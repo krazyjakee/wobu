@@ -11,8 +11,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use wobu_core::asset::AssetRef;
 use wobu_core::{
-    Asset, AssetKind, AssetRole, Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def,
-    kind_registry,
+    Asset, AssetKind, AssetRole, Description, DescriptionState, EnhanceStamp, Id, Node, NodeKind,
+    NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def, kind_registry,
 };
 
 use crate::assets::{self, ImportedAsset};
@@ -59,6 +59,22 @@ pub enum SaveOutcome {
     Saved(Box<Node>),
     /// Someone else changed the file since we loaded it. Ours was written
     /// alongside; the UI raises a diff rather than merging prose.
+    Conflict { conflict_path: String },
+}
+
+/// What happened to an enhanced description on its way to disk.
+///
+/// A type of its own rather than a third [`SaveOutcome`] variant, because
+/// [`RefusedEdit`](Enhanced::RefusedEdit) is not a saving problem — nothing
+/// raced, nothing is at risk on the share — and folding it in would make every
+/// ordinary save site match on a case that can never happen to it.
+#[derive(Debug)]
+pub enum Enhanced {
+    Saved(Box<Node>),
+    /// The description on disk was written by hand, and the enhance was not
+    /// told to overwrite it. The node comes back untouched so the UI can show
+    /// the user what it is about to replace and ask.
+    RefusedEdit(Box<Node>),
     Conflict { conflict_path: String },
 }
 
@@ -404,6 +420,69 @@ impl Project {
 
         let expected = self.index.stamp_of(node.id)?;
         self.write_node(&node, expected.as_ref())
+    }
+
+    /// Land the result of an enhance, stamping what it was enhanced from.
+    ///
+    /// The stamp is the point. Without it there is nothing in the file that
+    /// says what the model was shown, and "is this description still current"
+    /// has no answer at all — so this is the only supported way to write a
+    /// machine description, and it is a method on `Project` rather than
+    /// something the caller assembles so that a stamp cannot be forgotten.
+    ///
+    /// `sources` is `wobu_influence::resolve`'s answer for this node, passed
+    /// straight through. Taking it rather than recomputing it is what keeps
+    /// staleness and prompt compilation talking about the same graph: there is
+    /// one definition of "upstream" in Wobu and it is the walk that builds the
+    /// prompt. The subject is dropped from it here rather than at the call
+    /// site, because `resolve` includes the subject in its own stack and
+    /// stamping a node against its own description would make it stale the
+    /// instant it was written.
+    ///
+    /// **A hand-edited description is never overwritten silently.** `force` is
+    /// the user answering the question the UI raised, not a default.
+    pub fn accept_enhanced(
+        &mut self,
+        id: Id,
+        description: Description,
+        sources: &[Id],
+        force: bool,
+    ) -> Result<Enhanced> {
+        self.ensure_writable()?;
+
+        let mut node = self.get_node(id)?;
+        if node.description_is_hand_written() && !force {
+            return Ok(Enhanced::RefusedEdit(Box::new(node)));
+        }
+
+        let description = description.normalised_for(node.kind);
+        let empty = description.is_empty();
+        node.description = (!empty).then_some(description);
+        // An enhance that produced nothing is not a fresh description, and
+        // recording one would hide the failure behind a state that says the
+        // node has been described.
+        node.description_state =
+            if empty { DescriptionState::None } else { DescriptionState::Fresh };
+
+        let mut stamp = EnhanceStamp::default();
+        for source in sources.iter().filter(|s| **s != id) {
+            // A source the index cannot produce is one deleted between the
+            // resolve and this call. Stamping a version we never read would
+            // claim the description saw something it did not.
+            if let Some(source_node) = self.index.node(*source)? {
+                stamp.sources.push(SourceStamp {
+                    node: *source,
+                    version: crate::index::source_version(&source_node),
+                });
+            }
+        }
+        stamp.subject = crate::index::subject_version(&node);
+        node.enhanced_from = Some(stamp);
+
+        Ok(match self.save_node(node)? {
+            SaveOutcome::Saved(node) => Enhanced::Saved(node),
+            SaveOutcome::Conflict { conflict_path } => Enhanced::Conflict { conflict_path },
+        })
     }
 
     pub fn move_node(&mut self, id: Id, new_parent_id: Option<Id>) -> Result<()> {

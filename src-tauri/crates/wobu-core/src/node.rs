@@ -12,9 +12,30 @@ use crate::link::Link;
 
 /// Lifecycle of the machine-written description.
 ///
-/// `stale` is the interesting one: it means `notes_raw` or an upstream
-/// influence changed after the last enhance. The UI offers a quiet re-enhance
-/// rather than silently regenerating.
+/// Four of these five are facts about what somebody *did*: never enhanced, a
+/// job is running, the machine wrote this, a person rewrote it. They belong in
+/// the Markdown and they survive there, because the folder is the only copy of
+/// them.
+///
+/// [`Stale`](DescriptionState::Stale) is not that kind of fact. "Is this
+/// description still current" is a question about the rest of the world — the
+/// Style Guide's description, a culture's links — and its answer changes
+/// without anybody touching this node's file. Storing it would mean an edit to
+/// the Style Guide had to rewrite every node it reaches: a hundred guarded
+/// writes over a share, a hundred chances to park a conflict sibling, and a
+/// hundred files whose `updated_at` moved for a change the user did not make to
+/// them. It would also destroy information, because the enum holds one value at
+/// a time: flipping `edited` to `stale` forgets that a person wrote those words
+/// by hand, and the next enhance would overwrite them without knowing to ask.
+///
+/// So Wobu never writes this variant. Staleness is *derived*, by comparing a
+/// node's [`EnhanceStamp`] against the world as it currently stands, and it is
+/// derived in the index — the disposable half — so that recomputing it costs
+/// nothing and writes nothing.
+///
+/// The variant stays because a *file* can still say `stale`: one written by an
+/// older Wobu, or by a person in Obsidian marking something for redoing. That
+/// is honoured on read. It is only never written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DescriptionState {
@@ -27,8 +48,51 @@ pub enum DescriptionState {
     Fresh,
     /// Machine-written, then edited by hand.
     Edited,
-    /// Upstream or notes changed since the last enhance.
+    /// Upstream or notes changed since the last enhance. Read, never written —
+    /// see the type's own documentation.
     Stale,
+}
+
+/// One upstream source as it stood when a description was enhanced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceStamp {
+    pub node: Id,
+    pub version: String,
+}
+
+/// What the last enhance read, recorded so that staleness can be computed at
+/// all.
+///
+/// Nothing else in a Markdown file says what the model was shown, so without
+/// this there is no way to tell a description that is current from one whose
+/// sources have moved on — and the app would have to either regenerate
+/// constantly or never.
+///
+/// A "version" here is a **content hash**, and that choice is the load-bearing
+/// one. `updated_at` is the obvious alternative and it is wrong three ways: a
+/// hand-edit in Obsidian rewrites a description without touching it, so the
+/// change that matters most is the one it cannot see; two machines on one share
+/// disagree about the clock, so a current description can look older than the
+/// world it came from; and [`Node::touch`] moves it on every save, so
+/// re-saving a node unchanged would mark everything downstream stale.
+/// Filesystem mtime is worse still — it survives neither a copy, nor a sync
+/// client, nor a `git clone`, and the first thing a fresh checkout would do is
+/// declare the whole project stale. A hash is a fact about the content rather
+/// than about the machine the content is sitting on, so it survives all of
+/// them.
+///
+/// What goes *into* each hash is decided in `wobu_store::index`, next to the
+/// column that caches it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnhanceStamp {
+    /// The subject's own contribution to its enhance context — its notes, its
+    /// attributes, and the edges that decide which sources it reaches.
+    pub subject: String,
+    /// Every source the stack resolved to, in stack order. The subject is not
+    /// among them: its own description is the *output* of the enhance, so
+    /// stamping it would make every node stale the instant it was written.
+    #[serde(default)]
+    pub sources: Vec<SourceStamp>,
 }
 
 /// A single description section. Prose sections are [`SectionValue::Text`];
@@ -135,6 +199,12 @@ pub struct Node {
     pub description: Option<Description>,
     #[serde(default)]
     pub description_state: DescriptionState,
+    /// What the last enhance read. `None` for a description nobody has enhanced
+    /// through Wobu — including one typed straight into the Markdown — which is
+    /// read as "cannot be shown to be out of date" rather than as stale. See
+    /// [`EnhanceStamp`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enhanced_from: Option<EnhanceStamp>,
     #[serde(default)]
     pub attributes: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
@@ -177,6 +247,7 @@ impl Node {
             notes_raw: String::new(),
             description: None,
             description_state: DescriptionState::None,
+            enhanced_from: None,
             attributes: serde_json::Map::new(),
             tags: Vec::new(),
             cover_asset_id: None,
@@ -199,13 +270,13 @@ impl Node {
         }
     }
 
-    /// Flip a current description to `stale`. Called when notes or an upstream
-    /// influence change. Deliberately a no-op for descriptions that were never
-    /// written or are already being regenerated.
-    pub fn mark_stale(&mut self) {
-        if matches!(self.description_state, DescriptionState::Fresh | DescriptionState::Edited) {
-            self.description_state = DescriptionState::Stale;
-        }
+    /// Whether a re-enhance would throw away words a person wrote.
+    ///
+    /// The one question the enhance path must ask before it writes, and the
+    /// reason `edited` is never folded into `stale`: once the state has been
+    /// overwritten there is nothing left to ask.
+    pub fn description_is_hand_written(&self) -> bool {
+        self.description_state == DescriptionState::Edited
     }
 
     pub fn touch(&mut self) {
@@ -321,18 +392,23 @@ mod tests {
     }
 
     #[test]
-    fn mark_stale_only_touches_a_description_that_exists() {
+    fn a_new_node_carries_no_enhance_stamp() {
+        // A node nobody has enhanced must not look enhanced-and-current, or the
+        // first thing that reads a stamp would compare against an empty one and
+        // call every fresh project stale.
+        let n = node(NodeKind::Species, "Vashk");
+        assert_eq!(n.enhanced_from, None);
+        assert!(!n.description_is_hand_written());
+    }
+
+    #[test]
+    fn a_hand_written_description_announces_itself() {
+        // The single check standing between a re-enhance and somebody's prose.
         let mut n = node(NodeKind::Species, "Vashk");
-        n.mark_stale();
-        assert_eq!(n.description_state, DescriptionState::None, "nothing to invalidate");
-
         n.description_state = DescriptionState::Fresh;
-        n.mark_stale();
-        assert_eq!(n.description_state, DescriptionState::Stale);
-
-        n.description_state = DescriptionState::Enhancing;
-        n.mark_stale();
-        assert_eq!(n.description_state, DescriptionState::Enhancing, "a running job wins");
+        assert!(!n.description_is_hand_written());
+        n.description_state = DescriptionState::Edited;
+        assert!(n.description_is_hand_written());
     }
 
     #[test]
@@ -404,8 +480,25 @@ mod tests {
         n.links.push(Link::new(crate::new_id(), crate::link::LinkRole::MemberOf));
         n.asset_links.push(AssetRef::new(crate::new_id(), crate::asset::AssetRole::Pose));
         n.cover_asset_id = Some(crate::new_id());
+        n.enhanced_from = Some(EnhanceStamp {
+            subject: "0123456789abcdef".into(),
+            sources: vec![SourceStamp {
+                node: crate::new_id(),
+                version: "fedcba9876543210".into(),
+            }],
+        });
         let json = serde_json::to_string(&n).unwrap();
         let back: Node = serde_json::from_str(&json).unwrap();
         assert_eq!(back, n);
+    }
+
+    #[test]
+    fn an_unstamped_node_does_not_serialise_an_empty_stamp() {
+        // The `doc` column and the bridge both carry this. An `enhancedFrom` of
+        // nulls would parse back as a stamp with no sources, which reads as
+        // "enhanced against nothing" — the one shape that is indistinguishable
+        // from a node whose whole stack was deleted.
+        let json = serde_json::to_value(node(NodeKind::Prop, "Lantern")).unwrap();
+        assert!(json.get("enhancedFrom").is_none(), "{json}");
     }
 }

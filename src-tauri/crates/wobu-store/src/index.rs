@@ -11,20 +11,23 @@
 //! mode is corruption, not an error message. See `docs/02-data-model.md`.
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Asset, AssetKind, AssetLink, AssetRole, Id, LinkEdge, Node, NodeKind, NodeSummary};
+use wobu_core::{
+    Asset, AssetKind, AssetLink, AssetRole, DescriptionState, EnhanceStamp, Id, LinkEdge, LinkRole,
+    Node, NodeKind, NodeSummary, kind_def,
+};
 
 use crate::atomic::Stamp;
 use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 5;
+pub const INDEX_VERSION: u32 = 6;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -57,7 +60,19 @@ CREATE TABLE IF NOT EXISTS nodes (
     -- weight slider. With it, `prompt_compile` never touches the folder at all:
     -- it reads from local disk, so it answers at the same speed whether the
     -- share is fast, slow, or currently unplugged. See `Index::nodes`.
-    doc               TEXT NOT NULL DEFAULT ''
+    doc               TEXT NOT NULL DEFAULT '',
+
+    -- The three columns staleness is derived from, all off the same Markdown
+    -- as everything else here. They exist as columns rather than being read out
+    -- of `doc` because the navigator asks the staleness question about every
+    -- node at once, on every refresh: answering it from `doc` means parsing the
+    -- whole world's JSON to look at a few dozen bytes of each node, which is
+    -- the cost `Index::nodes` documents and the navigator has no reason to pay.
+    --
+    -- See `source_version`, `subject_version` and `Index::stale_nodes`.
+    source_version    TEXT NOT NULL DEFAULT '',
+    subject_version   TEXT NOT NULL DEFAULT '',
+    enhanced_from     TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS nodes_kind    ON nodes(kind);
 CREATE INDEX IF NOT EXISTS nodes_parent  ON nodes(parent_id);
@@ -309,8 +324,9 @@ impl Index {
         self.conn.execute(
             "INSERT INTO nodes
                (id, kind, name, slug, summary, parent_id, description_state, cover_asset_id,
-                rel_path, mtime_ms, size, hash, created_at, updated_at, doc)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+                rel_path, mtime_ms, size, hash, created_at, updated_at, doc,
+                source_version, subject_version, enhanced_from)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
              ON CONFLICT(id) DO UPDATE SET
                kind=excluded.kind, name=excluded.name, slug=excluded.slug,
                summary=excluded.summary, parent_id=excluded.parent_id,
@@ -318,7 +334,9 @@ impl Index {
                cover_asset_id=excluded.cover_asset_id, rel_path=excluded.rel_path,
                mtime_ms=excluded.mtime_ms, size=excluded.size, hash=excluded.hash,
                created_at=excluded.created_at, updated_at=excluded.updated_at,
-               doc=excluded.doc",
+               doc=excluded.doc, source_version=excluded.source_version,
+               subject_version=excluded.subject_version,
+               enhanced_from=excluded.enhanced_from",
             params![
                 node.id.to_string(),
                 node.kind.as_str(),
@@ -335,6 +353,12 @@ impl Index {
                 node.created_at.to_rfc3339(),
                 node.updated_at.to_rfc3339(),
                 serde_json::to_string(node)?,
+                source_version(node),
+                subject_version(node),
+                match &node.enhanced_from {
+                    Some(stamp) => serde_json::to_string(stamp)?,
+                    None => String::new(),
+                },
             ],
         )?;
 
@@ -427,7 +451,18 @@ impl Index {
 
     /// The navigator's data source. Ordered so the tree renders without a sort:
     /// registry order by kind, then alphabetically.
+    ///
+    /// `description_state` here is the **effective** state, not the stored one:
+    /// a node whose file says `fresh` or `edited` is reported `stale` when its
+    /// [`EnhanceStamp`] no longer matches the world. That overlay is why an
+    /// edit to the Style Guide can put a dot on a hundred rows without a single
+    /// file being written — and why it is confined to this summary, which is a
+    /// view. [`node`](Self::node) and `Project::get_node` still answer with what
+    /// the Markdown says, because those are what get saved back, and writing a
+    /// derived `stale` over a stored `edited` is exactly the data loss the
+    /// derivation exists to avoid.
     pub fn list_nodes(&self) -> Result<Vec<NodeSummary>> {
+        let stale = self.stale_nodes()?;
         let mut stmt = self.conn.prepare(
             "SELECT id, kind, name, slug, summary, parent_id, description_state
              FROM nodes ORDER BY name COLLATE NOCASE",
@@ -452,6 +487,11 @@ impl Index {
                 // build; skipping it keeps the tree usable until the rebuild.
                 continue;
             };
+            let description_state = if stale.contains(&id) {
+                DescriptionState::Stale
+            } else {
+                serde_json::from_value(serde_json::Value::String(state)).unwrap_or_default()
+            };
             out.push(NodeSummary {
                 id,
                 kind,
@@ -459,8 +499,7 @@ impl Index {
                 slug,
                 summary,
                 parent_id: parent.and_then(|p| Id::from_string(&p).ok()),
-                description_state: serde_json::from_value(serde_json::Value::String(state))
-                    .unwrap_or_default(),
+                description_state,
             });
         }
 
@@ -508,6 +547,164 @@ impl Index {
             .query_row("SELECT doc FROM nodes WHERE id = ?1", params![id.to_string()], |r| r.get(0))
             .optional()?;
         Ok(doc.and_then(|doc| serde_json::from_str(&doc).ok()))
+    }
+
+    /* ── staleness ───────────────────────────────────────────────────────
+     *
+     * `description_state = stale` is derived rather than stored, and this is
+     * where it is derived. The argument for that lives on
+     * `wobu_core::DescriptionState`; what follows is the mechanics.
+     */
+
+    /// Every node whose description no longer matches what it was enhanced
+    /// from.
+    ///
+    /// One query over a handful of narrow columns and no folder access at all,
+    /// which is what makes an edit to the Style Guide cheap: it invalidates most of
+    /// the project, and the cost of saying so is recomputing this — not
+    /// rewriting a hundred Markdown files, moving a hundred `updated_at`
+    /// stamps, and giving a hundred guarded writes the chance to lose a race
+    /// with a collaborator.
+    ///
+    /// A node is stale when any of these holds:
+    ///
+    /// - its file *says* `stale`, which only an older Wobu or a person editing
+    ///   frontmatter can have written, and which is honoured rather than
+    ///   second-guessed;
+    /// - its own notes, attributes or edges have moved since it was stamped;
+    /// - a source it was enhanced from now hashes differently, or has been
+    ///   deleted, so the layer it contributed is gone.
+    ///
+    /// A `fresh` or `edited` description with **no** stamp is deliberately not
+    /// stale. That is every description written before stamps existed and every
+    /// one typed straight into the Markdown, and there is nothing to compare
+    /// them against — a dot on every row of an existing project is the noise
+    /// that teaches people to ignore the dot.
+    pub fn stale_nodes(&self) -> Result<BTreeSet<Id>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, description_state, subject_version, source_version, enhanced_from
+             FROM nodes",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?;
+
+        // Collected whole first, because a node's answer depends on other
+        // rows' `source_version` and a streaming pass would have to re-query
+        // per source — the shape that turns one scan into a hundred.
+        let mut current: HashMap<Id, String> = HashMap::new();
+        let mut candidates = Vec::new();
+        for row in rows {
+            let (id, state, subject, source, stamp) = row?;
+            let Ok(id) = Id::from_string(&id) else { continue };
+            current.insert(id, source);
+            candidates.push((id, state, subject, stamp));
+        }
+
+        let mut stale = BTreeSet::new();
+        for (id, state, subject, stamp) in candidates {
+            let state: DescriptionState =
+                serde_json::from_value(serde_json::Value::String(state)).unwrap_or_default();
+            match state {
+                DescriptionState::Stale => {
+                    stale.insert(id);
+                    continue;
+                }
+                DescriptionState::Fresh | DescriptionState::Edited => {}
+                // `none` has nothing to invalidate, and `enhancing` is being
+                // rewritten as we speak — offering a re-enhance for a job that
+                // is already running is worse than saying nothing.
+                DescriptionState::None | DescriptionState::Enhancing => continue,
+            }
+
+            let Ok(stamp) = serde_json::from_str::<EnhanceStamp>(&stamp) else { continue };
+            let moved = stamp.subject != subject
+                || stamp
+                    .sources
+                    .iter()
+                    .any(|s| current.get(&s.node).map(String::as_str) != Some(&s.version));
+            if moved {
+                stale.insert(id);
+            }
+        }
+        Ok(stale)
+    }
+
+    /// Every node whose influence stack contains `id` — the nodes an edit to it
+    /// invalidates.
+    ///
+    /// The downstream direction of `wobu_influence::resolve`, and deliberately
+    /// the same graph read backwards rather than a second opinion about what
+    /// "upstream" means: `parent_id` is an implicit edge, disabled links
+    /// contribute nothing, and `related_to` is a lateral nod that resolves to a
+    /// source but is never expanded through. That last rule is the only one
+    /// that needs care in reverse. A path reaches `id` only if every node along
+    /// it was expanded, and a node reached by `related_to` is not — so the first
+    /// reverse hop may cross any role, and every hop after it may not cross
+    /// `related_to`.
+    ///
+    /// The two singletons are answered without walking. Nothing links to the
+    /// Style Guide; it is a root of *every* stack in the project
+    /// (`docs/04-influence-engine.md`), so a walk over the edges would find
+    /// nobody and report that editing it changed nothing at all.
+    ///
+    /// Cycles terminate the same way they do upstream — first visit wins, so
+    /// the walk is bounded by the number of nodes rather than by a hop counter.
+    /// A world with a link loop is something a user can create in two clicks
+    /// and something Obsidian can create by hand, so this cannot be left to a
+    /// depth limit.
+    pub fn dependents_of(&self, id: Id) -> Result<BTreeSet<Id>> {
+        if let Some((kind, _)) = self.kind_and_parent(id)?
+            && kind_def(kind).singleton
+        {
+            let mut all = self.all_ids()?;
+            all.remove(&id);
+            return Ok(all);
+        }
+
+        let mut out = BTreeSet::new();
+        let mut visited = BTreeSet::from([id]);
+        let mut queue = VecDeque::from([id]);
+
+        while let Some(current) = queue.pop_front() {
+            for from in self.referrers(current, current == id)? {
+                if visited.insert(from) {
+                    out.insert(from);
+                    queue.push_back(from);
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Nodes with an edge *into* `id`: children by nesting, plus the sources of
+    /// enabled links. `lateral` admits `related_to`, which only the first hop
+    /// of a downstream walk may do.
+    fn referrers(&self, id: Id, lateral: bool) -> Result<Vec<Id>> {
+        // The excluded role comes from `LinkRole` rather than being spelled
+        // into the SQL, so that renaming it in `wobu-core` cannot leave this
+        // silently matching nothing and quietly walking through laterals.
+        let excluded = if lateral { "" } else { LinkRole::RelatedTo.as_str() };
+        let mut stmt = self
+            .conn
+            .prepare("SELECT from_id FROM links WHERE to_id = ?1 AND enabled = 1 AND role <> ?2")?;
+        let rows = stmt.query_map(params![id.to_string(), excluded], |r| r.get::<_, String>(0))?;
+        let mut out: Vec<Id> =
+            rows.filter_map(|r| r.ok().and_then(|s| Id::from_string(&s).ok())).collect();
+        out.extend(self.children_of(id)?);
+        Ok(out)
+    }
+
+    fn all_ids(&self) -> Result<BTreeSet<Id>> {
+        let mut stmt = self.conn.prepare("SELECT id FROM nodes")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.filter_map(|r| r.ok().and_then(|s| Id::from_string(&s).ok())).collect())
     }
 
     /* ── assets ──────────────────────────────────────────────────────────
@@ -933,6 +1130,93 @@ where
     Ok(out)
 }
 
+/* ── versions ─────────────────────────────────────────────────────────────
+ *
+ * A "version" is a short content hash of the bytes an enhance actually reads.
+ * `wobu_core::EnhanceStamp` argues why it is a hash and not a timestamp; these
+ * two decide *which* bytes, and what is left out matters as much as what is in.
+ */
+
+/// The version of a node **as an influence source** — what a description
+/// downstream of it was enhanced from.
+///
+/// Two things go in. **The description**, because the enhance context is built
+/// from the resolved stack's descriptions rather than their raw notes
+/// (`docs/04-influence-engine.md`); rewriting a species' notes cannot have
+/// changed a word of a character enhanced under it, so it must not invalidate
+/// one. **The edges** — `parent_id` and the enabled links — because they decide
+/// which sources a stack reaches at all: a culture that gains a `located_in`
+/// puts a whole place chain in front of every character in it, and that is a
+/// change to their input even though no description moved.
+///
+/// The edges are also what make a stamp self-sufficient. A source can only
+/// enter a stack through an edge on a node already in that stack, so a stamp
+/// that watches its recorded sources' edges cannot miss one appearing — and
+/// staleness needs no walk to answer.
+///
+/// Left out: `name`, `summary`, link `weight`, `updated_at`. Weight is a
+/// compile-time knob that never reaches the enhance context, and the rest are
+/// labels. Marking a hundred descriptions stale because somebody fixed a typo
+/// in a species name is the noise that teaches people to ignore the dot.
+pub fn source_version(node: &Node) -> String {
+    let description = node
+        .description
+        .as_ref()
+        .map(|d| serde_json::to_string(d).unwrap_or_default())
+        .unwrap_or_default();
+    version(&[&description, &edges(node)])
+}
+
+/// The version of a node **as an enhance subject** — its own half of the
+/// context.
+///
+/// Its notes and attributes, which are what the model is asked to elaborate,
+/// plus its edges, which decide its stack. Its own description is deliberately
+/// absent: that is the *output*, and including it would make a description
+/// stale the instant it was written, and make every hand-edit register as
+/// staleness rather than as the resolution it is.
+pub fn subject_version(node: &Node) -> String {
+    let attributes = serde_json::to_string(&node.attributes).unwrap_or_default();
+    version(&[&node.notes_raw, &attributes, &edges(node)])
+}
+
+/// A node's edges, canonically. Sorted rather than left in file order: shuffling
+/// the `links:` block in Obsidian changes nothing the enhance context would see,
+/// and hashing file order would report that reshuffle as a change to every
+/// description downstream.
+fn edges(node: &Node) -> String {
+    let mut out: Vec<String> = node
+        .links
+        .iter()
+        .filter(|l| l.enabled)
+        .map(|l| format!("{}:{}", l.to_id, l.role.as_str()))
+        .collect();
+    out.sort();
+    if let Some(parent) = node.parent_id {
+        out.insert(0, format!("{parent}:parent"));
+    }
+    out.join(",")
+}
+
+/// BLAKE3 over length-prefixed parts.
+///
+/// Length-prefixed rather than delimited because a delimiter can appear inside
+/// somebody's notes, and `["a", "bc"]` hashing the same as `["ab", "c"]` is a
+/// change this would then never see.
+///
+/// Truncated to 64 bits, which goes into frontmatter a person reads in
+/// Obsidian. This answers "did these bytes change", not "could an adversary
+/// forge these bytes"; a full hash would be four lines of noise per source in
+/// every enhanced file, and people abandon formats that look like that.
+fn version(parts: &[&str]) -> String {
+    let mut hasher = blake3::Hasher::new();
+    for part in parts {
+        hasher.update(&(part.len() as u64).to_le_bytes());
+        hasher.update(part.as_bytes());
+    }
+    hasher.finalize().to_hex()[..16].to_string()
+}
+
 fn description_text(node: &Node) -> String {
     let Some(description) = &node.description else { return String::new() };
     let mut out = String::new();
@@ -1227,6 +1511,132 @@ mod tests {
         assert_eq!(index.kind_and_parent(city.id).unwrap(), Some((NodeKind::Setting, Some(region.id))));
         assert_eq!(index.kind_and_parent(region.id).unwrap(), Some((NodeKind::Setting, None)));
         assert_eq!(index.children_of(region.id).unwrap(), vec![city.id]);
+    }
+
+    #[test]
+    fn a_source_version_moves_with_the_description_and_the_edges() {
+        // The two inputs a downstream description was built from. A version
+        // that missed either would leave stale descriptions reading as current
+        // forever, with nothing in the UI to say why.
+        let mut vashk = Node::new(NodeKind::Species, "Vashk").unwrap();
+        let before = source_version(&vashk);
+
+        vashk.description = Some(wobu_core::Description::from_sections([(
+            "anatomy".to_string(),
+            wobu_core::SectionValue::Text("Four-jointed legs.".into()),
+        )]));
+        let described = source_version(&vashk);
+        assert_ne!(described, before, "a rewritten description is a new version");
+
+        vashk.links.push(Link::new(wobu_core::new_id(), LinkRole::LocatedIn));
+        assert_ne!(source_version(&vashk), described, "a new edge is a new stack");
+    }
+
+    #[test]
+    fn a_source_version_ignores_labels_and_slider_positions() {
+        // Every one of these would otherwise mark a hundred descriptions stale
+        // for a change that could not have altered a word of any of them, which
+        // is how a signal becomes noise people learn to click past.
+        let mut vashk = Node::new(NodeKind::Species, "Vashk").unwrap();
+        vashk.links.push(Link::new(wobu_core::new_id(), LinkRole::LocatedIn));
+        let before = source_version(&vashk);
+
+        vashk.name = "Vashk (revised)".into();
+        vashk.summary = "Ash-adapted".into();
+        vashk.notes_raw = "notes are not read from a source".into();
+        vashk.links[0].weight = 0.2;
+        vashk.touch();
+        assert_eq!(source_version(&vashk), before);
+    }
+
+    #[test]
+    fn reordering_links_by_hand_is_not_a_change() {
+        // Somebody tidying the `links:` block in Obsidian has changed nothing
+        // the enhance context would see, and must not invalidate the world.
+        let (a, b) = (wobu_core::new_id(), wobu_core::new_id());
+        let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
+        node.links = vec![Link::new(a, LinkRole::MemberOf), Link::new(b, LinkRole::LocatedIn)];
+        let before = source_version(&node);
+
+        node.links.reverse();
+        assert_eq!(source_version(&node), before);
+    }
+
+    #[test]
+    fn a_subject_version_leaves_out_the_description_it_produced() {
+        // The subject's description is the *output* of an enhance. Folding it
+        // in would make every description stale the moment it was written, and
+        // would report a hand-edit as staleness rather than as the resolution
+        // it is.
+        let mut kael = Node::new(NodeKind::Character, "Kael").unwrap();
+        kael.notes_raw = "scarred, ex-guild".into();
+        let before = subject_version(&kael);
+
+        kael.description = Some(wobu_core::Description::from_sections([(
+            "silhouette".to_string(),
+            wobu_core::SectionValue::Text("Tall.".into()),
+        )]));
+        assert_eq!(subject_version(&kael), before);
+
+        kael.notes_raw.push_str("\nowes a debt");
+        assert_ne!(subject_version(&kael), before, "notes are the subject's own input");
+    }
+
+    #[test]
+    fn a_cycle_does_not_hang_the_downstream_walk() {
+        // Two nodes each claiming the other is upstream is two clicks away in
+        // the Relations panel, and one line away in Obsidian. First visit wins,
+        // exactly as it does in `wobu_influence::resolve`.
+        let index = Index::in_memory().unwrap();
+        let mut a = Node::new(NodeKind::Culture, "Ember Guild").unwrap();
+        let mut b = Node::new(NodeKind::Culture, "Ash Court").unwrap();
+        a.links.push(Link::new(b.id, LinkRole::MemberOf));
+        b.links.push(Link::new(a.id, LinkRole::MemberOf));
+        indexed(&index, &a);
+        indexed(&index, &b);
+
+        assert_eq!(index.dependents_of(a.id).unwrap(), BTreeSet::from([b.id]));
+        assert_eq!(index.dependents_of(b.id).unwrap(), BTreeSet::from([a.id]));
+    }
+
+    #[test]
+    fn a_lateral_link_is_a_source_but_not_a_route() {
+        // `related_to` resolves to a source and is never expanded through, so
+        // downstream it reaches exactly one hop. Walking further would make a
+        // nod at a sibling drag that sibling's whole ancestry into the
+        // invalidation, and every character in a world would depend on every
+        // other one.
+        let index = Index::in_memory().unwrap();
+        let far = Node::new(NodeKind::Culture, "Ash Court").unwrap();
+        let mut middle = Node::new(NodeKind::Culture, "Ember Guild").unwrap();
+        middle.links.push(Link::new(far.id, LinkRole::RelatedTo));
+        let mut kael = Node::new(NodeKind::Character, "Kael").unwrap();
+        kael.links.push(Link::new(middle.id, LinkRole::RelatedTo));
+        for node in [&far, &middle, &kael] {
+            indexed(&index, node);
+        }
+
+        // Kael nods at the Guild, so the Guild's change reaches him.
+        assert!(index.dependents_of(middle.id).unwrap().contains(&kael.id));
+        // The Guild nods at the Court, and that is where it stops: Kael never
+        // expands the Guild, so the Court is not in his stack.
+        assert_eq!(index.dependents_of(far.id).unwrap(), BTreeSet::from([middle.id]));
+    }
+
+    #[test]
+    fn everything_is_downstream_of_the_style_guide() {
+        // Nothing links to it — it is a root of every stack — so a walk over
+        // the edges would find nobody and report that editing the one node
+        // which governs the whole project changed nothing at all.
+        let index = Index::in_memory().unwrap();
+        let style = Node::new(NodeKind::StyleGuide, "Style Guide").unwrap();
+        let vashk = Node::new(NodeKind::Species, "Vashk").unwrap();
+        let kael = Node::new(NodeKind::Character, "Kael").unwrap();
+        for node in [&style, &vashk, &kael] {
+            indexed(&index, node);
+        }
+
+        assert_eq!(index.dependents_of(style.id).unwrap(), BTreeSet::from([vashk.id, kael.id]));
     }
 
     #[test]

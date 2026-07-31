@@ -25,7 +25,8 @@ pub use generation::{
 pub use kind::{KindDef, Layer, NodeKind, SectionDef, SectionValueKind, kind_def, kind_registry};
 pub use link::{Link, LinkEdge, LinkRole};
 pub use node::{
-    Description, DescriptionState, Node, NodeSummary, SectionValue, validate_parent,
+    Description, DescriptionState, EnhanceStamp, Node, NodeSummary, SectionValue, SourceStamp,
+    validate_parent,
 };
 pub use preset::{
     ANY_KIND, Preset, SectionPriority, default_preset, preset, preset_registry, presets_for,

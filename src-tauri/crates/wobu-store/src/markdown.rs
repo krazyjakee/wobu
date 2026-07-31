@@ -12,8 +12,8 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use wobu_core::asset::AssetRef;
 use wobu_core::{
-    AssetRole, Description, DescriptionState, Id, Link, LinkRole, Node, NodeKind, SectionValue,
-    SectionValueKind, kind_def,
+    AssetRole, Description, DescriptionState, EnhanceStamp, Id, Link, LinkRole, Node, NodeKind,
+    SectionValue, SectionValueKind, kind_def,
 };
 
 use crate::error::{Error, Result};
@@ -76,6 +76,13 @@ struct Frontmatter {
     cover: Option<Id>,
     #[serde(default)]
     description_state: DescriptionState,
+    /// What the last enhance read. Canonically here rather than in the index,
+    /// like `links` and `assets` and for the same reason: staleness is derived
+    /// from it, the index is thrown away whenever its schema moves, and a
+    /// derived answer whose input only lived in the cache would come back
+    /// "current" for every node in the project the first time anybody rebuilt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    enhanced_from: Option<EnhanceStamp>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     links: Vec<FmLink>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -96,6 +103,7 @@ pub fn to_markdown(node: &Node) -> Result<String> {
         tags: node.tags.clone(),
         cover: node.cover_asset_id,
         description_state: node.description_state,
+        enhanced_from: node.enhanced_from.clone(),
         links: node
             .links
             .iter()
@@ -189,6 +197,7 @@ pub fn from_markdown(text: &str, path: &Path) -> Result<Node> {
         notes_raw: notes,
         description,
         description_state: fm.description_state,
+        enhanced_from: fm.enhanced_from,
         attributes: fm.attributes,
         tags: fm.tags,
         cover_asset_id: fm.cover,
@@ -340,6 +349,13 @@ mod tests {
         sections.insert("never".into(), SectionValue::List(vec!["Modern firearms".into()]));
         n.description = Some(Description { sections });
         n.description_state = DescriptionState::Fresh;
+        n.enhanced_from = Some(EnhanceStamp {
+            subject: "0123456789abcdef".into(),
+            sources: vec![wobu_core::SourceStamp {
+                node: wobu_core::new_id(),
+                version: "fedcba9876543210".into(),
+            }],
+        });
         n
     }
 
@@ -523,6 +539,29 @@ mod tests {
         assert_eq!(node.asset_links[0].weight, 1.0);
         assert!(!node.asset_links[1].enabled);
         assert_eq!(node.cover_asset_id, node.asset_links[0].asset_id.into());
+    }
+
+    #[test]
+    fn an_enhance_stamp_survives_the_folder_being_the_only_copy() {
+        // Staleness is derived from this and nothing else. The index is thrown
+        // away whenever its schema version moves, so a stamp that lived only
+        // there would come back empty for the whole project on the next
+        // rebuild — and every stale description would quietly read as current.
+        let original = character();
+        let text = to_markdown(&original).unwrap();
+        assert!(text.contains("enhanced_from:"), "{text}");
+
+        let parsed = from_markdown(&text, &path()).unwrap();
+        assert_eq!(parsed.enhanced_from, original.enhanced_from);
+    }
+
+    #[test]
+    fn a_node_that_was_never_enhanced_writes_no_stamp_key() {
+        // People read these files in Obsidian. An empty `enhanced_from:` on
+        // every unenhanced node is noise, and worse, it is a shape that parses
+        // back as "enhanced against nothing at all".
+        let text = to_markdown(&Node::new(NodeKind::Prop, "Ashglass Lantern").unwrap()).unwrap();
+        assert!(!text.contains("enhanced_from"), "{text}");
     }
 
     #[test]

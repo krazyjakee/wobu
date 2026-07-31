@@ -128,7 +128,7 @@ export function Navigator({
                   style={{ color: colorFor(def, n.kind) }}
                 />
                 <span className="nm">{n.name}</span>
-                {n.descriptionState === 'stale' && <span className="stale" title="stale" />}
+                <StaleDot state={n.descriptionState} />
               </button>
             )
           })}
@@ -279,6 +279,32 @@ export function Navigator({
         />
       )}
     </aside>
+  )
+}
+
+/**
+ * The unresolved-stale marker, on pinned rows and tree rows alike.
+ *
+ * `stale` reaches here derived rather than stored: the backend compares what a
+ * description was enhanced from against the world as it stands, so an edit to
+ * the Style Guide lights up a hundred of these without a hundred files being
+ * rewritten (#38). Nothing here re-enhances — the dot is an offer, and
+ * regenerating somebody's description because they clicked a row is the one
+ * behaviour the whole state machine exists to prevent.
+ *
+ * The title says *why* rather than saying "stale". "Stale" names the state the
+ * developer sees; the user needs to know something upstream moved, or the dot
+ * is just a thing that appears.
+ */
+function StaleDot({ state }: { state: NodeSummary['descriptionState'] }) {
+  if (state !== 'stale') return null
+  return (
+    <span
+      className="stale"
+      role="img"
+      aria-label="Description is out of date"
+      title="Notes or an upstream influence changed since this was enhanced"
+    />
   )
 }
 
@@ -434,9 +460,7 @@ function Row({
         )}
         <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
         <span className="nm">{n.name}</span>
-        {n.descriptionState === 'stale' && (
-          <span className="stale" title="description is stale" />
-        )}
+        <StaleDot state={n.descriptionState} />
       </button>
       {hasKids &&
         open &&

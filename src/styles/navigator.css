@@ -138,14 +138,22 @@
 .node .twist.open {
   transform: rotate(90deg);
 }
+/* Deliberately quiet. An edit to the Style Guide puts one of these on most of
+   the project at once, so anything that reads as an error would turn a whole
+   navigator red for a change the user meant to make. It is an offer to
+   re-enhance, not a warning. */
 .node .stale {
   margin-left: auto;
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  opacity: 0.8;
+  opacity: 0.55;
   flex: none;
+}
+.node:hover .stale,
+.node.is-sel .stale {
+  opacity: 0.9;
 }
 .node-pin {
   background: var(--bg-raised);
