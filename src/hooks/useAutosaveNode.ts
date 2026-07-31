@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WobuNode } from '../lib/api'
-import { errorMessage } from '../lib/api'
 import { useUpsertNode } from '../lib/queries'
-import { toast } from '../store/ui'
+import { report } from '../store/ui'
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
@@ -39,7 +38,7 @@ export function useAutosaveNode(node: WobuNode | undefined, delay = 500) {
       },
       onError: (e) => {
         setStatus('error')
-        toast(`Save failed — ${errorMessage(e)}`, 'error')
+        report(e, 'Save failed')
       },
     })
   }, [])

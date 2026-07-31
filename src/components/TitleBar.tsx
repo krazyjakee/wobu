@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NodeSummary, ProjectSummary } from '../lib/api'
-import { errorMessage } from '../lib/api'
 import { useCloseProject } from '../lib/queries'
 import { labelFor, type KindIndex } from '../lib/kinds'
-import { useUI, toast } from '../store/ui'
+import { useUI, report } from '../store/ui'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
 
@@ -56,7 +55,7 @@ export function TitleBar({
               onClick={() => {
                 setMenu(false)
                 closeProject.mutate(undefined, {
-                  onError: (e) => toast(errorMessage(e), 'error'),
+                  onError: (e) => report(e),
                 })
               }}
             >

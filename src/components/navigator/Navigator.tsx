@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { NodeKind, NodeSummary } from '../../lib/api'
-import { errorMessage } from '../../lib/api'
 import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
-import { useUI, toast } from '../../store/ui'
+import { useUI, report, toast } from '../../store/ui'
 import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
@@ -81,7 +80,7 @@ export function Navigator({
     move.mutate(
       { id: dragId, newParentId: targetId },
       {
-        onError: (e) => toast(errorMessage(e), 'error'),
+        onError: (e) => report(e),
         onSuccess: () =>
           toast(
             targetId
@@ -228,7 +227,7 @@ export function Navigator({
             onNewNode={onNewNode}
             onDuplicate={() =>
               dup.mutate(ctx.node.id, {
-                onError: (e) => toast(errorMessage(e), 'error'),
+                onError: (e) => report(e),
                 onSuccess: (n) => {
                   select(n.id)
                   toast(`Duplicated as “${n.name}”`)
@@ -251,7 +250,7 @@ export function Navigator({
           onConfirm={() => {
             const id = confirm.id
             del.mutate(id, {
-              onError: (e) => toast(errorMessage(e), 'error'),
+              onError: (e) => report(e),
               onSuccess: () => {
                 if (selectedId === id) select(null)
                 toast('Node deleted')

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { errorMessage, type ProjectSummary } from '../lib/api'
 import { useCreateProject, useOpenProject, useRecentProjects } from '../lib/queries'
-import { toast } from '../store/ui'
+import { report } from '../store/ui'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
 
@@ -18,10 +18,10 @@ export function Launcher({ error }: { error: string | null }) {
       const picked = await openDialog({ directory: true, multiple: false, title: 'Open a Wobu project folder' })
       if (typeof picked !== 'string') return
       openProject.mutate(picked, {
-        onError: (e) => toast(errorMessage(e), 'error'),
+        onError: (e) => report(e),
       })
     } catch (e) {
-      toast(errorMessage(e), 'error')
+      report(e)
     }
   }
 
@@ -63,7 +63,7 @@ export function Launcher({ error }: { error: string | null }) {
             failed={recent.isError ? errorMessage(recent.error) : null}
             busy={busy}
             onOpen={(p) =>
-              openProject.mutate(p.path, { onError: (e) => toast(errorMessage(e), 'error') })
+              openProject.mutate(p.path, { onError: (e) => report(e) })
             }
           />
 

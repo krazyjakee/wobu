@@ -3,6 +3,7 @@
 
 mod commands;
 mod error;
+mod redact;
 mod state;
 
 use state::AppState;

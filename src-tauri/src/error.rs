@@ -1,113 +1,365 @@
-//! The error shape that crosses the bridge.
+//! How errors travel from Rust to the UI.
 //!
-//! `wobu_store::Error` is a Rust error: it carries `PathBuf`s, an
-//! `io::Error` source, a `rusqlite::Error`. None of that is useful to a
-//! webview, and some of it (absolute paths) is more than the UI should be
-//! pasting into a toast. So commands return this instead — a stable machine
-//! `code` the frontend can branch on, plus a sentence a human can read.
+//! Each crate keeps its own `thiserror` enum — that is the right shape for
+//! Rust, where an `io::Error` source and a `PathBuf` are useful. None of it is
+//! the right shape for a webview, and some of it must not reach one at all.
+//! So every crate's error is flattened here, at the command boundary, into a
+//! single [`WobuError`], and there is exactly one constructor so that
+//! [`redact::scrub`] cannot be bypassed.
 //!
-//! The full taxonomy (per-code copy, retry affordances, secret redaction) is
-//! issue #4. This is the minimum that lets the frontend distinguish the cases
-//! it already has UI for, without locking that work out later: adding a variant
-//! to `Code` is additive, and `errorMessage()` in `src/lib/api.ts` already falls
-//! back to `.message` for codes it does not recognise.
+//! ## The four fields
+//!
+//! - `code` — a stable dotted string the frontend switches on. Stable means
+//!   stable: these appear in `src/lib/api.ts` and in conditionals, so a code is
+//!   renamed only alongside its call sites.
+//! - `message` — one sentence for a person. Says what happened and, where
+//!   there is one, what to do.
+//! - `detail` — the technical remainder, for the diagnostics log (#7) and for
+//!   a user copying something into an issue. Never required to understand the
+//!   error, because the UI does not always show it.
+//! - `retryable` — whether trying the same thing again could plausibly work.
+//!   A share that is unmounted may come back; a parent cycle will not.
+//!
+//! ## Why the frontend decides toast vs banner
+//!
+//! It does not live here. `src/lib/api.ts` maps codes onto surfaces, because
+//! whether something deserves a persistent banner is a question about the UI's
+//! attention budget, not about what went wrong. What this file guarantees is
+//! that the code is stable enough to map.
 
 use serde::Serialize;
 use wobu_store::Error as StoreError;
 
-/// Machine-readable discriminant. Serialises snake_case, matching every other
-/// enum in the domain.
+use crate::redact;
+
+/// The stable codes. Serialised as the dotted string, not as the variant name.
+///
+/// Grouped by the part of the system that owns the failure, because that is
+/// the axis the UI branches on: everything under `share.` is a banner,
+/// everything under `provider.` sends the user to Settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum Code {
-    /// The folder the user picked has no `project.json`.
+    // ── project ──────────────────────────────────────────────────────────
+    /// The chosen folder has no `project.json`.
+    #[serde(rename = "project.not_a_project")]
     NotAProject,
-    /// Creating a project over one that already exists.
+    /// Creating a project where one already exists.
+    #[serde(rename = "project.already_exists")]
     AlreadyExists,
-    /// Written by a newer Wobu than this build understands.
+    /// Written by a newer Wobu than this build understands. Opening read-write
+    /// would silently drop the fields this build cannot represent.
+    #[serde(rename = "project.schema_too_new")]
     SchemaTooNew,
-    /// The id is not in the index — usually a stale tab pointing at a node
-    /// someone else deleted.
-    NoSuchNode,
-    /// A node file on disk could not be parsed. Never a reason to overwrite it.
-    Malformed,
-    /// The project folder is not writable (a read-only share, typically).
-    ReadOnly,
-    /// A command that needs an open project was called without one.
+    /// A command needing an open project was called without one.
+    #[serde(rename = "project.none_open")]
     NoProjectOpen,
-    /// A concurrent writer won the race. `conflict_path` is where our version
-    /// was parked, relative to the project root.
-    Conflict,
-    /// The request itself was wrong — an empty name, a parent cycle, a
-    /// singleton created twice. Domain rules, not I/O.
+
+    // ── node ─────────────────────────────────────────────────────────────
+    /// No node with that id — usually a tab pointing at something deleted.
+    #[serde(rename = "node.not_found")]
+    NoSuchNode,
+    /// A file on disk could not be parsed. Never a reason to overwrite it.
+    #[serde(rename = "node.malformed")]
+    Malformed,
+    /// A domain rule said no: empty name, parent cycle, duplicate singleton.
+    #[serde(rename = "node.invalid")]
     Invalid,
-    /// Filesystem trouble.
+
+    // ── write ────────────────────────────────────────────────────────────
+    /// A concurrent writer won the race; ours was parked alongside.
+    #[serde(rename = "write.conflict")]
+    Conflict,
+    /// The project folder is not writable.
+    #[serde(rename = "write.read_only")]
+    ReadOnly,
+
+    // ── share ────────────────────────────────────────────────────────────
+    /// The folder went away underneath us — an unmounted share, usually.
+    /// Distinct from `io.failed` because it is the one I/O failure that is
+    /// expected, recoverable, and worth a banner rather than a toast.
+    #[serde(rename = "share.unmounted")]
+    ShareUnmounted,
+
+    // ── provider ─────────────────────────────────────────────────────────
+    //
+    // Defined here rather than when the provider crates land, which is the
+    // entire point of this taxonomy: `wobu-llm` and `wobu-imagine` should find
+    // the codes already waiting rather than invent their own shapes.
+    /// No API key configured for the selected provider.
+    #[serde(rename = "provider.no_key")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderNoKey,
+    /// The key is present and rejected.
+    #[serde(rename = "provider.bad_key")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderBadKey,
+    /// The account needs credit or a plan before the request will run.
+    #[serde(rename = "provider.billing_required")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderBillingRequired,
+    /// Slow down — worth retrying.
+    #[serde(rename = "provider.rate_limited")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderRateLimited,
+    /// The provider is unreachable or returned a 5xx.
+    #[serde(rename = "provider.unavailable")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderUnavailable,
+
+    // ── generic ──────────────────────────────────────────────────────────
+    /// Filesystem trouble that is not one of the named cases above.
+    #[serde(rename = "io.failed")]
     Io,
-    /// The local index, or anything else with no better home.
+    /// The local index, or anything with no better home. Always a bug.
+    #[serde(rename = "internal")]
     Internal,
 }
 
+impl Code {
+    /// Whether repeating the same request could plausibly succeed.
+    ///
+    /// Read narrowly: this drives a "Try again" affordance, so a `true` that
+    /// leads to the same failure is worse than a missing button. A conflict is
+    /// *not* retryable — retrying would produce a second conflict file, and
+    /// what it needs is a decision.
+    pub fn retryable(self) -> bool {
+        matches!(
+            self,
+            Code::Io
+                | Code::ShareUnmounted
+                | Code::ProviderRateLimited
+                | Code::ProviderUnavailable
+        )
+    }
+}
+
+/// The single shape that crosses the bridge.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CommandError {
+pub struct WobuError {
     pub code: Code,
     pub message: String,
-    /// Only set when `code` is `Conflict`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    pub retryable: bool,
+    /// Only set on `write.conflict`: where our version was parked, relative to
+    /// the project root.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflict_path: Option<String>,
 }
 
-impl CommandError {
+impl WobuError {
+    /// The only constructor, and therefore the only place redaction has to be
+    /// remembered. Everything else on this type routes through here.
     pub fn new(code: Code, message: impl Into<String>) -> Self {
-        CommandError { code, message: message.into(), conflict_path: None }
+        WobuError {
+            code,
+            message: redact::scrub(&message.into()),
+            detail: None,
+            retryable: code.retryable(),
+            conflict_path: None,
+        }
+    }
+
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(redact::scrub(&detail.into()));
+        self
     }
 
     pub fn no_project_open() -> Self {
-        CommandError::new(Code::NoProjectOpen, "No project is open.")
+        WobuError::new(Code::NoProjectOpen, "No project is open.")
     }
 
-    /// A save that lost the race. The UI has no conflict view until M2
-    /// (issue #18), but the outcome is reported honestly now rather than
-    /// being flattened into a generic failure — the user's text is on disk
-    /// at `conflict_path` either way, and they need to be told that.
+    /// A save that lost the race. The conflict *view* is M2 (#18), but the
+    /// user's text is on disk at `conflict_path` either way and they need to
+    /// be told that now rather than when the view lands.
     pub fn conflict(conflict_path: String) -> Self {
-        CommandError {
-            code: Code::Conflict,
-            message: format!(
+        let mut e = WobuError::new(
+            Code::Conflict,
+            format!(
                 "Someone else changed this node while you were editing it. \
                  Your version was saved alongside theirs as {conflict_path}."
             ),
-            conflict_path: Some(conflict_path),
-        }
+        );
+        e.conflict_path = Some(conflict_path);
+        e
     }
 }
 
-impl From<StoreError> for CommandError {
+impl From<StoreError> for WobuError {
     fn from(e: StoreError) -> Self {
-        // `to_string()` before matching: every variant already carries a
-        // written-out `#[error(...)]` message, and duplicating that copy here
-        // would leave two versions of it to drift apart.
+        // `to_string()` up front: every variant already carries written-out
+        // `#[error(...)]` copy, and restating it here would leave two versions
+        // to drift apart.
         let message = e.to_string();
         let code = match &e {
             StoreError::NotAProject(_) => Code::NotAProject,
             StoreError::AlreadyExists(_) => Code::AlreadyExists,
             StoreError::SchemaTooNew { .. } => Code::SchemaTooNew,
+            StoreError::NoProjectOpen => Code::NoProjectOpen,
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
             StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
             StoreError::ReadOnly => Code::ReadOnly,
-            StoreError::NoProjectOpen => Code::NoProjectOpen,
-            StoreError::Io { .. } => Code::Io,
             StoreError::Core(_) => Code::Invalid,
+            // The one I/O case worth telling apart. A share that unmounts
+            // mid-session reports `NotFound`/`NotConnected` on every path
+            // under it, and #20 wants that as a banner with backoff — not as
+            // the same toast a failed thumbnail write gets.
+            StoreError::Io { source, .. } if is_gone(source) => Code::ShareUnmounted,
+            StoreError::Io { .. } => Code::Io,
             StoreError::Yaml(_) | StoreError::Json(_) | StoreError::Sqlite(_) => Code::Internal,
         };
-        CommandError::new(code, message)
+
+        let error = WobuError::new(code, message);
+        // The source chain is where the operating system's own wording lives.
+        // Useful in a diagnostics log, too noisy for a toast.
+        match &e {
+            StoreError::Io { source, .. } => error.with_detail(source.to_string()),
+            StoreError::Yaml(inner) => error.with_detail(inner.to_string()),
+            StoreError::Json(inner) => error.with_detail(inner.to_string()),
+            StoreError::Sqlite(inner) => error.with_detail(inner.to_string()),
+            _ => error,
+        }
     }
 }
 
-impl From<wobu_core::Error> for CommandError {
+impl From<wobu_core::Error> for WobuError {
     fn from(e: wobu_core::Error) -> Self {
-        CommandError::new(Code::Invalid, e.to_string())
+        WobuError::new(Code::Invalid, e.to_string())
     }
 }
 
-pub type CommandResult<T> = std::result::Result<T, CommandError>;
+/// Whether an I/O error means "the thing this path lives on is not there",
+/// as opposed to "this particular operation failed".
+fn is_gone(e: &std::io::Error) -> bool {
+    use std::io::ErrorKind;
+    matches!(
+        e.kind(),
+        ErrorKind::NotFound | ErrorKind::NotConnected | ErrorKind::HostUnreachable | ErrorKind::BrokenPipe
+    )
+}
+
+pub type CommandResult<T> = std::result::Result<T, WobuError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn json(e: &WobuError) -> serde_json::Value {
+        serde_json::to_value(e).unwrap()
+    }
+
+    #[test]
+    fn codes_serialise_as_the_dotted_strings_the_frontend_switches_on() {
+        // These strings are load-bearing: `src/lib/api.ts` compares against
+        // them literally. Renaming a variant must not silently change one.
+        let cases = [
+            (Code::NotAProject, "project.not_a_project"),
+            (Code::SchemaTooNew, "project.schema_too_new"),
+            (Code::NoProjectOpen, "project.none_open"),
+            (Code::NoSuchNode, "node.not_found"),
+            (Code::Invalid, "node.invalid"),
+            (Code::Conflict, "write.conflict"),
+            (Code::ReadOnly, "write.read_only"),
+            (Code::ShareUnmounted, "share.unmounted"),
+            (Code::ProviderNoKey, "provider.no_key"),
+            (Code::ProviderBillingRequired, "provider.billing_required"),
+            (Code::Io, "io.failed"),
+            (Code::Internal, "internal"),
+        ];
+        for (code, expected) in cases {
+            assert_eq!(serde_json::to_value(code).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn retryable_is_true_only_where_trying_again_could_work() {
+        assert!(Code::ShareUnmounted.retryable());
+        assert!(Code::ProviderRateLimited.retryable());
+        assert!(Code::Io.retryable());
+
+        // A second attempt makes a second conflict file, not a resolution.
+        assert!(!Code::Conflict.retryable());
+        assert!(!Code::ReadOnly.retryable());
+        assert!(!Code::Invalid.retryable());
+        assert!(!Code::ProviderNoKey.retryable());
+    }
+
+    #[test]
+    fn a_key_cannot_reach_the_webview_through_any_field() {
+        // The constructor is the only way in, so this covers every crate.
+        let e = WobuError::new(Code::ProviderBadKey, "401 from x-api-key: sk-ant-api03-leakleakleak")
+            .with_detail("retried with Authorization: Bearer sk-ant-api03-leakleakleak");
+
+        let serialised = json(&e).to_string();
+        assert!(!serialised.contains("sk-ant-api03-leakleakleak"), "{serialised}");
+        assert!(!serialised.contains("leakleakleak"), "{serialised}");
+        assert!(serialised.contains("401"), "still diagnosable: {serialised}");
+    }
+
+    #[test]
+    fn a_conflict_carries_its_path_and_says_so_in_words() {
+        let e = WobuError::conflict("nodes/species/vashk.conflict.md".into());
+        let j = json(&e);
+
+        assert_eq!(j["code"], "write.conflict");
+        assert_eq!(j["conflictPath"], "nodes/species/vashk.conflict.md");
+        assert_eq!(j["retryable"], false);
+        // `errorMessage()` in api.ts reads `.message` and nothing else, so a
+        // conflict must be legible without the code being understood.
+        assert!(e.message.contains("nodes/species/vashk.conflict.md"));
+    }
+
+    #[test]
+    fn optional_fields_are_omitted_rather_than_null() {
+        // TypeScript reads these as `detail?: string`, so `null` would be a
+        // different type from absent.
+        let j = json(&WobuError::no_project_open());
+        assert!(j.get("detail").is_none(), "{j}");
+        assert!(j.get("conflictPath").is_none(), "{j}");
+    }
+
+    #[test]
+    fn store_errors_keep_their_own_wording() {
+        let e: WobuError = StoreError::NoSuchNode("01ARZ3NDEKTSV4RRFFQ69G5FAV".into()).into();
+        assert_eq!(json(&e)["code"], "node.not_found");
+        assert_eq!(e.message, "no node with id 01ARZ3NDEKTSV4RRFFQ69G5FAV");
+
+        let e: WobuError = StoreError::Core(wobu_core::Error::SelfParent).into();
+        assert_eq!(json(&e)["code"], "node.invalid");
+        assert_eq!(e.message, "a node cannot be its own parent");
+    }
+
+    #[test]
+    fn an_unmounted_share_is_told_apart_from_ordinary_io_trouble() {
+        // #20 hangs a banner and a backoff off this distinction, so it has to
+        // survive the flattening.
+        let gone = StoreError::io(
+            PathBuf::from("/mnt/art/Ashfall.wobu/nodes/species/vashk.md"),
+            std::io::Error::from(std::io::ErrorKind::NotConnected),
+        );
+        let e: WobuError = gone.into();
+        assert_eq!(json(&e)["code"], "share.unmounted");
+        assert_eq!(json(&e)["retryable"], true);
+
+        let full = StoreError::io(
+            PathBuf::from("/home/art/Ashfall.wobu/nodes/species/vashk.md"),
+            std::io::Error::from(std::io::ErrorKind::StorageFull),
+        );
+        let e: WobuError = full.into();
+        assert_eq!(json(&e)["code"], "io.failed");
+    }
+
+    #[test]
+    fn the_os_wording_lands_in_detail_not_in_the_message() {
+        let e: WobuError = StoreError::io(
+            PathBuf::from("/mnt/art/Ashfall.wobu"),
+            std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        )
+        .into();
+
+        assert!(e.detail.is_some(), "the source chain should be preserved");
+        assert!(e.detail.unwrap().to_lowercase().contains("permission"));
+    }
+}

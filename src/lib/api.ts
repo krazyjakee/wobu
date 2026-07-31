@@ -111,9 +111,102 @@ export interface WobuNode {
 export const isTauri = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
+/* ── errors ───────────────────────────────────────────────────────────────── */
+
+/**
+ * The stable codes `src-tauri/src/error.rs` emits. Renaming one means renaming
+ * it on both sides at once — there is a Rust test pinning every string here.
+ *
+ * Left open with `(string & {})` on purpose: the provider codes exist in Rust
+ * before the provider crates do, and a code this build has never heard of must
+ * degrade to "unknown error, show the message" rather than fail to type-check.
+ */
+export type ErrorCode =
+  | 'project.not_a_project'
+  | 'project.already_exists'
+  | 'project.schema_too_new'
+  | 'project.none_open'
+  | 'node.not_found'
+  | 'node.malformed'
+  | 'node.invalid'
+  | 'write.conflict'
+  | 'write.read_only'
+  | 'share.unmounted'
+  | 'provider.no_key'
+  | 'provider.bad_key'
+  | 'provider.billing_required'
+  | 'provider.rate_limited'
+  | 'provider.unavailable'
+  | 'io.failed'
+  | 'internal'
+  | (string & {})
+
+/** Exactly what a failing command rejects with. */
+export interface WobuError {
+  code: ErrorCode
+  message: string
+  /** Technical remainder — the OS's own wording, a parser position. */
+  detail?: string
+  retryable: boolean
+  /** Only on `write.conflict`: where our version was parked. */
+  conflictPath?: string
+}
+
+export function isWobuError(e: unknown): e is WobuError {
+  return (
+    !!e &&
+    typeof e === 'object' &&
+    typeof (e as WobuError).code === 'string' &&
+    typeof (e as WobuError).message === 'string'
+  )
+}
+
+/** The code, or `null` for anything that did not come from a command. */
+export function errorCode(e: unknown): ErrorCode | null {
+  return isWobuError(e) ? e.code : null
+}
+
+/**
+ * Where an error belongs on screen.
+ *
+ * A banner is persistent and occupies real estate, so it is reserved for the
+ * two things that make the *whole workspace* untrustworthy until resolved:
+ * the project folder went away, or it turned read-only underneath us.
+ * Everything else — a rejected save, a bad name, a failed thumbnail — is a
+ * toast, because the user already knows which action produced it and the rest
+ * of the app still works. Getting this wrong in the generous direction is
+ * worse: a banner that appears for routine failures is one the user learns to
+ * ignore.
+ *
+ * Both banner codes are specifically *mid-session* conditions. Open-time
+ * failures are not here on purpose: `project.not_a_project` and
+ * `project.schema_too_new` can only happen while the Launcher is on screen,
+ * which has its own inline error slot and no workspace to put a banner above.
+ * A read-only folder detected at open is likewise not a banner — the title
+ * bar carries a `read-only` chip and the write controls disable themselves.
+ * `write.read_only` reaching here means the folder changed under a session
+ * that started writable, which the chip alone would not explain.
+ */
+export type Surface = 'banner' | 'toast'
+
+export function errorSurface(e: unknown): Surface {
+  switch (errorCode(e)) {
+    case 'share.unmounted':
+    case 'write.read_only':
+      return 'banner'
+    default:
+      return 'toast'
+  }
+}
+
+export function isRetryable(e: unknown): boolean {
+  return isWobuError(e) && e.retryable
+}
+
 /** Normalises the assorted things a Rust command error can arrive as. */
 export function errorMessage(e: unknown): string {
   if (typeof e === 'string') return e
+  if (isWobuError(e)) return e.message
   if (e instanceof Error) return e.message
   if (e && typeof e === 'object') {
     const m = (e as { message?: unknown }).message

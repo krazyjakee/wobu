@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter};
 use wobu_store::{Project, Watcher};
 
-use crate::error::{CommandError, CommandResult};
+use crate::error::{CommandResult, WobuError};
 
 /// Emitted whenever the project folder turns out to differ from what we last
 /// indexed. `src/lib/queries.ts` listens for this and invalidates the world.
@@ -49,7 +49,7 @@ impl AppState {
     /// Run `f` against the open project, or fail with `no_project_open`.
     pub fn with<T>(&self, f: impl FnOnce(&mut Project) -> CommandResult<T>) -> CommandResult<T> {
         let mut guard = self.slot.lock();
-        let open = guard.as_mut().ok_or_else(CommandError::no_project_open)?;
+        let open = guard.as_mut().ok_or_else(WobuError::no_project_open)?;
         f(&mut open.project)
     }
 

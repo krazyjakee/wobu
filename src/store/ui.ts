@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { errorCode, errorMessage, errorSurface, isRetryable, isWobuError } from '../lib/api'
 import type { NodeKind } from '../lib/api'
 
 export type Mode = 'library' | 'board' | 'forge' | 'assets' | 'settings'
@@ -10,6 +11,22 @@ export interface Toast {
   id: number
   text: string
   kind: 'info' | 'error'
+}
+
+/**
+ * A condition that makes the workspace untrustworthy until it is resolved —
+ * the share unmounted, the folder is read-only. Unlike a toast this does not
+ * time out, because the thing it describes has not gone away.
+ *
+ * Keyed by error code rather than by a sequence number: a share that unmounts
+ * fails every read under it, and twenty identical banners is a worse bug than
+ * no banner. The newest wins so the wording stays current.
+ */
+export interface Banner {
+  code: string
+  text: string
+  detail?: string
+  retryable: boolean
 }
 
 const NAV_MIN = 200
@@ -48,6 +65,11 @@ interface UIState {
   toasts: Toast[]
   pushToast: (text: string, kind?: Toast['kind']) => void
   dropToast: (id: number) => void
+
+  banners: Banner[]
+  raiseBanner: (b: Banner) => void
+  clearBanner: (code: string) => void
+  clearBanners: () => void
 }
 
 let toastSeq = 0
@@ -110,8 +132,34 @@ export const useUI = create<UIState>((set) => ({
   pushToast: (text, kind = 'info') =>
     set((s) => ({ toasts: [...s.toasts, { id: ++toastSeq, text, kind }] })),
   dropToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+  banners: [],
+  raiseBanner: (b) => set((s) => ({ banners: [...s.banners.filter((x) => x.code !== b.code), b] })),
+  clearBanner: (code) => set((s) => ({ banners: s.banners.filter((b) => b.code !== code) })),
+  clearBanners: () => set({ banners: [] }),
 }))
 
 /** Convenience for imperative call-sites (mutation handlers). */
 export const toast = (text: string, kind: Toast['kind'] = 'info') =>
   useUI.getState().pushToast(text, kind)
+
+/**
+ * Report a failed command on whichever surface its code calls for.
+ *
+ * Call sites should not be choosing between `toast` and `raiseBanner`
+ * themselves — that decision belongs to the code, in one place, or it drifts
+ * per handler. `report` is what every `onError` should use.
+ */
+export function report(e: unknown, prefix?: string): void {
+  const text = prefix ? `${prefix} — ${errorMessage(e)}` : errorMessage(e)
+  if (errorSurface(e) === 'banner') {
+    useUI.getState().raiseBanner({
+      code: errorCode(e) ?? 'internal',
+      text,
+      detail: isWobuError(e) ? e.detail : undefined,
+      retryable: isRetryable(e),
+    })
+  } else {
+    useUI.getState().pushToast(text, 'error')
+  }
+}

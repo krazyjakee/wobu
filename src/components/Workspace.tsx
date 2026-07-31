@@ -5,7 +5,7 @@ import { errorMessage } from '../lib/api'
 import { useKinds, useNodes } from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
 import { ancestorsOf, buildGroups, indexNodes } from '../lib/tree'
-import { useUI, toast } from '../store/ui'
+import { useUI, report } from '../store/ui'
 import { TitleBar } from './TitleBar'
 import { ModeRail } from './ModeRail'
 import { StatusBar } from './StatusBar'
@@ -15,6 +15,7 @@ import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
+import { Banners } from './Banners'
 import { useKeyboard } from '../hooks/useKeyboard'
 
 const RAIL = 52
@@ -117,12 +118,17 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
   }, [isDragging, setNavWidth])
 
+  // Banners describe a condition of *this* project folder, so opening a
+  // different one starts clean rather than inheriting the last one's trouble.
+  const clearBanners = useUI((s) => s.clearBanners)
+  useEffect(() => clearBanners(), [project.id, clearBanners])
+
   useEffect(() => {
-    if (kindsQ.isError) toast(`Kind registry unavailable — ${errorMessage(kindsQ.error)}`, 'error')
+    if (kindsQ.isError) report(kindsQ.error, 'Kind registry unavailable')
   }, [kindsQ.isError, kindsQ.error])
 
   useEffect(() => {
-    if (nodesQ.isError) toast(`Could not list nodes — ${errorMessage(nodesQ.error)}`, 'error')
+    if (nodesQ.isError) report(nodesQ.error, 'Could not list nodes')
   }, [nodesQ.isError, nodesQ.error])
 
   // Collapsed panes drop their column entirely rather than shrinking to zero,
@@ -141,6 +147,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   return (
     <div className="app">
       <TitleBar project={project} chain={chain} selected={selected} kinds={kindIndex} />
+      <Banners />
 
       <div className="workspace" style={style}>
         <ModeRail />

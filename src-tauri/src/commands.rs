@@ -18,7 +18,7 @@ use wobu_core::kind_registry as registry;
 use wobu_core::{Id, KindDef, Node, NodeKind, NodeSummary};
 use wobu_store::{Project, ProjectSummary, SaveOutcome, recent};
 
-use crate::error::{CommandError, CommandResult};
+use crate::error::{CommandResult, WobuError};
 use crate::state::AppState;
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
@@ -107,7 +107,7 @@ pub fn node_create(
 pub fn node_upsert(state: State<'_, AppState>, node: Node) -> CommandResult<Node> {
     state.with(|p| match p.save_node(node)? {
         SaveOutcome::Saved(saved) => Ok(*saved),
-        SaveOutcome::Conflict { conflict_path } => Err(CommandError::conflict(conflict_path)),
+        SaveOutcome::Conflict { conflict_path } => Err(WobuError::conflict(conflict_path)),
     })
 }
 
@@ -211,36 +211,5 @@ mod bridge {
         let kinds: Vec<&str> = json.as_array().unwrap().iter().map(|d| d["kind"].as_str().unwrap()).collect();
         assert!(kinds.contains(&"style_guide"), "got {kinds:?}");
         assert!(kinds.contains(&"world_bible"), "got {kinds:?}");
-    }
-
-    #[test]
-    fn a_conflict_reports_the_path_rather_than_a_bare_message() {
-        let err = CommandError::conflict("nodes/species/vashk.conflict.md".into());
-        let json = serde_json::to_value(&err).unwrap();
-
-        assert_eq!(json["code"], "conflict");
-        assert_eq!(json["conflictPath"], "nodes/species/vashk.conflict.md");
-        // `errorMessage()` in api.ts reads `.message` and nothing else, so a
-        // conflict has to be legible without the code being understood.
-        assert!(json["message"].as_str().unwrap().contains("nodes/species/vashk.conflict.md"));
-    }
-
-    #[test]
-    fn store_errors_keep_their_own_wording() {
-        let err: CommandError = wobu_store::Error::NoSuchNode("01ARZ3NDEKTSV4RRFFQ69G5FAV".into()).into();
-        assert_eq!(serde_json::to_value(&err).unwrap()["code"], "no_such_node");
-        assert_eq!(err.message, "no node with id 01ARZ3NDEKTSV4RRFFQ69G5FAV");
-
-        let err: CommandError = wobu_store::Error::ReadOnly.into();
-        assert_eq!(serde_json::to_value(&err).unwrap()["code"], "read_only");
-
-        // A domain rule surfaces as `invalid`, not as an internal failure.
-        let err: CommandError =
-            wobu_store::Error::Core(wobu_core::Error::SelfParent).into();
-        assert_eq!(serde_json::to_value(&err).unwrap()["code"], "invalid");
-
-        // And a conflict raised anywhere else must not carry a stray path.
-        let err = CommandError::no_project_open();
-        assert!(serde_json::to_value(&err).unwrap().get("conflictPath").is_none());
     }
 }

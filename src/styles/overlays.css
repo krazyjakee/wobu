@@ -380,3 +380,75 @@
   border-color: color-mix(in srgb, #c4384a 45%, transparent);
   color: #e79aa5;
 }
+
+/* ── banners ──────────────────────────────────────────────────────────────
+   The persistent counterpart to .toast. Docked to the top of the window and
+   in flow rather than fixed, so it pushes the workspace down instead of
+   covering the title bar — a condition this serious should not be something
+   the user can lose behind a panel. */
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  z-index: 70;
+}
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: 12px;
+  background: color-mix(in srgb, #c4384a 16%, var(--bg-raised));
+  border-bottom: 1px solid color-mix(in srgb, #c4384a 45%, transparent);
+  color: #f0c2c8;
+}
+.banner > svg {
+  flex: none;
+  margin-top: 1px;
+  opacity: 0.85;
+}
+.banner-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  flex: 1;
+  min-width: 0;
+}
+.banner-text {
+  flex: 1;
+  min-width: 0;
+}
+.banner-more {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  opacity: 0.7;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.banner-more:hover {
+  opacity: 1;
+}
+.banner-detail {
+  flex-basis: 100%;
+  font-family: var(--mono);
+  font-size: 11px;
+  opacity: 0.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.banner-x {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.banner-x:hover {
+  opacity: 1;
+}
