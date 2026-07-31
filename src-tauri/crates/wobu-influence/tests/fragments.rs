@@ -610,12 +610,21 @@ fn an_absurd_stack_in_a_large_world_compiles_in_well_under_a_millisecond() {
     let sheet = preset("environment_matte").unwrap();
     assert_eq!(stack.sources().len(), 102, "a hundred places, the subject and the shot");
 
-    let started = std::time::Instant::now();
-    let compiled = fragments(&stack, sheet, &Sliders::neutral());
-    let elapsed = started.elapsed();
+    // Fastest of several runs, not one — a single sample measures the machine's
+    // load as much as this code, and the neighbouring resolve bound in
+    // `stacks.rs` has failed that way with a build running beside it. The
+    // regression worth catching here is a walk over the world rather than the
+    // stack, which is an order of magnitude and fails the fastest run too.
+    let mut fastest = std::time::Duration::MAX;
+    let mut compiled = Vec::new();
+    for _ in 0..5 {
+        let started = std::time::Instant::now();
+        compiled = fragments(&stack, sheet, &Sliders::neutral());
+        fastest = fastest.min(started.elapsed());
+    }
 
     // Ten fragments and one reference per district, plus the framing text. The
     // subject has no description of its own yet.
     assert_eq!(compiled.len(), 1_101);
-    assert!(elapsed < std::time::Duration::from_millis(1), "took {elapsed:?}");
+    assert!(fastest < std::time::Duration::from_millis(1), "took {fastest:?}");
 }

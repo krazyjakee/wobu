@@ -458,11 +458,21 @@ fn an_absurd_number_of_fragments_compiles_in_well_under_a_millisecond() {
         })
         .collect();
 
-    let started = std::time::Instant::now();
-    let compiled = compile(&built, Budget { prompt: Chars::new(2_000), negative: Chars::new(0) });
-    let elapsed = started.elapsed();
+    // Fastest of several runs, not one — a single sample measures the machine's
+    // load as much as this code, and the neighbouring resolve bound in
+    // `stacks.rs` has failed that way with a build running beside it. The
+    // regression worth catching is a sort that went quadratic, which fails the
+    // fastest run too.
+    let mut fastest = std::time::Duration::MAX;
+    let budget = Budget { prompt: Chars::new(2_000), negative: Chars::new(0) };
+    let mut compiled = compile(&built, budget);
+    for _ in 0..5 {
+        let started = std::time::Instant::now();
+        compiled = compile(&built, budget);
+        fastest = fastest.min(started.elapsed());
+    }
 
     assert!(compiled.prompt().chars().count() <= 2_000);
     assert!(!compiled.dropped().is_empty());
-    assert!(elapsed < std::time::Duration::from_millis(1), "took {elapsed:?}");
+    assert!(fastest < std::time::Duration::from_millis(1), "took {fastest:?}");
 }

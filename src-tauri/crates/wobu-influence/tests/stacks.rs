@@ -516,10 +516,22 @@ fn a_world_of_one_thousand_nodes_resolves_in_well_under_a_millisecond() {
     nodes.extend([&style, &bible, &kael]);
     let world = World::new(nodes);
 
-    let started = std::time::Instant::now();
-    let stack = resolve(&world, kael.id, Some(Shot::new("Environment matte"))).unwrap();
-    let elapsed = started.elapsed();
+    // Fastest of several runs, not one. A single sample measures the scheduler
+    // as much as the code — this failed at 1.35ms with a cargo build running
+    // beside it, on a walk that takes a third of that when it gets a core to
+    // itself. The minimum is the honest estimate of what the algorithm costs,
+    // and the regression it guards against — walking the whole world instead of
+    // the stack — is an order of magnitude, so it blows the bound on the
+    // fastest run too and taking the minimum hides nothing.
+    let mut fastest = std::time::Duration::MAX;
+    let mut sources = 0;
+    for _ in 0..5 {
+        let started = std::time::Instant::now();
+        let stack = resolve(&world, kael.id, Some(Shot::new("Environment matte"))).unwrap();
+        fastest = fastest.min(started.elapsed());
+        sources = stack.sources().len();
+    }
 
-    assert_eq!(stack.sources().len(), 1_004);
-    assert!(elapsed < std::time::Duration::from_millis(1), "took {elapsed:?}");
+    assert_eq!(sources, 1_004);
+    assert!(fastest < std::time::Duration::from_millis(1), "took {fastest:?}");
 }
