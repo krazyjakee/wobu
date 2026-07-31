@@ -369,6 +369,17 @@ pub fn kind_def(kind: NodeKind) -> &'static KindDef {
         .expect("every NodeKind variant has a registry entry")
 }
 
+/// The definition behind a section key, whichever kinds declare it.
+///
+/// The vocabulary check for anything that names sections from outside the
+/// registry — output presets weight them (`preset.rs`), and the compiler routes
+/// them. A key nothing declares is not an error at any point in the pipeline; it
+/// simply never matches a fragment, so the feature that named it is half-working
+/// and silent about it. `None` is how a caller's test can catch that.
+pub fn section_def(key: &str) -> Option<&'static SectionDef> {
+    REGISTRY.iter().flat_map(|d| d.sections).find(|s| s.key == key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,6 +420,20 @@ mod tests {
                 def.kind
             );
         }
+    }
+
+    #[test]
+    fn every_declared_section_is_findable_by_key() {
+        // `section_def` is the vocabulary check other modules validate against,
+        // so it has to see every key, not just the ones the first kind declares.
+        for def in REGISTRY {
+            for section in def.sections {
+                assert_eq!(section_def(section.key), Some(section), "{}", section.key);
+            }
+        }
+        assert_eq!(section_def("costume").unwrap().label, "Costume");
+        assert!(section_def("").is_none());
+        assert!(section_def("Silhouette").is_none(), "keys are the snake_case form");
     }
 
     #[test]
