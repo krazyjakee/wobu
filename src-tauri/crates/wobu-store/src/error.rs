@@ -27,6 +27,15 @@ pub enum Error {
     #[error("no node with id {0}")]
     NoSuchNode(String),
 
+    /// A resolution named a path that is not a conflict sibling.
+    ///
+    /// Its own variant rather than a generic invalid-argument, because
+    /// `resolve_conflict` is the one function in Wobu that deletes a file the
+    /// user did not ask to delete by name, and the check that keeps it pointed
+    /// at conflict siblings deserves to fail loudly rather than blend in.
+    #[error("{0} is not a conflict sibling")]
+    NotAConflict(PathBuf),
+
     #[error("malformed node file {path}: {reason}")]
     Malformed { path: PathBuf, reason: String },
 

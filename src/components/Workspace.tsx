@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
+import type { Conflict, NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
-import { useCorruptFiles, useKinds, useNodes } from '../lib/queries'
+import { useConflicts, useCorruptFiles, useKinds, useNodes } from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
 import { ancestorsOf, buildGroups, indexNodes } from '../lib/tree'
 import { useUI, report } from '../store/ui'
@@ -17,6 +17,7 @@ import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
 import { Settings } from './Settings'
 import { Banners } from './Banners'
+import { ConflictCard, ConflictsElsewhere } from './ConflictCard'
 import { useKeyboard } from '../hooks/useKeyboard'
 
 const RAIL = 52
@@ -25,6 +26,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const kindsQ = useKinds()
   const nodesQ = useNodes(true)
   const corruptQ = useCorruptFiles(true)
+  const conflictsQ = useConflicts(true)
 
   const mode = useUI((s) => s.mode)
   const navWidth = useUI((s) => s.navWidth)
@@ -66,11 +68,27 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     [nodes, singletonKinds, kindOrder, kindIndex],
   )
 
+  const conflicts = useMemo(() => conflictsQ.data ?? [], [conflictsQ.data])
+
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null
   const chain = useMemo(
     () => (selected ? ancestorsOf(selected.id, byId) : []),
     [selected, byId],
   )
+
+  // Conflicts on the node the editor is showing get a card; the rest get one
+  // line saying where they are. A conflict on a node nobody happens to open is
+  // otherwise invisible forever, which is the same silent loss the whole
+  // feature exists to prevent — just slower.
+  const [conflictsHere, conflictsElsewhere] = useMemo(() => {
+    const here: Conflict[] = []
+    const elsewhere: Conflict[] = []
+    for (const c of conflicts) {
+      if (selected && c.nodeId === selected.id) here.push(c)
+      else elsewhere.push(c)
+    }
+    return [here, elsewhere]
+  }, [conflicts, selected])
 
   // A selection that no longer exists (deleted, or removed on disk) is dropped
   // rather than left pointing at nothing.
@@ -184,15 +202,31 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 aria-orientation="vertical"
               />
             )}
-            <Editor
-              selected={selected}
-              chain={chain}
-              kinds={kindIndex}
-              readOnly={project.readOnly}
-              onJump={jumpTo}
-              hasNodes={nodes.length > 0}
-              loading={nodesQ.isPending}
-            />
+            {/* The conflict card belongs above the editor rather than inside
+                it: it is about the *file*, not about the node being edited, and
+                it has to stay visible while the user scrolls the notes they are
+                comparing it against. The wrapper is what keeps both of them in
+                the single `1fr` track — as separate grid children the card
+                would land in the inspector's column. */}
+            <div className="editor-region">
+              {(conflictsHere.length > 0 || conflictsElsewhere.length > 0) && (
+                <div className="conflicts">
+                  {conflictsHere.map((c) => (
+                    <ConflictCard key={c.relPath} conflict={c} projectPath={project.path} />
+                  ))}
+                  <ConflictsElsewhere conflicts={conflictsElsewhere} onJump={jumpTo} />
+                </div>
+              )}
+              <Editor
+                selected={selected}
+                chain={chain}
+                kinds={kindIndex}
+                readOnly={project.readOnly}
+                onJump={jumpTo}
+                hasNodes={nodes.length > 0}
+                loading={nodesQ.isPending}
+              />
+            </div>
             {!inspCollapsed && <Inspector selected={selected} kinds={kindIndex} />}
           </>
         ) : mode === 'settings' ? (

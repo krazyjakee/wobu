@@ -9,7 +9,16 @@ import {
 } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
 import * as api from './api'
-import type { CorruptFile, KindDef, NodeKind, NodeSummary, ProjectSummary, WobuNode } from './api'
+import type {
+  Conflict,
+  ConflictKeep,
+  CorruptFile,
+  KindDef,
+  NodeKind,
+  NodeSummary,
+  ProjectSummary,
+  WobuNode,
+} from './api'
 import {
   applyCommand,
   birthEntry,
@@ -28,6 +37,7 @@ export const qk = {
   projectRecent: ['project_recent'] as const,
   nodes: ['node_list'] as const,
   corrupt: ['corrupt_files'] as const,
+  conflicts: ['conflicts'] as const,
   node: (id: string) => ['node_get', id] as const,
   search: (q: string) => ['node_search', q] as const,
 }
@@ -40,6 +50,9 @@ export function invalidateWorld(qc: QueryClient) {
   // corrupt list has to move with the node list or it goes stale the moment
   // someone repairs a file.
   void qc.invalidateQueries({ queryKey: qk.corrupt })
+  // A conflict sibling can be parked by another machine, so the only signal
+  // this side ever gets that one appeared is the folder having changed.
+  void qc.invalidateQueries({ queryKey: qk.conflicts })
   // Editing a node changes what it matches. Without this the palette keeps
   // offering a hit for a phrase the user just deleted.
   void qc.invalidateQueries({ queryKey: ['node_search'] })
@@ -93,6 +106,49 @@ export function useCorruptFiles(enabled: boolean): UseQueryResult<CorruptFile[]>
     queryFn: api.corruptFiles,
     enabled,
     retry: false,
+  })
+}
+
+/**
+ * Versions of nodes that lost a save race and are waiting for a decision.
+ *
+ * Read from the folder on every fetch. A sibling can be parked by a
+ * collaborator's Wobu on the far side of a share, so there is no event here
+ * that could keep a cached list honest — `world:changed` invalidates it, and so
+ * does a save that comes back `write.conflict`.
+ */
+export function useConflicts(enabled: boolean): UseQueryResult<Conflict[]> {
+  return useQuery({
+    queryKey: qk.conflicts,
+    queryFn: api.conflicts,
+    enabled,
+    retry: false,
+  })
+}
+
+/**
+ * Apply a decision about one conflict, deleting the version the user rejected.
+ *
+ * `outcome` is not always `done`, and the two other answers are the point
+ * rather than an edge case: `stale` means the node file moved while the card
+ * was open and the question has changed, `conflict` means the write itself lost
+ * a race. Both left everything on disk alone, so both are told to the user and
+ * the list refetched rather than treated as a failure.
+ */
+export function useResolveConflict() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { relPath: string; keep: ConflictKeep; expectedHash: string }) =>
+      api.conflictResolve(v.relPath, v.keep, v.expectedHash),
+    onSuccess: (result) => {
+      if (result.outcome === 'stale') {
+        toast('That node changed while the conflict was open. Nothing was written — here it is again.')
+      } else if (result.outcome === 'conflict') {
+        toast(`Someone saved first. Your pick was kept as ${result.conflictPath}.`, 'error')
+      }
+      invalidateWorld(qc)
+    },
+    onError: (e) => report(e, 'Could not resolve the conflict'),
   })
 }
 
@@ -166,6 +222,7 @@ export function useCloseProject() {
       qc.removeQueries({ queryKey: qk.nodes })
       qc.removeQueries({ queryKey: ['node_get'] })
       qc.removeQueries({ queryKey: qk.corrupt })
+      qc.removeQueries({ queryKey: qk.conflicts })
       // Cached hits name nodes in a world that is no longer open.
       qc.removeQueries({ queryKey: ['node_search'] })
     },
@@ -207,6 +264,14 @@ export function useUpsertNode() {
       void qc.invalidateQueries({ queryKey: qk.nodes })
       const entry = ctx?.before && editEntry(ctx.before, node)
       if (entry) useUndoStack.getState().push(entry)
+    },
+    // A save that lost the race just parked a sibling on disk, and the card for
+    // it has to appear now rather than whenever the watcher next fires — on a
+    // network share that is a five-second poll, and five seconds of the user
+    // believing their paragraph is gone is the whole failure this feature is
+    // for. The caller's own `onError` still runs; this only refetches.
+    onError: (e) => {
+      if (api.errorCode(e) === 'write.conflict') invalidateWorld(qc)
     },
   })
 }

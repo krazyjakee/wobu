@@ -16,7 +16,9 @@ use tauri::{AppHandle, Emitter, State};
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
 use wobu_core::{Id, KindDef, Node, NodeKind, NodeSummary};
-use wobu_store::{CorruptFile, Peer, Project, ProjectSummary, SaveOutcome, recent};
+use wobu_store::{
+    Conflict, CorruptFile, Keep, Peer, Project, ProjectSummary, Resolved, SaveOutcome, recent,
+};
 
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
@@ -229,6 +231,45 @@ pub fn node_move(
     new_parent_id: Option<Id>,
 ) -> CommandResult<()> {
     state.with(|p| Ok(p.move_node(id, new_parent_id)?))
+}
+
+/* ── conflicts ────────────────────────────────────────────────────────────── */
+
+/// Unresolved conflict siblings in the open project.
+///
+/// Read from the folder on every call rather than pushed. A sibling can be
+/// parked by a *different machine*, so there is no event on this side that
+/// could keep a cached list honest — `world:changed` invalidates this alongside
+/// the node list, and a failing save invalidates it directly.
+#[tauri::command]
+pub fn conflicts(state: State<'_, AppState>) -> CommandResult<Vec<Conflict>> {
+    state.with(|p| Ok(p.conflicts()?))
+}
+
+/// Carry out the user's decision about one conflict sibling.
+///
+/// The only command in Wobu that deletes a file the user did not name as a
+/// node, which is why `expected_hash` is required rather than optional: it is
+/// the hash of the node file as the card rendered it, and a mismatch means the
+/// diff the user answered is not the one on disk. That comes back as
+/// `{ outcome: "stale" }` with both files untouched, and the card redraws.
+#[tauri::command]
+pub fn conflict_resolve(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    rel_path: String,
+    keep: Keep,
+    expected_hash: String,
+) -> CommandResult<Resolved> {
+    let outcome = state.with(|p| Ok(p.resolve_conflict(&rel_path, keep, &expected_hash)?))?;
+    if matches!(outcome, Resolved::Done) {
+        diag::info(&format!("conflict resolved at {rel_path} keeping {keep:?}"));
+        // Only on a real change. A stale or raced resolution left the folder
+        // exactly as it was, and waking the whole world for it would refetch
+        // the node the user is mid-decision about.
+        let _ = app.emit(WORLD_CHANGED, ());
+    }
+    Ok(outcome)
 }
 
 /* ── presence ─────────────────────────────────────────────────────────────── */
@@ -523,6 +564,43 @@ mod bridge {
         let ids: Vec<Id> =
             serde_json::from_str(r#"["01ARZ3NDEKTSV4RRFFQ69G5FAV"]"#).expect("ids should decode");
         assert_eq!(ids.len(), 1);
+    }
+
+    #[test]
+    fn a_conflict_matches_the_conflict_interface() {
+        let conflict = Conflict {
+            rel_path: "nodes/character/kael.conflict-nadia-20260731T142211Z.md".into(),
+            node_rel_path: "nodes/character/kael.md".into(),
+            node_id: Some("01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap()),
+            node_name: Some("Kael Vantris".into()),
+            user: Some("nadia".into()),
+            saved_at: Some("2026-07-31T14:22:11Z".parse().unwrap()),
+            mine: false,
+            parked: "hers".into(),
+            current: "ours".into(),
+            current_hash: "abc123".into(),
+        };
+        let json = serde_json::to_value(&conflict).unwrap();
+
+        for key in [
+            "relPath", "nodeRelPath", "nodeId", "nodeName", "user", "savedAt", "mine", "parked",
+            "current", "currentHash",
+        ] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from Conflict");
+        }
+        // The card renders a time from this, so it has to arrive as something
+        // `new Date()` understands rather than as a serde struct.
+        assert_eq!(json["savedAt"], "2026-07-31T14:22:11Z");
+        assert_eq!(json["nodeId"], "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+    }
+
+    #[test]
+    fn conflict_resolve_accepts_the_choice_the_buttons_send() {
+        // `keep` is a bare string on the wire. Anything else on this side and
+        // the buttons fail at the bridge rather than at compile time.
+        assert_eq!(serde_json::from_str::<Keep>("\"parked\"").unwrap(), Keep::Parked);
+        assert_eq!(serde_json::from_str::<Keep>("\"current\"").unwrap(), Keep::Current);
+        assert!(serde_json::from_str::<Keep>("\"mine\"").is_err());
     }
 
     #[test]

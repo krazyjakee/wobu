@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use wobu_core::{Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def, kind_registry};
 
 use crate::atomic::{self, WriteOutcome};
+use crate::conflict::{self, Conflict, Keep, Resolved};
 use crate::error::{Error, Result};
 use crate::index::{CorruptFile, Index};
 use crate::markdown;
@@ -515,6 +516,193 @@ impl Project {
         Ok(())
     }
 
+    // ── conflicts ────────────────────────────────────────────────────────
+
+    /// Every unresolved conflict sibling in the folder, newest first.
+    ///
+    /// Recomputed from the directory rather than cached in the index, and that
+    /// is deliberate. A sibling can arrive from a *different machine* — a
+    /// collaborator's Wobu parking their loser onto the share — so there is no
+    /// event on this side that could keep a cached list honest. The walk is one
+    /// directory listing, which `docs/07-file-shares.md` establishes as the
+    /// cheap half; the reads are two files per conflict, and a folder with no
+    /// conflicts, which is almost all of them, pays nothing at all.
+    pub fn conflicts(&self) -> Result<Vec<Conflict>> {
+        let mut out = Vec::new();
+
+        for (rel, path) in self.conflict_files() {
+            let Some(name) = path.file_name().and_then(|n| n.to_str()).and_then(conflict::parse)
+            else {
+                continue;
+            };
+            // Unreadable bytes rather than a missing file: a sibling half-copied
+            // by a sync client is exactly the thing not to drop off the list.
+            let Some((parked, _)) = atomic::read_stamped(&path)? else { continue };
+
+            let target = path.with_file_name(name.target_file_name());
+            let target_rel = target
+                .strip_prefix(&self.root)
+                .map(paths::to_rel_string)
+                .unwrap_or_else(|_| paths::to_rel_string(&target));
+            // A node file that has since been deleted leaves the sibling as the
+            // only surviving copy, so it is listed with an empty other side
+            // rather than hidden.
+            let (current, current_hash) = match atomic::read_stamped(&target)? {
+                Some((text, stamp)) => (text, stamp.hash),
+                None => (String::new(), String::new()),
+            };
+            let node = self.index.node_at_rel_path(&target_rel)?;
+
+            out.push(Conflict {
+                mine: name.user.as_deref() == Some(self.user.as_str()),
+                rel_path: rel,
+                node_rel_path: target_rel,
+                node_id: node.as_ref().map(|(id, _)| *id),
+                node_name: node.map(|(_, name)| name),
+                user: name.user,
+                saved_at: name.saved_at,
+                parked,
+                current,
+                current_hash,
+            });
+        }
+
+        // Newest first, so the card a user is most likely to be looking for is
+        // the one at the top. Unlabelled siblings sort last rather than first —
+        // `None` would otherwise win a descending sort and put the ones we know
+        // least about in front.
+        out.sort_by(|a, b| match (b.saved_at, a.saved_at) {
+            (Some(b), Some(a)) => b.cmp(&a),
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => a.rel_path.cmp(&b.rel_path),
+        });
+        Ok(out)
+    }
+
+    /// Carry out the user's decision about one conflict sibling.
+    ///
+    /// **This is the only code path in Wobu that deletes a conflict sibling**,
+    /// and it is reachable only from a button. Nothing on a timer, on a scan or
+    /// on a rebuild may ever grow a second one — a sibling is by construction
+    /// the last surviving copy of a paragraph somebody typed.
+    ///
+    /// `expected_hash` is the hash of the node file as the card rendered it. A
+    /// mismatch means a third writer moved the file while the user was reading
+    /// the diff, so the question they answered is not the question on disk:
+    /// [`Resolved::Stale`] comes back and *neither* file is touched. Without
+    /// that check, "keep theirs" would quietly throw away the parked version in
+    /// favour of text the user never saw, which is the same silent loss the
+    /// whole conflict machinery exists to prevent.
+    pub fn resolve_conflict(
+        &mut self,
+        rel_path: &str,
+        keep: Keep,
+        expected_hash: &str,
+    ) -> Result<Resolved> {
+        self.ensure_writable()?;
+
+        let sibling = paths::from_rel_string(&self.root, rel_path);
+        // Checked before anything else, and checked against the *filename*
+        // rather than against the list above: this function removes a file, and
+        // the argument comes over a bridge. A caller that got the path wrong
+        // must fail here rather than delete a node.
+        let name = sibling
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(conflict::parse)
+            .ok_or_else(|| Error::NotAConflict(sibling.clone()))?;
+        if !sibling.is_file() {
+            return Err(Error::NotAConflict(sibling));
+        }
+
+        let target = sibling.with_file_name(name.target_file_name());
+        let target_rel = target
+            .strip_prefix(&self.root)
+            .map(paths::to_rel_string)
+            .unwrap_or_else(|_| paths::to_rel_string(&target));
+
+        // `None` covers the node file having been deleted since the card was
+        // drawn, which is a change like any other and gets the same answer.
+        let current = atomic::read_stamped(&target)?;
+        let current_hash = current.as_ref().map(|(_, s)| s.hash.as_str()).unwrap_or("");
+        if current_hash != expected_hash {
+            return Ok(Resolved::Stale);
+        }
+
+        match keep {
+            // Nothing is written: the winner is already the file on disk. The
+            // guard above is what makes this safe — it is the reason a bare
+            // delete here cannot discard a version the user did not reject.
+            Keep::Current => {
+                self.remove_sibling(&sibling)?;
+                Ok(Resolved::Done)
+            }
+            Keep::Parked => {
+                let Some((parked, _)) = atomic::read_stamped(&sibling)? else {
+                    return Err(Error::NotAConflict(sibling));
+                };
+                let expected = current.map(|(_, stamp)| stamp);
+
+                // Back through `guarded_write` rather than a plain write. The
+                // hash check above closed the window the user spent reading;
+                // this closes the microseconds between that check and the
+                // rename, which on a share is a real window and the one place a
+                // resolution could still clobber.
+                match atomic::guarded_write(
+                    &self.root,
+                    &target,
+                    &parked,
+                    expected.as_ref(),
+                    &self.user,
+                )? {
+                    WriteOutcome::Written(stamp) => {
+                        match markdown::from_markdown(&parked, &target) {
+                            Ok(node) => {
+                                self.index.upsert_node(&node, &target_rel, &stamp)?;
+                                self.index.clear_corrupt(&target_rel)?;
+                            }
+                            // The user chose a version that does not parse —
+                            // a sibling a sync client truncated, most likely.
+                            // It is still their choice, so it lands; the
+                            // navigator says so rather than the app refusing.
+                            Err(e) => {
+                                let why = self.relative_message(&e.to_string());
+                                self.index.mark_corrupt(&target_rel, &why)?;
+                            }
+                        }
+                        // Only after the winner is safely on disk. The other
+                        // order loses everything if the write then fails.
+                        self.remove_sibling(&sibling)?;
+                        Ok(Resolved::Done)
+                    }
+                    WriteOutcome::Conflict { conflict_path, .. } => {
+                        let rel = conflict_path
+                            .strip_prefix(&self.root)
+                            .map(paths::to_rel_string)
+                            .unwrap_or_else(|_| paths::to_rel_string(&conflict_path));
+                        Ok(Resolved::Conflict { conflict_path: rel })
+                    }
+                }
+            }
+        }
+    }
+
+    /// The single `remove_file` call that may name a conflict sibling.
+    ///
+    /// Trivial on purpose: keeping it as one named function means a grep for
+    /// callers is a complete audit of what can delete one, which is the only
+    /// way to keep that promise true as the crate grows.
+    fn remove_sibling(&self, sibling: &Path) -> Result<()> {
+        match std::fs::remove_file(sibling) {
+            Ok(()) => Ok(()),
+            // Already gone — a collaborator resolved the same card. The user
+            // asked for it to not be there and it is not there.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(Error::io(sibling, e)),
+        }
+    }
+
     // ── reconciliation ───────────────────────────────────────────────────
 
     /// Read every node file and rebuild the index from scratch.
@@ -672,8 +860,13 @@ impl Project {
         Ok(changed)
     }
 
-    /// Every node Markdown file, as `(relative path, absolute path)`.
-    fn node_files(&self) -> Vec<(String, PathBuf)> {
+    /// Every Markdown file under `nodes/`, as `(relative path, absolute path)`.
+    ///
+    /// Includes conflict siblings; the two callers below split them apart. One
+    /// walk rather than two so the node list and the conflict list can never
+    /// disagree about which files exist, which they would the moment somebody
+    /// changed a depth limit in one of them.
+    fn markdown_files(&self) -> Vec<(String, PathBuf)> {
         let nodes_root = self.root.join(NODES_DIR);
         walkdir::WalkDir::new(&nodes_root)
             .max_depth(3)
@@ -681,17 +874,29 @@ impl Project {
             .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("md")))
-            .filter(|e| {
-                // Conflict siblings are for a human to resolve; indexing them
-                // would put ghost duplicates in the navigator.
-                !e.file_name().to_string_lossy().contains(".conflict-")
-            })
             .filter_map(|e| {
                 let rel = e.path().strip_prefix(&self.root).ok()?;
                 Some((paths::to_rel_string(rel), e.path().to_path_buf()))
             })
             .collect()
     }
+
+    /// Every node Markdown file, as `(relative path, absolute path)`.
+    fn node_files(&self) -> Vec<(String, PathBuf)> {
+        self.markdown_files().into_iter().filter(|(_, path)| !is_conflict_path(path)).collect()
+    }
+
+    /// The other half: files `guarded_write` parked, which are never nodes.
+    fn conflict_files(&self) -> Vec<(String, PathBuf)> {
+        self.markdown_files().into_iter().filter(|(_, path)| is_conflict_path(path)).collect()
+    }
+}
+
+/// Conflict siblings are for a human to resolve. Indexing one would put a ghost
+/// duplicate of the node in the navigator, and — far worse — make it a save
+/// target, so that resolving the conflict could start a new one.
+fn is_conflict_path(path: &Path) -> bool {
+    path.file_name().is_some_and(|n| conflict::is_sibling(&n.to_string_lossy()))
 }
 
 /// The name a conflict sibling is stamped with, and the name a collaborator

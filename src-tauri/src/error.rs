@@ -198,9 +198,11 @@ impl WobuError {
         WobuError::new(Code::NoProjectOpen, "No project is open.")
     }
 
-    /// A save that lost the race. The conflict *view* is M2 (#18), but the
-    /// user's text is on disk at `conflict_path` either way and they need to
-    /// be told that now rather than when the view lands.
+    /// A save that lost the race.
+    ///
+    /// `conflict_path` is the sibling their text was parked in, and it is what
+    /// the frontend uses to raise the right conflict card rather than making
+    /// the user find it in a list.
     pub fn conflict(conflict_path: String) -> Self {
         let mut e = WobuError::new(
             Code::Conflict,
@@ -226,6 +228,10 @@ impl From<StoreError> for WobuError {
             StoreError::SchemaTooNew { .. } => Code::SchemaTooNew,
             StoreError::NoProjectOpen => Code::NoProjectOpen,
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
+            // A resolution that named something other than a conflict sibling
+            // is a bug on the calling side, not a decision the user got wrong,
+            // so it lands in the same bucket as any other rejected argument.
+            StoreError::NotAConflict(_) => Code::Invalid,
             StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
             StoreError::ReadOnly => Code::ReadOnly,
             StoreError::Disconnected => Code::ShareUnmounted,

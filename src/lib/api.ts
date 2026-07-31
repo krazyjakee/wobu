@@ -327,6 +327,72 @@ export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 export const nodeMove = (id: string, newParentId: string | null) =>
   call<void>('node_move', { id, newParentId })
 
+/* ── conflicts ────────────────────────────────────────────────────────────── */
+
+/**
+ * A version of a node that lost a save race and was parked beside the winner.
+ *
+ * Both documents arrive whole rather than as a diff: how much context to show
+ * and whether to fold the unchanged parts is a rendering decision, and `Conflict`
+ * is a few kilobytes. `src/lib/diff.ts` does the aligning on this side.
+ */
+export interface Conflict {
+  /** The sibling file, project-relative. Also the handle `conflictResolve` takes. */
+  relPath: string
+  /** The node file it was parked beside. */
+  nodeRelPath: string
+  /** Null when the node file has since been deleted or cannot be parsed. */
+  nodeId: string | null
+  nodeName: string | null
+  /** Whose version was set aside, read back out of the filename. */
+  user: string | null
+  /** ISO 8601. Null for a sibling whose name nothing could parse. */
+  savedAt: string | null
+  /**
+   * Whether the parked version carries *this* session's user name — the
+   * difference between a card that says "keep mine" and one that says "keep
+   * Nadia's". Only the wording depends on it.
+   */
+  mine: boolean
+  /** The text that was set aside. */
+  parked: string
+  /** What is at `nodeRelPath` right now. Empty if the node file is gone. */
+  current: string
+  /**
+   * Hash of `current` as the card rendered it. Handed straight back to
+   * `conflictResolve`, which refuses if it no longer matches — that is what
+   * stops a decision being applied to a version the user never read.
+   */
+  currentHash: string
+}
+
+/** Which version the user chose. There is deliberately no "merge". */
+export type ConflictKeep = 'parked' | 'current'
+
+/**
+ * What came of a resolution. Only `done` changed anything on disk; `stale` and
+ * `conflict` both left the two files exactly as they were.
+ */
+export type ConflictResolved =
+  | { outcome: 'done' }
+  /** A third writer moved the node file while the user was reading the diff. */
+  | { outcome: 'stale' }
+  /** The write lost a race of its own; our pick is parked as a further sibling. */
+  | { outcome: 'conflict'; conflictPath: string }
+
+export const conflicts = () => call<Conflict[]>('conflicts')
+
+/**
+ * Apply the user's decision, and delete the version they rejected.
+ *
+ * The only call in the app that removes a conflict sibling, which is why it is
+ * only ever reached from a button. `expectedHash` is `Conflict.currentHash`
+ * unchanged — passing anything else defeats the staleness check that stops a
+ * third writer's version being discarded unseen.
+ */
+export const conflictResolve = (relPath: string, keep: ConflictKeep, expectedHash: string) =>
+  call<ConflictResolved>('conflict_resolve', { relPath, keep, expectedHash })
+
 /* ── presence ─────────────────────────────────────────────────────────────── */
 
 /**

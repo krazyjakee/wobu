@@ -14,6 +14,7 @@
 //!   SMB/NFS. Deleting it is always safe; it rebuilds from the Markdown.
 
 pub mod atomic;
+pub mod conflict;
 pub mod error;
 pub mod frontmatter;
 pub mod index;
@@ -25,6 +26,7 @@ pub mod recent;
 pub mod scan;
 pub mod watcher;
 
+pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};
 pub use presence::{Peer, Presence, PresenceHandle};

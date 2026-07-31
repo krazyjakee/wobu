@@ -277,6 +277,21 @@ impl Index {
         Ok(parsed)
     }
 
+    /// `(id, name)` for whatever node lives at a path.
+    ///
+    /// The reverse of [`rel_path_of`](Self::rel_path_of), and the lookup a
+    /// conflict sibling needs: the card knows the filename it was parked beside
+    /// and has to say "Kael Vantris" rather than quote a path at the user.
+    pub fn node_at_rel_path(&self, rel_path: &str) -> Result<Option<(Id, String)>> {
+        let row: Option<(String, String)> = self
+            .conn
+            .query_row("SELECT id, name FROM nodes WHERE rel_path = ?1", params![rel_path], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .optional()?;
+        Ok(row.and_then(|(id, name)| Id::from_string(&id).ok().map(|id| (id, name))))
+    }
+
     /// The navigator's data source. Ordered so the tree renders without a sort:
     /// registry order by kind, then alphabetically.
     pub fn list_nodes(&self) -> Result<Vec<NodeSummary>> {
