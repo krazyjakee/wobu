@@ -1,7 +1,11 @@
 /* ── shell ────────────────────────────────────────────────────────────────── */
 .app {
   display: grid;
-  grid-template-rows: 40px 1fr 26px;
+  /* title bar · banners · workspace · status bar. The banner row is `auto` so
+     it costs nothing when there is nothing to say, and declaring it here rather
+     than letting auto-placement invent a row is what stops a banner appearing
+     and shoving the workspace off the bottom of the window. */
+  grid-template-rows: 40px auto 1fr 26px;
   height: 100vh;
 }
 .workspace {

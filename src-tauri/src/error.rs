@@ -200,6 +200,7 @@ impl From<StoreError> for WobuError {
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
             StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
             StoreError::ReadOnly => Code::ReadOnly,
+            StoreError::Disconnected => Code::ShareUnmounted,
             StoreError::Core(_) => Code::Invalid,
             // The one I/O case worth telling apart. A share that unmounts
             // mid-session reports `NotFound`/`NotConnected` on every path
@@ -329,6 +330,19 @@ mod tests {
         let e: WobuError = StoreError::Core(wobu_core::Error::SelfParent).into();
         assert_eq!(json(&e)["code"], "node.invalid");
         assert_eq!(e.message, "a node cannot be its own parent");
+    }
+
+    #[test]
+    fn a_disconnected_share_reaches_the_ui_as_a_retryable_banner_code() {
+        // `Error::Disconnected` is what `reconcile` and every write path raise
+        // once the folder stops being reachable. It has to arrive as the code
+        // `errorSurface` routes to a banner, and as retryable — the share
+        // coming back is the expected outcome.
+        let e: WobuError = StoreError::Disconnected.into();
+        let j = json(&e);
+        assert_eq!(j["code"], "share.unmounted");
+        assert_eq!(j["retryable"], true);
+        assert!(e.message.contains("unmounted"), "{}", e.message);
     }
 
     #[test]

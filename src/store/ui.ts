@@ -27,6 +27,10 @@ export interface Banner {
   text: string
   detail?: string
   retryable: boolean
+  /** An affordance rendered inside the banner, when there is something to do. */
+  action?: { label: string; run: () => void }
+  /** Hides the dismiss button. For a banner the user must answer, not read. */
+  sticky?: boolean
 }
 
 const NAV_MIN = 200

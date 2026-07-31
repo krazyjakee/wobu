@@ -68,6 +68,29 @@ pub fn project_recent() -> Vec<ProjectSummary> {
     recent::list_summaries()
 }
 
+/// Whether the open project's folder is currently unreachable.
+///
+/// The `share:offline` / `share:online` events are the live signal; this is
+/// for the one case events cannot cover — a webview that reloaded while
+/// disconnected and so missed the event that would have raised the banner.
+#[tauri::command]
+pub fn share_offline(state: State<'_, AppState>) -> bool {
+    state.is_offline()
+}
+
+/// Quit despite the share being away, having been told what that costs.
+///
+/// The window's close handler refuses the first attempt while offline; this is
+/// the only way past it, and it exists so that the refusal is a warning rather
+/// than a trap the user cannot get out of.
+#[tauri::command]
+pub fn force_quit(app: AppHandle, state: State<'_, AppState>) {
+    // Drop the project first so the watcher and reconnect threads stop before
+    // the process does, rather than being killed mid-reconcile.
+    state.close();
+    app.exit(0);
+}
+
 /// Take ownership of a just-opened project: remember it in the recents list,
 /// then hand it to the state (which starts the watcher).
 fn adopt(app: &AppHandle, state: &AppState, project: Project) -> ProjectSummary {

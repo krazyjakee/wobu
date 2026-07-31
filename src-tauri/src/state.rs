@@ -1,5 +1,6 @@
-//! The one piece of mutable process state: the open project, and the watcher
-//! keeping it honest about what is on disk.
+//! The one piece of mutable process state: the open project, the watcher
+//! keeping it honest about what is on disk, and the reconnect loop for when
+//! that disk stops being there.
 //!
 //! ## Why a `Mutex` and not an `RwLock`
 //!
@@ -16,19 +17,45 @@
 //! anything slow — an LLM call, a network stat, a dialog — and the rule that
 //! keeps that true is that every helper below takes the lock, does one thing,
 //! and gives it back.
+//!
+//! ## Offline
+//!
+//! A project on a share can stop being reachable at any moment. The index
+//! lives in local app data, so when that happens the whole world is still
+//! *readable* — the app stays usable and the UI keeps rendering from it. What
+//! changes is that writes are refused (in `wobu-store`, on the write path) and
+//! a reconnect loop starts. Nothing is closed and nothing is discarded,
+//! because the share coming back is the expected outcome rather than the
+//! surprising one.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter};
-use wobu_store::{Project, Watcher};
+use wobu_store::{Error as StoreError, Project, Watcher, paths};
 
 use crate::error::{CommandResult, WobuError};
 
-/// Emitted whenever the project folder turns out to differ from what we last
-/// indexed. `src/lib/queries.ts` listens for this and invalidates the world.
+/// The project folder turned out to differ from what we last indexed.
+/// `src/lib/queries.ts` listens for this and invalidates the world.
 pub const WORLD_CHANGED: &str = "world:changed";
+/// The folder stopped being reachable. The UI raises a banner and keeps
+/// rendering from the cache it already has — it must *not* refetch, because
+/// the whole point is that nothing has been lost.
+pub const SHARE_OFFLINE: &str = "share:offline";
+/// It came back, and the index has been reconciled against it.
+pub const SHARE_ONLINE: &str = "share:online";
+
+/// Reconnect backoff, in seconds. Starts eager because a laptop waking from
+/// sleep is usually back within a second or two, and caps low enough that a
+/// share restored over lunch is noticed within half a minute.
+const BACKOFF: &[u64] = &[1, 2, 4, 8, 15, 30];
+/// Poll granularity, so closing a project is noticed inside a quarter second
+/// rather than at the end of the current backoff step.
+const TICK: Duration = Duration::from_millis(250);
 
 pub struct Open {
     pub project: Project,
@@ -36,13 +63,21 @@ pub struct Open {
     /// window between opening a project and the watcher starting, and if the
     /// platform refused to give us one at all.
     pub watcher: Option<Watcher>,
+    /// Whether the folder is currently unreachable. `wobu-store` refuses
+    /// writes on its own; this exists so the banner is raised once rather than
+    /// on every event, and so a webview that reloaded while disconnected can
+    /// ask for the current state.
+    pub offline: bool,
 }
 
-/// Cloneable handle to the slot, so the watcher callback can reach it without
-/// borrowing from a Tauri `State<'_, _>`.
 #[derive(Default)]
 pub struct AppState {
     slot: Arc<Mutex<Option<Open>>>,
+    /// Bumped on every install and close. Background threads capture the value
+    /// they were spawned under and stop as soon as it moves — which is what
+    /// stops a reconnect loop belonging to a closed project from reconciling
+    /// its successor.
+    generation: Arc<AtomicU64>,
 }
 
 impl AppState {
@@ -60,17 +95,20 @@ impl AppState {
         f(guard.as_ref().map(|o| &o.project))
     }
 
+    pub fn is_offline(&self) -> bool {
+        self.slot.lock().as_ref().is_some_and(|o| o.offline)
+    }
+
     /// Install a freshly opened project, replacing (and closing) whatever was
     /// open before, then start watching its folder.
     pub fn install(&self, app: &AppHandle, project: Project) {
         let root = project.root().to_path_buf();
 
-        // Close the previous project first, and crucially do the *drop* with
-        // the lock released — see `close`.
         self.close();
-        *self.slot.lock() = Some(Open { project, watcher: None });
+        let generation = self.generation.load(Ordering::SeqCst);
+        *self.slot.lock() = Some(Open { project, watcher: None, offline: false });
 
-        let watcher = self.start_watcher(app, &root);
+        let watcher = self.start_watcher(app, &root, generation);
         if let Some(open) = self.slot.lock().as_mut() {
             open.watcher = watcher;
         }
@@ -78,6 +116,11 @@ impl AppState {
 
     /// Close the open project, if any. Idempotent.
     pub fn close(&self) {
+        // Bumped first: a background thread waking between here and the `take`
+        // below sees a stale generation and bows out rather than reconciling a
+        // project on its way out.
+        self.generation.fetch_add(1, Ordering::SeqCst);
+
         // Written as take-then-drop rather than `*self.slot.lock() = None` so
         // that the `Project` — and with it the SQLite index handle — is dropped
         // with the guard already released. The watch thread may be inside the
@@ -89,23 +132,13 @@ impl AppState {
         drop(taken);
     }
 
-    fn start_watcher(&self, app: &AppHandle, root: &Path) -> Option<Watcher> {
-        let slot = Arc::clone(&self.slot);
+    fn start_watcher(&self, app: &AppHandle, root: &Path, generation: u64) -> Option<Watcher> {
+        let this = self.handle();
         let app = app.clone();
+        let watched = root.to_path_buf();
 
         let result = Watcher::start(root, move || {
-            // Reconcile under the lock; emit outside it. `reconcile` reports
-            // whether anything actually moved, and we only wake the frontend
-            // when it did — otherwise every save the app itself makes would
-            // bounce straight back as a cache invalidation and refetch.
-            let changed = match slot.lock().as_mut() {
-                Some(open) => open.project.reconcile().unwrap_or(false),
-                // Closed between the event firing and us getting the lock.
-                None => return,
-            };
-            if changed {
-                let _ = app.emit(WORLD_CHANGED, ());
-            }
+            this.on_folder_event(&app, &watched, generation);
         });
 
         match result {
@@ -118,4 +151,108 @@ impl AppState {
             }
         }
     }
+
+    /// The watcher fired: either the folder changed, or it went away.
+    fn on_folder_event(&self, app: &AppHandle, root: &Path, generation: u64) {
+        if self.generation.load(Ordering::SeqCst) != generation {
+            return;
+        }
+
+        // Reconcile under the lock; emit outside it.
+        let outcome = {
+            let mut guard = self.slot.lock();
+            let Some(open) = guard.as_mut() else { return };
+            if open.offline {
+                // The reconnect loop owns recovery from here. A stray event
+                // for a dead mountpoint must not race it.
+                return;
+            }
+            match open.project.reconcile() {
+                // `reconcile` reports whether anything actually moved, and the
+                // frontend is only woken when it did — otherwise every save the
+                // app itself makes bounces straight back as an invalidation
+                // and a refetch.
+                Ok(changed) => Outcome::Reconciled(changed),
+                Err(StoreError::Disconnected) => {
+                    open.offline = true;
+                    Outcome::WentOffline
+                }
+                Err(e) => {
+                    eprintln!("wobu: reconcile failed: {e}");
+                    Outcome::Reconciled(false)
+                }
+            }
+        };
+
+        match outcome {
+            Outcome::Reconciled(true) => {
+                let _ = app.emit(WORLD_CHANGED, ());
+            }
+            Outcome::Reconciled(false) => {}
+            Outcome::WentOffline => {
+                let _ = app.emit(SHARE_OFFLINE, ());
+                self.spawn_reconnect(app, root, generation);
+            }
+        }
+    }
+
+    /// Wait for the folder to come back, then reconcile and say so.
+    ///
+    /// A thread rather than a timer because the wait is unbounded and the work
+    /// either side of it is trivial. It exits on remount, or as soon as the
+    /// generation moves — so closing the project, or opening another, stops it.
+    fn spawn_reconnect(&self, app: &AppHandle, root: &Path, generation: u64) {
+        let this = self.handle();
+        let app = app.clone();
+        let root: PathBuf = root.to_path_buf();
+        let last = *BACKOFF.last().expect("BACKOFF is not empty");
+
+        std::thread::spawn(move || {
+            for step in BACKOFF.iter().copied().chain(std::iter::repeat(last)) {
+                let ticks = step * 1000 / TICK.as_millis() as u64;
+                for _ in 0..ticks {
+                    if this.generation.load(Ordering::SeqCst) != generation {
+                        return;
+                    }
+                    std::thread::sleep(TICK);
+                }
+                if this.generation.load(Ordering::SeqCst) != generation {
+                    return;
+                }
+                if !paths::project_is_present(&root) {
+                    continue;
+                }
+
+                let recovered = {
+                    let mut guard = this.slot.lock();
+                    let Some(open) = guard.as_mut() else { return };
+                    match open.project.reconcile() {
+                        Ok(_) => {
+                            open.offline = false;
+                            true
+                        }
+                        // It went away again between the probe and the lock.
+                        Err(_) => false,
+                    }
+                };
+                if recovered {
+                    let _ = app.emit(SHARE_ONLINE, ());
+                    let _ = app.emit(WORLD_CHANGED, ());
+                    return;
+                }
+            }
+        });
+    }
+
+    /// A detached clone sharing the same slot and generation, for the watcher
+    /// callback and the reconnect thread — neither of which can borrow from a
+    /// Tauri `State<'_, _>`.
+    fn handle(&self) -> AppState {
+        AppState { slot: Arc::clone(&self.slot), generation: Arc::clone(&self.generation) }
+    }
+}
+
+enum Outcome {
+    Reconciled(bool),
+    WentOffline,
 }

@@ -246,6 +246,18 @@ export const projectCurrent = () => call<ProjectSummary | null>('project_current
 
 export const projectClose = () => call<void>('project_close')
 
+/**
+ * Whether the open project's folder is currently unreachable.
+ *
+ * The `share:offline` / `share:online` events are the live signal; this covers
+ * the one case they cannot — a webview that reloaded while disconnected, and
+ * so missed the event that would have raised the banner.
+ */
+export const shareOffline = () => call<boolean>('share_offline')
+
+/** Quit anyway, having been told what quitting while offline costs. */
+export const forceQuit = () => call<void>('force_quit')
+
 export const nodeList = () => call<NodeSummary[]>('node_list')
 
 export const nodeGet = (id: string) => call<WobuNode>('node_get', { id })

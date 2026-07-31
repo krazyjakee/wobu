@@ -189,8 +189,17 @@ impl Project {
     pub fn get_node(&self, id: Id) -> Result<Node> {
         let rel = self.index.rel_path_of(id)?.ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
         let path = paths::from_rel_string(&self.root, &rel);
-        let (text, _) =
-            atomic::read_stamped(&path)?.ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
+        let Some((text, _)) = atomic::read_stamped(&path)? else {
+            // The index says this node exists and the file says otherwise. If
+            // the whole folder has gone, believe the index: telling the user
+            // their character does not exist, when it is sitting safely on a
+            // NAS that happens to be unplugged, is both wrong and alarming.
+            return Err(if self.is_present() {
+                Error::NoSuchNode(id.to_string())
+            } else {
+                Error::Disconnected
+            });
+        };
         markdown::from_markdown(&text, &path)
     }
 
@@ -340,8 +349,27 @@ impl Project {
         Ok(())
     }
 
+    /// Whether the folder this project was opened from is still reachable.
+    ///
+    /// Cheap, and checked on the write path rather than cached, because the
+    /// whole failure mode is that it changes underneath a running session.
+    pub fn is_present(&self) -> bool {
+        paths::project_is_present(&self.root)
+    }
+
     fn ensure_writable(&self) -> Result<()> {
-        if self.read_only { Err(Error::ReadOnly) } else { Ok(()) }
+        if self.read_only {
+            return Err(Error::ReadOnly);
+        }
+        // Checked before every write, not just reported after one fails. A
+        // write into an unmounted share's leftover mountpoint *succeeds* — it
+        // lands on the local disk under the mount, invisible to everyone and
+        // destined to be shadowed the moment the share comes back. Refusing up
+        // front is the only way that edit stays recoverable.
+        if !self.is_present() {
+            return Err(Error::Disconnected);
+        }
+        Ok(())
     }
 
     // ── reconciliation ───────────────────────────────────────────────────
@@ -367,6 +395,16 @@ impl Project {
     /// Only files whose `(mtime, size)` moved are re-read: listing a directory
     /// over SMB is cheap, re-reading hundreds of small files is not.
     pub fn reconcile(&mut self) -> Result<bool> {
+        // Nothing below can tell "the folder is empty" from "the folder is not
+        // there" — `node_files` walks a missing tree and yields zero entries
+        // either way, and the deletion sweep at the bottom then removes every
+        // node from the index. That index is the only copy of the world still
+        // readable while a share is away, so emptying it turns a recoverable
+        // disconnection into what looks to the user like total data loss.
+        if !self.is_present() {
+            return Err(Error::Disconnected);
+        }
+
         let known = self.index.all_stamps()?;
         let mut seen = std::collections::HashSet::new();
         let mut changed = false;
@@ -656,6 +694,92 @@ mod tests {
 
         assert!(project.reconcile().unwrap());
         assert_eq!(project.list_nodes().unwrap().len(), 2, "only the singletons remain");
+    }
+
+    /// The counterpart to the test above, and the distinction the whole
+    /// unmount story rests on: a deleted *file* is a real deletion, a missing
+    /// *folder* is not evidence of anything.
+    #[test]
+    fn reconcile_refuses_to_read_a_vanished_share_as_mass_deletion() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let before = project.list_nodes().unwrap().len();
+
+        // What an unmount leaves behind: the mountpoint is still a directory,
+        // so `root.is_dir()` is true and walking it yields nothing.
+        std::fs::remove_dir_all(project.root()).unwrap();
+        std::fs::create_dir_all(project.root()).unwrap();
+        assert!(project.root().is_dir(), "the mountpoint should still look like a directory");
+
+        assert!(matches!(project.reconcile(), Err(Error::Disconnected)));
+        assert_eq!(
+            project.list_nodes().unwrap().len(),
+            before,
+            "the index is the only readable copy of the world while the share is away",
+        );
+    }
+
+    /// The index holds summaries, not bodies, so a node that was never opened
+    /// before the share went cannot be read. What it must not do is claim the
+    /// node does not exist.
+    #[test]
+    fn an_unreadable_node_blames_the_share_rather_than_the_node() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+
+        std::fs::remove_dir_all(project.root()).unwrap();
+        std::fs::create_dir_all(project.root()).unwrap();
+
+        assert!(matches!(project.get_node(vashk.id), Err(Error::Disconnected)));
+        // Still listed, because that comes from the index.
+        assert!(project.list_nodes().unwrap().iter().any(|n| n.id == vashk.id));
+    }
+
+    #[test]
+    fn a_genuinely_missing_node_still_says_so() {
+        let (_dir, mut project) = new_project();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        std::fs::remove_file(project.root().join("nodes/species/vashk.md")).unwrap();
+
+        // The folder is fine, so the file being gone is real information.
+        assert!(matches!(project.get_node(vashk.id), Err(Error::NoSuchNode(_))));
+    }
+
+    #[test]
+    fn writes_are_refused_while_the_share_is_away() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+
+        std::fs::remove_dir_all(project.root()).unwrap();
+        std::fs::create_dir_all(project.root()).unwrap();
+
+        // Left to itself this write would *succeed*, landing on the local disk
+        // under the empty mountpoint — invisible to everyone else and shadowed
+        // the moment the share returns.
+        assert!(matches!(project.save_node(vashk), Err(Error::Disconnected)));
+        assert!(matches!(
+            project.create_node(NodeKind::Species, "Sunborn", None),
+            Err(Error::Disconnected)
+        ));
+    }
+
+    #[test]
+    fn a_share_that_comes_back_reconciles_normally() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+
+        let stashed = dir.path().join("stash");
+        std::fs::rename(project.root(), &stashed).unwrap();
+        assert!(matches!(project.reconcile(), Err(Error::Disconnected)));
+
+        std::fs::rename(&stashed, project.root()).unwrap();
+        assert!(project.is_present());
+        project.reconcile().unwrap();
+        assert_eq!(project.list_nodes().unwrap().len(), 3, "singletons plus Vashk");
     }
 
     #[test]

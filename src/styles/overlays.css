@@ -452,3 +452,17 @@
 .banner-x:hover {
   opacity: 1;
 }
+.banner-act {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: var(--r);
+  border: 1px solid color-mix(in srgb, #c4384a 55%, transparent);
+  background: color-mix(in srgb, #c4384a 22%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.banner-act:hover {
+  background: color-mix(in srgb, #c4384a 34%, transparent);
+}

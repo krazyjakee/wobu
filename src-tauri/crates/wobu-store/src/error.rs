@@ -36,6 +36,16 @@ pub enum Error {
     #[error("the project folder is read-only")]
     ReadOnly,
 
+    /// The folder was reachable when the project was opened and is not now.
+    ///
+    /// Distinct from [`Error::NotAProject`], which is a folder the user picked
+    /// that never was one. This is a share that went away underneath an open
+    /// session, and the difference matters: the index is still a complete copy
+    /// of the world, so the right response is to hold on and wait rather than
+    /// to close the project.
+    #[error("the project folder is not reachable — the share may be unmounted")]
+    Disconnected,
+
     #[error("no project is open")]
     NoProjectOpen,
 

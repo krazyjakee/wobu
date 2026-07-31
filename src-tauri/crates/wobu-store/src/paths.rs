@@ -122,6 +122,17 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| Error::io(path, e))
 }
 
+/// Whether an open project's folder is still reachable.
+///
+/// Probes `project.json` rather than the directory, and that is the whole
+/// point: unmounting a share usually leaves the mountpoint behind as an empty
+/// directory, so `root.is_dir()` cheerfully returns `true` for a world that is
+/// no longer there. Every caller of this is deciding whether to believe an
+/// empty directory listing — which is precisely the case `is_dir` gets wrong.
+pub fn project_is_present(root: &Path) -> bool {
+    root.join("project.json").is_file()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

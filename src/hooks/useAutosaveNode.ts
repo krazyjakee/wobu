@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import type { WobuNode } from '../lib/api'
+import { isRetryable, isTauri } from '../lib/api'
 import { useUpsertNode } from '../lib/queries'
 import { report } from '../store/ui'
 
-export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'held'
 
 /**
  * Debounced writes through `node_upsert`. The queued patch is merged onto the
  * freshest node we hold, so a `world:changed` refetch mid-typing cannot resurrect
  * older text. Pending edits are flushed when the node changes or the pane unmounts.
+ *
+ * A failure that could still succeed later — the share went away — puts the
+ * patch *back* on the queue rather than dropping it, and the edit is resent
+ * when `share:online` says the folder is reachable again. Anything else is a
+ * genuine rejection, and holding onto it would only resend something the
+ * backend has already refused.
  */
 export function useAutosaveNode(node: WobuNode | undefined, delay = 500) {
   const upsert = useUpsertNode()
@@ -37,11 +45,38 @@ export function useAutosaveNode(node: WobuNode | undefined, delay = 500) {
         setStatus('saved')
       },
       onError: (e) => {
-        setStatus('error')
+        if (isRetryable(e)) {
+          // Put it back, behind anything typed since — newer keystrokes win,
+          // but the text that failed to save is not lost.
+          patch.current = { ...p, ...(patch.current ?? {}) }
+          setStatus('held')
+        } else {
+          setStatus('error')
+        }
         report(e, 'Save failed')
       },
     })
   }, [])
+
+  // The share came back — resend whatever has been waiting. `send` is a no-op
+  // when there is no pending patch, so this costs nothing in the common case.
+  useEffect(() => {
+    if (!isTauri()) return
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void listen('share:online', () => send())
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisten = fn
+      })
+      .catch(() => {
+        /* nothing to listen to */
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [send])
 
   const flush = useCallback(() => {
     if (timer.current !== undefined) {
@@ -87,6 +122,8 @@ export function saveLabel(status: SaveStatus): string {
       return 'saving…'
     case 'saved':
       return 'saved'
+    case 'held':
+      return 'waiting for the share…'
     case 'error':
       return 'save failed'
     default:

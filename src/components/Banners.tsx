@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useUI } from '../store/ui'
+import { useUI, type Banner } from '../store/ui'
 import { Icon } from './Icon'
 
 /**
@@ -19,54 +19,49 @@ export function Banners() {
   const banners = useUI((s) => s.banners)
   const clear = useUI((s) => s.clearBanner)
 
-  if (!banners.length) return null
+  // Rendered even when empty, and deliberately not `return null`. `.app` is a
+  // four-row grid and its children are placed in order, so a component that
+  // sometimes renders nothing would shift the workspace and the status bar up
+  // a row whenever the share was fine — which is almost always. An empty flex
+  // container has no height, so this costs a node and not a pixel.
   return (
     <div className="banners" role="status" aria-live="polite">
       {banners.map((b) => (
-        <BannerRow
-          key={b.code}
-          code={b.code}
-          text={b.text}
-          detail={b.detail}
-          onDismiss={() => clear(b.code)}
-        />
+        <BannerRow key={b.code} banner={b} onDismiss={() => clear(b.code)} />
       ))}
     </div>
   )
 }
 
-function BannerRow({
-  code,
-  text,
-  detail,
-  onDismiss,
-}: {
-  code: string
-  text: string
-  detail?: string
-  onDismiss: () => void
-}) {
+function BannerRow({ banner, onDismiss }: { banner: Banner; onDismiss: () => void }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="banner" data-code={code}>
-      <Icon name="lock" size="sm" />
+    <div className="banner" data-code={banner.code}>
+      <Icon name={banner.code === 'share.unmounted' ? 'share' : 'lock'} size="sm" />
       <div className="banner-body">
-        <span className="banner-text">{text}</span>
+        <span className="banner-text">{banner.text}</span>
         {/* The detail is the OS's own wording. Useful in a bug report, noise
             in a banner, so it starts folded. */}
-        {detail && (
+        {banner.detail && (
           <>
             <button className="banner-more" onClick={() => setOpen((v) => !v)}>
               {open ? 'Hide details' : 'Details'}
             </button>
-            {open && <code className="banner-detail">{detail}</code>}
+            {open && <code className="banner-detail">{banner.detail}</code>}
           </>
         )}
       </div>
-      <button className="banner-x" onClick={onDismiss} aria-label="Dismiss">
-        <Icon name="x" size="sm" />
-      </button>
+      {banner.action && (
+        <button className="banner-act" onClick={banner.action.run}>
+          {banner.action.label}
+        </button>
+      )}
+      {!banner.sticky && (
+        <button className="banner-x" onClick={onDismiss} aria-label="Dismiss">
+          <Icon name="x" size="sm" />
+        </button>
+      )}
     </div>
   )
 }

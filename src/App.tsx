@@ -1,4 +1,4 @@
-import { useCurrentProject, useWorldChangedListener } from './lib/queries'
+import { useCurrentProject, useShareListener, useWorldChangedListener } from './lib/queries'
 import { errorMessage, isTauri } from './lib/api'
 import { Launcher } from './components/Launcher'
 import { Workspace } from './components/Workspace'
@@ -7,6 +7,7 @@ import { Icon } from './components/Icon'
 
 export function App() {
   useWorldChangedListener()
+  useShareListener()
   const current = useCurrentProject()
 
   // Outside the Tauri webview there is no backend at all — say so plainly

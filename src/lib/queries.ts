@@ -9,6 +9,7 @@ import {
 import { listen } from '@tauri-apps/api/event'
 import * as api from './api'
 import type { KindDef, NodeKind, NodeSummary, ProjectSummary, WobuNode } from './api'
+import { toast, useUI } from '../store/ui'
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
 
@@ -210,6 +211,88 @@ export function useWorldChangedListener() {
     return () => {
       disposed = true
       unlisten?.()
+    }
+  }, [qc])
+}
+
+/* ── share connectivity ───────────────────────────────────────────────────── */
+
+const OFFLINE_TEXT =
+  'The project folder is not reachable — the share may be unmounted. Everything here is ' +
+  'still readable from the local index, but nothing can be saved until it is back. Retrying…'
+
+function raiseOffline() {
+  useUI.getState().raiseBanner({ code: 'share.unmounted', text: OFFLINE_TEXT, retryable: true })
+}
+
+/**
+ * The share going away and coming back.
+ *
+ * The important half is what this deliberately does *not* do: going offline
+ * never invalidates a query. The SQLite index lives in local app data, so
+ * every node the user was looking at is still readable — refetching would
+ * replace a working workspace with spinners and empty states, which is exactly
+ * the failure this is meant to prevent. The cache is already right; all that
+ * changes is that a banner appears and writes start being refused.
+ *
+ * Coming back *does* invalidate, because by then the backend has reconciled
+ * against whatever happened to the folder while we were away.
+ */
+export function useShareListener() {
+  const qc = useQueryClient()
+
+  useEffect(() => {
+    if (!api.isTauri()) return
+    let disposed = false
+    const unlisteners: Array<() => void> = []
+
+    const attach = (event: string, handler: () => void) => {
+      void listen(event, handler)
+        .then((fn) => {
+          if (disposed) fn()
+          else unlisteners.push(fn)
+        })
+        .catch(() => {
+          /* nothing to listen to is not worth surfacing */
+        })
+    }
+
+    attach('share:offline', raiseOffline)
+
+    attach('share:online', () => {
+      const ui = useUI.getState()
+      ui.clearBanner('share.unmounted')
+      ui.clearBanner('share.quit_blocked')
+      toast('The project folder is back.')
+      invalidateWorld(qc)
+    })
+
+    attach('share:quit-blocked', () => {
+      useUI.getState().raiseBanner({
+        code: 'share.quit_blocked',
+        text:
+          'Wobu did not quit, because the share is still away and any edit being held would go ' +
+          'with it. Wait for the folder to come back, or quit and lose them.',
+        retryable: false,
+        sticky: true,
+        action: { label: 'Quit anyway', run: () => void api.forceQuit() },
+      })
+    })
+
+    // A reload while disconnected misses the event that would have raised the
+    // banner, so the state is asked for once on mount as well.
+    void api
+      .shareOffline()
+      .then((offline) => {
+        if (!disposed && offline) raiseOffline()
+      })
+      .catch(() => {
+        /* no project open yet */
+      })
+
+    return () => {
+      disposed = true
+      unlisteners.forEach((fn) => fn())
     }
   }, [qc])
 }
