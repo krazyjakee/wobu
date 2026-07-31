@@ -6,3 +6,8 @@ edition.workspace = true
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 wobu-core.workspace = true
+
+[dev-dependencies]
+# Only to assert the wire form of what the Inspector will read. Nothing in the
+# crate itself serialises, and nothing in it may — it hands borrowed nodes back.
+serde_json = "1.0.151"
