@@ -13,17 +13,17 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Id, LinkEdge, Node, NodeKind, NodeSummary};
+use wobu_core::{Asset, AssetKind, Id, LinkEdge, Node, NodeKind, NodeSummary};
 
 use crate::atomic::Stamp;
 use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 2;
+pub const INDEX_VERSION: u32 = 3;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -61,6 +61,23 @@ CREATE INDEX IF NOT EXISTS links_to ON links(to_id);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS node_fts USING fts5(
     id UNINDEXED, name, summary, notes, description, tokenize = 'unicode61'
+);
+
+-- Blobs under `assets/originals/`. Every column is derived from the file, so
+-- this table is rebuildable from the folder like the rest of the index — see
+-- `crate::assets::scan`. `hash` is UNIQUE because the id is derived from it:
+-- two rows differing only in id is a state that cannot exist.
+CREATE TABLE IF NOT EXISTS assets (
+    id         TEXT PRIMARY KEY,
+    hash       TEXT NOT NULL UNIQUE,
+    kind       TEXT NOT NULL,
+    rel_path   TEXT NOT NULL UNIQUE,
+    thumb_path TEXT,
+    mime       TEXT NOT NULL,
+    width      INTEGER NOT NULL,
+    height     INTEGER NOT NULL,
+    bytes      INTEGER NOT NULL,
+    created_at TEXT NOT NULL
 );
 
 -- Files that are on disk and could not be parsed. Deliberately a table of its
@@ -145,6 +162,7 @@ impl Index {
                 "DROP TABLE IF EXISTS nodes;
                  DROP TABLE IF EXISTS links;
                  DROP TABLE IF EXISTS node_fts;
+                 DROP TABLE IF EXISTS assets;
                  DROP TABLE IF EXISTS corrupt;",
             )?;
             self.conn.execute_batch(SCHEMA)?;
@@ -166,7 +184,8 @@ impl Index {
 
     pub fn clear(&self) -> Result<()> {
         self.conn.execute_batch(
-            "DELETE FROM nodes; DELETE FROM links; DELETE FROM node_fts; DELETE FROM corrupt;",
+            "DELETE FROM nodes; DELETE FROM links; DELETE FROM node_fts;
+             DELETE FROM assets; DELETE FROM corrupt;",
         )?;
         Ok(())
     }
@@ -336,6 +355,70 @@ impl Index {
         };
         out.sort_by_key(|n| (order(n.kind), n.name.to_lowercase()));
         Ok(out)
+    }
+
+    /* ── assets ──────────────────────────────────────────────────────────
+     *
+     * Nothing here is canonical either. Every column comes off the file — the
+     * hash and the id off its name, the rest off its header — so this table is
+     * a cache of a directory listing, and `crate::assets::scan` refills it.
+     */
+
+    /// Record a blob.
+    ///
+    /// `INSERT OR REPLACE` rather than an upsert on `id`, because there are
+    /// three unique columns here and any of them can be the one that collides:
+    /// a file re-imported after being renamed on disk keeps its id and changes
+    /// its `rel_path`. Replacing outright is safe precisely because no other
+    /// table references this one.
+    pub fn upsert_asset(&self, asset: &Asset) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO assets
+               (id, hash, kind, rel_path, thumb_path, mime, width, height, bytes, created_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            params![
+                asset.id.to_string(),
+                asset.hash,
+                serde_json::to_value(asset.kind)?.as_str().unwrap_or("reference"),
+                asset.rel_path,
+                asset.thumb_path,
+                asset.mime,
+                asset.width,
+                asset.height,
+                asset.bytes as i64,
+                asset.created_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Newest first — the library is browsed as "what did I just bring in",
+    /// not alphabetically by hash, which is an order with no meaning at all.
+    pub fn list_assets(&self) -> Result<Vec<Asset>> {
+        let mut stmt = self.conn.prepare(&format!("{ASSET_COLUMNS} ORDER BY created_at DESC"))?;
+        let rows = stmt.query_map([], asset_row)?;
+        Ok(rows.filter_map(std::result::Result::ok).flatten().collect())
+    }
+
+    pub fn asset(&self, id: Id) -> Result<Option<Asset>> {
+        Ok(self
+            .conn
+            .query_row(&format!("{ASSET_COLUMNS} WHERE id = ?1"), params![id.to_string()], asset_row)
+            .optional()?
+            .flatten())
+    }
+
+    /// Every asset path the index holds, for the reconcile that compares a
+    /// directory listing against it.
+    pub fn asset_paths(&self) -> Result<std::collections::HashSet<String>> {
+        let mut stmt = self.conn.prepare("SELECT rel_path FROM assets")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.filter_map(std::result::Result::ok).collect())
+    }
+
+    pub fn remove_asset_by_rel_path(&self, rel_path: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM assets WHERE rel_path = ?1", params![rel_path])?;
+        Ok(())
     }
 
     /* ── corrupt files ───────────────────────────────────────────────────
@@ -562,6 +645,37 @@ fn fts_match_expr(query: &str) -> Option<String> {
         .map(|t| format!("\"{}\"*", t.replace('"', "\"\"")))
         .collect();
     if terms.is_empty() { None } else { Some(terms.join(" AND ")) }
+}
+
+const ASSET_COLUMNS: &str = "SELECT id, hash, kind, rel_path, thumb_path, mime, width, height,
+                                    bytes, created_at
+                             FROM assets";
+
+/// One row as an [`Asset`], or `None` for a row this build cannot make sense
+/// of. The same forgiveness [`Index::list_nodes`] shows, for the same reason: a
+/// single unreadable row must not take the whole library off the screen.
+fn asset_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Option<Asset>> {
+    let (id, kind, created) =
+        (r.get::<_, String>(0)?, r.get::<_, String>(2)?, r.get::<_, String>(9)?);
+    let (Ok(id), Ok(kind), Ok(created_at)) = (
+        Id::from_string(&id),
+        serde_json::from_value::<AssetKind>(serde_json::Value::String(kind)),
+        DateTime::parse_from_rfc3339(&created),
+    ) else {
+        return Ok(None);
+    };
+    Ok(Some(Asset {
+        id,
+        hash: r.get(1)?,
+        kind,
+        rel_path: r.get(3)?,
+        thumb_path: r.get(4)?,
+        mime: r.get(5)?,
+        width: r.get(6)?,
+        height: r.get(7)?,
+        bytes: r.get::<_, i64>(8)? as u64,
+        created_at: created_at.with_timezone(&Utc),
+    }))
 }
 
 fn description_text(node: &Node) -> String {

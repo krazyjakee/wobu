@@ -74,6 +74,13 @@ pub enum Code {
     #[serde(rename = "write.read_only")]
     ReadOnly,
 
+    // ── asset ────────────────────────────────────────────────────────────
+    /// An import whose bytes no header parser recognised. Its own code because
+    /// it is the one asset failure a user can do something about — convert the
+    /// file — and a generic "invalid" would not say that.
+    #[serde(rename = "asset.not_an_image")]
+    NotAnImage,
+
     // ── share ────────────────────────────────────────────────────────────
     /// The folder went away underneath us — an unmounted share, usually.
     /// Distinct from `io.failed` because it is the one I/O failure that is
@@ -233,6 +240,7 @@ impl From<StoreError> for WobuError {
             // so it lands in the same bucket as any other rejected argument.
             StoreError::NotAConflict(_) => Code::Invalid,
             StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
+            StoreError::NotAnImage => Code::NotAnImage,
             StoreError::ReadOnly => Code::ReadOnly,
             StoreError::Disconnected => Code::ShareUnmounted,
             StoreError::Cancelled => Code::Cancelled,
@@ -298,6 +306,7 @@ mod tests {
             (Code::Invalid, "node.invalid"),
             (Code::Conflict, "write.conflict"),
             (Code::ReadOnly, "write.read_only"),
+            (Code::NotAnImage, "asset.not_an_image"),
             (Code::ShareUnmounted, "share.unmounted"),
             (Code::ProviderNoKey, "provider.no_key"),
             (Code::ProviderBillingRequired, "provider.billing_required"),
@@ -318,6 +327,8 @@ mod tests {
         // A second attempt makes a second conflict file, not a resolution.
         assert!(!Code::Conflict.retryable());
         assert!(!Code::ReadOnly.retryable());
+        // Dropping the same PDF again produces the same PDF.
+        assert!(!Code::NotAnImage.retryable());
         assert!(!Code::Invalid.retryable());
         assert!(!Code::ProviderNoKey.retryable());
     }

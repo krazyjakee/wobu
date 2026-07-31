@@ -142,7 +142,15 @@ These are constraints on the writer, and each one exists because something break
   stored with `/` separators, converted on read.
 - **Assets are content-addressed** by BLAKE3 hash, sharded two levels deep. Two people
   importing the same reference produce the same file — so asset writes can never conflict,
-  and dedup is free.
+  and dedup is free. The extension comes from the detected content type, never from the
+  imported filename, or the same bytes dropped in as `ref.png` and `ref.PNG` would land at
+  two paths and the property would be gone.
+- **An asset's id is derived from its hash**, not minted. Nothing on disk records an asset
+  id — the filename *is* the hash — so a minted one would be reissued whenever the index
+  was rebuilt, and every `asset_id` already sitting in somebody's frontmatter would dangle.
+  Deriving it also extends the conflict-free property from the bytes to the records that
+  point at them. The cost: asset ids do not sort by creation time, because the bits a ULID
+  normally spends on a timestamp hold hash instead. `created_at` is the field for that.
 - **Filenames are lowercase ASCII slugs**, restricted to what Windows and case-insensitive
   SMB shares tolerate: no `< > : " | ? *`, no trailing dots or spaces, and no reserved names
   (`CON`, `PRN`, `AUX`, `NUL`, `COM1`…). Nesting stays shallow to keep total path length

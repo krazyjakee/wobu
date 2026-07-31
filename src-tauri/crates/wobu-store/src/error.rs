@@ -42,6 +42,15 @@ pub enum Error {
     #[error("{0} is missing its YAML frontmatter")]
     MissingFrontmatter(PathBuf),
 
+    /// An import whose bytes no supported header parser recognised.
+    ///
+    /// Its own variant rather than a generic invalid-argument, because it is
+    /// the one asset failure a user can act on: they dropped a PDF, or a `.psd`
+    /// with a `.png` name, and the answer is to convert it. Naming the formats
+    /// in the message is the whole value of the error.
+    #[error("that file is not an image Wobu can read (PNG, JPEG, GIF and WebP are supported)")]
+    NotAnImage,
+
     #[error("the project folder is read-only")]
     ReadOnly,
 

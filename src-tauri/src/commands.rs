@@ -15,9 +15,10 @@ use tauri::{AppHandle, Emitter, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
-use wobu_core::{Id, KindDef, Node, NodeKind, NodeSummary};
+use wobu_core::{Asset, AssetKind, Id, KindDef, Node, NodeKind, NodeSummary};
 use wobu_store::{
-    Conflict, CorruptFile, Keep, Peer, Project, ProjectSummary, Resolved, SaveOutcome, recent,
+    Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary, Resolved,
+    SaveOutcome, recent,
 };
 
 use crate::diag;
@@ -231,6 +232,43 @@ pub fn node_move(
     new_parent_id: Option<Id>,
 ) -> CommandResult<()> {
     state.with(|p| Ok(p.move_node(id, new_parent_id)?))
+}
+
+/* ── assets ───────────────────────────────────────────────────────────────── */
+
+/// Bring a file the user dropped or picked into the project folder.
+///
+/// The path is only ever read from — it names a file somewhere on the user's
+/// machine, and nothing about it reaches the name the blob is stored under. See
+/// `wobu_store::assets`.
+///
+/// No `world:changed` is emitted. The import writes a file inside the folder,
+/// so the watcher raises the event on its own, and firing a second one here
+/// would refetch the whole world twice for one drag.
+#[tauri::command]
+pub fn asset_import(
+    state: State<'_, AppState>,
+    path: String,
+    kind: AssetKind,
+) -> CommandResult<ImportedAsset> {
+    state.with(|p| Ok(p.import_asset_file(&PathBuf::from(path), kind)?))
+}
+
+/// The same, for bytes the webview already holds — a paste, or a drop the
+/// browser handed over as data rather than as a path.
+#[tauri::command]
+pub fn asset_import_bytes(
+    state: State<'_, AppState>,
+    bytes: Vec<u8>,
+    kind: AssetKind,
+) -> CommandResult<ImportedAsset> {
+    state.with(|p| Ok(p.import_asset(&bytes, kind)?))
+}
+
+/// Every blob in the open project, newest first.
+#[tauri::command]
+pub fn asset_list(state: State<'_, AppState>) -> CommandResult<Vec<Asset>> {
+    state.with(|p| Ok(p.list_assets()?))
 }
 
 /* ── conflicts ────────────────────────────────────────────────────────────── */
@@ -601,6 +639,51 @@ mod bridge {
         assert_eq!(serde_json::from_str::<Keep>("\"parked\"").unwrap(), Keep::Parked);
         assert_eq!(serde_json::from_str::<Keep>("\"current\"").unwrap(), Keep::Current);
         assert!(serde_json::from_str::<Keep>("\"mine\"").is_err());
+    }
+
+    #[test]
+    fn an_import_matches_the_importedasset_interface() {
+        let imported = ImportedAsset {
+            asset: Asset {
+                id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap(),
+                hash: "a3f9c1d2e4b5a6978081726354453627a3f9c1d2e4b5a6978081726354453627".into(),
+                kind: AssetKind::Reference,
+                rel_path: "assets/originals/a3/a3f9c1.png".into(),
+                thumb_path: None,
+                mime: "image/png".into(),
+                width: 1024,
+                height: 768,
+                bytes: 240_512,
+                created_at: "2026-07-31T09:00:00Z".parse().unwrap(),
+            },
+            deduped: true,
+        };
+        let json = serde_json::to_value(&imported).unwrap();
+
+        assert!(json.get("deduped").is_some(), "`deduped` is missing from ImportedAsset");
+        for key in [
+            "id", "hash", "kind", "relPath", "thumbPath", "mime", "width", "height", "bytes",
+            "createdAt",
+        ] {
+            assert!(json["asset"].get(key).is_some(), "`{key}` is missing from Asset");
+        }
+        // The id is the handle a node's `coverAssetId` and every AssetLink
+        // carries, so it has to arrive as a plain ULID string.
+        assert_eq!(json["asset"]["id"], "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        // A thumbnail nothing has made yet is `null`, not an absent key —
+        // `thumbPath: string | null` on the far side.
+        assert!(json["asset"]["thumbPath"].is_null());
+    }
+
+    #[test]
+    fn asset_import_accepts_the_kind_the_webview_sends() {
+        // `kind` is a bare snake_case string on the wire. A mismatch fails at
+        // the bridge rather than at compile time, and every drop would be
+        // rejected with nothing on screen to say why.
+        assert_eq!(serde_json::from_str::<AssetKind>("\"reference\"").unwrap(), AssetKind::Reference);
+        assert_eq!(serde_json::from_str::<AssetKind>("\"generated\"").unwrap(), AssetKind::Generated);
+        assert_eq!(serde_json::from_str::<AssetKind>("\"upload\"").unwrap(), AssetKind::Upload);
+        assert!(serde_json::from_str::<AssetKind>("\"Reference\"").is_err());
     }
 
     #[test]

@@ -9,8 +9,11 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def, kind_registry};
+use wobu_core::{
+    Asset, AssetKind, Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def, kind_registry,
+};
 
+use crate::assets::{self, ImportedAsset};
 use crate::atomic::{self, WriteOutcome};
 use crate::conflict::{self, Conflict, Keep, Resolved};
 use crate::error::{Error, Result};
@@ -516,6 +519,73 @@ impl Project {
         Ok(())
     }
 
+    // ── assets ───────────────────────────────────────────────────────────
+
+    /// Bring an image into `assets/originals/` and index it.
+    ///
+    /// Goes through `ensure_writable` like every other write, for the same
+    /// reason: an import into an unmounted share's leftover mountpoint would
+    /// *succeed*, landing on local disk under the mount where nobody — the
+    /// importer included, once the share returns — will ever find it.
+    ///
+    /// Content addressing means this cannot conflict, so unlike `save_node`
+    /// there is no outcome enum: it either lands or it fails. What it does
+    /// report is whether the bytes were already there.
+    pub fn import_asset(&mut self, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsset> {
+        self.ensure_writable()?;
+        let imported = assets::import(&self.root, bytes, kind)?;
+        self.index.upsert_asset(&imported.asset)?;
+        Ok(imported)
+    }
+
+    /// The same, for a file the user dropped or picked rather than bytes the
+    /// webview already holds.
+    pub fn import_asset_file(&mut self, path: &Path, kind: AssetKind) -> Result<ImportedAsset> {
+        // Read whole rather than streamed: the hash needs every byte anyway,
+        // and it has to be hashed before we know where the file goes.
+        let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
+        self.import_asset(&bytes, kind)
+    }
+
+    pub fn list_assets(&self) -> Result<Vec<Asset>> {
+        self.index.list_assets()
+    }
+
+    pub fn get_asset(&self, id: Id) -> Result<Option<Asset>> {
+        self.index.asset(id)
+    }
+
+    /// Fold blobs that appeared or vanished into the index.
+    ///
+    /// A collaborator importing a reference on the far side of a share produces
+    /// no event on this machine at all, so a directory listing is the only
+    /// signal there will ever be that their file exists.
+    fn reconcile_assets(&mut self) -> Result<bool> {
+        let known = self.index.asset_paths()?;
+        let mut seen = std::collections::HashSet::new();
+        let mut changed = false;
+
+        for (rel, path) in assets::list_paths(&self.root) {
+            seen.insert(rel.clone());
+            // Blobs are immutable — the path *is* the content — so a path we
+            // have already described can never need describing again. That is
+            // what keeps this cheap enough to run on every watcher tick.
+            if known.contains(&rel) {
+                continue;
+            }
+            if let Some(asset) = assets::describe_at(&self.root, &path) {
+                self.index.upsert_asset(&asset)?;
+                changed = true;
+            }
+        }
+
+        for rel in known.iter().filter(|rel| !seen.contains(*rel)) {
+            self.index.remove_asset_by_rel_path(rel)?;
+            changed = true;
+        }
+        Ok(changed)
+    }
+
     // ── conflicts ────────────────────────────────────────────────────────
 
     /// Every unresolved conflict sibling in the folder, newest first.
@@ -750,8 +820,16 @@ impl Project {
             on_progress(ScanProgress { done: done + 1, total });
         }
 
+        // Read before the clear, like the nodes above and for the same reason:
+        // a rebuild that emptied the asset table and then failed would leave a
+        // library that is entirely intact looking empty.
+        let blobs = assets::scan(&self.root);
+
         cancel.check()?;
         self.index.clear()?;
+        for asset in &blobs {
+            self.index.upsert_asset(asset)?;
+        }
         for (node, rel, stamp) in &fresh {
             self.index.upsert_node(node, rel, stamp)?;
             self.index.clear_corrupt(rel)?;
@@ -857,6 +935,8 @@ impl Project {
             self.index.clear_corrupt(rel)?;
             changed = true;
         }
+
+        changed |= self.reconcile_assets()?;
         Ok(changed)
     }
 
@@ -1399,6 +1479,34 @@ mod tests {
         assert!(matches!(
             project.create_node(NodeKind::Species, "Vashk", None),
             Err(Error::ReadOnly)
+        ));
+    }
+
+    #[test]
+    fn a_read_only_project_refuses_an_import_rather_than_failing_late() {
+        // An import is a write like any other, and the chip in the title bar
+        // has already told the user this folder cannot take one.
+        let (_dir, mut project) = new_project();
+        project.read_only = true;
+        assert!(matches!(
+            project.import_asset(&[0x89, b'P', b'N', b'G'], AssetKind::Reference),
+            Err(Error::ReadOnly)
+        ));
+    }
+
+    #[test]
+    fn an_import_is_refused_while_the_share_is_away() {
+        // The same trap as a node save: writing into an unmounted share's
+        // leftover mountpoint succeeds, lands on local disk, and is shadowed
+        // the moment the share comes back — taking the reference with it.
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+        std::fs::remove_dir_all(project.root()).unwrap();
+        std::fs::create_dir_all(project.root()).unwrap();
+
+        assert!(matches!(
+            project.import_asset(&[0x89, b'P', b'N', b'G'], AssetKind::Reference),
+            Err(Error::Disconnected)
         ));
     }
 

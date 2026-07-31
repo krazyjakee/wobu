@@ -13,10 +13,12 @@
 //!   ULID, never inside the folder, because SQLite's locking is unsafe over
 //!   SMB/NFS. Deleting it is always safe; it rebuilds from the Markdown.
 
+pub mod assets;
 pub mod atomic;
 pub mod conflict;
 pub mod error;
 pub mod frontmatter;
+pub mod image;
 pub mod index;
 pub mod markdown;
 pub mod paths;
@@ -26,6 +28,7 @@ pub mod recent;
 pub mod scan;
 pub mod watcher;
 
+pub use assets::ImportedAsset;
 pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};

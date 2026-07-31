@@ -105,6 +105,38 @@ export interface WobuNode {
   updatedAt: string
 }
 
+/**
+ * What a blob is for. Roles (`palette`, `pose`, …) live on the link between an
+ * asset and a node; this is the coarser question of where the file came from.
+ */
+export type AssetKind = 'reference' | 'generated' | 'upload'
+
+/**
+ * A file in `assets/originals/`, addressed by the hash of its contents.
+ *
+ * Both `id` and `relPath` are derived from that hash and from nothing else, so
+ * two people importing the same picture on one share produce the same file
+ * *and* the same record — and neither survives being renamed, because neither
+ * ever depended on a name. `id` is what `coverAssetId` and every AssetLink
+ * point at.
+ */
+export interface Asset {
+  id: string
+  /** Lowercase hex BLAKE3 of the file. This, not the id, names the file. */
+  hash: string
+  kind: AssetKind
+  /** Project-relative, `/`-separated. Never absolute. */
+  relPath: string
+  /** Null until something has actually made a thumbnail. */
+  thumbPath: string | null
+  /** Read out of the file's own header, not out of its extension. */
+  mime: string
+  width: number
+  height: number
+  bytes: number
+  createdAt: string
+}
+
 /* ── environment ──────────────────────────────────────────────────────────── */
 
 /** True when running inside the Tauri webview (as opposed to a bare `vite dev`). */
@@ -131,6 +163,7 @@ export type ErrorCode =
   | 'node.invalid'
   | 'write.conflict'
   | 'write.read_only'
+  | 'asset.not_an_image'
   | 'share.unmounted'
   | 'provider.no_key'
   | 'provider.bad_key'
@@ -326,6 +359,41 @@ export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 
 export const nodeMove = (id: string, newParentId: string | null) =>
   call<void>('node_move', { id, newParentId })
+
+/* ── assets ───────────────────────────────────────────────────────────────── */
+
+/**
+ * What an import did, as opposed to what it produced.
+ *
+ * `deduped` is the only part a caller cannot work out for itself: the asset
+ * comes back identical whether the bytes were written or were already there,
+ * which is exactly what content addressing is for.
+ */
+export interface ImportedAsset {
+  asset: Asset
+  /** True when the picture was already in the folder and nothing was written. */
+  deduped: boolean
+}
+
+/**
+ * Import a file by path — a drop, or a file picker result.
+ *
+ * The path is read and then discarded. What the file was called has no bearing
+ * on where it lands or on the id it gets, so importing the same picture twice
+ * under two names is a no-op the second time.
+ *
+ * Rejects with `asset.not_an_image` for anything that is not PNG, JPEG, GIF or
+ * WebP; the format is read out of the file's header, not its extension.
+ */
+export const assetImport = (path: string, kind: AssetKind = 'reference') =>
+  call<ImportedAsset>('asset_import', { path, kind })
+
+/** The same, for a paste or a drop that arrived as bytes rather than a path. */
+export const assetImportBytes = (bytes: Uint8Array, kind: AssetKind = 'reference') =>
+  call<ImportedAsset>('asset_import_bytes', { bytes: Array.from(bytes), kind })
+
+/** Every blob in the open project, newest first. */
+export const assetList = () => call<Asset[]>('asset_list')
 
 /* ── conflicts ────────────────────────────────────────────────────────────── */
 

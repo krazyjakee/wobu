@@ -10,6 +10,8 @@ import {
 import { listen } from '@tauri-apps/api/event'
 import * as api from './api'
 import type {
+  Asset,
+  AssetKind,
   Conflict,
   ConflictKeep,
   CorruptFile,
@@ -38,6 +40,7 @@ export const qk = {
   nodes: ['node_list'] as const,
   corrupt: ['corrupt_files'] as const,
   conflicts: ['conflicts'] as const,
+  assets: ['asset_list'] as const,
   node: (id: string) => ['node_get', id] as const,
   search: (q: string) => ['node_search', q] as const,
 }
@@ -56,6 +59,10 @@ export function invalidateWorld(qc: QueryClient) {
   // Editing a node changes what it matches. Without this the palette keeps
   // offering a hit for a phrase the user just deleted.
   void qc.invalidateQueries({ queryKey: ['node_search'] })
+  // A collaborator's import produces no event on this machine either — the
+  // backend only learns about it by listing the folder, which it does as part
+  // of the same reconcile that raised this.
+  void qc.invalidateQueries({ queryKey: qk.assets })
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */
@@ -223,6 +230,7 @@ export function useCloseProject() {
       qc.removeQueries({ queryKey: ['node_get'] })
       qc.removeQueries({ queryKey: qk.corrupt })
       qc.removeQueries({ queryKey: qk.conflicts })
+      qc.removeQueries({ queryKey: qk.assets })
       // Cached hits name nodes in a world that is no longer open.
       qc.removeQueries({ queryKey: ['node_search'] })
     },
@@ -350,6 +358,41 @@ export function useMoveNode() {
       if (entry) useUndoStack.getState().push(entry)
       invalidateWorld(qc)
     },
+  })
+}
+
+/* ── assets ───────────────────────────────────────────────────────────────── */
+
+/** Every blob in the open project, newest first. */
+export function useAssets(enabled: boolean): UseQueryResult<Asset[]> {
+  return useQuery({
+    queryKey: qk.assets,
+    queryFn: api.assetList,
+    enabled,
+    retry: false,
+  })
+}
+
+/**
+ * Bring a picture into the project folder.
+ *
+ * Only the asset list is invalidated, not the whole world: an import writes a
+ * blob and touches nothing a node knows about, so refetching every node and
+ * every search would be work for no change on screen.
+ *
+ * A re-import is silent about being a re-import. `deduped` is there for a
+ * caller that wants to say "already in your library", but it is not a failure
+ * and nothing here treats it as one — the user asked for that picture to be in
+ * the project, and it is.
+ */
+export function useImportAsset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { path: string; kind?: AssetKind }) => api.assetImport(v.path, v.kind),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.assets })
+    },
+    onError: (e) => report(e, 'Could not import that image'),
   })
 }
 
