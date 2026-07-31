@@ -40,15 +40,52 @@
 //! # Ok::<(), wobu_core::Error>(())
 //! ```
 //!
-//! Fragment extraction and weighting (#42), the text and image budgets (#43) and
-//! the `influence_resolve` / `prompt_compile` commands (#46) build on
-//! [`ResolvedSource`], which carries everything a `SnapshotLayer` needs except
-//! its fragments.
+//! A source does not contribute a paragraph, it contributes [`fragments`]: one
+//! per description section, one per item of a list section, one per reference
+//! image, each weighted by `link.weight × section_priority × user_slider` and
+//! routed to a prompt, a negative prompt or an image adapter.
+//!
+//! ```
+//! use wobu_core::{
+//!     Description, FragmentTarget, Layer, Node, NodeKind, SectionValue, default_preset,
+//! };
+//! use wobu_influence::{Sliders, World, fragments, resolve};
+//!
+//! let mut kael = Node::new(NodeKind::Character, "Kael Vantris")?;
+//! kael.description = Some(Description::from_sections([
+//!     ("silhouette".to_string(), SectionValue::Text("Tall, narrow, hooded".into())),
+//!     ("never".to_string(), SectionValue::List(vec!["modern firearms".into()])),
+//! ]));
+//!
+//! let world = World::new([&kael]);
+//! let stack = resolve(&world, kael.id, None).unwrap();
+//! let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+//!
+//! let rows: Vec<_> = compiled
+//!     .iter()
+//!     .map(|f| (f.layer(), f.section(), f.text().unwrap(), f.weight(), f.target()))
+//!     .collect();
+//! assert_eq!(rows, [
+//!     // A character sheet is read as a shape, so it weights `silhouette` above 1.0.
+//!     (Layer::Subject, "silhouette", "Tall, narrow, hooded", 1.4, FragmentTarget::Prompt),
+//!     (Layer::Subject, "never", "modern firearms", 1.0, FragmentTarget::Negative),
+//! ]);
+//! # Ok::<(), wobu_core::Error>(())
+//! ```
+//!
+//! The text and image budgets (#43) take the slice [`fragments`] returns and
+//! record what they drop; the `influence_resolve` / `prompt_compile` commands
+//! (#46) group it back into `SnapshotLayer`s, which is why a [`Fragment`] keeps
+//! its own layer and node rather than being handed out already grouped.
 
+mod extract;
+mod fragment;
 mod resolve;
 mod stack;
 mod world;
 
+pub use extract::fragments;
+pub use fragment::{Fragment, FragmentBody, Sliders, section_target};
 pub use resolve::resolve;
 pub use stack::{Origin, Reached, ResolvedSource, ResolvedStack, Shot};
 pub use world::World;
