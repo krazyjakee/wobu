@@ -291,3 +291,32 @@ export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 
 export const nodeMove = (id: string, newParentId: string | null) =>
   call<void>('node_move', { id, newParentId })
+
+/* ── diagnostics ──────────────────────────────────────────────────────────── */
+
+/**
+ * Least to most verbose. `off` records nothing at all, errors included — it is
+ * there for someone who wants the file to stop existing, not as a default.
+ */
+export type LogLevel = 'off' | 'error' | 'warn' | 'info' | 'debug'
+
+export const LOG_LEVELS: LogLevel[] = ['off', 'error', 'warn', 'info', 'debug']
+
+export interface LogInfo {
+  /** Absolute. Shown to the user, who may well go and find it by hand. */
+  path: string
+  level: LogLevel
+  /** False until something has been recorded — there may be nothing to reveal. */
+  exists: boolean
+  sizeBytes: number
+}
+
+export const logInfo = () => call<LogInfo>('log_info')
+
+export const logSetLevel = (level: LogLevel) => call<void>('log_set_level', { level })
+
+/** The end of the log, so the user can read it before handing it over. */
+export const logTail = (lines: number) => call<string>('log_tail', { lines })
+
+/** Show it in the OS file manager, which is how it gets attached to something. */
+export const logReveal = () => call<void>('log_reveal')

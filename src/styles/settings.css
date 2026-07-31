@@ -1,0 +1,108 @@
+/* ── settings ──
+   Scrolls and starts at the top, unlike `.mode-empty`, which centres a short
+   placeholder. Same grid column so the rail stays put. */
+.settings-mode {
+  grid-column: 2 / -1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.settings {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+}
+.settings h2 {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.set-sec {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.set-sec h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.set-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.set-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 10px;
+}
+.set-row-col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+/* `flex-basis` is the main axis, so the label's 72px becomes a *height* once
+   the row stacks. Reset it rather than dropping the shorthand, which the
+   side-by-side rows need for their column alignment. */
+.set-row-col .set-label {
+  flex: 0 0 auto;
+}
+.set-label {
+  flex: 0 0 72px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.set-value {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.set-path {
+  font: 11px var(--mono);
+  color: var(--text-dim);
+  /* An absolute path is long and the user may want to read all of it. */
+  word-break: break-all;
+}
+
+.set-levels {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* The selected level. Scoped rather than a global `.btn-mini` modifier: here it
+   means "this is the current setting", not "this button is pressed". */
+.set-levels .btn-mini.is-on {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.set-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.set-log {
+  margin: 10px 0 0;
+  padding: 10px;
+  max-height: 320px;
+  overflow: auto;
+  border-radius: var(--r);
+  border: 1px solid var(--border-str);
+  background: var(--bg-raised);
+  font: 10.5px/1.6 var(--mono);
+  color: var(--text-dim);
+  /* Log lines are one record each and must not be re-wrapped into looking like
+     several — horizontal scroll is the honest rendering. */
+  white-space: pre;
+}

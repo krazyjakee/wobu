@@ -18,7 +18,8 @@ use wobu_core::kind_registry as registry;
 use wobu_core::{Id, KindDef, Node, NodeKind, NodeSummary};
 use wobu_store::{CorruptFile, Project, ProjectSummary, SaveOutcome, recent};
 
-use crate::error::{CommandResult, WobuError};
+use crate::diag;
+use crate::error::{Code, CommandResult, WobuError};
 use crate::state::{AppState, WORLD_CHANGED};
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
@@ -98,8 +99,12 @@ fn adopt(app: &AppHandle, state: &AppState, project: Project) -> ProjectSummary 
     // A recents file we cannot write is an annoyance, not a failure to open —
     // the project itself is already fine.
     if let Err(e) = recent::record(&summary) {
-        eprintln!("wobu: could not record recent project: {e}");
+        diag::error(&format!("could not record recent project: {e}"));
     }
+    // The path is the single most useful line in a bug report: it says whether
+    // the world was on a share, and `redact::scrub` leaves it intact because a
+    // filesystem path is not a credential.
+    diag::info(&format!("opened project {} at {}", summary.id, summary.path));
     state.install(app, project);
     summary
 }
@@ -172,6 +177,69 @@ pub fn node_move(
     state.with(|p| Ok(p.move_node(id, new_parent_id)?))
 }
 
+/* ── diagnostics ──────────────────────────────────────────────────────────── */
+
+/// What Settings needs to describe the log without reading it.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogInfo {
+    /// Absolute, and shown to the user — they may well go and find it by hand.
+    path: String,
+    level: diag::Level,
+    /// False until something has been recorded. The UI says so rather than
+    /// offering to reveal a file that is not there.
+    exists: bool,
+    size_bytes: u64,
+}
+
+#[tauri::command]
+pub fn log_info() -> LogInfo {
+    let (path, level) = match diag::global() {
+        Some(d) => (d.path(), d.level()),
+        None => (diag::dir().join("wobu.log"), diag::Level::default()),
+    };
+    let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    LogInfo {
+        exists: path.is_file(),
+        path: path.to_string_lossy().into_owned(),
+        level,
+        size_bytes,
+    }
+}
+
+#[tauri::command]
+pub fn log_set_level(level: diag::Level) {
+    if let Some(d) = diag::global() {
+        d.set_level(level);
+        // Recorded at error so it lands whatever the new level is — when
+        // reading a log the first question is always "was it even on?".
+        diag::error(&format!("log level set to {level:?}"));
+    }
+}
+
+/// The end of the log, for showing the user what they are about to hand over.
+#[tauri::command]
+pub fn log_tail(lines: usize) -> String {
+    diag::global().map(|d| d.tail(lines)).unwrap_or_default()
+}
+
+/// Show the file in the OS file manager, which is how it gets attached to
+/// something. Falls back to the folder when nothing has been logged yet.
+#[tauri::command]
+pub fn log_reveal() -> CommandResult<()> {
+    let dir = diag::dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| WobuError::new(Code::Io, "Could not open the log folder.").with_detail(e.to_string()))?;
+
+    let path = diag::global().map(|d| d.path()).unwrap_or_else(|| dir.join("wobu.log"));
+    let target = if path.is_file() { path } else { dir };
+
+    tauri_plugin_opener::reveal_item_in_dir(&target).map_err(|e| {
+        WobuError::new(Code::Io, "Could not show the log in the file manager.")
+            .with_detail(e.to_string())
+    })
+}
+
 /// The bridge contract, pinned.
 ///
 /// `src/lib/api.ts` hand-writes the TypeScript for every payload here. Nothing
@@ -241,6 +309,38 @@ mod bridge {
         }
         assert_eq!(json["links"][0]["toId"], "01ARZ3NDEKTSV4RRFFQ69G5FAW");
         assert_eq!(json["description"]["sections"]["materials"]["type"], "list");
+    }
+
+    #[test]
+    fn log_info_matches_the_loginfo_interface() {
+        let json = serde_json::to_value(log_info()).unwrap();
+        for key in ["path", "level", "exists", "sizeBytes"] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from LogInfo");
+        }
+    }
+
+    #[test]
+    fn log_levels_are_the_strings_the_level_buttons_send_back() {
+        // The Settings buttons post these values straight back through
+        // `log_set_level`, so a rename on either side silently stops working:
+        // serde would reject the string and the level would never change.
+        let levels: Vec<String> = [
+            diag::Level::Off,
+            diag::Level::Error,
+            diag::Level::Warn,
+            diag::Level::Info,
+            diag::Level::Debug,
+        ]
+        .iter()
+        .map(|l| serde_json::to_value(l).unwrap().as_str().unwrap().to_owned())
+        .collect();
+
+        assert_eq!(levels, ["off", "error", "warn", "info", "debug"]);
+        // And back the other way, which is the direction the buttons use.
+        assert_eq!(
+            serde_json::from_str::<diag::Level>("\"debug\"").unwrap(),
+            diag::Level::Debug
+        );
     }
 
     #[test]

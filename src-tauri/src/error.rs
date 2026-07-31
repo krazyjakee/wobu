@@ -30,6 +30,7 @@
 use serde::Serialize;
 use wobu_store::Error as StoreError;
 
+use crate::diag;
 use crate::redact;
 
 /// The stable codes. Serialised as the dotted string, not as the variant name.
@@ -116,6 +117,18 @@ pub enum Code {
 }
 
 impl Code {
+    /// The dotted string the webview sees, for putting in the log.
+    ///
+    /// Read back out of the serde attribute rather than duplicated in a match,
+    /// so a renamed code cannot say one thing in the log and another on the
+    /// bridge. `Code` is a plain unit-variant enum, so this cannot fail.
+    pub fn as_str(self) -> String {
+        serde_json::to_value(self)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "internal".to_owned())
+    }
+
     /// Whether repeating the same request could plausibly succeed.
     ///
     /// Read narrowly: this drives a "Try again" affordance, so a `true` that
@@ -152,9 +165,14 @@ impl WobuError {
     /// The only constructor, and therefore the only place redaction has to be
     /// remembered. Everything else on this type routes through here.
     pub fn new(code: Code, message: impl Into<String>) -> Self {
+        let message = redact::scrub(&message.into());
+        // Constructing an error is the same event as the user seeing one, so
+        // this is the one place that catches every failure for the log without
+        // a `diag::error` at each call site — the same argument as redaction.
+        diag::error(&format!("{}: {message}", code.as_str()));
         WobuError {
             code,
-            message: redact::scrub(&message.into()),
+            message,
             detail: None,
             retryable: code.retryable(),
             conflict_path: None,
@@ -162,7 +180,12 @@ impl WobuError {
     }
 
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
-        self.detail = Some(redact::scrub(&detail.into()));
+        let detail = redact::scrub(&detail.into());
+        // A separate line rather than part of the one above, because the detail
+        // is the OS's own wording and is often the only thing in the log that
+        // says *why*. At debug so a quiet log still carries the summary.
+        diag::record(diag::Level::Debug, &format!("  detail: {detail}"));
+        self.detail = Some(detail);
         self
     }
 

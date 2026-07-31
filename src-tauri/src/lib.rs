@@ -2,6 +2,7 @@
 //! registration — nothing else.
 
 mod commands;
+mod diag;
 mod error;
 mod redact;
 mod state;
@@ -16,6 +17,10 @@ const QUIT_BLOCKED: &str = "share:quit-blocked";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before the builder, so that a failure to start is itself recorded.
+    diag::init(diag::dir());
+    diag::info(&format!("wobu {} starting", env!("CARGO_PKG_VERSION")));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         // The launcher picks project folders with `@tauri-apps/plugin-dialog`;
@@ -53,6 +58,10 @@ pub fn run() {
             commands::node_upsert,
             commands::node_delete,
             commands::node_move,
+            commands::log_info,
+            commands::log_set_level,
+            commands::log_tail,
+            commands::log_reveal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

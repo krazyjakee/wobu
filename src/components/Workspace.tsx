@@ -15,6 +15,7 @@ import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
+import { Settings } from './Settings'
 import { Banners } from './Banners'
 import { useKeyboard } from '../hooks/useKeyboard'
 
@@ -194,6 +195,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
             />
             {!inspCollapsed && <Inspector selected={selected} kinds={kindIndex} />}
           </>
+        ) : mode === 'settings' ? (
+          <Settings />
         ) : (
           <MilestoneMode mode={mode} />
         )}
