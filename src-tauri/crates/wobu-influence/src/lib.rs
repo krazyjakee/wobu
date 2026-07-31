@@ -73,17 +73,58 @@
 //! # Ok::<(), wobu_core::Error>(())
 //! ```
 //!
-//! The text and image budgets (#43) take the slice [`fragments`] returns and
-//! record what they drop; the `influence_resolve` / `prompt_compile` commands
+//! [`compile`] fits that slice into a [`Budget`] and emits the two prompts. It
+//! drops the lightest fragments first and hands back an account of every one of
+//! them, because "the Inspector reports what was dropped rather than truncating
+//! silently" (`docs/04-influence-engine.md`) — a user who cannot see what was cut
+//! cannot learn to write better upstream notes, which is the feedback loop the
+//! whole engine exists for.
+//!
+//! ```
+//! use wobu_core::{Description, Node, NodeKind, SectionValue, default_preset};
+//! use wobu_influence::{
+//!     Budget, Chars, DropReason, Sliders, World, compile, fragments, resolve,
+//! };
+//!
+//! let mut kael = Node::new(NodeKind::Character, "Kael Vantris")?;
+//! kael.description = Some(Description::from_sections([
+//!     ("silhouette".to_string(), SectionValue::Text("Tall, narrow, hooded".into())),
+//!     ("costume".to_string(), SectionValue::Text("Ash-grey longcoat".into())),
+//!     ("never".to_string(), SectionValue::List(vec!["modern firearms".into()])),
+//! ]));
+//!
+//! let world = World::new([&kael]);
+//! let stack = resolve(&world, kael.id, None).unwrap();
+//! let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+//!
+//! // Room for one of the two prompt fragments. A character sheet is read as a
+//! // shape, so `silhouette` outweighs `costume` and the longcoat is what goes.
+//! let budget = Budget { prompt: Chars::new(24), negative: Chars::UNLIMITED };
+//! let compiled = compile(&extracted, budget);
+//!
+//! assert_eq!(compiled.prompt(), "Tall, narrow, hooded");
+//! assert_eq!(compiled.negative(), "modern firearms");
+//! let cut: Vec<_> =
+//!     compiled.dropped().iter().map(|d| (d.fragment.section(), d.reason)).collect();
+//! assert_eq!(cut, [("costume", DropReason::Budget)]);
+//! # Ok::<(), wobu_core::Error>(())
+//! ```
+//!
+//! The per-role image budget (#44) takes the same slice and prices what this one
+//! deliberately does not; the `influence_resolve` / `prompt_compile` commands
 //! (#46) group it back into `SnapshotLayer`s, which is why a [`Fragment`] keeps
 //! its own layer and node rather than being handed out already grouped.
 
+mod budget;
+mod compile;
 mod extract;
 mod fragment;
 mod resolve;
 mod stack;
 mod world;
 
+pub use budget::{Budget, Chars, CompiledPrompt, DropReason, Dropped};
+pub use compile::compile;
 pub use extract::fragments;
 pub use fragment::{Fragment, FragmentBody, Sliders, section_target};
 pub use resolve::resolve;
