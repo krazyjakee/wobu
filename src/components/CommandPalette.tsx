@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeSummary } from '../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../lib/kinds'
 import { nameMatches, textMatches } from '../lib/search'
-import { useNodeSearch } from '../lib/queries'
+import { useNodeSearch, useUndo } from '../lib/queries'
 import { useDebounced } from '../hooks/useDebounced'
 import { useUI } from '../store/ui'
 import { Icon } from './Icon'
@@ -58,6 +58,8 @@ export function CommandPalette({
   const toggleNav = useUI((s) => s.toggleNav)
   const toggleInsp = useUI((s) => s.toggleInsp)
 
+  const { undo, redo, nextUndo, nextRedo } = useUndo()
+
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
@@ -69,6 +71,13 @@ export function CommandPalette({
     }
   }, [open])
 
+  /*
+   * Undo and redo appear only when there is something to undo, and say what
+   * that is. A palette row that is always present and sometimes does nothing
+   * teaches the user to distrust the whole list, and "Undo" on its own asks
+   * them to remember what they last did — which is precisely what someone
+   * reaching for undo has already failed to do.
+   */
   const commands = useMemo<Cmd[]>(
     () => [
       {
@@ -78,6 +87,28 @@ export function CommandPalette({
         hint: 'create',
         run: () => onNewNode(),
       },
+      ...(nextUndo
+        ? [
+            {
+              id: 'cmd:undo',
+              label: `Undo ${nextUndo.label}`,
+              icon: 'refresh',
+              hint: '⌘Z',
+              run: () => void undo(),
+            },
+          ]
+        : []),
+      ...(nextRedo
+        ? [
+            {
+              id: 'cmd:redo',
+              label: `Redo ${nextRedo.label}`,
+              icon: 'refresh',
+              hint: '⇧⌘Z',
+              run: () => void redo(),
+            },
+          ]
+        : []),
       {
         id: 'cmd:nav',
         label: 'Toggle navigator',
@@ -93,7 +124,7 @@ export function CommandPalette({
         run: () => toggleInsp(),
       },
     ],
-    [onNewNode, toggleNav, toggleInsp],
+    [onNewNode, toggleNav, toggleInsp, undo, redo, nextUndo, nextRedo],
   )
 
   const needle = q.trim().toLowerCase()

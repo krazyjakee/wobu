@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { useUndoRunner } from '../lib/queries'
+import { undoIntent } from '../lib/undo'
 import { EDITOR_TABS, useUI } from '../store/ui'
 
 /**
@@ -7,11 +9,22 @@ import { EDITOR_TABS, useUI } from '../store/ui'
  * key to a feature that does not exist is a lie the user pays for later.
  */
 export function useKeyboard({ onNewNode }: { onNewNode: () => void }) {
+  const { undo, redo } = useUndoRunner()
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const ui = useUI.getState()
       const mod = e.metaKey || e.ctrlKey
       const typing = isTyping(e.target)
+
+      // Before the palette check: ⌘Z inside the palette's own input is the
+      // input's, and `undoIntent` already refuses it because `typing` is true.
+      const intent = undoIntent(e, typing)
+      if (intent) {
+        e.preventDefault()
+        void (intent === 'undo' ? undo() : redo())
+        return
+      }
 
       if (mod && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -54,7 +67,7 @@ export function useKeyboard({ onNewNode }: { onNewNode: () => void }) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onNewNode])
+  }, [onNewNode, undo, redo])
 }
 
 function isTyping(target: EventTarget | null): boolean {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -10,7 +10,15 @@ import {
 import { listen } from '@tauri-apps/api/event'
 import * as api from './api'
 import type { CorruptFile, KindDef, NodeKind, NodeSummary, ProjectSummary, WobuNode } from './api'
-import { toast, useUI } from '../store/ui'
+import {
+  applyCommand,
+  birthEntry,
+  deletionEntry,
+  editEntry,
+  moveEntry,
+  useUndoStack,
+} from './undo'
+import { report, toast, useUI } from '../store/ui'
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
 
@@ -173,18 +181,32 @@ export function useCreateNode() {
       api.nodeCreate(v.kind, v.name, v.parentId),
     onSuccess: (node) => {
       qc.setQueryData(qk.node(node.id), node)
+      useUndoStack.getState().push(birthEntry(node, 'create'))
       invalidateWorld(qc)
     },
   })
 }
 
+/**
+ * The choke point every content edit goes through — rename, notes,
+ * description, links, tags, cover — and therefore the one place any of them
+ * needs to be recorded for undo.
+ *
+ * The previous state comes from the query cache in `onMutate`, i.e. before the
+ * write lands. A node nothing has ever read is not in the cache, and rather
+ * than invent a "before" that was never verified against disk, the edit simply
+ * goes unrecorded: an undo that restores a guess is worse than no undo.
+ */
 export function useUpsertNode() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (node: WobuNode) => api.nodeUpsert(node),
-    onSuccess: (node) => {
+    onMutate: (node) => ({ before: qc.getQueryData<WobuNode>(qk.node(node.id)) ?? null }),
+    onSuccess: (node, _v, ctx) => {
       qc.setQueryData(qk.node(node.id), node)
       void qc.invalidateQueries({ queryKey: qk.nodes })
+      const entry = ctx?.before && editEntry(ctx.before, node)
+      if (entry) useUndoStack.getState().push(entry)
     },
   })
 }
@@ -192,9 +214,25 @@ export function useUpsertNode() {
 export function useDeleteNode() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.nodeDelete(id),
-    onSuccess: (_r, id) => {
+    // Everything undo will need is gathered *before* the delete, because
+    // afterwards none of it is knowable: the file is gone, and the children the
+    // backend promotes to the deleted node's parent no longer say where they
+    // came from. The id has to be the original one or every link to it breaks,
+    // which is why the whole node is read rather than reconstructed later.
+    //
+    // A read that fails is not a delete that fails — the delete goes ahead, and
+    // the only cost is that this one action cannot be undone.
+    mutationFn: async (id: string) => {
+      const before = await api.nodeGet(id).catch(() => null)
+      const childIds = (qc.getQueryData<NodeSummary[]>(qk.nodes) ?? [])
+        .filter((n) => n.parentId === id)
+        .map((n) => n.id)
+      await api.nodeDelete(id)
+      return { before, childIds }
+    },
+    onSuccess: ({ before, childIds }, id) => {
       qc.removeQueries({ queryKey: qk.node(id) })
+      if (before) useUndoStack.getState().push(deletionEntry(before, childIds))
       invalidateWorld(qc)
     },
   })
@@ -226,6 +264,7 @@ export function useDuplicateNode() {
     },
     onSuccess: (node) => {
       qc.setQueryData(qk.node(node.id), node)
+      useUndoStack.getState().push(birthEntry(node, 'duplicate'))
       invalidateWorld(qc)
     },
   })
@@ -236,8 +275,83 @@ export function useMoveNode() {
   return useMutation({
     mutationFn: (v: { id: string; newParentId: string | null }) =>
       api.nodeMove(v.id, v.newParentId),
-    onSuccess: () => invalidateWorld(qc),
+    // Where it came from has to be read before the move, and the summary list
+    // is the only place that holds it — `node_move` returns nothing.
+    onMutate: (v) => ({
+      from: (qc.getQueryData<NodeSummary[]>(qk.nodes) ?? []).find((n) => n.id === v.id) ?? null,
+    }),
+    onSuccess: (_r, v, ctx) => {
+      const entry = ctx?.from && moveEntry(ctx.from, v.newParentId)
+      if (entry) useUndoStack.getState().push(entry)
+      invalidateWorld(qc)
+    },
   })
+}
+
+/* ── undo ─────────────────────────────────────────────────────────────────── */
+
+/**
+ * Drive the undo stack from the UI.
+ *
+ * The commands run through `applyCommand`, which calls the backend directly
+ * rather than going back through the mutation hooks above — those record what
+ * they do, and an undo that recorded itself would put its own inverse on the
+ * stack and make ⌘Z a toggle.
+ *
+ * Invalidation happens in `finally` on purpose. A sequence that failed halfway
+ * has still changed the world, and the conflict path pulls the winner's version
+ * into the index before it reports, so the cache is stale either way.
+ */
+export function useUndoRunner() {
+  const qc = useQueryClient()
+
+  const undo = useCallback(async () => {
+    try {
+      const entry = await useUndoStack.getState().undo(applyCommand)
+      if (!entry) return
+      toast(entry.caveat ? `Undone: ${entry.label}. ${entry.caveat}` : `Undone: ${entry.label}`)
+    } catch (e) {
+      report(e, 'Undo failed')
+    } finally {
+      invalidateWorld(qc)
+    }
+  }, [qc])
+
+  const redo = useCallback(async () => {
+    try {
+      const entry = await useUndoStack.getState().redo(applyCommand)
+      if (entry) toast(`Redone: ${entry.label}`)
+    } catch (e) {
+      report(e, 'Redo failed')
+    } finally {
+      invalidateWorld(qc)
+    }
+  }, [qc])
+
+  return { undo, redo }
+}
+
+/**
+ * The same two actions, plus what they would do.
+ *
+ * Separate from `useUndoRunner` because reading the stack subscribes to it, and
+ * the keyboard hook lives in the Workspace — re-rendering the entire workspace
+ * every time an entry is pushed, to run a callback that does not depend on it,
+ * is a cost with nothing to show for it. Only a surface that *names* the next
+ * entry needs this one.
+ */
+export function useUndo() {
+  const { undo, redo } = useUndoRunner()
+  const past = useUndoStack((s) => s.past)
+  const future = useUndoStack((s) => s.future)
+
+  return {
+    undo,
+    redo,
+    /** The entry ⌘Z would reverse, for naming it on the surface that offers it. */
+    nextUndo: past[past.length - 1] ?? null,
+    nextRedo: future[future.length - 1] ?? null,
+  }
 }
 
 /* ── file-watcher bridge ──────────────────────────────────────────────────── */

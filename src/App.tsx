@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useCurrentProject, useShareListener, useWorldChangedListener } from './lib/queries'
 import { errorMessage, isTauri } from './lib/api'
+import { useUndoStack } from './lib/undo'
 import { Launcher } from './components/Launcher'
 import { Workspace } from './components/Workspace'
 import { Toasts } from './components/Toasts'
@@ -13,6 +15,13 @@ export function App() {
   // just the workspace.
   useUiScale()
   const current = useCurrentProject()
+
+  // The undo stack belongs to one project's world, so it is tied to whichever
+  // project is open rather than cleared at the close call site. Doing it here
+  // covers every way the project can change — closed, swapped, or restored on a
+  // reload that never went through `useOpenProject` at all.
+  const projectId = current.data?.id ?? null
+  useEffect(() => useUndoStack.getState().setProject(projectId), [projectId])
 
   // Outside the Tauri webview there is no backend at all — say so plainly
   // rather than spinning forever.
