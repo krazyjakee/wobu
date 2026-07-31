@@ -67,6 +67,8 @@ pub fn run() {
             commands::asset_unlink,
             commands::asset_link_update,
             commands::asset_set_cover,
+            commands::influence_resolve,
+            commands::prompt_compile,
             commands::conflicts,
             commands::conflict_resolve,
             commands::presence_peers,

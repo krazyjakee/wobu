@@ -13,13 +13,18 @@ import type {
   Asset,
   AssetKind,
   AssetRole,
+  CompiledPrompt,
   Conflict,
   ConflictKeep,
   CorruptFile,
+  InfluenceStack,
   KindDef,
   NodeKind,
   NodeSummary,
   ProjectSummary,
+  PromptBudget,
+  ShotControls,
+  SliderSetting,
   WobuNode,
 } from './api'
 import {
@@ -44,6 +49,11 @@ export const qk = {
   assets: ['asset_list'] as const,
   node: (id: string) => ['node_get', id] as const,
   search: (q: string) => ['node_search', q] as const,
+  // The engine is a pure function of the world and these arguments, so the
+  // arguments belong in the key: two presets, or two positions of the same
+  // slider, are two different answers and neither invalidates the other.
+  influence: (id: string, opts: InfluenceOptions) => ['influence_resolve', id, opts] as const,
+  prompt: (id: string, opts: PromptOptions) => ['prompt_compile', id, opts] as const,
 }
 
 /** Everything that the file watcher can invalidate. */
@@ -64,6 +74,12 @@ export function invalidateWorld(qc: QueryClient) {
   // backend only learns about it by listing the folder, which it does as part
   // of the same reconcile that raised this.
   void qc.invalidateQueries({ queryKey: qk.assets })
+  // A stack is built from other people's nodes as much as from the subject's:
+  // an edit two layers out changes the compiled prompt without touching
+  // anything the panel is pointing at, so these move with the world rather than
+  // with the node in the Inspector.
+  void qc.invalidateQueries({ queryKey: ['influence_resolve'] })
+  void qc.invalidateQueries({ queryKey: ['prompt_compile'] })
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */
@@ -194,6 +210,67 @@ export function useNode(id: string | null): UseQueryResult<WobuNode> {
   })
 }
 
+/* ── influence ────────────────────────────────────────────────────────────── */
+
+/** What `influenceResolve` varies on, and therefore what goes in its key. */
+export interface InfluenceOptions {
+  preset?: string
+  sliders?: SliderSetting[]
+  shot?: ShotControls
+}
+
+export interface PromptOptions extends InfluenceOptions {
+  budget?: PromptBudget
+}
+
+/**
+ * The resolved stack for a subject — one card per layer, outermost first.
+ *
+ * `staleTime: Infinity` because the answer is a pure function of the world and
+ * the arguments: nothing but a world change can move it, and that arrives as
+ * `world:changed` and invalidates this by hand. Refetching on window focus would
+ * be a round trip guaranteed to return what is already on screen.
+ */
+export function useInfluenceStack(
+  subjectId: string | null,
+  options: InfluenceOptions = {},
+): UseQueryResult<InfluenceStack> {
+  return useQuery({
+    queryKey: qk.influence(subjectId ?? '', options),
+    queryFn: () => api.influenceResolve(subjectId as string, options),
+    enabled: !!subjectId,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
+/**
+ * The compiled prompt, its spans, and the account of what was dropped.
+ *
+ * `keepPreviousData` is what makes this usable while a slider is moving: every
+ * value is a new key, so without it the prompt box would empty and refill under
+ * the cursor on every frame of a drag. The backend does no file I/O for this, so
+ * running it per drag is cheap — it is the blanking that would be unacceptable,
+ * not the call.
+ *
+ * `gcTime` is short for the same reason. A single drag leaves one cache entry
+ * per position it passed through, and none of them will ever be asked for again.
+ */
+export function useCompiledPrompt(
+  subjectId: string | null,
+  options: PromptOptions = {},
+): UseQueryResult<CompiledPrompt> {
+  return useQuery({
+    queryKey: qk.prompt(subjectId ?? '', options),
+    queryFn: () => api.promptCompile(subjectId as string, options),
+    enabled: !!subjectId,
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    gcTime: 30_000,
+    retry: false,
+  })
+}
+
 /* ── project mutations ────────────────────────────────────────────────────── */
 
 export function useOpenProject() {
@@ -234,6 +311,11 @@ export function useCloseProject() {
       qc.removeQueries({ queryKey: qk.assets })
       // Cached hits name nodes in a world that is no longer open.
       qc.removeQueries({ queryKey: ['node_search'] })
+      // As do cached stacks — removed rather than invalidated, because a stale
+      // one served for a moment would be the *previous* project's world on
+      // screen, which is the one thing a local-first app must never do.
+      qc.removeQueries({ queryKey: ['influence_resolve'] })
+      qc.removeQueries({ queryKey: ['prompt_compile'] })
     },
   })
 }

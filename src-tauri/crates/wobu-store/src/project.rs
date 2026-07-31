@@ -19,7 +19,7 @@ use crate::assets::{self, ImportedAsset};
 use crate::atomic::{self, WriteOutcome};
 use crate::conflict::{self, Conflict, Keep, Resolved};
 use crate::error::{Error, Result};
-use crate::index::{CorruptFile, Index};
+use crate::index::{CorruptFile, Index, Touched};
 use crate::markdown;
 use crate::paths;
 use crate::scan::{Cancel, ScanProgress};
@@ -69,6 +69,10 @@ pub struct Project {
     on_network_share: bool,
     read_only: bool,
     user: String,
+    /// Every node, whole, for the influence engine. Empty until something asks —
+    /// see [`world_nodes`](Project::world_nodes), which is also where the cost
+    /// of holding this is argued.
+    world: Vec<Node>,
 }
 
 impl Project {
@@ -113,6 +117,7 @@ impl Project {
             on_network_share: false,
             read_only: false,
             user: current_user(),
+            world: Vec::new(),
         };
 
         // Every influence stack is rooted in these two, so a project without
@@ -159,8 +164,15 @@ impl Project {
         let read_only = !paths::is_writable(&root);
 
         let index = Index::open_for(&meta.id)?;
-        let mut project =
-            Project { root, meta, index, on_network_share, read_only, user: current_user() };
+        let mut project = Project {
+            root,
+            meta,
+            index,
+            on_network_share,
+            read_only,
+            user: current_user(),
+            world: Vec::new(),
+        };
 
         // Before anything reads the folder: a write that was interrupted between
         // staging and rename left a full copy of a node file behind.
@@ -295,6 +307,59 @@ impl Project {
             });
         };
         markdown::from_markdown(&text, &path)
+    }
+
+    /// Every node in the project, whole, for the influence engine.
+    ///
+    /// `wobu-influence` is pure by design: it borrows already-loaded `Node`s and
+    /// does no IO, so that `prompt_compile` — which runs on every drag of a
+    /// weight slider — stays sub-millisecond. Somebody has to hold those nodes,
+    /// and this is the only place that can. The shell holds the `Project` under
+    /// a mutex it must not do file IO beneath (`state.rs`), and a cache anywhere
+    /// else would have to be told when a project closes and when a different one
+    /// opens; here it is a field of the thing that *is* the open project, so a
+    /// close drops it and no other project can ever be served from it.
+    ///
+    /// **Nothing here reads the project folder.** The nodes are rehydrated from
+    /// the index's `doc` column, which lives in local app data, so the answer
+    /// costs the same whether the world is on an SSD or on an SMB share that is
+    /// currently unplugged — and the Inspector has to keep working in the second
+    /// case, which is the whole promise of `docs/07-file-shares.md`. The index
+    /// being one reconcile behind the folder is the same staleness the navigator
+    /// already renders with, and the same event clears it.
+    ///
+    /// Built in full once, then patched: every writer of a node row records the
+    /// id it touched, so a save, or a collaborator's edit arriving through
+    /// `reconcile`, re-reads one row rather than the world. The full build is the
+    /// state after an open, a rescan or an index rebuild — see `index::Touched`.
+    ///
+    /// The cost is real and worth stating: this holds the whole world in memory
+    /// for as long as the project is open, at roughly the size of the Markdown
+    /// it came from. A world of two thousand entities with a couple of kilobytes
+    /// of prose each is a few megabytes. That is the price of an Inspector that
+    /// does not stutter, and it is paid only by projects that open the panel.
+    pub fn world_nodes(&mut self) -> Result<&[Node]> {
+        match self.index.take_touched() {
+            Touched::Everything => self.world = self.index.nodes()?,
+            Touched::These(ids) => {
+                for id in ids {
+                    // Kept sorted by id, which is the order `Index::nodes`
+                    // returns and the order `World` needs — it picks the Style
+                    // Guide by lowest id, and a project must not resolve
+                    // differently depending on which node was saved last.
+                    let at = self.world.binary_search_by_key(&id, |n| n.id);
+                    match (self.index.node(id)?, at) {
+                        (Some(node), Ok(at)) => self.world[at] = node,
+                        (Some(node), Err(at)) => self.world.insert(at, node),
+                        (None, Ok(at)) => drop(self.world.remove(at)),
+                        // Touched and gone and never held: a node created and
+                        // deleted between two reads of this.
+                        (None, Err(_)) => {}
+                    }
+                }
+            }
+        }
+        Ok(&self.world)
     }
 
     // ── writing ──────────────────────────────────────────────────────────

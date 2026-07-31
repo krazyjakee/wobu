@@ -10,7 +10,8 @@
 //! SMB and NFS, and WAL mode does not work there at all. The documented failure
 //! mode is corruption, not an error message. See `docs/02-data-model.md`.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -23,7 +24,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 4;
+pub const INDEX_VERSION: u32 = 5;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -45,7 +46,18 @@ CREATE TABLE IF NOT EXISTS nodes (
     size              INTEGER NOT NULL DEFAULT 0,
     hash              TEXT NOT NULL DEFAULT '',
     created_at        TEXT NOT NULL,
-    updated_at        TEXT NOT NULL
+    updated_at        TEXT NOT NULL,
+    -- The whole node as JSON. Derived like every other column here — it is what
+    -- the Markdown parsed to, and a rebuild restores it — but it is the only one
+    -- that hands back a `Node` rather than a summary of one, and a `Node` is
+    -- what the influence engine takes.
+    --
+    -- Without it, building the `World` for a stack means reading every node file
+    -- in the project, over whatever the folder is mounted on, on every drag of a
+    -- weight slider. With it, `prompt_compile` never touches the folder at all:
+    -- it reads from local disk, so it answers at the same speed whether the
+    -- share is fast, slow, or currently unplugged. See `Index::nodes`.
+    doc               TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS nodes_kind    ON nodes(kind);
 CREATE INDEX IF NOT EXISTS nodes_parent  ON nodes(parent_id);
@@ -131,8 +143,31 @@ pub struct CorruptFile {
     pub detected_at: String,
 }
 
+/// Which node rows have moved since a reader last asked.
+///
+/// The influence engine takes whole `Node`s, and materialising every one of them
+/// on every call would put a query over the entire world in front of every drag
+/// of a weight slider. So the writers say what they changed instead: `reconcile`
+/// already knows exactly which files moved, and this carries that knowledge to
+/// the one reader that can act on it ([`crate::Project::world_nodes`]).
+///
+/// [`Everything`](Touched::Everything) is not a shrug. It is what [`clear`] and a
+/// schema rebuild mean, and it is the state a fresh index starts in — nobody has
+/// read yet, so every row is news. Erring towards it is always correct and only
+/// ever costs a query.
+///
+/// [`clear`]: Index::clear
+pub(crate) enum Touched {
+    Everything,
+    These(BTreeSet<Id>),
+}
+
 pub struct Index {
     conn: Connection,
+    /// Interior mutability because every writer here takes `&self` — the
+    /// `Connection` does its own locking and the type is `!Sync`, so there is no
+    /// thread for a `RefCell` to be contended from.
+    touched: RefCell<Touched>,
 }
 
 impl Index {
@@ -162,9 +197,35 @@ impl Index {
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
 
-        let index = Index { conn };
+        // `Everything` from the start: a reader that has never looked is owed
+        // every row, and starting at an empty change set would hand it a world
+        // with no nodes in it.
+        let index = Index { conn, touched: RefCell::new(Touched::Everything) };
         index.migrate()?;
         Ok(index)
+    }
+
+    /// Note that one node's row has changed.
+    ///
+    /// A no-op once the set is [`Touched::Everything`], which is the whole point
+    /// of the two-state enum: a rebuild that then upserted four thousand rows
+    /// would otherwise spend the reader's saving on bookkeeping.
+    fn touch(&self, id: Id) {
+        if let Touched::These(ids) = &mut *self.touched.borrow_mut() {
+            ids.insert(id);
+        }
+    }
+
+    fn touch_everything(&self) {
+        *self.touched.borrow_mut() = Touched::Everything;
+    }
+
+    /// What has changed since this was last called, resetting the record.
+    ///
+    /// Taken rather than read, so that two readers cannot both believe they have
+    /// applied a change. There is exactly one — see [`Touched`].
+    pub(crate) fn take_touched(&self) -> Touched {
+        std::mem::replace(&mut *self.touched.borrow_mut(), Touched::These(BTreeSet::new()))
     }
 
     fn migrate(&self) -> Result<()> {
@@ -193,6 +254,7 @@ impl Index {
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![INDEX_VERSION.to_string()],
             )?;
+            self.touch_everything();
         }
         Ok(())
     }
@@ -209,6 +271,7 @@ impl Index {
             "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
              DELETE FROM node_fts; DELETE FROM assets; DELETE FROM corrupt;",
         )?;
+        self.touch_everything();
         Ok(())
     }
 
@@ -246,15 +309,16 @@ impl Index {
         self.conn.execute(
             "INSERT INTO nodes
                (id, kind, name, slug, summary, parent_id, description_state, cover_asset_id,
-                rel_path, mtime_ms, size, hash, created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+                rel_path, mtime_ms, size, hash, created_at, updated_at, doc)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
              ON CONFLICT(id) DO UPDATE SET
                kind=excluded.kind, name=excluded.name, slug=excluded.slug,
                summary=excluded.summary, parent_id=excluded.parent_id,
                description_state=excluded.description_state,
                cover_asset_id=excluded.cover_asset_id, rel_path=excluded.rel_path,
                mtime_ms=excluded.mtime_ms, size=excluded.size, hash=excluded.hash,
-               created_at=excluded.created_at, updated_at=excluded.updated_at",
+               created_at=excluded.created_at, updated_at=excluded.updated_at,
+               doc=excluded.doc",
             params![
                 node.id.to_string(),
                 node.kind.as_str(),
@@ -270,6 +334,7 @@ impl Index {
                 stamp.hash,
                 node.created_at.to_rfc3339(),
                 node.updated_at.to_rfc3339(),
+                serde_json::to_string(node)?,
             ],
         )?;
 
@@ -313,10 +378,12 @@ impl Index {
              VALUES (?1,?2,?3,?4,?5)",
             params![id, node.name, node.summary, node.notes_raw, description_text(node)],
         )?;
+        self.touch(node.id);
         Ok(())
     }
 
     pub fn remove_node(&self, id: Id) -> Result<()> {
+        self.touch(id);
         let id = id.to_string();
         self.conn.execute("DELETE FROM nodes    WHERE id      = ?1", params![id])?;
         self.conn.execute("DELETE FROM links    WHERE from_id = ?1", params![id])?;
@@ -402,6 +469,45 @@ impl Index {
         };
         out.sort_by_key(|n| (order(n.kind), n.name.to_lowercase()));
         Ok(out)
+    }
+
+    /// Every node in the project, whole, ordered by id.
+    ///
+    /// The influence engine's input. It borrows already-loaded `Node`s and does
+    /// no IO of its own, deliberately, so that `prompt_compile` stays
+    /// sub-millisecond (`wobu_influence::World`); this is where those nodes come
+    /// from, and it reads local disk rather than the project folder. That is the
+    /// whole point — the alternative is a read of every Markdown file, over
+    /// whatever the world is mounted on, on every Inspector interaction.
+    ///
+    /// Ordered by id because `World` picks the Style Guide by lowest id and a
+    /// caller must not be able to change which node that is by handing them over
+    /// in a different order. Rows this build cannot parse are skipped with the
+    /// same forgiveness [`list_nodes`](Self::list_nodes) shows: one entity
+    /// missing from a stack is survivable, a panel that will not open is not.
+    pub fn nodes(&self) -> Result<Vec<Node>> {
+        let mut stmt = self.conn.prepare("SELECT doc FROM nodes ORDER BY id")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            if let Ok(node) = serde_json::from_str::<Node>(&row?) {
+                out.push(node);
+            }
+        }
+        Ok(out)
+    }
+
+    /// One node, whole, without opening its file.
+    ///
+    /// What [`crate::Project::world_nodes`] re-reads when a single row moves —
+    /// the reason a save, or a collaborator's edit arriving through `reconcile`,
+    /// does not cost a query over the entire world.
+    pub fn node(&self, id: Id) -> Result<Option<Node>> {
+        let doc: Option<String> = self
+            .conn
+            .query_row("SELECT doc FROM nodes WHERE id = ?1", params![id.to_string()], |r| r.get(0))
+            .optional()?;
+        Ok(doc.and_then(|doc| serde_json::from_str(&doc).ok()))
     }
 
     /* ── assets ──────────────────────────────────────────────────────────

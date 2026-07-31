@@ -5522,6 +5522,7 @@ dependencies = [
  "tauri-plugin-opener",
  "thiserror 2.0.19",
  "wobu-core",
+ "wobu-influence",
  "wobu-store",
 ]
 
