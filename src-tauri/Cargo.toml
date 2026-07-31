@@ -26,6 +26,13 @@ default-run = "wobu"
 # collide on Windows otherwise.
 name = "wobu_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
+# rustdoc cannot build a `--test` harness for a crate that is also a cdylib and
+# a staticlib: it fails to resolve the path dependencies and reports them as
+# missing crates. There are no doctests in a Tauri shell anyway — the code here
+# is command glue, and the behaviour it wraps is tested in wobu-core and
+# wobu-store — so turning the harness off is what keeps `cargo test --workspace`
+# meaningful rather than red for a reason unrelated to any test.
+doctest = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
