@@ -28,6 +28,14 @@ pub fn run() {
         // has to be initialised on this side or every pick fails.
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .setup(|app| {
+            // Not another `.manage(Default::default())`: the queue reports
+            // itself by emitting, and there is no `AppHandle` to emit through
+            // until here. `state.rs` says why it sits beside `AppState` rather
+            // than inside it.
+            app.manage(state::Jobs::start(app.handle()));
+            Ok(())
+        })
         .on_window_event(|window, event| {
             // Quitting while the share is away would take any edit the user is
             // still holding with it, silently — the autosave has nowhere to put
@@ -80,6 +88,8 @@ pub fn run() {
             commands::log_set_level,
             commands::log_tail,
             commands::log_reveal,
+            commands::job_cancel,
+            commands::job_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

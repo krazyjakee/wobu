@@ -1,6 +1,18 @@
-//! The one piece of mutable process state: the open project, the watcher
-//! keeping it honest about what is on disk, and the reconnect loop for when
-//! that disk stops being there.
+//! The mutable process state: the open project, the watcher keeping it honest
+//! about what is on disk, the reconnect loop for when that disk stops being
+//! there — and, deliberately beside all of it rather than inside it, the job
+//! queue.
+//!
+//! ## Why the queue is not in the slot
+//!
+//! [`Jobs`] is managed separately from [`AppState`] and holds no reference to
+//! it. Two reasons, and the second is the one that matters. A job outlives the
+//! project it was started for — a paid call whose project has since closed is
+//! still in flight and still has to be able to report what it cost. And a queue
+//! that could reach the `Mutex` below would be the likeliest place in this
+//! codebase to end up holding it across an await, which is exactly what the
+//! next section says must never happen. It cannot, because there is no path
+//! from a job to it.
 //!
 //! ## Why a `Mutex` and not an `RwLock`
 //!
@@ -36,11 +48,14 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter};
 use wobu_core::Id;
+use wobu_jobs::{Config, Event, Failure, JobId, Notify, Queue, QueueSnapshot, events};
 use wobu_store::{
     Cancel, Error as StoreError, Peer, Presence, PresenceHandle, Project, Watcher, paths,
 };
 
+use crate::diag;
 use crate::error::{CommandResult, WobuError};
+use crate::redact;
 
 /// The project folder turned out to differ from what we last indexed.
 /// `src/lib/queries.ts` listens for this and invalidates the world.
@@ -337,4 +352,143 @@ impl AppState {
 enum Outcome {
     Reconciled(bool),
     WentOffline,
+}
+
+/// The job queue, and the bridge that turns what it says into Tauri events.
+///
+/// Managed state of its own — see the module header for why it is not part of
+/// [`AppState`]. Everything interesting is in `wobu-jobs`; what lives here is
+/// the adapter, and it is deliberately the only thing the shell contributes to
+/// the queue.
+pub struct Jobs(Queue);
+
+impl Jobs {
+    /// Started from `setup`, which is the first moment an `AppHandle` exists.
+    ///
+    /// Not a `Default`, and that is why: the queue's whole purpose is to emit,
+    /// and managed state is registered before there is anything to emit
+    /// through.
+    pub fn start(app: &AppHandle) -> Jobs {
+        // Tauri's runtime, named explicitly rather than taken from
+        // `Handle::current` — `setup` does not run inside it, and a queue that
+        // started a runtime of its own would be a second thread pool competing
+        // with the one every async command already uses.
+        let runtime = tauri::async_runtime::handle().inner().clone();
+        Jobs(Queue::with_runtime(Config::default(), Bridge { app: app.clone() }, runtime))
+    }
+
+    /// For the commands that submit work.
+    ///
+    /// Nothing calls it yet: Enhance (#37) and the image backends (#40) are the
+    /// callers it exists for, and wiring those through is their issue rather
+    /// than the queue's. The same `#[allow]` and the same reasoning as the
+    /// provider codes in `error.rs`, which were also defined before anything
+    /// raised them.
+    #[allow(dead_code)] // submitted through once #37 lands; see above
+    pub fn queue(&self) -> &Queue {
+        &self.0
+    }
+
+    pub fn cancel(&self, id: JobId) -> bool {
+        self.0.cancel(id)
+    }
+
+    pub fn snapshot(&self) -> QueueSnapshot {
+        self.0.snapshot()
+    }
+}
+
+/// `wobu_jobs::Notify` over `app.emit`.
+///
+/// The queue calls this from whichever task is driving a job, holding none of
+/// its own locks and none of this crate's — `Bridge` cannot reach [`AppState`],
+/// so there is no way for an emit to end up behind the project mutex.
+struct Bridge {
+    app: AppHandle,
+}
+
+impl Notify for Bridge {
+    fn notify(&self, event: Event) {
+        // Emission failures are dropped deliberately: the window may be on its
+        // way out, and a job that cannot announce itself is not a job that
+        // should stop working.
+        let _ = match event {
+            Event::State(snapshot) => self.app.emit(events::JOB_STATE, snapshot),
+            Event::Progress(progress) => self.app.emit(events::JOB_PROGRESS, progress),
+            Event::Preview(preview) => self.app.emit(events::JOB_PREVIEW, preview),
+            Event::Retry(mut retry) => {
+                retry.failure = scrubbed(retry.failure);
+                self.app.emit(events::JOB_RETRY, retry)
+            }
+            Event::Done(done) => self.app.emit(events::JOB_DONE, done),
+            Event::Failed(mut failed) => {
+                failed.failure = scrubbed(failed.failure);
+                // Logged here, and after scrubbing. `WobuError::new` is the
+                // equivalent choke point for command failures — one place that
+                // catches every one of them for the log — and a job failure
+                // never passes through it, so without this line the one class
+                // of error the user is most likely to ask about would be the
+                // one class missing from the log they send us.
+                diag::error(&format!("job {}: {}", failed.id, failed.failure.message));
+                self.app.emit(events::JOB_ERROR, failed)
+            }
+        };
+    }
+}
+
+/// Every string on a job failure, through the same scrubber every other message
+/// crossing this boundary goes through.
+///
+/// This is the only path to the webview that does not run through
+/// [`WobuError::new`], and a provider's own words are exactly where a key would
+/// turn up — an `Unavailable { detail }` carrying a URL with the key in its
+/// query string is the realistic version. `redact::scrub` is reused rather than
+/// reimplemented because it is idempotent and because a second scrubber is a
+/// second thing to keep in step with the first.
+fn scrubbed(mut failure: Failure) -> Failure {
+    failure.message = redact::scrub(&failure.message);
+    failure.detail = failure.detail.as_deref().map(redact::scrub);
+    failure.cost_note = failure.cost_note.as_deref().map(redact::scrub);
+    failure
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_string_on_a_job_failure_is_scrubbed_before_it_leaves_the_process() {
+        // `job:error` is the one route to the webview that does not pass through
+        // `WobuError::new`, and a provider that echoes the request back in its
+        // error — they do — would otherwise put the user's key in an event
+        // payload, in the log, and in whatever they paste into an issue.
+        //
+        // Every field is loaded with a key rather than just the message,
+        // because the regression this is really guarding is a *new* string
+        // field on `Failure` that nobody thinks to add above.
+        let failure = Failure::new(
+            "provider.unavailable",
+            "GET https://api.example/v1/messages?api_key=sk-ant-abc123 failed",
+        )
+        .with_detail("x-api-key: sk-ant-abc123")
+        .cost_note("billed under key sk-ant-abc123");
+
+        let clean = scrubbed(failure);
+        for field in [Some(clean.message), clean.detail, clean.cost_note] {
+            let text = field.expect("the field was set");
+            assert!(!text.contains("sk-ant-abc123"), "a key survived redaction in {text:?}");
+            assert!(text.contains(redact::MASK), "nothing was masked in {text:?}");
+        }
+    }
+
+    #[test]
+    fn an_ordinary_failure_message_comes_through_unchanged() {
+        // The other half: a scrubber that masked everything would be safe and
+        // useless, and the message is the only thing telling the user what
+        // happened.
+        let failure = Failure::new("provider.rate_limited", "Anthropic is rate limiting this key.");
+        let clean = scrubbed(failure);
+        assert_eq!(clean.message, "Anthropic is rate limiting this key.");
+        assert_eq!(clean.detail, None);
+    }
 }

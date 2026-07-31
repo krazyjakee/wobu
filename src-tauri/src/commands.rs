@@ -23,6 +23,7 @@ use wobu_influence::{
     Budget, Chars, DropReason, Dropped, Fragment, Reached, ResolvedStack, Shot, Sliders, World,
     compile, fragments, resolve,
 };
+use wobu_jobs::{JobId, QueueSnapshot};
 use wobu_store::{
     Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary, Resolved,
     SaveOutcome, recent,
@@ -30,7 +31,7 @@ use wobu_store::{
 
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
-use crate::state::{AppState, WORLD_CHANGED};
+use crate::state::{AppState, Jobs, WORLD_CHANGED};
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
 
@@ -933,6 +934,37 @@ pub fn log_reveal() -> CommandResult<()> {
     })
 }
 
+/* ── jobs ─────────────────────────────────────────────────────────────────── */
+
+/// Stop a job. `false` when there is no such job, or it had already finished.
+///
+/// Neither of those is an error, deliberately: the user can press Stop at the
+/// instant a job ends, and a webview that reloaded may still hold an id for
+/// something long gone. A *malformed* id is different — that one can never
+/// work, so it is reported rather than swallowed.
+///
+/// Returns as soon as the queue has been told, not when the work has stopped.
+/// A job that had not started is over immediately; one in flight is aborted
+/// within the grace it gets to report what it was charged. Waiting for either
+/// would be this command blocking the webview, which is the whole thing the
+/// queue exists to prevent.
+#[tauri::command]
+pub fn job_cancel(jobs: State<'_, Jobs>, job_id: String) -> CommandResult<bool> {
+    let id = JobId::parse(&job_id)
+        .ok_or_else(|| WobuError::new(Code::Internal, "That is not a job id.").with_detail(job_id))?;
+    Ok(jobs.cancel(id))
+}
+
+/// The queue as it stands.
+///
+/// `job:state` is the live signal; this covers the one case events cannot — a
+/// webview that reloaded while three generations were in flight, which is the
+/// same argument `share_offline` makes.
+#[tauri::command]
+pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
+    jobs.snapshot()
+}
+
 /// The bridge contract, pinned.
 ///
 /// `src/lib/api.ts` hand-writes the TypeScript for every payload here. Nothing
@@ -1105,6 +1137,64 @@ mod bridge {
         // or a number would arrive as a key nothing in the navigator matches.
         assert_eq!(json["sessionId"], "01ARZ3NDEKTSV4RRFFQ69G5FAV");
         assert_eq!(json["editing"][0], "01ARZ3NDEKTSV4RRFFQ69G5FAW");
+    }
+
+    #[test]
+    fn a_queue_snapshot_matches_the_queuesnapshot_interface() {
+        // `job:state` carries this on every transition and `job_list` returns
+        // it, so the status bar (#56) reads it two ways and neither is
+        // generated from the other side.
+        let snapshot = wobu_jobs::QueueSnapshot {
+            jobs: vec![wobu_jobs::JobSnapshot {
+                id: wobu_jobs::JobId::new(),
+                kind: wobu_jobs::JobKind::Enhance,
+                label: "Enhance Vashk".into(),
+                state: wobu_jobs::JobState::Running,
+                attempt: 1,
+            }],
+            queued: 2,
+            running: 1,
+            retrying: 0,
+        };
+        let json = serde_json::to_value(&snapshot).unwrap();
+
+        for key in ["jobs", "queued", "running", "retrying"] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from QueueSnapshot");
+        }
+        // The state is flattened into the job rather than nested, because the
+        // TypeScript is a discriminated union on one field. A `{ state: { … } }`
+        // here would draw every job as unknown and no Rust test inside
+        // `wobu-jobs` would notice which side was wrong.
+        let job = &json["jobs"][0];
+        assert_eq!(job["state"], "running");
+        assert_eq!(job["kind"], "enhance");
+        assert!(job["id"].is_string(), "a job id must cross as a string");
+        for key in ["id", "kind", "label", "attempt"] {
+            assert!(job.get(key).is_some(), "`{key}` is missing from JobSnapshot");
+        }
+    }
+
+    #[test]
+    fn a_held_retry_reaches_the_webview_as_the_offer_it_is() {
+        // `retryHeld` and `billed` are the whole of the "never auto-retry
+        // something that costs money" design as the user experiences it: they
+        // are what turns a failure into "try again — it will cost you". Dropped
+        // on the wire, the UI has no way to tell a dead end from a question.
+        let failure = wobu_jobs::Failure::new("provider.bad_response", "The response was cut short.")
+            .retryable(true)
+            .billed(wobu_jobs::Billed::Charged)
+            .cost_note("812 in + 400 out");
+        let state = wobu_jobs::JobState::Failed { failure, retry_held: true };
+        let json = serde_json::to_value(&state).unwrap();
+
+        assert_eq!(json["state"], "failed");
+        assert_eq!(json["retryHeld"], true);
+        assert_eq!(json["failure"]["billed"], "charged");
+        assert_eq!(json["failure"]["costNote"], "812 in + 400 out");
+        assert_eq!(json["failure"]["retryable"], true);
+        // The same dotted codes command errors use, so `errorSurface` in
+        // `src/lib/api.ts` can be pointed at either without a second taxonomy.
+        assert_eq!(json["failure"]["code"], Code::ProviderBadResponse.as_str());
     }
 
     #[test]

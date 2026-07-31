@@ -48,4 +48,5 @@ tauri-plugin-opener = "2.5.4"
 thiserror = "2.0.19"
 wobu-core = { workspace = true }
 wobu-influence = { workspace = true }
+wobu-jobs = { workspace = true }
 wobu-store = { workspace = true }

@@ -5523,6 +5523,7 @@ dependencies = [
  "thiserror 2.0.19",
  "wobu-core",
  "wobu-influence",
+ "wobu-jobs",
  "wobu-store",
 ]
 
@@ -5562,11 +5563,13 @@ dependencies = [
 name = "wobu-jobs"
 version = "0.1.0"
 dependencies = [
- "futures-core",
+ "async-trait",
  "serde",
+ "serde_json",
  "thiserror 2.0.19",
  "tokio",
  "ulid",
+ "wobu-llm",
 ]
 
 [[package]]

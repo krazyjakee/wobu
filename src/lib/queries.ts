@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -23,6 +23,7 @@ import type {
   NodeSummary,
   ProjectSummary,
   PromptBudget,
+  QueueSnapshot,
   ShotControls,
   SliderSetting,
   WobuNode,
@@ -737,3 +738,56 @@ export function useShareListener() {
     }
   }, [qc])
 }
+
+/* ── the job queue ────────────────────────────────────────────────────────── */
+
+/**
+ * The queue, live.
+ *
+ * Not a `useQuery`: there is nothing to invalidate and nothing to refetch. The
+ * backend sends the whole queue on every transition, so this is a subscription
+ * with one catch-up read for the case events cannot cover — a webview that
+ * reloaded while three generations were in flight.
+ *
+ * Whole snapshots rather than accumulated deltas, deliberately. A queue
+ * reassembled on this side from `progress`/`done`/`error` would be wrong the
+ * first time an event was dropped or arrived out of order, and it would be
+ * wrong in a way that shows: a job stuck on screen that finished minutes ago.
+ */
+export function useJobQueue(): QueueSnapshot {
+  const [snapshot, setSnapshot] = useState<QueueSnapshot>(EMPTY_QUEUE)
+
+  useEffect(() => {
+    if (!api.isTauri()) return
+    let disposed = false
+    let unlisten: (() => void) | undefined
+
+    void listen<QueueSnapshot>(api.JOB_EVENTS.state, (event) => setSnapshot(event.payload))
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisten = fn
+      })
+      .catch(() => {
+        /* nothing to listen to yet; the catch-up read below still applies */
+      })
+
+    void api
+      .jobList()
+      .then((current) => {
+        if (!disposed) setSnapshot(current)
+      })
+      .catch(() => {
+        /* no queue to ask — an empty one is the right answer */
+      })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+
+  return snapshot
+}
+
+/** Shared so that an idle queue is referentially stable and renders nothing. */
+const EMPTY_QUEUE: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
