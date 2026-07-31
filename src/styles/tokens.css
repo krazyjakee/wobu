@@ -1,0 +1,35 @@
+/* Design tokens — docs/03-ui-layout.md. Ported verbatim from prototype/styles.css. */
+:root {
+  --bg: #0d0e12;
+  --bg-panel: #14161c;
+  --bg-raised: #1a1d25;
+  --bg-input: #0f1117;
+
+  --border: #252932;
+  --border-str: #333846;
+
+  --text: #e7e9f0;
+  --text-dim: #9aa1b3;
+  --text-faint: #656c7e;
+
+  --accent: #e2a44f; /* user actions */
+  --ai: #9d7cf5; /* AI actions — reserved */
+
+  /* influence layer colours */
+  --l-style: #e2a44f;
+  --l-world: #4fd1c5;
+  --l-species: #7bd88f;
+  --l-culture: #f28bb4;
+  --l-place: #6aa9f5;
+  --l-subject: #9d7cf5;
+
+  --r-sm: 6px;
+  --r: 10px;
+  --r-lg: 14px;
+
+  --rail: 52px;
+  --nav: 272px;
+  --insp: 352px;
+
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}

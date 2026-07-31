@@ -1,0 +1,43 @@
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+
+[workspace.dependencies]
+wobu-core = { path = "crates/wobu-core" }
+wobu-store = { path = "crates/wobu-store" }
+wobu-influence = { path = "crates/wobu-influence" }
+wobu-llm = { path = "crates/wobu-llm" }
+wobu-imagine = { path = "crates/wobu-imagine" }
+wobu-jobs = { path = "crates/wobu-jobs" }
+
+[package]
+name = "wobu"
+version.workspace = true
+edition.workspace = true
+description = "Local-first, AI-assisted world building for concept art"
+default-run = "wobu"
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the binary name, which
+# collide on Windows otherwise.
+name = "wobu_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chrono = "0.4.45"
+parking_lot = "0.12.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tauri = "2.11.5"
+tauri-plugin-dialog = "2.7.2"
+tauri-plugin-opener = "2.5.4"
+thiserror = "2.0.19"
+wobu-core = { workspace = true }
+wobu-store = { workspace = true }

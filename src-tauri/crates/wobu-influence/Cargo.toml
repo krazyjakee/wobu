@@ -1,0 +1,8 @@
+[package]
+name = "wobu-influence"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+wobu-core.workspace = true

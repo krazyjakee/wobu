@@ -1,0 +1,11 @@
+[package]
+name = "wobu-imagine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = "0.1.91"
+futures-core = "0.3.33"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.19"
+wobu-core.workspace = true

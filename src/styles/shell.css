@@ -1,0 +1,274 @@
+/* ── shell ────────────────────────────────────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-rows: 40px 1fr 26px;
+  height: 100vh;
+}
+.workspace {
+  display: grid;
+  /* overridden inline by Workspace so a collapsed pane loses its track */
+  grid-template-columns: var(--rail) var(--nav) 1fr var(--insp);
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+/* ── title bar ── */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 0 14px;
+  background: var(--bg-panel);
+  user-select: none;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  font-size: 13px;
+}
+.brand-mark {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: conic-gradient(
+    from 210deg,
+    var(--accent),
+    var(--l-culture),
+    var(--ai),
+    var(--l-world),
+    var(--accent)
+  );
+  flex: none;
+}
+.brand-lg {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.projpick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 550;
+}
+.projpick:hover {
+  border-color: var(--border-str);
+}
+.projpick .ic {
+  transform: rotate(90deg);
+  opacity: 0.6;
+}
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-left: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.crumbs button {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.crumbs button:hover {
+  color: var(--text);
+}
+.crumbs .cur {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tspace {
+  flex: 1;
+  align-self: stretch;
+}
+.omni {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 12px;
+  min-width: 190px;
+}
+.omni:hover {
+  border-color: var(--border-str);
+}
+.omni kbd {
+  margin-left: auto;
+}
+.ro-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  font-weight: 550;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+
+/* window controls — Tauri decorations are off, so we draw our own */
+.wctl {
+  display: flex;
+  align-self: stretch;
+  margin-left: 6px;
+}
+.wctl button {
+  width: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+}
+.wctl button:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.wctl button.close:hover {
+  background: #c4384a;
+  color: #fff;
+}
+.wctl .ic {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.5;
+}
+
+/* ── mode rail ── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+.rspace {
+  flex: 1;
+}
+.rbtn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--text-faint);
+  position: relative;
+}
+.rbtn:hover {
+  color: var(--text);
+  background: var(--bg-raised);
+}
+.rbtn.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.rbtn.is-active::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  width: 2px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.rbtn::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 40px;
+  padding: 3px 7px;
+  font-size: 11px;
+  background: #000;
+  border: 1px solid var(--border-str);
+  border-radius: 5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  z-index: 20;
+}
+.rbtn:hover::after {
+  opacity: 1;
+}
+
+/* ── pane resizer ── */
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  margin-left: -3px;
+  cursor: col-resize;
+  z-index: 6;
+}
+.resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.resizer:hover::after,
+.resizer.is-dragging::after {
+  background: var(--accent);
+}
+
+/* ── mode placeholder (Board / Forge / Assets / Settings) ── */
+.mode-empty {
+  grid-column: 2 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* ── status ── */
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: var(--bg-panel);
+  user-select: none;
+}
+.status b {
+  color: var(--text-dim);
+  font-weight: 550;
+}
+.sspace {
+  flex: 1;
+}
+.sep {
+  width: 1px;
+  height: 11px;
+  background: var(--border-str);
+}
+.status code {
+  font: 10.5px var(--mono);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40vw;
+}

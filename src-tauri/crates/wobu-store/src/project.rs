@@ -1,0 +1,768 @@
+//! A project is a self-contained folder.
+//!
+//! Nothing canonical is stored outside it — no global application database, no
+//! absolute paths, no secrets. Copy the folder to a USB stick and it opens
+//! somewhere else; delete the local index and nothing is lost. See
+//! `docs/02-data-model.md`.
+
+use std::path::{Path, PathBuf};
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use wobu_core::{Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def, kind_registry};
+
+use crate::atomic::{self, WriteOutcome};
+use crate::error::{Error, Result};
+use crate::index::Index;
+use crate::markdown;
+use crate::paths;
+
+const PROJECT_FILE: &str = "project.json";
+const NODES_DIR: &str = "nodes";
+
+/// `project.json`. Records *which* provider a project prefers, never a key —
+/// keys live in the OS keychain, because project folders get shared.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectMeta {
+    pub id: Id,
+    pub name: String,
+    pub schema_version: u32,
+    pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub providers: serde_json::Map<String, serde_json::Value>,
+}
+
+/// What the launcher and title bar bind to.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSummary {
+    pub id: Id,
+    pub name: String,
+    /// Absolute, and therefore *only* ever held in memory or in the local
+    /// recents file — never written into the project folder.
+    pub path: String,
+    pub on_network_share: bool,
+    pub read_only: bool,
+    pub last_opened_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug)]
+pub enum SaveOutcome {
+    Saved(Box<Node>),
+    /// Someone else changed the file since we loaded it. Ours was written
+    /// alongside; the UI raises a diff rather than merging prose.
+    Conflict { conflict_path: String },
+}
+
+pub struct Project {
+    root: PathBuf,
+    meta: ProjectMeta,
+    index: Index,
+    on_network_share: bool,
+    read_only: bool,
+    user: String,
+}
+
+impl Project {
+    pub fn create(parent_dir: &Path, name: &str) -> Result<Project> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(Error::Core(wobu_core::Error::EmptyName));
+        }
+        let folder = format!("{}.wobu", wobu_core::slugify(name)?);
+        let root = parent_dir.join(folder);
+        if root.exists() {
+            return Err(Error::AlreadyExists(root));
+        }
+
+        for dir in [
+            root.join(NODES_DIR),
+            root.join("assets/originals"),
+            root.join("assets/thumbs"),
+            root.join("generations"),
+            root.join(".wobu/tmp"),
+            root.join(".wobu/sessions"),
+        ] {
+            paths::ensure_dir(&dir)?;
+        }
+
+        let meta = ProjectMeta {
+            id: wobu_core::new_id(),
+            name: name.to_string(),
+            schema_version: SCHEMA_VERSION,
+            created_at: Utc::now(),
+            providers: serde_json::Map::new(),
+        };
+        std::fs::write(root.join(PROJECT_FILE), serde_json::to_string_pretty(&meta)?)
+            .map_err(|e| Error::io(root.join(PROJECT_FILE), e))?;
+
+        let index = Index::open_for(&meta.id)?;
+        index.clear()?;
+        let mut project = Project {
+            root,
+            meta,
+            index,
+            on_network_share: false,
+            read_only: false,
+            user: current_user(),
+        };
+
+        // Every influence stack is rooted in these two, so a project without
+        // them is not openable in a meaningful sense.
+        for def in kind_registry().iter().filter(|d| d.singleton) {
+            project.create_node(def.kind, def.label, None)?;
+        }
+        Ok(project)
+    }
+
+    pub fn open(path: &Path) -> Result<Project> {
+        let root = path.to_path_buf();
+        let meta_path = root.join(PROJECT_FILE);
+        if !meta_path.is_file() {
+            return Err(Error::NotAProject(root));
+        }
+
+        let raw = std::fs::read_to_string(&meta_path).map_err(|e| Error::io(&meta_path, e))?;
+        let meta: ProjectMeta = serde_json::from_str(&raw)?;
+        if meta.schema_version > SCHEMA_VERSION {
+            return Err(Error::SchemaTooNew {
+                found: meta.schema_version,
+                supported: SCHEMA_VERSION,
+            });
+        }
+
+        let on_network_share = paths::is_network_path(&root);
+        // Probed rather than inferred: a read-only share must be detected on
+        // open so the UI can say so, not on the first failed save.
+        let read_only = !paths::is_writable(&root);
+
+        let index = Index::open_for(&meta.id)?;
+        let mut project =
+            Project { root, meta, index, on_network_share, read_only, user: current_user() };
+
+        if project.index.is_empty()? {
+            project.rescan()?;
+        } else {
+            project.reconcile()?;
+        }
+        Ok(project)
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn id(&self) -> Id {
+        self.meta.id
+    }
+
+    pub fn index(&self) -> &Index {
+        &self.index
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    pub fn on_network_share(&self) -> bool {
+        self.on_network_share
+    }
+
+    pub fn summary(&self) -> ProjectSummary {
+        ProjectSummary {
+            id: self.meta.id,
+            name: self.meta.name.clone(),
+            path: self.root.to_string_lossy().into_owned(),
+            on_network_share: self.on_network_share,
+            read_only: self.read_only,
+            last_opened_at: Some(Utc::now()),
+        }
+    }
+
+    // ── reading ──────────────────────────────────────────────────────────
+
+    pub fn list_nodes(&self) -> Result<Vec<NodeSummary>> {
+        self.index.list_nodes()
+    }
+
+    pub fn get_node(&self, id: Id) -> Result<Node> {
+        let rel = self.index.rel_path_of(id)?.ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
+        let path = paths::from_rel_string(&self.root, &rel);
+        let (text, _) =
+            atomic::read_stamped(&path)?.ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
+        markdown::from_markdown(&text, &path)
+    }
+
+    // ── writing ──────────────────────────────────────────────────────────
+
+    pub fn create_node(
+        &mut self,
+        kind: NodeKind,
+        name: &str,
+        parent_id: Option<Id>,
+    ) -> Result<Node> {
+        self.ensure_writable()?;
+
+        let def = kind_def(kind);
+        if def.singleton && self.index.singleton_of(kind)?.is_some() {
+            return Err(Error::Core(wobu_core::Error::DuplicateSingleton { kind: kind.as_str() }));
+        }
+
+        let mut node = Node::new(kind, name)?;
+        node.parent_id = parent_id;
+
+        // Two nodes of a kind may share a display name, but not a filename.
+        let taken = self.index.slugs_in_kind(kind)?;
+        node.slug = wobu_core::unique_slug(&node.slug, &|s| taken.iter().any(|t| t == s));
+
+        node.validate()?;
+        self.validate_parent(&node, parent_id)?;
+
+        match self.write_node(&node, None)? {
+            SaveOutcome::Saved(saved) => Ok(*saved),
+            SaveOutcome::Conflict { conflict_path } => Err(Error::AlreadyExists(
+                paths::from_rel_string(&self.root, &conflict_path),
+            )),
+        }
+    }
+
+    /// Save an edited node, refusing to clobber a concurrent change.
+    pub fn save_node(&mut self, mut node: Node) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        node.validate()?;
+        self.validate_parent(&node, node.parent_id)?;
+        node.touch();
+
+        let expected = self.index.stamp_of(node.id)?;
+        self.write_node(&node, expected.as_ref())
+    }
+
+    pub fn move_node(&mut self, id: Id, new_parent_id: Option<Id>) -> Result<()> {
+        let mut node = self.get_node(id)?;
+        if node.parent_id == new_parent_id {
+            return Ok(());
+        }
+        node.parent_id = new_parent_id;
+        // save_node re-validates, which is where the cycle check happens.
+        match self.save_node(node)? {
+            SaveOutcome::Saved(_) => Ok(()),
+            SaveOutcome::Conflict { conflict_path } => {
+                Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
+            }
+        }
+    }
+
+    /// Delete a node, promoting any children to its parent and stripping the
+    /// influence edges that pointed at it.
+    ///
+    /// Deleting a Region should not silently take its Cities with it, and
+    /// refusing outright would make the user delete a subtree leaf by leaf.
+    ///
+    /// The inbound links matter just as much: ULIDs are never reused, so a link
+    /// left pointing at a deleted node is dead weight in someone's frontmatter
+    /// forever, and the influence engine would resolve it into an empty layer
+    /// card rather than nothing at all.
+    pub fn delete_node(&mut self, id: Id) -> Result<()> {
+        self.ensure_writable()?;
+
+        let node = self.get_node(id)?;
+        if kind_def(node.kind).singleton {
+            return Err(Error::Core(wobu_core::Error::DuplicateSingleton {
+                kind: node.kind.as_str(),
+            }));
+        }
+
+        for child_id in self.index.children_of(id)? {
+            let mut child = self.get_node(child_id)?;
+            child.parent_id = node.parent_id;
+            self.save_node(child)?;
+        }
+
+        // Collected first: each save_node below rewrites the index, and holding
+        // a borrow across that would be reading a table we are mutating.
+        let referrers: Vec<Id> =
+            self.index.backlinks(id)?.into_iter().map(|edge| edge.from_id).collect();
+        for from_id in referrers {
+            // A referrer that is itself already gone is not an error — deleting
+            // two linked nodes in either order must work.
+            let Ok(mut referrer) = self.get_node(from_id) else { continue };
+            referrer.links.retain(|link| link.to_id != id);
+            self.save_node(referrer)?;
+        }
+
+        if let Some(rel) = self.index.rel_path_of(id)? {
+            let path = paths::from_rel_string(&self.root, &rel);
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(Error::io(&path, e)),
+            }
+        }
+        self.index.remove_node(id)?;
+        Ok(())
+    }
+
+    fn write_node(&mut self, node: &Node, expected: Option<&atomic::Stamp>) -> Result<SaveOutcome> {
+        let rel = self.rel_path(node);
+        let path = paths::from_rel_string(&self.root, &rel);
+        let text = markdown::to_markdown(node)?;
+
+        match atomic::guarded_write(&self.root, &path, &text, expected, &self.user)? {
+            WriteOutcome::Written(stamp) => {
+                self.index.upsert_node(node, &rel, &stamp)?;
+                Ok(SaveOutcome::Saved(Box::new(node.clone())))
+            }
+            WriteOutcome::Conflict { conflict_path, .. } => {
+                // Pull the winner's version into the index so the UI shows what
+                // is actually on disk while the conflict card is open.
+                if let Ok(Some((text, stamp))) = atomic::read_stamped(&path)
+                    && let Ok(theirs) = markdown::from_markdown(&text, &path)
+                {
+                    self.index.upsert_node(&theirs, &rel, &stamp)?;
+                }
+                let rel_conflict = conflict_path
+                    .strip_prefix(&self.root)
+                    .map(paths::to_rel_string)
+                    .unwrap_or_else(|_| paths::to_rel_string(&conflict_path));
+                Ok(SaveOutcome::Conflict { conflict_path: rel_conflict })
+            }
+        }
+    }
+
+    fn rel_path(&self, node: &Node) -> String {
+        format!("{NODES_DIR}/{}/{}.md", node.kind.dir(), node.slug)
+    }
+
+    fn validate_parent(&self, node: &Node, parent_id: Option<Id>) -> Result<()> {
+        let lookup = |id: Id| self.index.kind_and_parent(id).ok().flatten();
+        wobu_core::validate_parent(node, parent_id, &lookup)?;
+        Ok(())
+    }
+
+    fn ensure_writable(&self) -> Result<()> {
+        if self.read_only { Err(Error::ReadOnly) } else { Ok(()) }
+    }
+
+    // ── reconciliation ───────────────────────────────────────────────────
+
+    /// Read every node file and rebuild the index from scratch.
+    pub fn rescan(&mut self) -> Result<()> {
+        self.index.clear()?;
+        for (rel, path) in self.node_files() {
+            let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
+            match markdown::from_markdown(&text, &path) {
+                Ok(node) => self.index.upsert_node(&node, &rel, &stamp)?,
+                // A file a sync client mangled must be surfaced, not
+                // overwritten — so we skip it and leave it on disk untouched.
+                Err(_) => continue,
+            }
+        }
+        Ok(())
+    }
+
+    /// Fold external edits (Obsidian, git pull, a collaborator on the share)
+    /// into the index. Returns true if anything changed.
+    ///
+    /// Only files whose `(mtime, size)` moved are re-read: listing a directory
+    /// over SMB is cheap, re-reading hundreds of small files is not.
+    pub fn reconcile(&mut self) -> Result<bool> {
+        let known = self.index.all_stamps()?;
+        let mut seen = std::collections::HashSet::new();
+        let mut changed = false;
+
+        for (rel, path) in self.node_files() {
+            seen.insert(rel.clone());
+            let Some((mtime, size)) = atomic::peek(&path)? else { continue };
+            if known.get(&rel) == Some(&(mtime, size)) {
+                continue;
+            }
+            let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
+            if let Ok(node) = markdown::from_markdown(&text, &path) {
+                self.index.upsert_node(&node, &rel, &stamp)?;
+                changed = true;
+            }
+        }
+
+        for rel in known.keys().filter(|rel| !seen.contains(*rel)) {
+            self.index.remove_by_rel_path(rel)?;
+            changed = true;
+        }
+        Ok(changed)
+    }
+
+    /// Every node Markdown file, as `(relative path, absolute path)`.
+    fn node_files(&self) -> Vec<(String, PathBuf)> {
+        let nodes_root = self.root.join(NODES_DIR);
+        walkdir::WalkDir::new(&nodes_root)
+            .max_depth(3)
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("md")))
+            .filter(|e| {
+                // Conflict siblings are for a human to resolve; indexing them
+                // would put ghost duplicates in the navigator.
+                !e.file_name().to_string_lossy().contains(".conflict-")
+            })
+            .filter_map(|e| {
+                let rel = e.path().strip_prefix(&self.root).ok()?;
+                Some((paths::to_rel_string(rel), e.path().to_path_buf()))
+            })
+            .collect()
+    }
+}
+
+fn current_user() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "user".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_project() -> (tempfile::TempDir, Project) {
+        let dir = tempfile::tempdir().unwrap();
+        let project = Project::create(dir.path(), "Ashfall").unwrap();
+        (dir, project)
+    }
+
+    #[test]
+    fn create_lays_out_a_self_contained_folder() {
+        let (dir, project) = new_project();
+        let root = dir.path().join("ashfall.wobu");
+        assert_eq!(project.root(), root);
+        for expected in
+            ["project.json", "nodes", "assets/originals", "assets/thumbs", ".wobu/tmp", ".wobu/sessions"]
+        {
+            assert!(root.join(expected).exists(), "missing {expected}");
+        }
+    }
+
+    #[test]
+    fn create_seeds_the_two_singletons() {
+        let (_dir, project) = new_project();
+        let nodes = project.list_nodes().unwrap();
+        let kinds: Vec<_> = nodes.iter().map(|n| n.kind).collect();
+        assert!(kinds.contains(&NodeKind::StyleGuide));
+        assert!(kinds.contains(&NodeKind::WorldBible));
+        assert_eq!(nodes.len(), 2);
+    }
+
+    #[test]
+    fn singletons_cannot_be_duplicated_or_deleted() {
+        let (_dir, mut project) = new_project();
+        assert!(project.create_node(NodeKind::StyleGuide, "Another Style", None).is_err());
+
+        let style = project
+            .list_nodes()
+            .unwrap()
+            .into_iter()
+            .find(|n| n.kind == NodeKind::StyleGuide)
+            .unwrap();
+        assert!(project.delete_node(style.id).is_err());
+    }
+
+    #[test]
+    fn creating_a_project_twice_in_the_same_place_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        Project::create(dir.path(), "Ashfall").unwrap();
+        assert!(matches!(
+            Project::create(dir.path(), "Ashfall"),
+            Err(Error::AlreadyExists(_))
+        ));
+    }
+
+    #[test]
+    fn a_node_round_trips_through_disk() {
+        let (_dir, mut project) = new_project();
+        let created = project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+
+        let mut edited = project.get_node(created.id).unwrap();
+        assert_eq!(edited, created);
+
+        edited.notes_raw = "scarred, ex-guild".into();
+        let SaveOutcome::Saved(_) = project.save_node(edited).unwrap() else {
+            panic!("expected a clean save")
+        };
+
+        let reloaded = project.get_node(created.id).unwrap();
+        assert_eq!(reloaded.notes_raw, "scarred, ex-guild");
+    }
+
+    #[test]
+    fn nodes_land_at_the_documented_path() {
+        let (dir, mut project) = new_project();
+        project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+        assert!(dir.path().join("ashfall.wobu/nodes/character/kael-vantris.md").is_file());
+    }
+
+    #[test]
+    fn duplicate_names_get_distinct_filenames() {
+        let (_dir, mut project) = new_project();
+        let a = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let b = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        assert_ne!(a.slug, b.slug);
+        assert_eq!(a.name, b.name);
+    }
+
+    #[test]
+    fn renaming_a_node_does_not_move_its_file() {
+        // Moving the file out from under a collaborator is worse than a stale slug.
+        let (_dir, mut project) = new_project();
+        let mut node = project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+        node.name = "Kael the Ashbound".into();
+        project.save_node(node.clone()).unwrap();
+
+        let reloaded = project.get_node(node.id).unwrap();
+        assert_eq!(reloaded.slug, "kael-vantris");
+        assert_eq!(reloaded.name, "Kael the Ashbound");
+    }
+
+    #[test]
+    fn deleting_a_parent_promotes_its_children() {
+        let (_dir, mut project) = new_project();
+        let region = project.create_node(NodeKind::Setting, "Ember Coast", None).unwrap();
+        let city = project.create_node(NodeKind::Setting, "Cinder Bay", Some(region.id)).unwrap();
+
+        project.delete_node(region.id).unwrap();
+
+        let survivor = project.get_node(city.id).unwrap();
+        assert_eq!(survivor.parent_id, None, "the city must not vanish with the region");
+        assert!(project.get_node(region.id).is_err());
+    }
+
+    #[test]
+    fn deleting_a_node_strips_the_links_that_pointed_at_it() {
+        let (_dir, mut project) = new_project();
+        let guild = project.create_node(NodeKind::Culture, "Ember Guild", None).unwrap();
+        let mut kael = project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+        kael.links.push(wobu_core::Link::new(guild.id, wobu_core::LinkRole::MemberOf));
+        let SaveOutcome::Saved(kael) = project.save_node(kael).unwrap() else {
+            panic!("expected a clean save")
+        };
+
+        project.delete_node(guild.id).unwrap();
+
+        // Not just in the index — in the Markdown, which is the source of truth.
+        let reread = project.get_node(kael.id).unwrap();
+        assert!(reread.links.is_empty(), "dangling link survived: {:?}", reread.links);
+        assert!(project.index().backlinks(guild.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn deleting_two_linked_nodes_works_in_either_order() {
+        let (_dir, mut project) = new_project();
+        let guild = project.create_node(NodeKind::Culture, "Ember Guild", None).unwrap();
+        let mut kael = project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+        kael.links.push(wobu_core::Link::new(guild.id, wobu_core::LinkRole::MemberOf));
+        let SaveOutcome::Saved(kael) = project.save_node(kael).unwrap() else {
+            panic!("expected a clean save")
+        };
+
+        project.delete_node(kael.id).unwrap();
+        project.delete_node(guild.id).unwrap();
+        assert!(project.list_nodes().unwrap().iter().all(|n| n.id != guild.id));
+    }
+
+    #[test]
+    fn a_move_that_would_make_a_cycle_is_refused() {
+        let (_dir, mut project) = new_project();
+        let region = project.create_node(NodeKind::Setting, "Ember Coast", None).unwrap();
+        let city = project.create_node(NodeKind::Setting, "Cinder Bay", Some(region.id)).unwrap();
+
+        assert!(project.move_node(region.id, Some(city.id)).is_err());
+        assert_eq!(project.get_node(region.id).unwrap().parent_id, None);
+    }
+
+    #[test]
+    fn reopening_reads_the_world_back_off_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = {
+            let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+            project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+            project.root().to_path_buf()
+        };
+
+        let reopened = Project::open(&root).unwrap();
+        let names: Vec<_> = reopened.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
+        assert!(names.contains(&"Vashk".to_string()));
+    }
+
+    #[test]
+    fn deleting_the_index_loses_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (root, id) = {
+            let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+            project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+            (project.root().to_path_buf(), project.id())
+        };
+
+        std::fs::remove_file(paths::index_path(&id)).ok();
+        let reopened = Project::open(&root).unwrap();
+        assert_eq!(reopened.list_nodes().unwrap().len(), 3, "2 singletons + Vashk");
+    }
+
+    #[test]
+    fn reconcile_picks_up_an_external_edit() {
+        // The Obsidian / git-pull / collaborator case.
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+
+        let text = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Vashk-Prime");
+        // Push mtime forward; a same-second write can otherwise look unchanged.
+        std::fs::write(&path, text).unwrap();
+        filetime_bump(&path);
+
+        assert!(project.reconcile().unwrap());
+        let names: Vec<_> = project.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
+        assert!(names.contains(&"Vashk-Prime".to_string()), "{names:?}");
+        assert_eq!(project.get_node(node.id).unwrap().name, "Vashk-Prime");
+    }
+
+    #[test]
+    fn reconcile_survives_two_files_swapping_names() {
+        // Renaming files around in Obsidian is normal, and a swap is the case
+        // where a node arrives at a path the index still believes belongs to
+        // someone else. Getting this wrong makes the project fail to open.
+        let (_dir, mut project) = new_project();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let sunborn = project.create_node(NodeKind::Species, "Sunborn", None).unwrap();
+
+        let dir = project.root().join("nodes/species");
+        let (a, b, tmp) =
+            (dir.join("vashk.md"), dir.join("sunborn.md"), dir.join("swap.tmp"));
+        std::fs::rename(&a, &tmp).unwrap();
+        std::fs::rename(&b, &a).unwrap();
+        std::fs::rename(&tmp, &b).unwrap();
+        filetime_bump(&a);
+        filetime_bump(&b);
+
+        project.reconcile().unwrap();
+
+        // The slug follows the filename, so they have traded places.
+        assert_eq!(project.get_node(vashk.id).unwrap().slug, "sunborn");
+        assert_eq!(project.get_node(sunborn.id).unwrap().slug, "vashk");
+    }
+
+    #[test]
+    fn reconcile_notices_an_externally_deleted_file() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        std::fs::remove_file(project.root().join("nodes/species/vashk.md")).unwrap();
+
+        assert!(project.reconcile().unwrap());
+        assert_eq!(project.list_nodes().unwrap().len(), 2, "only the singletons remain");
+    }
+
+    #[test]
+    fn conflict_siblings_are_never_indexed_as_nodes() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let original = project.root().join("nodes/species/vashk.md");
+        let sibling = project.root().join("nodes/species/vashk.conflict-nadia-20260731T142211Z.md");
+        std::fs::copy(&original, &sibling).unwrap();
+
+        project.rescan().unwrap();
+        let vashk: Vec<_> =
+            project.list_nodes().unwrap().into_iter().filter(|n| n.name == "Vashk").collect();
+        assert_eq!(vashk.len(), 1, "the conflict copy must not appear in the navigator");
+    }
+
+    #[test]
+    fn a_corrupt_file_is_skipped_rather_than_overwritten() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        std::fs::write(&path, "this is not a node file").unwrap();
+
+        project.rescan().unwrap();
+        assert_eq!(project.list_nodes().unwrap().len(), 2, "corrupt file drops out of the index");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "this is not a node file",
+            "but is left exactly as it was on disk"
+        );
+    }
+
+    #[test]
+    fn a_concurrent_edit_produces_a_conflict_not_a_clobber() {
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+
+        // Nadia saves while we hold an older copy.
+        let theirs = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Nadia's Vashk");
+        std::fs::write(&path, theirs).unwrap();
+        filetime_bump(&path);
+
+        let mut mine = node.clone();
+        mine.notes_raw = "my edit".into();
+        let outcome = project.save_node(mine).unwrap();
+
+        let SaveOutcome::Conflict { conflict_path } = outcome else {
+            panic!("expected a conflict, got {outcome:?}")
+        };
+        assert!(conflict_path.contains(".conflict-"), "{conflict_path}");
+        assert!(std::fs::read_to_string(&path).unwrap().contains("Nadia's Vashk"));
+        assert!(project.root().join(&conflict_path).is_file());
+    }
+
+    #[test]
+    fn a_read_only_project_refuses_writes_rather_than_failing_late() {
+        let (_dir, mut project) = new_project();
+        project.read_only = true;
+        assert!(matches!(
+            project.create_node(NodeKind::Species, "Vashk", None),
+            Err(Error::ReadOnly)
+        ));
+    }
+
+    #[test]
+    fn opening_a_plain_folder_is_a_clear_error() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(matches!(Project::open(dir.path()), Err(Error::NotAProject(_))));
+    }
+
+    #[test]
+    fn a_newer_schema_is_refused_rather_than_misread() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = Project::create(dir.path(), "Ashfall").unwrap();
+        let meta_path = project.root().join(PROJECT_FILE);
+        let raw = std::fs::read_to_string(&meta_path).unwrap();
+        std::fs::write(&meta_path, raw.replace("\"schemaVersion\": 1", "\"schemaVersion\": 99"))
+            .unwrap();
+
+        assert!(matches!(
+            Project::open(project.root()),
+            Err(Error::SchemaTooNew { found: 99, .. })
+        ));
+    }
+
+    #[test]
+    fn nothing_absolute_is_written_into_the_folder() {
+        // The same share is /Volumes/art/… on one machine and Z:\art\… on another.
+        let (dir, mut project) = new_project();
+        project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+        let root_string = dir.path().to_string_lossy().into_owned();
+
+        for (_, path) in project.node_files() {
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(!text.contains(&root_string), "{} leaked an absolute path", path.display());
+        }
+        let meta = std::fs::read_to_string(project.root().join(PROJECT_FILE)).unwrap();
+        assert!(!meta.contains(&root_string));
+    }
+
+    /// Nudge mtime forward so a write inside the same filesystem timestamp
+    /// granularity is still visible to the `(mtime, size)` pre-filter.
+    fn filetime_bump(path: &Path) {
+        let meta = std::fs::metadata(path).unwrap();
+        let later = meta.modified().unwrap() + std::time::Duration::from_secs(2);
+        let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+        f.set_modified(later).unwrap();
+    }
+}

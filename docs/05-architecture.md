@@ -1,0 +1,104 @@
+# 05 — Technical Architecture
+
+## Stack
+
+- **Shell**: Tauri 2 (Rust core, system webview).
+- **Frontend**: React 19 + TypeScript + Vite. Chosen over Svelte for ecosystem depth in the
+  things this app leans on hardest — virtualised image grids, drag-and-drop trees, and
+  three.js integration. Styling is plain CSS with the design tokens from
+  [03](03-ui-layout.md); no framework, so the prototype's CSS ports over directly.
+- **State**: Zustand for UI state; TanStack Query over Tauri commands for world data.
+- **Rust**: workspace of small crates, so the domain logic is testable without a webview.
+
+```
+src-tauri/
+├── src/main.rs              tauri::Builder, command + event registration
+└── crates/
+    ├── wobu-core/           Node/Link/Asset types, kind registry, validation
+    ├── wobu-store/          Markdown+frontmatter IO, SQLite index, file watcher
+    ├── wobu-influence/      stack resolution, fragment scoring, prompt compilation
+    ├── wobu-llm/            Anthropic client, tool-use schemas, streaming Enhance
+    ├── wobu-imagine/        image/3D backend adapters behind one trait
+    └── wobu-jobs/           queue, cancellation, progress events, retries
+```
+
+`wobu-influence` is pure — stack in, compiled prompt out, no IO. It gets snapshot tests over
+fixture worlds, because prompt-compilation regressions are otherwise invisible.
+
+## Backend adapters
+
+One trait, several implementations, selected per project:
+
+```rust
+#[async_trait]
+pub trait ImageBackend {
+    fn capabilities(&self) -> Capabilities;      // controlnet? ip-adapter? loras? max res
+    async fn submit(&self, job: ImageJob) -> Result<JobHandle>;
+    async fn progress(&self, h: &JobHandle) -> BoxStream<Progress>;
+    async fn cancel(&self, h: &JobHandle) -> Result<()>;
+}
+```
+
+- **ComfyUI (local)** — the primary target, given the machine has a real GPU. Wobu ships
+  workflow templates per output preset and patches node inputs by ID; talks over
+  `/prompt` + the websocket for progress and previews.
+- **Replicate / fal** — hosted fallback for machines without a GPU, same trait.
+- **Automatic1111** — optional, community request.
+
+Capabilities are surfaced in the UI: if a backend has no ControlNet, structure references are
+visibly downgraded to moodboard-only rather than silently ignored.
+
+3D uses the same trait shape (`MeshBackend`): turnaround sheet → image-to-3D (TRELLIS /
+Hunyuan3D / InstantMesh via ComfyUI) → GLB, previewed in-app with three.js.
+
+## Commands and events
+
+Commands are coarse and domain-shaped, not CRUD-shaped:
+
+```
+project_open / project_create / project_recent
+node_list / node_get / node_upsert / node_delete / node_move
+asset_import / asset_thumb / asset_link
+influence_resolve(node_id)        -> layer cards for the Inspector
+prompt_compile(node_id, shot)     -> compiled prompt + fragment attribution
+enhance_start(node_id)            -> job id; streams via event
+generate_start(node_id, shot)     -> job id
+job_cancel(job_id)
+```
+
+Everything long-running returns a job id immediately and streams over Tauri events:
+`job:progress`, `job:preview` (latent previews from ComfyUI), `job:done`, `job:error`,
+`enhance:delta`. The frontend never blocks on a command.
+
+`prompt_compile` is called on every Inspector interaction, so it must stay sub-millisecond —
+another reason `wobu-influence` does no IO.
+
+## File watching and the index
+
+`wobu-store` reconciles external edits (Obsidian, git pull, a collaborator on the same share)
+into the SQLite index and pushes a `world:changed` event. It picks its change-detection
+strategy from the project path:
+
+- **Local filesystem** → `notify` watcher, debounced ~400 ms.
+- **Network mount** → 5-second directory-listing poll, because `inotify`/`FSEvents` do not
+  observe writes made by other hosts over NFS or SMB.
+
+Writes stage to `.wobu/tmp` on the same filesystem and `rename()` into place, guarded by an
+mtime+hash check that converts a clobber into a surfaced conflict. Details in
+[07 — Projects on file shares](07-file-shares.md).
+
+The index holds a mirror of node frontmatter, an FTS5 table over notes and descriptions, and
+the link edges. It lives in **local app data keyed by project ULID**, never in the project
+folder — SQLite's locking is unsafe over SMB/NFS and WAL mode doesn't work there at all.
+Schema or hash mismatch triggers a rebuild from Markdown; deleting the index is always safe.
+
+## Concerns worth naming early
+
+- **Secrets**: BYOK API keys go in the OS keychain via `keyring`, never in `project.json`.
+  This is non-negotiable now that project folders are meant to be shared — see
+  [08 — Providers & BYOK](08-providers.md).
+- **Thumbnails**: generate WebP thumbs on import off the UI thread; grids bind to thumbs only.
+- **Cancellation**: every job must be genuinely cancellable, including in-flight ComfyUI
+  prompts, or the queue becomes a hostage situation.
+- **Undo**: node edits go through a command log so `⌘Z` works across the whole workspace, not
+  just inside a text field.

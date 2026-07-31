@@ -1,0 +1,24 @@
+# ── secrets ───────────────────────────────────────────────────────────────
+# Tencent SecretId/SecretKey are account-wide credentials. Never commit these.
+.env
+.env.*
+!.env.example
+
+# ── rust / tauri ──────────────────────────────────────────────────────────
+target/
+**/*.rs.bk
+
+# ── node ──────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+
+# ── wobu project data ─────────────────────────────────────────────────────
+# Derived SQLite index — rebuildable from the project folder, never canonical.
+.index/
+*.wobu/.wobu/tmp/
+*.wobu/.wobu/sessions/
+
+# ── os ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

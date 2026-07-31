@@ -1,0 +1,7 @@
+@import './tokens.css';
+@import './base.css';
+@import './shell.css';
+@import './navigator.css';
+@import './editor.css';
+@import './inspector.css';
+@import './overlays.css';

@@ -1,0 +1,353 @@
+# 08 — Providers & BYOK
+
+Wobu ships with no inference of its own and no Wobu-operated proxy. Every provider is
+**bring-your-own-key**: the user pastes credentials they obtained themselves, and Wobu talks
+to that provider directly on their behalf.
+
+> ⚠️ **Verify before implementing.** The provider details below were researched on
+> **2026-07-31** against vendor documentation. Where a fact could not be confirmed it is
+> marked 🚩 rather than guessed. Confirm every endpoint and model ID against a live call
+> before writing the adapter — this file is a design brief, not an API reference.
+
+## Three capabilities, not one list
+
+Providers are selected per *capability*, not globally. A user can enhance with Gemini,
+generate images on a local ComfyUI, and produce meshes via Hunyuan3D — that combination is
+normal, not exotic.
+
+| Capability | Used by | Providers |
+| --- | --- | --- |
+| **Text** | Enhance | Anthropic, Google Gemini, local (Ollama) |
+| **Image** | Generate | ComfyUI (local), Google Gemini, Replicate/fal |
+| **Mesh** | Concept 3D | Tencent Hunyuan3D, ComfyUI (local Hunyuan3D weights) |
+
+## Key storage
+
+**Keys are never written into the project folder.** Project folders are designed to be put on
+a shared drive ([07](07-file-shares.md)), so a key in `project.json` is a key leaked to
+everyone with share access — and to git history, and to whoever the folder gets zipped to.
+
+- Keys live in the **OS keychain** via the `keyring` crate — Secret Service on Linux, Keychain
+  on macOS, Credential Manager on Windows — under `wobu/<provider>`.
+- Keys are **per-installation, not per-project**. Opening a shared project uses *your* keys.
+- `project.json` stores only the *selection*: provider id, model id, and default params. It is
+  safe to share, and a collaborator without a key sees "Gemini selected — no key on this
+  machine", not an error.
+- Keys are held in the Rust process only. They are never sent to the webview, never logged,
+  and redacted from error strings before they reach the UI.
+
+Opening a project whose selected provider has no key on this machine drops that capability
+into a disabled state with a direct "add key" affordance, rather than failing at generate time.
+
+**Development-time exception.** For local work, `wobu-llm`/`wobu-imagine` may fall back to
+environment variables (a repo-root `.env`, e.g. `TencentSecretId` / `TencentSecretKey`) when
+the keychain has no entry. Resolution order is **keychain → environment → unconfigured**, and
+the env path is compiled out of release builds. `.env` is gitignored; `.env.example` documents
+the variable names with empty values. This fallback must never read from inside a *project*
+folder — that is the shared-folder leak the keychain rule exists to prevent.
+
+## All network calls happen in Rust
+
+Every provider request is issued from `wobu-llm` / `wobu-imagine` in the Rust process, never
+from the webview. Three reasons, in order of importance:
+
+1. The key never enters renderer memory.
+2. Streaming, cancellation and retry are already the job queue's problem.
+3. **It sidesteps a live CORS bug.** Google's Interactions API client sends an `Api-Revision`
+   header, which triggers a CORS preflight that `generativelanguage.googleapis.com` rejects —
+   so calling it from a Tauri/Electron webview fails with an opaque `TypeError: Failed to
+   fetch` ([js-genai#1723](https://github.com/googleapis/js-genai/issues/1723)). From a native
+   HTTP client there is no preflight and no problem.
+
+---
+
+## Google Gemini (text + image)
+
+Base URL `https://generativelanguage.googleapis.com`, auth header
+`x-goog-api-key: <key>`. Keys come from AI Studio.
+
+**Two APIs currently exist.** The **Interactions API** (`POST /v1beta/interactions`, GA) is
+Google's forward path; the legacy `POST /v1beta/models/{model}:generateContent` remains fully
+supported. We target the Interactions API, because the usual reason to prefer legacy — the
+CORS bug above — doesn't apply to a native HTTP client.
+🚩 Google's migration guide says `/v1beta2` while the quickstart and API reference both say
+`/v1beta`. Confirm with a live call.
+
+### Text — Enhance
+
+Default model **`gemini-3.6-flash`** (GA 2026-07-21, has a free tier). Streaming is
+`"stream": true` in the body, returned as SSE — no separate endpoint.
+
+🚩 Do not assert a quality ranking between `gemini-3.6-flash` and `gemini-3.5-flash`; Google's
+own model page describes the *older* one as more capable. Benchmark on our actual Enhance
+prompt before picking a default for the UI copy.
+
+Structured descriptions use a top-level `response_format` (note: **not** inside
+`generation_config`):
+
+```json
+{
+  "model": "gemini-3.6-flash",
+  "input": "...",
+  "response_format": {
+    "type": "text",
+    "mime_type": "application/json",
+    "schema": { "type": "object", "properties": { }, "required": [] }
+  }
+}
+```
+
+The accepted schema is a **subset** of JSON Schema — objects, arrays, enums, `format`,
+numeric bounds, `anyOf`, and `$ref` for recursion are documented; Google states plainly that
+"not all JSON Schema features are supported" and that deeply nested schemas may be rejected.
+Our description schema is flat and small, so this is comfortable — but `wobu-llm` should
+validate the response client-side regardless, since the same schema must also work against
+Anthropic's tool-use.
+🚩 `oneOf`, `propertyOrdering` and `responseJsonSchema` could not be confirmed to exist in the
+current API. Don't use them.
+
+> **`temperature`, `top_p` and `top_k` were deprecated on 2026-07-21.** Do not build sampling
+> sliders into Settings.
+
+### Image — Generate
+
+| Model | Notes |
+| --- | --- |
+| `gemini-3.1-flash-image` | default; up to 4K |
+| `gemini-3-pro-image` | highest quality; largest reference budget |
+| `gemini-3.1-flash-lite-image` | cheapest, **1K only** |
+
+`imagen` is deprecated; don't add it.
+
+Images return as **inline base64** — there are no URLs — and all output carries **SynthID**
+watermarking, which is worth stating in the UI since this is concept art headed for a
+pipeline. Reference images are passed the same way (base64 inline, or via the Files API for
+larger payloads), which maps cleanly onto our AssetLink roles.
+
+**Reference budgets, per model** — these feed the image budget in [04](04-influence-engine.md):
+
+| Model | objects | characters | style refs |
+| --- | --- | --- | --- |
+| `gemini-3.1-flash-lite-image` | 14 | – | – |
+| `gemini-3.1-flash-image` | 10 | 4 | – |
+| `gemini-3-pro-image` | 6 | 5 | 3 |
+
+Aspect ratios: use the intersection both Google docs agree on — `1:1 3:2 2:3 3:4 4:3 4:5 5:4
+9:16 16:9 21:9`. Sizes are `512px`, `1K`, `2K`, `4K`, uppercase K required.
+
+🚩 Two things to verify empirically: the legacy image config field moved between
+`generationConfig.imageConfig` and `response_format.image` and the docs disagree; and there
+are multiple credible reports of `imageSize` and `aspect_ratio` being **silently ignored**.
+The adapter should read back the actual returned dimensions and trust those, not the request.
+
+### The thing that will generate support tickets
+
+**Gemini image generation has no free tier.** `gemini-3.6-flash` text is free; every image
+model is billing-only. A user who pastes a working key, successfully enhances a species, and
+then gets an error on Generate will reasonably conclude Wobu is broken.
+
+So the adapter must detect this specific failure and say *"Gemini image generation requires
+billing enabled on your Google account"* with a link — not surface a raw 429/403. Ideally we
+probe capability at key-entry time and show it in Settings before the user ever hits Generate.
+
+🚩 Concrete free-tier RPM/TPM/RPD numbers are deliberately unpublished and vary; do not
+hardcode them. Read limits from error responses and back off. Free-tier availability in the
+EEA/UK/CH could not be confirmed.
+
+---
+
+## Tencent Hunyuan3D (mesh)
+
+Hunyuan3D 3.1 is our concept-3D backend. It is **not** shaped like the other providers, and
+the differences are load-bearing — read this before estimating the work.
+
+### Pick the right namespace
+
+Tencent ships this product under three overlapping API namespaces, and choosing wrong is the
+most likely way to lose a day:
+
+| | Host | Service | Version | Has 3.1? |
+| --- | --- | --- | --- | --- |
+| **International** ✅ | `hunyuan.intl.tencentcloudapi.com` | `hunyuan` | `2023-09-01` | **yes** |
+| International `ai3d` ⛔ | `ai3d.intl.tencentcloudapi.com` | `ai3d` | `2025-05-13` | endpoint not live |
+| Mainland China | `ai3d.tencentcloudapi.com` | `ai3d` | `2025-05-13` | yes |
+
+Target the first. Note the counter-intuitive part: the *newer* capability lives under the
+*older-looking* version string. The mainland namespace has a richer action set (auto-rigging,
+motion, retopology) that international does not, and international Pro additionally lacks the
+`ResultFormat` parameter — so we take the default format set there.
+
+`ai3d.intl` is a dead end regardless of what the SDK source suggests: a signed
+`QueryHunyuanTo3DProJob` against it returns `ResourceUnavailable.InterfaceNotExist`.
+
+### ✅ Verified against a live account (2026-07-31)
+
+A signed request from a **non-mainland account** succeeded — the credentials probe returned
+`FailedOperation.JobNotFound` for a bogus `JobId`, which is the request completing normally.
+So: non-mainland signup and service activation work, and our TC3-HMAC-SHA256 implementation is
+correct. The earlier viability blocker is closed.
+
+**`Region` is far more restrictive than the general Tencent Cloud region list.** Sweeping
+twelve regions against `QueryHunyuanTo3DProJob`, exactly three are supported — everything else
+returns `UnsupportedRegion`:
+
+| Region | |
+| --- | --- |
+| `ap-singapore` | Asia-Pacific |
+| `na-siliconvalley` | North America |
+| `eu-frankfurt` | Europe |
+
+Rejected: `ap-guangzhou`, `ap-hongkong`, `ap-tokyo`, `ap-seoul`, `ap-bangkok`, `ap-mumbai`,
+`ap-jakarta`, `na-ashburn`, `na-toronto`, `sa-saopaulo`.
+
+This matters more than it looks. `ap-guangzhou` appears throughout Tencent's own documentation
+examples and is the obvious default to reach for — and it does not work on the international
+endpoint. The adapter should offer only these three, default by rough geographic proximity,
+and remember that **the poll must target the same region as the submit**.
+
+### 3.1 is a parameter, not an endpoint
+
+You call `SubmitHunyuanTo3DProJob` with `Model: "3.1"` (default is `3.0`). It is Pro-only —
+the Rapid action has no `Model` field.
+
+**The lucky finding: 3.1's whole headline feature is multi-view input, and we are a multi-view
+generator.** 3.0 accepts front + 3 views; 3.1 accepts front + 7:
+
+```
+left · right · back · top · bottom · left_front · right_front
+```
+
+Our Turnaround preset already exists to produce consistent multi-view sheets. It should be
+**redefined to emit exactly these seven view types plus front**, so its output drops straight
+into `MultiViewImages` with no intermediate step. That is a much stronger 3D pipeline than
+single-image-to-3D, and it falls out of the influence engine for free. See
+[04](04-influence-engine.md).
+
+**The cost of 3.1:** `LowPoly` and `Sketch` generate modes are unavailable. Since `Sketch` was
+the *only* mode permitting text and image together, **3.1 has no text+image conditioning path
+at all** — the compiled prompt cannot ride along with the images. Text-to-3D and image-to-3D
+are mutually exclusive. For us that is acceptable: by the time we reach 3D, all the influence
+has already been baked into the turnaround images.
+
+### Job model
+
+Asynchronous submit-then-poll, which fits the existing job queue:
+
+1. `POST /` to the host with `X-TC-Action: SubmitHunyuanTo3DProJob`, `X-TC-Version: 2023-09-01`,
+   `X-TC-Region: <region>`, params in the JSON body → returns `JobId`.
+2. Poll `QueryHunyuanTo3DProJob` with that `JobId`. `Status` is exactly
+   `WAIT | RUN | FAIL | DONE`.
+3. `DONE` yields `ResultFile3Ds[]` of `{ Type, Url, PreviewImageUrl }`.
+
+Two expiry traps: **`JobId` is valid 24 hours** and **result `Url`s are valid 24 hours**. Never
+persist a result URL — download into `assets/meshes/` immediately on `DONE`.
+
+Also: the OBJ `Url` is a **`.zip`** (mesh + `.mtl` + texture maps), not a bare mesh, so the
+downloader must unzip. And the international docs list `Type` values that contradict GLB being
+returned — treat `Type` as an open string and switch on it defensively rather than as an enum.
+
+Key parameters: `EnablePBR` (default false), `FaceCount` (default 500000, range 3000–1500000),
+`GenerateType` (`Normal` / `Geometry`; `LowPoly` and `Sketch` unavailable on 3.1).
+
+Limits: **3 concurrent Pro jobs**, 20 requests/second. The queue must respect the concurrency
+cap or we'll generate our own rate-limit errors.
+
+### Input constraints
+
+These bound what the Turnaround preset is allowed to emit, so they belong in the preset
+definition rather than being discovered at submit time:
+
+| | |
+| --- | --- |
+| Formats | `jpg png jpeg webp` single-image; **`JPG`/`PNG` only** for multi-view |
+| Resolution | min side ≥ 128, max side ≤ 5000 |
+| `ImageUrl` | ≤ 8 MB |
+| `ImageBase64` | ≤ 6 MB pre-encode (base64 inflates ~30%) |
+| Multi-view total | all images combined ≤ 6 MB pre-encode |
+| Views | exactly one image per view type, no duplicates |
+
+Tencent's own input guidance — plain background, no text, single object, subject filling >50%
+of frame — is precisely what our Turnaround preset should be tuned to produce anyway.
+
+### BYOK is genuinely harder here, and users must be told
+
+This is the part that differs most from Gemini, and it needs to be designed for rather than
+discovered:
+
+- **There is no bearer API key.** Authentication is a `SecretId` + `SecretKey` pair signed with
+  **TC3-HMAC-SHA256**, an AWS-SigV4-style canonical-request construction. We must implement
+  signing in `wobu-imagine`; it is neither optional nor trivial. Budget for it. (A working
+  reference implementation was verified against a live account — roughly 40 lines. The signed
+  header set is `content-type;host;x-tc-action`, with `X-TC-Timestamp`, `X-TC-Version` and
+  `X-TC-Region` sent unsigned alongside `Authorization`.)
+- **The `SecretKey` is an account-wide master credential**, not a scoped token — materially
+  more dangerous to hold than an OpenAI-style key. Keychain storage is mandatory, and the
+  onboarding copy should actively steer users to create a **CAM sub-account key scoped to the
+  3D service** rather than pasting their root credentials.
+  🚩 The exact CAM policy/action prefix to recommend is unverified.
+- **`Region` is a required parameter**, restricted to the three regions verified above, and the
+  poll must target the same region as the submit.
+- **Signatures expire after 5 minutes of clock skew** (`AuthFailure.SignatureExpire`). Desktop
+  clocks drift, so this error must map to a specific "check your system clock" message.
+- **A fresh account hits `FailedOperation.ServiceNotActivated` before anything works** — the 3D
+  service requires explicit activation in the console. This should be an onboarding step with
+  a link, not a runtime error.
+
+### Remaining unknowns
+
+Viability and regions are settled. Still open, none of them blocking:
+
+- 🚩 The CAM policy / action prefix to recommend for a least-privilege sub-account key.
+- 🚩 Current pricing and free-credit allowance — the international `Query` response omits the
+  `ResultCreditConsumed` field that the mainland one returns, so **we cannot read spend back
+  from the API** and the cost estimate will have to be a local model of published prices.
+- 🚩 Whether `3d.hunyuanglobal.com` issues credentials of its own. Evidence points to the
+  Tencent Cloud console being the only source, which matches the `SecretId`/`SecretKey` shape
+  we verified.
+
+### Local fallback is a different tier, not a fallback
+
+Tencent's open-weight releases stop at **Hunyuan3D-2.1**; there are no 3.x weights, and the
+strong indication is that 3.x is cloud-only. So running Hunyuan3D locally under ComfyUI gets
+you a materially older and lower-quality model — worth offering for cost and privacy reasons,
+but it must be presented as a **different quality tier**, not a drop-in substitute when the
+cloud key is missing.
+🚩 ComfyUI node availability and VRAM requirements for 2.1 are unverified.
+
+---
+
+## Capability negotiation
+
+Each adapter declares what it can do, and the UI adapts rather than failing late:
+
+```rust
+pub struct Capabilities {
+    pub max_resolution: (u32, u32),
+    pub aspect_ratios: Vec<AspectRatio>,
+    pub image_refs: HashMap<RefRole, u8>,   // per-role caps, e.g. style -> 3
+    pub controlnet: bool,
+    pub loras: bool,
+    pub requires_billing: bool,
+    pub streaming_preview: bool,
+}
+```
+
+Consequences the user can actually see:
+
+- A backend with no ControlNet shows structure references as visibly **downgraded to
+  mood-board-only**, rather than silently ignoring them.
+- Aspect ratios the backend doesn't support don't appear in the dropdown.
+- Per-role reference caps drive the image budget, so the Inspector can say `3/3 style refs`.
+
+## Cost and consent
+
+BYOK means the user pays per call, so the app must never surprise them:
+
+- The Generate button shows an **estimated cost** for the batch when the selected provider is
+  paid (Gemini image is roughly $0.05–0.24 per image depending on model and size; treat these
+  as indicative and re-check).
+- Local ComfyUI shows no cost — that asymmetry is the point, and it's a good default.
+- A per-project **spend ceiling** with a hard stop, because a turnaround loop is exactly the
+  kind of thing that runs 200 images unattended.
+- Every generation record already stores the provider, model and params, so actual spend is
+  reconstructable from the project folder.
