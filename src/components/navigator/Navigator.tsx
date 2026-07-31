@@ -3,6 +3,7 @@ import type { CorruptFile, NodeKind, NodeSummary } from '../../lib/api'
 import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
+import { canDrop as allow } from '../../lib/drop'
 import { useUI, report, toast } from '../../store/ui'
 import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
@@ -65,18 +66,9 @@ export function Navigator({
     [dragId, nodes],
   )
 
-  /** A drop is legal only within one kind — nesting is same-kind by design. */
+  /** The rules themselves live in lib/drop.ts, where they can be tested. */
   function canDrop(targetId: string | null, targetKind: NodeKind): boolean {
-    if (readOnly || !dragId) return false
-    const src = byId.get(dragId)
-    if (!src) return false
-    if (src.kind !== targetKind) return false
-    if (targetId === null) return src.parentId !== null
-    if (targetId === dragId || forbidden.has(targetId)) return false
-    if (src.parentId === targetId) return false
-    const def = kinds.get(targetKind)
-    if (def && !def.nests) return false
-    return true
+    return allow({ dragId, byId, forbidden, kinds, readOnly }, targetId, targetKind)
   }
 
   function doMove(targetId: string | null) {
