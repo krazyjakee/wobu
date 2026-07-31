@@ -45,6 +45,7 @@ pub fn run() {
             commands::kind_registry,
             commands::project_create,
             commands::project_open,
+            commands::project_open_cancel,
             commands::project_close,
             commands::project_current,
             commands::project_recent,

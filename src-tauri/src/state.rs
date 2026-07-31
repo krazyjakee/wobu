@@ -35,7 +35,7 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter};
-use wobu_store::{Error as StoreError, Project, Watcher, paths};
+use wobu_store::{Cancel, Error as StoreError, Project, Watcher, paths};
 
 use crate::error::{CommandResult, WobuError};
 
@@ -78,6 +78,13 @@ pub struct AppState {
     /// stops a reconnect loop belonging to a closed project from reconciling
     /// its successor.
     generation: Arc<AtomicU64>,
+    /// The cancel token for a scan currently running, if any.
+    ///
+    /// Separate from `slot` on purpose: an open is by definition not installed
+    /// yet, and parking it in the same mutex would mean holding the lock that
+    /// every command needs for the whole duration of a scan that can take
+    /// minutes on a NAS.
+    opening: Arc<Mutex<Option<Cancel>>>,
 }
 
 impl AppState {
@@ -97,6 +104,29 @@ impl AppState {
 
     pub fn is_offline(&self) -> bool {
         self.slot.lock().as_ref().is_some_and(|o| o.offline)
+    }
+
+    /// Hand out a cancel token for a scan that is about to start.
+    ///
+    /// Replacing any previous one rather than reusing it: a token that has
+    /// already been cancelled would abort the new scan instantly, so the user
+    /// who cancelled one open and immediately picked another folder would find
+    /// the second one refusing to open for no visible reason.
+    pub fn begin_open(&self) -> Cancel {
+        let cancel = Cancel::new();
+        *self.opening.lock() = Some(cancel.clone());
+        cancel
+    }
+
+    pub fn finish_open(&self) {
+        *self.opening.lock() = None;
+    }
+
+    /// Stop the scan in flight, if there is one.
+    pub fn cancel_open(&self) {
+        if let Some(cancel) = self.opening.lock().as_ref() {
+            cancel.cancel();
+        }
     }
 
     /// Install a freshly opened project, replacing (and closing) whatever was
@@ -138,7 +168,7 @@ impl AppState {
         let watched = root.to_path_buf();
 
         let result = Watcher::start(root, move || {
-            this.on_folder_event(&app, &watched, generation);
+            this.on_folder_event(&app, &watched, generation)
         });
 
         match result {
@@ -153,19 +183,23 @@ impl AppState {
     }
 
     /// The watcher fired: either the folder changed, or it went away.
-    fn on_folder_event(&self, app: &AppHandle, root: &Path, generation: u64) {
+    ///
+    /// Returns whether anything actually moved. On a share that answer decides
+    /// the next poll interval — the poller has no other way to tell whether
+    /// somebody else is working in this world right now.
+    fn on_folder_event(&self, app: &AppHandle, root: &Path, generation: u64) -> bool {
         if self.generation.load(Ordering::SeqCst) != generation {
-            return;
+            return false;
         }
 
         // Reconcile under the lock; emit outside it.
         let outcome = {
             let mut guard = self.slot.lock();
-            let Some(open) = guard.as_mut() else { return };
+            let Some(open) = guard.as_mut() else { return false };
             if open.offline {
                 // The reconnect loop owns recovery from here. A stray event
                 // for a dead mountpoint must not race it.
-                return;
+                return false;
             }
             match open.project.reconcile() {
                 // `reconcile` reports whether anything actually moved, and the
@@ -187,11 +221,15 @@ impl AppState {
         match outcome {
             Outcome::Reconciled(true) => {
                 let _ = app.emit(WORLD_CHANGED, ());
+                true
             }
-            Outcome::Reconciled(false) => {}
+            Outcome::Reconciled(false) => false,
             Outcome::WentOffline => {
                 let _ = app.emit(SHARE_OFFLINE, ());
                 self.spawn_reconnect(app, root, generation);
+                // A share that just vanished is the opposite of idle: stay on
+                // the fast poll so coming back is noticed quickly.
+                true
             }
         }
     }
@@ -248,7 +286,11 @@ impl AppState {
     /// callback and the reconnect thread — neither of which can borrow from a
     /// Tauri `State<'_, _>`.
     fn handle(&self) -> AppState {
-        AppState { slot: Arc::clone(&self.slot), generation: Arc::clone(&self.generation) }
+        AppState {
+            slot: Arc::clone(&self.slot),
+            generation: Arc::clone(&self.generation),
+            opening: Arc::clone(&self.opening),
+        }
     }
 }
 

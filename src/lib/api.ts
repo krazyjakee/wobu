@@ -138,6 +138,7 @@ export type ErrorCode =
   | 'provider.rate_limited'
   | 'provider.unavailable'
   | 'io.failed'
+  | 'cancelled'
   | 'internal'
   | (string & {})
 
@@ -187,13 +188,17 @@ export function errorCode(e: unknown): ErrorCode | null {
  * `write.read_only` reaching here means the folder changed under a session
  * that started writable, which the chip alone would not explain.
  */
-export type Surface = 'banner' | 'toast'
+export type Surface = 'banner' | 'toast' | 'silent'
 
 export function errorSurface(e: unknown): Surface {
   switch (errorCode(e)) {
     case 'share.unmounted':
     case 'write.read_only':
       return 'banner'
+    // Not a failure. The user asked for this to stop, and telling them it
+    // stopped is the app arguing with them about something they just did.
+    case 'cancelled':
+      return 'silent'
     default:
       return 'toast'
   }
@@ -239,6 +244,26 @@ export const projectCreate = (parentDir: string, name: string) =>
   call<ProjectSummary>('project_create', { parentDir, name })
 
 export const projectOpen = (path: string) => call<ProjectSummary>('project_open', { path })
+
+/**
+ * How far through the first scan of a project the backend is.
+ *
+ * `total` comes from one directory listing, which is cheap even over SMB —
+ * re-reading the files is the expensive part. It can be stale by the end if
+ * somebody else is writing, so it is an estimate, not a promise.
+ */
+export interface ScanProgress {
+  done: number
+  total: number
+}
+
+/**
+ * Stop a scan in flight.
+ *
+ * A no-op if it has already finished — the user can press Cancel at the instant
+ * the scan completes, and that race must not be an error.
+ */
+export const projectOpenCancel = () => call<void>('project_open_cancel')
 
 export const projectRecent = () => call<ProjectSummary[]>('project_recent')
 

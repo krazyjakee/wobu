@@ -49,6 +49,14 @@ pub enum Error {
     #[error("no project is open")]
     NoProjectOpen,
 
+    /// The user stopped a long scan.
+    ///
+    /// Not a failure, and deliberately its own variant: nothing was written and
+    /// the folder is exactly as it was, so the UI must not offer to retry
+    /// something the user just asked to stop, nor report it as trouble.
+    #[error("cancelled")]
+    Cancelled,
+
     #[error("yaml error: {0}")]
     Yaml(#[from] serde_norway::Error),
 

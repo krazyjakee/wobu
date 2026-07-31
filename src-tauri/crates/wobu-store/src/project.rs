@@ -16,6 +16,7 @@ use crate::error::{Error, Result};
 use crate::index::{CorruptFile, Index};
 use crate::markdown;
 use crate::paths;
+use crate::scan::{Cancel, ScanProgress};
 
 const PROJECT_FILE: &str = "project.json";
 const NODES_DIR: &str = "nodes";
@@ -117,6 +118,20 @@ impl Project {
     }
 
     pub fn open(path: &Path) -> Result<Project> {
+        Project::open_with(path, &Cancel::new(), &mut |_| {})
+    }
+
+    /// `open`, reporting progress and stoppable part-way.
+    ///
+    /// Only the first open of a project pays the full scan; after that the
+    /// index is warm and `reconcile` only reads what moved. But the first open
+    /// is exactly when the user has no idea whether the app is working, so it
+    /// is the one that needs both a number and a way out.
+    pub fn open_with(
+        path: &Path,
+        cancel: &Cancel,
+        on_progress: &mut impl FnMut(ScanProgress),
+    ) -> Result<Project> {
         let root = path.to_path_buf();
         let meta_path = root.join(PROJECT_FILE);
         if !meta_path.is_file() {
@@ -146,8 +161,11 @@ impl Project {
         project.sweep_staging();
 
         if project.index.is_empty()? {
-            project.rescan()?;
+            project.rescan_with(cancel, on_progress)?;
         } else {
+            // The warm path. No progress reported because there is nothing slow
+            // to report: this only reads files whose stamp moved, which on a
+            // folder nobody has touched is none of them.
             project.reconcile()?;
         }
         Ok(project)
@@ -501,24 +519,63 @@ impl Project {
 
     /// Read every node file and rebuild the index from scratch.
     pub fn rescan(&mut self) -> Result<()> {
-        self.index.clear()?;
-        for (rel, path) in self.node_files() {
-            let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
-            match markdown::from_markdown(&text, &path) {
-                Ok(node) => {
-                    self.index.upsert_node(&node, &rel, &stamp)?;
-                    self.index.clear_corrupt(&rel)?;
-                }
-                // A file a sync client mangled is left on disk exactly as it
-                // is, and recorded so the navigator can say so. Skipping it
-                // silently — which is what this used to do — leaves the user
-                // with an entity that quietly stopped existing.
-                Err(e) => {
-                    let why = self.relative_message(&e.to_string());
-                    self.index.mark_corrupt(&rel, &why)?;
-                }
+        self.rescan_with(&Cancel::new(), &mut |_| {})
+    }
+
+    /// `rescan`, reporting progress and stopping when asked.
+    ///
+    /// This is the one operation that can take minutes rather than
+    /// milliseconds: it is every node file, read, over whatever the folder
+    /// happens to be mounted on. Everything else in this crate touches one file
+    /// at a time.
+    ///
+    /// The cancel is checked between files, not inside a read. A single read on
+    /// a wedged SMB mount blocks until the mount's own timeout — minutes, by
+    /// default — and nothing in userspace can shorten that. Checking per file
+    /// bounds the wait by one file rather than by the rest of the folder, which
+    /// is the best that can honestly be offered.
+    pub fn rescan_with(
+        &mut self,
+        cancel: &Cancel,
+        on_progress: &mut impl FnMut(ScanProgress),
+    ) -> Result<()> {
+        let files = self.node_files();
+        let total = files.len();
+        on_progress(ScanProgress { done: 0, total });
+
+        // Nothing is cleared until we know we are going to finish. Clearing up
+        // front and then being cancelled would leave an empty index for a world
+        // that is entirely intact, and the next open would silently rebuild it
+        // — slowly, over the same slow share.
+        let mut fresh = Vec::with_capacity(total);
+        let mut broken = Vec::new();
+
+        for (done, (rel, path)) in files.into_iter().enumerate() {
+            cancel.check()?;
+            match atomic::read_stamped(&path)? {
+                Some((text, stamp)) => match markdown::from_markdown(&text, &path) {
+                    Ok(node) => fresh.push((node, rel, stamp)),
+                    Err(e) => broken.push((rel, self.relative_message(&e.to_string()))),
+                },
+                None => continue,
             }
+            on_progress(ScanProgress { done: done + 1, total });
         }
+
+        cancel.check()?;
+        self.index.clear()?;
+        for (node, rel, stamp) in &fresh {
+            self.index.upsert_node(node, rel, stamp)?;
+            self.index.clear_corrupt(rel)?;
+        }
+        for (rel, why) in &broken {
+            // A file a sync client mangled is left on disk exactly as it is, and
+            // recorded so the navigator can say so. Skipping it silently —
+            // which is what this used to do — leaves the user with an entity
+            // that quietly stopped existing.
+            self.index.mark_corrupt(rel, why)?;
+        }
+        on_progress(ScanProgress { done: total, total });
         Ok(())
     }
 

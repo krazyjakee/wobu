@@ -43,14 +43,57 @@ pub fn project_create(
     Ok(adopt(&app, &state, project))
 }
 
+/// Emitted while a first open is scanning. Payload is `ScanProgress`.
+pub const OPEN_PROGRESS: &str = "project:open-progress";
+
+/// Opening a project, which on a NAS is the one operation that can take
+/// minutes.
+///
+/// `async` so the webview keeps painting, and the scan itself runs on a
+/// blocking thread because it is filesystem-bound rather than await-bound. A
+/// stalled mount must never present as a frozen app, which is the whole reason
+/// this is not the three-line synchronous command it used to be.
+///
+/// Progress is emitted rather than returned: a return value arrives once, at
+/// the end, which is exactly when the user no longer needs it.
 #[tauri::command]
-pub fn project_open(
+pub async fn project_open(
     app: AppHandle,
     state: State<'_, AppState>,
     path: String,
 ) -> CommandResult<ProjectSummary> {
-    let project = Project::open(&PathBuf::from(path))?;
-    Ok(adopt(&app, &state, project))
+    let cancel = state.begin_open();
+    let emitter = app.clone();
+    let root = PathBuf::from(path);
+
+    let opened = tauri::async_runtime::spawn_blocking(move || {
+        let mut last = 0u8;
+        Project::open_with(&root, &cancel, &mut |p| {
+            // Throttled to whole percentage points. A world of 4000 files would
+            // otherwise put 4000 events through the bridge, and repainting the
+            // same number is work taken from the scan itself.
+            let pct = p.percent();
+            if pct != last {
+                last = pct;
+                let _ = emitter.emit(OPEN_PROGRESS, p);
+            }
+        })
+    })
+    .await
+    .map_err(|e| WobuError::new(Code::Internal, "The scan thread stopped unexpectedly.")
+        .with_detail(e.to_string()))?;
+
+    state.finish_open();
+    Ok(adopt(&app, &state, opened?))
+}
+
+/// Stop a scan in progress.
+///
+/// A no-op when nothing is open — the user can press this at the moment the
+/// scan finishes, and that race must not be an error.
+#[tauri::command]
+pub fn project_open_cancel(state: State<'_, AppState>) {
+    state.cancel_open();
 }
 
 #[tauri::command]

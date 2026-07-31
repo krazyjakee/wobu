@@ -21,10 +21,12 @@ pub mod markdown;
 pub mod paths;
 pub mod project;
 pub mod recent;
+pub mod scan;
 pub mod watcher;
 
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};
 pub use project::{Project, ProjectMeta, ProjectSummary, SaveOutcome};
 pub use recent::RecentProject;
+pub use scan::{Cancel, ScanProgress};
 pub use watcher::{Strategy, Watcher};

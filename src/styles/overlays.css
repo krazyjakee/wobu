@@ -110,6 +110,57 @@
   font-size: 12.5px;
   line-height: 1.7;
 }
+/* ── a slow open ── */
+.lch-scan {
+  margin-top: 20px;
+  padding: 12px 14px;
+  max-width: 620px;
+  border-radius: var(--r);
+  border: 1px solid var(--border-str);
+  background: var(--bg-panel);
+}
+.lch-scan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lch-bar-track {
+  margin-top: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.lch-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+/* Before the first progress event there is nothing honest to show as a
+   fraction, so the bar says "working" without claiming a position. */
+.lch-bar-fill.is-indeterminate {
+  width: 35%;
+  transition: none;
+  animation: lch-sweep 1.1s ease-in-out infinite;
+}
+@keyframes lch-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(286%);
+  }
+}
+.lch-scan-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
 .lch-note {
   margin-top: 26px;
   font-size: 12px;

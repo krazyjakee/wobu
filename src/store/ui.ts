@@ -155,8 +155,13 @@ export const toast = (text: string, kind: Toast['kind'] = 'info') =>
  * per handler. `report` is what every `onError` should use.
  */
 export function report(e: unknown, prefix?: string): void {
+  const surface = errorSurface(e)
+  // A cancellation is not a failure and gets no UI at all. Handled here rather
+  // than at the call sites so that nobody has to remember it.
+  if (surface === 'silent') return
+
   const text = prefix ? `${prefix} — ${errorMessage(e)}` : errorMessage(e)
-  if (errorSurface(e) === 'banner') {
+  if (surface === 'banner') {
     useUI.getState().raiseBanner({
       code: errorCode(e) ?? 'internal',
       text,

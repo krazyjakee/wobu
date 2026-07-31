@@ -1,10 +1,67 @@
 import { useState } from 'react'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { errorMessage, type ProjectSummary } from '../lib/api'
+import { errorMessage, projectOpenCancel, type ProjectSummary, type ScanProgress } from '../lib/api'
 import { useCreateProject, useOpenProject, useRecentProjects } from '../lib/queries'
+import { useOpenProgress } from '../hooks/useOpenProgress'
 import { report } from '../store/ui'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
+
+/**
+ * What a slow open looks like.
+ *
+ * Rendered only while an open is in flight. The important case is not a large
+ * world — it is a *stalled* one: an unresponsive NAS blocks a single read for
+ * the mount's own timeout, minutes by default, and from outside that is
+ * indistinguishable from a frozen app. A count that stops advancing tells the
+ * user which it is, and Cancel gives them a way out that is not `kill`.
+ */
+function Scanning() {
+  const progress = useOpenProgress(true)
+  const [cancelling, setCancelling] = useState(false)
+
+  async function cancel() {
+    setCancelling(true)
+    try {
+      await projectOpenCancel()
+    } catch (e) {
+      report(e, 'Could not stop the scan')
+      setCancelling(false)
+    }
+  }
+
+  // No events yet: either the world is small enough that the scan is already
+  // finishing, or the folder has not answered at all. Saying "reading" rather
+  // than showing 0% avoids implying progress that has not been measured.
+  const label = progress
+    ? `Reading ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()} files`
+    : 'Reading the folder…'
+
+  return (
+    <div className="lch-scan" role="status" aria-live="polite">
+      <div className="lch-scan-row">
+        <span>{label}</span>
+        <button className="btn-mini" onClick={() => void cancel()} disabled={cancelling}>
+          {cancelling ? 'Stopping…' : 'Cancel'}
+        </button>
+      </div>
+      <div className="lch-bar-track">
+        <div
+          className={progress ? 'lch-bar-fill' : 'lch-bar-fill is-indeterminate'}
+          style={progress ? { width: `${pct(progress)}%` } : undefined}
+        />
+      </div>
+      <p className="lch-scan-note">
+        Only the first open reads every file. After this, Wobu re-reads just the ones that changed.
+      </p>
+    </div>
+  )
+}
+
+function pct(p: ScanProgress): number {
+  if (p.total === 0) return 100
+  return Math.min(100, Math.round((p.done / p.total) * 100))
+}
 
 export function Launcher({ error }: { error: string | null }) {
   const recent = useRecentProjects()
@@ -66,6 +123,8 @@ export function Launcher({ error }: { error: string | null }) {
               openProject.mutate(p.path, { onError: (e) => report(e) })
             }
           />
+
+          {busy && <Scanning />}
 
           <p className="lch-note">
             A project is a folder, not a database file. Point Wobu at a share and anyone who can see

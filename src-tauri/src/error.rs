@@ -108,6 +108,11 @@ pub enum Code {
     ProviderUnavailable,
 
     // ── generic ──────────────────────────────────────────────────────────
+    /// The user stopped a long operation. Not a failure, and the UI shows
+    /// nothing at all for it — a toast saying "cancelled" after you pressed
+    /// Cancel is the app arguing with you.
+    #[serde(rename = "cancelled")]
+    Cancelled,
     /// Filesystem trouble that is not one of the named cases above.
     #[serde(rename = "io.failed")]
     Io,
@@ -224,6 +229,7 @@ impl From<StoreError> for WobuError {
             StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
             StoreError::ReadOnly => Code::ReadOnly,
             StoreError::Disconnected => Code::ShareUnmounted,
+            StoreError::Cancelled => Code::Cancelled,
             StoreError::Core(_) => Code::Invalid,
             // The one I/O case worth telling apart. A share that unmounts
             // mid-session reports `NotFound`/`NotConnected` on every path
