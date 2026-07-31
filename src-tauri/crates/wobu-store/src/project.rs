@@ -9,8 +9,10 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use wobu_core::asset::AssetRef;
 use wobu_core::{
-    Asset, AssetKind, Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def, kind_registry,
+    Asset, AssetKind, AssetRole, Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def,
+    kind_registry,
 };
 
 use crate::assets::{self, ImportedAsset};
@@ -553,6 +555,130 @@ impl Project {
 
     pub fn get_asset(&self, id: Id) -> Result<Option<Asset>> {
         self.index.asset(id)
+    }
+
+    /// Attach an asset to a node in a role.
+    ///
+    /// Goes through `save_node` like any other edit to the node, which is the
+    /// point: attaching a reference is an edit to the node's Markdown, so it
+    /// has to lose the same save races and park the same conflict sibling as
+    /// typing in the notes field. A private write path here would be a way to
+    /// clobber a collaborator that the editor does not have.
+    ///
+    /// Linking the same asset in the same role twice replaces the weight rather
+    /// than adding a second link — the user dropped the same picture on the
+    /// same shelf, and two identical rows is not something they can then
+    /// distinguish in the UI to remove one of.
+    pub fn link_asset(
+        &mut self,
+        node_id: Id,
+        asset_id: Id,
+        role: AssetRole,
+        weight: Option<f32>,
+    ) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        self.require_asset(asset_id)?;
+
+        let mut node = self.get_node(node_id)?;
+        let mut link = AssetRef::new(asset_id, role);
+        if let Some(weight) = weight {
+            link.weight = weight;
+        }
+        let link = link.clamped();
+
+        match node.asset_links.iter_mut().find(|l| l.asset_id == asset_id && l.role == role) {
+            Some(existing) => existing.weight = link.weight,
+            None => node.asset_links.push(link),
+        }
+        self.save_node(node)
+    }
+
+    /// Detach an asset from a node.
+    ///
+    /// **Never touches the blob.** Assets are content-addressed and shared, so
+    /// the file behind this link may be the cover of another node, a reference
+    /// on three more, and identical to the one a collaborator imported last
+    /// week. Removing the last link is not evidence that anybody wants the
+    /// picture gone, and deleting it would be unrecoverable in a way that
+    /// unlinking is not.
+    pub fn unlink_asset(&mut self, node_id: Id, asset_id: Id, role: AssetRole) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+
+        let mut node = self.get_node(node_id)?;
+        let before = node.asset_links.len();
+        node.asset_links.retain(|l| !(l.asset_id == asset_id && l.role == role));
+        if node.asset_links.len() == before {
+            return Err(Error::NoSuchAssetLink {
+                asset: asset_id.to_string(),
+                role: role.as_str().to_owned(),
+            });
+        }
+        self.save_node(node)
+    }
+
+    /// Change a link's weight, its enabled flag, or both.
+    ///
+    /// Both arguments are optional and `None` means "leave it": the slider and
+    /// the mute toggle are separate controls, and sending the whole link back
+    /// from either would let a stale copy of the other overwrite what the user
+    /// just did with it.
+    pub fn update_asset_link(
+        &mut self,
+        node_id: Id,
+        asset_id: Id,
+        role: AssetRole,
+        weight: Option<f32>,
+        enabled: Option<bool>,
+    ) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+
+        let mut node = self.get_node(node_id)?;
+        let Some(link) = node.asset_links.iter_mut().find(|l| l.asset_id == asset_id && l.role == role)
+        else {
+            return Err(Error::NoSuchAssetLink {
+                asset: asset_id.to_string(),
+                role: role.as_str().to_owned(),
+            });
+        };
+
+        let mut updated = link.clone();
+        if let Some(weight) = weight {
+            updated.weight = weight;
+        }
+        if let Some(enabled) = enabled {
+            updated.enabled = enabled;
+        }
+        *link = updated.clamped();
+        self.save_node(node)
+    }
+
+    /// Choose (or clear) the image that represents a node.
+    ///
+    /// Deliberately independent of the links: a cover is what a card shows, and
+    /// making it imply a link would mean choosing a thumbnail quietly changed
+    /// what the influence engine sends to a backend.
+    pub fn set_cover_asset(&mut self, node_id: Id, asset_id: Option<Id>) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        if let Some(asset_id) = asset_id {
+            self.require_asset(asset_id)?;
+        }
+
+        let mut node = self.get_node(node_id)?;
+        node.cover_asset_id = asset_id;
+        self.save_node(node)
+    }
+
+    /// Refuse an asset id the project does not have.
+    ///
+    /// Read from the index, which is a complete description of
+    /// `assets/originals/` after any open or reconcile — and, unlike the
+    /// folder, answers without a stat over the share on every keystroke of a
+    /// weight slider.
+    fn require_asset(&self, asset_id: Id) -> Result<()> {
+        if self.index.asset(asset_id)?.is_none() {
+            return Err(Error::NoSuchAsset(asset_id.to_string()));
+        }
+        Ok(())
     }
 
     /// Fold blobs that appeared or vanished into the index.
@@ -1490,6 +1616,29 @@ mod tests {
         project.read_only = true;
         assert!(matches!(
             project.import_asset(&[0x89, b'P', b'N', b'G'], AssetKind::Reference),
+            Err(Error::ReadOnly)
+        ));
+    }
+
+    #[test]
+    fn a_read_only_project_refuses_an_asset_link_rather_than_failing_late() {
+        // Attaching a reference is an edit to the node file, so the chip in the
+        // title bar has already told the user this cannot work.
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let asset = wobu_core::new_id();
+        project.read_only = true;
+
+        assert!(matches!(
+            project.link_asset(node.id, asset, AssetRole::Pose, None),
+            Err(Error::ReadOnly)
+        ));
+        assert!(matches!(project.set_cover_asset(node.id, Some(asset)), Err(Error::ReadOnly)));
+        // Read-only is reported ahead of the asset not existing: the folder is
+        // the reason nothing can happen here, and it is the one the user can do
+        // something about.
+        assert!(matches!(
+            project.unlink_asset(node.id, asset, AssetRole::Pose),
             Err(Error::ReadOnly)
         ));
     }

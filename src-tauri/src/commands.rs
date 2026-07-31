@@ -15,7 +15,7 @@ use tauri::{AppHandle, Emitter, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
-use wobu_core::{Asset, AssetKind, Id, KindDef, Node, NodeKind, NodeSummary};
+use wobu_core::{Asset, AssetKind, AssetRole, Id, KindDef, Node, NodeKind, NodeSummary};
 use wobu_store::{
     Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary, Resolved,
     SaveOutcome, recent,
@@ -214,10 +214,7 @@ pub fn node_create(
 
 #[tauri::command]
 pub fn node_upsert(state: State<'_, AppState>, node: Node) -> CommandResult<Node> {
-    state.with(|p| match p.save_node(node)? {
-        SaveOutcome::Saved(saved) => Ok(*saved),
-        SaveOutcome::Conflict { conflict_path } => Err(WobuError::conflict(conflict_path)),
-    })
+    state.with(|p| saved(p.save_node(node)?))
 }
 
 #[tauri::command]
@@ -269,6 +266,80 @@ pub fn asset_import_bytes(
 #[tauri::command]
 pub fn asset_list(state: State<'_, AppState>) -> CommandResult<Vec<Asset>> {
     state.with(|p| Ok(p.list_assets()?))
+}
+
+/// Attach a reference image to a node in a role.
+///
+/// The role is the whole payload here: it is what decides whether the image
+/// reaches a structure adapter, a style adapter, the colour pass, or — for
+/// `mood` — nothing outside this machine at all. See `wobu_core::AssetRole`.
+///
+/// Returns the saved node, like `node_upsert`, because this is an edit to that
+/// node's file and the caller needs the version that won.
+#[tauri::command]
+pub fn asset_link(
+    state: State<'_, AppState>,
+    node_id: Id,
+    asset_id: Id,
+    role: AssetRole,
+    weight: Option<f32>,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.link_asset(node_id, asset_id, role, weight)?))
+}
+
+/// Detach one. The blob stays — assets are shared, and content-addressed, so
+/// the last link going away says nothing about whether the file is wanted.
+#[tauri::command]
+pub fn asset_unlink(
+    state: State<'_, AppState>,
+    node_id: Id,
+    asset_id: Id,
+    role: AssetRole,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.unlink_asset(node_id, asset_id, role)?))
+}
+
+/// Adjust a link's weight, its enabled flag, or both.
+///
+/// Each is optional and absent means "leave it": the slider and the mute toggle
+/// are separate controls, and posting the whole link from either would let a
+/// stale copy of one overwrite what the user just did with the other.
+#[tauri::command]
+pub fn asset_link_update(
+    state: State<'_, AppState>,
+    node_id: Id,
+    asset_id: Id,
+    role: AssetRole,
+    weight: Option<f32>,
+    enabled: Option<bool>,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.update_asset_link(node_id, asset_id, role, weight, enabled)?))
+}
+
+/// Choose the image that represents a node, or clear it with a null.
+///
+/// Separate from linking on purpose: a cover is what a card shows, and making
+/// it imply a link would mean picking a thumbnail quietly changed what gets
+/// sent to a backend.
+#[tauri::command]
+pub fn asset_set_cover(
+    state: State<'_, AppState>,
+    node_id: Id,
+    asset_id: Option<Id>,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.set_cover_asset(node_id, asset_id)?))
+}
+
+/// The node that was written, or the conflict that stopped it.
+///
+/// Shared by the four commands above so that attaching a reference reports a
+/// lost save race in exactly the shape `node_upsert` does — the frontend has
+/// one `write.conflict` handler and it must not need a second.
+fn saved(outcome: SaveOutcome) -> CommandResult<Node> {
+    match outcome {
+        SaveOutcome::Saved(node) => Ok(*node),
+        SaveOutcome::Conflict { conflict_path } => Err(WobuError::conflict(conflict_path)),
+    }
 }
 
 /* ── conflicts ────────────────────────────────────────────────────────────── */
@@ -505,6 +576,9 @@ mod bridge {
         "links": [
             { "toId": "01ARZ3NDEKTSV4RRFFQ69G5FAW", "role": "styled_by", "weight": 0.5, "enabled": true }
         ],
+        "assetLinks": [
+            { "assetId": "01ARZ3NDEKTSV4RRFFQ69G5FAX", "role": "pose", "weight": 0.5, "enabled": true }
+        ],
         "createdAt": "2026-07-31T09:00:00Z",
         "updatedAt": "2026-07-31T09:30:00Z"
     }"#;
@@ -535,11 +609,59 @@ mod bridge {
         // The camelCase ones are the ones that would break silently: serde
         // renames them, TypeScript does not know that, and a missing key
         // arrives in the UI as `undefined` rather than as an error.
-        for key in ["parentId", "notesRaw", "descriptionState", "coverAssetId", "createdAt", "updatedAt"] {
+        for key in
+            ["parentId", "notesRaw", "descriptionState", "coverAssetId", "assetLinks", "createdAt", "updatedAt"]
+        {
             assert!(json.get(key).is_some(), "`{key}` is missing from the node payload");
         }
         assert_eq!(json["links"][0]["toId"], "01ARZ3NDEKTSV4RRFFQ69G5FAW");
+        assert_eq!(json["assetLinks"][0]["assetId"], "01ARZ3NDEKTSV4RRFFQ69G5FAX");
         assert_eq!(json["description"]["sections"]["materials"]["type"], "list");
+    }
+
+    #[test]
+    fn asset_roles_are_the_strings_the_role_picker_sends_back() {
+        // `role` crosses as a bare snake_case string, and a mismatch fails at
+        // the bridge rather than at compile time — the picker would simply stop
+        // working with nothing on screen to say why. `full_ref` is the one an
+        // automatic rename would get wrong.
+        for role in AssetRole::ALL {
+            let json = serde_json::to_value(role).unwrap();
+            assert_eq!(json.as_str().unwrap(), role.as_str());
+            assert_eq!(
+                serde_json::from_value::<AssetRole>(json).unwrap(),
+                role,
+                "{role} does not survive the bridge"
+            );
+        }
+        assert_eq!(serde_json::from_str::<AssetRole>("\"full_ref\"").unwrap(), AssetRole::FullRef);
+        assert!(serde_json::from_str::<AssetRole>("\"fullRef\"").is_err());
+        assert!(serde_json::from_str::<AssetRole>("\"Mood\"").is_err());
+    }
+
+    #[test]
+    fn an_asset_link_matches_the_assetlink_interface() {
+        let link = wobu_core::asset::AssetRef::new(
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX".parse().unwrap(),
+            AssetRole::Palette,
+        );
+        let json = serde_json::to_value(&link).unwrap();
+
+        for key in ["assetId", "role", "weight", "enabled"] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from AssetLink");
+        }
+        assert_eq!(json["role"], "palette");
+        assert_eq!(json["assetId"], "01ARZ3NDEKTSV4RRFFQ69G5FAX");
+
+        // The commands take a role and a weight as loose arguments rather than
+        // a whole link, so this is also the shape `assetLink` posts back inside
+        // a node — and a link that omits both must arrive at the documented
+        // defaults rather than at zero.
+        let bare: wobu_core::asset::AssetRef =
+            serde_json::from_str(r#"{"assetId":"01ARZ3NDEKTSV4RRFFQ69G5FAX","role":"mood"}"#)
+                .unwrap();
+        assert_eq!(bare.weight, 1.0);
+        assert!(bare.enabled);
     }
 
     #[test]

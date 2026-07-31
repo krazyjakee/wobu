@@ -16,14 +16,14 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Asset, AssetKind, Id, LinkEdge, Node, NodeKind, NodeSummary};
+use wobu_core::{Asset, AssetKind, AssetLink, AssetRole, Id, LinkEdge, Node, NodeKind, NodeSummary};
 
 use crate::atomic::Stamp;
 use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 3;
+pub const INDEX_VERSION: u32 = 4;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     summary           TEXT NOT NULL DEFAULT '',
     parent_id         TEXT,
     description_state TEXT NOT NULL DEFAULT 'none',
+    cover_asset_id    TEXT,
     rel_path          TEXT NOT NULL UNIQUE,
     mtime_ms          INTEGER NOT NULL DEFAULT 0,
     size              INTEGER NOT NULL DEFAULT 0,
@@ -79,6 +80,26 @@ CREATE TABLE IF NOT EXISTS assets (
     bytes      INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+
+-- Reference images attached to nodes, with the role that decides where each is
+-- routed. Canonically these live in node frontmatter, exactly like `links`;
+-- this table is refilled from there by `Index::upsert_node`, so a rebuild
+-- restores it without reading anything else.
+--
+-- Indexed on `(node_id, role)` because that is the question M5's per-role image
+-- budget asks once per role per layer while compiling: a five-layer stack over
+-- seven roles is thirty-five lookups, and answering them by opening node files
+-- over SMB is exactly what this index exists to avoid.
+CREATE TABLE IF NOT EXISTS asset_links (
+    node_id  TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    role     TEXT NOT NULL,
+    weight   REAL NOT NULL DEFAULT 1.0,
+    enabled  INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (node_id, asset_id, role)
+);
+CREATE INDEX IF NOT EXISTS asset_links_role  ON asset_links(node_id, role);
+CREATE INDEX IF NOT EXISTS asset_links_asset ON asset_links(asset_id);
 
 -- Files that are on disk and could not be parsed. Deliberately a table of its
 -- own rather than a column on `nodes`: a file a sync client truncated may never
@@ -161,6 +182,7 @@ impl Index {
             self.conn.execute_batch(
                 "DROP TABLE IF EXISTS nodes;
                  DROP TABLE IF EXISTS links;
+                 DROP TABLE IF EXISTS asset_links;
                  DROP TABLE IF EXISTS node_fts;
                  DROP TABLE IF EXISTS assets;
                  DROP TABLE IF EXISTS corrupt;",
@@ -184,8 +206,8 @@ impl Index {
 
     pub fn clear(&self) -> Result<()> {
         self.conn.execute_batch(
-            "DELETE FROM nodes; DELETE FROM links; DELETE FROM node_fts;
-             DELETE FROM assets; DELETE FROM corrupt;",
+            "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
+             DELETE FROM node_fts; DELETE FROM assets; DELETE FROM corrupt;",
         )?;
         Ok(())
     }
@@ -223,13 +245,14 @@ impl Index {
 
         self.conn.execute(
             "INSERT INTO nodes
-               (id, kind, name, slug, summary, parent_id, description_state,
+               (id, kind, name, slug, summary, parent_id, description_state, cover_asset_id,
                 rel_path, mtime_ms, size, hash, created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
              ON CONFLICT(id) DO UPDATE SET
                kind=excluded.kind, name=excluded.name, slug=excluded.slug,
                summary=excluded.summary, parent_id=excluded.parent_id,
-               description_state=excluded.description_state, rel_path=excluded.rel_path,
+               description_state=excluded.description_state,
+               cover_asset_id=excluded.cover_asset_id, rel_path=excluded.rel_path,
                mtime_ms=excluded.mtime_ms, size=excluded.size, hash=excluded.hash,
                created_at=excluded.created_at, updated_at=excluded.updated_at",
             params![
@@ -240,6 +263,7 @@ impl Index {
                 node.summary,
                 node.parent_id.map(|p| p.to_string()),
                 serde_json::to_value(node.description_state)?.as_str().unwrap_or("none"),
+                node.cover_asset_id.map(|a| a.to_string()),
                 rel_path,
                 stamp.mtime_ms,
                 stamp.size as i64,
@@ -265,6 +289,24 @@ impl Index {
             )?;
         }
 
+        // Replaced wholesale rather than merged, like the links above: the
+        // frontmatter is the whole truth about this node's references, so a row
+        // here that is not in the file is a row somebody deleted.
+        self.conn.execute("DELETE FROM asset_links WHERE node_id = ?1", params![id])?;
+        for link in &node.asset_links {
+            self.conn.execute(
+                "INSERT OR REPLACE INTO asset_links (node_id, asset_id, role, weight, enabled)
+                 VALUES (?1,?2,?3,?4,?5)",
+                params![
+                    id,
+                    link.asset_id.to_string(),
+                    link.role.as_str(),
+                    link.weight,
+                    link.enabled as i32
+                ],
+            )?;
+        }
+
         self.conn.execute("DELETE FROM node_fts WHERE id = ?1", params![id])?;
         self.conn.execute(
             "INSERT INTO node_fts (id, name, summary, notes, description)
@@ -279,6 +321,11 @@ impl Index {
         self.conn.execute("DELETE FROM nodes    WHERE id      = ?1", params![id])?;
         self.conn.execute("DELETE FROM links    WHERE from_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM links    WHERE to_id   = ?1", params![id])?;
+        // The node's own links go; nothing touches `assets`, because the blob
+        // outlives every node that pointed at it. Assets are content-addressed
+        // and shared, so the last link going away is not a reason to delete a
+        // file somebody else's node may be about to link.
+        self.conn.execute("DELETE FROM asset_links WHERE node_id = ?1", params![id])?;
         self.conn.execute("DELETE FROM node_fts WHERE id      = ?1", params![id])?;
         Ok(())
     }
@@ -417,8 +464,80 @@ impl Index {
     }
 
     pub fn remove_asset_by_rel_path(&self, rel_path: &str) -> Result<()> {
+        // Only the description of the blob. Any `asset_links` row pointing at
+        // it stays: the file may be back in a moment — a share reconnecting, a
+        // sync client catching up — and dropping the links would quietly strip
+        // the roles out of somebody's node while their folder was mid-sync.
         self.conn.execute("DELETE FROM assets WHERE rel_path = ?1", params![rel_path])?;
         Ok(())
+    }
+
+    /* ── asset links ─────────────────────────────────────────────────────
+     *
+     * Canonically frontmatter, cached here. `upsert_node` is the only writer,
+     * which is what makes these rows rebuildable: every path that reads a node
+     * file — first scan, reconcile, save — already goes through it.
+     */
+
+    /// Every asset attached to a node, strongest first.
+    ///
+    /// Ordered by weight because every caller is either drawing a strip of
+    /// references or filling a budget, and both want the ones that matter most
+    /// first. Ties break on role so the order is stable between calls rather
+    /// than left to SQLite's row order.
+    pub fn asset_links_of(&self, node_id: Id) -> Result<Vec<AssetLink>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT node_id, asset_id, role, weight, enabled FROM asset_links
+             WHERE node_id = ?1 ORDER BY weight DESC, role, asset_id",
+        )?;
+        collect_asset_links(stmt.query_map(params![node_id.to_string()], asset_link_row)?)
+    }
+
+    /// The same, narrowed to one role — what the per-role image budget asks.
+    ///
+    /// Filtered in SQL rather than by the caller so that the covering index on
+    /// `(node_id, role)` is what does the work; a budget that pulled every
+    /// reference on a node and then discarded six sevenths of them would make
+    /// the index pointless.
+    pub fn asset_links_in_role(&self, node_id: Id, role: AssetRole) -> Result<Vec<AssetLink>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT node_id, asset_id, role, weight, enabled FROM asset_links
+             WHERE node_id = ?1 AND role = ?2 ORDER BY weight DESC, asset_id",
+        )?;
+        collect_asset_links(
+            stmt.query_map(params![node_id.to_string(), role.as_str()], asset_link_row)?,
+        )
+    }
+
+    /// Every node using this asset — "3 characters reference this".
+    ///
+    /// Also the honest answer to "is anything still using this file", which is
+    /// a question the library will want to ask. It is deliberately *not* wired
+    /// to deletion: an asset with no links is still a file the user imported.
+    pub fn asset_backlinks(&self, asset_id: Id) -> Result<Vec<AssetLink>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT node_id, asset_id, role, weight, enabled FROM asset_links
+             WHERE asset_id = ?1 ORDER BY node_id, role",
+        )?;
+        collect_asset_links(stmt.query_map(params![asset_id.to_string()], asset_link_row)?)
+    }
+
+    /// A node's cover image, without opening its file.
+    ///
+    /// A column rather than a read because the surfaces that want it — the
+    /// Launcher's project cards, any grid of tiles — want one per node at once,
+    /// and the whole point of the index is that a card does not cost a file
+    /// read over SMB.
+    pub fn cover_asset_of(&self, node_id: Id) -> Result<Option<Id>> {
+        let raw: Option<Option<String>> = self
+            .conn
+            .query_row(
+                "SELECT cover_asset_id FROM nodes WHERE id = ?1",
+                params![node_id.to_string()],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(raw.flatten().and_then(|s| Id::from_string(&s).ok()))
     }
 
     /* ── corrupt files ───────────────────────────────────────────────────
@@ -678,6 +797,36 @@ fn asset_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Option<Asset>> {
     }))
 }
 
+/// One `asset_links` row as the tuple the collector parses.
+fn asset_link_row(
+    r: &rusqlite::Row<'_>,
+) -> rusqlite::Result<(String, String, String, f32, i32)> {
+    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+}
+
+/// Rows to [`AssetLink`]s, skipping any this build cannot parse.
+///
+/// The same forgiveness the node and asset readers show, and the same reason: a
+/// role written by a newer Wobu must cost the user that one reference, not the
+/// whole strip.
+fn collect_asset_links<I>(rows: I) -> Result<Vec<AssetLink>>
+where
+    I: Iterator<Item = rusqlite::Result<(String, String, String, f32, i32)>>,
+{
+    let mut out = Vec::new();
+    for row in rows {
+        let (node, asset, role, weight, enabled) = row?;
+        let (Ok(node_id), Ok(asset_id)) = (Id::from_string(&node), Id::from_string(&asset)) else {
+            continue;
+        };
+        let Ok(role) = serde_json::from_value::<AssetRole>(serde_json::Value::String(role)) else {
+            continue;
+        };
+        out.push(AssetLink { asset_id, node_id, role, weight, enabled: enabled != 0 });
+    }
+    Ok(out)
+}
+
 fn description_text(node: &Node) -> String {
     let Some(description) = &node.description else { return String::new() };
     let mut out = String::new();
@@ -701,6 +850,7 @@ fn description_text(node: &Node) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wobu_core::asset::AssetRef;
     use wobu_core::{Link, LinkRole};
 
     fn stamp() -> Stamp {
@@ -794,6 +944,113 @@ mod tests {
         assert!(index.list_nodes().unwrap().is_empty());
         assert!(index.backlinks(target).unwrap().is_empty());
         assert!(index.search("Kael").unwrap().is_empty());
+    }
+
+    #[test]
+    fn asset_links_are_queryable_by_role_without_reading_a_node_file() {
+        // The property M5's per-role image budget depends on: it asks for one
+        // role at a time, on every layer of a stack, while compiling.
+        let index = Index::in_memory().unwrap();
+        let pose = wobu_core::new_id();
+        let palette = wobu_core::new_id();
+        let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
+        node.asset_links = vec![
+            AssetRef { weight: 0.4, ..AssetRef::new(pose, AssetRole::Pose) },
+            AssetRef { weight: 0.9, ..AssetRef::new(palette, AssetRole::Palette) },
+            AssetRef::new(palette, AssetRole::Mood),
+        ];
+        indexed(&index, &node);
+
+        let poses = index.asset_links_in_role(node.id, AssetRole::Pose).unwrap();
+        assert_eq!(poses.len(), 1);
+        assert_eq!(poses[0].asset_id, pose);
+        assert_eq!(poses[0].node_id, node.id, "the index form carries both endpoints");
+        assert!(index.asset_links_in_role(node.id, AssetRole::Costume).unwrap().is_empty());
+
+        // Strongest first, because every caller is filling a budget.
+        let weights: Vec<f32> =
+            index.asset_links_of(node.id).unwrap().iter().map(|l| l.weight).collect();
+        assert_eq!(weights, [1.0, 0.9, 0.4]);
+    }
+
+    #[test]
+    fn one_asset_in_two_roles_is_two_links() {
+        // A picture can be both the reference that locks a look and the source
+        // of a palette. Keying on the asset alone would silently drop one, and
+        // with it one of the two adapters it was meant to reach.
+        let index = Index::in_memory().unwrap();
+        let asset = wobu_core::new_id();
+        let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
+        node.asset_links =
+            vec![AssetRef::new(asset, AssetRole::FullRef), AssetRef::new(asset, AssetRole::Palette)];
+        indexed(&index, &node);
+
+        assert_eq!(index.asset_links_of(node.id).unwrap().len(), 2);
+        assert_eq!(index.asset_backlinks(asset).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn asset_links_are_replaced_not_accumulated() {
+        // Reconcile re-upserts a node on every external edit, so a merge rather
+        // than a replace would make a hand-removed reference immortal.
+        let index = Index::in_memory().unwrap();
+        let asset = wobu_core::new_id();
+        let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
+        node.asset_links.push(AssetRef::new(asset, AssetRole::Mood));
+        indexed(&index, &node);
+        indexed(&index, &node);
+        assert_eq!(index.asset_backlinks(asset).unwrap().len(), 1);
+
+        node.asset_links.clear();
+        indexed(&index, &node);
+        assert!(index.asset_links_of(node.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn removing_a_node_drops_its_asset_links_but_never_the_asset() {
+        // Content-addressed blobs are shared between nodes, so a node going
+        // away says nothing about whether the picture is still wanted.
+        let index = Index::in_memory().unwrap();
+        let asset = Asset {
+            id: wobu_core::new_id(),
+            hash: "a3".repeat(32),
+            kind: AssetKind::Reference,
+            rel_path: "assets/originals/a3/a3.png".into(),
+            thumb_path: None,
+            mime: "image/png".into(),
+            width: 8,
+            height: 8,
+            bytes: 12,
+            created_at: Utc::now(),
+        };
+        index.upsert_asset(&asset).unwrap();
+
+        let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
+        node.asset_links.push(AssetRef::new(asset.id, AssetRole::Pose));
+        indexed(&index, &node);
+
+        index.remove_node(node.id).unwrap();
+        assert!(index.asset_backlinks(asset.id).unwrap().is_empty());
+        assert!(index.asset(asset.id).unwrap().is_some(), "the blob record must survive");
+    }
+
+    #[test]
+    fn a_cover_is_readable_without_opening_the_node() {
+        let index = Index::in_memory().unwrap();
+        let cover = wobu_core::new_id();
+        let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
+        indexed(&index, &node);
+        assert_eq!(index.cover_asset_of(node.id).unwrap(), None);
+
+        node.cover_asset_id = Some(cover);
+        indexed(&index, &node);
+        assert_eq!(index.cover_asset_of(node.id).unwrap(), Some(cover));
+
+        // Clearing it has to write the null back, not leave the old value —
+        // otherwise a removed cover keeps rendering until the next rebuild.
+        node.cover_asset_id = None;
+        indexed(&index, &node);
+        assert_eq!(index.cover_asset_of(node.id).unwrap(), None);
     }
 
     #[test]

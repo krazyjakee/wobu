@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::Id;
+use crate::asset::AssetRef;
 use crate::error::{Error, Result};
 use crate::kind::{NodeKind, SectionValueKind, kind_def};
 use crate::link::Link;
@@ -138,10 +139,18 @@ pub struct Node {
     pub attributes: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// The image that represents this entity in a card or a tile. Nothing
+    /// requires it to be linked as well — a cover is a choice about display,
+    /// not about influence, and conflating the two would mean picking a
+    /// thumbnail silently changed what gets sent to a backend.
     #[serde(default)]
     pub cover_asset_id: Option<Id>,
     #[serde(default)]
     pub links: Vec<Link>,
+    /// Reference images attached to this entity, each with a role that decides
+    /// where it is routed. See [`AssetRef`].
+    #[serde(default)]
+    pub asset_links: Vec<AssetRef>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -172,6 +181,7 @@ impl Node {
             tags: Vec::new(),
             cover_asset_id: None,
             links: Vec::new(),
+            asset_links: Vec::new(),
             created_at: now,
             updated_at: now,
         })
@@ -392,6 +402,8 @@ mod tests {
         let mut n = node(NodeKind::Character, "Kael Vantris");
         n.notes_raw = "scarred, ex-guild".into();
         n.links.push(Link::new(crate::new_id(), crate::link::LinkRole::MemberOf));
+        n.asset_links.push(AssetRef::new(crate::new_id(), crate::asset::AssetRole::Pose));
+        n.cover_asset_id = Some(crate::new_id());
         let json = serde_json::to_string(&n).unwrap();
         let back: Node = serde_json::from_str(&json).unwrap();
         assert_eq!(back, n);

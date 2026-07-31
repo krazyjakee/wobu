@@ -77,12 +77,25 @@ pub struct Link {
     pub enabled: bool,
 }
 
-fn default_weight() -> f32 {
+/// The weight an edge carries when it does not say otherwise.
+///
+/// `pub(crate)` rather than private because [`crate::asset::AssetRef`] uses the
+/// same three functions. An asset link and an influence edge are both "how much
+/// of this source reaches the compiler", so a project where one defaults to 1.0
+/// and the other to 0.5, or where one clamps to a different range, would give
+/// two answers to the same question depending on which kind of edge it was.
+pub(crate) fn default_weight() -> f32 {
     1.0
 }
 
-fn default_enabled() -> bool {
+pub(crate) fn default_enabled() -> bool {
     true
+}
+
+/// Weights outside 0.0–1.0 are meaningless to the compiler and can only come
+/// from a hand-edited file.
+pub(crate) fn clamp_weight(weight: f32) -> f32 {
+    weight.clamp(0.0, 1.0)
 }
 
 impl Link {
@@ -90,10 +103,8 @@ impl Link {
         Link { to_id, role, weight: default_weight(), enabled: default_enabled() }
     }
 
-    /// Weights outside 0.0–1.0 are meaningless to the compiler and can only come
-    /// from a hand-edited file.
     pub fn clamped(mut self) -> Self {
-        self.weight = self.weight.clamp(0.0, 1.0);
+        self.weight = clamp_weight(self.weight);
         self
     }
 }

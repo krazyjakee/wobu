@@ -10,8 +10,9 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use wobu_core::asset::AssetRef;
 use wobu_core::{
-    Description, DescriptionState, Id, Link, LinkRole, Node, NodeKind, SectionValue,
+    AssetRole, Description, DescriptionState, Id, Link, LinkRole, Node, NodeKind, SectionValue,
     SectionValueKind, kind_def,
 };
 
@@ -24,6 +25,21 @@ const DESCRIPTION_HEADING: &str = "## Description";
 struct FmLink {
     to: Id,
     role: LinkRole,
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    weight: f32,
+    #[serde(default = "yes", skip_serializing_if = "is_yes")]
+    enabled: bool,
+}
+
+/// A reference image attached to this node.
+///
+/// The `asset` key holds an id derived from the file's hash, so this survives
+/// the index being deleted and rebuilt — which is the only reason it is safe to
+/// keep the canonical list of links here rather than in a table.
+#[derive(Debug, Serialize, Deserialize)]
+struct FmAsset {
+    asset: Id,
+    role: AssetRole,
     #[serde(default = "one", skip_serializing_if = "is_one")]
     weight: f32,
     #[serde(default = "yes", skip_serializing_if = "is_yes")]
@@ -62,6 +78,8 @@ struct Frontmatter {
     description_state: DescriptionState,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     links: Vec<FmLink>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    assets: Vec<FmAsset>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     attributes: serde_json::Map<String, serde_json::Value>,
     created_at: DateTime<Utc>,
@@ -82,6 +100,16 @@ pub fn to_markdown(node: &Node) -> Result<String> {
             .links
             .iter()
             .map(|l| FmLink { to: l.to_id, role: l.role, weight: l.weight, enabled: l.enabled })
+            .collect(),
+        assets: node
+            .asset_links
+            .iter()
+            .map(|a| FmAsset {
+                asset: a.asset_id,
+                role: a.role,
+                weight: a.weight,
+                enabled: a.enabled,
+            })
             .collect(),
         attributes: node.attributes.clone(),
         created_at: node.created_at,
@@ -169,6 +197,14 @@ pub fn from_markdown(text: &str, path: &Path) -> Result<Node> {
             .into_iter()
             .map(|l| {
                 Link { to_id: l.to, role: l.role, weight: l.weight, enabled: l.enabled }.clamped()
+            })
+            .collect(),
+        asset_links: fm
+            .assets
+            .into_iter()
+            .map(|a| {
+                AssetRef { asset_id: a.asset, role: a.role, weight: a.weight, enabled: a.enabled }
+                    .clamped()
             })
             .collect(),
         created_at: fm.created_at,
@@ -289,6 +325,8 @@ mod tests {
         n.notes_raw = "scarred, ex-guild\nowes a debt".into();
         n.tags = vec!["exile".into()];
         n.links.push(Link::new(wobu_core::new_id(), LinkRole::MemberOf));
+        n.asset_links.push(AssetRef::new(wobu_core::new_id(), AssetRole::Pose));
+        n.cover_asset_id = Some(wobu_core::new_id());
 
         let mut sections = IndexMap::new();
         sections.insert(
@@ -437,6 +475,54 @@ mod tests {
             Error::Malformed { path: p, .. } => assert_eq!(p, path()),
             other => panic!("expected Malformed, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn asset_links_survive_the_folder_being_the_only_copy() {
+        // The index is disposable and rebuilt from these files, so a link that
+        // did not round-trip through frontmatter would vanish the first time
+        // anyone deleted their index — taking the roles, and therefore the
+        // routing, with it.
+        let original = character();
+        let text = to_markdown(&original).unwrap();
+        assert!(text.contains("assets:"), "{text}");
+        assert!(text.contains("role: pose"), "{text}");
+
+        let parsed = from_markdown(&text, &path()).unwrap();
+        assert_eq!(parsed.asset_links, original.asset_links);
+        assert_eq!(parsed.cover_asset_id, original.cover_asset_id);
+        assert_eq!(parsed.asset_links[0].weight, 1.0);
+        assert!(parsed.asset_links[0].enabled);
+    }
+
+    #[test]
+    fn hand_edited_asset_links_are_read_and_clamped() {
+        // Somebody will attach a reference by hand in Obsidian, and a weight of
+        // 9 must mean "as much as possible" rather than nine times everything
+        // else in the stack.
+        let text = "---\n\
+                    id: 01ARZ3NDEKTSV4RRFFQ69G5FAV\n\
+                    kind: character\n\
+                    name: Kael\n\
+                    cover: 01BX5ZZKBKACTAV9WEVGEMMVRZ\n\
+                    assets:\n\
+                    \x20 - asset: 01BX5ZZKBKACTAV9WEVGEMMVRZ\n\
+                    \x20   role: mood\n\
+                    \x20   weight: 9.0\n\
+                    \x20 - asset: 01BX5ZZKBKACTAV9WEVGEMMVRZ\n\
+                    \x20   role: palette\n\
+                    \x20   enabled: false\n\
+                    created_at: 2026-07-31T14:22:11Z\n\
+                    updated_at: 2026-07-31T14:22:11Z\n\
+                    ---\n\n\
+                    ## Notes\n";
+        let node = from_markdown(text, &path()).unwrap();
+
+        assert_eq!(node.asset_links.len(), 2, "the same asset twice in two roles is two links");
+        assert_eq!(node.asset_links[0].role, AssetRole::Mood);
+        assert_eq!(node.asset_links[0].weight, 1.0);
+        assert!(!node.asset_links[1].enabled);
+        assert_eq!(node.cover_asset_id, node.asset_links[0].asset_id.into());
     }
 
     #[test]

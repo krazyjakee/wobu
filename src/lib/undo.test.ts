@@ -355,6 +355,22 @@ describe('editLabel', () => {
     expect(editLabel(before, { ...before, links: [link] })).toBe('link change')
   })
 
+  it('notices a reference image attached, reweighted or muted', () => {
+    // `assetLinks` was added to WobuNode after this comparison was written and
+    // went unlisted, so an upsert carrying only a reference change labelled as
+    // nothing and `editEntry` dropped it: the one edit ⌘Z could not take back.
+    const before = node({ id: 'kell' })
+    const ref = { assetId: 'img', role: 'full_ref' as const, weight: 1, enabled: true }
+    expect(editLabel(before, { ...before, assetLinks: [ref] })).toBe('reference change')
+    const attached = { ...before, assetLinks: [ref] }
+    expect(editLabel(attached, { ...attached, assetLinks: [{ ...ref, weight: 0.4 }] })).toBe(
+      'reference change',
+    )
+    expect(editLabel(attached, { ...attached, assetLinks: [{ ...ref, enabled: false }] })).toBe(
+      'reference change',
+    )
+  })
+
   it('returns null for a save that changed nothing but the timestamp', () => {
     // Every save re-stamps updatedAt, so identical content still arrives as a
     // different object. Logging it would put an entry on the stack whose undo

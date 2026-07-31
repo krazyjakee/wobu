@@ -17,7 +17,7 @@ pub mod preset;
 pub mod schema;
 pub mod slug;
 
-pub use asset::{Asset, AssetKind, AssetLink, AssetRole};
+pub use asset::{Asset, AssetKind, AssetLink, AssetRef, AssetRole};
 pub use error::{Error, Result};
 pub use generation::{
     FragmentTarget, Generation, InfluenceSnapshot, SnapshotFragment, SnapshotLayer,

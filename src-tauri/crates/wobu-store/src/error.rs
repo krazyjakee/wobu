@@ -27,6 +27,24 @@ pub enum Error {
     #[error("no node with id {0}")]
     NoSuchNode(String),
 
+    /// A link named an asset the project does not have.
+    ///
+    /// Refused rather than stored, because the id in a link is derived from a
+    /// file's hash and nothing else: an id that matches no file matches no file
+    /// on any machine, forever. Writing it into frontmatter would put a
+    /// permanent dangling reference on a share for everyone to trip over — the
+    /// exact failure deriving asset ids was meant to make impossible.
+    #[error("no asset with id {0} in this project")]
+    NoSuchAsset(String),
+
+    /// An update or an unlink named a link that is not on the node.
+    ///
+    /// Almost always a UI holding a reference the user removed elsewhere — or,
+    /// on a share, one a collaborator removed. Saying so beats writing the link
+    /// back into existence to satisfy the request.
+    #[error("no {role} link from that node to asset {asset}")]
+    NoSuchAssetLink { asset: String, role: String },
+
     /// A resolution named a path that is not a conflict sibling.
     ///
     /// Its own variant rather than a generic invalid-argument, because

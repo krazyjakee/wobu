@@ -231,6 +231,13 @@ export function editLabel(before: WobuNode, after: WobuNode): string | null {
   if (before.notesRaw !== after.notesRaw) return 'notes edit'
   if (before.summary !== after.summary) return 'summary edit'
   if (JSON.stringify(before.links) !== JSON.stringify(after.links)) return 'link change'
+  // Beside `links` because it is the same kind of change: an edge off this node
+  // that the user placed deliberately and would expect ⌘Z to take back. Missing
+  // it does not produce a wrong label, it produces no entry at all — `editEntry`
+  // reads the `null` as "nothing happened" — so attaching or reweighting a
+  // reference image would be the one edit in the app that undo cannot see.
+  if (JSON.stringify(before.assetLinks) !== JSON.stringify(after.assetLinks))
+    return 'reference change'
   if (JSON.stringify(before.description) !== JSON.stringify(after.description))
     return 'description edit'
   if (JSON.stringify(before.tags) !== JSON.stringify(after.tags)) return 'tag change'
@@ -318,8 +325,8 @@ export function moveEntry(
 }
 
 /**
- * A content edit — rename, notes, description, links, tags, cover — which all
- * reach disk the same way and so all invert the same way. `null` when the save
+ * A content edit — rename, notes, description, links, tags, references, cover —
+ * which all reach disk the same way and so all invert the same way. `null` when the save
  * changed nothing but the timestamp.
  */
 export function editEntry(before: WobuNode, after: WobuNode): NewEntry | null {

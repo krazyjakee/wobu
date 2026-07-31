@@ -80,6 +80,12 @@ pub enum Code {
     /// file — and a generic "invalid" would not say that.
     #[serde(rename = "asset.not_an_image")]
     NotAnImage,
+    /// A link named an asset, or a link, that is not there. Its own code rather
+    /// than `node.not_found` because the UI's answer differs: this one means
+    /// "the picture panel you are looking at is stale", not "this entity is
+    /// gone", and the surfaces that raise it are different.
+    #[serde(rename = "asset.not_found")]
+    NoSuchAsset,
 
     // ── share ────────────────────────────────────────────────────────────
     /// The folder went away underneath us — an unmounted share, usually.
@@ -235,6 +241,7 @@ impl From<StoreError> for WobuError {
             StoreError::SchemaTooNew { .. } => Code::SchemaTooNew,
             StoreError::NoProjectOpen => Code::NoProjectOpen,
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
+            StoreError::NoSuchAsset(_) | StoreError::NoSuchAssetLink { .. } => Code::NoSuchAsset,
             // A resolution that named something other than a conflict sibling
             // is a bug on the calling side, not a decision the user got wrong,
             // so it lands in the same bucket as any other rejected argument.
@@ -307,6 +314,7 @@ mod tests {
             (Code::Conflict, "write.conflict"),
             (Code::ReadOnly, "write.read_only"),
             (Code::NotAnImage, "asset.not_an_image"),
+            (Code::NoSuchAsset, "asset.not_found"),
             (Code::ShareUnmounted, "share.unmounted"),
             (Code::ProviderNoKey, "provider.no_key"),
             (Code::ProviderBillingRequired, "provider.billing_required"),
@@ -329,6 +337,8 @@ mod tests {
         assert!(!Code::ReadOnly.retryable());
         // Dropping the same PDF again produces the same PDF.
         assert!(!Code::NotAnImage.retryable());
+        // The id is derived from a hash, so it will not start matching a file.
+        assert!(!Code::NoSuchAsset.retryable());
         assert!(!Code::Invalid.retryable());
         assert!(!Code::ProviderNoKey.retryable());
     }

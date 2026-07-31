@@ -12,6 +12,7 @@ import * as api from './api'
 import type {
   Asset,
   AssetKind,
+  AssetRole,
   Conflict,
   ConflictKeep,
   CorruptFile,
@@ -314,9 +315,14 @@ export function useDeleteNode() {
 /**
  * There is no `node_duplicate` command, so a copy is composed from the ones
  * that exist: read the source, create an empty node, then upsert the source's
- * content onto the new id. Nothing is fabricated — links and attributes are
- * carried across verbatim, and the description is deliberately not, because a
- * copy has not been enhanced.
+ * content onto the new id. Nothing is fabricated — links, attributes and
+ * reference images are carried across verbatim, and the description is
+ * deliberately not, because a copy has not been enhanced.
+ *
+ * The reference images come along because they cost nothing to share: assets
+ * are content-addressed, so a copy pointing at the same blobs is pointing at
+ * the same file rather than duplicating it, and a duplicated character that
+ * arrived with an empty picture strip would look like the copy had failed.
  */
 export function useDuplicateNode() {
   const qc = useQueryClient()
@@ -331,6 +337,8 @@ export function useDuplicateNode() {
         attributes: src.attributes,
         tags: [...src.tags],
         links: src.links.map((l) => ({ ...l })),
+        assetLinks: src.assetLinks.map((a) => ({ ...a })),
+        coverAssetId: src.coverAssetId,
         description: null,
         descriptionState: 'none',
       })
@@ -394,6 +402,82 @@ export function useImportAsset() {
     },
     onError: (e) => report(e, 'Could not import that image'),
   })
+}
+
+/**
+ * Attach, detach, re-weight, and choose a cover.
+ *
+ * One hook for all four because they share a shape and, more to the point, a
+ * cache story: each returns the saved node, so the node query is set from the
+ * response rather than refetched, and only the summary list is invalidated —
+ * the picture strip is part of the node, and nothing else on screen moved.
+ *
+ * They are *not* recorded for undo. `useUpsertNode` is the choke point that
+ * records edits, and these deliberately do not go through it: a reference is
+ * attached by dropping a picture, which the user reverses by removing it. An
+ * undo stack that also captured every weight-slider drag would bury the text
+ * edits ⌘Z exists for.
+ */
+function useAssetLinkMutation<V>(run: (v: V) => Promise<WobuNode>, whileDoing: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: run,
+    onSuccess: (node) => {
+      qc.setQueryData(qk.node(node.id), node)
+      void qc.invalidateQueries({ queryKey: qk.nodes })
+    },
+    onError: (e) => {
+      // A lost race has already parked a sibling on disk, and the card for it
+      // has to appear now rather than at the watcher's next poll — the same
+      // reasoning as `useUpsertNode`.
+      if (api.errorCode(e) === 'write.conflict') invalidateWorld(qc)
+      report(e, whileDoing)
+    },
+  })
+}
+
+/** Attach a reference image to a node in a role. */
+export function useLinkAsset() {
+  return useAssetLinkMutation(
+    (v: { nodeId: string; assetId: string; role: AssetRole; weight?: number }) =>
+      api.assetLink(v.nodeId, v.assetId, v.role, v.weight),
+    'Could not attach that reference',
+  )
+}
+
+/** Detach one. The picture stays in the library — it may be in use elsewhere. */
+export function useUnlinkAsset() {
+  return useAssetLinkMutation(
+    (v: { nodeId: string; assetId: string; role: AssetRole }) =>
+      api.assetUnlink(v.nodeId, v.assetId, v.role),
+    'Could not remove that reference',
+  )
+}
+
+/** Re-weight or mute a reference without detaching it. */
+export function useUpdateAssetLink() {
+  return useAssetLinkMutation(
+    (v: {
+      nodeId: string
+      assetId: string
+      role: AssetRole
+      weight?: number
+      enabled?: boolean
+    }) =>
+      api.assetLinkUpdate(v.nodeId, v.assetId, v.role, {
+        weight: v.weight,
+        enabled: v.enabled,
+      }),
+    'Could not change that reference',
+  )
+}
+
+/** Choose the image on a node's card, or clear it with `null`. */
+export function useSetCoverAsset() {
+  return useAssetLinkMutation(
+    (v: { nodeId: string; assetId: string | null }) => api.assetSetCover(v.nodeId, v.assetId),
+    'Could not set that cover image',
+  )
 }
 
 /* ── undo ─────────────────────────────────────────────────────────────────── */

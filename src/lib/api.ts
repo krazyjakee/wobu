@@ -77,6 +77,49 @@ export interface Link {
   enabled: boolean
 }
 
+/**
+ * What a reference image is *for*, and therefore where it is routed when a
+ * generation is compiled — a `palette` reference goes to colour conditioning, a
+ * `pose` reference to a structure adapter.
+ *
+ * `mood` is the exception worth knowing: it is `moodboard_only`, shown to the
+ * human and never sent anywhere. The backend enforces that; nothing on this
+ * side should be written that assumes otherwise.
+ */
+export type AssetRole =
+  | 'silhouette'
+  | 'palette'
+  | 'material'
+  | 'mood'
+  | 'pose'
+  | 'costume'
+  | 'full_ref'
+
+export const ASSET_ROLES: AssetRole[] = [
+  'silhouette',
+  'palette',
+  'material',
+  'mood',
+  'pose',
+  'costume',
+  'full_ref',
+]
+
+/**
+ * A reference image attached to a node.
+ *
+ * `(assetId, role)` is the identity: the same picture can be both a `full_ref`
+ * and a `palette` source for one entity, because those reach two different
+ * adapters. Weight is 0.0–1.0, defaulting to 1.0, exactly as on `Link`.
+ */
+export interface AssetLink {
+  assetId: string
+  role: AssetRole
+  weight: number
+  /** Muted for now, without detaching it. */
+  enabled: boolean
+}
+
 export interface NodeSummary {
   id: string
   kind: NodeKind
@@ -99,8 +142,10 @@ export interface WobuNode {
   descriptionState: DescriptionState
   attributes: Record<string, unknown>
   tags: string[]
+  /** The image shown on this entity's card. Independent of `assetLinks`. */
   coverAssetId: string | null
   links: Link[]
+  assetLinks: AssetLink[]
   createdAt: string
   updatedAt: string
 }
@@ -164,6 +209,7 @@ export type ErrorCode =
   | 'write.conflict'
   | 'write.read_only'
   | 'asset.not_an_image'
+  | 'asset.not_found'
   | 'share.unmounted'
   | 'provider.no_key'
   | 'provider.bad_key'
@@ -394,6 +440,53 @@ export const assetImportBytes = (bytes: Uint8Array, kind: AssetKind = 'reference
 
 /** Every blob in the open project, newest first. */
 export const assetList = () => call<Asset[]>('asset_list')
+
+/**
+ * Attach a reference image to a node in a role.
+ *
+ * All four calls below return the saved node — attaching a reference is an edit
+ * to that node's Markdown, so it goes through the same guarded write as any
+ * other and can reject with `write.conflict` in exactly the same way.
+ *
+ * `weight` is 0.0–1.0 and defaults to 1.0; anything outside the range is
+ * clamped rather than refused. Rejects with `asset.not_found` if the id names
+ * no blob in this project — an asset id is derived from a file's hash, so one
+ * that matches nothing here matches nothing anywhere.
+ */
+export const assetLink = (
+  nodeId: string,
+  assetId: string,
+  role: AssetRole,
+  weight?: number,
+) => call<WobuNode>('asset_link', { nodeId, assetId, role, weight })
+
+/**
+ * Detach one.
+ *
+ * The picture itself is untouched: assets are content-addressed and shared
+ * between nodes, so removing the last link is not a reason to delete the file.
+ * Rejects with `asset.not_found` when there is no such link, which is what a
+ * panel showing a reference somebody else already removed will get.
+ */
+export const assetUnlink = (nodeId: string, assetId: string, role: AssetRole) =>
+  call<WobuNode>('asset_unlink', { nodeId, assetId, role })
+
+/**
+ * Change a link's weight, its enabled flag, or both.
+ *
+ * Omit either to leave it alone. Sending the whole link from a slider would let
+ * its stale copy of `enabled` undo a mute the user just applied.
+ */
+export const assetLinkUpdate = (
+  nodeId: string,
+  assetId: string,
+  role: AssetRole,
+  patch: { weight?: number; enabled?: boolean },
+) => call<WobuNode>('asset_link_update', { nodeId, assetId, role, ...patch })
+
+/** Choose the image on a node's card, or pass `null` to clear it. */
+export const assetSetCover = (nodeId: string, assetId: string | null) =>
+  call<WobuNode>('asset_set_cover', { nodeId, assetId })
 
 /* ── conflicts ────────────────────────────────────────────────────────────── */
 
