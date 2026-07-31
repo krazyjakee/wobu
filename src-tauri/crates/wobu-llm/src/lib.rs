@@ -7,16 +7,18 @@
 //!
 //! [`TextProvider`] is the boundary every vendor sits behind. It is written to
 //! the intersection of what Anthropic and Gemini document rather than to either
-//! one, and the reasoning for each place they differ is in `provider.rs`. No
-//! HTTP client is a dependency of this crate on purpose: the adapters bring
-//! their own, and a client declared here would have made its assumptions part of
-//! the boundary before either adapter existed.
+//! one, and the reasoning for each place they differ is in `provider.rs`. The
+//! trait itself still names no HTTP client and no runtime: `reqwest` arrived
+//! with the Anthropic adapter and is reachable only from `anthropic.rs`, so a
+//! second adapter is free to disagree with every assumption made there.
 
+pub mod anthropic;
 pub mod cancel;
 pub mod error;
 pub mod provider;
 pub mod validate;
 
+pub use anthropic::AnthropicProvider;
 pub use cancel::{Cancel, Cancelled};
 pub use error::{Error, Result};
 pub use provider::{

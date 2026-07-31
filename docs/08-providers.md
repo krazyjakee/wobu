@@ -61,6 +61,54 @@ from the webview. Three reasons, in order of importance:
 
 ---
 
+## Anthropic (text)
+
+Base URL `https://api.anthropic.com`, auth header `x-api-key: <key>`, plus a required
+`anthropic-version`. Keys come from the Claude Console.
+
+### ✅ Verified against live documentation (2026-07-31)
+
+From [models overview](https://platform.claude.com/docs/en/about-claude/models/overview) and
+[pricing](https://platform.claude.com/docs/en/about-claude/pricing):
+
+| Claude API ID | in / out per MTok | context | max output |
+| --- | --- | --- | --- |
+| `claude-fable-5` | $10 / $50 | 1M | 128k |
+| `claude-opus-5` | $5 / $25 | 1M | 128k |
+| `claude-sonnet-5` | $3 / $15 | 1M | 128k |
+| `claude-haiku-4-5-20251001` | $1 / $5 | 200k | 64k |
+
+Sonnet 5 is $2 / $10 under introductory pricing until 2026-08-31.
+
+**`claude-opus-4-8` and `claude-sonnet-4-6` are legacy**, not current — they are what a model
+trained before the Claude 5 generation will offer you, and they are one generation stale. This
+is exactly why the id is checked against live docs rather than remembered: a hardcoded id from
+training data is a request that fails on the user's machine, and it fails for a reason that
+reads like a bug in Wobu.
+
+Wobu defaults to `claude-sonnet-5`. Enhance is a few hundred output tokens of visual
+invention: Haiku is a fifth of the price but a generation older, and Opus is five times the
+cost for a paragraph about what a censer looks like. Nothing validates the id against a list —
+`project.json` carries it — so a model released next month works without a release of ours.
+
+### Request shape
+
+Structured output is **tool use**, not a prompt asking for JSON: one tool whose `input_schema`
+is `wobu_core::description_schema(kind)` verbatim, with `tool_choice` pinning it and
+`disable_parallel_tool_use`. Streaming deltas arrive as `input_json_delta` — fragments of the
+JSON document, which is what the provider trait's deltas are defined to be.
+
+`strict: true` is deliberately **not** set. It would move schema enforcement server-side, but
+our shared schema puts a `pattern` on palette entries and string constraints are documented as
+unsupported under strict — turning it on trades a rare bad palette entry for every request
+failing. Client-side validation catches the same thing for nothing.
+
+**Sampling parameters are not sent at all.** `temperature`, `top_p` and `top_k` were removed
+on 4.7+ and are a 400; `thinking: {"type":"disabled"}` is a 400 on Fable 5. Omitting all of
+them is the only request shape every current model accepts.
+
+---
+
 ## Google Gemini (text + image)
 
 Base URL `https://generativelanguage.googleapis.com`, auth header

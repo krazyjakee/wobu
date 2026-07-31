@@ -6,6 +6,20 @@ edition.workspace = true
 [dependencies]
 async-trait = "0.1.91"
 futures-core = "0.3.33"
+# Already in the workspace lock at 0.13.4 by way of Tauri, and pinned loosely
+# enough to stay on that resolution: a second copy of reqwest in the tree is
+# megabytes of binary bought with nothing. The default features are pared back
+# to the three this adapter reaches — `default-tls` for HTTPS, `http2` because
+# Anthropic speaks it, `stream` for the response body one chunk at a time, and
+# `system-proxy` because a desktop app that ignores the OS proxy fails on a
+# corporate network in a way the user cannot fix. `blocking`, `cookies` and
+# `json` would each pull in code no request here goes near.
+reqwest = { version = "0.13", default-features = false, features = [
+    "default-tls",
+    "http2",
+    "stream",
+    "system-proxy",
+] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.19"
