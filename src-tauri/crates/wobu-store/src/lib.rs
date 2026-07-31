@@ -19,6 +19,7 @@ pub mod frontmatter;
 pub mod index;
 pub mod markdown;
 pub mod paths;
+pub mod presence;
 pub mod project;
 pub mod recent;
 pub mod scan;
@@ -26,6 +27,7 @@ pub mod watcher;
 
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};
+pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{Project, ProjectMeta, ProjectSummary, SaveOutcome};
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};

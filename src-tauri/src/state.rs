@@ -35,7 +35,10 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter};
-use wobu_store::{Cancel, Error as StoreError, Project, Watcher, paths};
+use wobu_core::Id;
+use wobu_store::{
+    Cancel, Error as StoreError, Peer, Presence, PresenceHandle, Project, Watcher, paths,
+};
 
 use crate::error::{CommandResult, WobuError};
 
@@ -63,6 +66,11 @@ pub struct Open {
     /// window between opening a project and the watcher starting, and if the
     /// platform refused to give us one at all.
     pub watcher: Option<Watcher>,
+    /// Our entry in `.wobu/sessions`. Dropped on close, which stops the
+    /// twenty-second heartbeat and takes the session file with it — so a
+    /// collaborator stops seeing us the moment we leave rather than a minute
+    /// later.
+    pub presence: Presence,
     /// Whether the folder is currently unreachable. `wobu-store` refuses
     /// writes on its own; this exists so the banner is raised once rather than
     /// on every event, and so a webview that reloaded while disconnected can
@@ -106,6 +114,34 @@ impl AppState {
         self.slot.lock().as_ref().is_some_and(|o| o.offline)
     }
 
+    /// Who else has the open project's folder open.
+    ///
+    /// An empty list rather than an error when nothing is open: presence is
+    /// advisory, and a poll that arrives one tick after a close is ordinary
+    /// rather than something to put on screen.
+    pub fn peers(&self) -> Vec<Peer> {
+        self.presence().map(|p| p.peers()).unwrap_or_default()
+    }
+
+    /// Tell everyone else which nodes this session has open.
+    pub fn set_editing(&self, node_ids: Vec<Id>) {
+        if let Some(presence) = self.presence() {
+            presence.set_editing(node_ids);
+        }
+    }
+
+    /// A handle taken out from under the lock, because everything done with one
+    /// touches the project folder — a directory listing and a read per peer, or
+    /// a write, over whatever the world happens to be mounted on. Holding the
+    /// mutex every other command needs across an SMB round trip is exactly what
+    /// this module's header says must not happen.
+    ///
+    /// A handle whose project has since closed is inert: its writes no-op, so
+    /// nothing here can resurrect a session file that a close has removed.
+    fn presence(&self) -> Option<PresenceHandle> {
+        self.slot.lock().as_ref().map(|o| o.presence.handle())
+    }
+
     /// Hand out a cancel token for a scan that is about to start.
     ///
     /// Replacing any previous one rather than reusing it: a token that has
@@ -136,7 +172,11 @@ impl AppState {
 
         self.close();
         let generation = self.generation.load(Ordering::SeqCst);
-        *self.slot.lock() = Some(Open { project, watcher: None, offline: false });
+        // After `close`, deliberately: reopening the same folder must not leave
+        // the previous session's file beside the new one, which would show the
+        // user to themselves as a second person in the world.
+        let presence = Presence::start(&root);
+        *self.slot.lock() = Some(Open { project, watcher: None, presence, offline: false });
 
         let watcher = self.start_watcher(app, &root, generation);
         if let Some(open) = self.slot.lock().as_mut() {

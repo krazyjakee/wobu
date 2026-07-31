@@ -327,6 +327,54 @@ export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 export const nodeMove = (id: string, newParentId: string | null) =>
   call<void>('node_move', { id, newParentId })
 
+/* ── presence ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Someone else with this project open.
+ *
+ * Advisory, and only advisory. Nothing here reserves a node or refuses a save —
+ * hard locks over a share strand files whenever a laptop sleeps or a VPN drops,
+ * and the recovery is worse than the collision. A peer editing the node you are
+ * in is a banner, never a block. See `docs/07-file-shares.md`.
+ */
+export interface Peer {
+  /** ULID of their session, not of a node. Stable for as long as they stay. */
+  sessionId: string
+  user: string
+  /** Best effort — reads `unknown` on platforms that do not hand it over. */
+  host: string
+  /**
+   * Seconds since their heartbeat file was last written, measured by *this*
+   * machine's clock against the file's mtime.
+   *
+   * Deliberately not a timestamp. Two machines on a LAN routinely sit an hour
+   * apart, so a duration computed on this side from a time the other side wrote
+   * would be wrong by exactly that much, and nothing here could tell.
+   */
+  seenSecsAgo: number
+  /** Node ids they have open. Render it; do not act on it. */
+  editing: string[]
+}
+
+/**
+ * Who else has this project open.
+ *
+ * Poll it — there is no event, because the answer only changes at human speed
+ * and pushing one per heartbeat per peer would be traffic on the same share the
+ * presence is describing. Empty when no project is open, rather than an error.
+ */
+export const presencePeers = () => call<Peer[]>('presence_peers')
+
+/**
+ * Tell everyone else which nodes this session has open.
+ *
+ * The whole list every time, not a delta: this side already knows exactly which
+ * nodes are open, and a delta would drift the first time one closed while the
+ * share was away.
+ */
+export const presenceEditing = (nodeIds: string[]) =>
+  call<void>('presence_editing', { nodeIds })
+
 /* ── storage and about ────────────────────────────────────────────────────── */
 
 /** The local SQLite index for the open project. Disposable by design. */

@@ -694,7 +694,10 @@ impl Project {
     }
 }
 
-fn current_user() -> String {
+/// The name a conflict sibling is stamped with, and the name a collaborator
+/// sees in the presence list. Shared so the two cannot disagree about who a
+/// person is.
+pub(crate) fn current_user() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "user".to_string())

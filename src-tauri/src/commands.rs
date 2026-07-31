@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter, State};
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
 use wobu_core::{Id, KindDef, Node, NodeKind, NodeSummary};
-use wobu_store::{CorruptFile, Project, ProjectSummary, SaveOutcome, recent};
+use wobu_store::{CorruptFile, Peer, Project, ProjectSummary, SaveOutcome, recent};
 
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
@@ -229,6 +229,36 @@ pub fn node_move(
     new_parent_id: Option<Id>,
 ) -> CommandResult<()> {
     state.with(|p| Ok(p.move_node(id, new_parent_id)?))
+}
+
+/* ── presence ─────────────────────────────────────────────────────────────── */
+
+/// Who else has this project open.
+///
+/// Polled rather than pushed. The answer only changes at human speed, and an
+/// event per beat per peer would be traffic on the very share whose latency the
+/// presence is there to explain.
+///
+/// Never fails, and is empty when no project is open — advisory information
+/// arriving as an error would put a toast on screen for a poll that merely
+/// raced a close.
+#[tauri::command]
+pub fn presence_peers(state: State<'_, AppState>) -> Vec<Peer> {
+    state.peers()
+}
+
+/// Record which nodes this session has open, for everyone else's benefit.
+///
+/// The whole list rather than an add/remove pair: the frontend already knows
+/// which nodes are open, and a delta protocol drifts the first time one closes
+/// during a disconnection and then stays wrong for the rest of the session.
+///
+/// Advisory in the strongest sense. No write path reads this, and naming a node
+/// here neither reserves it nor stops anyone — including the person who named
+/// it — from saving or deleting it.
+#[tauri::command]
+pub fn presence_editing(state: State<'_, AppState>, node_ids: Vec<Id>) {
+    state.set_editing(node_ids);
 }
 
 /* ── storage and about ────────────────────────────────────────────────────── */
@@ -463,6 +493,36 @@ mod bridge {
             serde_json::from_str::<diag::Level>("\"debug\"").unwrap(),
             diag::Level::Debug
         );
+    }
+
+    #[test]
+    fn a_peer_matches_the_peer_interface() {
+        let peer = Peer {
+            session_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap(),
+            user: "nadia".into(),
+            host: "nadia-mbp".into(),
+            seen_secs_ago: 4,
+            editing: vec!["01ARZ3NDEKTSV4RRFFQ69G5FAW".parse().unwrap()],
+        };
+        let json = serde_json::to_value(&peer).unwrap();
+
+        for key in ["sessionId", "user", "host", "seenSecsAgo", "editing"] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from Peer");
+        }
+        // Ids are strings on the far side; a ULID that serialised as an object
+        // or a number would arrive as a key nothing in the navigator matches.
+        assert_eq!(json["sessionId"], "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(json["editing"][0], "01ARZ3NDEKTSV4RRFFQ69G5FAW");
+    }
+
+    #[test]
+    fn presence_editing_accepts_the_node_ids_the_webview_sends() {
+        // `presenceEditing` posts a bare array of id strings. Anything else on
+        // this side and the call fails silently at the bridge, leaving the
+        // editing list frozen on whatever node was open first.
+        let ids: Vec<Id> =
+            serde_json::from_str(r#"["01ARZ3NDEKTSV4RRFFQ69G5FAV"]"#).expect("ids should decode");
+        assert_eq!(ids.len(), 1);
     }
 
     #[test]

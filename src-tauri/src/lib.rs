@@ -60,6 +60,8 @@ pub fn run() {
             commands::node_upsert,
             commands::node_delete,
             commands::node_move,
+            commands::presence_peers,
+            commands::presence_editing,
             commands::index_info,
             commands::index_rebuild,
             commands::about_info,
