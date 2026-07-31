@@ -119,6 +119,26 @@ pub enum Code {
     #[serde(rename = "provider.unavailable")]
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
     ProviderUnavailable,
+    /// The call succeeded and the answer is unusable — truncated mid-stream,
+    /// not JSON, or JSON that does not satisfy the schema it was given.
+    ///
+    /// Separate from `provider.unavailable` because that one says the service
+    /// is down and this one says the model answered badly, and folding them
+    /// together tells a user to check their network over a request that
+    /// arrived fine. Retryable: the same prompt usually succeeds on a second
+    /// attempt, which is exactly what makes it worth telling apart.
+    #[serde(rename = "provider.bad_response")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderBadResponse,
+    /// The request does not fit the model's context window.
+    ///
+    /// The one provider failure that is never worth retrying — the stack is
+    /// too big by construction, and a "Try again" would burn the user's money
+    /// to fail identically. `wobu-influence`'s budget (#43) is the fix, so the
+    /// code exists to tell the user which lever to pull.
+    #[serde(rename = "provider.context_too_long")]
+    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
+    ProviderContextTooLong,
 
     // ── generic ──────────────────────────────────────────────────────────
     /// The user stopped a long operation. Not a failure, and the UI shows

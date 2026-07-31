@@ -216,6 +216,8 @@ export type ErrorCode =
   | 'provider.billing_required'
   | 'provider.rate_limited'
   | 'provider.unavailable'
+  | 'provider.bad_response'
+  | 'provider.context_too_long'
   | 'io.failed'
   | 'cancelled'
   | 'internal'
