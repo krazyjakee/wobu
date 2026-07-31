@@ -292,6 +292,31 @@ export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 export const nodeMove = (id: string, newParentId: string | null) =>
   call<void>('node_move', { id, newParentId })
 
+/* ── storage and about ────────────────────────────────────────────────────── */
+
+/** The local SQLite index for the open project. Disposable by design. */
+export interface IndexInfo {
+  path: string
+  sizeBytes: number
+  nodeCount: number
+}
+
+export const indexInfo = () => call<IndexInfo>('index_info')
+
+/** Throw the index away and rebuild it from the Markdown. */
+export const indexRebuild = () => call<void>('index_rebuild')
+
+export interface AboutInfo {
+  appVersion: string
+  /** The on-disk format of the project folder. */
+  projectSchemaVersion: number
+  /** The local index layout; a bump silently rebuilds on next open. */
+  indexSchemaVersion: number
+  logPath: string
+}
+
+export const aboutInfo = () => call<AboutInfo>('about_info')
+
 /* ── diagnostics ──────────────────────────────────────────────────────────── */
 
 /**

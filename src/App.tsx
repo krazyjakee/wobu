@@ -4,10 +4,14 @@ import { Launcher } from './components/Launcher'
 import { Workspace } from './components/Workspace'
 import { Toasts } from './components/Toasts'
 import { Icon } from './components/Icon'
+import { useUiScale } from './hooks/useUiScale'
 
 export function App() {
   useWorldChangedListener()
   useShareListener()
+  // Applied at the root so it covers the launcher and the overlays too, not
+  // just the workspace.
+  useUiScale()
   const current = useCurrentProject()
 
   // Outside the Tauri webview there is no backend at all — say so plainly

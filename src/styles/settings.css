@@ -85,6 +85,22 @@
   border-color: var(--accent);
 }
 
+.set-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.set-slider input[type='range'] {
+  flex: 1 1 auto;
+  max-width: 280px;
+  accent-color: var(--accent);
+}
+.set-slider .set-value {
+  /* Fixed width so the row does not jog as the number changes under the drag. */
+  flex: 0 0 44px;
+  font-family: var(--mono);
+}
+
 .set-acts {
   display: flex;
   gap: 6px;

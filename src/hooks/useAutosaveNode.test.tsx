@@ -4,6 +4,7 @@ import { saveLabel, useAutosaveNode } from './useAutosaveNode'
 import type { WobuNode } from '../lib/api'
 import { node } from '../test/fixtures'
 import { useUI } from '../store/ui'
+import { useSettings } from '../store/settings'
 
 /*
  * This hook is the last thing standing between a keystroke and the disk, and
@@ -47,11 +48,21 @@ async function render(n: WobuNode | undefined, delay = 500) {
   return r
 }
 
+/** Exactly how the editor calls it: no delay argument at all. */
+async function renderAsEditorDoes(n: WobuNode) {
+  const r = renderHook(({ node }: { node: WobuNode }) => useAutosaveNode(node), {
+    initialProps: { node: n },
+  })
+  await act(async () => {})
+  return r
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   h.mutate.mockReset()
   h.listeners.clear()
   useUI.setState({ toasts: [], banners: [] })
+  useSettings.getState().reset()
   // Without this `isTauri()` is false and the share:online listener never
   // attaches — which is exactly right in a browser, and useless in a test.
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
@@ -95,6 +106,20 @@ describe('debouncing', () => {
     act(() => void vi.advanceTimersByTime(500))
 
     expect(sent()[0]).toMatchObject({ id: 'a', name: 'Kell', summary: 'an ashwalker' })
+  })
+
+  it('uses the configured delay when the caller does not pass one', async () => {
+    // The editor calls `useAutosaveNode(node)` with no delay, so this is the
+    // path that actually runs in the app — the explicit argument above exists
+    // for the tests. Setting it in Settings has to reach the open pane.
+    useSettings.getState().setAutosaveDelay(1500)
+    const { result } = await renderAsEditorDoes(node({ id: 'a' }))
+    act(() => result.current.queue({ notesRaw: 'slow' }))
+
+    act(() => void vi.advanceTimersByTime(1400))
+    expect(h.mutate).not.toHaveBeenCalled()
+    act(() => void vi.advanceTimersByTime(100))
+    expect(sent()).toHaveLength(1)
   })
 
   it('sends nothing when nothing was queued', async () => {

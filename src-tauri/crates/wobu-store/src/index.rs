@@ -23,7 +23,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-const INDEX_VERSION: u32 = 2;
+pub const INDEX_VERSION: u32 = 2;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -168,6 +168,18 @@ impl Index {
         self.conn.execute_batch(
             "DELETE FROM nodes; DELETE FROM links; DELETE FROM node_fts; DELETE FROM corrupt;",
         )?;
+        Ok(())
+    }
+
+    /// Return the pages freed by deletions to the filesystem.
+    ///
+    /// `DELETE` leaves the file the same size — SQLite keeps the pages on a
+    /// free list. That is the right trade during normal use and the wrong one
+    /// after a rebuild, which is the moment a user is looking at the number and
+    /// wondering why clearing it changed nothing. Must run outside a
+    /// transaction, so it is its own call rather than part of `clear`.
+    pub fn vacuum(&self) -> Result<()> {
+        self.conn.execute_batch("VACUUM")?;
         Ok(())
     }
 

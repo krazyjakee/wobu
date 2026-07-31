@@ -421,6 +421,30 @@ impl Project {
         Ok(())
     }
 
+    /// Throw the index away and build it again from the Markdown.
+    ///
+    /// Offered to the user as a support action, and safe to offer because the
+    /// index holds no canonical data — every fact is in the folder. It is the
+    /// answer to "the navigator is showing something that isn't there", which
+    /// is otherwise unfixable from inside the app.
+    ///
+    /// Refuses while the folder is unreachable. Rebuilding from a share that is
+    /// not mounted would faithfully record that the world is empty, which is
+    /// the one way this operation can actually lose something a user cares
+    /// about — the last readable copy of their world.
+    pub fn rebuild_index(&mut self) -> Result<()> {
+        if !self.is_present() {
+            return Err(Error::Disconnected);
+        }
+        self.rescan()?;
+        self.index.vacuum()
+    }
+
+    /// Where the index file for this project lives.
+    pub fn index_path(&self) -> PathBuf {
+        paths::index_path(&self.meta.id)
+    }
+
     /// Fold external edits (Obsidian, git pull, a collaborator on the share)
     /// into the index. Returns true if anything changed.
     ///

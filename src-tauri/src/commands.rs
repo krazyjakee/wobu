@@ -177,6 +177,74 @@ pub fn node_move(
     state.with(|p| Ok(p.move_node(id, new_parent_id)?))
 }
 
+/* ── storage and about ────────────────────────────────────────────────────── */
+
+/// The local index for the open project.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexInfo {
+    path: String,
+    size_bytes: u64,
+    /// Zero until something has been indexed — a project that failed to scan
+    /// looks identical to one that has not been opened otherwise.
+    node_count: u64,
+}
+
+#[tauri::command]
+pub fn index_info(state: State<'_, AppState>) -> CommandResult<IndexInfo> {
+    state.with(|p| {
+        let path = p.index_path();
+        Ok(IndexInfo {
+            size_bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+            path: path.to_string_lossy().into_owned(),
+            node_count: p.list_nodes()?.len() as u64,
+        })
+    })
+}
+
+/// Throw the index away and rebuild it from the Markdown.
+///
+/// Safe to expose because the index holds no canonical data. It is the support
+/// answer to "the navigator is showing something that isn't there".
+#[tauri::command]
+pub fn index_rebuild(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    state.with(|p| {
+        p.rebuild_index()?;
+        Ok(())
+    })?;
+    diag::info("index rebuilt on request");
+    let _ = app.emit(WORLD_CHANGED, ());
+    Ok(())
+}
+
+/// Version numbers worth quoting in a bug report.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AboutInfo {
+    app_version: String,
+    /// The on-disk format of the project folder. The number that decides
+    /// whether a newer Wobu's world can be opened here at all.
+    project_schema_version: u32,
+    /// The local index layout. Bumping it silently rebuilds, so a user seeing
+    /// a long pause after an update is seeing this change.
+    index_schema_version: u32,
+    log_path: String,
+}
+
+#[tauri::command]
+pub fn about_info() -> AboutInfo {
+    AboutInfo {
+        app_version: env!("CARGO_PKG_VERSION").to_owned(),
+        project_schema_version: wobu_core::SCHEMA_VERSION,
+        index_schema_version: wobu_store::index::INDEX_VERSION,
+        log_path: diag::global()
+            .map(|d| d.path())
+            .unwrap_or_else(|| diag::dir().join("wobu.log"))
+            .to_string_lossy()
+            .into_owned(),
+    }
+}
+
 /* ── diagnostics ──────────────────────────────────────────────────────────── */
 
 /// What Settings needs to describe the log without reading it.

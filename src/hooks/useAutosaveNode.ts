@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import type { WobuNode } from '../lib/api'
 import { isRetryable, isTauri } from '../lib/api'
 import { useUpsertNode } from '../lib/queries'
+import { useSettings } from '../store/settings'
 import { report } from '../store/ui'
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'held'
@@ -18,7 +19,13 @@ export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'held
  * genuine rejection, and holding onto it would only resend something the
  * backend has already refused.
  */
-export function useAutosaveNode(node: WobuNode | undefined, delay = 500) {
+export function useAutosaveNode(node: WobuNode | undefined, delayOverride?: number) {
+  // The setting is read here rather than passed down from the editor, so that
+  // changing it in Settings takes effect on the pane already open. An explicit
+  // argument still wins, which is what the tests use.
+  const configured = useSettings((s) => s.autosaveDelay)
+  const delay = delayOverride ?? configured
+
   const upsert = useUpsertNode()
   const [status, setStatus] = useState<SaveStatus>('idle')
 
