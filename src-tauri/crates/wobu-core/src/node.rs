@@ -64,6 +64,15 @@ pub struct Description {
 }
 
 impl Description {
+    /// Build from an ordered sequence of sections. Exists so a crate that
+    /// assembles a description — the `wobu-llm` response validator — does not
+    /// have to depend on `indexmap` just to fill in the one public field.
+    pub fn from_sections(
+        sections: impl IntoIterator<Item = (String, SectionValue)>,
+    ) -> Description {
+        Description { sections: sections.into_iter().collect() }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.sections.values().all(|v| v.is_empty())
     }

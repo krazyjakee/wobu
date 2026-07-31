@@ -13,6 +13,7 @@ pub mod generation;
 pub mod kind;
 pub mod link;
 pub mod node;
+pub mod schema;
 pub mod slug;
 
 pub use asset::{Asset, AssetKind, AssetLink, AssetRole};
@@ -25,6 +26,7 @@ pub use link::{Link, LinkEdge, LinkRole};
 pub use node::{
     Description, DescriptionState, Node, NodeSummary, SectionValue, validate_parent,
 };
+pub use schema::{HEX_COLOR_PATTERN, PALETTE_KEY, description_schema, is_hex_color};
 pub use slug::{is_valid_slug, slugify, unique_slug};
 
 /// Every id in Wobu is a ULID: lexicographically sortable, generated offline,
