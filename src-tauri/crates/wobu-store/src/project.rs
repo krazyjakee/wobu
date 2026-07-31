@@ -141,12 +141,58 @@ impl Project {
         let mut project =
             Project { root, meta, index, on_network_share, read_only, user: current_user() };
 
+        // Before anything reads the folder: a write that was interrupted between
+        // staging and rename left a full copy of a node file behind.
+        project.sweep_staging();
+
         if project.index.is_empty()? {
             project.rescan()?;
         } else {
             project.reconcile()?;
         }
         Ok(project)
+    }
+
+    /// How long a `.part` file has to sit before we believe nobody is using it.
+    ///
+    /// Absurdly generous on purpose. Staging normally lives for a few
+    /// milliseconds, so anything approaching this is certainly abandoned —
+    /// while a file that *is* mid-write belongs to another Wobu on the share,
+    /// and deleting it would make that user's rename fail and lose the save we
+    /// were trying to protect. Being slow to tidy costs a few kilobytes; being
+    /// quick costs someone their edit.
+    const STAGING_GRACE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+    /// Remove staging files left behind by an interrupted write.
+    ///
+    /// A crash or a kill between `stage_and_rename`'s write and its rename
+    /// leaves a `.part` in `.wobu/tmp`. Each one is a full copy of a node file,
+    /// they accumulate silently, and on a synced share they replicate to
+    /// everyone. Nothing ever reads them — the target was never touched — so
+    /// they are pure litter.
+    ///
+    /// Deliberately infallible: this is housekeeping, and a project that opens
+    /// fine except for a tidy-up is a project that should open.
+    fn sweep_staging(&self) {
+        let tmp = self.root.join(".wobu").join("tmp");
+        let Ok(entries) = std::fs::read_dir(&tmp) else { return };
+        let now = std::time::SystemTime::now();
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("part") {
+                continue;
+            }
+            let Ok(meta) = entry.metadata() else { continue };
+            let Ok(modified) = meta.modified() else { continue };
+            // `duration_since` errors on a file stamped in the future — a clock
+            // skew between machines on a share. Treat that as "recent", which
+            // is the cautious reading.
+            let Ok(age) = now.duration_since(modified) else { continue };
+            if age >= Self::STAGING_GRACE {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -341,6 +387,19 @@ impl Project {
         let path = paths::from_rel_string(&self.root, &rel);
         let text = markdown::to_markdown(node)?;
 
+        // Two people saving the same words is not a conflict — nobody's text is
+        // at risk — but every save re-stamps `updated_at`, so their bytes never
+        // match. `guarded_write` can only compare bytes, so left to itself it
+        // parks a `.conflict-` sibling whose sole difference from the winner is
+        // a timestamp. That is worse than useless: it teaches people that
+        // conflict files are noise, right up until one of them matters.
+        if let Some(expected) = expected
+            && let Some((theirs, stamp)) = self.same_words_on_disk(node, &path, expected)?
+        {
+            self.index.upsert_node(&theirs, &rel, &stamp)?;
+            return Ok(SaveOutcome::Saved(Box::new(theirs)));
+        }
+
         match atomic::guarded_write(&self.root, &path, &text, expected, &self.user)? {
             WriteOutcome::Written(stamp) => {
                 self.index.upsert_node(node, &rel, &stamp)?;
@@ -360,6 +419,48 @@ impl Project {
                     .unwrap_or_else(|_| paths::to_rel_string(&conflict_path));
                 Ok(SaveOutcome::Conflict { conflict_path: rel_conflict })
             }
+        }
+    }
+
+    /// The file changed under us, but it says exactly what we were about to say.
+    ///
+    /// Returns the on-disk node and its stamp when it matches ours in every
+    /// field but `updated_at`. The caller adopts it: the user's words are on
+    /// disk, so the save has effectively happened, and there is nothing for a
+    /// conflict card to offer a choice between.
+    ///
+    /// Comparison is by re-serialising our node with *their* timestamp and
+    /// requiring the bytes to match theirs exactly. That is deliberately strict
+    /// — a file hand-edited into different formatting falls through to the
+    /// normal conflict path, which is the safe direction to be wrong in.
+    fn same_words_on_disk(
+        &self,
+        node: &Node,
+        path: &Path,
+        expected: &atomic::Stamp,
+    ) -> Result<Option<(Node, atomic::Stamp)>> {
+        // The cheap filter first, so the common case — nothing changed — costs
+        // one `stat` rather than a read and a parse.
+        match atomic::peek(path)? {
+            Some((mtime, size)) if mtime == expected.mtime_ms && size == expected.size => {
+                return Ok(None);
+            }
+            // Deleted under us. `guarded_write` recreates, which is right.
+            None => return Ok(None),
+            _ => {}
+        }
+
+        let Some((text, stamp)) = atomic::read_stamped(path)? else { return Ok(None) };
+        if stamp.hash == expected.hash {
+            return Ok(None);
+        }
+        let Ok(theirs) = markdown::from_markdown(&text, path) else { return Ok(None) };
+
+        let mut ours = node.clone();
+        ours.updated_at = theirs.updated_at;
+        match markdown::to_markdown(&ours) {
+            Ok(rendered) if rendered == text => Ok(Some((theirs, stamp))),
+            _ => Ok(None),
         }
     }
 

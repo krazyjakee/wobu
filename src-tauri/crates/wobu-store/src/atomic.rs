@@ -117,7 +117,7 @@ pub fn guarded_write(
     };
 
     if clobbers_someone {
-        let conflict_path = conflict_sibling(target, user);
+        let conflict_path = reserve_conflict_sibling(target, user)?;
         stage_and_rename(project_root, &conflict_path, bytes)?;
         let stamp = Stamp::of_bytes(bytes, now_ms());
         return Ok(WriteOutcome::Conflict { conflict_path, stamp });
@@ -136,17 +136,55 @@ fn now_ms() -> i64 {
 ///
 /// The Obsidian/Dropbox convention: predictable, sorts next to the original,
 /// and because it is Markdown a human — or git — can resolve it properly.
-fn conflict_sibling(target: &Path, user: &str) -> PathBuf {
+fn conflict_sibling(target: &Path, user: &str, ts: &str, attempt: u32) -> PathBuf {
     let stem = target.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let ext = target.extension().map(|s| s.to_string_lossy().into_owned());
     let user = wobu_core::slugify(user).unwrap_or_else(|_| "unknown".to_string());
-    let ts = Utc::now().format("%Y%m%dT%H%M%SZ");
+    // The first one gets the clean name; only a collision pays for the suffix.
+    let n = if attempt <= 1 { String::new() } else { format!("-{attempt}") };
     let name = match ext {
-        Some(ext) => format!("{stem}.conflict-{user}-{ts}.{ext}"),
-        None => format!("{stem}.conflict-{user}-{ts}"),
+        Some(ext) => format!("{stem}.conflict-{user}-{ts}{n}.{ext}"),
+        None => format!("{stem}.conflict-{user}-{ts}{n}"),
     };
     target.with_file_name(name)
 }
+
+/// Claim a conflict filename that is definitely not in use.
+///
+/// The timestamp in the name is only accurate to the second, and two conflicts
+/// on one file inside the same second are entirely ordinary on a share — a sync
+/// client delivering a batch, or two people saving together. Renaming onto a
+/// name that already exists would silently destroy the first loser's text,
+/// which is the precise failure this whole module exists to prevent: the write
+/// that "succeeded" and the version nobody can find afterwards.
+///
+/// The name is claimed with `create_new`, which is atomic, rather than by
+/// testing for existence first. Two Wobu processes on the same share race here
+/// for real, and an `exists()` check would let both decide the same name is
+/// free. `stage_and_rename` then renames over our own empty placeholder.
+fn reserve_conflict_sibling(target: &Path, user: &str) -> Result<PathBuf> {
+    if let Some(parent) = target.parent() {
+        crate::paths::ensure_dir(parent)?;
+    }
+    let ts = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+
+    for attempt in 1..=MAX_CONFLICT_ATTEMPTS {
+        let candidate = conflict_sibling(target, user, &ts, attempt);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(_) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(Error::io(&candidate, e)),
+        }
+    }
+    // A thousand conflicts on one file in one second is not a race, it is a
+    // loop somewhere. Failing loudly beats quietly overwriting the thousandth.
+    Err(Error::io(
+        target,
+        std::io::Error::other("could not find a free conflict filename"),
+    ))
+}
+
+const MAX_CONFLICT_ATTEMPTS: u32 = 1000;
 
 /// Stage into `.wobu/tmp` — same filesystem as the target, so `rename` is
 /// atomic — then rename over the destination.
@@ -286,6 +324,55 @@ mod tests {
         guarded_write(dir.path(), &t, "v1", None, "jake").unwrap();
         let leftovers: Vec<_> = fs::read_dir(dir.path().join(".wobu/tmp")).unwrap().collect();
         assert!(leftovers.is_empty(), "staging dir should be empty after a write");
+    }
+
+    #[test]
+    fn a_second_conflict_in_the_same_second_does_not_overwrite_the_first() {
+        // The conflict filename is stamped to the second, so this collided
+        // silently: the second loser's text renamed straight over the first
+        // loser's. Two saves landing in one second is ordinary on a share.
+        let dir = project();
+        let t = target(dir.path());
+        let WriteOutcome::Written(loaded) =
+            guarded_write(dir.path(), &t, "v1", None, "jake").unwrap()
+        else {
+            panic!("expected a write")
+        };
+
+        fs::write(&t, "theirs").unwrap();
+        let WriteOutcome::Conflict { conflict_path: first, .. } =
+            guarded_write(dir.path(), &t, "mine one", Some(&loaded), "jake").unwrap()
+        else {
+            panic!("expected a conflict")
+        };
+        let WriteOutcome::Conflict { conflict_path: second, .. } =
+            guarded_write(dir.path(), &t, "mine two", Some(&loaded), "jake").unwrap()
+        else {
+            panic!("expected a conflict")
+        };
+
+        assert_ne!(first, second, "both conflicts claimed the same filename");
+        assert_eq!(fs::read_to_string(&first).unwrap(), "mine one");
+        assert_eq!(fs::read_to_string(&second).unwrap(), "mine two");
+        assert_eq!(fs::read_to_string(&t).unwrap(), "theirs");
+    }
+
+    #[test]
+    fn the_first_conflict_of_a_second_still_gets_the_clean_name() {
+        // The suffix is a collision cost, not the default shape of the name.
+        let dir = project();
+        let t = target(dir.path());
+        fs::write(&t, "theirs").unwrap();
+        let WriteOutcome::Conflict { conflict_path, .. } =
+            guarded_write(dir.path(), &t, "mine", None, "jake").unwrap()
+        else {
+            panic!("expected a conflict")
+        };
+        let name = conflict_path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("kael-vantris.conflict-jake-"), "{name}");
+        assert!(name.ends_with(".md"), "{name}");
+        // `...-20260731T142211Z.md`, with no `-2` before the extension.
+        assert!(!name.contains("-1.md"), "{name}");
     }
 
     #[test]
