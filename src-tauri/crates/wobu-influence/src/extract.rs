@@ -171,7 +171,7 @@ fn asset_fragments<'a>(
         out.push(Fragment::new(
             source,
             section,
-            FragmentBody::Asset(reference.asset_id),
+            FragmentBody::Asset { id: reference.asset_id, role: reference.role },
             path * preset.section_priority(section) * slider,
             reference.role.target(),
         ));

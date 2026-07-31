@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use wobu_core::{FragmentTarget, Id, Layer};
+use wobu_core::{AssetRole, FragmentTarget, Id, Layer};
 
 use crate::stack::{Origin, ResolvedSource};
 
@@ -20,7 +20,17 @@ pub enum FragmentBody<'a> {
     /// A reference image attached to the source node. The id and not the
     /// `wobu_core::Asset`, because assets are files behind the store and this
     /// crate does no IO; whatever builds a request resolves it there.
-    Asset(Id),
+    ///
+    /// The role travels with it as a value rather than being left to be read back
+    /// out of [`Fragment::section`], which for a reference is only ever
+    /// `role.as_str()`. The image budget maps roles to the backend's reference
+    /// buckets (#44) and that mapping has to be total over `AssetRole`; recovering
+    /// the role from its section key would be a second, weaker copy of the role
+    /// vocabulary, matched by string, that a rename would break in silence — and
+    /// silently misfiling a reference is how one ends up competing for the wrong
+    /// slot. Carried on the body rather than as a field of [`Fragment`] so that a
+    /// span of prose cannot have one.
+    Asset { id: Id, role: AssetRole },
 }
 
 /// One thing one layer contributes.
@@ -98,14 +108,26 @@ impl<'a> Fragment<'a> {
     pub fn text(self) -> Option<&'a str> {
         match self.body {
             FragmentBody::Text(text) => Some(text),
-            FragmentBody::Asset(_) => None,
+            FragmentBody::Asset { .. } => None,
         }
     }
 
     pub fn asset_id(self) -> Option<Id> {
         match self.body {
             FragmentBody::Text(_) => None,
-            FragmentBody::Asset(id) => Some(id),
+            FragmentBody::Asset { id, .. } => Some(id),
+        }
+    }
+
+    /// What this reference is *for*, or `None` for a span of prose.
+    ///
+    /// The role a user attached the picture under, unchanged — not the backend's
+    /// bucket, which is [`RefBucket::for_role`](crate::RefBucket::for_role)'s
+    /// answer and differs per model.
+    pub fn asset_role(self) -> Option<AssetRole> {
+        match self.body {
+            FragmentBody::Text(_) => None,
+            FragmentBody::Asset { role, .. } => Some(role),
         }
     }
 

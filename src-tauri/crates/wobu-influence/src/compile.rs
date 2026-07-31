@@ -55,9 +55,10 @@ struct Candidate<'a> {
 ///   not broken.
 /// - **Reference images.** They are not text and they do not belong in a prompt
 ///   string, so a text budget prices them at nothing rather than at a guess.
-///   Their budget is the per-role one against the backend's declared capability,
-///   it is the tighter of the two, and it is #44 — which is why they are not in
-///   this drop report either. Nothing here has made a decision about them yet.
+///   Their budget is the per-role one against the backend's declared capability
+///   and it is the tighter of the two — [`compile_images`](crate::compile_images),
+///   which is where they are accounted for. Nothing here makes a decision about
+///   them, which is why they are not in this drop report either.
 /// - **Zero-weight fragments.** Reported as [`DropReason::Silenced`] rather than
 ///   omitted, because "you turned this down" and "this did not fit" send the user
 ///   to two different controls. They cost the budget nothing, so turning a card

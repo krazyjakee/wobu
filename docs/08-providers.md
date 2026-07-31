@@ -459,13 +459,26 @@ Each adapter declares what it can do, and the UI adapts rather than failing late
 pub struct Capabilities {
     pub max_resolution: (u32, u32),
     pub aspect_ratios: Vec<AspectRatio>,
-    pub image_refs: HashMap<RefRole, u8>,   // per-role caps, e.g. style -> 3
+    pub image_refs: ImageBudget,            // see below — not a per-role map
     pub controlnet: bool,
     pub loras: bool,
     pub requires_billing: bool,
     pub streaming_preview: bool,
 }
 ```
+
+`image_refs` is deliberately **not** a map keyed by our own `AssetRole`. The caps are declared
+in the backend's vocabulary — objects, characters, style refs — and `wobu-influence` owns the
+mapping from our seven roles onto those three buckets (`capability.rs`, #44). Keying the
+capability by `AssetRole` would push that judgement into every adapter and let two of them
+disagree about which bucket a `pose` reference competes in.
+
+The buckets are **partitions of one reference budget, not separate budgets**: every row of the
+table above sums to 14. A model that declares no character category is not refusing images of
+people — it has one undifferentiated pool, so those references are counted as objects and
+*share* the object cap. Treating an undeclared bucket as its own pool would build a 20-image
+request for a model that takes 10, and the provider would be the one to point that out, after
+payment.
 
 Consequences the user can actually see:
 

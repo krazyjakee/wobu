@@ -110,23 +110,75 @@
 //! # Ok::<(), wobu_core::Error>(())
 //! ```
 //!
-//! The per-role image budget (#44) takes the same slice and prices what this one
-//! deliberately does not; the `influence_resolve` / `prompt_compile` commands
-//! (#46) group it back into `SnapshotLayer`s, which is why a [`Fragment`] keeps
-//! its own layer and node rather than being handed out already grouped.
+//! [`compile_images`] takes the same slice and prices what that one deliberately
+//! does not. It is the tighter of the two budgets and the one that actually
+//! bites: backends cap reference images *per role*, a five-layer stack can offer
+//! more style references than `gemini-3-pro-image` takes on its own, and
+//! "silently discarding a reference the user deliberately attached is the worst
+//! thing this engine could do". So the caps are data ([`image_budget`]), our
+//! roles are translated into the backend's buckets in exactly one place
+//! ([`RefBucket::for_role`]), and what did not fit comes back attributed to the
+//! card that lost it.
+//!
+//! ```
+//! use wobu_core::{AssetRef, AssetRole, Layer, Node, NodeKind, default_preset, new_id};
+//! use wobu_influence::{
+//!     RefBucket, Sliders, World, compile_images, fragments, image_budget, resolve,
+//! };
+//!
+//! let mut style = Node::new(NodeKind::StyleGuide, "Ashfall House Style")?;
+//! for _ in 0..2 {
+//!     style.asset_links.push(AssetRef::new(new_id(), AssetRole::Material));
+//! }
+//! let mut kael = Node::new(NodeKind::Character, "Kael Vantris")?;
+//! for _ in 0..3 {
+//!     kael.asset_links.push(AssetRef::new(new_id(), AssetRole::Costume));
+//! }
+//!
+//! let world = World::new([&style, &kael]);
+//! let stack = resolve(&world, kael.id, None).unwrap();
+//! let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+//!
+//! // Five style references offered, and `gemini-3-pro-image` takes three. A
+//! // character sheet leans on the subject's own costume, so the two the house
+//! // style contributed are the lightest and they are what goes.
+//! let images = compile_images(&extracted, image_budget("gemini-3-pro-image").unwrap());
+//! let style_refs = images.bucket(RefBucket::StyleRefs).unwrap();
+//!
+//! // Which is the sentence the Inspector puts on the card that lost them.
+//! let lost = style_refs.dropped().iter().filter(|d| d.fragment.layer() == Layer::Style).count();
+//! assert_eq!(
+//!     format!(
+//!         "{}/{} {} · {lost} dropped",
+//!         style_refs.kept().len(),
+//!         style_refs.cap().get(),
+//!         style_refs.bucket().label(),
+//!     ),
+//!     "3/3 style refs · 2 dropped",
+//! );
+//! # Ok::<(), wobu_core::Error>(())
+//! ```
+//!
+//! The `influence_resolve` / `prompt_compile` commands (#46) group both reports
+//! back into `SnapshotLayer`s, which is why a [`Fragment`] keeps its own layer
+//! and node rather than being handed out already grouped.
 
 mod budget;
+mod capability;
 mod compile;
 mod extract;
 mod fragment;
+mod images;
 mod resolve;
 mod stack;
 mod world;
 
 pub use budget::{Budget, Chars, CompiledPrompt, DropReason, Dropped};
+pub use capability::{ImageBudget, ModelRefs, RefBucket, Refs, image_budget, model_refs_registry};
 pub use compile::compile;
 pub use extract::fragments;
 pub use fragment::{Fragment, FragmentBody, Sliders, section_target};
+pub use images::{Bucket, CompiledImages, compile_images};
 pub use resolve::resolve;
 pub use stack::{Origin, Reached, ResolvedSource, ResolvedStack, Shot};
 pub use world::World;

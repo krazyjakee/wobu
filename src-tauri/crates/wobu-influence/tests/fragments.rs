@@ -125,8 +125,25 @@ fn a_character_sheet_reads_out_layer_by_layer_and_section_by_section() {
         (Layer::Subject, "Kael Vantris", "never", Text("modern firearms"), 1.0, Negative),
         (Layer::Subject, "Kael Vantris", "never", Text("clean surfaces"), 1.0, Negative),
         // References follow the prose of the node they hang off, routed by role.
-        (Layer::Subject, "Kael Vantris", "pose", Asset(ashfall.pose_ref), 1.0, StructureRef),
-        (Layer::Subject, "Kael Vantris", "mood", Asset(ashfall.mood_ref), 1.0, MoodboardOnly),
+        // The role travels on the body as well as being the section key, because
+        // the image budget maps roles to a backend's reference buckets and must
+        // not read one back out of a string (#44).
+        (
+            Layer::Subject,
+            "Kael Vantris",
+            "pose",
+            Asset { id: ashfall.pose_ref, role: AssetRole::Pose },
+            1.0,
+            StructureRef,
+        ),
+        (
+            Layer::Subject,
+            "Kael Vantris",
+            "mood",
+            Asset { id: ashfall.mood_ref, role: AssetRole::Mood },
+            1.0,
+            MoodboardOnly,
+        ),
         // The framing text is the preset's own product copy and it lives in
         // `wobu-core`; a second copy here would fail this snapshot for a wording
         // edit that has nothing to do with extraction.

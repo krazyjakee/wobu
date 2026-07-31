@@ -84,8 +84,11 @@ impl Chars {
 /// could explain.
 ///
 /// The image budget is not here. Backends cap references *per role* against a
-/// declared capability this crate cannot see (`docs/08-providers.md`), that cap
-/// is the one that actually bites, and it is #44.
+/// declared capability (`docs/08-providers.md`) and that cap is the one that
+/// actually bites, so it is its own budget over its own pools —
+/// [`ImageBudget`](crate::ImageBudget). Folding the two together would let a
+/// long description cost the user a reference they attached, which are not
+/// things any backend trades against each other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Budget {
     pub prompt: Chars,
