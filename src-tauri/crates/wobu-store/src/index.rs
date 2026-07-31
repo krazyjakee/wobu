@@ -13,7 +13,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 use wobu_core::{Id, LinkEdge, Node, NodeKind, NodeSummary};
 
 use crate::atomic::Stamp;
@@ -21,7 +23,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-const INDEX_VERSION: u32 = 1;
+const INDEX_VERSION: u32 = 2;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -60,7 +62,36 @@ CREATE INDEX IF NOT EXISTS links_to ON links(to_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS node_fts USING fts5(
     id UNINDEXED, name, summary, notes, description, tokenize = 'unicode61'
 );
+
+-- Files that are on disk and could not be parsed. Deliberately a table of its
+-- own rather than a column on `nodes`: a file a sync client truncated may never
+-- have had a node row at all, and the ones that did must keep it. See
+-- `Index::mark_corrupt`.
+CREATE TABLE IF NOT EXISTS corrupt (
+    rel_path    TEXT PRIMARY KEY,
+    node_id     TEXT,
+    error       TEXT NOT NULL,
+    detected_at TEXT NOT NULL
+);
 "#;
+
+/// A node file that is on disk and cannot be read.
+///
+/// `node_id` is `Some` when the index still remembers the entity this file
+/// used to be — which is the common case, and the useful one: the navigator
+/// can mark that entity broken in place instead of showing a bare path.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorruptFile {
+    /// Project-relative, `/`-separated. Shown to the user, so it must stay
+    /// relative — an absolute path would leak the machine's layout.
+    pub rel_path: String,
+    pub node_id: Option<Id>,
+    /// The parser's own words, kept verbatim.
+    pub error: String,
+    /// When it was *first* seen broken, not when it was last scanned.
+    pub detected_at: String,
+}
 
 pub struct Index {
     conn: Connection,
@@ -113,7 +144,8 @@ impl Index {
             self.conn.execute_batch(
                 "DROP TABLE IF EXISTS nodes;
                  DROP TABLE IF EXISTS links;
-                 DROP TABLE IF EXISTS node_fts;",
+                 DROP TABLE IF EXISTS node_fts;
+                 DROP TABLE IF EXISTS corrupt;",
             )?;
             self.conn.execute_batch(SCHEMA)?;
             self.conn.execute(
@@ -134,7 +166,7 @@ impl Index {
 
     pub fn clear(&self) -> Result<()> {
         self.conn.execute_batch(
-            "DELETE FROM nodes; DELETE FROM links; DELETE FROM node_fts;",
+            "DELETE FROM nodes; DELETE FROM links; DELETE FROM node_fts; DELETE FROM corrupt;",
         )?;
         Ok(())
     }
@@ -277,6 +309,81 @@ impl Index {
         };
         out.sort_by_key(|n| (order(n.kind), n.name.to_lowercase()));
         Ok(out)
+    }
+
+    /* ── corrupt files ───────────────────────────────────────────────────
+     *
+     * A sync client copying a half-written file is the expected cause, and a
+     * truncated YAML frontmatter block the expected shape. Three rules follow,
+     * and all three are about *not* acting:
+     *
+     * - the file is never written over, so the user's bytes survive;
+     * - its node row is never removed, because a live row next to a broken
+     *   file is how the user finds their data again;
+     * - the parse error is kept verbatim, because "expected a mapping at line
+     *   4" is the only thing that tells them what to fix.
+     */
+
+    /// Record a file that is present but unparseable. Idempotent — reconcile
+    /// re-runs on every folder event and must not accumulate rows.
+    pub fn mark_corrupt(&self, rel_path: &str, error: &str) -> Result<()> {
+        // The node id, where there is one, is what lets the navigator draw the
+        // broken state *on* the entity the user knows, rather than as an
+        // orphaned path they have to recognise.
+        let node_id: Option<String> = self
+            .conn
+            .query_row("SELECT id FROM nodes WHERE rel_path = ?1", params![rel_path], |r| r.get(0))
+            .optional()?;
+
+        // `detected_at` is only written on insert, so a file that stays broken
+        // keeps the time it first broke rather than the time of the last scan.
+        self.conn.execute(
+            "INSERT INTO corrupt (rel_path, node_id, error, detected_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(rel_path) DO UPDATE SET node_id = ?2, error = ?3",
+            params![rel_path, node_id, error, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// The file parsed, or went away. Either way it is no longer broken.
+    pub fn clear_corrupt(&self, rel_path: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM corrupt WHERE rel_path = ?1", params![rel_path])?;
+        Ok(())
+    }
+
+    pub fn corrupt_files(&self) -> Result<Vec<CorruptFile>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT rel_path, node_id, error, detected_at FROM corrupt ORDER BY rel_path",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let (rel_path, node_id, error, detected_at) = row?;
+            out.push(CorruptFile {
+                rel_path,
+                node_id: node_id.as_deref().and_then(|s| Id::from_string(s).ok()),
+                error,
+                detected_at,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Every path currently recorded as corrupt, for the sweep that drops the
+    /// ones whose file has since been deleted.
+    pub fn corrupt_paths(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare("SELECT rel_path FROM corrupt")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
     }
 
     pub fn rel_path_of(&self, id: Id) -> Result<Option<String>> {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
-import { useKinds, useNodes } from '../lib/queries'
+import { useCorruptFiles, useKinds, useNodes } from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
 import { ancestorsOf, buildGroups, indexNodes } from '../lib/tree'
 import { useUI, report } from '../store/ui'
@@ -23,6 +23,7 @@ const RAIL = 52
 export function Workspace({ project }: { project: ProjectSummary }) {
   const kindsQ = useKinds()
   const nodesQ = useNodes(true)
+  const corruptQ = useCorruptFiles(true)
 
   const mode = useUI((s) => s.mode)
   const navWidth = useUI((s) => s.navWidth)
@@ -164,6 +165,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 loading={nodesQ.isPending}
                 error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
                 readOnly={project.readOnly}
+                corrupt={corruptQ.data ?? []}
+                projectPath={project.path}
                 onNewNode={(kind, parentId) => setNewNode({ kind, parentId })}
               />
             )}

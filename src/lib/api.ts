@@ -260,6 +260,26 @@ export const forceQuit = () => call<void>('force_quit')
 
 export const nodeList = () => call<NodeSummary[]>('node_list')
 
+/**
+ * A node file that is on disk and cannot be read — a sync client copied it
+ * half-written, most likely, leaving truncated YAML frontmatter.
+ */
+export interface CorruptFile {
+  /** Project-relative, `/`-separated. Never absolute. */
+  relPath: string
+  /** Set when the index still remembers the entity this file used to be. */
+  nodeId: string | null
+  /** The parser's own words — the only thing that says what to fix. */
+  error: string
+  /** When it was first seen broken, not when it was last scanned. */
+  detectedAt: string
+}
+
+export const corruptFiles = () => call<CorruptFile[]>('corrupt_files')
+
+/** Re-read the folder now instead of waiting for the watcher's debounce. */
+export const projectReload = () => call<void>('project_reload')
+
 export const nodeGet = (id: string) => call<WobuNode>('node_get', { id })
 
 export const nodeCreate = (kind: NodeKind, name: string, parentId: string | null) =>

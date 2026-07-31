@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
 import * as api from './api'
-import type { KindDef, NodeKind, NodeSummary, ProjectSummary, WobuNode } from './api'
+import type { CorruptFile, KindDef, NodeKind, NodeSummary, ProjectSummary, WobuNode } from './api'
 import { toast, useUI } from '../store/ui'
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
@@ -18,6 +18,7 @@ export const qk = {
   projectCurrent: ['project_current'] as const,
   projectRecent: ['project_recent'] as const,
   nodes: ['node_list'] as const,
+  corrupt: ['corrupt_files'] as const,
   node: (id: string) => ['node_get', id] as const,
 }
 
@@ -25,6 +26,10 @@ export const qk = {
 export function invalidateWorld(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: qk.nodes })
   void qc.invalidateQueries({ queryKey: ['node_get'] })
+  // A file breaking and a file being edited arrive as the same event, so the
+  // corrupt list has to move with the node list or it goes stale the moment
+  // someone repairs a file.
+  void qc.invalidateQueries({ queryKey: qk.corrupt })
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */
@@ -58,6 +63,21 @@ export function useNodes(enabled: boolean): UseQueryResult<NodeSummary[]> {
   return useQuery({
     queryKey: qk.nodes,
     queryFn: api.nodeList,
+    enabled,
+    retry: false,
+  })
+}
+
+/**
+ * Files the last reconcile could not parse.
+ *
+ * Invalidated by `world:changed` alongside the node list, because a file
+ * breaking and a file being edited arrive through exactly the same event.
+ */
+export function useCorruptFiles(enabled: boolean): UseQueryResult<CorruptFile[]> {
+  return useQuery({
+    queryKey: qk.corrupt,
+    queryFn: api.corruptFiles,
     enabled,
     retry: false,
   })
@@ -107,6 +127,7 @@ export function useCloseProject() {
       void qc.invalidateQueries({ queryKey: qk.projectRecent })
       qc.removeQueries({ queryKey: qk.nodes })
       qc.removeQueries({ queryKey: ['node_get'] })
+      qc.removeQueries({ queryKey: qk.corrupt })
     },
   })
 }

@@ -46,6 +46,8 @@ pub fn run() {
             commands::share_offline,
             commands::force_quit,
             commands::node_list,
+            commands::corrupt_files,
+            commands::project_reload,
             commands::node_get,
             commands::node_create,
             commands::node_upsert,

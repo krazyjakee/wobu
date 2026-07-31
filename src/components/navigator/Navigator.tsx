@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { NodeKind, NodeSummary } from '../../lib/api'
+import type { CorruptFile, NodeKind, NodeSummary } from '../../lib/api'
 import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
@@ -7,6 +7,7 @@ import { useUI, report, toast } from '../../store/ui'
 import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
+import { BrokenFiles } from './BrokenFiles'
 
 const DRAG_MIME = 'application/x-wobu-node'
 
@@ -25,6 +26,8 @@ export function Navigator({
   loading,
   error,
   readOnly,
+  corrupt,
+  projectPath,
   onNewNode,
 }: {
   nodes: NodeSummary[]
@@ -35,6 +38,8 @@ export function Navigator({
   loading: boolean
   error: string | null
   readOnly: boolean
+  corrupt: CorruptFile[]
+  projectPath: string
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
 }) {
   const filter = useUI((s) => s.filter)
@@ -139,6 +144,7 @@ export function Navigator({
       )}
 
       <div className="nav-tree">
+        <BrokenFiles files={corrupt} projectPath={projectPath} />
         {loading && <p className="nav-note">Reading the world…</p>}
         {error && <p className="nav-note">Could not list nodes — {error}</p>}
         {!loading && !error && nodes.length === 0 && (

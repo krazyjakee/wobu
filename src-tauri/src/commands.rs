@@ -11,15 +11,15 @@
 
 use std::path::PathBuf;
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
 use wobu_core::{Id, KindDef, Node, NodeKind, NodeSummary};
-use wobu_store::{Project, ProjectSummary, SaveOutcome, recent};
+use wobu_store::{CorruptFile, Project, ProjectSummary, SaveOutcome, recent};
 
 use crate::error::{CommandResult, WobuError};
-use crate::state::AppState;
+use crate::state::{AppState, WORLD_CHANGED};
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
 
@@ -109,6 +109,30 @@ fn adopt(app: &AppHandle, state: &AppState, project: Project) -> ProjectSummary 
 #[tauri::command]
 pub fn node_list(state: State<'_, AppState>) -> CommandResult<Vec<NodeSummary>> {
     state.with(|p| Ok(p.list_nodes()?))
+}
+
+/// Node files that are on disk and cannot be parsed.
+///
+/// Separate from `node_list` because a file a sync client truncated may never
+/// have had a node row to attach to.
+#[tauri::command]
+pub fn corrupt_files(state: State<'_, AppState>) -> CommandResult<Vec<CorruptFile>> {
+    state.with(|p| Ok(p.corrupt_files()?))
+}
+
+/// Re-read the folder now, rather than waiting for the watcher.
+///
+/// The "reload" a broken file offers: the user has fixed it in a text editor
+/// or restored it from a backup and wants to know whether that worked, without
+/// having to guess at the debounce.
+#[tauri::command]
+pub fn project_reload(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
+    state.with(|p| {
+        p.reconcile()?;
+        Ok(())
+    })?;
+    let _ = app.emit(WORLD_CHANGED, ());
+    Ok(())
 }
 
 #[tauri::command]

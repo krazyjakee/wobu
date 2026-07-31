@@ -13,7 +13,7 @@ use wobu_core::{Id, Node, NodeKind, NodeSummary, SCHEMA_VERSION, kind_def, kind_
 
 use crate::atomic::{self, WriteOutcome};
 use crate::error::{Error, Result};
-use crate::index::Index;
+use crate::index::{CorruptFile, Index};
 use crate::markdown;
 use crate::paths;
 
@@ -184,6 +184,30 @@ impl Project {
 
     pub fn list_nodes(&self) -> Result<Vec<NodeSummary>> {
         self.index.list_nodes()
+    }
+
+    /// A parser message with the project root taken out of it.
+    ///
+    /// `wobu-core` and the YAML parser both name the file by absolute path,
+    /// which is right for a log and wrong for anything shown to a person: the
+    /// leading half of it is the user's home directory, and this string ends up
+    /// on screen and, sooner or later, pasted into a bug report. Everything
+    /// else about the message is kept verbatim, because "expected a mapping at
+    /// line 4" is the part that says what to fix.
+    fn relative_message(&self, message: &str) -> String {
+        let root = self.root.to_string_lossy();
+        let stripped = message.replace(&format!("{root}/"), "");
+        // Windows renders the same path with backslashes.
+        stripped.replace(&format!("{}\\", root.replace('/', "\\")), "")
+    }
+
+    /// Node files that are on disk and cannot be parsed.
+    ///
+    /// Read alongside [`list_nodes`](Self::list_nodes) rather than folded into
+    /// it: a truncated file may never have had a node row, so there is nothing
+    /// to fold it onto.
+    pub fn corrupt_files(&self) -> Result<Vec<CorruptFile>> {
+        self.index.corrupt_files()
     }
 
     pub fn get_node(&self, id: Id) -> Result<Node> {
@@ -380,10 +404,18 @@ impl Project {
         for (rel, path) in self.node_files() {
             let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
             match markdown::from_markdown(&text, &path) {
-                Ok(node) => self.index.upsert_node(&node, &rel, &stamp)?,
-                // A file a sync client mangled must be surfaced, not
-                // overwritten — so we skip it and leave it on disk untouched.
-                Err(_) => continue,
+                Ok(node) => {
+                    self.index.upsert_node(&node, &rel, &stamp)?;
+                    self.index.clear_corrupt(&rel)?;
+                }
+                // A file a sync client mangled is left on disk exactly as it
+                // is, and recorded so the navigator can say so. Skipping it
+                // silently — which is what this used to do — leaves the user
+                // with an entity that quietly stopped existing.
+                Err(e) => {
+                    let why = self.relative_message(&e.to_string());
+                    self.index.mark_corrupt(&rel, &why)?;
+                }
             }
         }
         Ok(())
@@ -406,6 +438,11 @@ impl Project {
         }
 
         let known = self.index.all_stamps()?;
+        // Captured up front so the loop below can tell a file that has just
+        // broken from one that was already broken — only the former is a
+        // change worth waking the UI for.
+        let was_corrupt: std::collections::HashSet<String> =
+            self.index.corrupt_paths()?.into_iter().collect();
         let mut seen = std::collections::HashSet::new();
         let mut changed = false;
 
@@ -416,14 +453,38 @@ impl Project {
                 continue;
             }
             let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
-            if let Ok(node) = markdown::from_markdown(&text, &path) {
-                self.index.upsert_node(&node, &rel, &stamp)?;
-                changed = true;
+            match markdown::from_markdown(&text, &path) {
+                Ok(node) => {
+                    self.index.upsert_node(&node, &rel, &stamp)?;
+                    if was_corrupt.contains(&rel) {
+                        self.index.clear_corrupt(&rel)?;
+                    }
+                    changed = true;
+                }
+                Err(e) => {
+                    // Note what is *not* here: no `upsert_node`, so the row
+                    // this file used to have keeps its last good contents, and
+                    // no removal, so the entity stays in the navigator. A live
+                    // row beside a broken file is how the user finds their
+                    // data again.
+                    let why = self.relative_message(&e.to_string());
+                    self.index.mark_corrupt(&rel, &why)?;
+                    if !was_corrupt.contains(&rel) {
+                        changed = true;
+                    }
+                }
             }
         }
 
         for rel in known.keys().filter(|rel| !seen.contains(*rel)) {
             self.index.remove_by_rel_path(rel)?;
+            changed = true;
+        }
+
+        // A corrupt file that has since been deleted or repaired-by-rename is
+        // no longer corrupt; without this the banner would never clear.
+        for rel in was_corrupt.iter().filter(|rel| !seen.contains(*rel)) {
+            self.index.clear_corrupt(rel)?;
             changed = true;
         }
         Ok(changed)
@@ -694,6 +755,112 @@ mod tests {
 
         assert!(project.reconcile().unwrap());
         assert_eq!(project.list_nodes().unwrap().len(), 2, "only the singletons remain");
+    }
+
+    /// A truncated YAML frontmatter block — the shape Dropbox and OneDrive
+    /// actually produce when they copy a half-written file.
+    fn truncate_frontmatter(path: &Path) {
+        let text = std::fs::read_to_string(path).unwrap();
+        let cut = text.len() / 3;
+        std::fs::write(path, &text[..cut]).unwrap();
+        filetime_bump(path);
+    }
+
+    #[test]
+    fn a_mangled_file_is_recorded_rather_than_dropped() {
+        let (_dir, mut project) = new_project();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        truncate_frontmatter(&path);
+
+        assert!(project.reconcile().unwrap());
+
+        let corrupt = project.corrupt_files().unwrap();
+        assert_eq!(corrupt.len(), 1, "{corrupt:?}");
+        assert_eq!(corrupt[0].rel_path, "nodes/species/vashk.md");
+        assert_eq!(corrupt[0].node_id, Some(vashk.id), "the broken file is tied to its entity");
+        assert!(!corrupt[0].error.is_empty(), "the parse error is what tells the user what to fix");
+
+        // The parser names the file by absolute path. That is right for a log
+        // and wrong for a string the UI shows and a user pastes into a bug
+        // report — the leading half of it is their home directory.
+        let root = project.root().to_string_lossy().into_owned();
+        assert!(!corrupt[0].error.contains(&root), "leaked an absolute path: {}", corrupt[0].error);
+        assert!(
+            corrupt[0].error.contains("nodes/species/vashk.md"),
+            "the file should still be named, relatively: {}",
+            corrupt[0].error,
+        );
+    }
+
+    #[test]
+    fn a_mangled_file_keeps_its_node_row_and_its_bytes() {
+        let (_dir, mut project) = new_project();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        truncate_frontmatter(&path);
+        let on_disk = std::fs::read(&path).unwrap();
+
+        project.reconcile().unwrap();
+
+        // The row survives — this is the whole point. A live node beside a
+        // broken file is how the user finds their data again; dropping it
+        // makes the entity silently cease to exist.
+        let listed = project.list_nodes().unwrap();
+        assert!(listed.iter().any(|n| n.id == vashk.id), "the node vanished from the navigator");
+        assert_eq!(std::fs::read(&path).unwrap(), on_disk, "the file was modified");
+    }
+
+    #[test]
+    fn a_mangled_file_is_never_written_over() {
+        let (_dir, mut project) = new_project();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        truncate_frontmatter(&path);
+        let on_disk = std::fs::read(&path).unwrap();
+        project.reconcile().unwrap();
+
+        // Saving the last-known-good node over the mangled file would destroy
+        // whatever the sync client left behind — including, possibly, the only
+        // copy of an edit made on another machine.
+        let outcome = project.save_node(vashk).unwrap();
+        assert!(matches!(outcome, SaveOutcome::Conflict { .. }), "{outcome:?}");
+        assert_eq!(std::fs::read(&path).unwrap(), on_disk, "the mangled file was overwritten");
+    }
+
+    #[test]
+    fn a_repaired_file_stops_being_corrupt() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        let good = std::fs::read_to_string(&path).unwrap();
+
+        truncate_frontmatter(&path);
+        project.reconcile().unwrap();
+        assert_eq!(project.corrupt_files().unwrap().len(), 1);
+
+        // The user restored it from a backup, or the sync client finished.
+        std::fs::write(&path, &good).unwrap();
+        filetime_bump(&path);
+        project.reconcile().unwrap();
+
+        assert!(project.corrupt_files().unwrap().is_empty(), "the broken state stuck around");
+        assert_eq!(project.list_nodes().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn deleting_a_mangled_file_clears_it() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        truncate_frontmatter(&path);
+        project.reconcile().unwrap();
+        assert_eq!(project.corrupt_files().unwrap().len(), 1);
+
+        // Giving up on it is a legitimate resolution, and the banner has to go.
+        std::fs::remove_file(&path).unwrap();
+        project.reconcile().unwrap();
+        assert!(project.corrupt_files().unwrap().is_empty());
     }
 
     /// The counterpart to the test above, and the distinction the whole
