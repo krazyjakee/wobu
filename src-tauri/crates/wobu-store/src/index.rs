@@ -509,19 +509,44 @@ impl Index {
 
     /// Full-text search over names, summaries, notes and descriptions.
     pub fn search(&self, query: &str) -> Result<Vec<Id>> {
-        let trimmed = query.trim();
-        if trimmed.is_empty() {
+        let Some(expr) = fts_match_expr(query) else {
             return Ok(Vec::new());
-        }
-        // Quote the user's text so FTS5 operators they did not intend (`-`, `*`,
-        // `"`) cannot turn into a syntax error mid-keystroke.
-        let escaped = trimmed.replace('"', "\"\"");
+        };
         let mut stmt = self.conn.prepare(
             "SELECT id FROM node_fts WHERE node_fts MATCH ?1 ORDER BY rank LIMIT 200",
         )?;
-        let rows = stmt.query_map(params![format!("\"{escaped}\"*")], |r| r.get::<_, String>(0))?;
+        let rows = stmt.query_map(params![expr], |r| r.get::<_, String>(0))?;
         Ok(rows.filter_map(|r| r.ok().and_then(|s| Id::from_string(&s).ok())).collect())
     }
+}
+
+/// Turn whatever the user typed into an FTS5 `MATCH` expression, or `None` when
+/// there is nothing worth searching for.
+///
+/// Two things are going on here, and they pull in opposite directions.
+///
+/// **Every term is quoted**, so that FTS5 operators the user did not mean — a
+/// stray `-`, `*`, `"`, or the word `AND` — cannot become a syntax error. The
+/// palette searches on every keystroke, so a query is malformed far more often
+/// than it is complete.
+///
+/// **But the terms are joined with `AND` rather than quoted as one phrase.**
+/// Quoting the whole query makes it an adjacency test, so "scarred enforcer"
+/// misses notes reading "scarred ex-guild enforcer" — which is exactly the
+/// query someone types when half-remembering a phrase, and exactly the case
+/// searching notes exists to serve. Each term keeps its `*` so prefixes still
+/// match while the word is still being typed.
+///
+/// Terms with no alphanumeric character are dropped rather than escaped: `"-"`
+/// tokenizes to nothing, and a query made only of those should find nothing
+/// rather than error.
+fn fts_match_expr(query: &str) -> Option<String> {
+    let terms: Vec<String> = query
+        .split_whitespace()
+        .filter(|t| t.chars().any(char::is_alphanumeric))
+        .map(|t| format!("\"{}\"*", t.replace('"', "\"\"")))
+        .collect();
+    if terms.is_empty() { None } else { Some(terms.join(" AND ")) }
 }
 
 fn description_text(node: &Node) -> String {
@@ -655,14 +680,47 @@ mod tests {
     }
 
     #[test]
+    fn separate_words_do_not_have_to_be_adjacent() {
+        // Typing two words you remember from someone's notes is the whole point
+        // of searching notes. Wrapping the query as a single quoted phrase makes
+        // it an adjacency test instead, which fails on the most natural query a
+        // person types.
+        let index = Index::in_memory().unwrap();
+        let mut node = Node::new(NodeKind::Character, "Kael Vantris").unwrap();
+        node.notes_raw = "scarred ex-guild enforcer".into();
+        indexed(&index, &node);
+
+        assert_eq!(index.search("scarred enforcer").unwrap(), vec![node.id]);
+        // Across fields, too: one word from the name, one from the notes.
+        assert_eq!(index.search("kael scarred").unwrap(), vec![node.id]);
+        // Still an AND, not an OR — every word has to appear somewhere.
+        assert!(index.search("scarred dragon").unwrap().is_empty());
+    }
+
+    #[test]
     fn search_survives_fts_operator_characters() {
         // The filter box searches on every keystroke, so a stray quote or dash
         // must not become a SQL error.
         let index = Index::in_memory().unwrap();
-        indexed(&index, &Node::new(NodeKind::Character, "Kael Vantris").unwrap());
-        for query in ["\"", "-", "*", "ka*", "a AND", "NEAR(", ""] {
+        let node = Node::new(NodeKind::Character, "Kael Vantris").unwrap();
+        indexed(&index, &node);
+        for query in ["\"", "-", "*", "ka*", "a AND", "NEAR(", "", "^", "()", "OR OR"] {
             index.search(query).expect(query);
         }
+
+        // Not erroring is the floor, not the bar. A query of pure punctuation
+        // has to find nothing rather than everything — dropping the terms and
+        // running an empty MATCH would return the whole world.
+        for query in ["-", "*", "\"", "()", "  "] {
+            assert!(index.search(query).unwrap().is_empty(), "{query} matched something");
+        }
+
+        // And the operators must be inert rather than merely safe: these are
+        // searches for the literal text, and the node does not contain it.
+        assert!(index.search("Kael AND dragon").unwrap().is_empty());
+        assert!(index.search("dragon OR Kael").unwrap().is_empty());
+        // A stray quote mid-word still finds what the user was reaching for.
+        assert_eq!(index.search("Kael\"").unwrap(), vec![node.id]);
     }
 
     #[test]

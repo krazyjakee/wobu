@@ -53,6 +53,7 @@ pub fn run() {
             commands::node_list,
             commands::corrupt_files,
             commands::project_reload,
+            commands::node_search,
             commands::node_get,
             commands::node_create,
             commands::node_upsert,

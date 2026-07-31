@@ -1,8 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeSummary } from '../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../lib/kinds'
+import { nameMatches, textMatches } from '../lib/search'
+import { useNodeSearch } from '../lib/queries'
+import { useDebounced } from '../hooks/useDebounced'
 import { useUI } from '../store/ui'
 import { Icon } from './Icon'
+
+function NodeRow({
+  node,
+  kinds,
+  on,
+  onHover,
+  onPick,
+}: {
+  node: NodeSummary
+  kinds: KindIndex
+  on: boolean
+  onHover: () => void
+  onPick: () => void
+}) {
+  const def = kinds.get(node.kind)
+  return (
+    <button
+      className={on ? 'pal-row is-on' : 'pal-row'}
+      onMouseEnter={onHover}
+      onClick={onPick}
+    >
+      <Icon name={spriteFor(def, node.kind)} size="sm" style={{ color: colorFor(def, node.kind) }} />
+      {node.name}
+      <span className="sub">{node.summary || labelFor(def, node.kind)}</span>
+    </button>
+  )
+}
 
 interface Cmd {
   id: string
@@ -67,24 +97,31 @@ export function CommandPalette({
   )
 
   const needle = q.trim().toLowerCase()
-  const matchedNodes = useMemo(() => {
-    const list = needle
-      ? nodes.filter(
-          (n) =>
-            n.name.toLowerCase().includes(needle) || n.summary.toLowerCase().includes(needle),
-        )
-      : nodes
-    return [...list]
-      .sort((a, b) => {
-        if (needle) {
-          const ai = a.name.toLowerCase().indexOf(needle)
-          const bi = b.name.toLowerCase().indexOf(needle)
-          if (ai !== bi) return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
-        }
-        return a.name.localeCompare(b.name)
-      })
-      .slice(0, 40)
-  }, [nodes, needle])
+
+  /*
+   * Two searches, deliberately.
+   *
+   * The local one runs on every keystroke over the already-loaded summaries, so
+   * typing a node's name is instant and never waits on a round trip. The FTS
+   * one is debounced and reaches into notes and descriptions, which are not in
+   * memory and cannot be searched here at all.
+   *
+   * They are shown as separate groups rather than merged into one ranked list.
+   * A node whose name does not contain what you typed, sitting among ones that
+   * do, reads as a bug — the heading is what explains it, and it is honest
+   * about which half of the search found the row.
+   */
+  const matchedNodes = useMemo(() => nameMatches(nodes, q), [nodes, q])
+
+  const search = useNodeSearch(useDebounced(q, 140))
+
+  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
+
+  /** FTS hits that the name filter did not already show, in rank order. */
+  const matchedText = useMemo(
+    () => (needle ? textMatches(byId, search.data ?? [], matchedNodes) : []),
+    [search.data, matchedNodes, byId, needle],
+  )
 
   const matchedCmds = useMemo(
     () => (needle ? commands.filter((c) => c.label.toLowerCase().includes(needle)) : commands),
@@ -94,9 +131,10 @@ export function CommandPalette({
   const rows = useMemo(
     () => [
       ...matchedNodes.map((n) => ({ kind: 'node' as const, node: n })),
+      ...matchedText.map((n) => ({ kind: 'node' as const, node: n })),
       ...matchedCmds.map((c) => ({ kind: 'cmd' as const, cmd: c })),
     ],
-    [matchedNodes, matchedCmds],
+    [matchedNodes, matchedText, matchedCmds],
   )
 
   useEffect(() => {
@@ -155,34 +193,46 @@ export function CommandPalette({
         <div className="pal-list" ref={listRef}>
           {rows.length === 0 && (
             <div className="pal-none">
-              {nodes.length === 0 ? 'This world has no nodes yet.' : 'No match.'}
+              {nodes.length === 0
+                ? 'This world has no nodes yet.'
+                : search.isFetching
+                  ? 'Searching notes…'
+                  : 'No match.'}
             </div>
           )}
 
           {matchedNodes.length > 0 && <div className="pal-sec">Nodes</div>}
-          {matchedNodes.map((n, i) => {
-            const def = kinds.get(n.kind)
+          {matchedNodes.map((n, i) => (
+            <NodeRow
+              key={n.id}
+              node={n}
+              kinds={kinds}
+              on={cursor === i}
+              onHover={() => setCursor(i)}
+              onPick={() => pick(i)}
+            />
+          ))}
+
+          {/* Named rather than merged above: these matched something the user
+              cannot see on the row, so the heading is the explanation. */}
+          {matchedText.length > 0 && <div className="pal-sec">In notes and descriptions</div>}
+          {matchedText.map((n, j) => {
+            const i = matchedNodes.length + j
             return (
-              <button
+              <NodeRow
                 key={n.id}
-                className={cursor === i ? 'pal-row is-on' : 'pal-row'}
-                onMouseEnter={() => setCursor(i)}
-                onClick={() => pick(i)}
-              >
-                <Icon
-                  name={spriteFor(def, n.kind)}
-                  size="sm"
-                  style={{ color: colorFor(def, n.kind) }}
-                />
-                {n.name}
-                <span className="sub">{n.summary || labelFor(def, n.kind)}</span>
-              </button>
+                node={n}
+                kinds={kinds}
+                on={cursor === i}
+                onHover={() => setCursor(i)}
+                onPick={() => pick(i)}
+              />
             )
           })}
 
           {matchedCmds.length > 0 && <div className="pal-sec">Commands</div>}
           {matchedCmds.map((c, j) => {
-            const i = matchedNodes.length + j
+            const i = matchedNodes.length + matchedText.length + j
             return (
               <button
                 key={c.id}

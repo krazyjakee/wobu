@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -20,6 +21,7 @@ export const qk = {
   nodes: ['node_list'] as const,
   corrupt: ['corrupt_files'] as const,
   node: (id: string) => ['node_get', id] as const,
+  search: (q: string) => ['node_search', q] as const,
 }
 
 /** Everything that the file watcher can invalidate. */
@@ -30,6 +32,9 @@ export function invalidateWorld(qc: QueryClient) {
   // corrupt list has to move with the node list or it goes stale the moment
   // someone repairs a file.
   void qc.invalidateQueries({ queryKey: qk.corrupt })
+  // Editing a node changes what it matches. Without this the palette keeps
+  // offering a hit for a phrase the user just deleted.
+  void qc.invalidateQueries({ queryKey: ['node_search'] })
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */
@@ -83,6 +88,31 @@ export function useCorruptFiles(enabled: boolean): UseQueryResult<CorruptFile[]>
   })
 }
 
+/**
+ * FTS hits for `query`, in rank order.
+ *
+ * `placeholderData: keepPreviousData` is what stops the palette flickering
+ * between empty and full while the next keystroke's query is in flight — the
+ * previous hits stay on screen and are replaced, rather than the list emptying
+ * and refilling under the cursor.
+ *
+ * Below two characters this does not run at all. A one-character prefix matches
+ * most of the world, so it costs a query to tell the user nothing, and the
+ * local name filter already covers that case instantly.
+ */
+export function useNodeSearch(query: string): UseQueryResult<string[]> {
+  const trimmed = query.trim()
+  return useQuery({
+    queryKey: qk.search(trimmed),
+    queryFn: () => api.nodeSearch(trimmed),
+    enabled: trimmed.length >= 2,
+    placeholderData: keepPreviousData,
+    // The index is local; re-running on focus would only cost latency.
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
 export function useNode(id: string | null): UseQueryResult<WobuNode> {
   return useQuery({
     queryKey: qk.node(id ?? ''),
@@ -128,6 +158,8 @@ export function useCloseProject() {
       qc.removeQueries({ queryKey: qk.nodes })
       qc.removeQueries({ queryKey: ['node_get'] })
       qc.removeQueries({ queryKey: qk.corrupt })
+      // Cached hits name nodes in a world that is no longer open.
+      qc.removeQueries({ queryKey: ['node_search'] })
     },
   })
 }

@@ -140,6 +140,17 @@ pub fn project_reload(app: AppHandle, state: State<'_, AppState>) -> CommandResu
     Ok(())
 }
 
+/// Full-text search over names, summaries, notes and descriptions.
+///
+/// Returns ids in rank order rather than whole nodes: the caller already holds
+/// every summary from `node_list`, so sending them back would duplicate the
+/// world across the bridge on every keystroke. The order is the part that
+/// cannot be reconstructed on the other side.
+#[tauri::command]
+pub fn node_search(state: State<'_, AppState>, query: String) -> CommandResult<Vec<Id>> {
+    state.with(|p| Ok(p.index().search(&query)?))
+}
+
 #[tauri::command]
 pub fn node_get(state: State<'_, AppState>, id: Id) -> CommandResult<Node> {
     state.with(|p| Ok(p.get_node(id)?))

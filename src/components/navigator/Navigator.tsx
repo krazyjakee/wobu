@@ -146,6 +146,26 @@ export function Navigator({
           </p>
         )}
 
+        {/*
+          The filter stays name-and-summary only; the palette is the search
+          surface. This is a decision, not an omission (#12).
+
+          The navigator renders a *tree*, and `filterTree` keeps the ancestors
+          of anything that matches. Feeding it hits from notes would expand a
+          branch and highlight a row for a reason that is nowhere on screen —
+          the user sees a species surface because of a word buried three
+          paragraphs into its notes, with no way to tell why. Narrowing what is
+          in front of you and finding something you half-remember are different
+          jobs, and the palette does the second one honestly, with a heading
+          that says which half of the search found each row.
+        */}
+        {filter && !groups.some((g) => filterTree(g.roots, filter).length > 0) && (
+          <p className="nav-note">
+            Nothing here matches <b>{filter}</b>. This box filters names and summaries — press{' '}
+            <kbd>Ctrl+K</kbd> to search inside notes and descriptions too.
+          </p>
+        )}
+
         {groups.map((g) => {
           const visible = filterTree(g.roots, filter)
           if (filter && visible.length === 0) return null

@@ -280,6 +280,16 @@ export const corruptFiles = () => call<CorruptFile[]>('corrupt_files')
 /** Re-read the folder now instead of waiting for the watcher's debounce. */
 export const projectReload = () => call<void>('project_reload')
 
+/**
+ * Full-text search over names, summaries, notes and descriptions.
+ *
+ * Returns ids in rank order, not nodes: the caller already holds every summary
+ * from `node_list`, and sending them back would duplicate the world across the
+ * bridge on every keystroke. Rank order is the part that cannot be
+ * reconstructed on this side.
+ */
+export const nodeSearch = (query: string) => call<string[]>('node_search', { query })
+
 export const nodeGet = (id: string) => call<WobuNode>('node_get', { id })
 
 export const nodeCreate = (kind: NodeKind, name: string, parentId: string | null) =>
