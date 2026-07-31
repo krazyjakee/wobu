@@ -1,6 +1,14 @@
-//! Turning a stream of arbitrary byte chunks into whole SSE payloads.
+//! Reading a streaming HTTP body: SSE framing, and doing it under a
+//! cancellation.
 //!
-//! Split out from the adapter because this is the part of a streaming response
+//! Shared by every adapter rather than written per vendor. That is not tidiness:
+//! both vendors stream over the same `text/event-stream` framing and both are
+//! cancelled the same way — by stopping holding the body — so a second copy of
+//! this file would be a second place for the same subtle bug to be fixed in only
+//! one of them. The adapters differ in what the payloads *mean*, which is what
+//! their `wire.rs` is for.
+//!
+//! Split out from the adapters because this is the part of a streaming response
 //! that a test can drive: the transport hands over bytes at whatever boundaries
 //! it feels like, and every framing bug — a chunk that ends mid-line, a `\r\n`
 //! from a proxy, a multi-byte character sawn in half — is invisible until it
@@ -8,10 +16,18 @@
 //!
 //! Only `data:` is read. The `event:` name is ignored on purpose: Anthropic
 //! documents that every payload also carries the same name in its own `type`
-//! field, so decoding one source rather than two removes the case where the two
-//! disagree and the adapter has to pick.
+//! field, and Google's Interactions API carries it as `event_type`, so decoding
+//! one source rather than two removes the case where the two disagree and the
+//! adapter has to pick.
 
 use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use futures_core::Stream;
+
+use crate::cancel::Cancel;
 
 /// Accumulates bytes and hands back complete `data:` payloads.
 #[derive(Debug, Default)]
@@ -21,7 +37,7 @@ pub(crate) struct Sse {
     /// a non-event: `\n` is ASCII, so anything up to one is whole UTF-8.
     partial: Vec<u8>,
     /// The `data:` lines of the event currently being assembled. SSE allows an
-    /// event to span several of them; Anthropic sends one, but a decoder that
+    /// event to span several of them; both vendors send one, but a decoder that
     /// only handles the shape it has seen is a decoder that breaks on a change
     /// nobody announced.
     data: String,
@@ -72,6 +88,50 @@ impl Sse {
     }
 }
 
+/// What one turn of an adapter's read loop got.
+pub(crate) enum Read<B, E> {
+    Chunk(std::result::Result<B, E>),
+    End,
+    Cancelled,
+}
+
+/// The next chunk, or the cancellation that beat it.
+///
+/// Cancellation is polled first so that a token set while a chunk was already
+/// waiting still wins: the point is to stop, and a stream with a chunk ready is
+/// a stream that will have another one ready in a moment.
+pub(crate) async fn next_chunk<S, B, E>(mut body: Pin<&mut S>, cancel: &Cancel) -> Read<B, E>
+where
+    S: Stream<Item = std::result::Result<B, E>>,
+{
+    let mut cancelled = std::pin::pin!(cancel.cancelled());
+    std::future::poll_fn(move |cx: &mut Context<'_>| {
+        if cancelled.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Read::Cancelled);
+        }
+        match body.as_mut().poll_next(cx) {
+            Poll::Ready(Some(chunk)) => Poll::Ready(Read::Chunk(chunk)),
+            Poll::Ready(None) => Poll::Ready(Read::End),
+            Poll::Pending => Poll::Pending,
+        }
+    })
+    .await
+}
+
+/// `None` when the cancellation won, in which case `future` is dropped — which
+/// for an in-flight request is what abandons it.
+pub(crate) async fn until_cancelled<F: Future>(future: F, cancel: &Cancel) -> Option<F::Output> {
+    let mut future = std::pin::pin!(future);
+    let mut cancelled = std::pin::pin!(cancel.cancelled());
+    std::future::poll_fn(move |cx: &mut Context<'_>| {
+        if cancelled.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(None);
+        }
+        future.as_mut().poll(cx).map(Some)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,7 +159,8 @@ mod tests {
         // The regression: a decoder that treats each chunk as a frame. Nothing
         // in HTTP promises a chunk is a line, and the failure looks like a
         // provider sending malformed JSON.
-        let seen = events(&["event: mess", "age_stop\nda", "ta: {\"type\":\"mes", "sage_stop\"}\n", "\n"]);
+        let seen =
+            events(&["event: mess", "age_stop\nda", "ta: {\"type\":\"mes", "sage_stop\"}\n", "\n"]);
         assert_eq!(seen, ["{\"type\":\"message_stop\"}"]);
     }
 
@@ -151,5 +212,14 @@ mod tests {
         // response rather than the dropped connection that actually happened.
         let seen = events(&["data: {\"type\":\"message_"]);
         assert!(seen.is_empty());
+    }
+
+    #[test]
+    fn a_sentinel_payload_that_is_not_json_still_frames_cleanly() {
+        // Google closes an Interactions stream with `event: done` /
+        // `data: [DONE]`. The framing has to hand that over like anything else
+        // so the adapter — not the decoder — decides it means nothing.
+        let seen = events(&["event: done\ndata: [DONE]\n\n"]);
+        assert_eq!(seen, ["[DONE]"]);
     }
 }

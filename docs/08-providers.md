@@ -118,25 +118,59 @@ Base URL `https://generativelanguage.googleapis.com`, auth header
 Google's forward path; the legacy `POST /v1beta/models/{model}:generateContent` remains fully
 supported. We target the Interactions API, because the usual reason to prefer legacy — the
 CORS bug above — doesn't apply to a native HTTP client.
-🚩 Google's migration guide says `/v1beta2` while the quickstart and API reference both say
-`/v1beta`. Confirm with a live call.
+
+**Path: `/v1beta`.** Re-checked 2026-07-31 while building the adapter (#35). Four of Google's
+pages write `/v1beta/interactions` — [structured
+output](https://ai.google.dev/gemini-api/docs/structured-output), the [breaking-changes
+guide](https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026) in six
+separate curl examples, [streaming](https://ai.google.dev/gemini-api/docs/interactions/streaming),
+and the [API reference](https://ai.google.dev/api/interactions-api). Only
+[migrate-to-interactions](https://ai.google.dev/gemini-api/docs/migrate-to-interactions) writes
+`/v1beta2`, and that same page is the only one still showing the pre-May request shape, so it
+reads as stale. 🚩 Still unconfirmed by a live call — nobody on the project has a key. The
+adapter sends `/v1beta` and `wobu-llm::gemini` says in a comment that a 404 with nothing billed
+means try `/v1beta2`.
+
+**Pin the revision.** The API is versioned by date via an `Api-Revision` header. The current
+shape is `2026-05-20`: default since 2026-05-26, and the revision before it was *removed* on
+2026-06-08. That revision is what renamed `outputs` to `steps` and folded `response_mime_type`
+into `response_format`, so anything written against an older example is a 400. The adapter
+sends the header explicitly rather than riding the default.
 
 ### Text — Enhance
 
-Default model **`gemini-3.6-flash`** (GA 2026-07-21, has a free tier). Streaming is
-`"stream": true` in the body, returned as SSE — no separate endpoint.
+Default model **`gemini-3.6-flash`**. Streaming is `"stream": true` in the body, returned as
+SSE — no separate endpoint, no `?alt=sse`.
 
-🚩 Do not assert a quality ranking between `gemini-3.6-flash` and `gemini-3.5-flash`; Google's
-own model page describes the *older* one as more capable. Benchmark on our actual Enhance
-prompt before picking a default for the UI copy.
+Verified 2026-07-31 against the [model
+page](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash) and
+[pricing](https://ai.google.dev/gemini-api/docs/pricing):
+
+| Model | in / out per Mtok | cached in | free tier |
+| --- | --- | --- | --- |
+| `gemini-3.6-flash` | $1.50 / $7.50 | $0.15 | yes — "Free of charge" |
+| `gemini-3.5-flash` | $1.50 / $9.00 | $0.15 | yes — "Free of charge" |
+| `gemini-3.5-flash-lite` | $0.30 / $2.50 | $0.03 | — |
+| `gemini-3.1-pro-preview` | $2 / $12 to 200k, $4 / $18 beyond | $0.20 | — |
+
+`gemini-3.6-flash` is 1,048,576 in / 65,536 out.
+
+🚩 Still do not assert a *quality* ranking between `gemini-3.6-flash` and `gemini-3.5-flash`;
+Google's own model page describes the older one as more capable. The adapter defaults to 3.6
+on price alone (same input, cheaper output) and says so. Benchmark on our actual Enhance prompt
+before writing UI copy that claims more than that.
 
 Structured descriptions use a top-level `response_format` (note: **not** inside
-`generation_config`):
+`generation_config`). The whole request, as the adapter sends it:
 
 ```json
 {
   "model": "gemini-3.6-flash",
   "input": "...",
+  "stream": true,
+  "store": false,
+  "system_instruction": "...",
+  "generation_config": { "max_output_tokens": 4096 },
   "response_format": {
     "type": "text",
     "mime_type": "application/json",
@@ -145,17 +179,70 @@ Structured descriptions use a top-level `response_format` (note: **not** inside
 }
 ```
 
-The accepted schema is a **subset** of JSON Schema — objects, arrays, enums, `format`,
-numeric bounds, `anyOf`, and `$ref` for recursion are documented; Google states plainly that
-"not all JSON Schema features are supported" and that deeply nested schemas may be rejected.
-Our description schema is flat and small, so this is comfortable — but `wobu-llm` should
-validate the response client-side regardless, since the same schema must also work against
-Anthropic's tool-use.
-🚩 `oneOf`, `propertyOrdering` and `responseJsonSchema` could not be confirmed to exist in the
-current API. Don't use them.
+`system_instruction` is a **plain string at the top level** — not the legacy
+`{parts: [...]}` object. `max_output_tokens` is the one setting that lives under
+`generation_config`. **`store` defaults to true**: the API keeps the request and the response
+server-side so a later call can chain onto them. Enhance never chains, and the payload is
+somebody's unpublished world, so the adapter opts out.
+
+**Streaming shape.** Events are `interaction.created`, `interaction.status_update`,
+`step.start`, `step.delta`, `step.stop`, `interaction.completed`, `error`, then a
+`data: [DONE]` sentinel. Each payload repeats its own name in `event_type`. Two things a naive
+reader gets wrong:
+
+- **Steps are numbered and thinking is one of them.** A `thought` step emits `step.delta`
+  events on the same event type as the answer, carrying `thought_signature` and — with
+  `thinking_summaries` on — prose. Track the `index` of the `step.start` whose
+  `step.type == "model_output"` and drop everything else, or the model's reasoning ends up
+  concatenated in front of the JSON.
+- **There is no finish-reason field.** Hitting `max_output_tokens` shows up as the
+  interaction's `status` being `incomplete` ("completed, but contains incomplete results").
+  The other terminal statuses are `completed`, `failed`, `cancelled`, `budget_exceeded`.
+
+**Usage** is `usage.total_input_tokens` / `total_output_tokens` / `total_cached_tokens` /
+`total_thought_tokens` / `total_tokens`, on `interaction.completed` — and also as
+`metadata.total_usage`, which the docs say may accompany *any* streamed event. Read both, or a
+cancelled call reports zero. 🚩 Two readings the docs don't settle and a live call would:
+whether `total_cached_tokens` is a subset of `total_input_tokens` (the wording "the cached part
+of the prompt" says yes, and the adapter subtracts), and whether `total_output_tokens` already
+includes thoughts (the adapter adds them, which errs high rather than low).
+
+**Errors** have their own documented table
+([api-errors](https://ai.google.dev/gemini-api/docs/api-errors)): a machine-readable snake_case
+`code` plus `message`, delivered as an HTTP body or — for a failure after the 200 — as an
+`error` stream event with the same fields. Codes: `invalid_request`, `parameter_unknown`,
+`authentication`, `permission_denied`, `not_found`, `model_not_found`, `rate_limit_exceeded`,
+`quota_exceeded`, `cancelled`, `api_error`, `service_unavailable`, plus a separate set for
+blocked generations (`safety`, `recitation`, `prohibited_content`, `spii`, `blocklist`, …).
+Google's edge still emits the older `google.rpc.Status` envelope for some refusals — integer
+`code`, name in `status` (`RESOURCE_EXHAUSTED`, `PERMISSION_DENIED`, `FAILED_PRECONDITION`) —
+so handle both. `FAILED_PRECONDITION` is specifically "the free tier is not available in your
+country and billing is not enabled", which is a *working* key: don't report it as a bad one.
+A 429 carries the wait in the body as a `google.rpc.RetryInfo` detail (`"retryDelay": "42s"`),
+not in a `Retry-After` header.
+
+The accepted schema is a **subset** of JSON Schema. Documented as supported, verbatim from the
+structured-output page on 2026-07-31: `string` `number` `integer` `boolean` `object` `array`
+`null`; `title` `description`; `properties` `required` `additionalProperties`; `enum` `format`;
+`minimum` `maximum`; `items` `prefixItems` `minItems` `maxItems`; `anyOf`; `$ref`. Google states
+plainly that "not all JSON Schema features are supported" and that deeply nested schemas may be
+rejected.
+
+🚩 **`pattern` does not appear on that page at all** — neither as supported nor as unsupported —
+and the page does not say what happens to a keyword it doesn't know. Our shared description
+schema puts a `pattern` on palette entries, and the adapter sends the schema **unedited**, the
+same bytes Anthropic gets, because a per-vendor edit is exactly the drift `wobu-core::schema`
+exists to prevent. If a live call comes back 400 with `invalid_request` naming `pattern`, that
+is a `wobu-core::schema` change (drop the `pattern`, keep `is_hex_color` as the enforcement
+point) and not an adapter workaround. If it comes back 200, the client-side validator catches a
+bad palette entry either way.
+🚩 `oneOf`, `propertyOrdering` and `responseJsonSchema` are still absent from the current docs.
+Don't use them.
 
 > **`temperature`, `top_p` and `top_k` were deprecated on 2026-07-21.** Do not build sampling
-> sliders into Settings.
+> sliders into Settings. 🚩 The deprecation date was not re-confirmed in July 2026; the model
+> and pricing pages don't mention sampling at all. The adapter sends none of them regardless,
+> which is the safe shape either way.
 
 ### Image — Generate
 
