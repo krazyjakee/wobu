@@ -68,6 +68,8 @@ pub enum JobKind {
     Enhance,
     /// An image backend producing a picture (#38–#40).
     Generate,
+    /// A local helper producing project-owned per-entity LoRA weights (#69).
+    TrainLora,
     /// Image-to-3D (#41). The one with a provider-imposed concurrency cap.
     Mesh,
     /// Thumbnailing an import. Cheap, local, and free — which is why it is

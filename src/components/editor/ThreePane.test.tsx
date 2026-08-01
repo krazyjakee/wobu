@@ -14,7 +14,15 @@ vi.mock('@tauri-apps/api/core', () => ({
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save: h.save }))
 vi.mock('@tauri-apps/plugin-opener', () => ({ revealItemInDir: h.reveal }))
 vi.mock('./MeshViewport', () => ({
-  default: ({ url, turntable, wireframe }: { url: string; turntable: boolean; wireframe: boolean }) => (
+  default: ({
+    url,
+    turntable,
+    wireframe,
+  }: {
+    url: string
+    turntable: boolean
+    wireframe: boolean
+  }) => (
     <div
       data-testid="mesh-viewport"
       data-url={url}
@@ -25,20 +33,13 @@ vi.mock('./MeshViewport', () => ({
 }))
 
 const subject = node({ id: 'kael', name: 'Kael Vantris' })
-const views = [
-  'front',
-  'left',
-  'right',
-  'back',
-  'top',
-  'bottom',
-  'left_front',
-  'right_front',
-].map((viewType, index) => ({
-  generationId: `generation-${index}`,
-  viewType,
-  assetId: `image-${index}`,
-}))
+const views = ['front', 'left', 'right', 'back', 'top', 'bottom', 'left_front', 'right_front'].map(
+  (viewType, index) => ({
+    generationId: `generation-${index}`,
+    viewType,
+    assetId: `image-${index}`,
+  }),
+)
 const concept: MeshConcept = {
   generationId: 'mesh-generation',
   createdAt: '2026-08-01T12:00:00Z',
@@ -57,7 +58,8 @@ function open(meshes: MeshConcept[] = [concept]) {
   h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
     if (command === 'mesh_concepts') return Promise.resolve(meshes)
     if (command === 'mesh_asset_path') return Promise.resolve('/project/assets/meshes/model.glb')
-    if (command === 'mesh_source_path') return Promise.resolve('/project/assets/meshes/canonical.glb')
+    if (command === 'mesh_source_path')
+      return Promise.resolve('/project/assets/meshes/canonical.glb')
     if (command === 'asset_thumb') return Promise.resolve(`/thumbs/${String(args?.assetId)}.webp`)
     if (command === 'mesh_export') return Promise.resolve(null)
     return Promise.resolve(null)

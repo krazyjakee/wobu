@@ -85,9 +85,13 @@ describe('StyleTransferSheet', () => {
     })
     open()
     fireEvent.click(await screen.findByRole('button', { name: 'Replace and import' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Transfer stopped after 0 of 1 nodes')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Transfer stopped after 0 of 1 nodes',
+    )
     expect(screen.getByRole('status')).toHaveTextContent('1 node remain unapplied')
     expect(screen.getByRole('status')).toHaveTextContent('style.conflict-nadia.md')
-    await waitFor(() => expect(h.invoke).toHaveBeenCalledWith('style_transfer_apply', expect.anything()))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('style_transfer_apply', expect.anything()),
+    )
   })
 })

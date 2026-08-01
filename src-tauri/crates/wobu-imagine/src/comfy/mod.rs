@@ -436,10 +436,7 @@ impl ComfyBackend {
             .part("image", part)
             .text("type", "input")
             .text("overwrite", "true");
-        let request = self
-            .client
-            .post(format!("{}/upload/image", self.base))
-            .multipart(form);
+        let request = self.client.post(format!("{}/upload/image", self.base)).multipart(form);
         let body = self.send(request, "upload/image", cancel).await?;
         let value: Value = serde_json::from_slice(&body).map_err(|_| Error::Unavailable {
             detail: "ComfyUI accepted the input image but returned no usable filename".into(),
@@ -544,6 +541,14 @@ impl ImageBackend for ComfyBackend {
             requires_billing: false,
             streaming_preview: true,
         }
+    }
+
+    fn supports_lora(&self, model: &str, provider_name: &str) -> bool {
+        self.probed.read().ok().and_then(|probed| probed.clone()).is_some_and(|probed| {
+            probed.installed.family_of(model).is_some()
+                && probed.installed.has_loras()
+                && probed.installed.loras().iter().any(|name| name == provider_name)
+        })
     }
 
     async fn generate(

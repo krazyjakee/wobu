@@ -170,6 +170,7 @@ mod extract;
 mod fragment;
 mod images;
 mod resolve;
+mod scene;
 mod stack;
 mod world;
 
@@ -178,7 +179,10 @@ pub use capability::{ImageBudget, ModelRefs, RefBucket, Refs, image_budget, mode
 pub use compile::compile;
 pub use extract::{fragments, fragments_for_view};
 pub use fragment::{Fragment, FragmentBody, Sliders, section_target};
-pub use images::{Bucket, CompiledImages, compile_images};
+pub use images::{Bucket, CompiledImages, compile_images, compile_scene_images};
 pub use resolve::resolve;
+pub use scene::{
+    ResolvedScene, SCENE_FRAMING, SceneError, SceneScope, resolve_scene, scene_fragments,
+};
 pub use stack::{Origin, Reached, ResolvedSource, ResolvedStack, Shot};
 pub use world::World;

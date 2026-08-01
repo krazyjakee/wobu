@@ -95,6 +95,9 @@ Backend health, active image model, job queue depth, active LLM, last generation
   results to open their originals side by side; the originals are fetched only when that viewer
   opens. Variant grids batch one explicit axis at a time (seed, one fragment weight, preset, or
   aspect), keeping the other compiled inputs fixed and labelling each receipt with its varied axis.
+  Forge also composes scenes: the selected entity is the primary history anchor, one to three more
+  are chosen in prompt order, and the scene direction and aspect are explicit. Scene tiles and
+  receipt details name every participant rather than presenting only the primary entity.
 - **Board** — freeform pan/zoom canvas for mood boarding; images can be dragged onto a node
   to become references.
 - **Settings** — providers (Anthropic key, ComfyUI URL, Replicate/fal tokens), model defaults,

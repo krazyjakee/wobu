@@ -20,17 +20,17 @@ use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Emitter, State};
 use wobu_core::{
     Asset, AssetKind, AssetRole, FragmentTarget, Generation, GenerationVariation, Id,
-    InfluenceSnapshot, Node, Preset, PresetGeneration, SnapshotFragment, SnapshotLayer,
-    VariationValue, default_preset, new_id, preset,
+    InfluenceSnapshot, Node, Preset, PresetGeneration, SceneComposition, SnapshotFragment,
+    SnapshotLayer, VariationValue, default_preset, kind_def, new_id, preset,
 };
 use wobu_imagine::{
     AspectRatio, Capabilities, ComfyBackend, Error as ImageError, GeminiBackend, ImageBackend,
-    ImageRequest, ImageUsage, ProgressSink, Reference, ReferenceMechanism, Resolution, comfy,
-    gemini, negotiate,
+    ImageRequest, ImageUsage, LoraWeight, ProgressSink, Reference, ReferenceMechanism, Resolution,
+    comfy, gemini, negotiate, negotiate_scene,
 };
 use wobu_influence::{
-    Budget, Fragment, FragmentBody, RefBucket, Shot, Sliders, World, compile, fragments,
-    fragments_for_view, resolve,
+    Budget, Fragment, FragmentBody, RefBucket, ResolvedScene, SceneScope, Shot, Sliders, World,
+    compile, fragments, fragments_for_view, resolve, resolve_scene, scene_fragments,
 };
 use wobu_jobs::{Billed, Failure, JobContext, JobKind, Outcome, Preview, Progress, Task};
 use wobu_store::Project;
@@ -44,6 +44,44 @@ const PRICE_SOURCE: &str = "https://ai.google.dev/gemini-api/docs/pricing";
 const PRICE_CHECKED_AT: &str = "2026-08-01";
 const SPEND_DIR: &str = ".wobu/spend";
 const LOCK_ATTEMPTS: usize = 200;
+const LORA_PROTOCOL: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReceiptLora {
+    node_id: Id,
+    content_hash: String,
+    provider_name: String,
+    trigger_token: String,
+    strength: f32,
+}
+
+impl ReceiptLora {
+    fn weight(&self) -> LoraWeight {
+        LoraWeight {
+            content_hash: self.content_hash.clone(),
+            provider_name: self.provider_name.clone(),
+            trigger_token: self.trigger_token.clone(),
+            strength: self.strength,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LoraDowngrade {
+    node_id: Id,
+    content_hash: String,
+    state: &'static str,
+    detail: String,
+}
+
+#[derive(Clone)]
+struct ResolvedLoras {
+    receipts: Vec<ReceiptLora>,
+    weights: Vec<LoraWeight>,
+    downgrades: Vec<LoraDowngrade>,
+}
 
 #[derive(Debug, Clone, Copy)]
 struct Price {
@@ -90,14 +128,20 @@ const MAX_GRID_CELLS: usize = 16;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "axis", rename_all = "snake_case")]
 pub enum VariantGrid {
-    Seed { values: Vec<u64> },
+    Seed {
+        values: Vec<u64>,
+    },
     FragmentWeight {
         #[serde(rename = "nodeId")]
         node_id: Id,
         values: Vec<f32>,
     },
-    Preset { values: Vec<String> },
-    Aspect { values: Vec<String> },
+    Preset {
+        values: Vec<String>,
+    },
+    Aspect {
+        values: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -131,7 +175,8 @@ pub struct GenerateShot {
 
 /// Start one image and return the queue id immediately.
 #[tauri::command]
-pub fn generate_start(
+#[allow(clippy::too_many_arguments)] // Tauri exposes these as named bridge arguments.
+pub async fn generate_start(
     app: AppHandle,
     state: State<'_, AppState>,
     jobs: State<'_, Jobs>,
@@ -182,9 +227,11 @@ pub fn generate_start(
     })?;
 
     let backend: Arc<dyn ImageBackend> = match provider.as_str() {
-        comfy::ID => Arc::new(ComfyBackend::new(comfy::DEFAULT_URL).map_err(|error| {
-            WobuError::new(Code::ProviderUnavailable, error.to_string())
-        })?),
+        comfy::ID => Arc::new(
+            ComfyBackend::connect(comfy::DEFAULT_URL)
+                .await
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
         gemini::ID => {
             let secret = keys.secret(gemini::ID).ok_or_else(|| {
                 WobuError::new(
@@ -192,9 +239,11 @@ pub fn generate_start(
                     "Gemini is selected for images, but there is no key on this machine. Add one in Settings.",
                 )
             })?;
-            Arc::new(GeminiBackend::new(secret.expose()).map_err(|error| {
-                WobuError::new(Code::ProviderUnavailable, error.to_string())
-            })?)
+            Arc::new(
+                GeminiBackend::new(secret.expose()).map_err(|error| {
+                    WobuError::new(Code::ProviderUnavailable, error.to_string())
+                })?,
+            )
         }
         other => {
             return Err(WobuError::new(
@@ -208,10 +257,8 @@ pub fn generate_start(
         .filter(|value| !value.is_empty())
         .or(selected_model)
         .unwrap_or_else(|| backend.default_model().to_owned());
-    let locked_seed = nodes
-        .iter()
-        .find(|node| node.id == subject_id)
-        .and_then(|node| node.locked_seed);
+    let locked_seed =
+        nodes.iter().find(|node| node.id == subject_id).and_then(|node| node.locked_seed);
     let (seed, seed_source) = match (seed, locked_seed) {
         (Some(seed), _) => (seed, SeedSource::Rerolled),
         (None, Some(seed)) => (seed, SeedSource::Locked),
@@ -242,6 +289,130 @@ pub fn generate_start(
     Ok(id.to_string())
 }
 
+/// Queue one image containing two to four ordered world entities.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri exposes these as named bridge arguments.
+pub async fn scene_generate_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, Jobs>,
+    keys: State<'_, Keys>,
+    subject_ids: Vec<Id>,
+    prompt: Option<String>,
+    aspect: Option<String>,
+    model: Option<String>,
+    seed: Option<u64>,
+) -> CommandResult<String> {
+    if !(2..=4).contains(&subject_ids.len()) {
+        return Err(WobuError::new(Code::Invalid, "A scene needs two to four entities."));
+    }
+    let distinct: HashSet<Id> = subject_ids.iter().copied().collect();
+    if distinct.len() != subject_ids.len() {
+        return Err(WobuError::new(Code::Invalid, "A scene cannot contain the same entity twice."));
+    }
+
+    let (root, project_id, nodes, assets, provider, selected_model) = state.with(|project| {
+        if project.is_read_only() {
+            return Err(WobuError::new(
+                Code::ReadOnly,
+                "This project is read-only, so a generated scene could not be saved.",
+            ));
+        }
+        let selected = project
+            .meta()
+            .providers
+            .get("image")
+            .and_then(Value::as_object)
+            .ok_or_else(no_image_provider)?;
+        let provider = selected
+            .get("provider")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(no_image_provider)?
+            .to_owned();
+        let selected_model = selected
+            .get("model")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        Ok((
+            project.root().to_path_buf(),
+            project.id(),
+            project.world_nodes()?.to_vec(),
+            project.list_assets()?,
+            provider,
+            selected_model,
+        ))
+    })?;
+
+    for subject_id in &subject_ids {
+        let subject = nodes.iter().find(|node| node.id == *subject_id).ok_or_else(|| {
+            WobuError::new(Code::NoSuchNode, "A scene entity is not in this project any more.")
+                .with_detail(subject_id.to_string())
+        })?;
+        if kind_def(subject.kind).singleton {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Style Guides and World Bibles are scene context, not scene entities.",
+            ));
+        }
+    }
+
+    let backend: Arc<dyn ImageBackend> = match provider.as_str() {
+        comfy::ID => Arc::new(
+            ComfyBackend::connect(comfy::DEFAULT_URL)
+                .await
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
+        gemini::ID => {
+            let secret = keys.secret(gemini::ID).ok_or_else(|| {
+                WobuError::new(
+                    Code::ProviderNoKey,
+                    "Gemini is selected for images, but there is no key on this machine. Add one in Settings.",
+                )
+            })?;
+            Arc::new(
+                GeminiBackend::new(secret.expose()).map_err(|error| {
+                    WobuError::new(Code::ProviderUnavailable, error.to_string())
+                })?,
+            )
+        }
+        other => {
+            return Err(WobuError::new(
+                Code::Invalid,
+                format!("This build has no image adapter for {other}."),
+            ));
+        }
+    };
+    let model = model
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or(selected_model)
+        .unwrap_or_else(|| backend.default_model().to_owned());
+    let seed_source = if seed.is_some() { SeedSource::Rerolled } else { SeedSource::Random };
+    let seed = seed.unwrap_or_else(|| u128::from(new_id()) as u64);
+    let mut plan = prepare_scene(ScenePrepare {
+        root,
+        project_id,
+        nodes,
+        assets,
+        subject_ids,
+        prompt: prompt.unwrap_or_default(),
+        aspect,
+        model,
+        seed,
+        seed_source,
+        backend,
+        provider,
+        app,
+    })?;
+    plan.reserve_spend()?;
+    let id = jobs.queue().submit(plan);
+    Ok(id.to_string())
+}
+
 /// Queue the exact provider request captured by an immutable generation.
 ///
 /// This path deliberately never resolves today's world, selects today's
@@ -249,7 +420,7 @@ pub fn generate_start(
 /// steps and replay means compilation already happened. Current state is used
 /// only to locate the old receipt and its referenced immutable asset bytes.
 #[tauri::command]
-pub fn generation_replay(
+pub async fn generation_replay(
     app: AppHandle,
     state: State<'_, AppState>,
     jobs: State<'_, Jobs>,
@@ -266,12 +437,7 @@ pub fn generation_replay(
         let generation = project.get_generation(generation_id)?.ok_or_else(|| {
             WobuError::new(Code::Invalid, "That generation is not in this project any more.")
         })?;
-        Ok((
-            project.root().to_path_buf(),
-            project.id(),
-            generation,
-            project.list_assets()?,
-        ))
+        Ok((project.root().to_path_buf(), project.id(), generation, project.list_assets()?))
     })?;
     let subject_name = generation
         .influence_snapshot
@@ -282,9 +448,11 @@ pub fn generation_replay(
         .unwrap_or_else(|| format!("generation {}", generation.id));
 
     let backend: Arc<dyn ImageBackend> = match generation.backend.as_str() {
-        comfy::ID => Arc::new(ComfyBackend::new(comfy::DEFAULT_URL).map_err(|error| {
-            WobuError::new(Code::ProviderUnavailable, error.to_string())
-        })?),
+        comfy::ID => Arc::new(
+            ComfyBackend::connect(comfy::DEFAULT_URL)
+                .await
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
         gemini::ID => {
             let secret = keys.secret(gemini::ID).ok_or_else(|| {
                 WobuError::new(
@@ -292,9 +460,11 @@ pub fn generation_replay(
                     "This replay used Gemini, but there is no Gemini key on this machine. Add one in Settings.",
                 )
             })?;
-            Arc::new(GeminiBackend::new(secret.expose()).map_err(|error| {
-                WobuError::new(Code::ProviderUnavailable, error.to_string())
-            })?)
+            Arc::new(
+                GeminiBackend::new(secret.expose()).map_err(|error| {
+                    WobuError::new(Code::ProviderUnavailable, error.to_string())
+                })?,
+            )
         }
         provider => {
             return Err(WobuError::new(
@@ -305,7 +475,7 @@ pub fn generation_replay(
     };
     let capabilities = backend.capabilities(&generation.model);
     let requires_billing = capabilities.requires_billing;
-    let plan = replay_plan(&root, &assets, generation, &capabilities)?;
+    let plan = replay_plan(&root, &assets, generation, &capabilities, backend.as_ref())?;
     if requires_billing && plan.cost_usd_micros == 0 {
         return Err(WobuError::new(
             Code::Invalid,
@@ -337,6 +507,7 @@ fn replay_plan(
     assets: &[Asset],
     original: Generation,
     capabilities: &Capabilities,
+    backend: &dyn ImageBackend,
 ) -> CommandResult<PlannedImage> {
     let aspect_text = replay_param_str(&original, "aspect")?;
     let aspect = AspectRatio::parse(aspect_text).ok_or_else(|| {
@@ -366,9 +537,8 @@ fn replay_plan(
             )
             .with_detail(asset_id.to_string())
         })?;
-        let role = fragment
-            .asset_role
-            .or_else(|| snapshot_role(&fragment.section, fragment.target));
+        let role =
+            fragment.asset_role.or_else(|| snapshot_role(&fragment.section, fragment.target));
         let role = role.ok_or_else(|| {
             replay_metadata_error(
                 &original,
@@ -400,6 +570,24 @@ fn replay_plan(
         });
     }
     restore_reference_order(&original, &mut references)?;
+    let recorded_loras: Vec<ReceiptLora> = match original.params.get("loras") {
+        None => Vec::new(),
+        Some(value) => serde_json::from_value(value.clone()).map_err(|error| {
+            replay_metadata_error(&original, format!("recorded LoRA metadata is invalid: {error}"))
+        })?,
+    };
+    let mut lora_hashes = HashSet::new();
+    let mut loras = Vec::with_capacity(recorded_loras.len());
+    for recorded in recorded_loras {
+        if !lora_hashes.insert(recorded.content_hash.clone()) {
+            return Err(replay_metadata_error(
+                &original,
+                "recorded LoRA list contains a duplicate content hash".into(),
+            ));
+        }
+        validate_replay_lora(root, &original, &recorded, backend)?;
+        loras.push(recorded.weight());
+    }
 
     let request = ImageRequest {
         model: original.model.clone(),
@@ -409,6 +597,7 @@ fn replay_plan(
         resolution,
         seed: original.seed,
         references,
+        loras,
     };
     let current_price = image_price(&original.backend, &original.model, resolution);
     let current_cost = current_price.map_or(0, |price| price.per_image_usd_micros);
@@ -418,10 +607,8 @@ fn replay_plan(
     generation.output_asset_ids.clear();
     generation.params.remove("outcome");
     generation.params.remove("errorCode");
-    if let Some(original_cost) = generation
-        .params
-        .get("estimatedCostUsdMicros")
-        .and_then(Value::as_u64)
+    if let Some(original_cost) =
+        generation.params.get("estimatedCostUsdMicros").and_then(Value::as_u64)
     {
         generation
             .params
@@ -432,9 +619,7 @@ fn replay_plan(
     generation.params.insert("batchIndex".into(), json!(0));
     generation.params.insert("batchSize".into(), json!(1));
     generation.params.insert("seedSource".into(), json!("replay"));
-    generation
-        .params
-        .insert("estimatedCostUsdMicros".into(), json!(current_cost));
+    generation.params.insert("estimatedCostUsdMicros".into(), json!(current_cost));
     if current_cost > 0 {
         generation.params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
         generation.params.insert("pricingSource".into(), json!(PRICE_SOURCE));
@@ -451,6 +636,219 @@ fn replay_plan(
     }
 
     Ok(PlannedImage { request, cost_usd_micros: current_cost, generation })
+}
+
+fn validate_replay_lora(
+    root: &Path,
+    generation: &Generation,
+    lora: &ReceiptLora,
+    backend: &dyn ImageBackend,
+) -> CommandResult<()> {
+    if !lora.strength.is_finite()
+        || !(0.0..=2.0).contains(&lora.strength)
+        || !safe_trigger_token(&lora.trigger_token)
+        || !safe_lora_name(&lora.provider_name)
+    {
+        return Err(replay_metadata_error(generation, "recorded LoRA fields are invalid".into()));
+    }
+    if !backend.supports_lora(&generation.model, &lora.provider_name) {
+        return Err(WobuError::new(
+            Code::ProviderUnavailable,
+            "The provider can no longer apply every LoRA captured by this generation, so replay cannot be verbatim.",
+        )
+        .with_detail(lora.provider_name.clone()));
+    }
+    let rel_path = wobu_core::asset::lora_path(&lora.content_hash).ok_or_else(|| {
+        replay_metadata_error(generation, "recorded LoRA content hash is invalid".into())
+    })?;
+    let path = root.join(rel_path);
+    let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+        WobuError::new(
+            Code::Io,
+            "A project-owned LoRA captured by this generation is missing, so replay cannot be verbatim.",
+        )
+        .with_detail(error.to_string())
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
+        return Err(replay_metadata_error(
+            generation,
+            "recorded LoRA path is not a regular project-owned file".into(),
+        ));
+    }
+    let bytes = std::fs::read(&path).map_err(|error| {
+        WobuError::new(Code::Io, "A recorded LoRA could not be read for replay.")
+            .with_detail(error.to_string())
+    })?;
+    if wobu_store::atomic::hash_bytes(&bytes) != lora.content_hash
+        || wobu_store::lora::validate(&bytes).is_err()
+    {
+        return Err(replay_metadata_error(
+            generation,
+            "recorded LoRA failed its content or safetensors integrity check".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn resolve_loras(
+    root: &Path,
+    nodes: &[Node],
+    ordered_node_ids: impl IntoIterator<Item = Id>,
+    model: &str,
+    backend: &dyn ImageBackend,
+) -> ResolvedLoras {
+    let by_id: HashMap<Id, &Node> = nodes.iter().map(|node| (node.id, node)).collect();
+    let mut visited_nodes = HashSet::new();
+    let mut applied_hashes = HashSet::new();
+    let mut receipts = Vec::new();
+    let mut weights = Vec::new();
+    let mut downgrades = Vec::new();
+    for node_id in ordered_node_ids {
+        if !visited_nodes.insert(node_id) {
+            continue;
+        }
+        let Some(pin) = by_id.get(&node_id).and_then(|node| node.lora.as_ref()) else {
+            continue;
+        };
+        let reject = |state: &'static str, detail: String| LoraDowngrade {
+            node_id,
+            content_hash: pin.hash.clone(),
+            state,
+            detail,
+        };
+        if pin.protocol != LORA_PROTOCOL {
+            downgrades.push(reject(
+                "protocol_mismatch",
+                format!("The pin uses trainer protocol {}, not {LORA_PROTOCOL}.", pin.protocol),
+            ));
+            continue;
+        }
+        if pin.base_model != model {
+            downgrades.push(reject(
+                "model_mismatch",
+                format!("The LoRA was trained for {}, not {model}.", pin.base_model),
+            ));
+            continue;
+        }
+        if !pin.strength.is_finite() || !(0.0..=2.0).contains(&pin.strength) {
+            downgrades.push(reject("weight_corrupt", "The LoRA strength is invalid.".into()));
+            continue;
+        }
+        if !safe_trigger_token(&pin.trigger_token) || !safe_lora_name(&pin.provider_name) {
+            downgrades.push(reject(
+                "pin_invalid",
+                "The LoRA pin contains an unsafe trigger token or provider filename.".into(),
+            ));
+            continue;
+        }
+        let Some(expected_path) = wobu_core::asset::lora_path(&pin.hash) else {
+            downgrades.push(reject("pin_invalid", "The LoRA content hash is invalid.".into()));
+            continue;
+        };
+        if pin.rel_path != expected_path {
+            downgrades.push(reject(
+                "pin_invalid",
+                "The LoRA path does not match its content hash.".into(),
+            ));
+            continue;
+        }
+        let path = root.join(expected_path);
+        let valid_bytes = std::fs::symlink_metadata(&path)
+            .ok()
+            .filter(|metadata| metadata.file_type().is_file() && !metadata.file_type().is_symlink())
+            .filter(|metadata| metadata.len() == pin.bytes)
+            .and_then(|_| std::fs::read(&path).ok())
+            .filter(|bytes| wobu_store::atomic::hash_bytes(bytes) == pin.hash)
+            .filter(|bytes| wobu_store::lora::validate(bytes).is_ok());
+        if valid_bytes.is_none() {
+            downgrades.push(reject(
+                "weight_missing_or_corrupt",
+                "The project-owned LoRA is missing or failed its integrity check.".into(),
+            ));
+            continue;
+        }
+        if !backend.supports_lora(model, &pin.provider_name) {
+            downgrades.push(reject(
+                "provider_unsupported",
+                "The probed provider cannot load this LoRA for the selected model.".into(),
+            ));
+            continue;
+        }
+        if !applied_hashes.insert(pin.hash.clone()) {
+            downgrades.push(reject(
+                "deduplicated",
+                "An earlier influence source already applies the same content-addressed LoRA."
+                    .into(),
+            ));
+            continue;
+        }
+        let receipt = ReceiptLora {
+            node_id,
+            content_hash: pin.hash.clone(),
+            provider_name: pin.provider_name.clone(),
+            trigger_token: pin.trigger_token.clone(),
+            strength: pin.strength,
+        };
+        weights.push(receipt.weight());
+        receipts.push(receipt);
+    }
+    ResolvedLoras { receipts, weights, downgrades }
+}
+
+fn prompt_with_lora_triggers(prompt: &str, loras: &[LoraWeight]) -> String {
+    let triggers = missing_lora_triggers(prompt, loras);
+    if triggers.is_empty() {
+        prompt.to_owned()
+    } else if prompt.trim().is_empty() {
+        triggers.join(", ")
+    } else {
+        format!("{}, {}", prompt.trim_end(), triggers.join(", "))
+    }
+}
+
+fn scene_prompt_with_lora_triggers(prompt: &str, loras: &[LoraWeight]) -> String {
+    let triggers = missing_lora_triggers(prompt, loras);
+    if triggers.is_empty() {
+        return prompt.to_owned();
+    }
+    let trigger_clause = triggers.join(", ");
+    match prompt.rsplit_once("; ") {
+        Some((before_identity, identity)) => {
+            format!("{before_identity}; {trigger_clause}; {identity}")
+        }
+        None if prompt.trim().is_empty() => trigger_clause,
+        None => format!("{trigger_clause}; {prompt}"),
+    }
+}
+
+fn missing_lora_triggers<'a>(prompt: &str, loras: &'a [LoraWeight]) -> Vec<&'a str> {
+    let existing: HashSet<&str> = prompt
+        .split(|character: char| {
+            !(character.is_ascii_alphanumeric() || character == '_' || character == '-')
+        })
+        .filter(|part| !part.is_empty())
+        .collect();
+    let mut seen = HashSet::new();
+    loras
+        .iter()
+        .map(|lora| lora.trigger_token.as_str())
+        .filter(|token| !existing.contains(token) && seen.insert(*token))
+        .collect()
+}
+
+fn safe_trigger_token(token: &str) -> bool {
+    !token.is_empty()
+        && token.len() <= 64
+        && token.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+fn safe_lora_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 240
+        && name.ends_with(".safetensors")
+        && !name.starts_with('/')
+        && !name.contains('\\')
+        && name.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 fn replay_param_str<'a>(generation: &'a Generation, key: &str) -> CommandResult<&'a str> {
@@ -503,11 +901,7 @@ fn restore_reference_order(
     generation: &Generation,
     references: &mut Vec<Reference>,
 ) -> CommandResult<()> {
-    let Some(order) = generation
-        .params
-        .get("referenceAssetIds")
-        .and_then(Value::as_array)
-    else {
+    let Some(order) = generation.params.get("referenceAssetIds").and_then(Value::as_array) else {
         // Before `referenceAssetIds` was recorded, prepare still emitted a
         // deterministic order: all object-bucket references, then characters,
         // then style refs, preserving extraction order inside each bucket.
@@ -528,16 +922,11 @@ fn restore_reference_order(
     }
     let mut ordered = Vec::with_capacity(references.len());
     for value in order {
-        let id = value
-            .as_str()
-            .and_then(|value| Id::from_string(value).ok())
-            .ok_or_else(|| {
-                replay_metadata_error(generation, "recorded reference order is invalid".to_string())
-            })?;
-        let index = references
-            .iter()
-            .position(|reference| reference.asset_id == id)
-            .ok_or_else(|| {
+        let id = value.as_str().and_then(|value| Id::from_string(value).ok()).ok_or_else(|| {
+            replay_metadata_error(generation, "recorded reference order is invalid".to_string())
+        })?;
+        let index =
+            references.iter().position(|reference| reference.asset_id == id).ok_or_else(|| {
                 replay_metadata_error(
                     generation,
                     format!("recorded reference {id} is not in the snapshot"),
@@ -652,9 +1041,11 @@ pub fn spend_recovery_reset(
     })?;
     let ledger = root.join(SPEND_DIR);
     if ledger.exists() {
-        let archive = root
-            .join(".wobu")
-            .join(format!("spend-recovery-{}-{}", Utc::now().format("%Y%m%dT%H%M%SZ"), new_id()));
+        let archive = root.join(".wobu").join(format!(
+            "spend-recovery-{}-{}",
+            Utc::now().format("%Y%m%dT%H%M%SZ"),
+            new_id()
+        ));
         std::fs::rename(&ledger, &archive).map_err(|error| {
             spend_io("The pending spend ledger could not be archived.", &ledger, error)
         })?;
@@ -664,6 +1055,7 @@ pub fn spend_recovery_reset(
 
 /// Provider-aware reference quotas and every image that negotiation withholds.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri exposes these as named bridge arguments.
 pub fn image_reference_report(
     state: State<'_, AppState>,
     subject_id: Id,
@@ -695,15 +1087,22 @@ pub fn image_reference_report(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_owned);
-        Ok((project.root().to_path_buf(), project.world_nodes()?.to_vec(), provider, selected_model))
+        Ok((
+            project.root().to_path_buf(),
+            project.world_nodes()?.to_vec(),
+            provider,
+            selected_model,
+        ))
     })?;
     let backend: Box<dyn ImageBackend> = match provider.as_str() {
-        comfy::ID => Box::new(ComfyBackend::new(comfy::DEFAULT_URL).map_err(|error| {
-            WobuError::new(Code::ProviderUnavailable, error.to_string())
-        })?),
-        gemini::ID => Box::new(GeminiBackend::new("capability-preview").map_err(|error| {
-            WobuError::new(Code::ProviderUnavailable, error.to_string())
-        })?),
+        comfy::ID => Box::new(
+            ComfyBackend::new(comfy::DEFAULT_URL)
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
+        gemini::ID => Box::new(
+            GeminiBackend::new("capability-preview")
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
         other => {
             return Err(WobuError::new(
                 Code::Invalid,
@@ -731,12 +1130,11 @@ pub fn image_reference_report(
     let stack = resolve(
         &world,
         subject_id,
-        Some(Shot {
-            label: shot_label,
-            weight: controls.weight.unwrap_or(1.0).clamp(0.0, 1.0),
-        }),
+        Some(Shot { label: shot_label, weight: controls.weight.unwrap_or(1.0).clamp(0.0, 1.0) }),
     )
-    .ok_or_else(|| WobuError::new(Code::NoSuchNode, "That entity is not in this project any more."))?;
+    .ok_or_else(|| {
+        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
+    })?;
     let slider_values: Vec<(Id, f32)> = sliders
         .unwrap_or_default()
         .into_iter()
@@ -796,12 +1194,16 @@ pub fn image_reference_report(
             let kept = negotiated
                 .images()
                 .kept()
-                .filter(|fragment| fragment.node_id() == node_id && fragment.layer() == source.layer)
+                .filter(|fragment| {
+                    fragment.node_id() == node_id && fragment.layer() == source.layer
+                })
                 .count();
             let mut reasons: Vec<String> = negotiated
                 .images()
                 .dropped()
-                .filter(|drop| drop.fragment.node_id() == node_id && drop.fragment.layer() == source.layer)
+                .filter(|drop| {
+                    drop.fragment.node_id() == node_id && drop.fragment.layer() == source.layer
+                })
                 .map(|_| "reference budget".to_owned())
                 .collect();
             reasons.extend(
@@ -882,8 +1284,8 @@ fn variant_cells(
     let total = grid_len(grid)?;
     let grid_id = new_id();
     let total_u16 = total as u16;
-    let common = |index: usize, preset: Preset, seed: u64, aspect: AspectRatio, values| {
-        VariantCell {
+    let common =
+        |index: usize, preset: Preset, seed: u64, aspect: AspectRatio, values| VariantCell {
             preset,
             item: PresetGeneration { index: index as u8, seed, view: None },
             aspect,
@@ -894,8 +1296,7 @@ fn variant_cells(
                 base_seed_source
             },
             variation: None,
-        }
-    };
+        };
 
     let cells = match grid {
         VariantGrid::Seed { values } => {
@@ -905,13 +1306,7 @@ fn variant_cells(
                 .copied()
                 .enumerate()
                 .map(|(index, seed)| {
-                    let mut cell = common(
-                        index,
-                        chosen,
-                        seed,
-                        base_aspect,
-                        slider_values.to_vec(),
-                    );
+                    let mut cell = common(index, chosen, seed, base_aspect, slider_values.to_vec());
                     cell.variation = Some(GenerationVariation {
                         grid_id,
                         index: index as u16,
@@ -936,7 +1331,7 @@ fn variant_cells(
                 ));
             }
             let distinct: Vec<u32> = values.iter().map(|value| value.to_bits()).collect();
-            require_distinct(distinct.into_iter(), "fragment weight")?;
+            require_distinct(distinct, "fragment weight")?;
             values
                 .iter()
                 .copied()
@@ -978,13 +1373,8 @@ fn variant_cells(
                         "Named-view presets cannot be cells in a variant grid.",
                     ));
                 }
-                let mut cell = common(
-                    index,
-                    *candidate,
-                    base_seed,
-                    base_aspect,
-                    slider_values.to_vec(),
-                );
+                let mut cell =
+                    common(index, *candidate, base_seed, base_aspect, slider_values.to_vec());
                 cell.variation = Some(GenerationVariation {
                     grid_id,
                     index: index as u16,
@@ -999,7 +1389,10 @@ fn variant_cells(
             let mut aspects = Vec::with_capacity(total);
             for value in values {
                 let parsed = AspectRatio::parse(value.trim()).ok_or_else(|| {
-                    WobuError::new(Code::Invalid, format!("{value} is not a supported aspect ratio."))
+                    WobuError::new(
+                        Code::Invalid,
+                        format!("{value} is not a supported aspect ratio."),
+                    )
                 })?;
                 if !caps.aspect_ratios.is_empty() && !caps.aspect_ratios.contains(&parsed) {
                     return Err(WobuError::new(
@@ -1019,13 +1412,7 @@ fn variant_cells(
                 .into_iter()
                 .enumerate()
                 .map(|(index, aspect)| {
-                    let mut cell = common(
-                        index,
-                        chosen,
-                        base_seed,
-                        aspect,
-                        slider_values.to_vec(),
-                    );
+                    let mut cell = common(index, chosen, base_seed, aspect, slider_values.to_vec());
                     cell.variation = Some(GenerationVariation {
                         grid_id,
                         index: index as u16,
@@ -1078,6 +1465,297 @@ fn derived_seed_source(source: SeedSource) -> SeedSource {
     }
 }
 
+struct ScenePrepare {
+    root: PathBuf,
+    project_id: Id,
+    nodes: Vec<Node>,
+    assets: Vec<Asset>,
+    /// The full ordered participant set is carried to every composition step.
+    /// Participant LoRA collection belongs here too: #69 can collect compatible
+    /// pins for every id and dedupe by hash without changing this request seam.
+    subject_ids: Vec<Id>,
+    prompt: String,
+    aspect: Option<String>,
+    model: String,
+    seed: u64,
+    seed_source: SeedSource,
+    backend: Arc<dyn ImageBackend>,
+    provider: String,
+    app: AppHandle,
+}
+
+fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
+    let world = World::new(input.nodes.iter());
+    let names: Vec<String> = input
+        .subject_ids
+        .iter()
+        .map(|id| {
+            world
+                .get(*id)
+                .map(|node| node.name.clone())
+                .ok_or_else(|| WobuError::new(Code::NoSuchNode, "A scene entity disappeared."))
+        })
+        .collect::<Result<_, _>>()?;
+    let scene_label = format!("Scene · {}", names.join(" + "));
+    let scene =
+        resolve_scene(&world, &input.subject_ids, Shot::new(&scene_label)).map_err(|error| {
+            WobuError::new(Code::Invalid, "The scene influence stacks could not be composed.")
+                .with_detail(format!("{error:?}"))
+        })?;
+    let mut extracted = scene_fragments(&world, &scene);
+    let user_prompt = input.prompt.trim();
+    append_scene_prompt(&scene, &mut extracted, user_prompt);
+    let requested_aspect = input.aspect.as_deref().unwrap_or("16:9");
+    let requested_aspect = AspectRatio::parse(requested_aspect).ok_or_else(|| {
+        WobuError::new(Code::Invalid, "That is not a supported aspect ratio.")
+            .with_detail(requested_aspect.to_owned())
+    })?;
+    let caps = input.backend.capabilities(&input.model);
+    let negotiated = negotiate_scene(&extracted, requested_aspect, &caps, &input.subject_ids);
+    ensure_scene_reference_fairness(&input.subject_ids, &extracted, &negotiated)?;
+    let (prompt, negative) = compile_scene_prompt(&scene, negotiated.fragments(), &names);
+    let loras = resolve_loras(
+        &input.root,
+        &input.nodes,
+        scene.stack().sources().iter().filter_map(|source| source.node_id()),
+        &input.model,
+        input.backend.as_ref(),
+    );
+    let prompt = scene_prompt_with_lora_triggers(&prompt, &loras.weights);
+    if prompt.trim().is_empty() {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Describe at least one scene entity before generating.",
+        ));
+    }
+
+    let assets: HashMap<Id, &Asset> = input.assets.iter().map(|asset| (asset.id, asset)).collect();
+    let mut references = Vec::new();
+    for bucket in negotiated.images().buckets() {
+        for fragment in bucket.kept() {
+            let asset_id = fragment.asset_id().expect("kept image fragments have asset ids");
+            let asset = assets.get(&asset_id).ok_or_else(|| {
+                WobuError::new(Code::NoSuchAsset, "A scene reference is no longer in this project.")
+                    .with_detail(asset_id.to_string())
+            })?;
+            let bytes = std::fs::read(input.root.join(&asset.rel_path)).map_err(|error| {
+                WobuError::new(Code::Io, "A scene reference image could not be read.")
+                    .with_detail(error.to_string())
+            })?;
+            if let Some(reference) =
+                Reference::from_fragment(*fragment, bucket.bucket(), bytes, asset.mime.clone())
+            {
+                references.push(reference);
+            }
+        }
+    }
+    let dropped: Vec<FragmentKey> = negotiated
+        .images()
+        .dropped()
+        .map(|drop| FragmentKey::of(drop.fragment))
+        .chain(negotiated.downgrades().iter().map(|drop| FragmentKey::of(drop.fragment)))
+        .collect();
+    let resolution = negotiated.resolution();
+    let price = image_price(&input.provider, &input.model, resolution);
+    let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
+    let mut params = Map::new();
+    params.insert("batchIndex".into(), json!(0));
+    params.insert("batchSize".into(), json!(1));
+    params.insert("requestedAspect".into(), json!(requested_aspect.to_string()));
+    params.insert("aspect".into(), json!(negotiated.aspect().to_string()));
+    params.insert("width".into(), json!(resolution.width));
+    params.insert("height".into(), json!(resolution.height));
+    params.insert("negativePromptSupported".into(), json!(caps.negative_prompt));
+    params.insert("seedSource".into(), json!(input.seed_source));
+    params.insert("estimatedCostUsdMicros".into(), json!(cost_usd_micros));
+    params.insert(
+        "referenceAssetIds".into(),
+        json!(references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>()),
+    );
+    params.insert("loras".into(), json!(&loras.receipts));
+    params.insert("loraDowngrades".into(), json!(&loras.downgrades));
+    params.insert(
+        "sceneComposition".into(),
+        serde_json::to_value(SceneComposition {
+            version: 1,
+            subject_ids: input.subject_ids.clone(),
+            subject_names: names.clone(),
+        })
+        .map_err(|error| {
+            WobuError::new(Code::Internal, "The scene receipt could not be encoded.")
+                .with_detail(error.to_string())
+        })?,
+    );
+    params.insert(
+        "controls".into(),
+        json!({
+            "scene": {
+                "prompt": user_prompt,
+                "aspect": requested_aspect.to_string(),
+            },
+        }),
+    );
+    if price.is_some() {
+        params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
+        params.insert("pricingSource".into(), json!(PRICE_SOURCE));
+        params.insert("pricingIndicative".into(), json!(true));
+        params.insert(
+            "pricingConservativeFallback".into(),
+            json!(price.is_some_and(|price| price.conservative_fallback)),
+        );
+    }
+    let request = ImageRequest::new(input.model.clone(), &prompt, input.seed, &negotiated)
+        .with_negative(&negative)
+        .with_references(references)
+        .with_loras(loras.weights);
+    let primary = input.subject_ids[0];
+    let generation = Generation {
+        id: new_id(),
+        node_id: primary,
+        created_at: Utc::now(),
+        // Scene composition deliberately uses the registry's wide establishing
+        // preset for framing/aspect. `params.sceneComposition` is the mode and
+        // participant record; inventing a preset id no registry knows would
+        // make history and replay disagree about which framing was chosen.
+        preset: "environment_matte".into(),
+        view_type: None,
+        user_prompt: user_prompt.to_owned(),
+        compiled_prompt: prompt,
+        negative_prompt: negative,
+        backend: input.provider,
+        model: input.model,
+        seed: input.seed,
+        params,
+        output_asset_ids: Vec::new(),
+        influence_snapshot: snapshot(scene.stack(), &extracted, &[], &HashSet::new(), &dropped),
+    };
+    Ok(GenerateTask {
+        label: format!("Compose scene · {}", names.join(" + ")),
+        subject_id: primary,
+        project_id: input.project_id,
+        root: input.root,
+        backend: input.backend,
+        plans: vec![PlannedImage { request, cost_usd_micros, generation }],
+        next: 0,
+        completed: Vec::new(),
+        app: input.app,
+        requires_billing: caps.requires_billing,
+        reservation: None,
+        archival_replay: false,
+    })
+}
+
+fn append_scene_prompt<'a>(
+    scene: &ResolvedScene<'a>,
+    fragments: &mut Vec<Fragment<'a>>,
+    prompt: &'a str,
+) {
+    if prompt.is_empty() {
+        return;
+    }
+    if let Some(source) =
+        scene.stack().sources().iter().find(|source| source.layer == wobu_core::Layer::Shot)
+    {
+        let fragment = Fragment::new(
+            source,
+            "user_prompt",
+            FragmentBody::Text(prompt),
+            source.weight,
+            FragmentTarget::Prompt,
+        );
+        let identity = fragments
+            .iter()
+            .position(|fragment| fragment.section() == "scene_identity")
+            .unwrap_or(fragments.len());
+        fragments.insert(identity, fragment);
+    }
+}
+
+fn compile_scene_prompt(
+    scene: &ResolvedScene<'_>,
+    fragments: &[Fragment<'_>],
+    names: &[String],
+) -> (String, String) {
+    let mut shared = Vec::new();
+    let mut by_subject: HashMap<Id, Vec<&str>> =
+        scene.subjects().iter().copied().map(|id| (id, Vec::new())).collect();
+    let mut shot = Vec::new();
+    let mut negatives = Vec::new();
+    for fragment in fragments.iter().copied().filter(|fragment| fragment.contributes()) {
+        let Some(text) = fragment.text() else { continue };
+        match fragment.target() {
+            FragmentTarget::Negative => push_unique(&mut negatives, text),
+            FragmentTarget::Prompt => match fragment.node_id() {
+                None => push_unique(&mut shot, text),
+                Some(id) => match scene.scope_for_node(id) {
+                    Some(SceneScope::Subject(subject)) => {
+                        if let Some(values) = by_subject.get_mut(&subject) {
+                            push_unique(values, text);
+                        }
+                    }
+                    Some(SceneScope::Shared) | None => push_unique(&mut shared, text),
+                },
+            },
+            FragmentTarget::StyleRef
+            | FragmentTarget::StructureRef
+            | FragmentTarget::Palette
+            | FragmentTarget::MoodboardOnly => {}
+        }
+    }
+
+    let mut clauses = Vec::new();
+    if !shared.is_empty() {
+        clauses.push(format!("Shared world and style: {}", shared.join(", ")));
+    }
+    for (subject, name) in scene.subjects().iter().zip(names) {
+        if let Some(values) = by_subject.get(subject)
+            && !values.is_empty()
+        {
+            clauses.push(format!("{name}: {}", values.join(", ")));
+        }
+    }
+    clauses.extend(shot.into_iter().map(str::to_owned));
+    (clauses.join("; "), negatives.join(", "))
+}
+
+fn push_unique<'a>(values: &mut Vec<&'a str>, value: &'a str) {
+    if !values.contains(&value) {
+        values.push(value);
+    }
+}
+
+fn ensure_scene_reference_fairness(
+    subjects: &[Id],
+    offered: &[Fragment<'_>],
+    negotiated: &wobu_imagine::Negotiated<'_>,
+) -> CommandResult<()> {
+    let kept: HashSet<(Id, AssetRole)> = negotiated
+        .images()
+        .kept()
+        .filter_map(|fragment| Some((fragment.asset_id()?, fragment.asset_role()?)))
+        .collect();
+    for subject in subjects {
+        let direct: Vec<(Id, AssetRole)> = offered
+            .iter()
+            .copied()
+            .filter(|fragment| {
+                fragment.node_id() == Some(*subject)
+                    && fragment.contributes()
+                    && fragment.is_sendable()
+            })
+            .filter_map(|fragment| Some((fragment.asset_id()?, fragment.asset_role()?)))
+            .collect();
+        if !direct.is_empty() && !direct.iter().any(|reference| kept.contains(reference)) {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "The selected image model cannot keep one identity reference for every scene entity.",
+            )
+            .with_detail(format!("no reference slot remained for {subject}")));
+        }
+    }
+    Ok(())
+}
+
 struct Prepare {
     root: PathBuf,
     project_id: Id,
@@ -1099,13 +1777,9 @@ struct Prepare {
 }
 
 fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
-    let subject = input
-        .nodes
-        .iter()
-        .find(|node| node.id == input.subject_id)
-        .ok_or_else(|| {
-            WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
-        })?;
+    let subject = input.nodes.iter().find(|node| node.id == input.subject_id).ok_or_else(|| {
+        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
+    })?;
     let chosen = input
         .preset_id
         .as_deref()
@@ -1119,23 +1793,14 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         .map(str::trim)
         .filter(|label| !label.is_empty())
         .unwrap_or(chosen.label);
-    let shot = Shot {
-        label: shot_label,
-        weight: input.shot.weight.unwrap_or(1.0).clamp(0.0, 1.0),
-    };
+    let shot = Shot { label: shot_label, weight: input.shot.weight.unwrap_or(1.0).clamp(0.0, 1.0) };
     let slider_values: Vec<(Id, f32)> = input
         .sliders
         .iter()
-        .map(|slider| {
-            (slider.node_id, if slider.muted { 0.0 } else { slider.value })
-        })
+        .map(|slider| (slider.node_id, if slider.muted { 0.0 } else { slider.value }))
         .collect();
-    let muted_nodes: HashSet<Id> = input
-        .sliders
-        .iter()
-        .filter(|slider| slider.muted)
-        .map(|slider| slider.node_id)
-        .collect();
+    let muted_nodes: HashSet<Id> =
+        input.sliders.iter().filter(|slider| slider.muted).map(|slider| slider.node_id).collect();
     let world = World::new(input.nodes.iter());
     let stack = resolve(&world, input.subject_id, Some(shot)).ok_or_else(|| {
         WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
@@ -1150,6 +1815,13 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
     let user_prompt = input.shot.prompt.as_deref().map(str::trim).unwrap_or("");
     let available_nodes: HashSet<Id> =
         stack.sources().iter().filter_map(|source| source.node_id()).collect();
+    let loras = resolve_loras(
+        &input.root,
+        &input.nodes,
+        stack.sources().iter().filter_map(|source| source.node_id()),
+        &input.model,
+        input.backend.as_ref(),
+    );
     let cells = variant_cells(
         subject,
         *chosen,
@@ -1173,6 +1845,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         append_user_prompt(&stack, &mut extracted, user_prompt);
         let negotiated = negotiate(&extracted, cell.aspect, &caps);
         let compiled = compile(negotiated.fragments(), Budget::unlimited());
+        let compiled_prompt = prompt_with_lora_triggers(compiled.prompt(), &loras.weights);
         let mut references = Vec::new();
         for bucket in negotiated.images().buckets() {
             for fragment in bucket.kept() {
@@ -1232,10 +1905,16 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             params.insert("usedLockedSeed".into(), json!(cell.item.seed == locked_seed));
         }
         if let Some(variation) = &cell.variation {
-            params.insert("variation".into(), serde_json::to_value(variation).map_err(|error| {
-                WobuError::new(Code::Internal, "The variant grid metadata could not be encoded.")
+            params.insert(
+                "variation".into(),
+                serde_json::to_value(variation).map_err(|error| {
+                    WobuError::new(
+                        Code::Internal,
+                        "The variant grid metadata could not be encoded.",
+                    )
                     .with_detail(error.to_string())
-            })?);
+                })?,
+            );
         }
         let price = image_price(&input.provider, &input.model, resolution);
         let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
@@ -1244,6 +1923,8 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             "referenceAssetIds".into(),
             json!(references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>()),
         );
+        params.insert("loras".into(), json!(&loras.receipts));
+        params.insert("loraDowngrades".into(), json!(&loras.downgrades));
         if price.is_some() {
             params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
             params.insert("pricingSource".into(), json!(PRICE_SOURCE));
@@ -1253,14 +1934,11 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
                 json!(price.is_some_and(|price| price.conservative_fallback)),
             );
         }
-        let request = ImageRequest::new(
-            input.model.clone(),
-            compiled.prompt(),
-            cell.item.seed,
-            &negotiated,
-        )
-        .with_negative(compiled.negative())
-        .with_references(references);
+        let request =
+            ImageRequest::new(input.model.clone(), &compiled_prompt, cell.item.seed, &negotiated)
+                .with_negative(compiled.negative())
+                .with_references(references)
+                .with_loras(loras.weights.clone());
         plans.push(PlannedImage {
             request,
             cost_usd_micros,
@@ -1271,7 +1949,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
                 preset: cell.preset.id.to_owned(),
                 view_type: cell.item.view.map(|view| view.view_type.to_owned()),
                 user_prompt: user_prompt.to_owned(),
-                compiled_prompt: compiled.prompt().to_owned(),
+                compiled_prompt,
                 negative_prompt: compiled.negative().to_owned(),
                 backend: input.provider.clone(),
                 model: input.model.clone(),
@@ -1313,7 +1991,8 @@ fn append_user_prompt<'a>(
     if prompt.is_empty() {
         return;
     }
-    if let Some(source) = stack.sources().iter().find(|source| source.layer == wobu_core::Layer::Shot)
+    if let Some(source) =
+        stack.sources().iter().find(|source| source.layer == wobu_core::Layer::Shot)
     {
         fragments.push(Fragment::new(
             source,
@@ -1441,10 +2120,7 @@ impl GenerateTask {
             return Ok(());
         }
         let reservation = self.reservation.as_mut().ok_or_else(|| {
-            WobuError::new(
-                Code::Internal,
-                "Paid generation started without a spend reservation.",
-            )
+            WobuError::new(Code::Internal, "Paid generation started without a spend reservation.")
         })?;
         if let Err(error) = reservation.commit(cost_usd_micros) {
             // A receipt was already persisted. Retaining the remaining
@@ -1567,10 +2243,10 @@ impl Task for GenerateTask {
                 }
                 Err(ImageError::Cancelled) => return Outcome::Cancelled,
                 Err(error) => {
-                    if billing_may_be_unknown(&error, outcome.usage, self.requires_billing) {
-                        if let Some(reservation) = self.reservation.as_mut() {
-                            reservation.release_on_drop = false;
-                        }
+                    if billing_may_be_unknown(&error, outcome.usage, self.requires_billing)
+                        && let Some(reservation) = self.reservation.as_mut()
+                    {
+                        reservation.release_on_drop = false;
                     }
                     return Outcome::failed(image_failure(
                         &error,
@@ -1666,13 +2342,11 @@ struct JobProgress {
 
 impl ProgressSink for JobProgress {
     fn step(&mut self, done: u32, total: u32, note: Option<&str>) {
-        let within = if total == 0 { 100 } else { done.min(total) * 100 / total };
+        let within = done.min(total).saturating_mul(100).checked_div(total).unwrap_or(100);
         let overall = self.batch_index as u32 * 100 + within;
         let prefix = format!("Image {}/{}", self.batch_index + 1, self.batch_total);
         let note = note.map_or(prefix.clone(), |note| format!("{prefix} · {note}"));
-        self.ctx.progress(
-            Progress::new(overall, self.batch_total as u32 * 100).with_note(note),
-        );
+        self.ctx.progress(Progress::new(overall, self.batch_total as u32 * 100).with_note(note));
     }
 
     fn preview(&mut self, image: &str, step: Option<u32>) {
@@ -1700,7 +2374,10 @@ fn image_failure(error: &ImageError, usage: ImageUsage, requires_billing: bool) 
             | ImageError::NotAnImage { .. }
             | ImageError::NoMesh
             | ImageError::NotAMesh { .. }
-                if requires_billing => Billed::Unknown,
+                if requires_billing =>
+            {
+                Billed::Unknown
+            }
             _ => Billed::Nothing,
         }
     };
@@ -1713,11 +2390,7 @@ fn image_failure(error: &ImageError, usage: ImageUsage, requires_billing: bool) 
     failure
 }
 
-fn billing_may_be_unknown(
-    error: &ImageError,
-    usage: ImageUsage,
-    requires_billing: bool,
-) -> bool {
+fn billing_may_be_unknown(error: &ImageError, usage: ImageUsage, requires_billing: bool) -> bool {
     !usage.is_billed()
         && requires_billing
         && matches!(
@@ -1760,6 +2433,7 @@ fn image_price(provider: &str, model: &str, resolution: Resolution) -> Option<Pr
     Some(Price { per_image_usd_micros, conservative_fallback })
 }
 
+#[cfg(test)]
 fn cost_estimate(
     provider: &str,
     model: &str,
@@ -1782,12 +2456,10 @@ fn cost_estimate(
 
 fn cost_estimate_prices(prices: Vec<Price>, images: usize) -> Option<CostEstimate> {
     let first = *prices.first()?;
-    let batch_usd_micros = prices
-        .iter()
-        .fold(0_u64, |total, price| total.saturating_add(price.per_image_usd_micros));
-    let varies_by_cell = prices
-        .iter()
-        .any(|price| price.per_image_usd_micros != first.per_image_usd_micros);
+    let batch_usd_micros =
+        prices.iter().fold(0_u64, |total, price| total.saturating_add(price.per_image_usd_micros));
+    let varies_by_cell =
+        prices.iter().any(|price| price.per_image_usd_micros != first.per_image_usd_micros);
     Some(CostEstimate {
         currency: "USD",
         per_image_usd_micros: first.per_image_usd_micros,
@@ -1849,18 +2521,11 @@ impl SpendLock {
                     thread::sleep(Duration::from_millis(5));
                 }
                 Err(error) => {
-                    return Err(spend_io(
-                        "The spend ledger could not be locked.",
-                        &path,
-                        error,
-                    ));
+                    return Err(spend_io("The spend ledger could not be locked.", &path, error));
                 }
             }
         }
-        Err(WobuError::new(
-            Code::Io,
-            "The shared spend ledger is busy. Try Generate again.",
-        ))
+        Err(WobuError::new(Code::Io, "The shared spend ledger is busy. Try Generate again."))
     }
 }
 
@@ -1892,7 +2557,9 @@ impl SpendReservation {
             .spent_usd_micros
             .checked_add(status.reserved_usd_micros)
             .and_then(|used| used.checked_add(amount_usd_micros))
-            .ok_or_else(|| WobuError::new(Code::Invalid, "The project spend total is too large."))?;
+            .ok_or_else(|| {
+                WobuError::new(Code::Invalid, "The project spend total is too large.")
+            })?;
         if committed > ceiling {
             return Err(WobuError::new(
                 Code::SpendCeilingExceeded,
@@ -1900,10 +2567,7 @@ impl SpendReservation {
             )
             .with_detail(format!(
                 "spent={} reserved={} batch={} ceiling={} USD micros",
-                status.spent_usd_micros,
-                status.reserved_usd_micros,
-                amount_usd_micros,
-                ceiling,
+                status.spent_usd_micros, status.reserved_usd_micros, amount_usd_micros, ceiling,
             )));
         }
         let id = new_id();
@@ -1914,12 +2578,7 @@ impl SpendReservation {
             created_at: Utc::now().to_rfc3339(),
         };
         write_reservation_new(&path, &file)?;
-        Ok(SpendReservation {
-            root: root.to_path_buf(),
-            path,
-            file,
-            release_on_drop: true,
-        })
+        Ok(SpendReservation { root: root.to_path_buf(), path, file, release_on_drop: true })
     }
 
     fn commit(&mut self, amount_usd_micros: u64) -> CommandResult<()> {
@@ -1936,11 +2595,7 @@ impl SpendReservation {
             // removing the old file means a crash can only over-reserve, never
             // open a window where concurrent work can overspend.
             let id = new_id();
-            let path = self
-                .root
-                .join(SPEND_DIR)
-                .join("reservations")
-                .join(format!("{id}.json"));
+            let path = self.root.join(SPEND_DIR).join("reservations").join(format!("{id}.json"));
             let replacement = ReservationFile {
                 id,
                 remaining_usd_micros: remaining,
@@ -1996,21 +2651,18 @@ fn spend_status_for_report(root: &Path) -> CommandResult<SpendStatus> {
 
 fn read_spend_status_locked(root: &Path) -> CommandResult<SpendStatus> {
     let (ceiling_usd_micros, receipts) = Project::spend_ledger(root)?;
-    let spent_usd_micros = receipts.into_iter().try_fold(
-        0_u64,
-        |total, generation| {
-            total.checked_add(receipt_cost(&generation)).ok_or_else(|| {
-                WobuError::new(Code::Invalid, "The project spend total is too large.")
-            })
-        },
-    )?;
+    let spent_usd_micros = receipts.into_iter().try_fold(0_u64, |total, generation| {
+        total
+            .checked_add(receipt_cost(&generation))
+            .ok_or_else(|| WobuError::new(Code::Invalid, "The project spend total is too large."))
+    })?;
     let reservations = root.join(SPEND_DIR).join("reservations");
     let mut reserved_usd_micros = 0_u64;
     let mut pending_reservations = 0_usize;
     let mut oldest_reservation_at: Option<String> = None;
-    for entry in std::fs::read_dir(&reservations)
-        .map_err(|error| spend_io("The spend reservations could not be read.", &reservations, error))?
-    {
+    for entry in std::fs::read_dir(&reservations).map_err(|error| {
+        spend_io("The spend reservations could not be read.", &reservations, error)
+    })? {
         let entry = entry.map_err(|error| {
             spend_io("A spend reservation could not be read.", &reservations, error)
         })?;
@@ -2027,9 +2679,10 @@ fn read_spend_status_locked(root: &Path) -> CommandResult<SpendStatus> {
             )
             .with_detail(format!("{}: {error}", path.display()))
         })?;
-        reserved_usd_micros = reserved_usd_micros
-            .checked_add(reservation.remaining_usd_micros)
-            .ok_or_else(|| WobuError::new(Code::Invalid, "The reserved spend total is too large."))?;
+        reserved_usd_micros =
+            reserved_usd_micros.checked_add(reservation.remaining_usd_micros).ok_or_else(|| {
+                WobuError::new(Code::Invalid, "The reserved spend total is too large.")
+            })?;
         pending_reservations += 1;
         if oldest_reservation_at
             .as_ref()
@@ -2071,10 +2724,7 @@ fn spend_io(message: &str, path: &Path, error: std::io::Error) -> WobuError {
 }
 
 fn no_image_provider() -> WobuError {
-    WobuError::new(
-        Code::Invalid,
-        "Choose an image provider in Settings before generating.",
-    )
+    WobuError::new(Code::Invalid, "Choose an image provider in Settings before generating.")
 }
 
 #[cfg(test)]
@@ -2093,10 +2743,8 @@ mod tests {
             std::fs::create_dir(&parent).unwrap();
             let mut project = Project::create(&parent, "Ledger").unwrap();
             project.set_spend_ceiling(Some(ceiling_usd_micros)).unwrap();
-            let node_id = project
-                .create_node(wobu_core::NodeKind::Character, "Kael", None)
-                .unwrap()
-                .id;
+            let node_id =
+                project.create_node(wobu_core::NodeKind::Character, "Kael", None).unwrap().id;
             let root = project.root().to_path_buf();
             drop(project);
             TestProject { parent, root, node_id }
@@ -2111,13 +2759,7 @@ mod tests {
         }
     }
 
-    fn receipt(
-        node_id: Id,
-        backend: &str,
-        model: &str,
-        width: u32,
-        height: u32,
-    ) -> Generation {
+    fn receipt(node_id: Id, backend: &str, model: &str, width: u32, height: u32) -> Generation {
         Generation {
             id: new_id(),
             node_id,
@@ -2166,21 +2808,47 @@ mod tests {
     #[test]
     fn local_is_free_and_unknown_paid_models_fail_high() {
         assert!(image_price(comfy::ID, "anything", Resolution::new(4_096, 4_096)).is_none());
-        let unknown = image_price(gemini::ID, "gemini-future-image", Resolution::new(1_024, 1_024))
-            .unwrap();
+        let unknown =
+            image_price(gemini::ID, "gemini-future-image", Resolution::new(1_024, 1_024)).unwrap();
         assert_eq!(unknown.per_image_usd_micros, 240_000);
         assert!(unknown.conservative_fallback);
     }
 
     #[test]
+    fn lora_triggers_are_deduplicated_and_scene_identity_stays_last() {
+        let loras = vec![
+            LoraWeight {
+                content_hash: "a".repeat(64),
+                provider_name: "first.safetensors".into(),
+                trigger_token: "wobu_kael".into(),
+                strength: 0.8,
+            },
+            LoraWeight {
+                content_hash: "b".repeat(64),
+                provider_name: "second.safetensors".into(),
+                trigger_token: "wobu_kael".into(),
+                strength: 0.7,
+            },
+        ];
+        assert_eq!(prompt_with_lora_triggers("portrait", &loras), "portrait, wobu_kael");
+        assert_eq!(
+            prompt_with_lora_triggers("portrait of wobu_kael", &loras),
+            "portrait of wobu_kael",
+        );
+        assert_eq!(
+            scene_prompt_with_lora_triggers(
+                "Shared world; wide framing; preserve every named identity",
+                &loras,
+            ),
+            "Shared world; wide framing; wobu_kael; preserve every named identity",
+        );
+    }
+
+    #[test]
     fn batch_estimate_and_old_receipts_use_recorded_model_and_size() {
-        let estimate = cost_estimate(
-            gemini::ID,
-            "gemini-3.1-flash-image",
-            Resolution::new(2_048, 2_048),
-            8,
-        )
-        .unwrap();
+        let estimate =
+            cost_estimate(gemini::ID, "gemini-3.1-flash-image", Resolution::new(2_048, 2_048), 8)
+                .unwrap();
         assert_eq!(estimate.batch_usd_micros, 808_000);
 
         let old = receipt(new_id(), gemini::ID, "gemini-3-pro-image", 4_096, 4_096);
@@ -2194,13 +2862,7 @@ mod tests {
 
     #[test]
     fn replay_plan_uses_recorded_request_and_current_price_without_compiling() {
-        let mut original = receipt(
-            new_id(),
-            gemini::ID,
-            "gemini-3.1-flash-image",
-            1_024,
-            1_024,
-        );
+        let mut original = receipt(new_id(), gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
         original.compiled_prompt = "the immutable positive".into();
         original.negative_prompt = "the immutable negative".into();
         original.seed = 77;
@@ -2208,10 +2870,9 @@ mod tests {
         let original_id = original.id;
         let original_snapshot = original.influence_snapshot.clone();
 
-        let caps = GeminiBackend::new("test-key")
-            .unwrap()
-            .capabilities("gemini-3.1-flash-image");
-        let plan = replay_plan(Path::new("."), &[], original, &caps).unwrap();
+        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
+        let backend = GeminiBackend::new("test-key").unwrap();
+        let plan = replay_plan(Path::new("."), &[], original, &caps, &backend).unwrap();
         assert_eq!(plan.request.prompt, "the immutable positive");
         assert_eq!(plan.request.negative, "the immutable negative");
         assert_eq!(plan.request.seed, 77);
@@ -2246,10 +2907,9 @@ mod tests {
                 dropped: false,
             }],
         });
-        let caps = GeminiBackend::new("test-key")
-            .unwrap()
-            .capabilities("gemini-3.1-flash-image");
-        let Err(error) = replay_plan(Path::new("."), &[], original, &caps) else {
+        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
+        let backend = GeminiBackend::new("test-key").unwrap();
+        let Err(error) = replay_plan(Path::new("."), &[], original, &caps, &backend) else {
             panic!("a missing immutable reference must refuse replay")
         };
         assert_eq!(error.code, Code::NoSuchAsset);
@@ -2260,14 +2920,10 @@ mod tests {
     fn variant_cells_change_one_axis_and_report_the_real_output_count() {
         let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
         let chosen = *preset("character_sheet").unwrap();
-        let caps = GeminiBackend::new("test-key")
-            .unwrap()
-            .capabilities("gemini-3.1-flash-image");
+        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
         let available = HashSet::from([subject.id]);
-        let weight_grid = VariantGrid::FragmentWeight {
-            node_id: subject.id,
-            values: vec![0.4, 0.7, 1.0],
-        };
+        let weight_grid =
+            VariantGrid::FragmentWeight { node_id: subject.id, values: vec![0.4, 0.7, 1.0] };
         let weights = variant_cells(
             &subject,
             chosen,
@@ -2284,10 +2940,7 @@ mod tests {
         assert_eq!(weights.len(), 3);
         assert!(weights.iter().all(|cell| cell.item.seed == 42));
         assert_eq!(
-            weights
-                .iter()
-                .map(|cell| cell.slider_values[0].1)
-                .collect::<Vec<_>>(),
+            weights.iter().map(|cell| cell.slider_values[0].1).collect::<Vec<_>>(),
             [0.4, 0.7, 1.0]
         );
         assert!(weights.iter().all(|cell| {
@@ -2311,7 +2964,10 @@ mod tests {
             &caps,
         )
         .unwrap();
-        assert_eq!(seeds.iter().map(|cell| cell.item.seed).collect::<Vec<_>>(), [11, 22, 33, 44, 55]);
+        assert_eq!(
+            seeds.iter().map(|cell| cell.item.seed).collect::<Vec<_>>(),
+            [11, 22, 33, 44, 55]
+        );
 
         let estimate = cost_estimate_prices(
             seeds
@@ -2328,9 +2984,7 @@ mod tests {
     #[test]
     fn named_view_presets_are_refused_as_variant_grids() {
         let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
-        let caps = GeminiBackend::new("test-key")
-            .unwrap()
-            .capabilities("gemini-3.1-flash-image");
+        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
         let grid = VariantGrid::Seed { values: vec![1, 2] };
         let error = variant_cells(
             &subject,
@@ -2367,13 +3021,8 @@ mod tests {
     fn committed_receipt_and_reduced_reservation_are_not_double_counted() {
         let project = TestProject::new(200_000);
         let mut reservation = SpendReservation::create(&project.root, 134_000).unwrap();
-        let mut generation = receipt(
-            project.node_id,
-            gemini::ID,
-            "gemini-3.1-flash-image",
-            1_024,
-            1_024,
-        );
+        let mut generation =
+            receipt(project.node_id, gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
         generation.params.insert("estimatedCostUsdMicros".into(), json!(67_000));
         let mut store = Project::open(&project.root).unwrap();
         store.record_generation(generation).unwrap();

@@ -46,6 +46,7 @@ pub fn from_rel_string(root: &Path, rel: &str) -> PathBuf {
 
 /// Filesystem types where `inotify`/`FSEvents` do not observe writes made by
 /// other hosts, and where SQLite's locking is unreliable.
+#[cfg(target_os = "linux")]
 const NETWORK_FS: &[&str] = &[
     "nfs",
     "nfs4",

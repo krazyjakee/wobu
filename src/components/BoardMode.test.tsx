@@ -84,12 +84,14 @@ beforeEach(() => {
       return Promise.resolve(
         buildNode({
           id: String(args?.nodeId),
-          assetLinks: [{
-            assetId: String(args?.assetId),
-            role: args?.role as 'mood',
-            weight: 1,
-            enabled: true,
-          }],
+          assetLinks: [
+            {
+              assetId: String(args?.assetId),
+              role: args?.role as 'mood',
+              weight: 1,
+              enabled: true,
+            },
+          ],
         }) satisfies WobuNode,
       )
     }
@@ -98,7 +100,16 @@ beforeEach(() => {
   })
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 })
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 })
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  )
+  // jsdom does not provide DragEvent, so Testing Library otherwise creates a
+  // plain Event whose client coordinates are always zero.
+  vi.stubGlobal('DragEvent', MouseEvent)
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 
@@ -120,7 +131,9 @@ describe('BoardMode', () => {
     assets = Array.from({ length: 80 }, (_, index) => asset(index))
     const view = open()
 
-    await waitFor(() => expect(view.container.querySelectorAll('.board-asset').length).toBeGreaterThan(0))
+    await waitFor(() =>
+      expect(view.container.querySelectorAll('.board-asset').length).toBeGreaterThan(0),
+    )
     expect(view.container.querySelectorAll('.board-asset').length).toBeLessThan(assets.length)
     expect(screen.getByText(/of 80 images in view/)).toBeInTheDocument()
     expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
@@ -164,12 +177,14 @@ describe('BoardMode', () => {
     fireEvent.change(roleSelect, { target: { value: 'pose' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Attach reference' }))
 
-    await waitFor(() => expect(h.invoke).toHaveBeenCalledWith('asset_link', {
-      nodeId: 'kael',
-      assetId: 'asset-0',
-      role: 'pose',
-      weight: undefined,
-    }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_link', {
+        nodeId: 'kael',
+        assetId: 'asset-0',
+        role: 'pose',
+        weight: undefined,
+      }),
+    )
   })
 
   it('does not invent a selected-node target and blocks writes when read-only', async () => {

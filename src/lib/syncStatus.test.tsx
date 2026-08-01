@@ -63,9 +63,9 @@ describe('sync status events', () => {
     await waitFor(() => expect(h.listeners.size).toBe(2))
 
     act(() => h.listeners.get('sync:state')?.({ payload: snapshot('connecting') }))
-    expect(screen.getByText('connecting')).toBeTruthy()
+    expect(await screen.findByText('connecting')).toBeTruthy()
 
     act(() => h.listeners.get('sync:peer')?.({ payload: snapshot('syncing') }))
-    expect(screen.getByText('syncing')).toBeTruthy()
+    expect(await screen.findByText('syncing')).toBeTruthy()
   })
 })

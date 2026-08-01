@@ -58,7 +58,9 @@ function QueueView({ queue, onBack }: { queue: QueueSnapshot; onBack: () => void
             <h3>Job queue</h3>
             <p>Live backend work and the recent outcomes retained by Wobu.</p>
           </div>
-          <button className="btn" onClick={onBack}>Back to Library</button>
+          <button className="btn" onClick={onBack}>
+            Back to Library
+          </button>
         </div>
         {queue.jobs.length === 0 ? (
           <p className="queue-empty">Queue 0 · no recent jobs</p>

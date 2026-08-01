@@ -95,6 +95,30 @@ pub struct EnhanceStamp {
     pub sources: Vec<SourceStamp>,
 }
 
+/// One immutable, project-owned entity fine-tune.
+///
+/// The content hash and relative path identify the canonical weights. The
+/// provider name is deliberately only an application handle: local ComfyUI
+/// may install the same bytes under a friendly filename, but moving the project
+/// never turns that installation-local name into the source of truth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoraPin {
+    pub hash: String,
+    pub rel_path: String,
+    pub bytes: u64,
+    pub trainer: String,
+    pub protocol: u32,
+    pub base_model: String,
+    pub model_family: String,
+    pub provider_name: String,
+    pub trigger_token: String,
+    #[serde(default)]
+    pub input_asset_hashes: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub strength: f32,
+}
+
 /// A single description section. Prose sections are [`SectionValue::Text`];
 /// `palette`, `signature` and `never` are [`SectionValue::List`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -219,6 +243,9 @@ pub struct Node {
     /// does not explicitly re-roll, so collaborators get the same baseline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locked_seed: Option<u64>,
+    /// Automatically offered to compatible local image requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lora: Option<LoraPin>,
     #[serde(default)]
     pub links: Vec<Link>,
     /// Reference images attached to this entity, each with a role that decides
@@ -256,6 +283,7 @@ impl Node {
             tags: Vec::new(),
             cover_asset_id: None,
             locked_seed: None,
+            lora: None,
             links: Vec::new(),
             asset_links: Vec::new(),
             created_at: now,

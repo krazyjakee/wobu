@@ -4,6 +4,7 @@
 use crate::budget::{DropReason, Dropped};
 use crate::capability::{ImageBudget, RefBucket, Refs};
 use crate::fragment::Fragment;
+use wobu_core::Id;
 
 /// A reference image that is still in the running, with the two numbers the
 /// budget needs precomputed.
@@ -154,6 +155,32 @@ impl<'a> CompiledImages<'a> {
 /// renders something nobody described, a request with no reference images is an
 /// ordinary request.
 pub fn compile_images<'a>(fragments: &[Fragment<'a>], budget: ImageBudget) -> CompiledImages<'a> {
+    compile_images_for_subjects(fragments, budget, &[])
+}
+
+/// Budget a scene while giving every entity a fair chance to keep an identity
+/// reference in each provider bucket.
+///
+/// The ordinary single-subject compiler remains byte-for-byte the same. Scene
+/// composition adds two rules: an exact `(asset, role)` duplicate occupies one
+/// slot, and each named subject's strongest direct reference is protected before
+/// remaining slots are filled by weight. If a provider cap is smaller than the
+/// number of protected anchors, the lightest anchors still appear in `dropped`;
+/// the scene caller can then refuse explicitly instead of sending a request that
+/// silently lost an entity.
+pub fn compile_scene_images<'a>(
+    fragments: &[Fragment<'a>],
+    budget: ImageBudget,
+    subjects: &[Id],
+) -> CompiledImages<'a> {
+    compile_images_for_subjects(fragments, budget, subjects)
+}
+
+fn compile_images_for_subjects<'a>(
+    fragments: &[Fragment<'a>],
+    budget: ImageBudget,
+    subjects: &[Id],
+) -> CompiledImages<'a> {
     // The buckets this backend counts separately, which is the shape of the
     // report. A `Vec` of at most three, searched linearly: nothing here may
     // answer differently from one run to the next, and a hashed map iterates in
@@ -183,13 +210,29 @@ pub fn compile_images<'a>(fragments: &[Fragment<'a>], budget: ImageBudget) -> Co
             report.push((index, metered, DropReason::Silenced));
             continue;
         }
+        if !subjects.is_empty() {
+            let duplicate = pools[pool].iter().position(|candidate| {
+                candidate.fragment.asset_id() == fragment.asset_id()
+                    && candidate.fragment.asset_role() == fragment.asset_role()
+            });
+            if let Some(position) = duplicate {
+                if fragment.weight() >= pools[pool][position].weight {
+                    report.push((pools[pool][position].index, metered, DropReason::Budget));
+                    pools[pool][position] =
+                        Candidate { index, fragment: *fragment, weight: fragment.weight() };
+                } else {
+                    report.push((index, metered, DropReason::Budget));
+                }
+                continue;
+            }
+        }
         pools[pool].push(Candidate { index, fragment: *fragment, weight: fragment.weight() });
     }
 
     let mut buckets: Vec<Bucket<'a>> = Vec::new();
     for (bucket, pool) in declared.iter().zip(pools) {
         let (_, cap) = budget.meter(*bucket);
-        let kept = trim(pool, cap, *bucket, &mut report);
+        let kept = trim(pool, cap, *bucket, subjects, &mut report);
         buckets.push(Bucket { bucket: *bucket, cap, kept, dropped: Vec::new() });
     }
 
@@ -223,12 +266,32 @@ fn trim<'a>(
     candidates: Vec<Candidate<'a>>,
     cap: Refs,
     bucket: RefBucket,
+    subjects: &[Id],
     report: &mut Vec<(usize, RefBucket, DropReason)>,
 ) -> Vec<Fragment<'a>> {
     let mut order: Vec<(f32, usize)> =
         candidates.iter().enumerate().map(|(position, c)| (c.weight, position)).collect();
     order.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
 
+    let mut protected = vec![false; candidates.len()];
+    for subject in subjects {
+        let best = candidates
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| candidate.fragment.node_id() == Some(*subject))
+            .max_by(|left, right| {
+                left.1.weight.total_cmp(&right.1.weight).then(left.0.cmp(&right.0))
+            })
+            .map(|(position, _)| position);
+        if let Some(position) = best {
+            protected[position] = true;
+        }
+    }
+
+    // Unprotected references pay first. Protected anchors are considered only
+    // when the provider cap makes retaining one per subject impossible, which
+    // is the explicit refusal seam documented on `compile_scene_images`.
+    order.sort_by_key(|(_, position)| protected[*position]);
     let mut doomed = vec![false; candidates.len()];
     let mut remaining = candidates.len();
     for (_, position) in order {
@@ -249,7 +312,7 @@ mod tests {
     use crate::capability::image_budget;
     use crate::fragment::FragmentBody;
     use crate::stack::{Origin, Reached, ResolvedSource};
-    use wobu_core::{AssetRole, Id, Layer};
+    use wobu_core::{AssetRole, Id, Layer, Node, NodeKind};
 
     fn shot_source() -> ResolvedSource<'static> {
         ResolvedSource {
@@ -268,6 +331,23 @@ mod tests {
             FragmentBody::Asset { id: Id::nil(), role },
             1.0,
             role.target(),
+        )
+    }
+
+    fn subject_reference<'a>(node: &'a Node, asset: Id, weight: f32) -> Fragment<'a> {
+        let source = ResolvedSource {
+            layer: Layer::Subject,
+            origin: Origin::Node(node),
+            reached: Reached::Subject,
+            distance: 0,
+            weight: 1.0,
+        };
+        Fragment::new(
+            &source,
+            AssetRole::FullRef.as_str(),
+            FragmentBody::Asset { id: asset, role: AssetRole::FullRef },
+            weight,
+            AssetRole::FullRef.target(),
         )
     }
 
@@ -317,5 +397,30 @@ mod tests {
         assert_eq!(compiled.kept().count(), 0);
         assert_eq!(compiled.dropped().count(), 0);
         assert_eq!(compiled.buckets().len(), 3, "the counters are the backend's, not the stack's");
+    }
+
+    #[test]
+    fn a_scene_protects_one_direct_reference_per_subject_before_filling_by_weight() {
+        let first = Node::new(NodeKind::Character, "First").unwrap();
+        let second = Node::new(NodeKind::Character, "Second").unwrap();
+        let first_best = Id::from(1_u128);
+        let first_extra = Id::from(2_u128);
+        let second_only = Id::from(3_u128);
+        let refs = [
+            subject_reference(&first, first_best, 1.0),
+            subject_reference(&first, first_extra, 0.9),
+            subject_reference(&second, second_only, 0.1),
+        ];
+        let budget = ImageBudget {
+            objects: Refs::new(0),
+            characters: Some(Refs::new(0)),
+            style_refs: Some(Refs::new(2)),
+        };
+
+        let compiled = compile_scene_images(&refs, budget, &[first.id, second.id]);
+        let kept: Vec<_> = compiled.kept().filter_map(Fragment::asset_id).collect();
+
+        assert_eq!(kept, [first_best, second_only]);
+        assert_eq!(compiled.dropped().count(), 1);
     }
 }

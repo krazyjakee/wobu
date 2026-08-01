@@ -5,12 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import * as api from '../../lib/api'
 import type { Asset, AssetLink, AssetRole, WobuNode } from '../../lib/api'
 import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
-import {
-  useAssetThumb,
-  useAssets,
-  useLinkAsset,
-  useSetCoverAsset,
-} from '../../lib/queries'
+import { useAssetThumb, useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
 type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed'
@@ -22,8 +17,7 @@ type ImportItem = {
   deduped?: boolean
 }
 type ImportInput =
-  | { source: 'path'; name: string; path: string }
-  | { source: 'file'; name: string; file: File }
+  { source: 'path'; name: string; path: string } | { source: 'file'; name: string; file: File }
 
 const DEFAULT_ROLE: AssetRole = 'full_ref'
 const TILE_MIN = 196
@@ -71,9 +65,7 @@ export function ReferencesPane({
   }
 
   const updateImport = (id: number, patch: Partial<ImportItem>) => {
-    setImports((current) =>
-      current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    )
+    setImports((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
 
   const importInputs = async (inputs: ImportInput[]) => {
@@ -84,50 +76,52 @@ export function ReferencesPane({
     }))
     setImports((current) => [...batch.map(({ item }) => item), ...current])
 
-    importChain.current = importChain.current.catch(() => undefined).then(async () => {
-      try {
-        await settleLinkAutosave()
-      } catch (error) {
-        for (const { item } of batch) {
-          updateImport(item.id, {
-            state: 'failed',
-            error: `Could not attach: ${api.errorMessage(error)}`,
-          })
-        }
-        return
-      }
-      // Sequential attachment is intentional. Each link is a guarded edit to
-      // the same Markdown file; concurrent saves would race one another and
-      // turn a successful forty-file drop into conflicts created by ourselves.
-      for (const { input, item } of batch) {
-        let imported = false
+    importChain.current = importChain.current
+      .catch(() => undefined)
+      .then(async () => {
         try {
-          updateImport(item.id, { state: 'importing' })
-          const result =
-            input.source === 'path'
-              ? await api.assetImport(input.path, 'reference')
-              : await api.assetImportBytes(
-                  new Uint8Array(await input.file.arrayBuffer()),
-                  'reference',
-                )
-          imported = true
-          setImportedAssets((current) => ({ ...current, [result.asset.id]: result.asset }))
-          updateImport(item.id, { state: 'linking', deduped: result.deduped })
-          const saved = await linkAsset.mutateAsync({
-            nodeId: node.id,
-            assetId: result.asset.id,
-            role: DEFAULT_ROLE,
-          })
-          setLinks(saved.assetLinks)
-          updateImport(item.id, { state: 'done' })
+          await settleLinkAutosave()
         } catch (error) {
-          updateImport(item.id, {
-            state: 'failed',
-            error: `${imported ? 'Imported, but could not attach' : 'Import failed'}: ${api.errorMessage(error)}`,
-          })
+          for (const { item } of batch) {
+            updateImport(item.id, {
+              state: 'failed',
+              error: `Could not attach: ${api.errorMessage(error)}`,
+            })
+          }
+          return
         }
-      }
-    })
+        // Sequential attachment is intentional. Each link is a guarded edit to
+        // the same Markdown file; concurrent saves would race one another and
+        // turn a successful forty-file drop into conflicts created by ourselves.
+        for (const { input, item } of batch) {
+          let imported = false
+          try {
+            updateImport(item.id, { state: 'importing' })
+            const result =
+              input.source === 'path'
+                ? await api.assetImport(input.path, 'reference')
+                : await api.assetImportBytes(
+                    new Uint8Array(await input.file.arrayBuffer()),
+                    'reference',
+                  )
+            imported = true
+            setImportedAssets((current) => ({ ...current, [result.asset.id]: result.asset }))
+            updateImport(item.id, { state: 'linking', deduped: result.deduped })
+            const saved = await linkAsset.mutateAsync({
+              nodeId: node.id,
+              assetId: result.asset.id,
+              role: DEFAULT_ROLE,
+            })
+            setLinks(saved.assetLinks)
+            updateImport(item.id, { state: 'done' })
+          } catch (error) {
+            updateImport(item.id, {
+              state: 'failed',
+              error: `${imported ? 'Imported, but could not attach' : 'Import failed'}: ${api.errorMessage(error)}`,
+            })
+          }
+        }
+      })
     await importChain.current
   }
 
@@ -188,7 +182,11 @@ export function ReferencesPane({
 
   const receiveFiles = (files: FileList | File[]) => {
     void importInputs(
-      Array.from(files).map((file) => ({ source: 'file', name: file.name || 'Pasted image', file })),
+      Array.from(files).map((file) => ({
+        source: 'file',
+        name: file.name || 'Pasted image',
+        file,
+      })),
     )
   }
 
@@ -214,7 +212,8 @@ export function ReferencesPane({
       }}
       onDragLeave={(event) => {
         if (readOnly) return
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false)
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setDraggingFiles(false)
       }}
       onDrop={(event) => {
         if (readOnly) return
@@ -249,12 +248,12 @@ export function ReferencesPane({
         </button>
       </header>
 
-      {imports.length > 0 && (
-        <ImportReport items={imports} onClear={() => setImports([])} />
-      )}
+      {imports.length > 0 && <ImportReport items={imports} onClear={() => setImports([])} />}
 
       {assets.isError && (
-        <p className="references-error">Could not read the asset library: {api.errorMessage(assets.error)}</p>
+        <p className="references-error">
+          Could not read the asset library: {api.errorMessage(assets.error)}
+        </p>
       )}
 
       <VirtualReferenceGrid
@@ -353,7 +352,9 @@ function VirtualReferenceGrid({
     return (
       <div className="references-empty">
         <h3>No references yet</h3>
-        <p>Drop images here or paste from the clipboard to build this entity&apos;s visual canon.</p>
+        <p>
+          Drop images here or paste from the clipboard to build this entity&apos;s visual canon.
+        </p>
       </div>
     )
   }
@@ -382,8 +383,9 @@ function VirtualReferenceGrid({
               isCover={coverAssetId === link.assetId}
               readOnly={readOnly}
               usedRoles={links
-                .filter((candidate, candidateIndex) =>
-                  candidate.assetId === link.assetId && candidateIndex !== index,
+                .filter(
+                  (candidate, candidateIndex) =>
+                    candidate.assetId === link.assetId && candidateIndex !== index,
                 )
                 .map((candidate) => candidate.role)}
               onUpdate={(patch) => {
@@ -502,7 +504,11 @@ function ReferenceTile({
           <output>{link.weight.toFixed(2)}</output>
         </label>
         <div className="reference-actions">
-          <button type="button" disabled={readOnly || index === 0} onClick={() => onMove(index - 1)}>
+          <button
+            type="button"
+            disabled={readOnly || index === 0}
+            onClick={() => onMove(index - 1)}
+          >
             ←
           </button>
           <button
@@ -512,7 +518,11 @@ function ReferenceTile({
           >
             →
           </button>
-          <button type="button" disabled={readOnly} onClick={() => onUpdate({ enabled: !link.enabled })}>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => onUpdate({ enabled: !link.enabled })}
+          >
             {link.enabled ? 'Mute' : 'Unmute'}
           </button>
           <button type="button" disabled={readOnly} onClick={onCover}>
@@ -523,7 +533,9 @@ function ReferenceTile({
           </button>
         </div>
       </div>
-      <small>{asset ? `${asset.width}×${asset.height} · ${formatBytes(asset.bytes)}` : link.assetId}</small>
+      <small>
+        {asset ? `${asset.width}×${asset.height} · ${formatBytes(asset.bytes)}` : link.assetId}
+      </small>
     </article>
   )
 }
@@ -537,9 +549,7 @@ function importLabel(item: ImportItem): string {
 }
 
 function roleLabel(role: AssetRole): string {
-  return role === 'full_ref'
-    ? 'Full reference'
-    : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
+  return role === 'full_ref' ? 'Full reference' : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
 }
 
 function fileName(path: string): string {

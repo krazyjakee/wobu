@@ -718,6 +718,24 @@ Consequences the user can actually see:
 - Aspect ratios the backend doesn't support don't appear in the dropdown.
 - Per-role reference caps drive the image budget, so the Inspector can say `3/3 style refs`.
 
+### Local per-entity LoRA protocol
+
+Training is local-only and uses the fixed executable `wobu-lora-trainer`. Wobu first runs
+`capabilities --json` (protocol version 1, supported model name/family pairs, maximum inputs and
+whether the helper can install into ComfyUI), then runs `train --manifest <path> --output <path>`.
+The manifest and hash-verified image copies live in an owner-private project staging directory;
+stdout is bounded newline-delimited JSON for progress and one result. Cancellation kills the child
+and no node pin is published. Output must be a regular non-symlink safetensors file no larger than
+2 GB and is published at `assets/loras/<prefix>/<blake3>.safetensors` before a guarded node save.
+
+The helper's installed-LoRA list is advisory UI status only. Generation connects to ComfyUI and
+uses its real `/object_info` model family, `LoraLoader` class and filename inventory. Compatible
+pins from the resolved stack form an ordered `ImageRequest.loras` vector; checkpoint and Flux UNET
+graphs chain loaders and rewire every model/CLIP consumer. Receipts store the applied vector and
+each downgrade independently. Replay re-hashes the project blobs and requires the recorded
+provider filenames to remain loadable; if exact application is impossible it refuses instead of
+silently replaying without the weights.
+
 ## Cost and consent
 
 BYOK means the user pays per call, so the app must never surprise them:

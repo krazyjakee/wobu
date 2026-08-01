@@ -191,11 +191,7 @@ pub struct AttributeDef {
 }
 
 const fn attribute(key: &'static str, label: &'static str) -> AttributeDef {
-    AttributeDef {
-        key,
-        label,
-        value_kind: AttributeValueKind::Text,
-    }
+    AttributeDef { key, label, value_kind: AttributeValueKind::Text }
 }
 
 const fn text(key: &'static str, label: &'static str) -> SectionDef {

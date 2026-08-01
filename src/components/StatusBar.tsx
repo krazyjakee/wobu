@@ -72,8 +72,14 @@ export function StatusBar({
           />
           <span>sync · {sync.state}</span>
           {connectedText(sync.peers) && <span>· {connectedText(sync.peers)}</span>}
-          {last && <span>· last synced with {last.alias} · {relativeTime(last.at, now)}</span>}
-          <span className="sync-caveat">· peer edits arrive only while both people run Wobu · no seed node</span>
+          {last && (
+            <span>
+              · last synced with {last.alias} · {relativeTime(last.at, now)}
+            </span>
+          )}
+          <span className="sync-caveat">
+            · peer edits arrive only while both people run Wobu · no seed node
+          </span>
         </>
       )}
 

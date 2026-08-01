@@ -313,7 +313,11 @@
   min-height: 0;
   overflow: auto;
   border-top: 1px solid var(--border);
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-faint) 18%, transparent) 0.7px, transparent 0.8px);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--text-faint) 18%, transparent) 0.7px,
+    transparent 0.8px
+  );
   background-size: 14px 14px;
 }
 .graph-canvas {
@@ -341,7 +345,9 @@
   stroke: var(--accent);
   stroke-width: 1.5;
   opacity: 0.58;
-  transition: opacity 0.12s, stroke-width 0.12s;
+  transition:
+    opacity 0.12s,
+    stroke-width 0.12s;
 }
 .graph-edge.is-parent {
   stroke: var(--text-faint);
@@ -379,7 +385,10 @@
   color: var(--text-dim);
   text-align: left;
   box-shadow: 0 2px 8px color-mix(in srgb, #000 18%, transparent);
-  transition: opacity 0.12s, border-color 0.12s, background 0.12s;
+  transition:
+    opacity 0.12s,
+    border-color 0.12s,
+    background 0.12s;
 }
 .graph-node:hover,
 .graph-node:focus-visible {

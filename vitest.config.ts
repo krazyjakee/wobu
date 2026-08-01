@@ -16,6 +16,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // The UI suites are jsdom-heavy. Bounding concurrency avoids starving
+    // React Query notifications and turning one-second DOM waits into flakes.
+    maxWorkers: 4,
     // `globals: false` — every `describe`/`it`/`expect` is imported. It keeps
     // the test files honest about what they depend on and means tsc type-checks
     // them with no extra `types` entry in tsconfig.json.

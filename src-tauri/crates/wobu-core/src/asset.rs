@@ -222,6 +222,21 @@ pub fn mesh_path(hash: &str) -> String {
     format!("assets/meshes/{}/{}.glb", &hash[..2], hash)
 }
 
+/// Project-owned LoRA weights use the same immutable, sharded layout as image
+/// and mesh blobs. The provider-facing installation name is metadata; this
+/// relative path and its content hash remain the canonical copy.
+pub fn content_hash_valid(hash: &str) -> bool {
+    hash.len() == 64
+        && hash.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// Fallible because LoRA metadata is editable Markdown. Image/mesh paths are
+/// derived from hashes Wobu itself indexed; a pin may contain any text and may
+/// never be allowed to panic a preview or compiler by slicing a short string.
+pub fn lora_path(hash: &str) -> Option<String> {
+    content_hash_valid(hash).then(|| format!("assets/loras/{}/{}.safetensors", &hash[..2], hash))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,10 +247,17 @@ mod tests {
         assert_eq!(original_path(hash, "png"), format!("assets/originals/a3/{hash}.png"));
         assert_eq!(thumb_path(hash), format!("assets/thumbs/a3/{hash}.webp"));
         assert_eq!(mesh_path(hash), format!("assets/meshes/a3/{hash}.glb"));
-        for p in [original_path(hash, "png"), thumb_path(hash), mesh_path(hash)] {
+        assert_eq!(lora_path(hash), Some(format!("assets/loras/a3/{hash}.safetensors")));
+        for p in [
+            original_path(hash, "png"),
+            thumb_path(hash),
+            mesh_path(hash),
+            lora_path(hash).unwrap(),
+        ] {
             assert!(!p.starts_with('/'), "must be project-relative");
             assert!(!p.contains('\\'), "must use forward slashes on every platform");
         }
+        assert_eq!(lora_path("x"), None);
     }
 
     #[test]

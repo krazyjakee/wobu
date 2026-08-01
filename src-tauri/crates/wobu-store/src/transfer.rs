@@ -16,7 +16,7 @@ use wobu_core::{AssetKind, Id, Node, NodeKind, kind_def};
 use crate::error::{Error, Result};
 use crate::{Project, atomic, paths};
 
-pub const TRANSFER_VERSION: u32 = 1;
+pub const TRANSFER_VERSION: u32 = 2;
 
 /// One root the source project can export. Selecting it includes descendants
 /// through `parent_id`; influence links do not pull unrelated entities in.
@@ -30,6 +30,8 @@ pub struct TransferCandidate {
     pub reference_count: usize,
     pub external_link_count: usize,
     pub missing_asset_count: usize,
+    pub lora_count: usize,
+    pub missing_lora_count: usize,
     pub replaces_singleton: bool,
 }
 
@@ -41,8 +43,6 @@ pub struct TransferPreview {
     pub source_project_name: String,
     pub default_root_id: Option<Id>,
     pub candidates: Vec<TransferCandidate>,
-    /// Reserved in the versioned envelope for project-pinned LoRAs. No such
-    /// field exists in today's project schema, so this is honestly empty.
     pub pinned_loras: Vec<String>,
     pub lora_note: String,
 }
@@ -62,6 +62,8 @@ pub struct TransferOutcome {
     pub pending_node_ids: Vec<Id>,
     pub reference_count: usize,
     pub deduped_reference_count: usize,
+    pub lora_count: usize,
+    pub deduped_lora_count: usize,
     pub dropped_external_link_count: usize,
     pub replaced_singleton: bool,
     pub conflict_paths: Vec<String>,
@@ -75,6 +77,12 @@ pub struct StagedAsset {
     pub(crate) bytes: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
+pub struct StagedLora {
+    pub(crate) hash: String,
+    pub(crate) bytes: Vec<u8>,
+}
+
 /// Fully self-contained input to the destination apply. Public because the
 /// shell stages it off the destination lock, but constructible only here.
 #[derive(Debug, Clone)]
@@ -84,6 +92,7 @@ pub struct TransferBundle {
     pub(crate) root_id: Id,
     pub(crate) nodes: Vec<Node>,
     pub(crate) assets: Vec<StagedAsset>,
+    pub(crate) loras: Vec<StagedLora>,
     pub(crate) external_link_count: usize,
     pub(crate) replaces_singleton: bool,
 }
@@ -103,15 +112,19 @@ pub fn preview(source: &Path) -> Result<TransferPreview> {
             .filter(|asset| paths::from_rel_string(project.root(), &asset.rel_path).is_file())
             .map(|asset| asset.id)
             .collect();
+        let available_loras: HashSet<String> = nodes
+            .iter()
+            .filter_map(|node| node.lora.as_ref())
+            .filter(|pin| valid_lora_path(project.root(), pin))
+            .map(|pin| pin.hash.clone())
+            .collect();
 
         let candidates = nodes
             .iter()
-            .map(|root| candidate(root, &nodes, &available))
+            .map(|root| candidate(root, &nodes, &available, &available_loras))
             .collect();
-        let default_root_id = nodes
-            .iter()
-            .find(|node| node.kind == NodeKind::StyleGuide)
-            .map(|node| node.id);
+        let default_root_id =
+            nodes.iter().find(|node| node.kind == NodeKind::StyleGuide).map(|node| node.id);
 
         Ok(TransferPreview {
             version: TRANSFER_VERSION,
@@ -119,8 +132,11 @@ pub fn preview(source: &Path) -> Result<TransferPreview> {
             source_project_name: project.meta().name.clone(),
             default_root_id,
             candidates,
-            pinned_loras: Vec::new(),
-            lora_note: "ComfyUI LoRAs are installed on this computer, not stored in a Wobu project, so they are not copied.".to_string(),
+            pinned_loras: nodes
+                .iter()
+                .filter_map(|node| node.lora.as_ref().map(|pin| format!("{} · {}", node.name, pin.hash)))
+                .collect(),
+            lora_note: "Project-owned LoRA weights in the selected subtree are hash-verified and copied; their local ComfyUI installation is rechecked on the destination machine.".to_string(),
         })
     })
 }
@@ -138,16 +154,10 @@ pub fn stage(source: &Path, root_id: Id) -> Result<TransferBundle> {
         };
         let replaces_singleton = kind_def(root.kind).singleton;
         let selected = selected_ids(root_id, &all);
-        let nodes: Vec<Node> = all
-            .into_iter()
-            .filter(|node| selected.contains(&node.id))
-            .collect();
+        let nodes: Vec<Node> = all.into_iter().filter(|node| selected.contains(&node.id)).collect();
         let referenced = referenced_assets(&nodes);
-        let indexed: HashMap<Id, _> = project
-            .list_assets()?
-            .into_iter()
-            .map(|asset| (asset.id, asset))
-            .collect();
+        let indexed: HashMap<Id, _> =
+            project.list_assets()?.into_iter().map(|asset| (asset.id, asset)).collect();
         let mut assets = Vec::with_capacity(referenced.len());
         for id in referenced {
             let asset = indexed.get(&id).ok_or_else(|| Error::NoSuchAsset(id.to_string()))?;
@@ -159,6 +169,33 @@ pub fn stage(source: &Path, root_id: Id) -> Result<TransferBundle> {
             }
             crate::assets::validate_import(&bytes)?;
             assets.push(StagedAsset { id, kind: asset.kind, bytes });
+        }
+        let mut loras = Vec::new();
+        let mut seen_loras = HashSet::new();
+        for pin in nodes.iter().filter_map(|node| node.lora.as_ref()) {
+            if !seen_loras.insert(pin.hash.clone()) {
+                continue;
+            }
+            let expected = wobu_core::asset::lora_path(&pin.hash).ok_or_else(|| {
+                Error::InvalidLora("the pin hash is not 64 lowercase hex characters".into())
+            })?;
+            if pin.rel_path != expected {
+                return Err(Error::InvalidLora("the pin path is not derived from its hash".into()));
+            }
+            let path = paths::from_rel_string(project.root(), &pin.rel_path);
+            let metadata =
+                std::fs::symlink_metadata(&path).map_err(|error| Error::io(&path, error))?;
+            if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+                return Err(Error::InvalidLora("the pinned weight is not a regular file".into()));
+            }
+            let bytes = std::fs::read(&path).map_err(|error| Error::io(&path, error))?;
+            if bytes.len() as u64 != pin.bytes || atomic::hash_bytes(&bytes) != pin.hash {
+                return Err(Error::InvalidLora(
+                    "the pinned weight failed its size or hash check".into(),
+                ));
+            }
+            crate::lora::validate(&bytes)?;
+            loras.push(StagedLora { hash: pin.hash.clone(), bytes });
         }
 
         let external_link_count = nodes
@@ -172,16 +209,24 @@ pub fn stage(source: &Path, root_id: Id) -> Result<TransferBundle> {
             root_id,
             nodes,
             assets,
+            loras,
             external_link_count,
             replaces_singleton,
         })
     })
 }
 
-fn candidate(root: &Node, all: &[Node], available: &HashSet<Id>) -> TransferCandidate {
+fn candidate(
+    root: &Node,
+    all: &[Node],
+    available: &HashSet<Id>,
+    available_loras: &HashSet<String>,
+) -> TransferCandidate {
     let selected = selected_ids(root.id, all);
     let nodes: Vec<&Node> = all.iter().filter(|node| selected.contains(&node.id)).collect();
     let referenced = referenced_assets_ref(&nodes);
+    let loras: HashSet<&str> =
+        nodes.iter().filter_map(|node| node.lora.as_ref().map(|pin| pin.hash.as_str())).collect();
     TransferCandidate {
         root_id: root.id,
         kind: root.kind,
@@ -194,8 +239,28 @@ fn candidate(root: &Node, all: &[Node], available: &HashSet<Id>) -> TransferCand
             .filter(|link| !selected.contains(&link.to_id))
             .count(),
         missing_asset_count: referenced.difference(available).count(),
+        lora_count: loras.len(),
+        missing_lora_count: loras.iter().filter(|hash| !available_loras.contains(**hash)).count(),
         replaces_singleton: kind_def(root.kind).singleton,
     }
+}
+
+fn valid_lora_path(root: &Path, pin: &wobu_core::LoraPin) -> bool {
+    let Some(expected) = wobu_core::asset::lora_path(&pin.hash) else {
+        return false;
+    };
+    if pin.rel_path != expected {
+        return false;
+    }
+    let path = paths::from_rel_string(root, &pin.rel_path);
+    std::fs::symlink_metadata(&path)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_file() && !metadata.file_type().is_symlink())
+        .filter(|metadata| metadata.len() == pin.bytes)
+        .and_then(|_| std::fs::read(path).ok())
+        .is_some_and(|bytes| {
+            atomic::hash_bytes(&bytes) == pin.hash && crate::lora::validate(&bytes).is_ok()
+        })
 }
 
 fn selected_ids(root: Id, all: &[Node]) -> HashSet<Id> {
@@ -228,9 +293,15 @@ fn referenced_assets_ref(nodes: &[&Node]) -> HashSet<Id> {
 
 fn with_source<T>(source: &Path, f: impl FnOnce(&mut Project) -> Result<T>) -> Result<T> {
     let canonical = canonical(source)?;
-    let scratch = std::env::temp_dir().join(format!("wobu-transfer-{}.sqlite", wobu_core::new_id()));
-    let result = Project::open_at_index(&canonical, &scratch).and_then(|mut project| f(&mut project));
-    for path in [scratch.clone(), scratch.with_extension("sqlite-wal"), scratch.with_extension("sqlite-shm")] {
+    let scratch =
+        std::env::temp_dir().join(format!("wobu-transfer-{}.sqlite", wobu_core::new_id()));
+    let result =
+        Project::open_at_index(&canonical, &scratch).and_then(|mut project| f(&mut project));
+    for path in [
+        scratch.clone(),
+        scratch.with_extension("sqlite-wal"),
+        scratch.with_extension("sqlite-shm"),
+    ] {
         let _ = std::fs::remove_file(path);
     }
     result

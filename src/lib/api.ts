@@ -124,6 +124,22 @@ export interface AssetLink {
   enabled: boolean
 }
 
+/** One immutable, project-owned entity fine-tune pinned by its content hash. */
+export interface LoraPin {
+  hash: string
+  relPath: string
+  bytes: number
+  trainer: string
+  protocol: number
+  baseModel: string
+  modelFamily: string
+  providerName: string
+  triggerToken: string
+  inputAssetHashes: string[]
+  createdAt: string
+  strength: number
+}
+
 export interface NodeSummary {
   id: string
   kind: NodeKind
@@ -150,6 +166,8 @@ export interface WobuNode {
   coverAssetId: string | null
   /** Shared identity seed used whenever Generate has no explicit re-roll. */
   lockedSeed: number | null
+  /** Optional local entity fine-tune, applied only when its model is compatible. */
+  lora: LoraPin | null
   links: Link[]
   assetLinks: AssetLink[]
   createdAt: string
@@ -365,6 +383,8 @@ export interface TransferCandidate {
   referenceCount: number
   externalLinkCount: number
   missingAssetCount: number
+  loraCount: number
+  missingLoraCount: number
   replacesSingleton: boolean
 }
 
@@ -387,6 +407,8 @@ export interface TransferOutcome {
   pendingNodeIds: string[]
   referenceCount: number
   dedupedReferenceCount: number
+  loraCount: number
+  dedupedLoraCount: number
   droppedExternalLinkCount: number
   replacedSingleton: boolean
   conflictPaths: string[]
@@ -604,8 +626,7 @@ export const assetDelete = (assetId: string) => call<void>('asset_delete', { ass
 export const assetThumb = (assetId: string) => call<string | null>('asset_thumb', { assetId })
 
 /** Full-resolution path, fetched only when a viewer is opened. */
-export const assetOriginal = (assetId: string) =>
-  call<string | null>('asset_original', { assetId })
+export const assetOriginal = (assetId: string) => call<string | null>('asset_original', { assetId })
 
 export interface GenerationSnapshotFragment {
   section: string
@@ -645,9 +666,71 @@ export interface Generation {
   influenceSnapshot: { layers: GenerationSnapshotLayer[] }
 }
 
+export interface AppliedLoraReceipt {
+  nodeId: string
+  contentHash: string
+  providerName: string
+  triggerToken: string
+  strength: number
+}
+
+export interface LoraDowngradeReceipt {
+  nodeId: string
+  contentHash: string
+  state: string
+  detail: string
+}
+
+/** Defensively read optional LoRA metadata from immutable generation params. */
+export function generationLoraReceipt(generation: Generation): {
+  applied: AppliedLoraReceipt[]
+  downgrades: LoraDowngradeReceipt[]
+} {
+  const applied = Array.isArray(generation.params.loras)
+    ? generation.params.loras.flatMap((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+        const candidate = value as Record<string, unknown>
+        if (
+          typeof candidate.nodeId !== 'string' ||
+          !candidate.nodeId ||
+          typeof candidate.contentHash !== 'string' ||
+          !candidate.contentHash ||
+          typeof candidate.providerName !== 'string' ||
+          !candidate.providerName ||
+          typeof candidate.triggerToken !== 'string' ||
+          !candidate.triggerToken ||
+          typeof candidate.strength !== 'number' ||
+          !Number.isFinite(candidate.strength) ||
+          candidate.strength < 0 ||
+          candidate.strength > 2
+        )
+          return []
+        return [candidate as unknown as AppliedLoraReceipt]
+      })
+    : []
+  const downgrades = Array.isArray(generation.params.loraDowngrades)
+    ? generation.params.loraDowngrades.flatMap((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+        const candidate = value as Record<string, unknown>
+        if (
+          typeof candidate.nodeId !== 'string' ||
+          !candidate.nodeId ||
+          typeof candidate.contentHash !== 'string' ||
+          !candidate.contentHash ||
+          typeof candidate.state !== 'string' ||
+          !candidate.state ||
+          typeof candidate.detail !== 'string' ||
+          !candidate.detail
+        )
+          return []
+        return [candidate as unknown as LoraDowngradeReceipt]
+      })
+    : []
+  return { applied, downgrades }
+}
+
 /** One node's generation receipts, newest first. */
-export const generationList = (nodeId: string) =>
-  call<Generation[]>('generation_list', { nodeId })
+export const generationList = (nodeId: string) => call<Generation[]>('generation_list', { nodeId })
 
 export interface MeshAsset {
   id: string
@@ -673,8 +756,7 @@ export interface MeshConcept {
 }
 
 /** Mesh metadata only. The GLB body remains untouched until `meshAssetPath`. */
-export const meshConcepts = (nodeId: string) =>
-  call<MeshConcept[]>('mesh_concepts', { nodeId })
+export const meshConcepts = (nodeId: string) => call<MeshConcept[]>('mesh_concepts', { nodeId })
 
 /** Full validation and absolute path for the one GLB the open viewer needs. */
 export const meshAssetPath = (assetId: string) =>
@@ -1049,7 +1131,10 @@ export interface ImageReferenceReport {
 
 export const imageReferenceReport = (
   subjectId: string,
-  options: Pick<GenerateOptions, 'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid'> = {},
+  options: Pick<
+    GenerateOptions,
+    'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid'
+  > = {},
 ) => call<ImageReferenceReport>('image_reference_report', { subjectId, ...options })
 
 export const spendStatus = () => call<SpendStatus>('spend_status')
@@ -1065,6 +1150,67 @@ export const spendRecoveryReset = (confirmNoPaidJobs: boolean) =>
 /** Queue one negotiated image generation and return its job id. */
 export const generateStart = (subjectId: string, options: GenerateOptions = {}) =>
   call<string>('generate_start', { subjectId, ...options })
+
+export interface SceneGenerateOptions {
+  prompt?: string
+  aspect?: string
+  model?: string
+  seed?: number
+}
+
+/** Queue one image containing two to four ordered world entities. */
+export const sceneGenerateStart = (subjectIds: string[], options: SceneGenerateOptions = {}) =>
+  call<string>('scene_generate_start', { subjectIds, ...options })
+
+export interface LoraStatus {
+  subjectId: string
+  pinnedCount: number
+  invalidPinnedCount: number
+  requiredCount: number
+  eligible: boolean
+  trainerState: string
+  trainerDetail: string
+  selectedModel: string | null
+  pin: LoraPin | null
+  applicationState: string
+  applicationDetail: string
+}
+
+/** Inspect training inputs, the local trainer, and application compatibility. */
+export const loraStatus = (subjectId: string) => call<LoraStatus>('lora_status', { subjectId })
+
+/** Queue local LoRA training for one entity. */
+export const loraTrainStart = (subjectId: string) => call<string>('lora_train_start', { subjectId })
+
+export interface SceneCompositionReceipt {
+  version: 1
+  subjectIds: string[]
+  subjectNames: string[]
+}
+
+export function sceneComposition(generation: Generation): SceneCompositionReceipt | null {
+  const value = generation.params.sceneComposition
+  if (!value || typeof value !== 'object') return null
+  const scene = value as Record<string, unknown>
+  if (
+    scene.version !== 1 ||
+    !Array.isArray(scene.subjectIds) ||
+    !Array.isArray(scene.subjectNames)
+  ) {
+    return null
+  }
+  if (!scene.subjectIds.every((id) => typeof id === 'string')) return null
+  if (!scene.subjectNames.every((name) => typeof name === 'string')) return null
+  if (
+    scene.subjectIds.length < 2 ||
+    scene.subjectIds.length > 4 ||
+    scene.subjectIds.length !== scene.subjectNames.length ||
+    new Set(scene.subjectIds).size !== scene.subjectIds.length
+  ) {
+    return null
+  }
+  return scene as unknown as SceneCompositionReceipt
+}
 
 /* ── conflicts ────────────────────────────────────────────────────────────── */
 
@@ -1448,7 +1594,7 @@ export const logReveal = () => call<void>('log_reveal')
  * The shapes here mirror `wobu-jobs` exactly — see `src-tauri/crates/wobu-jobs`,
  * where the reasoning for each of them is written down.
  */
-export type JobKind = 'enhance' | 'generate' | 'mesh' | 'thumbnail'
+export type JobKind = 'enhance' | 'generate' | 'train_lora' | 'mesh' | 'thumbnail'
 
 /**
  * Whether the attempt that failed cost the user money.

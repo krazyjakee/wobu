@@ -37,7 +37,10 @@ export default function MeshViewport({
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x111319)
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10_000)
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+    })
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.1

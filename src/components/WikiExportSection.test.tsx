@@ -51,7 +51,9 @@ describe('static wiki export', () => {
       }),
     )
     expect(await screen.findByText('Exported 12 nodes and 7 images.')).toBeInTheDocument()
-    expect(screen.getByText('2 missing images were replaced with placeholders.')).toBeInTheDocument()
+    expect(
+      screen.getByText('2 missing images were replaced with placeholders.'),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Reveal exported folder' }))
     await waitFor(() => expect(h.reveal).toHaveBeenCalledWith('/exports/glass-sea-wiki'))

@@ -19,15 +19,15 @@ use tauri::{AppHandle, Emitter, Manager, State};
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
 use wobu_core::{
-    Asset, AssetKind, AssetRole, FragmentTarget, Generation, Id, KindDef, Layer, LinkEdge, LinkRole,
-    MeshAsset, Node, NodeKind, NodeSummary, Preset, default_preset,
+    Asset, AssetKind, AssetRole, FragmentTarget, Generation, Id, KindDef, Layer, LinkEdge,
+    LinkRole, MeshAsset, Node, NodeKind, NodeSummary, Preset, default_preset,
+};
+use wobu_imagine::{
+    View as MeshView, comfy, gemini as image_gemini, tencent::Region as HunyuanRegion,
 };
 use wobu_influence::{
     Budget, Chars, DropReason, Dropped, Fragment, FragmentBody, Reached, ResolvedStack, Shot,
     Sliders, World, compile, fragments, resolve,
-};
-use wobu_imagine::{
-    View as MeshView, comfy, gemini as image_gemini, tencent::Region as HunyuanRegion,
 };
 use wobu_jobs::{JobId, QueueSnapshot};
 use wobu_llm::{
@@ -80,9 +80,8 @@ pub async fn style_transfer_preview(
     state: State<'_, AppState>,
     source_path: String,
 ) -> CommandResult<TransferPreview> {
-    let destination = state.peek(|project| {
-        project.map(|project| (project.id(), project.root().to_path_buf()))
-    });
+    let destination =
+        state.peek(|project| project.map(|project| (project.id(), project.root().to_path_buf())));
     let source = PathBuf::from(source_path);
     let same_path = destination.as_ref().is_some_and(|(_, root)| {
         std::fs::canonicalize(&source)
@@ -96,9 +95,9 @@ pub async fn style_transfer_preview(
     let preview = tauri::async_runtime::spawn_blocking(move || transfer::preview(&source))
         .await
         .map_err(|error| {
-            WobuError::new(Code::Internal, "Style transfer preview stopped unexpectedly.")
-                .with_detail(error.to_string())
-        })??;
+        WobuError::new(Code::Internal, "Style transfer preview stopped unexpectedly.")
+            .with_detail(error.to_string())
+    })??;
     if destination.is_some_and(|(id, _)| id == preview.source_project_id) {
         return Err(wobu_store::Error::TransferSameProject.into());
     }
@@ -135,7 +134,8 @@ pub async fn style_transfer_apply(
     if bundle.source_project_id() == destination.0 {
         return Err(wobu_store::Error::TransferSameProject.into());
     }
-    let outcome = state.with_project(destination.0, |project| Ok(project.apply_transfer(bundle)?))?;
+    let outcome =
+        state.with_project(destination.0, |project| Ok(project.apply_transfer(bundle)?))?;
     let _ = app.emit(WORLD_CHANGED, ());
     Ok(outcome)
 }
@@ -550,10 +550,7 @@ pub fn asset_delete(state: State<'_, AppState>, asset_id: Id) -> CommandResult<(
 /// Immutable Concepts history for one node, already newest first in SQLite.
 /// Image bytes remain behind `asset_thumb`/`asset_original`.
 #[tauri::command]
-pub fn generation_list(
-    state: State<'_, AppState>,
-    node_id: Id,
-) -> CommandResult<Vec<Generation>> {
+pub fn generation_list(state: State<'_, AppState>, node_id: Id) -> CommandResult<Vec<Generation>> {
     state.with(|p| Ok(p.list_generations(node_id)?))
 }
 
@@ -603,10 +600,7 @@ pub fn mesh_concepts(state: State<'_, AppState>, node_id: Id) -> CommandResult<V
     })
 }
 
-fn turnaround_views(
-    ids: &[Id],
-    generations: &HashMap<Id, &Generation>,
-) -> Vec<TurnaroundView> {
+fn turnaround_views(ids: &[Id], generations: &HashMap<Id, &Generation>) -> Vec<TurnaroundView> {
     if ids.len() != MeshView::ALL.len() {
         return Vec::new();
     }
@@ -624,7 +618,8 @@ fn turnaround_views(
     // A partial sheet is not "the sheet that produced this mesh". If even one
     // immutable source receipt is missing, show the explicit unavailable state.
     let views = views.unwrap_or_default();
-    let distinct: HashSet<_> = views.iter().filter_map(|view| MeshView::parse(&view.view_type)).collect();
+    let distinct: HashSet<_> =
+        views.iter().filter_map(|view| MeshView::parse(&view.view_type)).collect();
     if distinct.len() == MeshView::ALL.len() { views } else { Vec::new() }
 }
 
@@ -635,7 +630,8 @@ pub async fn mesh_asset_path(
     state: State<'_, AppState>,
     asset_id: Id,
 ) -> CommandResult<Option<String>> {
-    let (project_id, root) = state.with(|project| Ok((project.id(), project.root().to_path_buf())))?;
+    let (project_id, root) =
+        state.with(|project| Ok((project.id(), project.root().to_path_buf())))?;
     let checked_root = root.clone();
     let mesh = blocking("The mesh validation thread stopped unexpectedly.", move || {
         wobu_store::assets::cached_mesh(&checked_root, project_id, asset_id)
@@ -650,10 +646,7 @@ pub async fn mesh_asset_path(
 /// Canonical project path for Finder/Explorer. Unlike the viewer path this is
 /// not a local cache, and unlike loading it does not read the GLB body.
 #[tauri::command]
-pub fn mesh_source_path(
-    state: State<'_, AppState>,
-    asset_id: Id,
-) -> CommandResult<Option<String>> {
+pub fn mesh_source_path(state: State<'_, AppState>, asset_id: Id) -> CommandResult<Option<String>> {
     state.with(|project| {
         Ok(project
             .list_meshes()
@@ -674,7 +667,8 @@ pub async fn mesh_export(
         return Err(WobuError::new(Code::Invalid, "Choose where to export the GLB."));
     }
     let destination = PathBuf::from(destination);
-    let (project_id, root) = state.with(|project| Ok((project.id(), project.root().to_path_buf())))?;
+    let (project_id, root) =
+        state.with(|project| Ok((project.id(), project.root().to_path_buf())))?;
     blocking("The mesh export thread stopped unexpectedly.", move || {
         let (_mesh, cached) = wobu_store::assets::cached_mesh(&root, project_id, asset_id)?
             .ok_or_else(|| wobu_store::Error::NoSuchAsset(asset_id.to_string()))?;
@@ -1772,9 +1766,8 @@ pub async fn status_bar_backend(
     state: State<'_, AppState>,
     keys: State<'_, Keys>,
 ) -> CommandResult<StatusBarBackend> {
-    let (image, text) = state.with(|project| {
-        Ok((selected_model(project, "image"), selected_model(project, "text")))
-    })?;
+    let (image, text) = state
+        .with(|project| Ok((selected_model(project, "image"), selected_model(project, "text"))))?;
 
     let text_provider = text.as_ref().map(|choice| choice.0.as_str()).unwrap_or(anthropic::ID);
     let text_model = text
@@ -1881,9 +1874,7 @@ fn image_default(provider: &str) -> &str {
 fn context_window(provider: &str, model: &str) -> Option<u64> {
     match (provider, model) {
         (anthropic::ID, "claude-haiku-4-5") => Some(200_000),
-        (anthropic::ID, "claude-opus-5" | "claude-sonnet-5" | "claude-fable-5") => {
-            Some(1_000_000)
-        }
+        (anthropic::ID, "claude-opus-5" | "claude-sonnet-5" | "claude-fable-5") => Some(1_000_000),
         (gemini::ID, "gemini-3.6-flash") => Some(1_048_576),
         (gemini::ID, "gemini-3.5-flash" | "gemini-3.5-flash-lite") => Some(1_000_000),
         _ => None,
@@ -2269,24 +2260,12 @@ mod bridge {
             node_name: "Vashk".into(),
             node_kind: NodeKind::Species,
             node_tags: vec!["playable".into()],
-            roles: vec![AssetUsageRole {
-                role: AssetRole::FullRef,
-                weight: 0.8,
-                enabled: true,
-            }],
+            roles: vec![AssetUsageRole { role: AssetRole::FullRef, weight: 0.8, enabled: true }],
             cover: true,
         };
         let json = serde_json::to_value(usage).unwrap();
 
-        for key in [
-            "assetId",
-            "nodeId",
-            "nodeName",
-            "nodeKind",
-            "nodeTags",
-            "roles",
-            "cover",
-        ] {
+        for key in ["assetId", "nodeId", "nodeName", "nodeKind", "nodeTags", "roles", "cover"] {
             assert!(json.get(key).is_some(), "`{key}` is missing from AssetUsage");
         }
         assert_eq!(json["roles"][0]["role"], "full_ref");
@@ -2568,12 +2547,7 @@ mod bridge {
         for key in ["key", "label", "valueKind"] {
             assert!(first["sections"][0].get(key).is_some(), "`{key}` is missing from SectionDef");
         }
-        let world = json
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|d| d["kind"] == "world_bible")
-            .unwrap();
+        let world = json.as_array().unwrap().iter().find(|d| d["kind"] == "world_bible").unwrap();
         for key in ["key", "label", "valueKind"] {
             assert!(
                 world["attributes"][0].get(key).is_some(),

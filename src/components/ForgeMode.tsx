@@ -3,7 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { Generation, NodeSummary, ProjectSummary, QueueSnapshot } from '../lib/api'
 import type { KindIndex } from '../lib/kinds'
-import { useAssetThumb, useGenerations } from '../lib/queries'
+import { useAssetThumb, useGenerations, useLoraStatus, useTrainLora } from '../lib/queries'
 import { report, useUI } from '../store/ui'
 import { Inspector } from './Inspector'
 
@@ -31,7 +31,10 @@ export function ForgeMode({
   const select = useUI((state) => state.select)
   const setMode = useUI((state) => state.setMode)
   const sortedNodes = useMemo(
-    () => [...nodes].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })),
+    () =>
+      [...nodes].sort((left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
+      ),
     [nodes],
   )
 
@@ -50,11 +53,26 @@ export function ForgeMode({
             onChange={(event) => select(event.target.value || null)}
           >
             <option value="">Choose an entity</option>
-            {sortedNodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
+            {sortedNodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.name}
+              </option>
+            ))}
           </select>
         </label>
-        <button className="btn" type="button" onClick={() => setMode('library')}>Back to Library</button>
+        <button className="btn" type="button" onClick={() => setMode('library')}>
+          Back to Library
+        </button>
       </header>
+
+      <SceneComposer
+        primary={selected}
+        nodes={sortedNodes}
+        kinds={kinds}
+        readOnly={project.readOnly}
+      />
+
+      <LoraCard subject={selected} readOnly={project.readOnly} queue={queue} />
 
       <Inspector
         project={project}
@@ -69,10 +87,231 @@ export function ForgeMode({
       ) : (
         <section className="forge-no-subject">
           <h3>Choose a subject</h3>
-          <p>Its influence stack, attributed prompt, batch controls, and generation history will fill the Forge.</p>
+          <p>
+            Its influence stack, attributed prompt, batch controls, and generation history will fill
+            the Forge.
+          </p>
         </section>
       )}
     </main>
+  )
+}
+
+function LoraCard({
+  subject,
+  readOnly,
+  queue,
+}: {
+  subject: NodeSummary | null
+  readOnly: boolean
+  queue: QueueSnapshot
+}) {
+  const status = useLoraStatus(subject?.id ?? null)
+  const train = useTrainLora()
+  const active =
+    !!subject &&
+    queue.jobs.some(
+      (job) => job.kind === 'train_lora' && job.subjectId === subject.id && !isTerminal(job.state),
+    )
+
+  if (!subject) return null
+  if (status.isPending) {
+    return <section className="forge-lora">Checking LoRA readiness…</section>
+  }
+  if (status.isError || !status.data) {
+    return (
+      <section className="forge-lora" aria-label={`LoRA for ${subject.name}`}>
+        <b>Entity LoRA</b>
+        <span>Could not inspect LoRA readiness: {api.errorMessage(status.error)}</span>
+      </section>
+    )
+  }
+
+  const value = status.data
+  const subjectId = subject.id
+  const subjectName = subject.name
+  const blocked = readOnly || active || train.isPending || !value.eligible
+  const action = value.pin ? 'Re-train' : 'Train'
+  const disabledReason = readOnly
+    ? 'This project is read-only.'
+    : active
+      ? 'Training is already active for this entity.'
+      : !value.eligible
+        ? 'Resolve the reference, trainer, provider, and model requirements first.'
+        : undefined
+
+  async function start() {
+    try {
+      await train.mutateAsync(subjectId)
+    } catch (reason) {
+      report(reason, `Could not train a LoRA for ${subjectName}`)
+    }
+  }
+
+  return (
+    <section className="forge-lora" aria-label={`LoRA for ${subject.name}`}>
+      <div className="forge-lora-title">
+        <b>Entity LoRA</b>
+        <span data-state={value.applicationState}>
+          {value.applicationState.replaceAll('_', ' ')}
+        </span>
+      </div>
+      <div className="forge-lora-counts">
+        <b>
+          {value.pinnedCount} / {value.requiredCount}
+        </b>{' '}
+        valid full references
+        <span> · {value.invalidPinnedCount} invalid</span>
+      </div>
+      <dl>
+        <div>
+          <dt>Trainer</dt>
+          <dd>
+            <b>{value.trainerState}</b> · {value.trainerDetail}
+          </dd>
+        </div>
+        <div>
+          <dt>Model</dt>
+          <dd>{value.selectedModel ?? 'No image checkpoint selected'}</dd>
+        </div>
+        <div>
+          <dt>Application</dt>
+          <dd>{value.applicationDetail}</dd>
+        </div>
+        {value.pin && (
+          <div>
+            <dt>Weights</dt>
+            <dd>
+              {value.pin.trainer} · {value.pin.baseModel} · strength {value.pin.strength.toFixed(2)}
+            </dd>
+          </div>
+        )}
+      </dl>
+      <button
+        className="btn"
+        type="button"
+        aria-label={`${action} LoRA for ${subject.name}`}
+        disabled={blocked}
+        title={disabledReason}
+        onClick={() => void start()}
+      >
+        {active ? 'Training…' : train.isPending ? 'Starting…' : `${action} LoRA`}
+      </button>
+    </section>
+  )
+}
+
+function SceneComposer({
+  primary,
+  nodes,
+  kinds,
+  readOnly,
+}: {
+  primary: NodeSummary | null
+  nodes: NodeSummary[]
+  kinds: KindIndex
+  readOnly: boolean
+}) {
+  const [additional, setAdditional] = useState<string[]>([])
+  const [prompt, setPrompt] = useState('')
+  const [aspect, setAspect] = useState('16:9')
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+  const candidates = nodes.filter(
+    (node) => node.id !== primary?.id && !kinds.get(node.kind)?.singleton,
+  )
+  const primaryAllowed = primary ? !kinds.get(primary.kind)?.singleton : false
+
+  useEffect(() => {
+    setAdditional([])
+    setStatus(null)
+  }, [primary?.id])
+
+  function toggle(id: string) {
+    setAdditional((current) => {
+      if (current.includes(id)) return current.filter((value) => value !== id)
+      if (current.length >= 3) return current
+      return [...current, id]
+    })
+  }
+
+  async function generate() {
+    if (!primary || additional.length === 0) return
+    setBusy(true)
+    setStatus(null)
+    try {
+      await api.sceneGenerateStart([primary.id, ...additional], {
+        prompt: prompt.trim() || undefined,
+        aspect,
+      })
+      setStatus(`Scene queued with ${1 + additional.length} entities.`)
+    } catch (reason) {
+      setStatus(api.errorMessage(reason))
+      report(reason, 'Could not queue scene composition')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <details className="forge-scene">
+      <summary>Compose a multi-entity scene</summary>
+      {!primary ? (
+        <p>Choose the primary Forge subject first.</p>
+      ) : !primaryAllowed ? (
+        <p>Style Guides and World Bibles shape a scene, but cannot be participants.</p>
+      ) : (
+        <div className="forge-scene-body">
+          <div className="forge-scene-entities">
+            <b>Primary · {primary.name}</b>
+            <span>Add one to three entities in prompt order.</span>
+            <div role="group" aria-label="Additional scene entities">
+              {candidates.map((node) => (
+                <label key={node.id}>
+                  <input
+                    type="checkbox"
+                    checked={additional.includes(node.id)}
+                    disabled={!additional.includes(node.id) && additional.length >= 3}
+                    onChange={() => toggle(node.id)}
+                  />
+                  {node.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="forge-scene-prompt">
+            <span>Scene direction</span>
+            <textarea
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="Crossing the flooded market at blue hour…"
+            />
+          </label>
+          <label>
+            <span>Aspect</span>
+            <select
+              aria-label="Scene aspect"
+              value={aspect}
+              onChange={(event) => setAspect(event.target.value)}
+            >
+              <option value="16:9">16:9 · wide</option>
+              <option value="3:2">3:2 · landscape</option>
+              <option value="1:1">1:1 · square</option>
+              <option value="9:16">9:16 · portrait</option>
+            </select>
+          </label>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={readOnly || busy || additional.length === 0}
+            onClick={() => void generate()}
+          >
+            {busy ? 'Queuing scene…' : 'Generate scene'}
+          </button>
+          {status && <p role="status">{status}</p>}
+        </div>
+      )}
+    </details>
   )
 }
 
@@ -112,7 +351,10 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
       <header>
         <div>
           <h3>Results</h3>
-          <span>{history.data?.length ?? 0} receipts{activeJobs.length ? ` · ${activeJobs.length} active` : ''}</span>
+          <span>
+            {history.data?.length ?? 0} receipts
+            {activeJobs.length ? ` · ${activeJobs.length} active` : ''}
+          </span>
         </div>
         <p>Select up to {MAX_COMPARE} completed results for a full-resolution comparison.</p>
         <button
@@ -124,17 +366,25 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
           Compare selected · {selected.length}
         </button>
         {selected.length > 0 && (
-          <button className="btn-mini" type="button" onClick={() => setSelectedIds(new Set())}>Clear</button>
+          <button className="btn-mini" type="button" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </button>
         )}
       </header>
 
       {activeJobs.length > 0 && (
         <div className="forge-active" aria-label="Active Forge generations">
-          {activeJobs.map((job) => <span key={job.id}>{job.label} · {job.state}</span>)}
+          {activeJobs.map((job) => (
+            <span key={job.id}>
+              {job.label} · {job.state}
+            </span>
+          ))}
         </div>
       )}
       {history.isError ? (
-        <p className="forge-results-empty">Could not read results: {api.errorMessage(history.error)}</p>
+        <p className="forge-results-empty">
+          Could not read results: {api.errorMessage(history.error)}
+        </p>
       ) : (
         <VirtualResultGrid
           generations={history.data ?? []}
@@ -183,7 +433,11 @@ function VirtualResultGrid({
     return (
       <div className="forge-results-empty">
         <h3>{loading ? 'Reading results…' : 'No results yet'}</h3>
-        <p>{loading ? 'Receipts will appear as the index answers.' : 'Queue a generation above; completed images collect here.'}</p>
+        <p>
+          {loading
+            ? 'Receipts will appear as the index answers.'
+            : 'Queue a generation above; completed images collect here.'}
+        </p>
       </div>
     )
   }
@@ -242,6 +496,7 @@ function ForgeResultTile({
   const assetId = generation.outputAssetIds[0] ?? null
   const thumb = useAssetThumb(assetId)
   const variation = variationLabel(generation)
+  const scene = api.sceneComposition(generation)
   return (
     <button
       className={`forge-result${selected ? ' is-selected' : ''}`}
@@ -253,12 +508,21 @@ function ForgeResultTile({
       onClick={onToggle}
     >
       <span className="forge-result-image">
-        {thumb.data ? <img src={convertFileSrc(thumb.data)} alt="" /> : <span>{assetId ? 'Loading preview…' : 'No output'}</span>}
+        {thumb.data ? (
+          <img src={convertFileSrc(thumb.data)} alt="" />
+        ) : (
+          <span>{assetId ? 'Loading preview…' : 'No output'}</span>
+        )}
         <b>{selected ? 'Selected' : assetId ? 'Compare' : 'Receipt only'}</b>
       </span>
       <span className="forge-result-meta">
-        <b>{generation.preset}{variation ? ` · ${variation}` : ''}</b>
-        <span>{generation.model} · seed {generation.seed}</span>
+        <b>
+          {scene ? `Scene · ${scene.subjectNames.join(' + ')}` : generation.preset}
+          {variation ? ` · ${variation}` : ''}
+        </b>
+        <span>
+          {generation.model} · seed {generation.seed}
+        </span>
         <small>{new Date(generation.createdAt).toLocaleString()}</small>
         <p>{generation.compiledPrompt}</p>
       </span>
@@ -266,7 +530,13 @@ function ForgeResultTile({
   )
 }
 
-function CompareViewer({ generations, onClose }: { generations: Generation[]; onClose: () => void }) {
+function CompareViewer({
+  generations,
+  onClose,
+}: {
+  generations: Generation[]
+  onClose: () => void
+}) {
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -279,11 +549,23 @@ function CompareViewer({ generations, onClose }: { generations: Generation[]; on
     <div className="scrim forge-compare-scrim" role="dialog" aria-label="Compare Forge results">
       <section className="forge-compare">
         <header>
-          <div><h2>Full-resolution comparison</h2><p>{generations.length} immutable results</p></div>
-          <button className="ibtn" type="button" onClick={onClose} aria-label="Close Forge comparison">×</button>
+          <div>
+            <h2>Full-resolution comparison</h2>
+            <p>{generations.length} immutable results</p>
+          </div>
+          <button
+            className="ibtn"
+            type="button"
+            onClick={onClose}
+            aria-label="Close Forge comparison"
+          >
+            ×
+          </button>
         </header>
         <div className="forge-compare-images">
-          {generations.map((generation) => <CompareImage key={generation.id} generation={generation} />)}
+          {generations.map((generation) => (
+            <CompareImage key={generation.id} generation={generation} />
+          ))}
         </div>
       </section>
     </div>
@@ -294,12 +576,14 @@ function CompareImage({ generation }: { generation: Generation }) {
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const assetId = generation.outputAssetIds[0] ?? null
+  const scene = api.sceneComposition(generation)
   useEffect(() => {
     let disposed = false
     setSrc(null)
     setError(null)
     if (!assetId) return
-    void api.assetOriginal(assetId)
+    void api
+      .assetOriginal(assetId)
       .then((path) => {
         if (!disposed) {
           if (path) setSrc(convertFileSrc(path))
@@ -312,12 +596,25 @@ function CompareImage({ generation }: { generation: Generation }) {
           report(reason, 'Could not load a comparison original')
         }
       })
-    return () => { disposed = true }
+    return () => {
+      disposed = true
+    }
   }, [assetId])
   return (
     <figure>
-      <div>{src ? <img src={src} alt={generation.compiledPrompt} /> : <span>{error ?? 'Loading original…'}</span>}</div>
-      <figcaption><b>{generation.preset}</b><span>{generation.model} · seed {generation.seed}</span></figcaption>
+      <div>
+        {src ? (
+          <img src={src} alt={generation.compiledPrompt} />
+        ) : (
+          <span>{error ?? 'Loading original…'}</span>
+        )}
+      </div>
+      <figcaption>
+        <b>{scene ? `Scene · ${scene.subjectNames.join(' + ')}` : generation.preset}</b>
+        <span>
+          {generation.model} · seed {generation.seed}
+        </span>
+      </figcaption>
     </figure>
   )
 }

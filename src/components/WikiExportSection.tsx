@@ -71,8 +71,8 @@ export function WikiExportSection({ project }: { project: ProjectSummary }) {
           </span>
           {result.missingImages > 0 && (
             <span className="wiki-export-warning">
-              {result.missingImages} missing {result.missingImages === 1 ? 'image was' : 'images were'}{' '}
-              replaced with placeholders.
+              {result.missingImages} missing{' '}
+              {result.missingImages === 1 ? 'image was' : 'images were'} replaced with placeholders.
             </span>
           )}
           <span className="set-path">{result.destination}</span>
@@ -88,6 +88,10 @@ export function WikiExportSection({ project }: { project: ProjectSummary }) {
 }
 
 function safeFilename(value: string): string {
-  const safe = value.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').replace(/-+/g, '-')
+  const safe = value
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
   return safe.replace(/^[.-]+|[.-]+$/g, '') || 'world'
 }

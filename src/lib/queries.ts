@@ -55,6 +55,7 @@ export const qk = {
   assets: ['asset_list'] as const,
   assetUsages: ['asset_usage_list'] as const,
   generations: (nodeId: string) => ['generation_list', nodeId] as const,
+  loraStatus: (nodeId: string) => ['lora_status', nodeId] as const,
   meshes: (nodeId: string) => ['mesh_concepts', nodeId] as const,
   meshPath: (assetId: string) => ['mesh_asset_path', assetId] as const,
   generationHistory: ['generation_list_all'] as const,
@@ -119,6 +120,9 @@ export function invalidateWorld(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ['influence_resolve'] })
   void qc.invalidateQueries({ queryKey: ['prompt_compile'] })
   void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
+  // Reference pins, provider selection, and the entity's attached weight all
+  // participate in LoRA readiness.
+  void qc.invalidateQueries({ queryKey: ['lora_status'] })
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */
@@ -740,13 +744,7 @@ function useNodeLinkMutation<V>(run: (value: V) => Promise<WobuNode>, whileDoing
 
 export function useAddNodeLink() {
   return useNodeLinkMutation(
-    (value: {
-      nodeId: string
-      toId: string
-      role: LinkRole
-      weight?: number
-      enabled?: boolean
-    }) =>
+    (value: { nodeId: string; toId: string; role: LinkRole; weight?: number; enabled?: boolean }) =>
       api.nodeLinkAdd(value.nodeId, value.toId, value.role, {
         weight: value.weight,
         enabled: value.enabled,
@@ -765,13 +763,7 @@ export function useRemoveNodeLink() {
 
 export function useUpdateNodeLink() {
   return useNodeLinkMutation(
-    (value: {
-      nodeId: string
-      toId: string
-      role: LinkRole
-      weight?: number
-      enabled?: boolean
-    }) =>
+    (value: { nodeId: string; toId: string; role: LinkRole; weight?: number; enabled?: boolean }) =>
       api.nodeLinkUpdate(value.nodeId, value.toId, value.role, {
         weight: value.weight,
         enabled: value.enabled,
@@ -864,6 +856,45 @@ export function useGenerations(nodeId: string): UseQueryResult<api.Generation[]>
   }, [nodeId, qc])
 
   return query
+}
+
+/** Local LoRA readiness for one Forge subject, refreshed after training settles. */
+export function useLoraStatus(nodeId: string | null): UseQueryResult<api.LoraStatus> {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: qk.loraStatus(nodeId ?? ''),
+    queryFn: () => api.loraStatus(nodeId as string),
+    enabled: !!nodeId,
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (!nodeId || !api.isTauri()) return
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    void listen<api.JobDone>(api.JOB_EVENTS.done, (event) => {
+      if (event.payload.kind === 'train_lora') {
+        void qc.invalidateQueries({ queryKey: qk.loraStatus(nodeId) })
+      }
+    })
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisten = fn
+      })
+      .catch(() => {
+        /* world:changed remains the slower catch-up path */
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [nodeId, qc])
+
+  return query
+}
+
+export function useTrainLora() {
+  return useMutation({ mutationFn: api.loraTrainStart })
 }
 
 /** Mounted only by the active 3D tab; listing a share's mesh directory is lazy. */

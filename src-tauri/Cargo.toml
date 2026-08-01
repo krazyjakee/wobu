@@ -69,6 +69,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 async-trait = "0.1.91"
+blake3 = "1.8.5"
 chrono = "0.4.45"
 # Named directly because `sync/bodies.rs` speaks a protocol on the streams of a
 # `wobu_sync::Session`'s connection, and `Connection`, `SendStream` and
@@ -101,6 +102,8 @@ tokio = { version = "1.53.1", features = [
     "time",
     "macros",
     "sync",
+    "process",
+    "io-util",
 ] }
 wobu-core = { workspace = true }
 wobu-influence = { workspace = true }

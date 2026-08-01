@@ -40,7 +40,8 @@ function cleanPoint(value: unknown): BoardPoint | null {
     typeof point.y !== 'number' ||
     !Number.isFinite(point.x) ||
     !Number.isFinite(point.y)
-  ) return null
+  )
+    return null
   return { x: point.x, y: point.y }
 }
 
@@ -140,9 +141,10 @@ export const useBoard = create<BoardState>()(
     {
       name: 'wobu.board-layouts.v1',
       merge: (stored, current) => {
-        const raw = stored && typeof stored === 'object'
-          ? (stored as { projects?: Record<string, unknown> })
-          : {}
+        const raw =
+          stored && typeof stored === 'object'
+            ? (stored as { projects?: Record<string, unknown> })
+            : {}
         const projects: Record<string, BoardProjectLayout> = {}
         if (raw.projects && typeof raw.projects === 'object') {
           for (const [projectId, layout] of Object.entries(raw.projects)) {

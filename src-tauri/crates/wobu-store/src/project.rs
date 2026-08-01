@@ -11,8 +11,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use wobu_core::asset::AssetRef;
 use wobu_core::{
-    Asset, AssetKind, AssetRole, Description, DescriptionState, EnhanceStamp, Generation, Id, Node,
-    Link, LinkEdge, LinkRole, NodeKind, NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def,
+    Asset, AssetKind, AssetRole, Description, DescriptionState, EnhanceStamp, Generation, Id, Link,
+    LinkEdge, LinkRole, Node, NodeKind, NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def,
     kind_registry,
 };
 
@@ -387,7 +387,8 @@ impl Project {
         if !meta_path.is_file() {
             return Err(Error::NotAProject(path.to_path_buf()));
         }
-        let raw = std::fs::read_to_string(&meta_path).map_err(|error| Error::io(&meta_path, error))?;
+        let raw =
+            std::fs::read_to_string(&meta_path).map_err(|error| Error::io(&meta_path, error))?;
         let meta: ProjectMeta = serde_json::from_str(&raw)?;
         let receipts = generations::read_all_strict(path)?;
         Ok((meta.spend_ceiling_usd_micros, receipts))
@@ -468,6 +469,11 @@ impl Project {
         markdown::from_markdown(&text, &path)
     }
 
+    /// The exact node version a long-running local task read before it started.
+    pub fn node_stamp(&self, id: Id) -> Result<Option<atomic::Stamp>> {
+        self.index.stamp_of(id)
+    }
+
     /// Every node in the project, whole, for the influence engine.
     ///
     /// `wobu-influence` is pure by design: it borrows already-loaded `Node`s and
@@ -534,12 +540,7 @@ impl Project {
         }
         let nodes = self.world_nodes()?.to_vec();
         let assets = self.list_assets()?;
-        Ok(crate::wiki::WikiSnapshot::new(
-            self.root.clone(),
-            self.meta.name.clone(),
-            nodes,
-            assets,
-        ))
+        Ok(crate::wiki::WikiSnapshot::new(self.root.clone(), self.meta.name.clone(), nodes, assets))
     }
 
     // ── writing ──────────────────────────────────────────────────────────
@@ -593,8 +594,8 @@ impl Project {
         after_preflight: impl FnOnce(&mut Project),
     ) -> Result<TransferOutcome> {
         self.ensure_writable()?;
-        let destination_root = std::fs::canonicalize(&self.root)
-            .map_err(|error| Error::io(&self.root, error))?;
+        let destination_root =
+            std::fs::canonicalize(&self.root).map_err(|error| Error::io(&self.root, error))?;
         if destination_root == bundle.source_root || self.id() == bundle.source_project_id {
             return Err(Error::TransferSameProject);
         }
@@ -614,8 +615,7 @@ impl Project {
         for node in &existing {
             taken.entry(node.kind).or_default().insert(node.slug.clone());
         }
-        let mut identities: std::collections::HashMap<Id, Node> =
-            std::collections::HashMap::new();
+        let mut identities: std::collections::HashMap<Id, Node> = std::collections::HashMap::new();
         for source in &bundle.nodes {
             if kind_def(source.kind).singleton {
                 let summary = existing
@@ -635,16 +635,17 @@ impl Project {
             let kind_taken = taken.entry(source.kind).or_default();
             identity.slug = wobu_core::unique_slug(&identity.slug, &|slug| {
                 kind_taken.contains(slug)
-                    || self.root.join(format!("{NODES_DIR}/{}/{}.md", source.kind.dir(), slug)).exists()
+                    || self
+                        .root
+                        .join(format!("{NODES_DIR}/{}/{}.md", source.kind.dir(), slug))
+                        .exists()
             });
             kind_taken.insert(identity.slug.clone());
             identities.insert(source.id, identity);
         }
 
-        let id_map: std::collections::HashMap<Id, Id> = identities
-            .iter()
-            .map(|(source, target)| (*source, target.id))
-            .collect();
+        let id_map: std::collections::HashMap<Id, Id> =
+            identities.iter().map(|(source, target)| (*source, target.id)).collect();
         let mut planned = Vec::with_capacity(bundle.nodes.len());
         for source in &bundle.nodes {
             let identity = identities
@@ -668,10 +669,8 @@ impl Project {
             planned.push(target);
         }
 
-        let planned_lookup: std::collections::HashMap<Id, (NodeKind, Option<Id>)> = planned
-            .iter()
-            .map(|node| (node.id, (node.kind, node.parent_id)))
-            .collect();
+        let planned_lookup: std::collections::HashMap<Id, (NodeKind, Option<Id>)> =
+            planned.iter().map(|node| (node.id, (node.kind, node.parent_id))).collect();
         for node in &planned {
             node.validate()?;
             let lookup = |id: Id| {
@@ -690,6 +689,14 @@ impl Project {
             let hash = atomic::hash_bytes(&asset.bytes);
             if crate::assets::asset_id(&hash) != Some(asset.id) {
                 return Err(Error::NoSuchAsset(asset.id.to_string()));
+            }
+        }
+        for lora in &bundle.loras {
+            crate::lora::validate(&lora.bytes)?;
+            if atomic::hash_bytes(&lora.bytes) != lora.hash {
+                return Err(Error::InvalidLora(
+                    "a staged transfer weight no longer matches its content hash".into(),
+                ));
             }
         }
 
@@ -727,6 +734,8 @@ impl Project {
             pending_node_ids: planned.iter().map(|node| node.id).collect(),
             reference_count: bundle.assets.len(),
             deduped_reference_count: 0,
+            lora_count: bundle.loras.len(),
+            deduped_lora_count: 0,
             dropped_external_link_count: bundle.external_link_count,
             replaced_singleton: bundle.replaces_singleton,
             conflict_paths: Vec::new(),
@@ -741,6 +750,16 @@ impl Project {
         for asset in &bundle.assets {
             match self.import_asset(&asset.bytes, asset.kind) {
                 Ok(imported) => outcome.deduped_reference_count += usize::from(imported.deduped),
+                Err(error) => {
+                    outcome.failure = Some(error.to_string());
+                    return Ok(outcome);
+                }
+            }
+        }
+
+        for lora in &bundle.loras {
+            match crate::lora::publish(&self.root, &lora.hash, &lora.bytes) {
+                Ok((_, deduped)) => outcome.deduped_lora_count += usize::from(deduped),
                 Err(error) => {
                     outcome.failure = Some(error.to_string());
                     return Ok(outcome);
@@ -781,6 +800,21 @@ impl Project {
 
         let expected = self.index.stamp_of(node.id)?;
         self.write_node(&node, expected.as_ref())
+    }
+
+    /// Publish a long-running task's result only if the node is still the
+    /// version the task began from. The incoming version is parked as an
+    /// ordinary conflict when somebody edited during the run.
+    pub fn save_node_expected(
+        &mut self,
+        mut node: Node,
+        expected: &atomic::Stamp,
+    ) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        node.validate()?;
+        self.validate_parent(&node, node.parent_id)?;
+        node.touch();
+        self.write_node(&node, Some(expected))
     }
 
     /// Persist the entity identity seed through the same guarded node write as
@@ -1274,15 +1308,10 @@ impl Project {
     /// achieves the requested end state.
     pub fn delete_asset(&mut self, id: Id) -> Result<()> {
         self.ensure_writable()?;
-        let asset = self
-            .get_asset(id)?
-            .ok_or_else(|| Error::NoSuchAsset(id.to_string()))?;
+        let asset = self.get_asset(id)?.ok_or_else(|| Error::NoSuchAsset(id.to_string()))?;
         let users = self.canonical_asset_users(id)?;
         if users > 0 {
-            return Err(Error::AssetInUse {
-                asset: id.to_string(),
-                nodes: users,
-            });
+            return Err(Error::AssetInUse { asset: id.to_string(), nodes: users });
         }
 
         if let Some(thumb) = &asset.thumb_path {
@@ -2293,6 +2322,7 @@ fn is_conflict_path(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wobu_core::new_id;
 
     fn new_project() -> (tempfile::TempDir, Project) {
         let dir = tempfile::tempdir().unwrap();
@@ -2437,7 +2467,7 @@ mod tests {
 
     #[test]
     fn nodes_land_at_the_documented_path() {
-        let (_dir, mut project) = new_project();
+        let (dir, mut project) = new_project();
         project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
         assert!(dir.path().join("ashfall.wobu/nodes/character/kael-vantris.md").is_file());
     }
@@ -2484,13 +2514,7 @@ mod tests {
         let kael = project.create_node(NodeKind::Character, "Kael", None).unwrap();
 
         let SaveOutcome::Saved(saved) = project
-            .add_node_link(
-                kael.id,
-                guild.id,
-                wobu_core::LinkRole::MemberOf,
-                Some(2.0),
-                Some(false),
-            )
+            .add_node_link(kael.id, guild.id, wobu_core::LinkRole::MemberOf, Some(2.0), Some(false))
             .unwrap()
         else {
             panic!("expected a clean add")
@@ -2517,9 +2541,8 @@ mod tests {
         assert_eq!(saved.links[0].weight, 0.4);
         assert!(saved.links[0].enabled);
 
-        let SaveOutcome::Saved(saved) = project
-            .remove_node_link(kael.id, guild.id, wobu_core::LinkRole::MemberOf)
-            .unwrap()
+        let SaveOutcome::Saved(saved) =
+            project.remove_node_link(kael.id, guild.id, wobu_core::LinkRole::MemberOf).unwrap()
         else {
             panic!("expected a clean removal")
         };
@@ -2538,13 +2561,8 @@ mod tests {
             .unwrap();
         let kael = project.create_node(NodeKind::Character, "Kael", None).unwrap();
 
-        let result = project.add_node_link(
-            kael.id,
-            style.id,
-            wobu_core::LinkRole::StyledBy,
-            None,
-            None,
-        );
+        let result =
+            project.add_node_link(kael.id, style.id, wobu_core::LinkRole::StyledBy, None, None);
         assert!(matches!(result, Err(Error::InvalidNodeLinkRole { .. })));
         assert!(project.get_node(kael.id).unwrap().links.is_empty());
     }
@@ -3019,10 +3037,7 @@ mod tests {
     #[test]
     fn spend_ceiling_is_shared_and_preserves_unknown_metadata() {
         let (_dir, mut project) = new_project();
-        assert_eq!(
-            project.meta().spend_ceiling_usd_micros,
-            Some(DEFAULT_SPEND_CEILING_USD_MICROS)
-        );
+        assert_eq!(project.meta().spend_ceiling_usd_micros, Some(DEFAULT_SPEND_CEILING_USD_MICROS));
         let path = project.root().join(PROJECT_FILE);
         let mut meta: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -3039,9 +3054,11 @@ mod tests {
         assert_eq!(project.meta().spend_ceiling_usd_micros, Some(2_500_000));
 
         project.set_spend_ceiling(None).unwrap();
-        assert!(serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path).unwrap())
-            .unwrap()["spendCeilingUsdMicros"]
-            .is_null());
+        assert!(
+            serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path).unwrap())
+                .unwrap()["spendCeilingUsdMicros"]
+                .is_null()
+        );
     }
 
     #[test]

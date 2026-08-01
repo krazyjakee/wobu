@@ -64,7 +64,11 @@ export function BoardMode({
   const selectedNode = nodes.find((node) => node.id === selectedId) ?? null
 
   useEffect(() => {
-    if (assets.isSuccess) syncAssets(projectId, assetList.map((asset) => asset.id))
+    if (assets.isSuccess)
+      syncAssets(
+        projectId,
+        assetList.map((asset) => asset.id),
+      )
   }, [assetList, assets.isSuccess, projectId, syncAssets])
 
   useEffect(() => {
@@ -142,14 +146,31 @@ export function BoardMode({
           </p>
         </div>
         <div className="board-actions">
-          <button className="btn" type="button" onClick={() => arrange(projectId, assetList.map((asset) => asset.id))}>
+          <button
+            className="btn"
+            type="button"
+            onClick={() =>
+              arrange(
+                projectId,
+                assetList.map((asset) => asset.id),
+              )
+            }
+          >
             Arrange
           </button>
-          <button className="btn" type="button" aria-label="Zoom out" onClick={() => zoomBy(0.8)}>−</button>
+          <button className="btn" type="button" aria-label="Zoom out" onClick={() => zoomBy(0.8)}>
+            −
+          </button>
           <output aria-label="Board zoom">{Math.round(camera.zoom * 100)}%</output>
-          <button className="btn" type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)}>+</button>
-          <button className="btn" type="button" onClick={() => setCamera(DEFAULT_BOARD_VIEWPORT)}>Reset view</button>
-          <button className="btn" type="button" onClick={() => setMode('library')}>Back to Library</button>
+          <button className="btn" type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)}>
+            +
+          </button>
+          <button className="btn" type="button" onClick={() => setCamera(DEFAULT_BOARD_VIEWPORT)}>
+            Reset view
+          </button>
+          <button className="btn" type="button" onClick={() => setMode('library')}>
+            Back to Library
+          </button>
         </div>
       </header>
 
@@ -198,7 +219,9 @@ export function BoardMode({
         }}
       >
         {assets.isError && (
-          <p className="board-error">Could not read the asset library: {api.errorMessage(assets.error)}</p>
+          <p className="board-error">
+            Could not read the asset library: {api.errorMessage(assets.error)}
+          </p>
         )}
         {selectedNode && (
           <NodeDropChip
@@ -354,12 +377,22 @@ function AttachReferenceSheet({
   }
 
   return (
-    <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="sheet board-attach-sheet" role="dialog" aria-modal="true" aria-label="Attach board image">
+    <div
+      className="scrim"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div
+        className="sheet board-attach-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Attach board image"
+      >
         <h2>Attach board image</h2>
         {asset && node ? (
           <>
-            <p>Choose how <b>{assetLabel(asset)}</b> should influence <b>{node.name}</b>.</p>
+            <p>
+              Choose how <b>{assetLabel(asset)}</b> should influence <b>{node.name}</b>.
+            </p>
             <label>
               <span>Reference role</span>
               <select
@@ -369,17 +402,26 @@ function AttachReferenceSheet({
                 onChange={(event) => setRole(event.target.value as AssetRole)}
                 autoFocus
               >
-                {api.ASSET_ROLES.map((value) => <option key={value} value={value}>{roleLabel(value)}</option>)}
+                {api.ASSET_ROLES.map((value) => (
+                  <option key={value} value={value}>
+                    {roleLabel(value)}
+                  </option>
+                ))}
               </select>
             </label>
-            <p className="board-role-note">Mood references are never sent to providers; other roles may be routed to compatible image backends.</p>
+            <p className="board-role-note">
+              Mood references are never sent to providers; other roles may be routed to compatible
+              image backends.
+            </p>
           </>
         ) : (
           <p>The image or node no longer exists. Close this sheet and choose another target.</p>
         )}
         {error && <p className="board-error">Attach failed: {error}</p>}
         <div className="sheet-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn-ghost" type="button" onClick={onClose}>
+            Cancel
+          </button>
           <button
             className="btn btn-primary"
             type="button"

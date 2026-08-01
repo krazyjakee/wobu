@@ -95,6 +95,9 @@ most likely to make Wobu feel bad on a NAS. Mitigations:
 - **Meshes are lazy.** The closed 3D tab asks for nothing. Opening it lists only fixed-size GLB
   headers, then streams and hashes the selected file once into a disposable machine-local cache;
   three.js reads that local copy, so one view does not pull the same large GLB over SMB twice.
+- **LoRA blobs use the large-blob path.** Sync accepts only the exact
+  `assets/loras/<prefix>/<hash>.safetensors` path for the advertised hash and allows up to 30
+  minutes for these project-owned weights, while ordinary blobs keep the shorter timeout.
 - Long share operations show progress and are cancellable. A stalled NAS must never present
   as a frozen app.
 

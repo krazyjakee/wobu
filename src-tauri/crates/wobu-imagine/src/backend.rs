@@ -96,6 +96,16 @@ pub struct Reference {
     pub mime: String,
 }
 
+/// One provider-installed LoRA to apply to this image, in compiler order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoraWeight {
+    pub content_hash: String,
+    pub provider_name: String,
+    pub trigger_token: String,
+    pub strength: f32,
+}
+
 impl Reference {
     /// Build one from the fragment that earned the slot.
     ///
@@ -166,6 +176,8 @@ pub struct ImageRequest {
     /// In reading order across the buckets, exactly as
     /// `CompiledImages::kept` yields them.
     pub references: Vec<Reference>,
+    /// Ordered, content-addressed LoRA weights the backend must apply exactly.
+    pub loras: Vec<LoraWeight>,
 }
 
 impl ImageRequest {
@@ -190,6 +202,7 @@ impl ImageRequest {
             resolution: negotiated.resolution(),
             seed,
             references: Vec::new(),
+            loras: Vec::new(),
         }
     }
 
@@ -200,6 +213,11 @@ impl ImageRequest {
 
     pub fn with_references(mut self, references: Vec<Reference>) -> ImageRequest {
         self.references = references;
+        self
+    }
+
+    pub fn with_loras(mut self, loras: Vec<LoraWeight>) -> ImageRequest {
+        self.loras = loras;
         self
     }
 
@@ -447,6 +465,11 @@ pub trait ImageBackend: Send + Sync {
     /// handing an unknown remote model an unlimited reference budget builds a
     /// request the provider rejects after payment.
     fn capabilities(&self, model: &str) -> Capabilities;
+
+    /// Whether a real provider probe found this LoRA usable with this model.
+    fn supports_lora(&self, _model: &str, _provider_name: &str) -> bool {
+        false
+    }
 
     /// Make one image.
     ///

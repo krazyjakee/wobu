@@ -10,8 +10,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{AssetRole, Id};
 use crate::kind::Layer;
+use crate::{AssetRole, Id};
 
 /// Where a fragment was routed. See `docs/04-influence-engine.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +61,19 @@ pub struct SnapshotLayer {
 #[serde(rename_all = "camelCase")]
 pub struct InfluenceSnapshot {
     pub layers: Vec<SnapshotLayer>,
+}
+
+/// The ordered participant identity of one multi-entity composition.
+///
+/// Stored under `Generation.params.sceneComposition` so older readers preserve
+/// it and ordinary receipts stay unchanged. `node_id` remains the primary/index
+/// anchor; this is the complete scene identity used by history and replay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneComposition {
+    pub version: u8,
+    pub subject_ids: Vec<Id>,
+    pub subject_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -119,14 +132,20 @@ pub struct MeshOutput {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "axis", rename_all = "snake_case")]
 pub enum VariationValue {
-    Seed { seed: u64 },
+    Seed {
+        seed: u64,
+    },
     FragmentWeight {
         #[serde(rename = "nodeId")]
         node_id: Id,
         weight: f32,
     },
-    Preset { preset: String },
-    Aspect { aspect: String },
+    Preset {
+        preset: String,
+    },
+    Aspect {
+        aspect: String,
+    },
 }
 
 impl Generation {
@@ -138,17 +157,23 @@ impl Generation {
     }
 
     pub fn variation(&self) -> Option<GenerationVariation> {
-        self.params
-            .get("variation")
-            .cloned()
-            .and_then(|value| serde_json::from_value(value).ok())
+        self.params.get("variation").cloned().and_then(|value| serde_json::from_value(value).ok())
     }
 
     pub fn mesh_output(&self) -> Option<MeshOutput> {
+        self.params.get("meshOutput").cloned().and_then(|value| serde_json::from_value(value).ok())
+    }
+
+    pub fn scene_composition(&self) -> Option<SceneComposition> {
         self.params
-            .get("meshOutput")
+            .get("sceneComposition")
             .cloned()
             .and_then(|value| serde_json::from_value(value).ok())
+            .filter(|scene: &SceneComposition| {
+                scene.version == 1
+                    && (2..=4).contains(&scene.subject_ids.len())
+                    && scene.subject_ids.len() == scene.subject_names.len()
+            })
     }
 }
 
@@ -192,5 +217,13 @@ mod tests {
         g.params.insert("meshOutput".into(), serde_json::to_value(&mesh).unwrap());
         assert_eq!(g.mesh_output(), Some(mesh));
         assert!(g.output_asset_ids.is_empty(), "image outputs stay unambiguous");
+
+        let scene = SceneComposition {
+            version: 1,
+            subject_ids: vec![g.node_id, crate::new_id()],
+            subject_names: vec!["Kael".into(), "Mira".into()],
+        };
+        g.params.insert("sceneComposition".into(), serde_json::to_value(&scene).unwrap());
+        assert_eq!(g.scene_composition(), Some(scene));
     }
 }

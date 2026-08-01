@@ -22,6 +22,7 @@ pub mod frontmatter;
 pub mod generations;
 pub mod image;
 pub mod index;
+pub mod lora;
 pub mod markdown;
 pub mod paths;
 pub mod peer;

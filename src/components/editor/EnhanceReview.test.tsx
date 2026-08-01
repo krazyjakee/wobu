@@ -76,9 +76,7 @@ describe('EnhanceReview', () => {
     expect(silhouette).toHaveTextContent('New forward-canted silhouette')
     expect(silhouette).toHaveTextContent('changed')
 
-    const signature = screen
-      .getByRole('heading', { name: 'Signature details' })
-      .closest('section')
+    const signature = screen.getByRole('heading', { name: 'Signature details' }).closest('section')
     expect(signature).toHaveTextContent('unchanged')
     expect(screen.getByTitle('#101820')).toBeInTheDocument()
     expect(screen.getByTitle('#c2703a')).toBeInTheDocument()
@@ -126,7 +124,9 @@ describe('EnhanceReview', () => {
       />,
     )
 
-    expect(screen.getByText(/partial draft stays here locally and is not saved/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/partial draft stays here locally and is not saved/i),
+    ).toBeInTheDocument()
     expect(screen.getByText('Partial words that arrived')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Accept all' })).not.toBeInTheDocument()
 

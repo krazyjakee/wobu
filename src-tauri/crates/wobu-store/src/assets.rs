@@ -200,7 +200,9 @@ pub fn store_mesh_glb(root: &Path, bytes: &[u8]) -> Result<StoredMesh> {
     let path = paths::from_rel_string(root, &rel_path);
     let publish = || match stage_and_rename(root, &path, bytes) {
         Ok(()) => Ok(false),
-        Err(_) if fs::metadata(&path).is_ok_and(|metadata| metadata.len() == bytes.len() as u64) => {
+        Err(_)
+            if fs::metadata(&path).is_ok_and(|metadata| metadata.len() == bytes.len() as u64) =>
+        {
             // Another process won the Windows create race with the same
             // content-addressed bytes.
             Ok(true)

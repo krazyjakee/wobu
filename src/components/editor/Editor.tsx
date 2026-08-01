@@ -202,12 +202,7 @@ export function Editor({
               />
             )}
             {tab === 'refs' && (
-              <ReferencesPane
-                key={node.id}
-                node={node}
-                readOnly={readOnly}
-                autosave={autosave}
-              />
+              <ReferencesPane key={node.id} node={node} readOnly={readOnly} autosave={autosave} />
             )}
             {tab === 'concepts' && (
               <ConceptsPane node={node} queue={queue} kinds={kinds} readOnly={readOnly} />

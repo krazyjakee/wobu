@@ -196,7 +196,13 @@ export function EnhanceReview({
   )
 }
 
-function SectionPreview({ sectionKey, value }: { sectionKey: string; value: SectionValue | undefined }) {
+function SectionPreview({
+  sectionKey,
+  value,
+}: {
+  sectionKey: string
+  value: SectionValue | undefined
+}) {
   if (!value || (value.type === 'text' && value.value.trim() === '')) {
     return <span className="enhance-empty">Not present</span>
   }
@@ -235,7 +241,11 @@ function orderedSections(
   return ordered
 }
 
-function mergeSections(current: SectionMap, proposed: SectionMap, accepted: Set<string>): SectionMap {
+function mergeSections(
+  current: SectionMap,
+  proposed: SectionMap,
+  accepted: Set<string>,
+): SectionMap {
   const merged = { ...current }
   for (const key of accepted) {
     const value = proposed[key]

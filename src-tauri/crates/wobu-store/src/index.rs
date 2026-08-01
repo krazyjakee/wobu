@@ -26,8 +26,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use wobu_core::{
-    Asset, AssetKind, AssetLink, AssetRole, DescriptionState, EnhanceStamp, Generation, Id, LinkEdge,
-    LinkRole, Node, NodeKind, NodeSummary, kind_def,
+    Asset, AssetKind, AssetLink, AssetRole, DescriptionState, EnhanceStamp, Generation, Id,
+    LinkEdge, LinkRole, Node, NodeKind, NodeSummary, kind_def,
 };
 
 use crate::atomic::Stamp;
@@ -987,9 +987,8 @@ impl Index {
 
     /// Project-wide history, newest first, from the disposable read model.
     pub fn generations_all(&self) -> Result<Vec<Generation>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT doc FROM generations ORDER BY created_at DESC, id DESC")?;
+        let mut stmt =
+            self.conn.prepare("SELECT doc FROM generations ORDER BY created_at DESC, id DESC")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         let mut out = Vec::new();
         for row in rows {

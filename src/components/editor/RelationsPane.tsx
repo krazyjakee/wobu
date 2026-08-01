@@ -97,7 +97,9 @@ export function RelationsPane({
                   readOnly={readOnly}
                   busy={busy}
                   onJump={onJump}
-                  onRemove={() => remove.mutate({ nodeId: node.id, toId: link.toId, role: link.role })}
+                  onRemove={() =>
+                    remove.mutate({ nodeId: node.id, toId: link.toId, role: link.role })
+                  }
                   onUpdate={(patch) =>
                     update.mutate({ nodeId: node.id, toId: link.toId, role: link.role, ...patch })
                   }
@@ -108,7 +110,9 @@ export function RelationsPane({
         })}
 
         {!node.parentId && node.links.length === 0 && (
-          <p className="relations-empty">No influences yet. Add the first explicit relation below.</p>
+          <p className="relations-empty">
+            No influences yet. Add the first explicit relation below.
+          </p>
         )}
 
         <div className="relation-add">
@@ -301,7 +305,9 @@ function BacklinkRow({
   onJump: (id: string) => void
 }) {
   return (
-    <div className={edge.enabled ? 'relation-row is-backlink' : 'relation-row is-backlink is-muted'}>
+    <div
+      className={edge.enabled ? 'relation-row is-backlink' : 'relation-row is-backlink is-muted'}
+    >
       <RelationTarget target={source} fallback={edge.fromId} onJump={onJump} />
       <span className="relation-note">{edge.enabled ? 'Inherits from this' : 'Muted'}</span>
       <span className="relation-weight-static">{edge.weight.toFixed(2)}</span>
@@ -335,8 +341,8 @@ function backlinkSummary(
     current.count += 1
     counts.set(source.kind, current)
   }
-  const parts = [...counts.values()].map(({ count, singular, plural }) =>
-    `${count} ${count === 1 ? singular : plural}`,
+  const parts = [...counts.values()].map(
+    ({ count, singular, plural }) => `${count} ${count === 1 ? singular : plural}`,
   )
   return parts.length > 0 ? `${parts.join(', ')} inherit from this.` : 'No active backlinks.'
 }

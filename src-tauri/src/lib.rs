@@ -7,6 +7,7 @@ mod enhance;
 mod error;
 mod generate;
 mod keys;
+mod lora;
 mod redact;
 mod state;
 mod sync;
@@ -128,11 +129,14 @@ pub fn run() {
             commands::influence_resolve,
             commands::prompt_compile,
             generate::generate_start,
+            generate::scene_generate_start,
             generate::generation_replay,
             generate::image_reference_report,
             generate::spend_status,
             generate::spend_ceiling_set,
             generate::spend_recovery_reset,
+            lora::lora_status,
+            lora::lora_train_start,
             enhance::enhance_start,
             enhance::enhance_accept,
             enhance::enhance_discard,

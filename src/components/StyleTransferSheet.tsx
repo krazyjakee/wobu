@@ -43,7 +43,7 @@ export function StyleTransferSheet({
   )
 
   function submit() {
-    if (!candidate || candidate.missingAssetCount > 0) return
+    if (!candidate || candidate.missingAssetCount > 0 || candidate.missingLoraCount > 0) return
     setError(null)
     setPartial(null)
     apply.mutate(
@@ -58,7 +58,9 @@ export function StyleTransferSheet({
           const links = outcome.droppedExternalLinkCount
             ? ` ${outcome.droppedExternalLinkCount} link${outcome.droppedExternalLinkCount === 1 ? '' : 's'} outside the subtree were left behind.`
             : ''
-          toast(`Imported ${outcome.plannedNodeCount} node${outcome.plannedNodeCount === 1 ? '' : 's'}.${links}`)
+          toast(
+            `Imported ${outcome.plannedNodeCount} node${outcome.plannedNodeCount === 1 ? '' : 's'}.${links}`,
+          )
           onImported(outcome.importedRootId)
         },
       },
@@ -66,7 +68,10 @@ export function StyleTransferSheet({
   }
 
   return (
-    <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="scrim"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
       <div className="sheet transfer-sheet" role="dialog" aria-label="Import style or subtree">
         <h2>Import style or subtree</h2>
         {!preview && !error && <p>Reading the source project…</p>}
@@ -78,7 +83,11 @@ export function StyleTransferSheet({
             </p>
             <div className="field">
               <label htmlFor="transfer-root">Root</label>
-              <select id="transfer-root" value={rootId} onChange={(event) => setRootId(event.target.value)}>
+              <select
+                id="transfer-root"
+                value={rootId}
+                onChange={(event) => setRootId(event.target.value)}
+              >
                 {preview.candidates.map((item) => (
                   <option key={item.rootId} value={item.rootId}>
                     {labelFor(kinds.get(item.kind), item.kind)} — {item.name}
@@ -91,16 +100,30 @@ export function StyleTransferSheet({
                 <p>
                   {candidate.nodeCount} node{candidate.nodeCount === 1 ? '' : 's'} ·{' '}
                   {candidate.referenceCount} reference{candidate.referenceCount === 1 ? '' : 's'}
-                  {candidate.externalLinkCount > 0 && ` · ${candidate.externalLinkCount} outside link${candidate.externalLinkCount === 1 ? '' : 's'} dropped`}
+                  {candidate.loraCount > 0 &&
+                    ` · ${candidate.loraCount} LoRA${candidate.loraCount === 1 ? '' : 's'}`}
+                  {candidate.externalLinkCount > 0 &&
+                    ` · ${candidate.externalLinkCount} outside link${candidate.externalLinkCount === 1 ? '' : 's'} dropped`}
                 </p>
                 {candidate.replacesSingleton && (
                   <p className="sheet-warning">
-                    This replaces the destination {labelFor(kinds.get(candidate.kind), candidate.kind)} content. Its destination identity and incoming links are preserved.
+                    This replaces the destination{' '}
+                    {labelFor(kinds.get(candidate.kind), candidate.kind)} content. Its destination
+                    identity and incoming links are preserved.
                   </p>
                 )}
                 {candidate.missingAssetCount > 0 && (
                   <p className="sheet-err">
-                    {candidate.missingAssetCount} referenced image{candidate.missingAssetCount === 1 ? ' is' : 's are'} missing from the source. Restore them before importing.
+                    {candidate.missingAssetCount} referenced image
+                    {candidate.missingAssetCount === 1 ? ' is' : 's are'} missing from the source.
+                    Restore them before importing.
+                  </p>
+                )}
+                {candidate.missingLoraCount > 0 && (
+                  <p className="sheet-err">
+                    {candidate.missingLoraCount} pinned LoRA weight file
+                    {candidate.missingLoraCount === 1 ? ' is' : 's are'} missing from the source.
+                    Restore them before importing.
                   </p>
                 )}
               </div>
@@ -111,19 +134,33 @@ export function StyleTransferSheet({
         {error && <div className="sheet-err">{error}</div>}
         {partial && (
           <div className="sheet-err" role="status">
-            Transfer stopped after {partial.appliedNodeIds.length} of {partial.plannedNodeCount} nodes.
-            {' '}{partial.failure} {partial.pendingNodeIds.length} node{partial.pendingNodeIds.length === 1 ? '' : 's'} remain unapplied.
-            {partial.conflictPaths.length > 0 && ` Incoming content is recoverable at ${partial.conflictPaths.join(', ')}.`}
+            Transfer stopped after {partial.appliedNodeIds.length} of {partial.plannedNodeCount}{' '}
+            nodes. {partial.failure} {partial.pendingNodeIds.length} node
+            {partial.pendingNodeIds.length === 1 ? '' : 's'} remain unapplied.
+            {partial.conflictPaths.length > 0 &&
+              ` Incoming content is recoverable at ${partial.conflictPaths.join(', ')}.`}
           </div>
         )}
         <div className="sheet-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          <button className="btn btn-ghost" onClick={onClose}>
+            Close
+          </button>
           <button
             className="btn btn-primary"
             onClick={submit}
-            disabled={!candidate || candidate.missingAssetCount > 0 || apply.isPending || !!partial}
+            disabled={
+              !candidate ||
+              candidate.missingAssetCount > 0 ||
+              candidate.missingLoraCount > 0 ||
+              apply.isPending ||
+              !!partial
+            }
           >
-            {apply.isPending ? 'Importing…' : candidate?.replacesSingleton ? 'Replace and import' : 'Import'}
+            {apply.isPending
+              ? 'Importing…'
+              : candidate?.replacesSingleton
+                ? 'Replace and import'
+                : 'Import'}
           </button>
         </div>
       </div>

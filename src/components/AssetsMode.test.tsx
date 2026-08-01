@@ -67,12 +67,7 @@ function open(readOnly = false) {
   })
   return render(
     <QueryClientProvider client={qc}>
-      <AssetsMode
-        nodes={nodes}
-        kinds={kinds}
-        readOnly={readOnly}
-        onJump={vi.fn()}
-      />
+      <AssetsMode nodes={nodes} kinds={kinds} readOnly={readOnly} onJump={vi.fn()} />
     </QueryClientProvider>,
   )
 }
@@ -146,7 +141,9 @@ describe('AssetsMode', () => {
     expect(screen.queryByRole('button', { name: 'Select reference asset reference' })).toBeNull()
 
     fireEvent.change(screen.getByLabelText('Filter assets by kind'), { target: { value: 'all' } })
-    fireEvent.change(screen.getByLabelText('Filter assets by role'), { target: { value: 'palette' } })
+    fireEvent.change(screen.getByLabelText('Filter assets by role'), {
+      target: { value: 'palette' },
+    })
     expect(screen.getByRole('button', { name: 'Select upload asset upload' })).toBeVisible()
 
     fireEvent.change(screen.getByLabelText('Filter assets by role'), { target: { value: 'all' } })
@@ -217,7 +214,9 @@ describe('AssetsMode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete…' }))
 
     const confirm = screen.getByRole('alertdialog', { name: 'Delete orphaned asset?' })
-    expect(within(confirm).getByText(/immutable generation receipt will remain/)).toBeInTheDocument()
+    expect(
+      within(confirm).getByText(/immutable generation receipt will remain/),
+    ).toBeInTheDocument()
     expect(h.invoke).not.toHaveBeenCalledWith('asset_delete', expect.anything())
     fireEvent.click(within(confirm).getByRole('button', { name: 'Delete permanently' }))
     await waitFor(() =>

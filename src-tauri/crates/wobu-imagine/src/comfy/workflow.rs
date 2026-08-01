@@ -255,7 +255,6 @@ impl Workflow {
                 ),
             });
         }
-
         let mut graph = self.parse()?;
         for binding in self.bindings {
             let value = match binding.slot {
@@ -268,8 +267,86 @@ impl Workflow {
             };
             set(&mut graph, self.id, *binding, value)?;
         }
+        if !request.loras.is_empty() {
+            apply_loras(&mut graph, self.family, request)?;
+        }
         Ok(graph)
     }
+}
+
+fn apply_loras(
+    graph: &mut Map<String, Value>,
+    family: Family,
+    request: &ImageRequest,
+) -> Result<()> {
+    struct LoraBindings {
+        model_loader: &'static str,
+        model_consumers: &'static [(&'static str, &'static str)],
+        clip_loader: &'static str,
+        clip_consumers: &'static [(&'static str, &'static str)],
+    }
+
+    let bindings = match family {
+        Family::Checkpoint => LoraBindings {
+            model_loader: "4",
+            model_consumers: &[("3", "model")],
+            clip_loader: "4",
+            clip_consumers: &[("6", "clip"), ("7", "clip")],
+        },
+        Family::Unet => LoraBindings {
+            model_loader: "10",
+            model_consumers: &[("18", "model"), ("19", "model")],
+            clip_loader: "11",
+            clip_consumers: &[("13", "clip")],
+        },
+    };
+    let mut model_edge = json_edge(bindings.model_loader, 0);
+    let mut clip_edge =
+        json_edge(bindings.clip_loader, if family == Family::Checkpoint { 1 } else { 0 });
+    for (index, lora) in request.loras.iter().enumerate() {
+        let id = format!("wobu_lora_{index}");
+        graph.insert(
+            id.clone(),
+            serde_json::json!({
+                "class_type": "LoraLoader",
+                "inputs": {
+                    "model": model_edge,
+                    "clip": clip_edge,
+                    "lora_name": lora.provider_name.as_str(),
+                    "strength_model": lora.strength,
+                    "strength_clip": lora.strength,
+                },
+            }),
+        );
+        model_edge = json_edge(&id, 0);
+        clip_edge = json_edge(&id, 1);
+    }
+    for (node, input) in bindings.model_consumers {
+        set_input(graph, node, input, model_edge.clone())?;
+    }
+    for (node, input) in bindings.clip_consumers {
+        set_input(graph, node, input, clip_edge.clone())?;
+    }
+    Ok(())
+}
+
+fn json_edge(node: &str, slot: u32) -> Value {
+    serde_json::json!([node, slot])
+}
+
+fn set_input(graph: &mut Map<String, Value>, node: &str, input: &str, value: Value) -> Result<()> {
+    let inputs = graph
+        .get_mut(node)
+        .and_then(|value| value.get_mut("inputs"))
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| Error::Unsupported {
+            detail: format!("workflow node {node} has no inputs"),
+        })?;
+    let target = inputs.get_mut(input).ok_or_else(|| Error::Unsupported {
+        detail: format!("workflow node {node} has no {input} input"),
+    })?;
+    *target = value;
+    Ok(())
 }
 
 /// Write one input, or say which node and field were not there.
@@ -312,6 +389,7 @@ fn set(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LoraWeight;
     use crate::aspect::{AspectRatio, Resolution};
     use crate::capability::{Capabilities, ReferenceMechanisms};
     use crate::negotiate::negotiate;
@@ -344,6 +422,15 @@ mod tests {
         graph[node]["inputs"][input].as_str().unwrap().to_owned()
     }
 
+    fn lora(hash: &str, name: &str, strength: f32) -> LoraWeight {
+        LoraWeight {
+            content_hash: hash.into(),
+            provider_name: name.into(),
+            trigger_token: format!("wobu_{hash}"),
+            strength,
+        }
+    }
+
     #[test]
     fn every_shipped_template_parses_and_every_binding_points_at_a_real_input() {
         // The failure this guards is a template edited without its bindings: a
@@ -373,6 +460,36 @@ mod tests {
             .unwrap();
         assert_eq!(text_at(&graph, "6", "text"), "a hooded figure in ash-glazed plate");
         assert_eq!(text_at(&graph, "7", "text"), "modern firearms");
+    }
+
+    #[test]
+    fn checkpoint_loras_chain_in_order_and_feed_model_and_both_clip_encoders() {
+        let request = request("portrait", "artifact").with_loras(vec![
+            lora("first", "first.safetensors", 0.8),
+            lora("second", "second.safetensors", 0.6),
+        ]);
+        let graph = SD_CHECKPOINT.patch(&request).unwrap();
+        assert_eq!(graph["wobu_lora_0"]["inputs"]["model"], serde_json::json!(["4", 0]));
+        assert_eq!(graph["wobu_lora_0"]["inputs"]["clip"], serde_json::json!(["4", 1]));
+        assert_eq!(graph["wobu_lora_1"]["inputs"]["model"], serde_json::json!(["wobu_lora_0", 0]));
+        assert_eq!(graph["3"]["inputs"]["model"], serde_json::json!(["wobu_lora_1", 0]));
+        assert_eq!(graph["6"]["inputs"]["clip"], serde_json::json!(["wobu_lora_1", 1]));
+        assert_eq!(graph["7"]["inputs"]["clip"], serde_json::json!(["wobu_lora_1", 1]));
+    }
+
+    #[test]
+    fn flux_unet_lora_chain_feeds_both_model_consumers_and_the_encoder() {
+        let request = request("portrait", "").with_loras(vec![lora(
+            "flux",
+            "flux-character.safetensors",
+            0.75,
+        )]);
+        let graph = FLUX_UNET.patch(&request).unwrap();
+        assert_eq!(graph["wobu_lora_0"]["inputs"]["model"], serde_json::json!(["10", 0]));
+        assert_eq!(graph["wobu_lora_0"]["inputs"]["clip"], serde_json::json!(["11", 0]));
+        assert_eq!(graph["18"]["inputs"]["model"], serde_json::json!(["wobu_lora_0", 0]));
+        assert_eq!(graph["19"]["inputs"]["model"], serde_json::json!(["wobu_lora_0", 0]));
+        assert_eq!(graph["13"]["inputs"]["clip"], serde_json::json!(["wobu_lora_0", 1]));
     }
 
     #[test]

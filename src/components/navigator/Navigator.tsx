@@ -184,7 +184,7 @@ export function Navigator({
             </p>
           )}
 
-        {/*
+          {/*
           The filter stays name-and-summary only; the palette is the search
           surface. This is a decision, not an omission (#12).
 
@@ -205,67 +205,67 @@ export function Navigator({
           )}
 
           {groups.map((g) => {
-          const visible = filterTree(g.roots, filter)
-          if (filter && visible.length === 0) return null
-          const open = !closedGroups[g.kind] || !!filter
-          return (
-            <div key={g.kind} className={open ? 'group open' : 'group'}>
-              <button
-                className={`group-h${dropId === `group:${g.kind}` ? ' drop-target' : ''}`}
-                onClick={() => toggleGroup(g.kind)}
-                onDragOver={(e) => {
-                  if (!canDrop(null, g.kind)) return
-                  e.preventDefault()
-                  setDropId(`group:${g.kind}`)
-                }}
-                onDragLeave={() => setDropId((d) => (d === `group:${g.kind}` ? null : d))}
-                onDrop={(e) => {
-                  if (!canDrop(null, g.kind)) return
-                  e.preventDefault()
-                  doMove(null)
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  setCtx(null)
-                  if (!readOnly) onNewNode(g.kind, null)
-                }}
-              >
-                <Icon name="chev" />
-                {pluralFor(g.def, g.kind)}
-                <span className="gcount">{g.count}</span>
-              </button>
-              {open && (
-                <div className="group-items">
-                  {visible.map((t) => (
-                    <Row
-                      key={t.node.id}
-                      t={t}
-                      kinds={kinds}
-                      selectedId={selectedId}
-                      collapsed={collapsedNodes}
-                      forceOpen={!!filter}
-                      dragId={dragId}
-                      dropId={dropId}
-                      onSelect={select}
-                      onToggle={toggleNodeOpen}
-                      onContext={(x, y, node) => setCtx({ x, y, node })}
-                      onDragStart={(id) => setDragId(id)}
-                      onDragEnd={() => {
-                        setDragId(null)
-                        setDropId(null)
-                      }}
-                      canDrop={canDrop}
-                      onDropOn={(id) => doMove(id)}
-                      setDropId={setDropId}
-                      readOnly={readOnly}
-                      editedElsewhere={editedElsewhere}
-                      onAssetDrop={onAssetDrop}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )
+            const visible = filterTree(g.roots, filter)
+            if (filter && visible.length === 0) return null
+            const open = !closedGroups[g.kind] || !!filter
+            return (
+              <div key={g.kind} className={open ? 'group open' : 'group'}>
+                <button
+                  className={`group-h${dropId === `group:${g.kind}` ? ' drop-target' : ''}`}
+                  onClick={() => toggleGroup(g.kind)}
+                  onDragOver={(e) => {
+                    if (!canDrop(null, g.kind)) return
+                    e.preventDefault()
+                    setDropId(`group:${g.kind}`)
+                  }}
+                  onDragLeave={() => setDropId((d) => (d === `group:${g.kind}` ? null : d))}
+                  onDrop={(e) => {
+                    if (!canDrop(null, g.kind)) return
+                    e.preventDefault()
+                    doMove(null)
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setCtx(null)
+                    if (!readOnly) onNewNode(g.kind, null)
+                  }}
+                >
+                  <Icon name="chev" />
+                  {pluralFor(g.def, g.kind)}
+                  <span className="gcount">{g.count}</span>
+                </button>
+                {open && (
+                  <div className="group-items">
+                    {visible.map((t) => (
+                      <Row
+                        key={t.node.id}
+                        t={t}
+                        kinds={kinds}
+                        selectedId={selectedId}
+                        collapsed={collapsedNodes}
+                        forceOpen={!!filter}
+                        dragId={dragId}
+                        dropId={dropId}
+                        onSelect={select}
+                        onToggle={toggleNodeOpen}
+                        onContext={(x, y, node) => setCtx({ x, y, node })}
+                        onDragStart={(id) => setDragId(id)}
+                        onDragEnd={() => {
+                          setDragId(null)
+                          setDropId(null)
+                        }}
+                        canDrop={canDrop}
+                        onDropOn={(id) => doMove(id)}
+                        setDropId={setDropId}
+                        readOnly={readOnly}
+                        editedElsewhere={editedElsewhere}
+                        onAssetDrop={onAssetDrop}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           })}
         </div>
       ) : (

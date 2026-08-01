@@ -17,29 +17,24 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use serde_json::{Map, Value, json};
 
+use crate::Cancel;
 use crate::backend::ProgressSink;
-use crate::comfy::{self, ComfyBackend, Installed};
 use crate::comfy::socket::{self, Frame, Next};
 use crate::comfy::wire::Event;
+use crate::comfy::{self, ComfyBackend, Installed};
 use crate::dimensions;
 use crate::error::{Error, Result};
 use crate::mesh::{
     FACE_COUNT, GenerateType, GeneratedMesh, MeshBackend, MeshCapabilities, MeshFile, MeshFormat,
     MeshInput, MeshOutcome, MeshRequest, MeshUsage, View,
 };
-use crate::Cancel;
 
 pub const LABEL: &str = "Local Hunyuan3D 2.1 (ComfyUI)";
 pub const DEFAULT_MODEL: &str = "hunyuan3d-dit-v2-1.ckpt";
 
 const OUTPUT_NODE: &str = "5";
-const REQUIRED_NODES: [&str; 5] = [
-    "LoadImage",
-    "Hy3D_2_1SimpleMeshGen",
-    "Hy3DPostprocessMesh",
-    "Hy3DExportMesh",
-    "Preview3D",
-];
+const REQUIRED_NODES: [&str; 5] =
+    ["LoadImage", "Hy3D_2_1SimpleMeshGen", "Hy3DPostprocessMesh", "Hy3DExportMesh", "Preview3D"];
 
 /// A deliberately separate mesh adapter around the shared ComfyUI transport.
 pub struct ComfyMeshBackend {
@@ -48,10 +43,7 @@ pub struct ComfyMeshBackend {
 
 impl std::fmt::Debug for ComfyMeshBackend {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("ComfyMeshBackend")
-            .field("base", &self.comfy.base_url())
-            .finish()
+        formatter.debug_struct("ComfyMeshBackend").field("base", &self.comfy.base_url()).finish()
     }
 }
 
@@ -100,10 +92,11 @@ impl ComfyMeshBackend {
 
         // A cached graph can finish before a socket opened after `/prompt`
         // receives its first event, so this order is part of the protocol.
-        let socket = match socket::until_cancelled(socket::connect(&self.comfy.ws_url()), cancel).await {
-            None => return Err(Error::Cancelled),
-            Some(socket) => socket?,
-        };
+        let socket =
+            match socket::until_cancelled(socket::connect(&self.comfy.ws_url()), cancel).await {
+                None => return Err(Error::Cancelled),
+                Some(socket) => socket?,
+            };
         let prompt_id = self.comfy.queue(graph, cancel).await?;
         match watch(socket, &prompt_id, &classes, progress, cancel).await {
             Ok(()) => {}
@@ -193,7 +186,12 @@ fn validate(request: &MeshRequest) -> Result<()> {
     }
     if !FACE_COUNT.contains(&request.face_count) {
         return Err(Error::Unsupported {
-            detail: format!("{} faces is outside {}–{}", request.face_count, FACE_COUNT.start(), FACE_COUNT.end()),
+            detail: format!(
+                "{} faces is outside {}–{}",
+                request.face_count,
+                FACE_COUNT.start(),
+                FACE_COUNT.end()
+            ),
         });
     }
     if request.enable_pbr || request.generate_type != GenerateType::Geometry {
@@ -211,9 +209,9 @@ fn validate(request: &MeshRequest) -> Result<()> {
         MeshInput::Views(views) => Err(Error::Unsupported {
             detail: format!("{LABEL} takes one front image, not {} Turnaround views", views.len()),
         }),
-        MeshInput::Prompt(_) => Err(Error::Unsupported {
-            detail: format!("{LABEL} has no text-to-mesh workflow"),
-        }),
+        MeshInput::Prompt(_) => {
+            Err(Error::Unsupported { detail: format!("{LABEL} has no text-to-mesh workflow") })
+        }
     }
 }
 
@@ -234,7 +232,9 @@ fn verify_install(installed: &Installed, model: &str) -> Result<()> {
 
 fn validate_image(bytes: &[u8], labelled_mime: &str) -> Result<()> {
     if dimensions::read(bytes).is_none() {
-        return Err(Error::Unsupported { detail: "the local mesh input is not a readable image".into() });
+        return Err(Error::Unsupported {
+            detail: "the local mesh input is not a readable image".into(),
+        });
     }
     let actual = dimensions::mime(bytes);
     if actual != "image/png" && actual != "image/jpeg" {
@@ -244,7 +244,9 @@ fn validate_image(bytes: &[u8], labelled_mime: &str) -> Result<()> {
     }
     if !actual.eq_ignore_ascii_case(labelled_mime) {
         return Err(Error::Unsupported {
-            detail: format!("the front view is labelled {labelled_mime}, but its bytes are {actual}"),
+            detail: format!(
+                "the front view is labelled {labelled_mime}, but its bytes are {actual}"
+            ),
         });
     }
     Ok(())
@@ -340,7 +342,8 @@ where
             // GET and agrees with ComfyUI's official WebSocket example.
             Event::Executing { node: None, .. } => return Ok(()),
             Event::Progress { value, max, .. } => {
-                let note = running.as_ref().and_then(|id| classes.get(id)).map(|class| class_note(class));
+                let note =
+                    running.as_ref().and_then(|id| classes.get(id)).map(|class| class_note(class));
                 progress.step(value, max.max(1), note);
             }
             Event::ExecutionError { node_type, message, .. } => {
@@ -408,10 +411,7 @@ fn upload_name(mime: &str) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or_default();
-    format!(
-        "wobu-hy3d-{since_epoch:x}-{:x}.{extension}",
-        NEXT.fetch_add(1, Ordering::Relaxed),
-    )
+    format!("wobu-hy3d-{since_epoch:x}-{:x}.{extension}", NEXT.fetch_add(1, Ordering::Relaxed),)
 }
 
 fn missing_nodes(missing: &[String]) -> Error {
@@ -451,12 +451,9 @@ mod tests {
     }
 
     fn request() -> MeshRequest {
-        MeshRequest::from_views(
-            DEFAULT_MODEL,
-            vec![MeshView::new(View::Front, png(), "image/png")],
-        )
-        .with_face_count(40_000)
-        .with_generate_type(GenerateType::Geometry)
+        MeshRequest::from_views(DEFAULT_MODEL, vec![MeshView::new(View::Front, png(), "image/png")])
+            .with_face_count(40_000)
+            .with_generate_type(GenerateType::Geometry)
     }
 
     #[test]

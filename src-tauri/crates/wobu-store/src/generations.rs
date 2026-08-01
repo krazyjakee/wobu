@@ -34,18 +34,15 @@ pub fn write(root: &Path, generation: &Generation) -> Result<(String, Stamp)> {
 /// rebuild change the number of results in the Concepts grid.
 pub fn read_at(root: &Path, path: &Path) -> Result<Option<(Generation, String, Stamp)>> {
     let Some((text, stamp)) = atomic::read_stamped(path)? else { return Ok(None) };
-    let generation: Generation =
-        serde_json::from_str(&text).map_err(|error| Error::MalformedGeneration {
-            path: path.to_path_buf(),
-            reason: error.to_string(),
-        })?;
-    let rel = path
-        .strip_prefix(root)
-        .map(paths::to_rel_string)
-        .map_err(|_| Error::MalformedGeneration {
+    let generation: Generation = serde_json::from_str(&text).map_err(|error| {
+        Error::MalformedGeneration { path: path.to_path_buf(), reason: error.to_string() }
+    })?;
+    let rel = path.strip_prefix(root).map(paths::to_rel_string).map_err(|_| {
+        Error::MalformedGeneration {
             path: path.to_path_buf(),
             reason: "generation file is outside the project".to_string(),
-        })?;
+        }
+    })?;
     let expected = generation.rel_path();
     if rel != expected {
         return Err(Error::MalformedGeneration {

@@ -1,12 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StatusBar, relativeTime } from './StatusBar'
-import type {
-  ProjectSummary,
-  ProjectSyncStatus,
-  QueueSnapshot,
-  StatusBarBackend,
-} from '../lib/api'
+import type { ProjectSummary, ProjectSyncStatus, QueueSnapshot, StatusBarBackend } from '../lib/api'
 import { useUI } from '../store/ui'
 
 const project: ProjectSummary = {
@@ -100,8 +95,9 @@ describe('peer sync in the status bar', () => {
 
 describe('relative sync time', () => {
   it('does not render future clock skew as a negative duration', () => {
-    expect(relativeTime(Date.parse('2026-08-01T12:01:00Z'), Date.parse('2026-08-01T12:00:00Z')))
-      .toBe('just now')
+    expect(
+      relativeTime(Date.parse('2026-08-01T12:01:00Z'), Date.parse('2026-08-01T12:00:00Z')),
+    ).toBe('just now')
   })
 })
 

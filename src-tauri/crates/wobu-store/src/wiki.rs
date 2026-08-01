@@ -127,8 +127,8 @@ fn validate_destination(snapshot: &WikiSnapshot, destination: &Path) -> Result<(
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     let parent = fs::canonicalize(parent).map_err(|error| Error::io(parent, error))?;
-    let root = fs::canonicalize(&snapshot.root)
-        .map_err(|error| Error::io(&snapshot.root, error))?;
+    let root =
+        fs::canonicalize(&snapshot.root).map_err(|error| Error::io(&snapshot.root, error))?;
     if parent.starts_with(&root) {
         return Err(Error::ExportInsideProject(destination.to_path_buf()));
     }
@@ -140,9 +140,10 @@ fn copy_media(
     destination: &Path,
 ) -> Result<(HashMap<Id, ExportMedia>, usize, usize)> {
     let wanted = wanted_assets(snapshot);
-    let assets: HashMap<Id, &Asset> = snapshot.assets.iter().map(|asset| (asset.id, asset)).collect();
-    let canonical_root = fs::canonicalize(&snapshot.root)
-        .map_err(|error| Error::io(&snapshot.root, error))?;
+    let assets: HashMap<Id, &Asset> =
+        snapshot.assets.iter().map(|asset| (asset.id, asset)).collect();
+    let canonical_root =
+        fs::canonicalize(&snapshot.root).map_err(|error| Error::io(&snapshot.root, error))?;
     let mut out = HashMap::new();
     let mut copied = 0;
     let mut missing = 0;
@@ -157,7 +158,8 @@ fn copy_media(
         let original = paths::from_rel_string(&snapshot.root, &asset.rel_path);
         match safe_source(&canonical_root, &original)? {
             Some(source) => {
-                let extension = source.extension().and_then(|value| value.to_str()).unwrap_or("img");
+                let extension =
+                    source.extension().and_then(|value| value.to_str()).unwrap_or("img");
                 let relative = format!("media/originals/{id}.{extension}");
                 copy(&source, &destination.join(&relative))?;
                 exported.original = Some(relative);
@@ -210,9 +212,7 @@ fn wanted_assets(snapshot: &WikiSnapshot) -> BTreeSet<Id> {
 }
 
 fn copy(source: &Path, destination: &Path) -> Result<()> {
-    fs::copy(source, destination)
-        .map(|_| ())
-        .map_err(|error| Error::io(destination, error))
+    fs::copy(source, destination).map(|_| ()).map_err(|error| Error::io(destination, error))
 }
 
 fn write(path: &Path, contents: &[u8]) -> Result<()> {
@@ -228,15 +228,12 @@ fn index_page(snapshot: &WikiSnapshot, media: &HashMap<Id, ExportMedia>) -> Stri
         snapshot.generations.len()
     );
     for definition in wobu_core::kind_registry() {
-        let mut nodes: Vec<_> = snapshot
-            .nodes
-            .iter()
-            .filter(|node| node.kind == definition.kind)
-            .collect();
+        let mut nodes: Vec<_> =
+            snapshot.nodes.iter().filter(|node| node.kind == definition.kind).collect();
         if nodes.is_empty() {
             continue;
         }
-        nodes.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+        nodes.sort_by_key(|node| node.name.to_lowercase());
         body.push_str(&format!(
             "<section><h2>{}</h2><div class=\"cards\">",
             text(definition.plural)
@@ -261,11 +258,7 @@ fn index_page(snapshot: &WikiSnapshot, media: &HashMap<Id, ExportMedia>) -> Stri
     page(snapshot, &snapshot.project_name, "", &body)
 }
 
-fn node_page(
-    snapshot: &WikiSnapshot,
-    node: &Node,
-    media: &HashMap<Id, ExportMedia>,
-) -> String {
+fn node_page(snapshot: &WikiSnapshot, node: &Node, media: &HashMap<Id, ExportMedia>) -> String {
     let definition = kind_def(node.kind);
     let mut body = format!(
         "<article class=\"node-page\"><header class=\"node-head\"><p class=\"eyebrow\">{}</p><h1>{}</h1><p class=\"lede\">{}</p>{}</header>",
@@ -295,30 +288,30 @@ fn node_page(
         body.push_str(&render_markdown(&node.notes_raw));
         body.push_str("</div></section>");
     }
-    if let Some(description) = &node.description {
-        if !description.is_empty() {
-            body.push_str("<section><h2>Description</h2><div class=\"description\">");
-            for (key, value) in &description.sections {
-                let label = definition
-                    .sections
-                    .iter()
-                    .find(|section| section.key == key)
-                    .map_or_else(|| title_case(key), |section| section.label.to_string());
-                body.push_str(&format!("<section><h3>{}</h3>", text(&label)));
-                match value {
-                    SectionValue::Text(value) => body.push_str(&render_markdown(value)),
-                    SectionValue::List(values) => {
-                        body.push_str("<ul>");
-                        for value in values {
-                            body.push_str(&format!("<li>{}</li>", text(value)));
-                        }
-                        body.push_str("</ul>");
+    if let Some(description) = &node.description
+        && !description.is_empty()
+    {
+        body.push_str("<section><h2>Description</h2><div class=\"description\">");
+        for (key, value) in &description.sections {
+            let label = definition
+                .sections
+                .iter()
+                .find(|section| section.key == key)
+                .map_or_else(|| title_case(key), |section| section.label.to_string());
+            body.push_str(&format!("<section><h3>{}</h3>", text(&label)));
+            match value {
+                SectionValue::Text(value) => body.push_str(&render_markdown(value)),
+                SectionValue::List(values) => {
+                    body.push_str("<ul>");
+                    for value in values {
+                        body.push_str(&format!("<li>{}</li>", text(value)));
                     }
+                    body.push_str("</ul>");
                 }
-                body.push_str("</section>");
             }
-            body.push_str("</div></section>");
+            body.push_str("</section>");
         }
+        body.push_str("</div></section>");
     }
     body.push_str(&relations(snapshot, node));
     body.push_str(&references(node, media));
@@ -391,15 +384,13 @@ fn references(node: &Node, media: &HashMap<Id, ExportMedia>) -> String {
     out
 }
 
-fn concepts(
-    snapshot: &WikiSnapshot,
-    node: &Node,
-    media: &HashMap<Id, ExportMedia>,
-) -> String {
+fn concepts(snapshot: &WikiSnapshot, node: &Node, media: &HashMap<Id, ExportMedia>) -> String {
     let generations: Vec<_> = snapshot
         .generations
         .iter()
-        .filter(|generation| generation.node_id == node.id && !generation.output_asset_ids.is_empty())
+        .filter(|generation| {
+            generation.node_id == node.id && !generation.output_asset_ids.is_empty()
+        })
         .collect();
     if generations.is_empty() {
         return String::new();
@@ -412,7 +403,10 @@ fn concepts(
                 media.get(id),
                 "../",
                 &format!("{} concept", node.name),
-                &format!("{} · {} · {} · seed {}", generation.preset, date, generation.model, generation.seed),
+                &format!(
+                    "{} · {} · {} · seed {}",
+                    generation.preset, date, generation.model, generation.seed
+                ),
             ));
         }
     }
@@ -420,12 +414,7 @@ fn concepts(
     out
 }
 
-fn media_figure(
-    media: Option<&ExportMedia>,
-    prefix: &str,
-    alt: &str,
-    caption: &str,
-) -> String {
+fn media_figure(media: Option<&ExportMedia>, prefix: &str, alt: &str, caption: &str) -> String {
     match media.and_then(|item| item.original.as_ref().map(|original| (item, original))) {
         Some((item, original)) => {
             let source = item.thumb.as_ref().unwrap_or(original);
@@ -470,7 +459,10 @@ fn graph_page(snapshot: &WikiSnapshot) -> String {
         .map(|(index, node)| {
             (
                 node.id,
-                (40 + (index % columns) * (card_width + gap_x), 60 + (index / columns) * (card_height + gap_y)),
+                (
+                    40 + (index % columns) * (card_width + gap_x),
+                    60 + (index / columns) * (card_height + gap_y),
+                ),
             )
         })
         .collect();
@@ -489,7 +481,15 @@ fn graph_page(snapshot: &WikiSnapshot) -> String {
         for link in &node.links {
             if let Some(target) = positions.get(&link.to_id) {
                 let class = if link.enabled { "influence" } else { "influence muted" };
-                svg.push_str(&edge(x1, y1, *target, card_width, card_height, class, link.role.label()));
+                svg.push_str(&edge(
+                    x1,
+                    y1,
+                    *target,
+                    card_width,
+                    card_height,
+                    class,
+                    link.role.label(),
+                ));
             }
         }
     }
@@ -636,9 +636,7 @@ fn title_case(value: &str) -> String {
 
 fn capitalise(value: &str) -> String {
     let mut chars = value.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
+    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 fn truncate(value: &str, max: usize) -> String {

@@ -170,9 +170,15 @@ export function RelationshipGraph({
         </span>
       </div>
       <div className="graph-legend" aria-label="Relationship legend">
-        <span><i className="is-parent" /> Parent</span>
-        <span><i className="is-influence" /> Influence</span>
-        <span><i className="is-muted" /> Muted</span>
+        <span>
+          <i className="is-parent" /> Parent
+        </span>
+        <span>
+          <i className="is-influence" /> Influence
+        </span>
+        <span>
+          <i className="is-muted" /> Muted
+        </span>
       </div>
 
       {loading && <p className="nav-note">Reading relationships…</p>}
@@ -194,13 +200,23 @@ export function RelationshipGraph({
               aria-label={`${layout.nodes.length} nodes and ${layout.edges.length} relationships`}
             >
               <defs>
-                <marker id="graph-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <marker
+                  id="graph-arrow"
+                  viewBox="0 0 8 8"
+                  refX="7"
+                  refY="4"
+                  markerWidth="5"
+                  markerHeight="5"
+                  orient="auto-start-reverse"
+                >
                   <path d="M 0 0 L 8 4 L 0 8 z" />
                 </marker>
               </defs>
               {layout.groups.map((group) => (
                 <g key={group.kind} className="graph-group-label">
-                  <text x={PAD_X} y={group.y + 13}>{group.label}</text>
+                  <text x={PAD_X} y={group.y + 13}>
+                    {group.label}
+                  </text>
                   <line x1={PAD_X} x2={layout.width - PAD_X} y1={group.y + 20} y2={group.y + 20} />
                 </g>
               ))}
@@ -214,7 +230,9 @@ export function RelationshipGraph({
                   edge.kind === 'parent' ? 'is-parent' : 'is-influence',
                   edge.enabled ? '' : 'is-muted',
                   active ? 'is-connected' : '',
-                ].filter(Boolean).join(' ')
+                ]
+                  .filter(Boolean)
+                  .join(' ')
                 return (
                   <path
                     key={edge.key}
@@ -235,17 +253,18 @@ export function RelationshipGraph({
                 node.name.toLowerCase().includes(needle) ||
                 node.summary.toLowerCase().includes(needle)
               const faded =
-                selectedId !== node.id &&
-                ((!!selectedId && !connected.has(node.id)) || !matches)
+                selectedId !== node.id && ((!!selectedId && !connected.has(node.id)) || !matches)
               return (
                 <button
                   key={node.id}
                   className={`graph-node${selectedId === node.id ? ' is-sel' : ''}${faded ? ' is-dim' : ''}${assetDropId === node.id ? ' drop-target' : ''}`}
-                  style={{
-                    left: node.x,
-                    top: node.y,
-                    '--graph-kind': colorFor(def, node.kind),
-                  } as CSSProperties}
+                  style={
+                    {
+                      left: node.x,
+                      top: node.y,
+                      '--graph-kind': colorFor(def, node.kind),
+                    } as CSSProperties
+                  }
                   aria-label={`Open ${node.name}, ${labelFor(def, node.kind)}`}
                   aria-current={selectedId === node.id ? 'true' : undefined}
                   title={node.summary || labelFor(def, node.kind)}
@@ -255,7 +274,8 @@ export function RelationshipGraph({
                       readOnly ||
                       !onAssetDrop ||
                       !Array.from(event.dataTransfer.types).includes(BOARD_ASSET_MIME)
-                    ) return
+                    )
+                      return
                     event.preventDefault()
                     event.dataTransfer.dropEffect = 'link'
                     setAssetDropId(node.id)
@@ -286,7 +306,9 @@ export function RelationshipGraph({
         <p className="graph-footnote">No parent or influence relationships yet.</p>
       )}
       {layout.dangling > 0 && (
-        <p className="graph-footnote">{layout.dangling} relationship{layout.dangling === 1 ? '' : 's'} point to missing nodes.</p>
+        <p className="graph-footnote">
+          {layout.dangling} relationship{layout.dangling === 1 ? '' : 's'} point to missing nodes.
+        </p>
       )}
     </section>
   )

@@ -433,16 +433,14 @@ impl SyncManager {
         shares
             .into_iter()
             .map(|share| {
-                let mut snapshot = runtime
-                    .get(&share.project)
-                    .map_or_else(
-                        || ProjectSyncStatus {
-                            project: share.project,
-                            state: SyncPhase::Idle,
-                            peers: Vec::new(),
-                        },
-                        |status| status.snapshot(share.project),
-                    );
+                let mut snapshot = runtime.get(&share.project).map_or_else(
+                    || ProjectSyncStatus {
+                        project: share.project,
+                        state: SyncPhase::Idle,
+                        peers: Vec::new(),
+                    },
+                    |status| status.snapshot(share.project),
+                );
 
                 Self::add_known_peers(&mut snapshot, share.peers);
                 snapshot
@@ -526,9 +524,8 @@ impl SyncManager {
             peer.alias = alias;
             peer.connected = connected;
             if converged {
-                peer.last_converged_at = Some(
-                    Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
-                );
+                peer.last_converged_at =
+                    Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
             }
             status.snapshot(project)
         };
@@ -716,14 +713,7 @@ impl SyncManager {
         let gate = replica.round.lock().await;
         let endpoint_id = ticket.peer().to_string();
         let alias = ticket.alias();
-        self.set_peer(
-            project,
-            endpoint_id.clone(),
-            alias.clone(),
-            true,
-            false,
-            SyncPhase::Syncing,
-        );
+        self.set_peer(project, endpoint_id.clone(), alias.clone(), true, false, SyncPhase::Syncing);
         let outcome = round::run(self, &replica, &session).await;
         drop(gate);
         session.close();
@@ -788,10 +778,7 @@ impl SyncManager {
                 Err(e) => diag::error(format!("sync: round with a peer failed: {}", e.message)),
             }
         }
-        self.set_phase(
-            project,
-            if answered { SyncPhase::Idle } else { SyncPhase::Offline },
-        );
+        self.set_phase(project, if answered { SyncPhase::Idle } else { SyncPhase::Offline });
         worked
     }
 

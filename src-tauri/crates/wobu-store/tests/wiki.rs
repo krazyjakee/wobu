@@ -95,7 +95,8 @@ fn a_complete_export_has_safe_node_galleries_graph_and_relative_navigation() {
     assert!(index.contains(&format!("nodes/{}.html", character.id)));
     assert!(!index.contains(project.root().to_string_lossy().as_ref()));
 
-    let page = fs::read_to_string(destination.join(format!("nodes/{}.html", character.id))).unwrap();
+    let page =
+        fs::read_to_string(destination.join(format!("nodes/{}.html", character.id))).unwrap();
     assert!(page.contains("Kael &lt;script&gt;"));
     assert!(page.contains("&lt;script&gt;steal()&lt;/script&gt;"));
     assert!(!page.contains("<script>"));

@@ -51,12 +51,20 @@ describe('machine-local project board layouts', () => {
 describe('board viewport geometry', () => {
   it('keeps the world point below the cursor fixed while zooming', () => {
     const next = zoomBoardAt(DEFAULT_BOARD_VIEWPORT, 2, { x: 300, y: 220 })
-    expect((300 - next.x) / next.zoom).toBe((300 - DEFAULT_BOARD_VIEWPORT.x) / DEFAULT_BOARD_VIEWPORT.zoom)
-    expect((220 - next.y) / next.zoom).toBe((220 - DEFAULT_BOARD_VIEWPORT.y) / DEFAULT_BOARD_VIEWPORT.zoom)
+    expect((300 - next.x) / next.zoom).toBe(
+      (300 - DEFAULT_BOARD_VIEWPORT.x) / DEFAULT_BOARD_VIEWPORT.zoom,
+    )
+    expect((220 - next.y) / next.zoom).toBe(
+      (220 - DEFAULT_BOARD_VIEWPORT.y) / DEFAULT_BOARD_VIEWPORT.zoom,
+    )
   })
 
   it('culls distant tiles while retaining an overscan band', () => {
-    expect(boardTileVisible({ x: 100, y: 100 }, DEFAULT_BOARD_VIEWPORT, { width: 800, height: 600 })).toBe(true)
-    expect(boardTileVisible({ x: 9000, y: 9000 }, DEFAULT_BOARD_VIEWPORT, { width: 800, height: 600 })).toBe(false)
+    expect(
+      boardTileVisible({ x: 100, y: 100 }, DEFAULT_BOARD_VIEWPORT, { width: 800, height: 600 }),
+    ).toBe(true)
+    expect(
+      boardTileVisible({ x: 9000, y: 9000 }, DEFAULT_BOARD_VIEWPORT, { width: 800, height: 600 }),
+    ).toBe(false)
   })
 })

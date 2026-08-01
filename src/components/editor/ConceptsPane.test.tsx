@@ -63,11 +63,7 @@ const kinds = kindIndex([
   kindDef('creature'),
 ])
 
-function open(
-  queue: QueueSnapshot = emptyQueue,
-  subject: WobuNode = node,
-  readOnly = false,
-) {
+function open(queue: QueueSnapshot = emptyQueue, subject: WobuNode = node, readOnly = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
@@ -113,7 +109,12 @@ beforeEach(() => {
 describe('generation history', () => {
   it('renders backend order, reveals prompt and seed, and loads one original only on click', async () => {
     history = [
-      generation({ id: 'new', createdAt: '2026-08-02T12:00:00Z', compiledPrompt: 'new prompt', seed: 9 }),
+      generation({
+        id: 'new',
+        createdAt: '2026-08-02T12:00:00Z',
+        compiledPrompt: 'new prompt',
+        seed: 9,
+      }),
       generation({ id: 'old', outputAssetIds: ['asset-2'], compiledPrompt: 'old prompt', seed: 7 }),
     ]
     open()
@@ -139,21 +140,25 @@ describe('generation history', () => {
         id: 'snapshot',
         params: { aspect: '3:4', width: 768, height: 1024 },
         influenceSnapshot: {
-          layers: [{
-            layer: 'subject',
-            nodeId: node.id,
-            nodeName: 'Kael then',
-            weight: 0.7,
-            muted: false,
-            fragments: [{
-              section: 'appearance',
-              text: 'ash-grey travelling coat',
-              assetId: null,
+          layers: [
+            {
+              layer: 'subject',
+              nodeId: node.id,
+              nodeName: 'Kael then',
               weight: 0.7,
-              target: 'prompt',
-              dropped: false,
-            }],
-          }],
+              muted: false,
+              fragments: [
+                {
+                  section: 'appearance',
+                  text: 'ash-grey travelling coat',
+                  assetId: null,
+                  weight: 0.7,
+                  target: 'prompt',
+                  dropped: false,
+                },
+              ],
+            },
+          ],
         },
       }),
     ]
@@ -241,9 +246,7 @@ describe('generation history', () => {
       summary({ id: 'vashk', name: 'Vashk', kind: 'species' }),
       summary({ id: 'kael', name: 'Kael', kind: 'character' }),
     ]
-    worldLinks = [
-      { fromId: 'kael', toId: 'vashk', role: 'species_of', weight: 1, enabled: true },
-    ]
+    worldLinks = [{ fromId: 'kael', toId: 'vashk', role: 'species_of', weight: 1, enabled: true }]
     open(emptyQueue, species)
 
     expect(
@@ -288,7 +291,11 @@ describe('live generation tiles', () => {
 
     act(() => {
       h.listeners.get('job:preview')?.({
-        payload: { id: 'job-1', image: 'data:image/webp;base64,preview', step: 12 } satisfies JobPreview,
+        payload: {
+          id: 'job-1',
+          image: 'data:image/webp;base64,preview',
+          step: 12,
+        } satisfies JobPreview,
       })
       h.listeners.get('job:progress')?.({
         payload: { id: 'job-1', done: 12, total: 30, note: 'sampling 12/30' } satisfies JobProgress,

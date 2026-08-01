@@ -22,7 +22,7 @@ pub use asset::{Asset, AssetKind, AssetLink, AssetRef, AssetRole, MeshAsset};
 pub use error::{Error, Result};
 pub use generation::{
     FragmentTarget, Generation, GenerationVariation, InfluenceSnapshot, MeshOutput,
-    SnapshotFragment, SnapshotLayer, VariationValue,
+    SceneComposition, SnapshotFragment, SnapshotLayer, VariationValue,
 };
 pub use kind::{
     AttributeDef, AttributeValueKind, KindDef, Layer, NodeKind, SectionDef, SectionValueKind,
@@ -30,8 +30,8 @@ pub use kind::{
 };
 pub use link::{Link, LinkEdge, LinkRole};
 pub use node::{
-    Description, DescriptionState, EnhanceStamp, Node, NodeSummary, SectionValue, SourceStamp,
-    validate_parent,
+    Description, DescriptionState, EnhanceStamp, LoraPin, Node, NodeSummary, SectionValue,
+    SourceStamp, validate_parent,
 };
 pub use preset::{
     ANY_KIND, ImageConstraints, Preset, PresetGeneration, PresetView, SectionPriority,

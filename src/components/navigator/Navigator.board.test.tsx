@@ -19,7 +19,7 @@ function transfer(type: string, value: string) {
     effectAllowed: 'all',
     dropEffect: 'none',
     setData: vi.fn(),
-    getData: (requested: string) => requested === type ? value : '',
+    getData: (requested: string) => (requested === type ? value : ''),
   }
 }
 

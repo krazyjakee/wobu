@@ -136,6 +136,7 @@ Ashfall.wobu/
 ├── assets/
 │   ├── originals/a3/a3f9…c1.png  content-addressed, sharded by first 2 hex chars
 │   ├── thumbs/a3/a3f9…c1.webp
+│   ├── loras/7d/7d42…9e.safetensors  trained weights, content-addressed
 │   └── meshes/7b/7b21…04.glb     concept 3D output
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
@@ -156,7 +157,8 @@ These are constraints on the writer, and each one exists because something break
 - **No absolute paths, anywhere.** The same share is `/Volumes/art/Ashfall.wobu` on one
   machine and `Z:\art\Ashfall.wobu` on another. All internal references are relative and
   stored with `/` separators, converted on read.
-- **Assets are content-addressed** by BLAKE3 hash, sharded two levels deep. Two people
+- **Assets and trained LoRA weights are content-addressed** by BLAKE3 hash, sharded two levels
+  deep. Two people
   importing the same reference produce the same file — so asset writes can never conflict,
   and dedup is free. The extension comes from the detected content type, never from the
   imported filename, or the same bytes dropped in as `ref.png` and `ref.PNG` would land at
@@ -225,9 +227,11 @@ them. Provider selections, secrets, generation history and spend records never t
 Every cover and reference blob is read and hash-checked before destination node publication. Missing
 or mismatched blobs block apply; valid blobs keep their content-derived ids and deduplicate against
 bytes already present. Asset roles, weights and muted state are retained, while thumbnails remain
-derived and are regenerated lazily. ComfyUI LoRAs are installation-local today—there is no pinned
-LoRA field in the project schema—so the versioned transfer preview states that they are not copied
-and reserves an empty metadata seam for a future project-owned representation.
+derived and are regenerated lazily. A selected node's pinned LoRA frontmatter and immutable
+`assets/loras/<prefix>/<hash>.safetensors` blob transfer together after safetensors, size, path and
+content-hash checks. Transfer does not copy provider settings or assume the destination ComfyUI has
+installed the provider filename; generation re-probes that machine and reports an explicit
+downgrade when it cannot apply the project-owned weight.
 
 The destination is also fully preflighted before its first node write. Guarded writes still matter on
 a shared folder: if another author wins a race after preflight, the command returns an explicit

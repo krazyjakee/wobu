@@ -163,8 +163,8 @@ pub mod tencent;
 
 pub use aspect::{AspectRatio, Resolution};
 pub use backend::{
-    Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
-    Reference, Watermark,
+    Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, LoraWeight,
+    ProgressSink, Reference, Watermark,
 };
 pub use capability::{Capabilities, ReferenceMechanism, ReferenceMechanisms};
 pub use comfy::ComfyBackend;
@@ -176,7 +176,7 @@ pub use mesh::{
     MeshFile, MeshFormat, MeshInput, MeshOutcome, MeshRequest, MeshUsage, MeshView, Turnaround,
     View,
 };
-pub use negotiate::{Downgrade, Downgraded, Negotiated, negotiate};
+pub use negotiate::{Downgrade, Downgraded, Negotiated, negotiate, negotiate_scene};
 pub use tencent::HunyuanBackend;
 
 /// The cancellation token, re-exported from `wobu-llm` rather than defined

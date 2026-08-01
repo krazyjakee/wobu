@@ -375,9 +375,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 onNewNode={startNewNode}
                 onStyleTransfer={() => void startStyleTransfer()}
                 onAssetDrop={
-                  readOnly
-                    ? undefined
-                    : (assetId, nodeId) => setBoardAttach({ assetId, nodeId })
+                  readOnly ? undefined : (assetId, nodeId) => setBoardAttach({ assetId, nodeId })
                 }
               />
             )}
@@ -392,12 +390,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
             />
           </>
         ) : mode === 'assets' ? (
-          <AssetsMode
-            nodes={nodes}
-            kinds={kindIndex}
-            readOnly={readOnly}
-            onJump={jumpTo}
-          />
+          <AssetsMode nodes={nodes} kinds={kindIndex} readOnly={readOnly} onJump={jumpTo} />
         ) : mode === 'forge' ? (
           <ForgeMode
             project={project}

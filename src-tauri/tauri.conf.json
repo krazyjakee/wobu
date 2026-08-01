@@ -40,6 +40,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": false,
+    "publisher": "Wobu contributors",
+    "homepage": "https://github.com/krazyjakee/wobu",
     "category": "GraphicsAndDesign",
     "shortDescription": "Local-first world building for concept art",
     "longDescription": "Author a world's hierarchy once — art style, lore, species, cultures, places — and every concept image you generate inherits that context automatically.",

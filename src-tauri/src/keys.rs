@@ -35,6 +35,7 @@
 //! See `docs/08-providers.md`.
 
 use std::collections::HashMap;
+#[cfg(debug_assertions)]
 use std::path::PathBuf;
 
 use parking_lot::Mutex;

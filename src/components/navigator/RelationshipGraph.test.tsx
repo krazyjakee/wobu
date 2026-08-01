@@ -64,7 +64,9 @@ describe('read-only relationship graph', () => {
     expect(screen.getByText('Select a node to open it. Edit links in Relations.')).toBeTruthy()
     expect(screen.getByRole('img', { name: '4 nodes and 3 relationships' })).toBeTruthy()
     expect(screen.getByText('Kael inherits from Vashk · Species · 0.80')).toBeTruthy()
-    expect(screen.getByText('Kael inherits from Ember Guild · Member of · 1.00 · muted')).toBeTruthy()
+    expect(
+      screen.getByText('Kael inherits from Ember Guild · Member of · 1.00 · muted'),
+    ).toBeTruthy()
 
     const guild = screen.getByRole('button', { name: 'Open Ember Guild, Culture' })
     expect(guild.getAttribute('draggable')).toBeNull()
@@ -86,7 +88,11 @@ describe('read-only relationship graph', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Open Ember Guild, Culture' }).className).not.toContain('is-dim')
-    expect(screen.getByRole('button', { name: 'Open Kael, Character' }).className).toContain('is-dim')
+    expect(
+      screen.getByRole('button', { name: 'Open Ember Guild, Culture' }).className,
+    ).not.toContain('is-dim')
+    expect(screen.getByRole('button', { name: 'Open Kael, Character' }).className).toContain(
+      'is-dim',
+    )
   })
 })

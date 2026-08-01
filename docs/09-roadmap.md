@@ -42,7 +42,7 @@ and the point at which Wobu is worth using.
 
 ### M6 — Iteration and consistency
 Forge mode, variant grids, seed locking, pin-to-reference promotion, generation history with
-replayable snapshots.
+replayable snapshots, and cancellable local per-entity LoRA training with project-owned weights.
 
 ### M7 — Concept 3D
 Turnaround preset → image-to-3D via Hunyuan3D — hosted BYOK and/or local weights under
@@ -51,6 +51,5 @@ viewer with turntable, export for a modeller. Concept 3D is deliberately last: i
 consistent multi-view output, which depends on everything above it working well.
 
 ### Later, if earned
-Per-entity LoRA training · relationship graph view · style transfer between projects ·
-scene composition (multiple entities in one image) · collaborative/remote projects ·
+Relationship graph view · collaborative/remote projects ·
 export to a static world wiki.

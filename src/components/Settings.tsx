@@ -668,7 +668,8 @@ function HunyuanOnboarding() {
     <div className="prov-onboarding" aria-label="Tencent Hunyuan3D setup">
       <p className="prov-alert">
         <b>Do not paste a root-account key.</b> A root SecretKey controls the whole Tencent Cloud
-        account. Create a dedicated CAM sub-account and paste only that sub-account&rsquo;s key here.
+        account. Create a dedicated CAM sub-account and paste only that sub-account&rsquo;s key
+        here.
       </p>
       <ol>
         <li>
@@ -696,9 +697,7 @@ function HunyuanOnboarding() {
         <li>
           <button
             className="btn-mini"
-            onClick={() =>
-              void visit('https://console.tencentcloud.com/cam/capi', 'CAM API keys')
-            }
+            onClick={() => void visit('https://console.tencentcloud.com/cam/capi', 'CAM API keys')}
           >
             Create sub-account API key
           </button>

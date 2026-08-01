@@ -192,7 +192,9 @@ export function Inspector({
     if (axis === 'seed') setGridValues([seed, seed + 1, seed + 2, seed + 3].join(', '))
     if (axis === 'fragment_weight') {
       setGridValues('0.4, 0.7, 1')
-      setGridNodeId((current) => current || stack.data?.layers.find((layer) => layer.nodeId)?.nodeId || '')
+      setGridNodeId(
+        (current) => current || stack.data?.layers.find((layer) => layer.nodeId)?.nodeId || '',
+      )
     }
     if (axis === 'preset') {
       setGridValues(
@@ -229,12 +231,18 @@ export function Inspector({
     const trimmed = ceilingDollars.trim()
     const dollars = trimmed === '' ? null : Number(trimmed)
     if (dollars !== null && (!Number.isFinite(dollars) || dollars < 0)) {
-      report(new Error('Enter a non-negative dollar amount, or leave it blank to disable paid generation.'))
+      report(
+        new Error(
+          'Enter a non-negative dollar amount, or leave it blank to disable paid generation.',
+        ),
+      )
       return
     }
     try {
       await setSpendCeiling.mutateAsync(
-        dollars === null ? null : Math.min(Number.MAX_SAFE_INTEGER, Math.round(dollars * 1_000_000)),
+        dollars === null
+          ? null
+          : Math.min(Number.MAX_SAFE_INTEGER, Math.round(dollars * 1_000_000)),
       )
       toast(dollars === null ? 'Paid generation disabled' : 'Shared spend ceiling saved')
     } catch (error) {
@@ -261,8 +269,7 @@ export function Inspector({
       spend?.remainingUsdMicros === null ||
       (spend?.remainingUsdMicros !== undefined &&
         paidEstimate.batchUsdMicros > spend.remainingUsdMicros))
-  const gridBlocked =
-    gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
+  const gridBlocked = gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
 
   const inspector = (
     <>
@@ -276,7 +283,8 @@ export function Inspector({
           <div className="ref-budgets" aria-label="Provider reference limits">
             {imageReport.data.buckets.map((bucket) => (
               <span key={bucket.bucket}>
-                {bucket.kept}{bucket.limit === null ? '' : `/${bucket.limit}`} {bucket.label}
+                {bucket.kept}
+                {bucket.limit === null ? '' : `/${bucket.limit}`} {bucket.label}
                 {bucket.dropped > 0 ? ` · ${bucket.dropped} dropped` : ''}
               </span>
             ))}
@@ -302,7 +310,9 @@ export function Inspector({
               const isMuted = card.nodeId ? muted.has(card.nodeId) : shotMuted
               const value = card.nodeId ? (weights[card.nodeId] ?? card.slider) : shotWeight
               const textCount = card.fragments.filter((fragment) => fragment.text !== null).length
-              const imageCount = card.fragments.filter((fragment) => fragment.assetId !== null).length
+              const imageCount = card.fragments.filter(
+                (fragment) => fragment.assetId !== null,
+              ).length
               const dropCount = dropped.get(`${card.nodeId ?? 'shot'}:${card.layer}`) ?? 0
               const referenceReport = imageReport.data?.layers.find(
                 (report) => report.nodeId === card.nodeId && report.layer === card.layer,
@@ -344,11 +354,19 @@ export function Inspector({
           </label>
           <label>
             <span>Aspect</span>
-            <input value={aspect} onChange={(event) => setAspect(event.target.value)} placeholder="3:4" />
+            <input
+              value={aspect}
+              onChange={(event) => setAspect(event.target.value)}
+              placeholder="3:4"
+            />
           </label>
           <label className="shot-model">
             <span>Model</span>
-            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Selected model" />
+            <input
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              placeholder="Selected model"
+            />
           </label>
           <label className="shot-prompt">
             <span>Extra shot prompt</span>
@@ -369,7 +387,9 @@ export function Inspector({
                 step={1}
                 value={seed}
                 onChange={(event) => {
-                  setSeed(Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Number(event.target.value) || 0)))
+                  setSeed(
+                    Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Number(event.target.value) || 0)),
+                  )
                   setSeedOverride(true)
                 }}
               />
@@ -379,12 +399,14 @@ export function Inspector({
                 ? 'Unlocked seed'
                 : gridAxis === 'seed'
                   ? `Locked at ${lockedSeed} · grid varies seed`
-                : usesLockedSeed
-                  ? `Locked · next result uses ${lockedSeed}`
-                  : `Locked at ${lockedSeed} · next result is re-rolled`}
+                  : usesLockedSeed
+                    ? `Locked · next result uses ${lockedSeed}`
+                    : `Locked at ${lockedSeed} · next result is re-rolled`}
             </div>
             <div className="seed-actions">
-              <button className="btn-mini" onClick={reroll}>Re-roll</button>
+              <button className="btn-mini" onClick={reroll}>
+                Re-roll
+              </button>
               {lockedSeed === null ? (
                 <button
                   className="btn-mini"
@@ -454,7 +476,8 @@ export function Inspector({
             )}
             {gridAxis !== 'none' && (
               <small className={grid.error ? 'variant-error' : ''}>
-                {grid.error ?? `${grid.value?.values.length ?? 0} outputs · exactly one axis varies`}
+                {grid.error ??
+                  `${grid.value?.values.length ?? 0} outputs · exactly one axis varies`}
               </small>
             )}
           </div>
@@ -463,7 +486,8 @@ export function Inspector({
               <div className="spend-estimate">
                 <b>Estimated {formatUsd(paidEstimate.batchUsdMicros)} batch</b>
                 <span>
-                  {paidEstimate.images}{paidEstimate.variesByCell
+                  {paidEstimate.images}
+                  {paidEstimate.variesByCell
                     ? ' outputs · cell price varies'
                     : ` × ${formatUsd(paidEstimate.perImageUsdMicros)} output`}
                   {paidEstimate.conservativeFallback ? ' · conservative fallback' : ''}
@@ -527,8 +551,14 @@ export function Inspector({
           <button
             className="btn-primary shot-generate"
             disabled={
-              !selected || !chosenPreset || generating || project.readOnly || costBlocked || gridBlocked
-              || !imageReport.data || imageReport.isPlaceholderData
+              !selected ||
+              !chosenPreset ||
+              generating ||
+              project.readOnly ||
+              costBlocked ||
+              gridBlocked ||
+              !imageReport.data ||
+              imageReport.isPlaceholderData
             }
             onClick={() => void generate()}
           >
@@ -548,7 +578,9 @@ export function Inspector({
     <section className="forge-inspector" aria-label="Forge generation controls">
       {inspector}
     </section>
-  ) : inspector
+  ) : (
+    inspector
+  )
 }
 
 function formatUsd(micros: number): string {
@@ -576,7 +608,10 @@ function parseVariantGrid(
   nodeId: string,
 ): GridParse {
   if (axis === 'none') return {}
-  const raw = source.split(',').map((value) => value.trim()).filter(Boolean)
+  const raw = source
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
   if (raw.length < 2 || raw.length > 16) return { error: 'Enter 2 to 16 distinct cell values.' }
   if (new Set(raw).size !== raw.length) return { error: 'Every grid cell must be different.' }
 
@@ -626,7 +661,10 @@ function Layer({
 }) {
   const color = layerColor(card.layer)
   return (
-    <details className={muted ? 'layer is-muted' : 'layer'} style={{ '--lc': color } as CSSProperties}>
+    <details
+      className={muted ? 'layer is-muted' : 'layer'}
+      style={{ '--lc': color } as CSSProperties}
+    >
       <summary className="layer-h">
         <span className="layer-dot" aria-hidden="true" />
         <span className="txt">
@@ -666,7 +704,10 @@ function Layer({
           <p>Nothing described on this source yet.</p>
         ) : (
           card.fragments.map((fragment, index) => (
-            <FragmentRow key={`${fragment.section}-${fragment.assetId ?? index}`} fragment={fragment} />
+            <FragmentRow
+              key={`${fragment.section}-${fragment.assetId ?? index}`}
+              fragment={fragment}
+            />
           ))
         )}
         {card.nodeId && (

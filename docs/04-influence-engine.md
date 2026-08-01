@@ -139,6 +139,33 @@ their recorded provider order. It works even after the subject node has been del
 receipt and content-addressed assets are the source of truth. If any reference asset is missing,
 replay stops explicitly; reading today's links would make a plausible new image, not a replay.
 
+### Multi-entity scene composition
+
+Forge can compose two to four ordered entities into one `environment_matte` request. Each entity's
+stack resolves independently first. The composition then emits shared Style/World nodes once;
+deduplicates ancestry, culture and place sources in layer/participant order; emits every Subject in
+the order chosen; and appends one Shot. A shared source uses the strongest path weight rather than
+the sum, so adding another entity from the same culture cannot accidentally double the culture or
+house style.
+
+The compiled prompt states shared world/style guidance first, then one explicitly named clause per
+entity. Distinct palettes remain inside those entity clauses instead of being averaged into a colour
+scheme that belongs to nobody. Shot clauses are deliberately last in this order: the ordinary wide
+establishing framing, the user's scene direction, then a final instruction to preserve every named
+identity. Shared exact fragments and negative terms are emitted once.
+
+Reference images still pass through adapter-mechanism limits and the provider's declared counting
+buckets. Inside each bucket, exact `(asset, role)` duplicates cost one slot and each participant's
+strongest direct reference is protected before spare slots are filled by weight. If negotiation
+cannot retain any offered identity reference for one participant, composition refuses before a paid
+request rather than silently producing a scene with that entity visually erased.
+
+The immutable receipt remains compatible with single-subject history: `node_id` is its primary
+index anchor, while `params.sceneComposition` records version 1 plus every ordered subject id/name.
+The influence snapshot is the complete merged stack. Scene metadata is separate from LoRA
+application/downgrade metadata, and request preparation carries the full participant list so
+compatible pins can be collected across all entities and deduplicated by weight hash.
+
 ## The Enhance pipeline
 
 `⌘E` on any node:
@@ -171,5 +198,10 @@ prompt stays inside budget.
 - **Seed locking** per entity, so re-rolls stay in family.
 - **Pinned references**: promoting a generated image to a `full_ref` reference makes it feed
   back as conditioning for the next generation — the main tool for locking a look.
-- **Character LoRA (later)**: once an entity has ≥15 pinned images, offer a local fine-tune;
-  the resulting weights attach to the node and are auto-applied by the compiler.
+- **Per-entity LoRA**: once an entity has at least 15 distinct, enabled `full_ref` originals,
+  Forge offers a cancellable local fine-tune. A fixed `wobu-lora-trainer` executable receives a
+  private staged manifest—never a project-supplied command—and returns a validated safetensors
+  file. Its content-addressed project pin follows the resolved influence/scene order; compatible
+  pins are hash-deduplicated, their trigger tokens are added once, and ComfyUI applies the ordered
+  vector automatically. Model, provider, installation or integrity mismatches remain visible
+  receipt downgrades rather than silent omissions.

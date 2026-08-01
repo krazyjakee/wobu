@@ -30,10 +30,7 @@ export interface EnhanceSession {
   reject: () => void
 }
 
-export function useEnhanceSession(
-  nodeId: string | null,
-  queue: api.QueueSnapshot,
-): EnhanceSession {
+export function useEnhanceSession(nodeId: string | null, queue: api.QueueSnapshot): EnhanceSession {
   const startMutation = useEnhance()
   const acceptMutation = useAcceptEnhanced()
   const discardMutation = useDiscardEnhanced()
@@ -87,8 +84,7 @@ export function useEnhanceSession(
         .reverse()
         .find((ready) => ready.nodeId === nodeId && !hiddenJobs.has(ready.jobId))
     : undefined
-  const ready =
-    liveReady && !hiddenJobs.has(liveReady.jobId) ? liveReady : (caughtUpReady ?? null)
+  const ready = liveReady && !hiddenJobs.has(liveReady.jobId) ? liveReady : (caughtUpReady ?? null)
   const jobId = nodeId ? (jobsByNode[nodeId] ?? ready?.jobId ?? null) : null
   const stream = useEnhanceStream(jobId)
   const partial =

@@ -191,6 +191,15 @@ pub const ALPN: &[u8] = iroh_blobs::ALPN;
 /// worst link it recorded.
 pub const BLOB_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// LoRA weights commonly exceed the roughly 100 MB relay budget behind
+/// [`BLOB_TIMEOUT`]. The manifest carries no byte size, so the exact validated
+/// path is the only honest signal available before fetching.
+pub const LORA_BLOB_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+pub fn timeout_for(rel_path: &str, ordinary: Duration) -> Duration {
+    if lora_hash_from_path(rel_path).is_some() { ordinary.max(LORA_BLOB_TIMEOUT) } else { ordinary }
+}
+
 /// The staging directory, relative to the project root.
 ///
 /// The same one `wobu_store::atomic` uses, and the same `.part` suffix, so that
@@ -388,6 +397,9 @@ pub fn place(root: &Path, rel_path: &str) -> std::result::Result<PathBuf, Unplac
 /// race for one that does not exist here yet, and losing that race means
 /// receiving somebody else's generation record rather than losing our own.
 pub fn agrees(rel_path: &str, hash: &str) -> bool {
+    if rel_path.starts_with("assets/loras/") {
+        return lora_hash_from_path(rel_path).is_some_and(|path_hash| path_hash == hash);
+    }
     let Some(rest) = rel_path.strip_prefix("assets/originals/") else { return true };
     if !is_content_hash(hash) {
         return false;
@@ -401,6 +413,16 @@ pub fn agrees(rel_path: &str, hash: &str) -> bool {
     };
     let stem = file.split('.').next().unwrap_or(file);
     shard == &hash[..2] && stem == hash
+}
+
+fn lora_hash_from_path(rel_path: &str) -> Option<&str> {
+    let rest = rel_path.strip_prefix("assets/loras/")?;
+    let mut parts = rest.split('/');
+    let (Some(shard), Some(file), None) = (parts.next(), parts.next(), parts.next()) else {
+        return None;
+    };
+    let hash = file.strip_suffix(".safetensors")?;
+    (is_content_hash(hash) && shard == &hash[..2]).then_some(hash)
 }
 
 /// The DOS device names, which are still special in Win32 in 2026.
@@ -749,7 +771,10 @@ impl Blobs {
             .map_err(|source| Error::Dial { peer: id, source })?;
 
         for (hash, rel_path) in targets {
-            match self.fetch_one(&connection, hash, &rel_path, per_blob).await {
+            match self
+                .fetch_one(&connection, hash, &rel_path, timeout_for(&rel_path, per_blob))
+                .await
+            {
                 Ok(()) => tally.placed.push(rel_path),
                 Err(()) => tally.failed += 1,
             }
@@ -1162,6 +1187,27 @@ mod tests {
         assert!(!agrees(&format!("assets/originals/{real}.png"), real));
         // No extension is still an original.
         assert!(agrees(&format!("assets/originals/af/{real}"), real));
+    }
+
+    #[test]
+    fn a_project_lora_path_and_wire_hash_must_name_the_same_content() {
+        let real = "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
+        let other = "b3".repeat(32);
+        assert!(agrees(&format!("assets/loras/af/{real}.safetensors"), real));
+        assert!(!agrees(&format!("assets/loras/af/{real}.safetensors"), &other));
+        assert!(!agrees(&format!("assets/loras/ff/{real}.safetensors"), real));
+        assert!(!agrees(&format!("assets/loras/af/{real}.bin"), real));
+        assert!(!agrees(&format!("assets/loras/af/deep/{real}.safetensors"), real));
+    }
+
+    #[test]
+    fn project_loras_get_a_longer_per_file_relay_budget() {
+        let hash = format!("af{}", "0".repeat(62));
+        let path = format!("assets/loras/af/{hash}.safetensors");
+        assert_eq!(timeout_for(&path, BLOB_TIMEOUT), LORA_BLOB_TIMEOUT,);
+        assert_eq!(timeout_for("assets/originals/af/x.png", BLOB_TIMEOUT), BLOB_TIMEOUT);
+        assert_eq!(timeout_for(&path, Duration::from_secs(4000)), Duration::from_secs(4000),);
+        assert_eq!(timeout_for("assets/loras/af/x.safetensors", BLOB_TIMEOUT), BLOB_TIMEOUT);
     }
 
     #[test]

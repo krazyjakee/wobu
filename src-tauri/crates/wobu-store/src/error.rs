@@ -25,9 +25,7 @@ pub enum Error {
     #[error("the static wiki destination must be outside the project folder: {0}")]
     ExportInsideProject(PathBuf),
 
-    #[error(
-        "resolve {corrupt} broken node file(s) and {conflicts} conflict(s) before exporting"
-    )]
+    #[error("resolve {corrupt} broken node file(s) and {conflicts} conflict(s) before exporting")]
     ExportBlocked { corrupt: usize, conflicts: usize },
 
     #[error(
@@ -121,6 +119,9 @@ pub enum Error {
 
     #[error("that mesh is not a complete binary glTF 2.0 file")]
     NotAMesh,
+
+    #[error("that LoRA is not a complete safetensors weight file: {0}")]
+    InvalidLora(String),
 
     /// A blob already in the library whose pixels will not come back out.
     ///

@@ -22,9 +22,7 @@ fn style_replacement_preserves_destination_identity_and_copies_references() {
         .find(|node| node.kind == NodeKind::StyleGuide)
         .unwrap();
     let asset = source.import_asset(&png(80, 60), AssetKind::Reference).unwrap().asset;
-    source
-        .link_asset(source_style.id, asset.id, AssetRole::Palette, Some(0.65))
-        .unwrap();
+    source.link_asset(source_style.id, asset.id, AssetRole::Palette, Some(0.65)).unwrap();
     source
         .update_asset_link(source_style.id, asset.id, AssetRole::Palette, None, Some(false))
         .unwrap();
@@ -44,10 +42,8 @@ fn style_replacement_preserves_destination_identity_and_copies_references() {
 
     let destination_dir = tempfile::tempdir().unwrap();
     let mut destination = Project::create(destination_dir.path(), "Destination").unwrap();
-    let existing_asset = destination
-        .import_asset(&png(80, 60), AssetKind::Reference)
-        .unwrap()
-        .asset;
+    let existing_asset =
+        destination.import_asset(&png(80, 60), AssetKind::Reference).unwrap().asset;
     assert_eq!(existing_asset.id, asset.id);
     let old = destination
         .list_nodes()
@@ -62,9 +58,7 @@ fn style_replacement_preserves_destination_identity_and_copies_references() {
         .into_iter()
         .find(|node| node.kind == NodeKind::WorldBible)
         .unwrap();
-    destination
-        .add_node_link(canon.id, old.id, LinkRole::StyledBy, None, None)
-        .unwrap();
+    destination.add_node_link(canon.id, old.id, LinkRole::StyledBy, None, None).unwrap();
     let outcome = destination
         .apply_transfer(transfer::stage(&source_root, source_style.id).unwrap())
         .unwrap();
@@ -92,31 +86,22 @@ fn subtree_ids_and_parents_remap_while_external_links_are_dropped() {
     let root = source.create_node(NodeKind::Setting, "Glass Coast", None).unwrap();
     let child = source.create_node(NodeKind::Setting, "Salt Port", Some(root.id)).unwrap();
     let outside = source.create_node(NodeKind::Setting, "Far Reach", None).unwrap();
-    source
-        .add_node_link(child.id, root.id, LinkRole::RelatedTo, None, None)
-        .unwrap();
-    source
-        .add_node_link(child.id, outside.id, LinkRole::RelatedTo, None, None)
-        .unwrap();
+    source.add_node_link(child.id, root.id, LinkRole::RelatedTo, None, None).unwrap();
+    source.add_node_link(child.id, outside.id, LinkRole::RelatedTo, None, None).unwrap();
     let source_root = source.root().to_path_buf();
     drop(source);
 
     let destination_dir = tempfile::tempdir().unwrap();
     let mut destination = Project::create(destination_dir.path(), "Destination").unwrap();
-    let outcome = destination
-        .apply_transfer(transfer::stage(&source_root, root.id).unwrap())
-        .unwrap();
+    let outcome =
+        destination.apply_transfer(transfer::stage(&source_root, root.id).unwrap()).unwrap();
     assert!(outcome.completed);
     assert_eq!(outcome.planned_node_count, 2);
     assert_eq!(outcome.dropped_external_link_count, 1);
 
     let imported_root = destination.get_node(outcome.imported_root_id).unwrap();
-    let imported_child = destination
-        .world_nodes()
-        .unwrap()
-        .iter()
-        .find(|node| node.name == "Salt Port")
-        .unwrap();
+    let imported_child =
+        destination.world_nodes().unwrap().iter().find(|node| node.name == "Salt Port").unwrap();
     assert_ne!(imported_root.id, root.id);
     assert_ne!(imported_child.id, child.id);
     assert_eq!(imported_child.parent_id, Some(imported_root.id));
@@ -135,9 +120,7 @@ fn a_missing_source_blob_blocks_staging_before_the_destination_changes() {
         .find(|node| node.kind == NodeKind::StyleGuide)
         .unwrap();
     let asset = source.import_asset(&png(12, 12), AssetKind::Reference).unwrap().asset;
-    source
-        .link_asset(style.id, asset.id, AssetRole::Palette, None)
-        .unwrap();
+    source.link_asset(style.id, asset.id, AssetRole::Palette, None).unwrap();
     let source_root = source.root().to_path_buf();
     let blob = paths::from_rel_string(&source_root, &asset.rel_path);
     drop(source);
@@ -167,8 +150,5 @@ fn a_project_cannot_import_from_itself_even_through_a_staged_bundle() {
 
     let bundle = transfer::stage(&root, style.id).unwrap();
     let mut same = Project::open(&root).unwrap();
-    assert!(matches!(
-        same.apply_transfer(bundle),
-        Err(Error::TransferSameProject)
-    ));
+    assert!(matches!(same.apply_transfer(bundle), Err(Error::TransferSameProject)));
 }

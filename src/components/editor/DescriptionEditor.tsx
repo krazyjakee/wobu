@@ -269,9 +269,7 @@ function orderedSections(definitions: SectionDef[], sections: SectionMap): Secti
 function valueFor(definition: SectionDef, sections: SectionMap): SectionValue {
   const value = sections[definition.key]
   if (value?.type === definition.valueKind) return value
-  return definition.valueKind === 'list'
-    ? { type: 'list', value: [] }
-    : { type: 'text', value: '' }
+  return definition.valueKind === 'list' ? { type: 'list', value: [] } : { type: 'text', value: '' }
 }
 
 function persistedValue(value: SectionValue): SectionValue {

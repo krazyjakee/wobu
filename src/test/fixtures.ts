@@ -53,6 +53,7 @@ export function node(over: Partial<WobuNode> & { id: string }): WobuNode {
     tags: [],
     coverAssetId: null,
     lockedSeed: null,
+    lora: null,
     links: [],
     assetLinks: [],
     createdAt: '2026-01-01T00:00:00Z',

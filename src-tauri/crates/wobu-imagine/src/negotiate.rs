@@ -25,8 +25,8 @@
 //! be what costs a real reference its place" — applied to the references this
 //! backend turns *into* mood-board references.
 
-use wobu_core::FragmentTarget;
-use wobu_influence::{CompiledImages, Fragment, compile_images};
+use wobu_core::{FragmentTarget, Id};
+use wobu_influence::{CompiledImages, Fragment, compile_images, compile_scene_images};
 
 use serde::Serialize;
 
@@ -269,6 +269,25 @@ pub fn negotiate<'a>(
     aspect: AspectRatio,
     caps: &Capabilities,
 ) -> Negotiated<'a> {
+    negotiate_for_subjects(fragments, aspect, caps, &[])
+}
+
+/// Negotiate one multi-entity scene with fair per-subject reference anchors.
+pub fn negotiate_scene<'a>(
+    fragments: &[Fragment<'a>],
+    aspect: AspectRatio,
+    caps: &Capabilities,
+    subjects: &[Id],
+) -> Negotiated<'a> {
+    negotiate_for_subjects(fragments, aspect, caps, subjects)
+}
+
+fn negotiate_for_subjects<'a>(
+    fragments: &[Fragment<'a>],
+    aspect: AspectRatio,
+    caps: &Capabilities,
+    subjects: &[Id],
+) -> Negotiated<'a> {
     let mut routed: Vec<(usize, Fragment<'a>)> = Vec::with_capacity(fragments.len());
     let mut reported: Vec<(usize, Downgraded<'a>)> = Vec::new();
 
@@ -325,7 +344,11 @@ pub fn negotiate<'a>(
     // After the withholding and never before it — see the module header. A
     // reference the backend is not going to receive must not be counted against
     // a bucket on its way out, or it evicts one that would have been sent.
-    let images = compile_images(&kept, caps.image_refs);
+    let images = if subjects.is_empty() {
+        compile_images(&kept, caps.image_refs)
+    } else {
+        compile_scene_images(&kept, caps.image_refs, subjects)
+    };
     let settled = caps.nearest_aspect(aspect);
 
     Negotiated {

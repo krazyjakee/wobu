@@ -84,17 +84,111 @@ version. It creates a draft even after successful builds. Before publishing, con
 matrix jobs passed, the draft contains installers from all three operating systems, and its
 unsigned-install warning is intact.
 
-## Three version numbers, three jobs
+## Version audit tooling
 
-Do not bump a schema because the app is being released:
+[`release/versions.json`](../release/versions.json) is the release audit record:
 
-| Number | Current source | Bump when |
-| --- | --- | --- |
-| Application version | The four manifest/lock locations above | Shipping a Wobu release |
-| Project schema version | `wobu_core::SCHEMA_VERSION` | The canonical on-disk project format changes, with compatible loading or a migration plan |
-| Index schema version | `wobu_store::index::INDEX_VERSION` | The disposable SQLite index layout or indexed interpretation changes |
+- `appVersion` is SemVer shown in About and embedded in installers. It must match `package.json`,
+  `package-lock.json`, `src-tauri/tauri.conf.json`, the Cargo workspace version, and every Wobu
+  workspace package in `Cargo.lock`.
+- `projectSchemaVersion` is the canonical `.wobu` folder format. Change it only with an explicit
+  compatibility/migration decision; a routine app release must not touch it.
+- `indexSchemaVersion` is the disposable local SQLite layout. Change it only when the index schema
+  changes; opening then rebuilds the cache. It does not imply a project format change.
 
-The index can be rebuilt, so its version is independent of project compatibility. The project
-schema governs whether a project folder can be opened and must not be used as a release counter.
-All three values are exposed separately in the About panel and printed by the release-version
-check; that visibility is not permission to keep them numerically aligned.
+Set only the app version with:
+
+```sh
+npm run release:set -- 0.2.0
+npm run release:check
+```
+
+The stamping tool serialises and stages every manifest beside its target before replacing files one at
+a time. If an operation reports an error, it rolls back files already replaced. This is not a durable
+cross-file transaction: a process or operating-system crash can interrupt publication or rollback and
+leave mixed versions. Always run it from a clean git checkout; after an interrupted process, inspect
+`git status`, restore the manifest set from git if necessary, and run the stamp again. The tool updates
+the JavaScript, Tauri, Cargo and lockfile app versions together, but never edits either schema
+constant. For an intentional schema change, edit the corresponding Rust constant and
+`release/versions.json` in the same reviewed change. `npm run release:check` prints all three numbers
+and refuses drift, missing icons, disabled bundling, or accidental updater activation. Its focused
+static tests are available as `npm run release:tool:test`.
+
+## Local fallback release procedure
+
+The tag workflow is the normal publication path. To reproduce or diagnose one of its jobs locally,
+start from a clean checkout of the intended tag on the matching native host. Install the repository's
+pinned Rust toolchain, Node dependencies with `npm ci`, and the current [Tauri platform
+prerequisites](https://v2.tauri.app/start/prerequisites/). Then:
+
+1. Run `npm run release:check` and record its three-number output.
+2. Run the normal project checks required by the release owner.
+3. Build on the target operating system with the commands below. Native builds are the supported
+   path; cross-compiling Windows is explicitly a last resort in Tauri's documentation.
+4. Launch the installed application, create/open a disposable project, and confirm About shows the
+   intended app/project/index versions.
+5. Generate SHA-256 files beside every public artifact and verify them on a second machine.
+6. Create a manual GitHub Release named `v<appVersion>`, attach artifacts and checksums, and state
+   prominently that the bundles are unsigned.
+
+Tauri writes artifacts below `src-tauri/target/release/bundle/`.
+
+### Linux
+
+Build on the oldest Linux distribution the release intends to support so the linked system libraries
+do not silently raise the runtime floor:
+
+```sh
+npm run tauri build -- --bundles deb,appimage --no-sign
+sha256sum src-tauri/target/release/bundle/deb/* src-tauri/target/release/bundle/appimage/* \
+  > SHA256SUMS-linux.txt
+```
+
+Publish the `.deb`, AppImage, and checksum file. Linux package signing remains optional external work;
+checksums provide integrity only when users obtain them from the authenticated release page. Users
+can install the Debian package with their graphical package manager or `sudo apt install` followed by
+the downloaded local `.deb` path. The AppImage is portable: run `chmod +x` on the downloaded AppImage,
+then launch it directly. Exact filenames come from the release assets.
+
+### macOS
+
+Build each architecture intended for release on macOS (or make an explicitly tested universal build):
+
+```sh
+npm run tauri build -- --bundles app,dmg --no-sign
+shasum -a 256 src-tauri/target/release/bundle/dmg/*.dmg > SHA256SUMS-macos.txt
+```
+
+Publish the `.dmg` and checksum. Because it is not Developer ID signed or notarised, Gatekeeper may
+block the first launch. Users should drag Wobu to Applications, try to open it once, then use **System
+Settings → Privacy & Security → Open Anyway** and confirm. Do not tell users to disable Gatekeeper
+globally or run a blanket `xattr` command. A public friction-free macOS release remains blocked on an
+Apple Developer ID Application certificate, notarisation credentials and a trusted macOS release
+machine. Tauri documents that direct-download macOS distribution requires signing and notarisation.
+
+### Windows
+
+Build on Windows so the supported MSVC toolchain, WiX and NSIS paths are used:
+
+```powershell
+npm run tauri build -- --bundles msi,nsis --no-sign
+$artifacts = Get-Item src-tauri\target\release\bundle\msi\*.msi,
+  src-tauri\target\release\bundle\nsis\*.exe
+$artifacts | Get-FileHash -Algorithm SHA256 |
+  ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
+  Set-Content SHA256SUMS-windows.txt
+```
+
+Publish both installers and checksums. Windows SmartScreen will identify an unsigned browser download
+as untrusted and show **Unknown publisher**. Users must compare the filename/version and checksum,
+choose **More info → Run anyway**, then continue the installer. Do not weaken SmartScreen globally.
+Removing this warning remains blocked on a current Windows code-signing certificate or managed signing
+service and a trusted Windows release machine.
+
+## Signing handoff
+
+When external identities exist, keep private material out of git and prefer environment/OS key-store
+integration described by Tauri's [macOS signing](https://v2.tauri.app/distribute/sign/macos/) and
+[Windows signing](https://v2.tauri.app/distribute/sign/windows/) guides. A signed release is complete
+only after signatures are verified on the final downloadable bytes and macOS notarisation is stapled;
+having configuration fields ready is not evidence that either happened.

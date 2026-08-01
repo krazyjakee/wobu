@@ -59,7 +59,11 @@
   cursor: grab;
   touch-action: none;
   background-color: var(--bg);
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--border-str) 75%, transparent) 1px, transparent 1px);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--border-str) 75%, transparent) 1px,
+    transparent 1px
+  );
   background-size: 24px 24px;
 }
 .board-viewport.is-panning {

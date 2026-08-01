@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
-import type {
-  Asset,
-  AssetKind,
-  AssetRole,
-  AssetUsage,
-  NodeSummary,
-} from '../lib/api'
+import type { Asset, AssetKind, AssetRole, AssetUsage, NodeSummary } from '../lib/api'
 import type { KindIndex } from '../lib/kinds'
 import { labelFor } from '../lib/kinds'
 import {
@@ -128,7 +122,9 @@ export function AssetsMode({
           >
             <option value="all">All kinds</option>
             {KINDS.map((value) => (
-              <option key={value} value={value}>{kindLabel(value)}</option>
+              <option key={value} value={value}>
+                {kindLabel(value)}
+              </option>
             ))}
           </select>
         </label>
@@ -142,7 +138,9 @@ export function AssetsMode({
           >
             <option value="all">All roles</option>
             {api.ASSET_ROLES.map((value) => (
-              <option key={value} value={value}>{roleLabel(value)}</option>
+              <option key={value} value={value}>
+                {roleLabel(value)}
+              </option>
             ))}
           </select>
         </label>
@@ -157,7 +155,11 @@ export function AssetsMode({
             <option value="all">All nodes</option>
             {[...nodes]
               .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-              .map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
+              .map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.name}
+                </option>
+              ))}
           </select>
         </label>
         <label>
@@ -169,7 +171,11 @@ export function AssetsMode({
             onChange={(event) => setTag(event.target.value)}
           >
             <option value="all">All tags</option>
-            {tags.map((value) => <option key={value} value={value}>{value}</option>)}
+            {tags.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
           </select>
         </label>
         <button
@@ -201,7 +207,7 @@ export function AssetsMode({
         />
         <AssetDetails
           asset={selected}
-          usages={selected ? usageByAsset.get(selected.id) ?? [] : []}
+          usages={selected ? (usageByAsset.get(selected.id) ?? []) : []}
           usageKnown={usageKnown}
           nodes={nodes}
           kinds={kinds}
@@ -265,7 +271,11 @@ function VirtualAssetGrid({
     return (
       <div className="asset-library-empty">
         <h3>{loading ? 'Reading assets…' : 'No assets match'}</h3>
-        <p>{loading ? 'The library will appear as the index answers.' : 'Clear or change a filter to widen the library.'}</p>
+        <p>
+          {loading
+            ? 'The library will appear as the index answers.'
+            : 'Clear or change a filter to widen the library.'}
+        </p>
       </div>
     )
   }
@@ -346,7 +356,9 @@ function AssetTile({
       </span>
       <span className="asset-library-tile-meta">
         <b>{kindLabel(asset.kind)}</b>
-        <small>{asset.width}×{asset.height} · {formatBytes(asset.bytes)}</small>
+        <small>
+          {asset.width}×{asset.height} · {formatBytes(asset.bytes)}
+        </small>
         <code>{asset.id}</code>
       </span>
     </button>
@@ -395,6 +407,7 @@ function AssetDetails({
     )
   }
 
+  const assetId = asset.id
   const alreadyAttached = usages.some(
     (usage) => usage.nodeId === nodeId && usage.roles.some((item) => item.role === role),
   )
@@ -402,7 +415,7 @@ function AssetDetails({
     if (!nodeId || readOnly || alreadyAttached) return
     setError(null)
     try {
-      await linkAsset.mutateAsync({ nodeId, assetId: asset.id, role })
+      await linkAsset.mutateAsync({ nodeId, assetId, role })
     } catch (reason) {
       setError(api.errorMessage(reason))
     }
@@ -419,14 +432,32 @@ function AssetDetails({
       </div>
       <h3>{kindLabel(asset.kind)} asset</h3>
       <dl>
-        <div><dt>Dimensions</dt><dd>{asset.width}×{asset.height}</dd></div>
-        <div><dt>Size</dt><dd>{formatBytes(asset.bytes)}</dd></div>
-        <div><dt>Created</dt><dd>{new Date(asset.createdAt).toLocaleString()}</dd></div>
-        <div><dt>ID</dt><dd><code>{asset.id}</code></dd></div>
+        <div>
+          <dt>Dimensions</dt>
+          <dd>
+            {asset.width}×{asset.height}
+          </dd>
+        </div>
+        <div>
+          <dt>Size</dt>
+          <dd>{formatBytes(asset.bytes)}</dd>
+        </div>
+        <div>
+          <dt>Created</dt>
+          <dd>{new Date(asset.createdAt).toLocaleString()}</dd>
+        </div>
+        <div>
+          <dt>ID</dt>
+          <dd>
+            <code>{asset.id}</code>
+          </dd>
+        </div>
       </dl>
 
       <section className="asset-uses">
-        <h4>Used by {usages.length} {usages.length === 1 ? 'node' : 'nodes'}</h4>
+        <h4>
+          Used by {usages.length} {usages.length === 1 ? 'node' : 'nodes'}
+        </h4>
         {!usageKnown ? (
           <p className="asset-orphan-note">Usage is unavailable, so orphan actions are withheld.</p>
         ) : usages.length === 0 ? (
@@ -434,7 +465,9 @@ function AssetDetails({
         ) : (
           usages.map((usage) => (
             <div className="asset-use" key={usage.nodeId}>
-              <button type="button" onClick={() => onJump(usage.nodeId)}>{usage.nodeName}</button>
+              <button type="button" onClick={() => onJump(usage.nodeId)}>
+                {usage.nodeName}
+              </button>
               <small>{labelFor(kinds.get(usage.nodeKind), usage.nodeKind)}</small>
               <div>
                 {usage.cover && <span>Cover</span>}
@@ -444,7 +477,9 @@ function AssetDetails({
                   </span>
                 ))}
               </div>
-              {usage.nodeTags.length > 0 && <code>{usage.nodeTags.map((tag) => `#${tag}`).join(' ')}</code>}
+              {usage.nodeTags.length > 0 && (
+                <code>{usage.nodeTags.map((tag) => `#${tag}`).join(' ')}</code>
+              )}
             </div>
           ))
         )}
@@ -454,17 +489,38 @@ function AssetDetails({
         <h4>Attach as reference</h4>
         <label>
           <span>Node</span>
-          <select value={nodeId} disabled={readOnly || nodes.length === 0 || linkAsset.isPending} onChange={(event) => setNodeId(event.target.value)}>
-            {nodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
+          <select
+            value={nodeId}
+            disabled={readOnly || nodes.length === 0 || linkAsset.isPending}
+            onChange={(event) => setNodeId(event.target.value)}
+          >
+            {nodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.name}
+              </option>
+            ))}
           </select>
         </label>
         <label>
           <span>Role</span>
-          <select value={role} disabled={readOnly || linkAsset.isPending} onChange={(event) => setRole(event.target.value as AssetRole)}>
-            {api.ASSET_ROLES.map((value) => <option key={value} value={value}>{roleLabel(value)}</option>)}
+          <select
+            value={role}
+            disabled={readOnly || linkAsset.isPending}
+            onChange={(event) => setRole(event.target.value as AssetRole)}
+          >
+            {api.ASSET_ROLES.map((value) => (
+              <option key={value} value={value}>
+                {roleLabel(value)}
+              </option>
+            ))}
           </select>
         </label>
-        <button className="btn btn-primary" type="button" disabled={readOnly || !nodeId || alreadyAttached || linkAsset.isPending} onClick={() => void attach()}>
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={readOnly || !nodeId || alreadyAttached || linkAsset.isPending}
+          onClick={() => void attach()}
+        >
           {linkAsset.isPending ? 'Attaching…' : alreadyAttached ? 'Already attached' : 'Attach'}
         </button>
         {error && <p className="asset-library-error">Attach failed: {error}</p>}
@@ -479,16 +535,19 @@ function AssetDetails({
           </button>
         </section>
       ) : usageKnown ? (
-        <p className="asset-delete-blocked">Detach every role and clear cover use before deletion is offered.</p>
+        <p className="asset-delete-blocked">
+          Detach every role and clear cover use before deletion is offered.
+        </p>
       ) : null}
     </aside>
   )
 }
 
 function deleteWarning(asset: Asset): string {
-  const generation = asset.kind === 'generated'
-    ? ' Its immutable generation receipt will remain, with this output shown as missing.'
-    : ''
+  const generation =
+    asset.kind === 'generated'
+      ? ' Its immutable generation receipt will remain, with this output shown as missing.'
+      : ''
   return `This permanently removes the original image and its thumbnail. It cannot be undone.${generation}`
 }
 

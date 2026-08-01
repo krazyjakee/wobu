@@ -315,7 +315,7 @@ impl From<StoreError> for WobuError {
             // is the wording, which travels in `message` and needs no new code
             // on the far side to be read.
             StoreError::NotAnImage | StoreError::AnimatedImage => Code::NotAnImage,
-            StoreError::NotAMesh => Code::Invalid,
+            StoreError::NotAMesh | StoreError::InvalidLora(_) => Code::Invalid,
             // A blob already in the library whose pixels will not come back
             // out — almost always one a sync client has not finished copying.
             // `Malformed` rather than `NotAnImage`, because nothing was dropped

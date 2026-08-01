@@ -62,7 +62,9 @@ export function ConceptsPane({
   return (
     <section className="concepts" aria-label={`Concepts for ${node.name}`}>
       {history.isError && (
-        <div className="concept-error">Could not read generation history: {api.errorMessage(history.error)}</div>
+        <div className="concept-error">
+          Could not read generation history: {api.errorMessage(history.error)}
+        </div>
       )}
       {jobs.length === 0 && (history.data?.length ?? 0) === 0 && !history.isPending && (
         <div className="concept-empty">
@@ -81,9 +83,7 @@ export function ConceptsPane({
             node={node}
             dependents={dependents}
             kinds={kinds}
-            scopeUnknown={
-              nodes.isPending || links.isPending || nodes.isError || links.isError
-            }
+            scopeUnknown={nodes.isPending || links.isPending || nodes.isError || links.isError}
             readOnly={readOnly}
             onOpen={setViewer}
           />
@@ -149,7 +149,8 @@ function LiveTile({ job, signal }: { job: JobSnapshot; signal: Signal | undefine
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const progress = signal?.progress
-  const pct = progress && progress.total > 0 ? Math.min(100, (progress.done / progress.total) * 100) : null
+  const pct =
+    progress && progress.total > 0 ? Math.min(100, (progress.done / progress.total) * 100) : null
   const failed = job.state === 'failed' ? job.failure.message : null
 
   async function cancel() {
@@ -240,7 +241,9 @@ function GenerationTile({
     try {
       const path = await api.assetOriginal(assetId)
       if (!path) {
-        setError('The full-resolution image is not available; the immutable receipt can still be inspected.')
+        setError(
+          'The full-resolution image is not available; the immutable receipt can still be inspected.',
+        )
         onOpen({ src: null, generation })
       } else onOpen({ src: convertFileSrc(path), generation })
     } catch (reason) {
@@ -290,7 +293,9 @@ function GenerationTile({
       <div className="concept-caption">
         <span>{generation.model}</span>
         <span className="concept-seed-source">{seedSourceLabel(generation)}</span>
-        <time dateTime={generation.createdAt}>{new Date(generation.createdAt).toLocaleString()}</time>
+        <time dateTime={generation.createdAt}>
+          {new Date(generation.createdAt).toLocaleString()}
+        </time>
       </div>
       {assetId && (
         <div className="concept-pin-controls">
@@ -375,9 +380,7 @@ function roleConsequence(role: Exclude<AssetRole, 'mood'>): string {
 }
 
 function roleLabel(role: AssetRole): string {
-  return role === 'full_ref'
-    ? 'Full reference'
-    : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
+  return role === 'full_ref' ? 'Full reference' : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
 }
 
 function seedSourceLabel(generation: Generation): string {

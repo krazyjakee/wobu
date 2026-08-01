@@ -64,7 +64,11 @@ export function ThreePane({ node }: { node: WobuNode }) {
 
   if (concepts.isPending) return <div className="mesh-empty">Reading 3D history…</div>
   if (concepts.isError) {
-    return <div className="mesh-empty">Could not read 3D history: {api.errorMessage(concepts.error)}</div>
+    return (
+      <div className="mesh-empty">
+        Could not read 3D history: {api.errorMessage(concepts.error)}
+      </div>
+    )
   }
   if (!selected) {
     return (
@@ -167,7 +171,9 @@ function TurnaroundSheet({ concept }: { concept: MeshConcept }) {
         <p>The immutable mesh receipt did not record a complete source sheet.</p>
       ) : (
         <div className="mesh-sheet-grid">
-          {views.map((view) => <TurnaroundTile key={view.generationId} view={view} />)}
+          {views.map((view) => (
+            <TurnaroundTile key={view.generationId} view={view} />
+          ))}
         </div>
       )}
     </aside>
@@ -189,7 +195,12 @@ function TurnaroundTile({ view }: { view: TurnaroundView }) {
 }
 
 function safeFilename(name: string): string {
-  return name.trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'wobu-mesh'
+  return (
+    name
+      .trim()
+      .replace(/[^a-z0-9._-]+/gi, '-')
+      .replace(/^-+|-+$/g, '') || 'wobu-mesh'
+  )
 }
 
 function formatBytes(bytes: number): string {

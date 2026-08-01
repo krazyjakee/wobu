@@ -12,8 +12,8 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use wobu_core::asset::AssetRef;
 use wobu_core::{
-    AssetRole, Description, DescriptionState, EnhanceStamp, Id, Link, LinkRole, Node, NodeKind,
-    SectionValue, SectionValueKind, kind_def,
+    AssetRole, Description, DescriptionState, EnhanceStamp, Id, Link, LinkRole, LoraPin, Node,
+    NodeKind, SectionValue, SectionValueKind, kind_def,
 };
 
 use crate::error::{Error, Result};
@@ -46,6 +46,61 @@ struct FmAsset {
     enabled: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct FmLora {
+    hash: String,
+    path: String,
+    bytes: u64,
+    trainer: String,
+    protocol: u32,
+    base_model: String,
+    model_family: String,
+    provider_name: String,
+    trigger_token: String,
+    #[serde(default)]
+    input_asset_hashes: Vec<String>,
+    created_at: DateTime<Utc>,
+    strength: f32,
+}
+
+impl From<&LoraPin> for FmLora {
+    fn from(pin: &LoraPin) -> Self {
+        Self {
+            hash: pin.hash.clone(),
+            path: pin.rel_path.clone(),
+            bytes: pin.bytes,
+            trainer: pin.trainer.clone(),
+            protocol: pin.protocol,
+            base_model: pin.base_model.clone(),
+            model_family: pin.model_family.clone(),
+            provider_name: pin.provider_name.clone(),
+            trigger_token: pin.trigger_token.clone(),
+            input_asset_hashes: pin.input_asset_hashes.clone(),
+            created_at: pin.created_at,
+            strength: pin.strength,
+        }
+    }
+}
+
+impl From<FmLora> for LoraPin {
+    fn from(pin: FmLora) -> Self {
+        Self {
+            hash: pin.hash,
+            rel_path: pin.path,
+            bytes: pin.bytes,
+            trainer: pin.trainer,
+            protocol: pin.protocol,
+            base_model: pin.base_model,
+            model_family: pin.model_family,
+            provider_name: pin.provider_name,
+            trigger_token: pin.trigger_token,
+            input_asset_hashes: pin.input_asset_hashes,
+            created_at: pin.created_at,
+            strength: pin.strength,
+        }
+    }
+}
+
 fn one() -> f32 {
     1.0
 }
@@ -76,6 +131,8 @@ struct Frontmatter {
     cover: Option<Id>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     locked_seed: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lora: Option<FmLora>,
     #[serde(default)]
     description_state: DescriptionState,
     /// What the last enhance read. Canonically here rather than in the index,
@@ -105,6 +162,7 @@ pub fn to_markdown(node: &Node) -> Result<String> {
         tags: node.tags.clone(),
         cover: node.cover_asset_id,
         locked_seed: node.locked_seed,
+        lora: node.lora.as_ref().map(FmLora::from),
         description_state: node.description_state,
         enhanced_from: node.enhanced_from.clone(),
         links: node
@@ -202,6 +260,7 @@ pub fn from_markdown(text: &str, path: &Path) -> Result<Node> {
         tags: fm.tags,
         cover_asset_id: fm.cover,
         locked_seed: fm.locked_seed,
+        lora: fm.lora.map(LoraPin::from),
         links: fm
             .links
             .into_iter()
@@ -374,6 +433,28 @@ mod tests {
         let parsed =
             from_markdown(&text, &PathBuf::from("nodes/prop/ashglass-lantern.md")).unwrap();
         assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn round_trips_a_content_addressed_lora_pin() {
+        let mut original = character();
+        original.lora = Some(LoraPin {
+            hash: "a".repeat(64),
+            rel_path: format!("assets/loras/aa/{}.safetensors", "a".repeat(64)),
+            bytes: 4_096,
+            trainer: "wobu-test-trainer".into(),
+            protocol: 1,
+            base_model: "flux-dev.safetensors".into(),
+            model_family: "unet".into(),
+            provider_name: "wobu/kael.safetensors".into(),
+            trigger_token: "wobu_kael".into(),
+            input_asset_hashes: vec!["b".repeat(64), "c".repeat(64)],
+            created_at: Utc::now(),
+            strength: 0.8,
+        });
+        let text = to_markdown(&original).unwrap();
+        assert!(text.contains("provider_name: wobu/kael.safetensors"));
+        assert_eq!(from_markdown(&text, &path()).unwrap(), original);
     }
 
     #[test]
