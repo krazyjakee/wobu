@@ -324,6 +324,43 @@
   color: var(--text-faint);
 }
 
+.prov-endpoint {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.prov-endpoint > label {
+  display: block;
+  margin-top: 9px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.prov-endpoint-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+.prov-endpoint-entry input {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: 5px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 11.5px var(--mono);
+  outline: none;
+}
+.prov-endpoint-entry input:focus {
+  border-color: var(--border-str);
+}
+.prov-endpoint .prov-probe {
+  margin-top: 9px;
+}
+
 .prov-onboarding ol {
   display: grid;
   gap: 8px;

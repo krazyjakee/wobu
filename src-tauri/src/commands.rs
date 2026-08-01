@@ -43,6 +43,7 @@ use crate::diag;
 use crate::enhance::Pending;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
+use crate::machine::MachineSettings;
 use crate::state::{AppState, Jobs, WORLD_CHANGED};
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
@@ -1773,6 +1774,7 @@ pub struct StatusBarBackend {
 pub async fn status_bar_backend(
     state: State<'_, AppState>,
     keys: State<'_, Keys>,
+    machine: State<'_, MachineSettings>,
 ) -> CommandResult<StatusBarBackend> {
     let (image, text) = state
         .with(|project| Ok((selected_model(project, "image"), selected_model(project, "text"))))?;
@@ -1808,7 +1810,7 @@ pub async fn status_bar_backend(
     };
 
     let health = match image_provider.as_str() {
-        comfy::ID => match comfy::ComfyBackend::new(comfy::DEFAULT_URL) {
+        comfy::ID => match machine.comfy_image() {
             Ok(backend) => match backend.health(&image_model).await {
                 comfy::Health::Connected { queue, .. } => {
                     BackendHealth::Connected { external_queue: Some(queue) }

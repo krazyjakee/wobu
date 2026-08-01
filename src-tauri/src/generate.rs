@@ -24,9 +24,9 @@ use wobu_core::{
     SnapshotLayer, VariationValue, default_preset, kind_def, new_id, preset,
 };
 use wobu_imagine::{
-    AspectRatio, Capabilities, ComfyBackend, Error as ImageError, GeminiBackend, ImageBackend,
-    ImageRequest, ImageUsage, LoraWeight, ProgressSink, Reference, ReferenceMechanism, Resolution,
-    comfy, gemini, negotiate, negotiate_scene,
+    AspectRatio, Capabilities, Error as ImageError, GeminiBackend, ImageBackend, ImageRequest,
+    ImageUsage, LoraWeight, ProgressSink, Reference, ReferenceMechanism, Resolution, comfy, gemini,
+    negotiate, negotiate_scene,
 };
 use wobu_influence::{
     Budget, Fragment, FragmentBody, RefBucket, ResolvedScene, SceneScope, Shot, Sliders, World,
@@ -37,6 +37,7 @@ use wobu_store::Project;
 
 use crate::error::{Code, CommandResult, WobuError};
 use crate::keys::Keys;
+use crate::machine::MachineSettings;
 use crate::state::{AppState, Jobs};
 
 pub const GENERATION_RECORDED: &str = "generation:recorded";
@@ -228,6 +229,7 @@ pub async fn generate_start(
     state: State<'_, AppState>,
     jobs: State<'_, Jobs>,
     keys: State<'_, Keys>,
+    machine: State<'_, MachineSettings>,
     subject_id: Id,
     preset: Option<String>,
     sliders: Option<Vec<GenerateSlider>>,
@@ -275,7 +277,8 @@ pub async fn generate_start(
 
     let backend: Arc<dyn ImageBackend> = match provider.as_str() {
         comfy::ID => Arc::new(
-            ComfyBackend::connect(comfy::DEFAULT_URL)
+            machine
+                .connect_comfy_image()
                 .await
                 .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
         ),
@@ -347,6 +350,7 @@ pub async fn scene_generate_start(
     state: State<'_, AppState>,
     jobs: State<'_, Jobs>,
     keys: State<'_, Keys>,
+    machine: State<'_, MachineSettings>,
     subject_ids: Vec<Id>,
     prompt: Option<String>,
     aspect: Option<String>,
@@ -412,7 +416,8 @@ pub async fn scene_generate_start(
 
     let backend: Arc<dyn ImageBackend> = match provider.as_str() {
         comfy::ID => Arc::new(
-            ComfyBackend::connect(comfy::DEFAULT_URL)
+            machine
+                .connect_comfy_image()
                 .await
                 .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
         ),
@@ -478,6 +483,7 @@ pub async fn generation_replay(
     state: State<'_, AppState>,
     jobs: State<'_, Jobs>,
     keys: State<'_, Keys>,
+    machine: State<'_, MachineSettings>,
     generation_id: Id,
 ) -> CommandResult<String> {
     let (root, project_id, generation, assets) = state.with(|project| {
@@ -502,7 +508,8 @@ pub async fn generation_replay(
 
     let backend: Arc<dyn ImageBackend> = match generation.backend.as_str() {
         comfy::ID => Arc::new(
-            ComfyBackend::connect(comfy::DEFAULT_URL)
+            machine
+                .connect_comfy_image()
                 .await
                 .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
         ),
@@ -1118,6 +1125,7 @@ pub fn spend_recovery_reset(
 #[allow(clippy::too_many_arguments)] // Tauri exposes these as named bridge arguments.
 pub fn image_reference_report(
     state: State<'_, AppState>,
+    machine: State<'_, MachineSettings>,
     subject_id: Id,
     preset: Option<String>,
     sliders: Option<Vec<GenerateSlider>>,
@@ -1156,7 +1164,8 @@ pub fn image_reference_report(
     })?;
     let backend: Box<dyn ImageBackend> = match provider.as_str() {
         comfy::ID => Box::new(
-            ComfyBackend::new(comfy::DEFAULT_URL)
+            machine
+                .comfy_image()
                 .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
         ),
         gemini::ID => Box::new(

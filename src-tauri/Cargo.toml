@@ -105,6 +105,7 @@ tokio = { version = "1.53.1", features = [
     "process",
     "io-util",
 ] }
+url = "2.5.8"
 wobu-core = { workspace = true }
 wobu-influence = { workspace = true }
 wobu-imagine = { workspace = true }

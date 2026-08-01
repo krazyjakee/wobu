@@ -1439,6 +1439,36 @@ export interface ProbeResult {
 export const providerProbe = (provider: string, model?: string) =>
   call<ProbeResult>('provider_probe', { provider, model })
 
+/* ── machine-local provider settings ────────────────────────────────────── */
+
+/** Installation settings. Deliberately separate from project provider selections. */
+export interface MachineSettings {
+  comfyuiEndpoint: string
+}
+
+export type ComfyEndpointState =
+  'connected' | 'unreachable' | 'authentication_required' | 'incompatible'
+
+export interface ComfyEndpointProbe {
+  endpoint: string
+  state: ComfyEndpointState
+  ok: boolean
+  message: string
+}
+
+/** Read the route stored under this installation's application-data directory. */
+export const machineSettings = () => call<MachineSettings>('machine_settings')
+
+/** Validate and persist a ComfyUI route on this machine, never in project.json. */
+export const comfyuiEndpointSet = (endpoint: string) =>
+  call<MachineSettings>('comfyui_endpoint_set', { endpoint })
+
+/** Probe a draft route without changing which route generation uses. */
+export const comfyuiEndpointProbe = (endpoint?: string) =>
+  call<ComfyEndpointProbe>('comfyui_endpoint_probe', {
+    ...(endpoint === undefined ? {} : { endpoint }),
+  })
+
 /* ── the provider selection ───────────────────────────────────────────────── */
 
 /**

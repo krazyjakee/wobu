@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './Settings'
-import type { KeyStatus, ProviderSelections } from '../lib/api'
+import type { ComfyEndpointProbe, KeyStatus, ProviderSelections } from '../lib/api'
 import { useUI } from '../store/ui'
 import { useSettings } from '../store/settings'
 
@@ -26,6 +26,13 @@ vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: h.openUrl, revealItemInDi
 /** What the backend answers, per command. Overwritten per test. */
 let keyStatuses: KeyStatus[] = []
 let selections: ProviderSelections = { providers: {}, readOnly: false }
+let machineEndpoint = 'http://127.0.0.1:8188'
+let comfyProbe: ComfyEndpointProbe = {
+  endpoint: machineEndpoint,
+  state: 'connected',
+  ok: true,
+  message: 'Connected to ComfyUI. Found 2 image models and 1 local mesh model.',
+}
 
 function unconfigured(provider: string): KeyStatus {
   return { provider, source: null, keychain: 'ready' }
@@ -44,6 +51,13 @@ function backend(cmd: string, args: Record<string, unknown> | undefined): unknow
       return { removed: true, status: unconfigured(String(args?.provider)) }
     case 'project_provider_select':
       return selections
+    case 'machine_settings':
+      return { comfyuiEndpoint: machineEndpoint }
+    case 'comfyui_endpoint_set':
+      machineEndpoint = String(args?.endpoint).replace(/\/$/, '')
+      return { comfyuiEndpoint: machineEndpoint }
+    case 'comfyui_endpoint_probe':
+      return { ...comfyProbe, endpoint: String(args?.endpoint ?? machineEndpoint) }
     case 'provider_probe':
       return {
         provider: args?.provider,
@@ -118,6 +132,13 @@ beforeEach(() => {
     unconfigured('tencent-secret-key'),
   ]
   selections = { providers: {}, readOnly: false }
+  machineEndpoint = 'http://127.0.0.1:8188'
+  comfyProbe = {
+    endpoint: machineEndpoint,
+    state: 'connected',
+    ok: true,
+    message: 'Connected to ComfyUI. Found 2 image models and 1 local mesh model.',
+  }
   useUI.setState({ toasts: [], banners: [] })
   useSettings.getState().reset()
   // Without this `isTauri()` is false and every command rejects before it is
@@ -417,5 +438,58 @@ describe('settings control accessibility', () => {
 
     expect(screen.getByRole('button', { name: 'info' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'debug' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+describe('the machine-local ComfyUI endpoint', () => {
+  it('loads, persists, and probes one route without writing project provider data', async () => {
+    await open()
+    const field = await screen.findByLabelText('Server URL')
+    expect(field).toHaveValue('http://127.0.0.1:8188')
+
+    fireEvent.change(field, { target: { value: 'http://renderbox.local:9000/comfy/' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and check' }))
+
+    await waitFor(() => {
+      expect(h.invoke).toHaveBeenCalledWith('comfyui_endpoint_set', {
+        endpoint: 'http://renderbox.local:9000/comfy/',
+      })
+      expect(h.invoke).toHaveBeenCalledWith('comfyui_endpoint_probe', {
+        endpoint: 'http://renderbox.local:9000/comfy',
+      })
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(/Connected to ComfyUI/)
+    expect(h.invoke).not.toHaveBeenCalledWith(
+      'project_provider_select',
+      expect.objectContaining({ endpoint: expect.anything() }),
+    )
+  })
+
+  it('keeps authentication feedback beside the endpoint and states the trust boundary', async () => {
+    comfyProbe = {
+      endpoint: machineEndpoint,
+      state: 'authentication_required',
+      ok: false,
+      message:
+        'The ComfyUI endpoint requires authentication (HTTP 401). Wobu does not store endpoint credentials.',
+    }
+    await open()
+
+    expect(await screen.findByLabelText('Server URL')).toHaveAccessibleDescription(
+      /never in project.json or the project folder.*enter only a server you trust/i,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Save and check' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /requires authentication.*HTTP 401/i,
+    )
+  })
+
+  it('describes the image and Concept 3D surfaces that are actually present', async () => {
+    await open()
+
+    expect(screen.queryByText(/Nothing in this build generates images yet/)).toBeNull()
+    expect(screen.queryByText(/Concept 3D generation surface is not in this build yet/)).toBeNull()
+    expect(screen.getByText(/Generate and Forge use this choice/)).toBeTruthy()
+    expect(screen.getByText(/Concept 3D uses this choice for mesh generation/)).toBeTruthy()
   })
 })

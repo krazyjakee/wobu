@@ -7751,6 +7751,7 @@ dependencies = [
  "tauri-plugin-opener",
  "thiserror 2.0.19",
  "tokio",
+ "url",
  "wobu-core",
  "wobu-imagine",
  "wobu-influence",

@@ -485,6 +485,12 @@ impl ComfyBackend {
         };
         match status {
             200..=299 => Ok(body),
+            401 | 403 => Err(Error::Unavailable {
+                detail: format!(
+                    "the ComfyUI endpoint at {} requires authentication (HTTP {status}). Wobu does not store credentials in endpoint URLs or send proxy authentication headers",
+                    self.base,
+                ),
+            }),
             // A 404 on a path every ComfyUI serves is the wrong service on the
             // right port far more often than it is a broken ComfyUI, and the
             // two send the user somewhere completely different.

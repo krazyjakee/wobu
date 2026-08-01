@@ -59,6 +59,27 @@ from the webview. Three reasons, in order of importance:
    fetch` ([js-genai#1723](https://github.com/googleapis/js-genai/issues/1723)). From a native
    HTTP client there is no preflight and no problem.
 
+## ComfyUI endpoint is machine-local
+
+ComfyUI defaults to `http://127.0.0.1:8188`, but its `--listen`, `--port` and reverse-proxy
+configuration can put it elsewhere. Settings stores the chosen HTTP(S) base URL in Wobu's
+application-data `settings.json`, never in `project.json` or anywhere under a project folder.
+A provider selection is shared world intent; an endpoint is how this particular installation
+reaches a machine. Syncing one into the other would make every collaborator try to contact the
+server under somebody else's desk.
+
+The route is shared by status probes, image generation, scene composition, replay and local
+Hunyuan3D mesh jobs. Saving validates the URL and probing distinguishes an unreachable address,
+an authenticating proxy (HTTP 401/403), and a service whose ComfyUI schema endpoints do not match.
+Wobu supports HTTP and HTTPS only and rejects URL user-info, query strings and fragments. In
+particular, `http://user:password@host/` is not a supported authentication mechanism: it would put
+a credential in a plain settings file and echo it across the renderer bridge.
+
+Loopback is the safe default. Pointing Wobu at a LAN or internet host is an explicit trust choice:
+the Rust process will send that server the prompts and reference-image bytes required for the job.
+The endpoint UI says this beside the field; TLS and any trusted-network authentication remain the
+operator's responsibility.
+
 ---
 
 ## Anthropic (text)

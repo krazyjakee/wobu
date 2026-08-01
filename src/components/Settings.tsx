@@ -4,6 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import type {
   AboutInfo,
   Capability,
+  ComfyEndpointProbe,
   IndexInfo,
   KeyStatus,
   LogInfo,
@@ -15,12 +16,16 @@ import type {
 import {
   LOG_LEVELS,
   aboutInfo,
+  comfyuiEndpointProbe,
+  comfyuiEndpointSet,
+  errorMessage,
   indexInfo,
   indexRebuild,
   logInfo,
   logReveal,
   logSetLevel,
   logTail,
+  machineSettings,
   providerProbe,
 } from '../lib/api'
 import {
@@ -125,9 +130,8 @@ const COMFYUI: ProviderDef = {
   label: 'ComfyUI',
   credentials: [],
   instead:
-    'ComfyUI needs no key — it is a server you run yourself. What decides whether it works is ' +
-    'whether its address answers, which is a question about your machine rather than about a ' +
-    'credential, so there is nothing to store here and nothing this pane could get wrong.',
+    'ComfyUI needs no key — it is a server you run yourself. Its machine-local address is ' +
+    'configured and checked below instead of being written into the shared project.',
 }
 
 const HUNYUAN3D: ProviderDef = {
@@ -177,8 +181,8 @@ interface CapabilityDef {
    * made before this pane existed is in exactly that state.
    */
   fallback?: ProviderDef
-  /** Said when this build records the choice but cannot yet act on it. */
-  unused?: string
+  /** What the current product surface does with this capability. */
+  activeNote?: string
 }
 
 /**
@@ -205,7 +209,8 @@ const CAPABILITIES: CapabilityDef[] = [
     icon: 'image',
     providers: [COMFYUI, GEMINI],
     model: false,
-    unused: 'Nothing in this build generates images yet, so the choice is recorded and not read.',
+    activeNote:
+      'Generate and Forge use this choice for entity images, variant grids and scene compositions.',
   },
   {
     capability: 'mesh',
@@ -214,9 +219,8 @@ const CAPABILITIES: CapabilityDef[] = [
     icon: 'cube',
     providers: [HUNYUAN3D, COMFYUI_MESH],
     model: false,
-    unused:
-      'The mesh adapter is ready, but the Concept 3D generation surface is not in this build yet. ' +
-      'The choice is recorded; local is only used when this project explicitly selects it.',
+    activeNote:
+      'Concept 3D uses this choice for mesh generation and keeps completed GLBs in the project asset library.',
   },
 ]
 
@@ -318,9 +322,11 @@ function Providers() {
         </div>
         <p className="set-note">
           Listed once each, because a key is not per capability — the same Gemini key writes text
-          and makes pictures. Nothing here is written into the project folder, and nothing you paste
-          is ever sent back to this window.
+          and makes pictures. The ComfyUI route belongs here for the same reason: it describes this
+          computer, not the shared world. Nothing here is written into the project folder, and
+          nothing you paste is ever sent back to this window.
         </p>
+        <ComfyEndpointSettings />
         {keychainDown && (
           <p className="prov-alert">
             This computer&rsquo;s credential store is not answering. On Linux that usually means the
@@ -499,7 +505,131 @@ function CapabilityRow({
         </p>
       )}
 
-      {def.unused && <p className="set-note">{def.unused}</p>}
+      {def.activeNote && <p className="set-note">{def.activeNote}</p>}
+    </div>
+  )
+}
+
+const DEFAULT_COMFYUI_ENDPOINT = 'http://127.0.0.1:8188'
+
+function ComfyEndpointSettings() {
+  const queryClient = useQueryClient()
+  const [saved, setSaved] = useState(DEFAULT_COMFYUI_ENDPOINT)
+  const [draft, setDraft] = useState(DEFAULT_COMFYUI_ENDPOINT)
+  const [probe, setProbe] = useState<ComfyEndpointProbe | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(false)
+
+  useEffect(() => {
+    let disposed = false
+    void machineSettings().then(
+      (settings) => {
+        if (disposed) return
+        setSaved(settings.comfyuiEndpoint)
+        setDraft(settings.comfyuiEndpoint)
+        setLoading(false)
+      },
+      (reason: unknown) => {
+        if (disposed) return
+        setError(`Could not read this computer's ComfyUI endpoint: ${errorMessage(reason)}`)
+        setLoading(false)
+      },
+    )
+    return () => {
+      disposed = true
+    }
+  }, [])
+
+  async function saveAndCheck() {
+    setChecking(true)
+    setError(null)
+    setProbe(null)
+    try {
+      const settings = await comfyuiEndpointSet(draft)
+      setSaved(settings.comfyuiEndpoint)
+      setDraft(settings.comfyuiEndpoint)
+      void queryClient.invalidateQueries({ queryKey: ['status_bar_backend'] })
+      void queryClient.invalidateQueries({ queryKey: ['image_reference_report'] })
+      setProbe(await comfyuiEndpointProbe(settings.comfyuiEndpoint))
+    } catch (reason) {
+      setError(errorMessage(reason))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <div className="prov-endpoint" aria-label="ComfyUI connection">
+      <div className="prov-key-head">
+        <span className="prov-key-name">ComfyUI endpoint</span>
+        <span className="badge">local</span>
+      </div>
+      <label htmlFor="comfyui-endpoint">Server URL</label>
+      <div className="prov-endpoint-entry">
+        <input
+          id="comfyui-endpoint"
+          type="url"
+          value={draft}
+          placeholder={DEFAULT_COMFYUI_ENDPOINT}
+          disabled={loading || checking}
+          spellCheck={false}
+          autoComplete="off"
+          aria-describedby="comfyui-endpoint-boundary"
+          onChange={(event) => {
+            setDraft(event.currentTarget.value)
+            setProbe(null)
+            setError(null)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void saveAndCheck()
+            if (event.key === 'Escape') {
+              setDraft(saved)
+              setProbe(null)
+              setError(null)
+            }
+          }}
+        />
+        <button
+          className="btn-mini"
+          disabled={loading || checking}
+          onClick={() => void saveAndCheck()}
+        >
+          {checking ? 'Checking…' : 'Save and check'}
+        </button>
+        {draft !== DEFAULT_COMFYUI_ENDPOINT && (
+          <button
+            className="btn-mini"
+            disabled={checking}
+            onClick={() => {
+              setDraft(DEFAULT_COMFYUI_ENDPOINT)
+              setProbe(null)
+              setError(null)
+            }}
+          >
+            Use default
+          </button>
+        )}
+      </div>
+      <p className="set-note" id="comfyui-endpoint-boundary">
+        Saved in Wobu&rsquo;s application data on this computer, never in <code>project.json</code>{' '}
+        or the project folder. Image generation, scene composition, replay and local mesh requests
+        all use this route. A non-loopback server receives the prompts and reference images those
+        jobs need, so enter only a server you trust. URL credentials are rejected; an authenticating
+        proxy must be configured outside Wobu.
+      </p>
+      {probe && (
+        <p className={probe.ok ? 'prov-probe is-ok' : 'prov-probe is-bad'} role="status">
+          <Icon name={probe.ok ? 'check' : 'x'} size="sm" />
+          {probe.message}
+        </p>
+      )}
+      {error && (
+        <p className="prov-probe is-bad" role="alert">
+          <Icon name="x" size="sm" />
+          {error}
+        </p>
+      )}
     </div>
   )
 }

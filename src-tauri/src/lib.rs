@@ -8,6 +8,7 @@ mod error;
 mod generate;
 mod keys;
 mod lora;
+mod machine;
 mod redact;
 mod state;
 mod sync;
@@ -38,6 +39,9 @@ pub fn run() {
         // reach a project folder is a type that could one day read a key out of
         // one, and project folders live on shares.
         .manage(keys::Keys::default())
+        // A ComfyUI route is per installation for the same reason a key is:
+        // collaborators share provider choices, not each other's machines.
+        .manage(machine::MachineSettings::default())
         // Descriptions that have come back from a provider and not yet been
         // accepted, edited or rejected. Beside the project rather than inside
         // it for the same reason the queue is: the call that produced one
@@ -157,6 +161,9 @@ pub fn run() {
             commands::provider_key_set,
             commands::provider_key_delete,
             commands::provider_probe,
+            machine::machine_settings,
+            machine::comfyui_endpoint_set,
+            machine::comfyui_endpoint_probe,
             commands::project_providers,
             commands::project_provider_select,
             commands::status_bar_backend,
