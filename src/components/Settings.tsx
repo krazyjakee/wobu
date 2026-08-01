@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { AboutInfo, IndexInfo, LogInfo, LogLevel } from '../lib/api'
+import type {
+  AboutInfo,
+  Capability,
+  IndexInfo,
+  KeyStatus,
+  LogInfo,
+  LogLevel,
+  ProbeResult,
+  ProviderSelection,
+} from '../lib/api'
 import {
   LOG_LEVELS,
   aboutInfo,
@@ -10,8 +19,16 @@ import {
   logReveal,
   logSetLevel,
   logTail,
+  providerProbe,
 } from '../lib/api'
-import { invalidateWorld } from '../lib/queries'
+import {
+  invalidateWorld,
+  useDeleteProviderKey,
+  useProviderKeys,
+  useProviderSelections,
+  useSelectProvider,
+  useSetProviderKey,
+} from '../lib/queries'
 import {
   AUTOSAVE_DEFAULT,
   AUTOSAVE_MAX,
@@ -28,31 +45,693 @@ import { Icon } from './Icon'
 /**
  * The Settings surface.
  *
- * Sections are independent and each owns its own loading, so the M5 providers
- * pane drops in as one more `<section className="set-sec">` rather than a
- * rewrite. Nothing here is stubbed: a control that looks configurable but is
- * not is worse than an honest absence, which is why there is no theme switch —
- * see Appearance.
+ * Sections are independent and each owns its own loading, so a new pane drops
+ * in as one more `<section className="set-sec">` rather than a rewrite. Nothing
+ * here is stubbed: a control that looks configurable but is not is worse than
+ * an honest absence, which is why there is no theme switch — see Appearance.
  */
 export function Settings() {
   return (
     <div className="settings-mode">
       <div className="settings">
         <h2>Settings</h2>
+        <Providers />
         <Storage />
         <EditorPrefs />
         <Appearance />
         <Diagnostics />
         <About />
-        <section className="set-sec">
-          <h3>Providers and models</h3>
-          <span className="milestone">M5 — Enhance (first BYOK providers)</span>
-          <p className="set-note">
-            Keys live in the OS keychain and never in the project folder, so this section lands with
-            the first provider that needs one.
-          </p>
-        </section>
       </div>
+    </div>
+  )
+}
+
+/* ── providers ────────────────────────────────────────────────────────────── */
+
+/**
+ * One credential a provider needs before it will answer.
+ *
+ * A list rather than a string because Tencent's is a SecretId/SecretKey *pair*
+ * signed together, not a bearer token — `keys.rs` registers it as two keychain
+ * entries for that reason, and a pane that assumed one field per provider would
+ * have nowhere to put the second.
+ */
+interface Credential {
+  /** The `wobu/<id>` keychain entry, and the id every command here takes. */
+  id: string
+  label: string
+}
+
+interface ProviderDef {
+  /** The id `project.json` carries. */
+  id: string
+  label: string
+  /** Empty for a backend that authenticates nothing. See ComfyUI. */
+  credentials: Credential[]
+  /** Where the user goes to get one. */
+  where?: string
+  /** Whether this build has an adapter that can check a key for it. */
+  checkable?: boolean
+  /** Said instead of a key field, for a provider that needs none. */
+  instead?: string
+}
+
+const ANTHROPIC: ProviderDef = {
+  id: 'anthropic',
+  label: 'Anthropic',
+  credentials: [{ id: 'anthropic', label: 'API key' }],
+  where: 'the Claude Console',
+  checkable: true,
+}
+
+const GEMINI: ProviderDef = {
+  id: 'gemini',
+  label: 'Gemini',
+  credentials: [{ id: 'gemini', label: 'API key' }],
+  where: 'Google AI Studio',
+  checkable: true,
+}
+
+const COMFYUI: ProviderDef = {
+  id: 'comfyui',
+  label: 'ComfyUI',
+  credentials: [],
+  instead:
+    'ComfyUI needs no key — it is a server you run yourself. What decides whether it works is ' +
+    'whether its address answers, which is a question about your machine rather than about a ' +
+    'credential, so there is nothing to store here and nothing this pane could get wrong.',
+}
+
+const HUNYUAN3D: ProviderDef = {
+  id: 'hunyuan3d',
+  label: 'Tencent Hunyuan3D',
+  credentials: [
+    { id: 'tencent-secret-id', label: 'Secret ID' },
+    { id: 'tencent-secret-key', label: 'Secret key' },
+  ],
+  where: 'the Tencent Cloud console',
+}
+
+interface CapabilityDef {
+  capability: Capability
+  label: string
+  /** What in the app uses this choice. */
+  used: string
+  icon: string
+  providers: ProviderDef[]
+  /** Whether choosing a model here means anything to this build. */
+  model: boolean
+  /**
+   * What runs when `project.json` names nothing.
+   *
+   * Not a display default: `enhance.rs` really does fall back to Anthropic, so
+   * a pane that showed "nothing chosen" and left it there would be describing a
+   * project that spends money at a provider it never mentioned. Every world
+   * made before this pane existed is in exactly that state.
+   */
+  fallback?: ProviderDef
+  /** Said when this build records the choice but cannot yet act on it. */
+  unused?: string
+}
+
+/**
+ * Three capabilities, chosen separately.
+ *
+ * Enhancing with Gemini, generating on a ComfyUI running under your desk and
+ * meshing through Hunyuan3D is the ordinary combination rather than the exotic
+ * one, and a single "provider" setting could not express it at all.
+ */
+const CAPABILITIES: CapabilityDef[] = [
+  {
+    capability: 'text',
+    label: 'Text',
+    used: 'Enhance',
+    icon: 'spark',
+    providers: [ANTHROPIC, GEMINI],
+    model: true,
+    fallback: ANTHROPIC,
+  },
+  {
+    capability: 'image',
+    label: 'Image',
+    used: 'Generate',
+    icon: 'image',
+    providers: [COMFYUI, GEMINI],
+    model: false,
+    unused: 'Nothing in this build generates images yet, so the choice is recorded and not read.',
+  },
+  {
+    capability: 'mesh',
+    label: 'Mesh',
+    used: 'Concept 3D',
+    icon: 'cube',
+    providers: [HUNYUAN3D, COMFYUI],
+    model: false,
+    unused: 'Nothing in this build makes meshes yet, so the choice is recorded and not read.',
+  },
+]
+
+/**
+ * Every provider that has a key, once each.
+ *
+ * Once, because a key is not per capability: Gemini writes text and makes
+ * pictures on the same credential, and listing it twice would ask the user for
+ * two keys and store one. This ordering is the order the key rows appear in.
+ */
+const KEYED: ProviderDef[] = [ANTHROPIC, GEMINI, HUNYUAN3D, COMFYUI]
+
+/**
+ * Module-level so the array identity is stable — it is part of the React Query
+ * key, and a fresh array every render would refetch on every render.
+ */
+const CREDENTIAL_IDS: string[] = KEYED.flatMap((p) => p.credentials.map((c) => c.id))
+
+/**
+ * Providers and keys — and above all, which of the two is shared.
+ *
+ * The pane is two bands rather than one list of providers, and that is the
+ * whole design rather than a layout choice. A project's *selection* lives in
+ * `project.json` and goes wherever the folder goes: open a world from a shared
+ * drive and you are looking at somebody else's decision. A *key* is per
+ * installation, sits in this machine's keychain, and goes nowhere at all. Those
+ * two facts are what BYOK means, they are the two facts users get wrong, and a
+ * sentence explaining them is worth much less than a layout in which they are
+ * obviously separate things — so the pane keeps them apart, labels each band
+ * with what it is, and never repeats a key row inside a capability.
+ *
+ * See `docs/08-providers.md`.
+ */
+function Providers() {
+  const selections = useProviderSelections()
+  const keys = useProviderKeys(CREDENTIAL_IDS)
+  const [focus, setFocus] = useState<string | null>(null)
+  // Stable identity: it is an effect dependency in every credential row, and a
+  // fresh closure per render would re-run all of them on every render.
+  const clearFocus = useCallback(() => setFocus(null), [])
+
+  const statuses = keys.data
+  const selected = selections.data
+
+  // Both are one round trip on mount and neither is worth a spinner; the
+  // sections around this one take the same line.
+  if (!statuses || !selected) return null
+  const chosen = selected.providers
+
+  const status = (id: string): KeyStatus | undefined =>
+    statuses.find((s) => s.provider === id)
+
+  /** Whether every credential this provider needs is present on this machine. */
+  const configured = (provider: ProviderDef) =>
+    provider.credentials.every((c) => status(c.id)?.source)
+
+  // A property of the machine rather than of a provider, which is why one line
+  // covers the whole band. `keys.rs` reports it per provider because that is
+  // where it has to be said, not because it varies.
+  const keychainDown = statuses.some((s) => s.keychain === 'unavailable')
+
+  return (
+    <section className="set-sec">
+      <h3>Providers and models</h3>
+      <p className="set-note">
+        Two different things live here and they belong to different people. What this project
+        uses is written into the project folder and travels with it, so opening a shared world
+        shows you the choices whoever built it made. Your keys never travel: they stay in this
+        computer&rsquo;s keychain, and everyone who opens the same world runs it on their own.
+      </p>
+
+      <div className="prov-band prov-band-shared">
+        <div className="prov-band-head">
+          <Icon name="share" size="sm" />
+          <span className="prov-band-title">What this project uses</span>
+          <span className="badge">shared</span>
+        </div>
+        <p className="set-note">
+          In <code>project.json</code>, beside the world itself — never a key.
+          {selected.readOnly &&
+            ' This folder is read-only, so the choices below cannot be changed from here.'}
+        </p>
+        {CAPABILITIES.map((def) => (
+          <CapabilityRow
+            key={def.capability}
+            def={def}
+            selection={chosen[def.capability] ?? {}}
+            readOnly={selected.readOnly}
+            configured={configured}
+            onAddKey={setFocus}
+          />
+        ))}
+      </div>
+
+      <div className="prov-band prov-band-local">
+        <div className="prov-band-head">
+          <Icon name="lock" size="sm" />
+          <span className="prov-band-title">Keys on this computer</span>
+          <span className="badge">local</span>
+        </div>
+        <p className="set-note">
+          Listed once each, because a key is not per capability — the same Gemini key writes text
+          and makes pictures. Nothing here is written into the project folder, and nothing you
+          paste is ever sent back to this window.
+        </p>
+        {keychainDown && (
+          <p className="prov-alert">
+            This computer&rsquo;s credential store is not answering. On Linux that usually means
+            the login keyring is locked; a headless session has none at all. Keys cannot be saved
+            until it is unlocked — a key already in the environment still works.
+          </p>
+        )}
+        {KEYED.map((provider) => (
+          <ProviderKeys
+            key={provider.id}
+            provider={provider}
+            statuses={statuses}
+            model={chosen.text?.provider === provider.id ? chosen.text?.model : undefined}
+            keychainDown={keychainDown}
+            focus={focus}
+            onFocused={clearFocus}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/**
+ * One capability's choice, and what is missing before it can run.
+ *
+ * The "selected but no key here" state is rendered inline rather than as a
+ * failure, because it is the *expected* state for a collaborator on day one:
+ * they opened somebody else's world, and the selection came with it. Saying so
+ * next to the choice, with a way straight to the field that fixes it, is the
+ * alternative to finding out at generate time on a call that has already been
+ * queued.
+ */
+function CapabilityRow({
+  def,
+  selection,
+  readOnly,
+  configured,
+  onAddKey,
+}: {
+  def: CapabilityDef
+  selection: ProviderSelection
+  readOnly: boolean
+  configured: (provider: ProviderDef) => boolean
+  onAddKey: (credentialId: string) => void
+}) {
+  const select = useSelectProvider()
+  const chosen = def.providers.find((p) => p.id === selection.provider)
+  const missing = chosen && !configured(chosen)
+
+  return (
+    // Grouped and named because the same provider appears under more than one
+    // capability — Gemini writes text and makes pictures — so "the Gemini
+    // button" is ambiguous to a screen reader for exactly the reason it is
+    // ambiguous to a reader.
+    <div className="prov-cap" role="group" aria-label={`${def.label} — ${def.used}`}>
+      <div className="prov-cap-head">
+        <Icon name={def.icon} size="sm" />
+        <span className="prov-cap-title">{def.label}</span>
+        <span className="prov-cap-used">{def.used}</span>
+      </div>
+
+      <div className="set-levels">
+        {def.providers.map((p) => (
+          <button
+            key={p.id}
+            className={p.id === selection.provider ? 'btn-mini is-on' : 'btn-mini'}
+            disabled={readOnly || select.isPending}
+            // The model is deliberately not carried across. Model ids belong to
+            // one vendor — `claude-sonnet-5` handed to Gemini is a request that
+            // fails for a reason nothing on screen explains — so changing the
+            // provider drops back to that adapter's own default.
+            onClick={() => select.mutate({ capability: def.capability, provider: p.id })}
+          >
+            {p.id === selection.provider && <Icon name="check" size="sm" />}
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {def.model && chosen && (
+        <ModelField
+          key={chosen.id}
+          capability={def.capability}
+          provider={chosen.id}
+          model={selection.model}
+          readOnly={readOnly}
+        />
+      )}
+
+      {missing && chosen && (
+        <p className="prov-gap">
+          <b>
+            {chosen.label} selected — no key on this machine.
+          </b>{' '}
+          {def.used} stays off until one is added, rather than failing once a job is already
+          running.
+          <button
+            className="btn-mini"
+            onClick={() => onAddKey(chosen.credentials[0]?.id ?? chosen.id)}
+          >
+            Add key
+          </button>
+        </p>
+      )}
+
+      {/* A project written by a build with more adapters than this one, which
+          the shared selection makes possible by design. Saying what it names is
+          the only way the user can tell "nothing is chosen" from "something is
+          chosen that this Wobu cannot run". */}
+      {selection.provider && !chosen && (
+        <p className="prov-gap">
+          <b>
+            This project selects <code>{selection.provider}</code>, which this version of Wobu
+            does not have.
+          </b>{' '}
+          Choosing one above replaces it for everyone.
+        </p>
+      )}
+
+      {/* What actually runs when nobody has chosen. Left unsaid, the row would
+          read as "off" for every world made before this pane existed — and
+          those worlds do enhance, at this provider, on this user's key. */}
+      {!selection.provider && def.fallback && (
+        <p className="set-note">
+          Nothing chosen, so {def.used} uses <b>{def.fallback.label}</b> — this build&rsquo;s
+          default. Picking one writes it down, and everyone who opens this world gets it.
+        </p>
+      )}
+
+      {def.unused && <p className="set-note">{def.unused}</p>}
+    </div>
+  )
+}
+
+/**
+ * The model id, as free text.
+ *
+ * Not a dropdown, and that is the point: model ids move faster than anything
+ * else in `docs/08-providers.md`, nothing validates this against a list, and a
+ * model released next month has to work without a release of ours. Empty means
+ * the adapter's own default, which is the answer that stays right on its own.
+ */
+function ModelField({
+  capability,
+  provider,
+  model,
+  readOnly,
+}: {
+  capability: Capability
+  provider: string
+  model: string | undefined
+  readOnly: boolean
+}) {
+  const select = useSelectProvider()
+  const [draft, setDraft] = useState(model ?? '')
+
+  function commit() {
+    const next = draft.trim()
+    if (next === (model ?? '')) return
+    select.mutate({ capability, provider, model: next || undefined })
+  }
+
+  return (
+    <div className="prov-model">
+      <span className="set-label">Model</span>
+      <input
+        type="text"
+        value={draft}
+        placeholder="the provider's default"
+        disabled={readOnly}
+        spellCheck={false}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') setDraft(model ?? '')
+        }}
+      />
+    </div>
+  )
+}
+
+/** How a key's provenance reads, and the colour it reads in. */
+const SOURCE_LABEL = {
+  keychain: 'in the keychain',
+  environment: 'from the environment',
+} as const
+
+function ProviderKeys({
+  provider,
+  statuses,
+  model,
+  keychainDown,
+  focus,
+  onFocused,
+}: {
+  provider: ProviderDef
+  statuses: KeyStatus[]
+  /** The model this project selected, so a check tests what Enhance would run. */
+  model: string | undefined
+  keychainDown: boolean
+  focus: string | null
+  onFocused: () => void
+}) {
+  const [probe, setProbe] = useState<ProbeResult | null>(null)
+  const [checking, setChecking] = useState(false)
+
+  async function check() {
+    setChecking(true)
+    try {
+      setProbe(await providerProbe(provider.id, model))
+    } catch (e) {
+      report(e, `Could not check the ${provider.label} key`)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const mine = provider.credentials.map((c) => statuses.find((s) => s.provider === c.id))
+  const ready = mine.every((s) => s?.source)
+  // Once per provider rather than once per credential: Tencent's pair would
+  // otherwise print the same paragraph twice under the same heading.
+  const fromEnvironment = mine.some((s) => s?.source === 'environment')
+
+  return (
+    <div className="prov-key">
+      <div className="prov-key-head">
+        <span className="prov-key-name">{provider.label}</span>
+        {provider.where && (
+          <span className="prov-key-where">a key comes from {provider.where}</span>
+        )}
+      </div>
+
+      {provider.instead && <p className="set-note">{provider.instead}</p>}
+
+      {provider.credentials.map((credential) => (
+        <CredentialRow
+          key={credential.id}
+          credential={credential}
+          multiple={provider.credentials.length > 1}
+          status={statuses.find((s) => s.provider === credential.id)}
+          keychainDown={keychainDown}
+          focus={focus}
+          onFocused={onFocused}
+          onChanged={() => setProbe(null)}
+        />
+      ))}
+
+      {fromEnvironment && (
+        <p className="set-note">
+          Read from a <code>.env</code> at the repository root — a development fallback that only
+          exists in this build. There is nothing in the keychain behind it, so there is nothing
+          here to remove: to change it, edit that file. A key saved above takes priority over it.
+        </p>
+      )}
+
+      {provider.checkable && ready && (
+        <div className="set-acts">
+          <button className="btn-mini" onClick={() => void check()} disabled={checking}>
+            <Icon name="check" size="sm" />
+            {checking ? 'Checking…' : 'Check this key'}
+          </button>
+          <span className="prov-cost">
+            asks for one description and stops it after a couple of dozen tokens — a fraction of a
+            penny, and nothing at all if the key is refused
+          </span>
+        </div>
+      )}
+
+      {probe && (
+        <p className={probe.ok ? 'prov-probe is-ok' : 'prov-probe is-bad'}>
+          <Icon name={probe.ok ? 'check' : 'x'} size="sm" />
+          {probe.message}{' '}
+          <span className="prov-probe-cost">
+            {probe.usage.inputTokens + probe.usage.cachedInputTokens} in /{' '}
+            {probe.usage.outputTokens} out tokens.
+          </span>
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One key field.
+ *
+ * The pasted key never becomes React state, and that is deliberate rather than
+ * stylistic. It is read off the DOM node at the moment Save is pressed, handed
+ * to the command, and the node is blanked — so no render captures it, no
+ * mutation cache holds it, and there is no component state for a future
+ * devtools panel or error boundary to serialise. The Rust side already
+ * guarantees a key never comes *back* across the bridge (`keys.rs`); that
+ * guarantee is worth little if the webview keeps a copy of the one it sent.
+ */
+function CredentialRow({
+  credential,
+  multiple,
+  status,
+  keychainDown,
+  focus,
+  onFocused,
+  onChanged,
+}: {
+  credential: Credential
+  /** Whether the label has to be shown — a lone "API key" row does not need it. */
+  multiple: boolean
+  status: KeyStatus | undefined
+  keychainDown: boolean
+  focus: string | null
+  onFocused: () => void
+  onChanged: () => void
+}) {
+  const field = useRef<HTMLInputElement>(null)
+  const { save, saving } = useSetProviderKey()
+  const remove = useDeleteProviderKey()
+  const [editing, setEditing] = useState(false)
+
+  const source = status?.source ?? null
+  const wanted = focus === credential.id
+
+  useEffect(() => {
+    if (!wanted) return
+    setEditing(true)
+    onFocused()
+  }, [wanted, onFocused])
+
+  // Deliberately after the state above rather than inside the click handler: the
+  // field does not exist until `editing` is true, so focusing it has to wait for
+  // the render that creates it.
+  useEffect(() => {
+    if (editing) field.current?.focus()
+  }, [editing])
+
+  async function submit() {
+    const input = field.current
+    if (!input) return
+    const key = input.value
+    if (!key.trim()) return
+    // Blanked before the await, not after: a save that fails still must not
+    // leave the key sitting in the DOM, and the value is already captured.
+    input.value = ''
+    try {
+      await save(credential.id, key)
+      close()
+      onChanged()
+      toast('Key saved to this computer’s keychain.')
+    } catch (e) {
+      report(e, 'Could not save that key')
+    }
+  }
+
+  /**
+   * Leave the field, taking whatever is in it.
+   *
+   * Blanked rather than merely unmounted. React drops the node either way and
+   * the string becomes collectable, but "becomes collectable" is a claim about
+   * an engine and this is a claim about the code — and a half-typed key
+   * abandoned on Escape is the case nobody would think to check.
+   */
+  function close() {
+    if (field.current) field.current.value = ''
+    setEditing(false)
+  }
+
+  async function discard() {
+    try {
+      const removal = await remove.mutateAsync(credential.id)
+      onChanged()
+      toast(
+        removal.status.source
+          ? 'Removed from the keychain — this provider is still configured from the environment.'
+          : 'Key removed from this computer.',
+      )
+    } catch (e) {
+      report(e, 'Could not remove that key')
+    }
+  }
+
+  return (
+    <div className="prov-cred">
+      <span className="prov-cred-label">{multiple ? credential.label : 'Key'}</span>
+
+      {editing ? (
+        <div className="prov-cred-entry">
+          <input
+            ref={field}
+            type="password"
+            placeholder={`Paste the ${credential.label.toLowerCase()}`}
+            // Nothing offers to remember it, nothing sends it to a spell
+            // checker, and nothing suggests it back into another field.
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            disabled={keychainDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void submit()
+              if (e.key === 'Escape') close()
+            }}
+          />
+          <button
+            className="btn-mini"
+            onClick={() => void submit()}
+            disabled={keychainDown || saving === credential.id}
+          >
+            {saving === credential.id ? 'Saving…' : 'Save'}
+          </button>
+          <button className="btn-mini" onClick={close}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          <span className={source ? 'prov-cred-state' : 'prov-cred-state is-absent'}>
+            <span className={source === 'keychain' ? 'dot dot-ok' : source ? 'dot dot-warn' : 'dot'} />
+            {source ? SOURCE_LABEL[source] : 'no key on this machine'}
+          </span>
+          <div className="set-acts prov-cred-acts">
+            <button className="btn-mini" onClick={() => setEditing(true)} disabled={keychainDown}>
+              {source === 'keychain' ? 'Replace' : 'Add key'}
+            </button>
+            {/* Only for a key this pane can actually remove. An environment
+                key has no keychain entry behind it, so a Remove button here
+                would report "nothing was removed" and change nothing — which
+                reads as the app ignoring the click. */}
+            {source === 'keychain' && (
+              <button
+                className="btn-mini"
+                onClick={() => void discard()}
+                disabled={remove.isPending}
+              >
+                <Icon name="trash" size="sm" />
+                Remove
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
     </div>
   )
 }

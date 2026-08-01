@@ -13,6 +13,7 @@ import type {
   Asset,
   AssetKind,
   AssetRole,
+  Capability,
   CompiledPrompt,
   Conflict,
   ConflictKeep,
@@ -23,6 +24,7 @@ import type {
   NodeKind,
   NodeSummary,
   ProjectSummary,
+  ProviderSelections,
   PromptBudget,
   QueueSnapshot,
   ShotControls,
@@ -55,6 +57,10 @@ export const qk = {
   // `invalidateWorld` touches it. Opening someone else's world does not change
   // which keys this machine has.
   providerKeys: (providers: string[]) => ['provider_key_status', providers] as const,
+  // And its opposite number: per project, shared with everyone who opens the
+  // folder. The two are never merged into one key because they are never
+  // invalidated by the same thing.
+  projectProviders: ['project_providers'] as const,
   // The engine is a pure function of the world and these arguments, so the
   // arguments belong in the key: two presets, or two positions of the same
   // slider, are two different answers and neither invalidates the other.
@@ -599,19 +605,41 @@ export function useProviderKeys(providers: string[]): UseQueryResult<KeyStatus[]
 /**
  * Save a key for a provider.
  *
- * The caller is responsible for clearing its own input afterwards. React Query
- * keeps `variables` on the mutation until it is reset, so a key pasted here
- * stays reachable from the mutation's state — harmless, since the user typed it
- * into this process, but not something to leave sitting in a form.
+ * Deliberately **not** a `useMutation`, and that is the whole point of the hook.
+ * React Query keeps `variables` on a mutation until something resets it, so a
+ * key passed through one stays reachable from the mutation cache — and the
+ * mutation cache is a long-lived object hanging off the `QueryClient`, which
+ * means a pasted key would outlive the form, the pane, and every re-render, in
+ * the one process the rest of this design works to keep key material out of.
+ * `keys.rs` guarantees nothing sends a key back to the webview; that guarantee
+ * is worth very little if the webview keeps its own copy.
+ *
+ * So the key is an argument to a plain call and a local for the length of one
+ * await. The caller passes it straight from the DOM node the user typed it into
+ * and clears that node afterwards — see `Settings.tsx`, which never puts one in
+ * React state either.
+ *
+ * `saving` is the provider id, not a boolean: the pane renders every provider at
+ * once and a shared flag would put "Saving…" on all of them.
  */
 export function useSetProviderKey() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (v: { provider: string; key: string }) => api.providerKeySet(v.provider, v.key),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
+  const [saving, setSaving] = useState<string | null>(null)
+
+  const save = useCallback(
+    async (provider: string, key: string) => {
+      setSaving(provider)
+      try {
+        await api.providerKeySet(provider, key)
+        void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
+      } finally {
+        setSaving(null)
+      }
     },
-  })
+    [qc],
+  )
+
+  return { save, saving }
 }
 
 /**
@@ -628,6 +656,51 @@ export function useDeleteProviderKey() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
     },
+  })
+}
+
+/* ── the provider selection ───────────────────────────────────────────────── */
+
+/**
+ * Which provider this project has chosen for each capability.
+ *
+ * The counterpart to `useProviderKeys`, and kept apart from it on purpose: this
+ * one is a property of the *project folder* and travels to everyone on the
+ * share, that one is a property of *this machine* and travels nowhere. The pane
+ * renders them as two bands for the same reason.
+ *
+ * Not part of `invalidateWorld`: a collaborator editing a node does not change
+ * what `project.json` selects, and the only thing that changes it here is the
+ * mutation below.
+ */
+export function useProviderSelections(): UseQueryResult<ProviderSelections> {
+  return useQuery({
+    queryKey: qk.projectProviders,
+    queryFn: api.projectProviders,
+    retry: false,
+  })
+}
+
+/**
+ * Choose a provider for one capability.
+ *
+ * The result is the whole selection map, written into the cache rather than
+ * refetched: the backend has just re-read `project.json` to answer, so a second
+ * round trip would only ask the same question again.
+ *
+ * Rejects with `write.read_only` on a read-only folder, which the pane already
+ * knows and disables for — the rejection is the backstop for a folder that
+ * turned read-only mid-session.
+ */
+export function useSelectProvider() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { capability: Capability; provider: string; model?: string }) =>
+      api.projectProviderSelect(v.capability, v.provider, v.model),
+    onSuccess: (selections) => {
+      qc.setQueryData(qk.projectProviders, selections)
+    },
+    onError: (e: unknown) => report(e, 'Could not change the provider'),
   })
 }
 

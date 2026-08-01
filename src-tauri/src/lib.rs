@@ -109,6 +109,9 @@ pub fn run() {
             commands::provider_key_status,
             commands::provider_key_set,
             commands::provider_key_delete,
+            commands::provider_probe,
+            commands::project_providers,
+            commands::project_provider_select,
             commands::job_cancel,
             commands::job_list,
         ])

@@ -896,6 +896,113 @@ export interface KeyRemoval {
 export const providerKeyDelete = (provider: string) =>
   call<KeyRemoval>('provider_key_delete', { provider })
 
+/* ── the capability probe ─────────────────────────────────────────────────── */
+
+/** What a probe was charged, as the provider reported it. */
+export interface ProbeUsage {
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+}
+
+/**
+ * What checking a key found out.
+ *
+ * A rejected key arrives here as `ok: false`, not as a rejected promise. It is
+ * the answer the pane asked for and belongs beside the field that caused it —
+ * a toast would put "Anthropic says this key is wrong" somewhere the key is no
+ * longer on screen.
+ */
+export interface ProbeResult {
+  provider: string
+  /** The model asked about — the adapter's own default when none was passed. */
+  model: string
+  ok: boolean
+  /** One sentence. On success it says what was proved, not just "OK". */
+  message: string
+  /** `null` when the probe passed. */
+  code: ErrorCode | null
+  usage: ProbeUsage
+}
+
+/**
+ * Check a stored key against the provider it belongs to.
+ *
+ * Cheap by construction rather than by promise: the backend asks for one
+ * description and cuts the answer off after a couple of dozen tokens, because
+ * everything worth knowing — the key is accepted, the model id resolves, the
+ * schema is one this provider will take — is settled before the first sentence
+ * is finished. A refused key is never billed at all.
+ *
+ * Rejects only when the probe could not run: no key on this machine
+ * (`provider.no_key`), or a provider this build has no adapter for.
+ */
+export const providerProbe = (provider: string, model?: string) =>
+  call<ProbeResult>('provider_probe', { provider, model })
+
+/* ── the provider selection ───────────────────────────────────────────────── */
+
+/**
+ * The three jobs a provider can be chosen for, selected independently.
+ *
+ * Not one setting: enhancing with Gemini, generating on a ComfyUI running
+ * downstairs and meshing through Hunyuan3D is the ordinary combination
+ * (`docs/08-providers.md`), and a single provider field cannot express it.
+ */
+export type Capability = 'text' | 'image' | 'mesh'
+
+/**
+ * One capability's entry in `project.json`.
+ *
+ * Both fields are optional because both have meaningful absences: no `provider`
+ * is "nobody has chosen", and no `model` is "whatever the adapter's default is",
+ * which moves faster than any list we could ship.
+ */
+export interface ProviderSelection {
+  provider?: string
+  model?: string
+}
+
+/**
+ * The shared half of the providers pane.
+ *
+ * This is what `project.json` says, so it is what *everyone* who opens the
+ * folder sees — the counterpart to `KeyStatus`, which is what only this machine
+ * has. Keeping them as two separate shapes is deliberate: they have different
+ * lifetimes, different owners, and merging them into one "provider is ready"
+ * flag would erase exactly the distinction a collaborator needs.
+ *
+ * Keyed loosely because a project written by a newer Wobu may carry a
+ * capability this build has never heard of, and the backend round-trips the map
+ * rather than parsing it into three fields.
+ */
+export interface ProviderSelections {
+  providers: Record<string, ProviderSelection | undefined>
+  /**
+   * Whether the *selection* can be changed. Keys are unaffected — they are per
+   * installation — so a read-only world is still one you can add a key for.
+   */
+  readOnly: boolean
+}
+
+export const projectProviders = () => call<ProviderSelections>('project_providers')
+
+/**
+ * Choose a provider for one capability and write it into `project.json`.
+ *
+ * Merged rather than replaced on the Rust side, so default params set by another
+ * build survive a change of provider. Passing no `model` clears the model, which
+ * is how "use the adapter's default" is spelled — a caller that does not offer a
+ * model editor should pass the one already there rather than omitting it.
+ *
+ * Rejects with `write.read_only` on a read-only folder.
+ */
+export const projectProviderSelect = (
+  capability: Capability,
+  provider: string,
+  model?: string,
+) => call<ProviderSelections>('project_provider_select', { capability, provider, model })
+
 /* ── storage and about ────────────────────────────────────────────────────── */
 
 /** The local SQLite index for the open project. Disposable by design. */

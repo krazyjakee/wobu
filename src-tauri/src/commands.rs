@@ -9,8 +9,10 @@
 //! Argument names are snake_case; Tauri v2 matches them against the camelCase
 //! keys `src/lib/api.ts` sends.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
@@ -24,6 +26,10 @@ use wobu_influence::{
     compile, fragments, resolve,
 };
 use wobu_jobs::{JobId, QueueSnapshot};
+use wobu_llm::{
+    AnthropicProvider, Cancel, Discard, EnhanceOutcome, EnhanceRequest, GeminiProvider,
+    TextProvider, Usage, anthropic, gemini,
+};
 use wobu_store::{
     Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary, Resolved,
     SaveOutcome, recent,
@@ -32,7 +38,7 @@ use wobu_store::{
 use crate::diag;
 use crate::enhance::Pending;
 use crate::error::{Code, CommandResult, WobuError};
-use crate::keys::{KeyRemoval, KeyStatus, Keys};
+use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 use crate::state::{AppState, Jobs, WORLD_CHANGED};
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
@@ -986,6 +992,345 @@ pub fn provider_key_delete(keys: State<'_, Keys>, provider: String) -> CommandRe
     keys.delete(&provider)
 }
 
+/* ── the provider selection ───────────────────────────────────────────────── */
+
+/// Which job a selection is for.
+///
+/// Three, not one list. A user enhancing with Gemini, generating on a ComfyUI
+/// running on the machine under their desk and meshing through Hunyuan3D is the
+/// ordinary case rather than the exotic one (`docs/08-providers.md`), and a
+/// single "provider" setting would make it unrepresentable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Capability {
+    Text,
+    Image,
+    Mesh,
+}
+
+impl Capability {
+    /// The key this capability's selection sits under in `project.json`'s
+    /// `providers`.
+    ///
+    /// `"text"` is not a name chosen here: `enhance.rs` already reads that key
+    /// to decide who writes descriptions, and the two have to agree or a
+    /// selection made in Settings is written somewhere Enhance never looks.
+    fn key(self) -> &'static str {
+        match self {
+            Capability::Text => "text",
+            Capability::Image => "image",
+            Capability::Mesh => "mesh",
+        }
+    }
+}
+
+/// The shared half of the providers pane: what `project.json` says.
+///
+/// Carried as the raw map rather than as three typed fields, because a project
+/// written by a build that knows a fourth capability must survive a round trip
+/// through this one. The frontend reads the capabilities it understands and
+/// leaves the rest alone, which is the same contract `ProjectMeta` has with the
+/// file.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSelections {
+    pub providers: serde_json::Map<String, serde_json::Value>,
+    /// Whether the *selection* can be changed here. Keys are unaffected: they
+    /// are per installation and go to this machine's keychain, so a read-only
+    /// world is one you can still add a key for and still generate from.
+    pub read_only: bool,
+}
+
+/// What this project has chosen, for the pane that has to show it as shared.
+#[tauri::command]
+pub fn project_providers(state: State<'_, AppState>) -> CommandResult<ProviderSelections> {
+    state.with(|p| Ok(selections(p)))
+}
+
+/// Choose a provider for one capability, and write it into `project.json`.
+///
+/// This is the only command that writes project metadata, and it exists because
+/// there was no other: `wobu-store` writes `project.json` when a project is
+/// created and never again. Anything else that needs to change that file should
+/// come through here rather than open a second way to do it.
+///
+/// The selection is *shared*. It travels with the folder to everyone on the
+/// share, which is exactly why the key does not — see `keys.rs`.
+#[tauri::command]
+pub fn project_provider_select(
+    state: State<'_, AppState>,
+    capability: Capability,
+    provider: String,
+    model: Option<String>,
+) -> CommandResult<ProviderSelections> {
+    let provider = provider.trim().to_owned();
+    if provider.is_empty() {
+        return Err(WobuError::new(Code::Invalid, "A capability needs a provider."));
+    }
+    // Trimmed to nothing means "whatever the adapter's default is", which is a
+    // real answer and is spelled as the absence of the field — the same thing
+    // `enhance.rs` reads an empty string as.
+    let model = model.map(|m| m.trim().to_owned()).filter(|m| !m.is_empty());
+
+    state.with(|project| {
+        if project.is_read_only() {
+            return Err(WobuError::new(
+                Code::ReadOnly,
+                "This project folder is read-only, so the provider it uses cannot be changed \
+                 here. Keys can still be added — those live on this machine.",
+            ));
+        }
+
+        let root = project.root().to_path_buf();
+        let mut providers = project.meta().providers.clone();
+        // Merged into whatever is already under this capability rather than
+        // replacing it. Default params live in the same object
+        // (`docs/08-providers.md`), and a build that only knows about `provider`
+        // and `model` must not delete the rest of somebody's settings by
+        // touching a dropdown.
+        let mut chosen = providers
+            .get(capability.key())
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        chosen.insert("provider".to_owned(), serde_json::Value::String(provider));
+        match model {
+            Some(model) => {
+                chosen.insert("model".to_owned(), serde_json::Value::String(model));
+            }
+            None => {
+                chosen.remove("model");
+            }
+        }
+        providers.insert(capability.key().to_owned(), serde_json::Value::Object(chosen));
+        write_providers(&root, &providers)?;
+
+        // Reopened rather than patched in memory, because `Project` hands out
+        // `&ProjectMeta` and nothing else — `meta` is what was read at open
+        // time. Without this the user would change the provider, press Enhance,
+        // and be billed by the one they just moved away from, which is the
+        // exact failure `enhance.rs`'s selection code is written to prevent.
+        //
+        // It costs a `reconcile` — the same walk the Reload button does — and
+        // this runs when somebody picks from a dropdown, not in a loop.
+        *project = Project::open(&root)?;
+        Ok(selections(project))
+    })
+}
+
+fn selections(project: &Project) -> ProviderSelections {
+    ProviderSelections {
+        providers: project.meta().providers.clone(),
+        read_only: project.is_read_only(),
+    }
+}
+
+/// Put `providers` into `project.json`, leaving every other byte of meaning
+/// alone.
+///
+/// Read back as raw JSON and patched at one key rather than re-serialised from
+/// `ProjectMeta`: a field written by a newer Wobu would not survive a round trip
+/// through a struct that has never heard of it, and `project.json` is precisely
+/// the file two builds of different vintages share across a drive.
+///
+/// Staged and renamed, on the same filesystem so the rename is atomic. This is
+/// the file that decides whether a folder is a project at all — a half-written
+/// one is a world that will not open, for everyone on the share at once.
+fn write_providers(
+    root: &Path,
+    providers: &serde_json::Map<String, serde_json::Value>,
+) -> CommandResult<()> {
+    let path = root.join("project.json");
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
+    let mut meta: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
+    let Some(object) = meta.as_object_mut() else {
+        return Err(meta_write_failed("is not a JSON object", raw));
+    };
+    object.insert("providers".to_owned(), serde_json::Value::Object(providers.clone()));
+
+    let staging = root.join(".wobu").join("tmp");
+    std::fs::create_dir_all(&staging)
+        .map_err(|e| meta_write_failed("could not be staged", e.to_string()))?;
+    let part = staging.join("project.json.part");
+    let text = serde_json::to_string_pretty(&meta)
+        .map_err(|e| meta_write_failed("could not be written", e.to_string()))?;
+    std::fs::write(&part, text)
+        .map_err(|e| meta_write_failed("could not be staged", e.to_string()))?;
+    std::fs::rename(&part, &path)
+        .map_err(|e| meta_write_failed("could not be written", e.to_string()))?;
+    Ok(())
+}
+
+fn meta_write_failed(what_happened: &str, detail: String) -> WobuError {
+    WobuError::new(Code::Io, format!("This project's `project.json` {what_happened}."))
+        .with_detail(detail)
+}
+
+/* ── the capability probe ─────────────────────────────────────────────────── */
+
+/// The one node kind the probe asks about.
+///
+/// A prop has the shortest description in the registry, so it is the cheapest
+/// schema to hand a provider and the fastest thing for one to start answering.
+const PROBE_KIND: NodeKind = NodeKind::Prop;
+
+/// Deliberately trivial, and deliberately not about anybody's world. The probe
+/// asks a real question because a provider only reveals whether it will take our
+/// schema by being given it.
+const PROBE_PROMPT: &str = "A plain iron nail. One short line per section.";
+
+/// How much of the answer to let the provider produce.
+///
+/// This is the whole trick that makes the check free enough to offer. Everything
+/// the probe is there to find out — the key is accepted, the model id exists for
+/// this account, the description schema is one the provider will take, and the
+/// model has started emitting the structured document — is settled in the first
+/// few tokens. Letting the answer finish would buy nothing except a bill.
+const PROBE_MAX_OUTPUT_TOKENS: u32 = 24;
+
+/// What a probe found out, in the terms the Settings pane renders.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeResult {
+    pub provider: String,
+    /// The model actually asked about — the adapter's own default when the
+    /// project named none, which is the fact a user has no other way to learn.
+    pub model: String,
+    pub ok: bool,
+    /// One sentence for the pane. On success it says what was *proved*, because
+    /// a green tick beside a key field is a claim the user cannot check.
+    pub message: String,
+    /// The stable dotted code, so a rejected key can be shown differently from
+    /// a provider that is having an outage. `None` when the probe passed.
+    pub code: Option<String>,
+    /// What the check cost, as the provider reported it. Returned rather than
+    /// assumed: a button that spends money silently is the thing this pane
+    /// exists to prevent.
+    pub usage: Usage,
+}
+
+/// Check a stored key against the provider it belongs to, at key-entry time.
+///
+/// The point is *when* it runs. Without this, a mistyped key is discovered by
+/// pressing Enhance on a node and watching a job fail — the failure surfaces at
+/// generate time, in a place that has nothing to do with credentials, and often
+/// on somebody else's machine. Here it surfaces beside the field that caused it.
+///
+/// What it proves, in order: this machine has a key; the provider accepts it;
+/// the model id resolves for this account; the description schema is one the
+/// provider will take at all (Google documents a subset of JSON Schema, so this
+/// is a real answer and not a formality); and the model begins emitting the
+/// structured document. What it does *not* prove is that a full description
+/// validates — the answer is cut off at [`PROBE_MAX_OUTPUT_TOKENS`] on purpose,
+/// and pretending otherwise would mean charging for a description nobody asked
+/// for every time a user pastes a key.
+///
+/// A provider failure is a *result*, not a rejection: "Anthropic says this key
+/// is wrong" is the answer the pane asked for and belongs beside the field, not
+/// in a toast. Only the two things that mean the probe could not run at all —
+/// no key on this machine, a provider this build does not have — come back as
+/// errors.
+#[tauri::command]
+pub async fn provider_probe(
+    keys: State<'_, Keys>,
+    provider: String,
+    model: Option<String>,
+) -> CommandResult<ProbeResult> {
+    let secret = keys.secret(&provider).ok_or_else(|| {
+        WobuError::new(
+            Code::ProviderNoKey,
+            "There is no key for this provider on this machine, so there is nothing to check.",
+        )
+    })?;
+    let adapter = probe_provider(&provider, &secret)?;
+    let model = model
+        .map(|m| m.trim().to_owned())
+        .filter(|m| !m.is_empty())
+        .unwrap_or_else(|| adapter.default_model().to_owned());
+
+    let request = EnhanceRequest::new(PROBE_KIND, &model, PROBE_PROMPT)
+        .with_max_output_tokens(PROBE_MAX_OUTPUT_TOKENS);
+    // A fresh token that nothing holds: the probe is a few hundred milliseconds
+    // and there is no Stop button in Settings to wire one to.
+    let outcome = adapter.enhance(&request, &mut Discard, &Cancel::new()).await;
+
+    Ok(verdict(adapter.as_ref(), model, outcome))
+}
+
+/// Read an `EnhanceOutcome` as an answer about the key rather than as an answer
+/// about a nail.
+fn verdict(adapter: &dyn TextProvider, model: String, outcome: EnhanceOutcome) -> ProbeResult {
+    let label = adapter.label();
+    let usage = outcome.usage;
+    let (ok, message, code) = match outcome.result {
+        // Only reachable if a provider fits a whole description into the token
+        // ceiling above, which no current one does — but it is the strongest
+        // possible pass and reporting it as a failure would be absurd.
+        Ok(_) => (true, format!("{label} answered with a complete description."), None),
+        Err(error) => {
+            let code = error.code();
+            // `wobu_llm::Error` is split into "the call" and "the answer", and
+            // every variant on the answer side lands on this one code. Reaching
+            // the answer side at all means the key, the model id and the schema
+            // were all accepted — the request got as far as generating — which
+            // is precisely what the probe set out to establish. Matching on the
+            // code rather than on the variants keeps this from having to be
+            // revisited every time one is added.
+            if code == "provider.bad_response" {
+                (
+                    true,
+                    format!(
+                        "{label} took the key and started writing with {model}. The check stops \
+                         the answer after a few tokens, so it did not finish one."
+                    ),
+                    None,
+                )
+            } else {
+                (false, error.to_string(), Some(code.to_owned()))
+            }
+        }
+    };
+    ProbeResult { provider: adapter.id().to_owned(), model, ok, message, code, usage }
+}
+
+/// The text adapters this build has, by the id `project.json` and the keychain
+/// both use.
+///
+/// A second construction site — `enhance.rs` has the same match, private to
+/// itself — and the duplication is deliberate rather than overlooked: the
+/// modules do not export to each other and the probe must not be the reason
+/// `enhance.rs` grows a public surface. What has to stay true is the *set of
+/// ids*, and both sides read those from `anthropic::ID` and `gemini::ID` rather
+/// than spelling them out, so an adapter added to one and not the other is a
+/// probe that cannot check the provider Enhance would actually run.
+fn probe_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>> {
+    let built = match id {
+        anthropic::ID => {
+            AnthropicProvider::new(key.expose()).map(|p| Arc::new(p) as Arc<dyn TextProvider>)
+        }
+        gemini::ID => {
+            GeminiProvider::new(key.expose()).map(|p| Arc::new(p) as Arc<dyn TextProvider>)
+        }
+        // Not a bug and not a broken key: ComfyUI needs no credential at all,
+        // and the image and mesh backends are not wired into this shell yet. A
+        // key for one of those can still be stored — it is per installation and
+        // will be waiting — there is simply nothing here to ask.
+        _ => {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "This build has no way to check that provider's key.",
+            )
+            .with_detail(id.to_owned()));
+        }
+    };
+    built.map_err(|e| {
+        WobuError::new(Code::ProviderUnavailable, "This provider could not be started.")
+            .with_detail(e.to_string())
+    })
+}
+
 /* ── jobs ─────────────────────────────────────────────────────────────────── */
 
 /// Stop a job. `false` when there is no such job, or it had already finished.
@@ -1356,6 +1701,152 @@ mod bridge {
         let kinds: Vec<&str> = json.as_array().unwrap().iter().map(|d| d["kind"].as_str().unwrap()).collect();
         assert!(kinds.contains(&"style_guide"), "got {kinds:?}");
         assert!(kinds.contains(&"world_bible"), "got {kinds:?}");
+    }
+
+    #[test]
+    fn the_three_capabilities_cross_as_the_strings_the_pane_sends_back() {
+        // The Settings pane posts one of these on every provider change, and a
+        // rename on either side is a dropdown that silently stops working:
+        // serde refuses the string and nothing is ever written.
+        for (capability, wire) in [
+            (Capability::Text, "text"),
+            (Capability::Image, "image"),
+            (Capability::Mesh, "mesh"),
+        ] {
+            assert_eq!(serde_json::to_value(capability).unwrap(), wire);
+            assert_eq!(
+                serde_json::from_value::<Capability>(serde_json::json!(wire)).unwrap(),
+                capability,
+            );
+            // And the key in `project.json` is the same string, which is the
+            // half `enhance.rs` reads.
+            assert_eq!(capability.key(), wire);
+        }
+        assert!(serde_json::from_str::<Capability>("\"Text\"").is_err());
+    }
+
+    #[test]
+    fn a_probe_result_matches_the_proberesult_interface() {
+        let result = ProbeResult {
+            provider: "anthropic".into(),
+            model: "claude-sonnet-5".into(),
+            ok: false,
+            message: "Anthropic rejected the API key".into(),
+            code: Some("provider.bad_key".into()),
+            usage: Usage { input_tokens: 412, cached_input_tokens: 0, output_tokens: 24 },
+        };
+        let json = serde_json::to_value(&result).unwrap();
+
+        for key in ["provider", "model", "ok", "message", "code", "usage"] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from ProbeResult");
+        }
+        // The usage fields are camelCase on the wire and the pane prints them
+        // as what the check cost; an absent one reads as zero and understates
+        // the bill.
+        for key in ["inputTokens", "cachedInputTokens", "outputTokens"] {
+            assert!(json["usage"].get(key).is_some(), "`{key}` is missing from the probe usage");
+        }
+        assert_eq!(json["code"], "provider.bad_key");
+    }
+
+    #[test]
+    fn a_failed_probe_is_an_answer_rather_than_a_rejection() {
+        // The regression: routing a rejected key through the command's `Err`
+        // channel would put it in a toast, away from the field that caused it,
+        // and the pane would have nothing to disable. Every "the call" failure
+        // has to arrive as `ok: false` with a code the pane can style.
+        let outcome = EnhanceOutcome::unbilled(wobu_llm::Error::BadKey { provider: "Anthropic" });
+        let rejected = verdict(&ProbeAdapter, "claude-sonnet-5".into(), outcome);
+        assert!(!rejected.ok);
+        assert_eq!(rejected.code.as_deref(), Some("provider.bad_key"));
+        assert_eq!(rejected.usage, Usage::default());
+
+        // And the other half: an answer cut off by the token ceiling is what a
+        // *passing* probe looks like, because everything the check set out to
+        // establish was already settled by the time the provider started
+        // writing. Reading it as a failure would report every good key as bad.
+        let truncated = EnhanceOutcome::new(
+            Usage { input_tokens: 400, cached_input_tokens: 0, output_tokens: 24 },
+            Err(wobu_llm::Error::Truncated),
+        );
+        let passed = verdict(&ProbeAdapter, "claude-sonnet-5".into(), truncated);
+        assert!(passed.ok, "{}", passed.message);
+        assert_eq!(passed.code, None);
+        assert_eq!(passed.usage.output_tokens, 24, "the pane says what the check cost");
+    }
+
+    /// Stands in for whichever adapter the probe built. Only the three name
+    /// methods are reached — [`verdict`] never calls one.
+    struct ProbeAdapter;
+
+    #[async_trait::async_trait]
+    impl TextProvider for ProbeAdapter {
+        fn id(&self) -> &'static str {
+            anthropic::ID
+        }
+        fn label(&self) -> &'static str {
+            anthropic::LABEL
+        }
+        fn default_model(&self) -> &'static str {
+            "claude-sonnet-5"
+        }
+        async fn enhance(
+            &self,
+            _request: &EnhanceRequest,
+            _deltas: &mut dyn wobu_llm::DeltaSink,
+            _cancel: &Cancel,
+        ) -> EnhanceOutcome {
+            unreachable!("the verdict tests never make a call")
+        }
+    }
+
+    /* ── the shared selection ─────────────────────────────────────────────── */
+
+    #[test]
+    fn writing_a_selection_leaves_the_rest_of_project_json_alone() {
+        // `project.json` is shared across a drive, so this file is written by
+        // builds of different vintages. Re-serialising `ProjectMeta` would drop
+        // every field this build has never heard of — including a fourth
+        // capability under `providers` — and the loss would be invisible until
+        // the collaborator who set it noticed their world had changed.
+        let root = std::env::temp_dir().join(format!("wobu-providers-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("project.json");
+        std::fs::write(
+            &path,
+            r#"{
+              "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+              "name": "Ashfall",
+              "schemaVersion": 1,
+              "createdAt": "2026-07-31T09:00:00Z",
+              "somethingANewerBuildWrote": { "keep": "me" },
+              "providers": { "image": { "provider": "comfyui" } }
+            }"#,
+        )
+        .unwrap();
+
+        let mut providers = serde_json::Map::new();
+        providers.insert("image".to_owned(), serde_json::json!({ "provider": "comfyui" }));
+        providers.insert(
+            "text".to_owned(),
+            serde_json::json!({ "provider": "gemini", "model": "gemini-3.6-flash" }),
+        );
+        write_providers(&root, &providers).unwrap();
+
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(written["somethingANewerBuildWrote"]["keep"], "me");
+        assert_eq!(written["name"], "Ashfall");
+        assert_eq!(written["providers"]["text"]["provider"], "gemini");
+        // The other capabilities are untouched: three selections are three
+        // independent choices, and setting one must not clear the others.
+        assert_eq!(written["providers"]["image"]["provider"], "comfyui");
+
+        // Nothing is left in staging — a `.part` beside a project is litter that
+        // replicates to everyone on the share.
+        assert!(!root.join(".wobu/tmp/project.json.part").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 
