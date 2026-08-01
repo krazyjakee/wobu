@@ -2,11 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Conflict, NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
-import { useConflicts, useCorruptFiles, useKinds, useNodes } from '../lib/queries'
+import {
+  useConflicts,
+  useCorruptFiles,
+  useKinds,
+  useNodes,
+  usePresence,
+  useReportEditing,
+} from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
+import { PRESENCE_BANNER, editingText, editorsByNode, editorsOf, openedText } from '../lib/presence'
 import { READ_ONLY_BANNER, READ_ONLY_TEXT } from '../lib/readOnly'
 import { ancestorsOf, buildGroups, indexNodes } from '../lib/tree'
-import { useUI, report } from '../store/ui'
+import { useUI, report, toast } from '../store/ui'
 import { TitleBar } from './TitleBar'
 import { ModeRail } from './ModeRail'
 import { StatusBar } from './StatusBar'
@@ -30,6 +38,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const nodesQ = useNodes(true)
   const corruptQ = useCorruptFiles(true)
   const conflictsQ = useConflicts(true)
+  const { peers, ready: presenceReady } = usePresence(true)
 
   const mode = useUI((s) => s.mode)
   const navWidth = useUI((s) => s.navWidth)
@@ -94,6 +103,14 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
     return [here, elsewhere]
   }, [conflicts, selected])
+
+  // Everyone else's Wobu is told which node we have open, so their navigator can
+  // put a dot on it. Advisory in both directions: nothing sent here reserves a
+  // node, and nothing that comes back disables anything below.
+  useReportEditing(selectedId)
+
+  const peerEditors = useMemo(() => editorsByNode(peers), [peers])
+  const editorsHere = useMemo(() => editorsOf(selectedId, peers), [selectedId, peers])
 
   // A selection that no longer exists (deleted, or removed on disk) is dropped
   // rather than left pointing at nothing.
@@ -168,6 +185,48 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
   }, [project.id, readOnly, clearBanners])
 
+  // Both presence effects below are declared *after* that one on purpose:
+  // effects run in source order, so opening a project clears the banners first
+  // and this raises against the clean slate rather than into one about to be
+  // wiped.
+
+  // "Nadia has this project open." — once per project open, on the first answer
+  // that comes back rather than on every poll, and silent when nobody else is
+  // here. Announcing an empty folder every time is how the one message that
+  // matters gets dismissed unread.
+  const greeted = useRef<string | null>(null)
+  useEffect(() => {
+    if (!presenceReady || greeted.current === project.id) return
+    greeted.current = project.id
+    const text = openedText(peers)
+    if (text) toast(text)
+  }, [project.id, presenceReady, peers])
+
+  // The passive banner, raised once per *event* — this node becoming one that
+  // somebody else has open — rather than once per poll. Keyed by code exactly as
+  // the read-only banner is (#19), and the remembered key is what lets a
+  // dismissal stick until the situation itself changes.
+  //
+  // Informational, and that is the whole design: it names what happens if you
+  // both save. Nothing under it is disabled, and nothing may be.
+  const bannerKey = useRef<string | null>(null)
+  useEffect(() => {
+    const key = editorsHere.length
+      ? `${project.id}|${selectedId}|${editorsHere.map((p) => p.sessionId).join(',')}`
+      : null
+    if (bannerKey.current === key) return
+    bannerKey.current = key
+    if (!key) {
+      useUI.getState().clearBanner(PRESENCE_BANNER)
+      return
+    }
+    useUI.getState().raiseBanner({
+      code: PRESENCE_BANNER,
+      text: editingText(editorsHere, selected?.name ?? 'this node'),
+      retryable: false,
+    })
+  }, [project.id, selectedId, editorsHere, selected?.name])
+
   useEffect(() => {
     if (kindsQ.isError) report(kindsQ.error, 'Kind registry unavailable')
   }, [kindsQ.isError, kindsQ.error])
@@ -210,6 +269,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
                 readOnly={readOnly}
                 corrupt={corruptQ.data ?? []}
+                editedElsewhere={peerEditors}
                 projectPath={project.path}
                 onNewNode={startNewNode}
               />
@@ -272,7 +332,12 @@ export function Workspace({ project }: { project: ProjectSummary }) {
         )}
       </div>
 
-      <StatusBar project={project} nodeCount={nodes.length} loading={nodesQ.isPending} />
+      <StatusBar
+        project={project}
+        nodeCount={nodes.length}
+        loading={nodesQ.isPending}
+        peers={peers}
+      />
 
       <CommandPalette
         nodes={nodes}

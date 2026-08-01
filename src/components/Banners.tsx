@@ -1,6 +1,19 @@
 import { useState } from 'react'
 import { useUI, type Banner } from '../store/ui'
+import { PRESENCE_BANNER } from '../lib/presence'
 import { Icon } from './Icon'
+
+/**
+ * The glyph for a code, falling back to the padlock.
+ *
+ * Presence is listed here rather than left to the fallback because a padlock is
+ * the one thing it must not say: nothing about a collaborator having a node open
+ * locks anything.
+ */
+const ICON: Record<string, string> = {
+  'share.unmounted': 'share',
+  [PRESENCE_BANNER]: 'share',
+}
 
 /**
  * The persistent half of the error surface.
@@ -38,7 +51,7 @@ function BannerRow({ banner, onDismiss }: { banner: Banner; onDismiss: () => voi
 
   return (
     <div className="banner" data-code={banner.code}>
-      <Icon name={banner.code === 'share.unmounted' ? 'share' : 'lock'} size="sm" />
+      <Icon name={ICON[banner.code] ?? 'lock'} size="sm" />
       <div className="banner-body">
         <span className="banner-text">{banner.text}</span>
         {/* The detail is the OS's own wording. Useful in a bug report, noise

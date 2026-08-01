@@ -155,6 +155,27 @@
 .node.is-sel .stale {
   opacity: 0.9;
 }
+/* Quieter still than the stale dot, and a hollow ring rather than a filled one:
+   somebody else having this node open is a coincidence, not a condition of the
+   node. It takes the `margin-left: auto` when it is present, and the rule below
+   hands `.stale` a fixed gap so the two sit as a pair at the right edge rather
+   than sharing the free space between them. */
+.node .peer {
+  margin-left: auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--text-dim);
+  opacity: 0.6;
+  flex: none;
+}
+.node .peer + .stale {
+  margin-left: 4px;
+}
+.node:hover .peer,
+.node.is-sel .peer {
+  opacity: 0.95;
+}
 .node-pin {
   background: var(--bg-raised);
   border: 1px solid var(--border);

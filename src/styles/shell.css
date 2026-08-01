@@ -268,6 +268,16 @@
   height: 11px;
   background: var(--border-str);
 }
+/* The same hollow ring the navigator uses, so the count in the status bar and
+   the dots on the rows are visibly the same fact. */
+.status .presence {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--text-dim);
+  flex: none;
+  margin-right: -3px;
+}
 .status code {
   font: 10.5px var(--mono);
   color: var(--text-faint);
