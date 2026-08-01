@@ -51,11 +51,12 @@ pub enum Error {
     ///
     /// The message is the whole of what the user is shown — `WobuError` in the
     /// Tauri shell is built from a `Display` — so it has to name the fix rather
-    /// than the symptom. It lands on `provider.bad_key` because that is the
-    /// code for "the credential path refused this call and repeating it
-    /// unchanged will be refused identically", which is exactly true here; the
-    /// sentence is what tells the two apart, and a person reads it, not a
-    /// `match`.
+    /// than the symptom. It lands on its own `provider.clock_skew` rather than
+    /// on `provider.bad_key`: both are non-retryable auth failures and folding
+    /// them is tempting, but the Settings pane offers "re-enter your key" for a
+    /// bad key, which is actively wrong advice when the key is fine and the
+    /// clock is five minutes fast. Leaving the sentence to carry the difference
+    /// would not have saved it, because the surfaces branch on the code.
     #[error(
         "{backend} rejected the request signature as expired — this computer's clock is more \
          than five minutes away from real time. Check your system clock and turn on automatic \
@@ -138,6 +139,30 @@ pub enum Error {
     /// asked for.
     #[error("the backend returned something that is not a readable image: {detail}")]
     NotAnImage { detail: String },
+
+    /// A mesh job reported `DONE` and listed nothing we could use.
+    ///
+    /// The mesh twin of [`Error::NoImage`], and separate from it rather than
+    /// folded in because the two carry different advice: an image backend that
+    /// returns nothing is usually a refusal in disguise, and a mesh job that
+    /// finishes empty is a `ResultFile3Ds` list whose every entry we could not
+    /// take. It is also the one this crate can raise *after* a job has been
+    /// billed for several minutes of GPU time, which is what makes reporting it
+    /// as its own thing worth doing.
+    #[error("the backend returned no mesh")]
+    NoMesh,
+
+    /// Bytes arrived and are not a mesh we can keep — an archive that will not
+    /// open, or one with nothing recognisable inside it.
+    ///
+    /// Its own variant rather than [`Error::NotAnImage`], whose sentence would
+    /// tell somebody their 3D model was not a readable picture. `docs/08-providers.md`
+    /// warns that the OBJ result URL is a `.zip` rather than a bare mesh and that
+    /// the declared `Type` contradicts what is delivered, so "we downloaded
+    /// something and could not make a mesh of it" is a case with a real chance of
+    /// happening and a real need to say what arrived.
+    #[error("the backend returned something that is not a readable mesh: {detail}")]
+    NotAMesh { detail: String },
 }
 
 impl Error {
@@ -165,7 +190,13 @@ impl Error {
             | Error::Unavailable { .. }
             | Error::Refused { .. }
             | Error::NoImage
-            | Error::NotAnImage { .. } => true,
+            | Error::NotAnImage { .. }
+            // Both are worth another attempt for the same reason the image ones
+            // are: a job that came back empty or unreadable is not a fact about
+            // the request. Whether it is worth *spending* another mesh job on is
+            // `MeshUsage`'s question, and the queue weighs the two together.
+            | Error::NoMesh
+            | Error::NotAMesh { .. } => true,
         }
     }
 
@@ -199,9 +230,11 @@ impl Error {
             // for that is `internal`.
             Error::Unsupported { .. } => "internal",
             Error::Cancelled => "cancelled",
-            Error::Refused { .. } | Error::NoImage | Error::NotAnImage { .. } => {
-                "provider.bad_response"
-            }
+            Error::Refused { .. }
+            | Error::NoImage
+            | Error::NotAnImage { .. }
+            | Error::NoMesh
+            | Error::NotAMesh { .. } => "provider.bad_response",
         }
     }
 }
@@ -227,6 +260,8 @@ mod tests {
             Error::Refused { detail: "prohibited_content".into() },
             Error::NoImage,
             Error::NotAnImage { detail: "no PNG signature".into() },
+            Error::NoMesh,
+            Error::NotAMesh { detail: "the archive has no mesh in it".into() },
         ]
     }
 
@@ -331,6 +366,23 @@ mod tests {
         let error = Error::Unsupported { detail: "no controlnet".into() };
         assert_eq!(error.code(), "internal");
         assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn a_mesh_that_will_not_open_is_never_reported_as_an_unreadable_picture() {
+        // The reason `NotAMesh` exists rather than reusing `NotAnImage`: the
+        // message is the whole of what the user is shown, and telling somebody
+        // their 3D model "is not a readable image" sends them to look at the
+        // turnaround sheet, which is fine. `docs/08-providers.md` makes this a
+        // realistic case rather than a theoretical one — the OBJ result is a
+        // `.zip` and the declared `Type` contradicts what is delivered.
+        let mesh = Error::NotAMesh { detail: "the archive has no mesh in it".into() };
+        assert!(mesh.to_string().contains("mesh"), "{mesh}");
+        assert!(!mesh.to_string().contains("image"), "{mesh}");
+        assert!(!Error::NoMesh.to_string().contains("image"));
+        // And both land where every other unusable answer does, because the
+        // queue's decision about them is the same one.
+        assert_eq!(mesh.code(), Error::NotAnImage { detail: String::new() }.code());
     }
 
     #[test]

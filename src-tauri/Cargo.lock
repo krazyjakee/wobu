@@ -5832,6 +5832,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "flate2",
  "futures-core",
  "hmac",
  "reqwest",

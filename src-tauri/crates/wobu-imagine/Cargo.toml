@@ -10,6 +10,16 @@ async-trait = "0.1.91"
 # ends already agree on, and 0.22.1 is the version the workspace lock already
 # resolved for Tauri.
 base64 = "0.22"
+# The OBJ result URL from Hunyuan3D is a `.zip` of the mesh, its `.mtl` and its
+# texture maps (`docs/08-providers.md`), so the mesh adapter has to unpack one.
+# What is needed from this crate is DEFLATE and a CRC-32 and nothing else — the
+# ZIP container itself is `tencent/archive.rs`, a hundred lines of central
+# directory. A `zip` crate would add half a dozen entries to the lock for the same
+# two primitives, whereas **flate2 1.1.9 was already in the workspace lock** by
+# way of `png`, together with the `miniz_oxide` and `crc32fast` it pulls. This
+# requirement is written loosely enough to resolve to exactly that entry rather
+# than adding a second copy, and the default features are the two already in use.
+flate2 = "1.1"
 # The websocket is a stream, which is what changed since #50. That note said
 # "this crate has no stream" and it was true of the trait — progress is still a
 # sink, for the reasons in `backend.rs`. What needs `Stream` is the read loop in

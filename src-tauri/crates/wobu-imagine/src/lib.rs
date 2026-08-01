@@ -12,6 +12,19 @@
 //!
 //! See `docs/08-providers.md`.
 //!
+//! ## Two traits, because a mesh is not a picture
+//!
+//! [`MeshBackend`] sits beside [`ImageBackend`] rather than inside it.
+//! `docs/08-providers.md` lists Text, Image and Mesh as three separate
+//! capabilities, and the second one here is Tencent Hunyuan3D
+//! ([#64](https://github.com/krazyjakee/wobu/issues/64)): a request with no
+//! aspect ratio, no resolution, no seed and no negative prompt, whose result is a
+//! set of files that reference each other by name rather than one blob with
+//! dimensions. `mesh.rs` argues it field by field. What the two share is the part
+//! that is about *calling a provider* rather than about a medium — [`Error`],
+//! [`Cancel`] and [`ProgressSink`] — because two error types would mean two
+//! copies of the UI's code table and two ways for `wobu-jobs` to read a failure.
+//!
 //! ## The half of this crate that is not the trait
 //!
 //! A backend that quietly does less than it was asked is worse than one that
@@ -137,18 +150,24 @@ pub mod comfy;
 mod dimensions;
 mod error;
 pub mod gemini;
+mod mesh;
 mod negotiate;
 pub mod tencent;
 
 pub use aspect::{AspectRatio, Resolution};
 pub use comfy::ComfyBackend;
 pub use gemini::GeminiBackend;
+pub use tencent::HunyuanBackend;
 pub use backend::{
     Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
     Reference, Watermark,
 };
 pub use capability::Capabilities;
 pub use error::{Error, Result};
+pub use mesh::{
+    DEFAULT_FACE_COUNT, FACE_COUNT, GenerateType, GeneratedMesh, MeshBackend, MeshCapabilities,
+    MeshFile, MeshFormat, MeshInput, MeshOutcome, MeshRequest, MeshUsage, MeshView, View,
+};
 pub use negotiate::{Downgrade, Downgraded, Negotiated, negotiate};
 
 /// The cancellation token, re-exported from `wobu-llm` rather than defined
