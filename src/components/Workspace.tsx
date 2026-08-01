@@ -12,6 +12,7 @@ import { StatusBar } from './StatusBar'
 import { Navigator } from './navigator/Navigator'
 import { Editor } from './editor/Editor'
 import { Inspector } from './Inspector'
+import { PromptBox } from './inspector/PromptBox'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
@@ -227,7 +228,18 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 loading={nodesQ.isPending}
               />
             </div>
-            {!inspCollapsed && <Inspector selected={selected} kinds={kindIndex} />}
+            {/* The compiled prompt sits under the influence stack, in the
+                inspector's own column — the wrapper is what keeps the two in
+                one grid track, exactly as `.editor-region` does for the
+                conflict card. It is rendered from here rather than from inside
+                the Inspector only until the stack itself lands; see
+                `PromptBox`. */}
+            {!inspCollapsed && (
+              <div className="insp-region">
+                <Inspector selected={selected} kinds={kindIndex} />
+                <PromptBox project={project} subject={selected} onJump={jumpTo} />
+              </div>
+            )}
           </>
         ) : mode === 'settings' ? (
           <Settings />

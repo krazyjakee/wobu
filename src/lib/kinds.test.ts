@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { colorFor, indexKinds, labelFor, layerColor, pluralFor, spriteFor } from './kinds'
+import {
+  colorFor,
+  indexKinds,
+  labelFor,
+  layerColor,
+  layerLabel,
+  pluralFor,
+  spriteFor,
+} from './kinds'
 import type { InfluenceLayer } from './api'
 import { kindDef } from '../test/fixtures'
 
@@ -76,20 +84,35 @@ describe('colorFor', () => {
   })
 })
 
-describe('layerColor', () => {
-  const layers: InfluenceLayer[] = [
-    'style',
-    'world',
-    'ancestry',
-    'culture',
-    'place',
-    'subject',
-    'shot',
-  ]
+const layers: InfluenceLayer[] = [
+  'style',
+  'world',
+  'ancestry',
+  'culture',
+  'place',
+  'subject',
+  'shot',
+]
 
+describe('layerColor', () => {
   it('covers every layer — the switch has no default, so a new one is a type error', () => {
     for (const l of layers) expect(layerColor(l)).toMatch(/^var\(--/)
     expect(new Set(layers.map(layerColor)).size).toBe(layers.length)
+  })
+})
+
+describe('layerLabel', () => {
+  it('names every layer distinctly, since it is what carries attribution without colour', () => {
+    // The compiled prompt box credits each span to a layer in words as well as
+    // in tint, for readers who cannot tell two of these colours apart. Two
+    // layers sharing a label would make that attribution unreadable.
+    for (const l of layers) expect(layerLabel(l)).toMatch(/^[A-Z]/)
+    expect(new Set(layers.map(layerLabel)).size).toBe(layers.length)
+  })
+
+  it('spells them the way wobu-core does, so two surfaces cannot disagree', () => {
+    expect(layerLabel('ancestry')).toBe('Ancestry')
+    expect(layerLabel('shot')).toBe('Shot')
   })
 })
 

@@ -4,5 +4,6 @@
 @import './navigator.css';
 @import './editor.css';
 @import './inspector.css';
+@import './prompt.css';
 @import './settings.css';
 @import './overlays.css';

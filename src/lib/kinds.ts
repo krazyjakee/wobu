@@ -113,6 +113,33 @@ export function layerColor(layer: InfluenceLayer): string {
   }
 }
 
+/**
+ * Influence layer → the name it is called by.
+ *
+ * Spelled the same as `wobu-core`'s `Layer::label`, because the prompt box
+ * attributes a span to a layer in words as well as in colour and the two sides
+ * disagreeing would mean a fragment credited to "Ancestry" on one surface and
+ * "Species" on another.
+ */
+export function layerLabel(layer: InfluenceLayer): string {
+  switch (layer) {
+    case 'style':
+      return 'Style'
+    case 'world':
+      return 'World'
+    case 'ancestry':
+      return 'Ancestry'
+    case 'culture':
+      return 'Culture'
+    case 'place':
+      return 'Place'
+    case 'subject':
+      return 'Subject'
+    case 'shot':
+      return 'Shot'
+  }
+}
+
 function fallbackColor(kind: NodeKind): string {
   switch (kind) {
     case 'style_guide':
