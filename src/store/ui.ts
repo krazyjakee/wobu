@@ -9,9 +9,22 @@ export const EDITOR_TABS: EditorTab[] = ['notes', 'refs', 'concepts', 'three', '
 
 export interface Toast {
   id: number
+  /** Incremented in place so a changed toast can restart its own lifetime. */
+  revision: number
   text: string
   kind: 'info' | 'error'
+  detail?: string
+  /** An affordance for a failure the user can recover from. */
+  action?: { label: string; run: () => void }
+  /** Persistent toasts remain until their action runs or the user dismisses them. */
+  persistent: boolean
+  durationMs: number
 }
+
+export type ToastOptions = Partial<Pick<Toast, 'detail' | 'action' | 'persistent' | 'durationMs'>>
+export type ToastUpdate = Partial<
+  Pick<Toast, 'text' | 'kind' | 'detail' | 'action' | 'persistent' | 'durationMs'>
+>
 
 /**
  * A condition that makes the workspace untrustworthy until it is resolved —
@@ -67,7 +80,8 @@ interface UIState {
   setPaletteOpen: (v: boolean) => void
 
   toasts: Toast[]
-  pushToast: (text: string, kind?: Toast['kind']) => void
+  pushToast: (text: string, kind?: Toast['kind'], options?: ToastOptions) => number
+  updateToast: (id: number, update: ToastUpdate) => void
   dropToast: (id: number) => void
 
   banners: Banner[]
@@ -77,6 +91,11 @@ interface UIState {
 }
 
 let toastSeq = 0
+
+export const TOAST_DURATION = {
+  info: 4_200,
+  error: 8_000,
+} as const
 
 export const useUI = create<UIState>((set) => ({
   mode: 'library',
@@ -133,8 +152,42 @@ export const useUI = create<UIState>((set) => ({
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
   toasts: [],
-  pushToast: (text, kind = 'info') =>
-    set((s) => ({ toasts: [...s.toasts, { id: ++toastSeq, text, kind }] })),
+  pushToast: (text, kind = 'info', options = {}) => {
+    const id = ++toastSeq
+    set((s) => ({
+      toasts: [
+        ...s.toasts,
+        {
+          id,
+          revision: 0,
+          text,
+          kind,
+          detail: options.detail,
+          action: options.action,
+          persistent: options.persistent ?? Boolean(options.detail || options.action),
+          durationMs: options.durationMs ?? TOAST_DURATION[kind],
+        },
+      ],
+    }))
+    return id
+  },
+  updateToast: (id, update) =>
+    set((s) => ({
+      toasts: s.toasts.map((toast) => {
+        if (toast.id !== id) return toast
+        const next = { ...toast, ...update, revision: toast.revision + 1 }
+        if (update.kind && update.durationMs === undefined) {
+          next.durationMs = TOAST_DURATION[update.kind]
+        }
+        if (
+          update.persistent === undefined &&
+          (update.action !== undefined || update.detail !== undefined)
+        ) {
+          next.persistent = Boolean(next.action || next.detail)
+        }
+        return next
+      }),
+    })),
   dropToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   banners: [],
@@ -144,8 +197,8 @@ export const useUI = create<UIState>((set) => ({
 }))
 
 /** Convenience for imperative call-sites (mutation handlers). */
-export const toast = (text: string, kind: Toast['kind'] = 'info') =>
-  useUI.getState().pushToast(text, kind)
+export const toast = (text: string, kind: Toast['kind'] = 'info', options?: ToastOptions): number =>
+  useUI.getState().pushToast(text, kind, options)
 
 /**
  * Report a failed command on whichever surface its code calls for.
@@ -169,6 +222,13 @@ export function report(e: unknown, prefix?: string): void {
       retryable: isRetryable(e),
     })
   } else {
-    useUI.getState().pushToast(text, 'error')
+    const detail = isWobuError(e) ? e.detail : undefined
+    useUI.getState().pushToast(text, 'error', {
+      detail,
+      // A retryable command needs a durable surface even when the caller has
+      // no safe, self-contained retry function to offer here. It remains
+      // dismissible, but never vanishes while the user is deciding what to do.
+      persistent: isRetryable(e) || Boolean(detail),
+    })
   }
 }

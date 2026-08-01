@@ -54,6 +54,19 @@ describe('report — which surface an error lands on', () => {
     expect(useUI.getState().toasts[0]!.text).toBe('Could not save — permission denied')
   })
 
+  it('keeps retryable toast errors on a durable surface', () => {
+    report(err({ code: 'io.failed', retryable: true }))
+    expect(useUI.getState().toasts[0]!.persistent).toBe(true)
+  })
+
+  it('retains technical detail on a persistent toast', () => {
+    report(err({ code: 'io.failed', detail: 'EACCES: /world/story.wobu' }))
+    expect(useUI.getState().toasts[0]).toMatchObject({
+      detail: 'EACCES: /world/story.wobu',
+      persistent: true,
+    })
+  })
+
   it('carries the technical detail onto the banner', () => {
     report(err({ code: 'share.unmounted', detail: 'ENOENT: /Volumes/art' }))
     expect(useUI.getState().banners[0]!.detail).toBe('ENOENT: /Volumes/art')
@@ -108,6 +121,31 @@ describe('toasts', () => {
     const first = useUI.getState().toasts[0]!
     useUI.getState().dropToast(first.id)
     expect(useUI.getState().toasts.map((t) => t.text)).toEqual(['b'])
+  })
+
+  it('updates an existing toast in place and restarts its lifetime revision', () => {
+    const id = toast('Uploading')
+    const before = useUI.getState().toasts[0]!
+
+    useUI.getState().updateToast(id, { text: 'Upload complete', kind: 'error' })
+
+    expect(useUI.getState().toasts).toHaveLength(1)
+    expect(useUI.getState().toasts[0]).toMatchObject({
+      id,
+      revision: before.revision + 1,
+      text: 'Upload complete',
+      kind: 'error',
+      durationMs: 8_000,
+    })
+  })
+
+  it('makes actionable toasts persistent by default', () => {
+    const retry = () => undefined
+    toast('Upload failed', 'error', { action: { label: 'Retry', run: retry } })
+    expect(useUI.getState().toasts[0]).toMatchObject({
+      persistent: true,
+      action: { label: 'Retry', run: retry },
+    })
   })
 })
 
