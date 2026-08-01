@@ -1,31 +1,36 @@
-import type { Peer, ProjectSummary } from '../lib/api'
+import { useEffect, useMemo, useState } from 'react'
+import type { Peer, ProjectSummary, ProjectSyncStatus, SyncPeerStatus } from '../lib/api'
 import { sessionsText, sessionsTitle } from '../lib/presence'
 import { useUI } from '../store/ui'
 
 /**
- * Honest by construction: everything here is something M1 actually knows.
- * Backend health, image model and queue depth arrive with M5.
+ * Honest by construction: every state here comes from a backend observation.
+ * In particular, idle is not rendered as "synced", and a completed peer round
+ * is not rendered as cloud availability.
  */
 export function StatusBar({
   project,
   nodeCount,
   loading,
   peers,
+  sync,
 }: {
   project: ProjectSummary
   nodeCount: number
   loading: boolean
   peers: Peer[]
+  sync: ProjectSyncStatus | null
 }) {
   const navCollapsed = useUI((s) => s.navCollapsed)
   const inspCollapsed = useUI((s) => s.inspCollapsed)
   // Absent rather than "1 session" when nobody else is here. A count that never
   // changes is a count nobody reads, and the point of this one is that it moved.
   const sessions = sessionsText(peers)
+  const last = useMemo(() => lastConverged(sync?.peers ?? []), [sync])
+  const now = useRelativeClock(last !== null)
 
   return (
     <footer className="status">
-      <span className="dot dot-ok" />
       <b>{project.name}</b>
       <span className="sep" />
       <code title={project.path}>{project.path}</code>
@@ -39,6 +44,21 @@ export function StatusBar({
         <>
           <span className="sep" />
           <span>read-only</span>
+        </>
+      )}
+
+      {sync && (
+        <>
+          <span className="sep" />
+          <span
+            className={`dot ${sync.state === 'syncing' ? 'dot-ok' : sync.state === 'connecting' ? 'dot-warn' : ''}`}
+            role="img"
+            aria-label={`Sync ${sync.state}`}
+          />
+          <span>sync · {sync.state}</span>
+          {connectedText(sync.peers) && <span>· {connectedText(sync.peers)}</span>}
+          {last && <span>· last synced with {last.alias} · {relativeTime(last.at, now)}</span>}
+          <span className="sync-caveat">· peer edits arrive only while both people run Wobu · no seed node</span>
         </>
       )}
 
@@ -63,4 +83,45 @@ export function StatusBar({
       <span>M1 · no AI backends configured</span>
     </footer>
   )
+}
+
+function connectedText(peers: SyncPeerStatus[]): string | null {
+  const connected = peers.filter((peer) => peer.connected)
+  if (connected.length === 0) return null
+  if (connected.length === 1) return `${connected[0]?.alias ?? '1 peer'} connected`
+  return `${connected.length} peers connected`
+}
+
+function lastConverged(peers: SyncPeerStatus[]): { alias: string; at: number } | null {
+  let latest: { alias: string; at: number } | null = null
+  for (const peer of peers) {
+    if (!peer.lastConvergedAt) continue
+    const at = Date.parse(peer.lastConvergedAt)
+    if (!Number.isFinite(at)) continue
+    if (!latest || at > latest.at) latest = { alias: peer.alias, at }
+  }
+  return latest
+}
+
+function useRelativeClock(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [active])
+  return now
+}
+
+export function relativeTime(then: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.floor((now - then) / 1_000))
+  if (seconds < 45) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 2) return '1 minute ago'
+  if (minutes < 60) return `${minutes} minutes ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 2) return '1 hour ago'
+  if (hours < 24) return `${hours} hours ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? '1 day ago' : `${days} days ago`
 }

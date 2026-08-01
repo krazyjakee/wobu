@@ -30,7 +30,7 @@ Project
 | `notes_raw` | markdown | the user's messy source notes. Never machine-written. |
 | `description` | json | structured, LLM-enhanced. See below. |
 | `description_state` | enum | `none · enhancing · fresh · edited · stale` |
-| `attributes` | json | kind-specific schema (scale, era, biome, material…) |
+| `attributes` | json | kind-specific facts (scale, era, biome, material…); controls come from `KindDef.attributes` |
 | `tags` | string[] | |
 | `cover_asset_id` | ulid? | |
 | `created_at` / `updated_at` | ts | |

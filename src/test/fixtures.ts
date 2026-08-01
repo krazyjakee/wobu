@@ -28,6 +28,7 @@ export function kindDef(kind: NodeKind, over: Partial<KindDef> = {}): KindDef {
     dir: kind,
     nests: true,
     singleton: false,
+    attributes: [],
     sections: [],
     defaultLinkRoles: [],
     ...over,

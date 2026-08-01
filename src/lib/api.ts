@@ -29,6 +29,15 @@ export type SectionValue = { type: 'text'; value: string } | { type: 'list'; val
 
 export type SectionValueKind = 'text' | 'list'
 
+export type AttributeValueKind = 'text' | 'number' | 'boolean'
+
+/** `key` indexes `WobuNode.attributes`; the value kind selects the generated control. */
+export interface AttributeDef {
+  key: string
+  label: string
+  valueKind: AttributeValueKind
+}
+
 /** `key` indexes `WobuNode.description.sections`; `label` is the rendered heading. */
 export interface SectionDef {
   key: string
@@ -50,6 +59,8 @@ export interface KindDef {
   dir: string
   nests: boolean
   singleton: boolean
+  /** Kind-specific facts rendered as controls in the Notes tab. */
+  attributes: AttributeDef[]
   /** already in the kind's intended display order */
   sections: SectionDef[]
   defaultLinkRoles: LinkRole[]
@@ -355,6 +366,43 @@ export const shareOffline = () => call<boolean>('share_offline')
 
 /** Quit anyway, having been told what quitting while offline costs. */
 export const forceQuit = () => call<void>('force_quit')
+
+/* ── peer-to-peer sync ───────────────────────────────────────────────────── */
+
+export type SyncPhase = 'idle' | 'connecting' | 'syncing' | 'offline'
+
+export interface SyncPeerStatus {
+  /** The authenticated endpoint identity; aliases are display-only. */
+  endpointId: string
+  alias: string
+  /** True only while a live round is using this peer. */
+  connected: boolean
+  /** ISO timestamp, absent until a complete conflict-free round finishes. */
+  lastConvergedAt: string | null
+}
+
+/** Payload shared by `sync:state`, `sync:peer`, and the catch-up query. */
+export interface ProjectSyncStatus {
+  project: string
+  state: SyncPhase
+  peers: SyncPeerStatus[]
+}
+
+export interface SyncStatus {
+  running: boolean
+  alias: string
+  endpointId: string
+  persistent: boolean
+  shares: Array<{
+    project: string
+    root: string
+    peers: number
+    open: boolean
+  }>
+  projects: ProjectSyncStatus[]
+}
+
+export const syncStatus = () => call<SyncStatus>('sync_status')
 
 export const nodeList = () => call<NodeSummary[]>('node_list')
 

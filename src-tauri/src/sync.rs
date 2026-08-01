@@ -163,7 +163,8 @@ impl SyncState {
                         manager.identity().alias(),
                         manager.shares().len()
                     ));
-                    *slot.lock() = Some(manager);
+                    *slot.lock() = Some(Arc::clone(&manager));
+                    manager.announce();
                 }
                 // Not fatal, and not a dialog. Everything local still works; what
                 // is lost is syncing, and an app that refused to start because a
@@ -223,9 +224,62 @@ impl Wake for Window {
             let _ = self.app.emit(state::WORLD_CHANGED, ());
         }
     }
+
+    fn sync_state(&self, status: ProjectSyncStatus) {
+        if self.state.open_id() == Some(status.project) {
+            let _ = self.app.emit(SYNC_STATE, status);
+        }
+    }
+
+    fn sync_peer(&self, status: ProjectSyncStatus) {
+        if self.state.open_id() == Some(status.project) {
+            let _ = self.app.emit(SYNC_PEER, status);
+        }
+    }
 }
 
 /* ── what the webview sees ────────────────────────────────────────────────── */
+
+pub const SYNC_STATE: &str = "sync:state";
+pub const SYNC_PEER: &str = "sync:peer";
+
+/// What the endpoint is doing for one project right now.
+///
+/// `Offline` is intentionally narrow: a poll just tried every known peer and
+/// none answered. It does not claim that this computer has no network route,
+/// which the endpoint cannot know.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SyncPhase {
+    #[default]
+    Idle,
+    Connecting,
+    Syncing,
+    Offline,
+}
+
+/// One peer the manager has actually learned about.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPeerStatus {
+    /// The TLS identity. Aliases are for display and are not unique.
+    pub endpoint_id: String,
+    pub alias: String,
+    /// A live sync round, not a promise that the peer will remain reachable.
+    pub connected: bool,
+    /// RFC 3339, written only after a complete round with no parked or refused
+    /// node. `None` is more truthful than calling a partial exchange synced.
+    pub last_converged_at: Option<String>,
+}
+
+/// The event payload and the catch-up value use exactly the same shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSyncStatus {
+    pub project: Id,
+    pub state: SyncPhase,
+    pub peers: Vec<SyncPeerStatus>,
+}
 
 /// This installation, as a person reads it.
 #[derive(Debug, Serialize)]
@@ -243,6 +297,10 @@ pub struct SyncStatus {
     /// time, which is worth saying out loud rather than discovering.
     pub persistent: bool,
     pub shares: Vec<SharedProject>,
+    /// Runtime state is separate from `shares`: a creator learns an inbound
+    /// peer's identity from its authenticated session, not from a ticket it
+    /// could have listed before that peer ever connected.
+    pub projects: Vec<ProjectSyncStatus>,
 }
 
 #[derive(Debug, Serialize)]
@@ -305,6 +363,7 @@ pub async fn sync_status(sync: State<'_, SyncState>) -> CommandResult<SyncStatus
             endpoint_id: String::new(),
             persistent: false,
             shares: Vec::new(),
+            projects: Vec::new(),
         });
     };
     Ok(SyncStatus {
@@ -327,6 +386,7 @@ pub async fn sync_status(sync: State<'_, SyncState>) -> CommandResult<SyncStatus
                 peers: share.peers.len(),
             })
             .collect(),
+        projects: manager.project_statuses(),
     })
 }
 

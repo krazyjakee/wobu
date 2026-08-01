@@ -88,6 +88,7 @@ use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use chrono::{SecondsFormat, Utc};
 use parking_lot::Mutex;
 use wobu_core::Id;
 use wobu_store::Project;
@@ -100,6 +101,7 @@ use crate::error::{Code, CommandResult, WobuError};
 use crate::state::{AppState, Handover};
 use crate::sync::round;
 use crate::sync::shares::{Share, Shares};
+use crate::sync::{ProjectSyncStatus, SyncPeerStatus, SyncPhase};
 
 /// How long a whole inbound session gets before it is abandoned.
 ///
@@ -143,6 +145,27 @@ const BACKOFF: &[u64] = &[3, 5, 10, 20, 45, 90, 120];
 /// looking at is a refetch of nothing.
 pub trait Wake: Send + Sync + 'static {
     fn world_changed(&self, project: Id);
+
+    /// A default keeps non-window harnesses concerned only with file
+    /// invalidation small. The production window overrides both status hooks.
+    fn sync_state(&self, _status: ProjectSyncStatus) {}
+    fn sync_peer(&self, _status: ProjectSyncStatus) {}
+}
+
+#[derive(Default)]
+struct RuntimeProject {
+    state: SyncPhase,
+    peers: BTreeMap<String, SyncPeerStatus>,
+}
+
+impl RuntimeProject {
+    fn snapshot(&self, project: Id) -> ProjectSyncStatus {
+        ProjectSyncStatus {
+            project,
+            state: self.state,
+            peers: self.peers.values().cloned().collect(),
+        }
+    }
 }
 
 /// Who is holding a project's folder and index right now.
@@ -284,6 +307,10 @@ pub struct SyncManager {
     endpoint: OnceLock<SyncEndpoint>,
     shares: Mutex<Shares>,
     replicas: Mutex<BTreeMap<Id, Arc<Replica>>>,
+    /// Ephemeral connectivity plus the last completed round for each peer.
+    /// This is deliberately memory-only: after restart, "never synced in this
+    /// session" is an honest answer and a stale historical green light is not.
+    runtime: Mutex<BTreeMap<Id, RuntimeProject>>,
     index_dir: Option<PathBuf>,
     poll: bool,
     /// Read on every poll tick and before every round step. Set once, never
@@ -338,6 +365,7 @@ impl SyncManager {
             endpoint: OnceLock::new(),
             shares: Mutex::new(setup.shares),
             replicas: Mutex::new(BTreeMap::new()),
+            runtime: Mutex::new(BTreeMap::new()),
             index_dir: setup.index_dir,
             poll: setup.poll,
             stopping: AtomicBool::new(false),
@@ -398,6 +426,117 @@ impl SyncManager {
         self.shares.lock().all().to_vec()
     }
 
+    /// Catch-up snapshots for a webview that mounted after an event fired.
+    pub fn project_statuses(&self) -> Vec<ProjectSyncStatus> {
+        let shares = self.shares();
+        let runtime = self.runtime.lock();
+        shares
+            .into_iter()
+            .map(|share| {
+                let mut snapshot = runtime
+                    .get(&share.project)
+                    .map_or_else(
+                        || ProjectSyncStatus {
+                            project: share.project,
+                            state: SyncPhase::Idle,
+                            peers: Vec::new(),
+                        },
+                        |status| status.snapshot(share.project),
+                    );
+
+                Self::add_known_peers(&mut snapshot, share.peers);
+                snapshot
+            })
+            .collect()
+    }
+
+    /// Announce the catch-up shape after the manager is installed in
+    /// `SyncState`. In particular this emits `idle`: a webview may have queried
+    /// while endpoint binding was still in flight, and silence would leave that
+    /// truthful-but-temporary "not running" answer on screen forever.
+    pub fn announce(&self) {
+        for status in self.project_statuses() {
+            self.wake.sync_state(status);
+        }
+    }
+
+    fn announce_project(&self, project: Id) {
+        if let Some(status) = self.project_statuses().into_iter().find(|s| s.project == project) {
+            self.wake.sync_state(status);
+        }
+    }
+
+    fn add_known_peers(snapshot: &mut ProjectSyncStatus, tickets: Vec<Ticket>) {
+        // A joined project knows its outbound peers before the first dial. Put
+        // them in status as disconnected so "offline" can name who was tried
+        // rather than looking like no setup.
+        for ticket in tickets {
+            let endpoint_id = ticket.peer().to_string();
+            if !snapshot.peers.iter().any(|peer| peer.endpoint_id == endpoint_id) {
+                snapshot.peers.push(SyncPeerStatus {
+                    endpoint_id,
+                    alias: ticket.alias(),
+                    connected: false,
+                    last_converged_at: None,
+                });
+            }
+        }
+        snapshot.peers.sort_by(|a, b| a.alias.cmp(&b.alias));
+    }
+
+    fn with_known_peers(&self, mut snapshot: ProjectSyncStatus) -> ProjectSyncStatus {
+        if let Some(share) = self.shares.lock().get(snapshot.project).cloned() {
+            Self::add_known_peers(&mut snapshot, share.peers);
+        }
+        snapshot
+    }
+
+    fn set_phase(&self, project: Id, state: SyncPhase) {
+        let snapshot = {
+            let mut runtime = self.runtime.lock();
+            let status = runtime.entry(project).or_default();
+            if status.state == state {
+                return;
+            }
+            status.state = state;
+            status.snapshot(project)
+        };
+        self.wake.sync_state(self.with_known_peers(snapshot));
+    }
+
+    fn set_peer(
+        &self,
+        project: Id,
+        endpoint_id: String,
+        alias: String,
+        connected: bool,
+        converged: bool,
+        state: SyncPhase,
+    ) {
+        let snapshot = {
+            let mut runtime = self.runtime.lock();
+            let status = runtime.entry(project).or_default();
+            status.state = state;
+            let peer = status.peers.entry(endpoint_id.clone()).or_insert(SyncPeerStatus {
+                endpoint_id,
+                alias: alias.clone(),
+                connected,
+                last_converged_at: None,
+            });
+            peer.alias = alias;
+            peer.connected = connected;
+            if converged {
+                peer.last_converged_at = Some(
+                    Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
+                );
+            }
+            status.snapshot(project)
+        };
+        let snapshot = self.with_known_peers(snapshot);
+        self.wake.sync_peer(snapshot.clone());
+        self.wake.sync_state(snapshot);
+    }
+
     /// Somebody pressed "Share".
     ///
     /// Returns the ticket to hand out. **Await [`SyncEndpoint::online`] first**
@@ -414,6 +553,7 @@ impl SyncManager {
             grant
         };
         self.register(project, root, self.state.open_id() == Some(project));
+        self.announce_project(project);
         if self.poll {
             self.spawn_poller(project);
         }
@@ -449,6 +589,7 @@ impl SyncManager {
         drop(shares);
 
         self.register(project, &root, self.state.open_id() == Some(project));
+        self.announce_project(project);
         if self.poll {
             self.spawn_poller(project);
         }
@@ -496,6 +637,7 @@ impl SyncManager {
                 }
             }
         }
+        self.runtime.lock().remove(&project);
         Ok(())
     }
 
@@ -566,11 +708,27 @@ impl SyncManager {
     #[cfg(test)]
     pub(super) async fn run_ticket(self: &Arc<SyncManager>, project: Id, ticket: &Ticket) -> bool {
         let Some(replica) = self.replica(project) else { return false };
-        let Ok(session) = self.endpoint().connect_ticket(ticket).await else { return false };
+        self.set_phase(project, SyncPhase::Connecting);
+        let Ok(session) = self.endpoint().connect_ticket(ticket).await else {
+            self.set_phase(project, SyncPhase::Offline);
+            return false;
+        };
         let gate = replica.round.lock().await;
+        let endpoint_id = ticket.peer().to_string();
+        let alias = ticket.alias();
+        self.set_peer(
+            project,
+            endpoint_id.clone(),
+            alias.clone(),
+            true,
+            false,
+            SyncPhase::Syncing,
+        );
         let outcome = round::run(self, &replica, &session).await;
         drop(gate);
         session.close();
+        let converged = outcome.as_ref().is_ok_and(|outcome| outcome.converged());
+        self.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
         outcome.is_ok_and(|outcome| outcome.did_something())
     }
 
@@ -585,10 +743,12 @@ impl SyncManager {
         }
 
         let mut worked = false;
+        let mut answered = false;
         for ticket in &share.peers {
             if self.stopping() {
                 return worked;
             }
+            self.set_phase(project, SyncPhase::Connecting);
             let session = match self.endpoint().connect_ticket(ticket).await {
                 Ok(session) => session,
                 Err(e) => {
@@ -603,17 +763,35 @@ impl SyncManager {
                     continue;
                 }
             };
+            answered = true;
 
             let gate = replica.round.lock().await;
+            let endpoint_id = ticket.peer().to_string();
+            let alias = ticket.alias();
+            self.set_peer(
+                project,
+                endpoint_id.clone(),
+                alias.clone(),
+                true,
+                false,
+                SyncPhase::Syncing,
+            );
             let outcome = round::run(self, &replica, &session).await;
             drop(gate);
             session.close();
+
+            let converged = outcome.as_ref().is_ok_and(|outcome| outcome.converged());
+            self.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
 
             match outcome {
                 Ok(outcome) => worked |= outcome.did_something(),
                 Err(e) => diag::error(format!("sync: round with a peer failed: {}", e.message)),
             }
         }
+        self.set_phase(
+            project,
+            if answered { SyncPhase::Idle } else { SyncPhase::Offline },
+        );
         worked
     }
 
@@ -770,15 +948,34 @@ impl Sessions for Accepts {
             return;
         };
 
+        let project = session.project();
+        let endpoint_id = session.peer().to_string();
+        let alias = wobu_core::peer::alias(session.peer().as_bytes());
+        manager.set_peer(
+            project,
+            endpoint_id.clone(),
+            alias.clone(),
+            true,
+            false,
+            SyncPhase::Syncing,
+        );
+
         let outcome =
             tokio::time::timeout(SESSION_BUDGET, round::run(&manager, &replica, &session));
-        match outcome.await {
-            Ok(Ok(_)) => {}
-            Ok(Err(e)) => diag::error(format!("sync: inbound round failed: {}", e.message)),
-            Err(_elapsed) => diag::error("sync: inbound round ran out of time"),
-        }
+        let converged = match outcome.await {
+            Ok(Ok(outcome)) => outcome.converged(),
+            Ok(Err(e)) => {
+                diag::error(format!("sync: inbound round failed: {}", e.message));
+                false
+            }
+            Err(_elapsed) => {
+                diag::error("sync: inbound round ran out of time");
+                false
+            }
+        };
         drop(gate);
         session.close();
+        manager.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
     }
 }
 

@@ -23,7 +23,10 @@ pub use error::{Error, Result};
 pub use generation::{
     FragmentTarget, Generation, InfluenceSnapshot, SnapshotFragment, SnapshotLayer,
 };
-pub use kind::{KindDef, Layer, NodeKind, SectionDef, SectionValueKind, kind_def, kind_registry};
+pub use kind::{
+    AttributeDef, AttributeValueKind, KindDef, Layer, NodeKind, SectionDef, SectionValueKind,
+    kind_def, kind_registry,
+};
 pub use link::{Link, LinkEdge, LinkRole};
 pub use node::{
     Description, DescriptionState, EnhanceStamp, Node, NodeSummary, SectionValue, SourceStamp,

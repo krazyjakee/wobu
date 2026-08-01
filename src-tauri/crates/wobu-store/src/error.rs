@@ -57,6 +57,9 @@ pub enum Error {
     #[error("malformed node file {path}: {reason}")]
     Malformed { path: PathBuf, reason: String },
 
+    #[error("malformed generation record {path}: {reason}")]
+    MalformedGeneration { path: PathBuf, reason: String },
+
     #[error("{0} is missing its YAML frontmatter")]
     MissingFrontmatter(PathBuf),
 

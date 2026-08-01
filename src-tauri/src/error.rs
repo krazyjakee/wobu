@@ -284,7 +284,9 @@ impl From<StoreError> for WobuError {
             // is a bug on the calling side, not a decision the user got wrong,
             // so it lands in the same bucket as any other rejected argument.
             StoreError::NotAConflict(_) => Code::Invalid,
-            StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
+            StoreError::Malformed { .. }
+            | StoreError::MalformedGeneration { .. }
+            | StoreError::MissingFrontmatter(_) => Code::Malformed,
             // An animation shares the code and not the sentence. `NotAnImage`
             // is what the webview already switches on to put a refused drop
             // back on the drop target rather than in an error toast, and the

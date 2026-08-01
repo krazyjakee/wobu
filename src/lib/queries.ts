@@ -24,6 +24,7 @@ import type {
   NodeKind,
   NodeSummary,
   Peer,
+  ProjectSyncStatus,
   ProjectSummary,
   ProviderSelections,
   PromptBudget,
@@ -42,6 +43,8 @@ export const qk = {
   kinds: ['kind_registry'] as const,
   projectCurrent: ['project_current'] as const,
   projectRecent: ['project_recent'] as const,
+  // Installation-wide catch-up for the two live sync event streams.
+  syncStatus: ['sync_status'] as const,
   nodes: ['node_list'] as const,
   corrupt: ['corrupt_files'] as const,
   conflicts: ['conflicts'] as const,
@@ -121,6 +124,67 @@ export function useRecentProjects(): UseQueryResult<ProjectSummary[]> {
     queryFn: api.projectRecent,
     retry: false,
   })
+}
+
+/**
+ * Runtime sync state for one project.
+ *
+ * Events make the status live; `sync_status` makes it correct after a webview
+ * reload or an event fired just before this hook mounted. Both event names use
+ * the full project snapshot, so state and peer changes cannot drift apart.
+ */
+export function useProjectSync(project: string): ProjectSyncStatus | null {
+  const qc = useQueryClient()
+  const status = useQuery({
+    queryKey: qk.syncStatus,
+    queryFn: api.syncStatus,
+    staleTime: Infinity,
+    // Binding is asynchronous. A first `running: false` is expected, not a
+    // permanent answer; stop polling the moment the manager is available.
+    refetchInterval: (query) => (query.state.data?.running === false ? 1_000 : false),
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (!api.isTauri()) return
+    let disposed = false
+    const unlisteners: Array<() => void> = []
+
+    const replace = (snapshot: ProjectSyncStatus) => {
+      qc.setQueryData<api.SyncStatus>(qk.syncStatus, (current) => {
+        if (!current) return current
+        const found = current.projects.some((entry) => entry.project === snapshot.project)
+        return {
+          ...current,
+          projects: found
+            ? current.projects.map((entry) =>
+                entry.project === snapshot.project ? snapshot : entry,
+              )
+            : [...current.projects, snapshot],
+        }
+      })
+    }
+
+    const attach = (name: 'sync:state' | 'sync:peer') => {
+      void listen<ProjectSyncStatus>(name, (event) => replace(event.payload))
+        .then((unlisten) => {
+          if (disposed) unlisten()
+          else unlisteners.push(unlisten)
+        })
+        .catch(() => {
+          /* the catch-up query remains truthful when events are unavailable */
+        })
+    }
+
+    attach('sync:state')
+    attach('sync:peer')
+    return () => {
+      disposed = true
+      for (const unlisten of unlisteners) unlisten()
+    }
+  }, [qc])
+
+  return status.data?.projects.find((entry) => entry.project === project) ?? null
 }
 
 export function useNodes(enabled: boolean): UseQueryResult<NodeSummary[]> {

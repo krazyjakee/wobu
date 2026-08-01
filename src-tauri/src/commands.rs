@@ -1956,6 +1956,7 @@ mod bridge {
             "dir",
             "nests",
             "singleton",
+            "attributes",
             "sections",
             "defaultLinkRoles",
         ] {
@@ -1963,6 +1964,18 @@ mod bridge {
         }
         for key in ["key", "label", "valueKind"] {
             assert!(first["sections"][0].get(key).is_some(), "`{key}` is missing from SectionDef");
+        }
+        let world = json
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["kind"] == "world_bible")
+            .unwrap();
+        for key in ["key", "label", "valueKind"] {
+            assert!(
+                world["attributes"][0].get(key).is_some(),
+                "`{key}` is missing from AttributeDef"
+            );
         }
         // The union in `api.ts` is snake_case; the enum has to agree.
         let kinds: Vec<&str> =

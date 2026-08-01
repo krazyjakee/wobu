@@ -8,6 +8,7 @@ import {
   useKinds,
   useNodes,
   usePresence,
+  useProjectSync,
   useReportEditing,
 } from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
@@ -39,6 +40,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const corruptQ = useCorruptFiles(true)
   const conflictsQ = useConflicts(true)
   const { peers, ready: presenceReady } = usePresence(true)
+  const sync = useProjectSync(project.id)
 
   const mode = useUI((s) => s.mode)
   const navWidth = useUI((s) => s.navWidth)
@@ -336,6 +338,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
         nodeCount={nodes.length}
         loading={nodesQ.isPending}
         peers={peers}
+        sync={sync}
       />
 
       <CommandPalette

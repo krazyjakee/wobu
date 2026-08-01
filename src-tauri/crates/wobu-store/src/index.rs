@@ -1,17 +1,18 @@
 //! The SQLite index.
 //!
 //! This holds **no** canonical data — it is a cache of what is already in the
-//! Markdown, and deleting it is always safe. It exists because reading several
-//! hundred small files over SMB is slow enough to make the app feel broken; the
-//! workspace renders from here and only touches the folder for changed files.
+//! project folder, and deleting it is always safe. It exists because reading
+//! several hundred small files over SMB is slow enough to make the app feel
+//! broken; the workspace renders from here and only touches the folder for
+//! changed files.
 //!
 //! It lives in local app data keyed by the project's ULID, never inside the
 //! project folder: SQLite's POSIX advisory locking is unreliable-to-broken over
 //! SMB and NFS, and WAL mode does not work there at all. The documented failure
 //! mode is corruption, not an error message. See `docs/02-data-model.md`.
 //!
-//! Two tables — `sync_state` and `sync_rejected` — are not a cache of the
-//! Markdown, because no folder can tell you what a peer once held or what a
+//! Two tables — `sync_state` and `sync_rejected` — are not a cache of canonical
+//! project files, because no folder can tell you what a peer once held or what a
 //! person once refused. They are still safe to delete, which is the rule that
 //! actually matters here; losing them costs a re-compare on the next sync and a
 //! run of conflict cards nobody needed, and nothing else. The argument is on
@@ -25,16 +26,16 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use wobu_core::{
-    Asset, AssetKind, AssetLink, AssetRole, DescriptionState, EnhanceStamp, Id, LinkEdge, LinkRole,
-    Node, NodeKind, NodeSummary, kind_def,
+    Asset, AssetKind, AssetLink, AssetRole, DescriptionState, EnhanceStamp, Generation, Id, LinkEdge,
+    LinkRole, Node, NodeKind, NodeSummary, kind_def,
 };
 
 use crate::atomic::Stamp;
 use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
-/// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 8;
+/// rebuilds from the project folder, which is why this needs no migration code.
+pub const INDEX_VERSION: u32 = 9;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -134,6 +135,28 @@ CREATE TABLE IF NOT EXISTS asset_links (
 );
 CREATE INDEX IF NOT EXISTS asset_links_role  ON asset_links(node_id, role);
 CREATE INDEX IF NOT EXISTS asset_links_asset ON asset_links(asset_id);
+
+-- Append-only JSON under `generations/YYYY-MM/`. `doc` is the whole record so
+-- the Concepts grid can open a result without touching the share; the other
+-- columns are only the fields used to select and order its tiles. Every byte is
+-- rebuildable from the JSON file, including provider/model/params and the full
+-- influence snapshot, so this remains a disposable cache.
+CREATE TABLE IF NOT EXISTS generations (
+    id         TEXT PRIMARY KEY,
+    node_id    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    preset     TEXT NOT NULL,
+    view_type  TEXT,
+    backend    TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    rel_path   TEXT NOT NULL UNIQUE,
+    mtime_ms   INTEGER NOT NULL DEFAULT 0,
+    size       INTEGER NOT NULL DEFAULT 0,
+    hash       TEXT NOT NULL DEFAULT '',
+    doc        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS generations_node ON generations(node_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS generations_model ON generations(backend, model);
 
 -- Files that are on disk and could not be parsed. Deliberately a table of its
 -- own rather than a column on `nodes`: a file a sync client truncated may never
@@ -343,6 +366,7 @@ impl Index {
                  DROP TABLE IF EXISTS asset_links;
                  DROP TABLE IF EXISTS node_fts;
                  DROP TABLE IF EXISTS assets;
+                 DROP TABLE IF EXISTS generations;
                  DROP TABLE IF EXISTS corrupt;
                  DROP TABLE IF EXISTS sync_state;
                  DROP TABLE IF EXISTS sync_rejected;",
@@ -366,7 +390,7 @@ impl Index {
     }
 
     /// Empty every derived table, so the next scan can refill them from the
-    /// folder.
+    /// folder's Markdown, assets and generation JSON.
     ///
     /// `sync_state` is deliberately not in the list. This is "re-read the
     /// Markdown", and re-reading the Markdown says nothing about what a peer
@@ -390,7 +414,8 @@ impl Index {
     pub fn clear(&self) -> Result<()> {
         self.conn.execute_batch(
             "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
-             DELETE FROM node_fts; DELETE FROM assets; DELETE FROM corrupt;",
+             DELETE FROM node_fts; DELETE FROM assets; DELETE FROM generations;
+             DELETE FROM corrupt;",
         )?;
         self.touch_everything();
         Ok(())
@@ -882,6 +907,93 @@ impl Index {
         // sync client catching up — and dropping the links would quietly strip
         // the roles out of somebody's node while their folder was mid-sync.
         self.conn.execute("DELETE FROM assets WHERE rel_path = ?1", params![rel_path])?;
+        Ok(())
+    }
+
+    /* ── generations ────────────────────────────────────────────────────
+     *
+     * Canonically one immutable JSON document per row. The columns here are a
+     * read model for the Concepts grid; deleting every one and scanning the
+     * month shards produces exactly the same rows again.
+     */
+
+    pub fn upsert_generation(
+        &self,
+        generation: &Generation,
+        rel_path: &str,
+        stamp: &Stamp,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO generations
+               (id, node_id, created_at, preset, view_type, backend, model,
+                rel_path, mtime_ms, size, hash, doc)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
+             ON CONFLICT(id) DO UPDATE SET
+               node_id=excluded.node_id, created_at=excluded.created_at,
+               preset=excluded.preset, view_type=excluded.view_type,
+               backend=excluded.backend, model=excluded.model,
+               rel_path=excluded.rel_path, mtime_ms=excluded.mtime_ms,
+               size=excluded.size, hash=excluded.hash, doc=excluded.doc",
+            params![
+                generation.id.to_string(),
+                generation.node_id.to_string(),
+                generation.created_at.to_rfc3339(),
+                generation.preset,
+                generation.view_type,
+                generation.backend,
+                generation.model,
+                rel_path,
+                stamp.mtime_ms,
+                stamp.size as i64,
+                stamp.hash,
+                serde_json::to_string(generation)?,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// One generation from local disk, without opening its canonical JSON.
+    pub fn generation(&self, id: Id) -> Result<Option<Generation>> {
+        let doc: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT doc FROM generations WHERE id = ?1",
+                params![id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(doc.and_then(|doc| serde_json::from_str(&doc).ok()))
+    }
+
+    /// A node's Concepts tiles, newest first.
+    ///
+    /// ULID breaks equal timestamps deterministically. Two collaborators who
+    /// generate for the same node therefore get two rows and a stable order;
+    /// neither node id nor timestamp is treated as a uniqueness boundary.
+    pub fn generations_for_node(&self, node_id: Id) -> Result<Vec<Generation>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT doc FROM generations
+             WHERE node_id = ?1 ORDER BY created_at DESC, id DESC",
+        )?;
+        let rows = stmt.query_map(params![node_id.to_string()], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            if let Ok(generation) = serde_json::from_str::<Generation>(&row?) {
+                out.push(generation);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Every generation path held by the disposable index.
+    pub fn generation_paths(&self) -> Result<HashSet<String>> {
+        let mut stmt = self.conn.prepare("SELECT rel_path FROM generations")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        Ok(rows.filter_map(std::result::Result::ok).collect())
+    }
+
+    pub fn remove_generation_by_rel_path(&self, rel_path: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM generations WHERE rel_path = ?1", params![rel_path])?;
         Ok(())
     }
 

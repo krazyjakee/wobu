@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WobuNode } from '../../lib/api'
-import { node as buildNode } from '../../test/fixtures'
+import { kindDef, node as buildNode } from '../../test/fixtures'
 import { NotesPane } from './NotesPane'
 
 const autosave = {
@@ -60,5 +60,25 @@ describe('notes receiving a remote edit', () => {
     expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
       "Nadia's incoming paragraph",
     )
+  })
+})
+
+describe('kind attributes', () => {
+  it('places registry-generated controls beneath Raw notes', () => {
+    const node = buildNode({ id: 'kael', attributes: { scale: 'human' } })
+    render(
+      <NotesPane
+        node={node}
+        def={kindDef('character', {
+          attributes: [{ key: 'scale', label: 'Scale', valueKind: 'text' }],
+        })}
+        readOnly={false}
+        autosave={autosave}
+      />,
+    )
+
+    const rawNotesColumn = screen.getByRole('heading', { name: 'Raw notes' }).closest('.col')
+    expect(rawNotesColumn).toContainElement(screen.getByLabelText('Scale'))
+    expect(screen.getByText('Attributes')).toBeInTheDocument()
   })
 })

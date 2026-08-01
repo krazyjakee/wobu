@@ -94,6 +94,9 @@ pub struct Outcome {
     /// Conflict siblings this round created. Not the same as `applied`: a
     /// conflict changes the folder without anybody's version being replaced.
     pub parked: usize,
+    /// Nodes refused as malformed or unsafe to apply. A round with one is not
+    /// converged even when every manifest page arrived.
+    pub refused: usize,
     /// Nodes the peer acknowledged receiving from us.
     pub pushed: usize,
     /// Nodes this side handed over because the peer asked.
@@ -115,6 +118,12 @@ impl Outcome {
     /// interval down to its cap instead of polling hot for ever.
     pub fn did_something(&self) -> bool {
         self.applied > 0 || self.pushed > 0 || self.served > 0
+    }
+
+    /// Whether both sides completed the exchange without leaving a version
+    /// parked or refused. This is the only point the UI may call "last synced".
+    pub fn converged(&self) -> bool {
+        self.whole && self.parked == 0 && self.refused == 0
     }
 }
 
@@ -162,6 +171,7 @@ pub async fn run(
     let outcome = Outcome {
         applied: ours.applied + theirs.applied,
         parked: ours.parked + theirs.parked,
+        refused: ours.refused + theirs.refused,
         pushed: ours.pushed,
         served: theirs.served,
         changed: ours.changed || theirs.changed,
@@ -182,6 +192,7 @@ pub async fn run(
 struct Half {
     applied: usize,
     parked: usize,
+    refused: usize,
     pushed: usize,
     served: usize,
     changed: bool,
@@ -367,7 +378,9 @@ fn absorb(half: &mut Half, report: &ApplyReport) {
         .count();
     half.changed |= report.changed_the_folder();
 
-    for (id, why) in report.refusals() {
+    let refusals = report.refusals();
+    half.refused += refusals.len();
+    for (id, why) in refusals {
         // Worth a log line and nothing more. A refusal is per node and never
         // aborts a batch — one mangled file from one peer must not stop the
         // other two hundred good ones — and the strings inside are a stranger's.
@@ -482,6 +495,20 @@ mod tests {
         assert!(Outcome { pushed: 1, ..Outcome::default() }.did_something());
         assert!(Outcome { served: 1, ..Outcome::default() }.did_something());
         assert!(!Outcome::default().did_something());
+    }
+
+    #[test]
+    fn only_a_whole_clean_round_is_a_convergence_claim() {
+        assert!(Outcome { whole: true, ..Outcome::default() }.converged());
+        assert!(!Outcome::default().converged(), "a capped manifest is necessarily partial");
+        assert!(
+            !Outcome { whole: true, parked: 1, ..Outcome::default() }.converged(),
+            "a conflict sibling means the replicas still disagree"
+        );
+        assert!(
+            !Outcome { whole: true, refused: 1, ..Outcome::default() }.converged(),
+            "a refused node was not accepted by this replica"
+        );
     }
 
     #[test]

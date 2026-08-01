@@ -1,10 +1,13 @@
 //! Guarded atomic writes.
 //!
 //! Node Markdown is the only file in a project that two people can edit at
-//! once, so it is the only thing this module protects. Every write stages into
+//! once, so it is the only mutable thing this module protects. Every write stages into
 //! `.wobu/tmp` on the **same filesystem** — using the OS temp dir would
 //! silently degrade the rename into a cross-device copy, which is not atomic —
 //! checks that the target has not moved under us, and then renames into place.
+//! Write-once records use the same staging area, then publish with a hard link:
+//! unlike `rename`, that operation can never replace a name another writer has
+//! already claimed.
 //!
 //! We never merge. The loser's version lands beside the winner's as a
 //! `.conflict-*.md` sibling and the UI raises a diff. See
@@ -37,6 +40,46 @@ impl Stamp {
 
 pub fn hash_bytes(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
+}
+
+/// Publish complete bytes at a name that may be claimed exactly once.
+///
+/// Generation JSON is append-only, so an existing target is never compared,
+/// updated or parked as a conflict: reusing its ULID is an error even when the
+/// bytes happen to be identical. The hard link is the no-clobber equivalent of
+/// the rename used by [`guarded_write`]. It exposes the fully-written, synced
+/// staging inode in one filesystem operation and fails atomically when another
+/// process already owns `target`.
+pub fn write_once(project_root: &Path, target: &Path, bytes: &[u8]) -> Result<Stamp> {
+    let tmp_dir = project_root.join(".wobu").join("tmp");
+    crate::paths::ensure_dir(&tmp_dir)?;
+    if let Some(parent) = target.parent() {
+        crate::paths::ensure_dir(parent)?;
+    }
+
+    let tmp = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
+    {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+            .map_err(|e| Error::io(&tmp, e))?;
+        file.write_all(bytes).map_err(|e| Error::io(&tmp, e))?;
+        file.sync_all().map_err(|e| Error::io(&tmp, e))?;
+    }
+
+    let published = fs::hard_link(&tmp, target);
+    let _ = fs::remove_file(&tmp);
+    match published {
+        Ok(()) => {
+            let mtime = fs::metadata(target).map(|m| mtime_ms(&m)).unwrap_or_else(|_| now_ms());
+            Ok(Stamp::of_bytes(bytes, mtime))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            Err(Error::AlreadyExists(target.to_path_buf()))
+        }
+        Err(e) => Err(Error::io(target, e)),
+    }
 }
 
 fn mtime_ms(meta: &fs::Metadata) -> i64 {

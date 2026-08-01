@@ -11,8 +11,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use wobu_core::asset::AssetRef;
 use wobu_core::{
-    Asset, AssetKind, AssetRole, Description, DescriptionState, EnhanceStamp, Id, Node, NodeKind,
-    NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def, kind_registry,
+    Asset, AssetKind, AssetRole, Description, DescriptionState, EnhanceStamp, Generation, Id, Node,
+    NodeKind, NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def, kind_registry,
 };
 
 use crate::apply;
@@ -20,6 +20,7 @@ use crate::assets::{self, ImportedAsset};
 use crate::atomic::{self, WriteOutcome};
 use crate::conflict::{self, Conflict, Keep, Resolved};
 use crate::error::{Error, Result};
+use crate::generations;
 use crate::index::{CorruptFile, Index, Touched};
 use crate::markdown;
 use crate::paths;
@@ -791,6 +792,38 @@ impl Project {
         self.index.asset(id)
     }
 
+    // ── generations ──────────────────────────────────────────────────────
+
+    /// Append one immutable generation record to the project.
+    ///
+    /// The JSON lands before the index row. If local SQLite is unavailable at
+    /// that point the result is still safely recorded, and the next open or
+    /// rebuild discovers it from the folder. There is deliberately no update
+    /// counterpart: a retry or another collaborator's attempt gets a new ULID.
+    pub fn record_generation(&mut self, generation: Generation) -> Result<Generation> {
+        self.ensure_writable()?;
+        if self.index.node(generation.node_id)?.is_none() {
+            return Err(Error::NoSuchNode(generation.node_id.to_string()));
+        }
+        for asset_id in &generation.output_asset_ids {
+            self.require_asset(*asset_id)?;
+        }
+
+        let (rel, stamp) = generations::write(&self.root, &generation)?;
+        self.index.upsert_generation(&generation, &rel, &stamp)?;
+        Ok(generation)
+    }
+
+    /// A node's generation history for the Concepts grid, newest first.
+    pub fn list_generations(&self, node_id: Id) -> Result<Vec<Generation>> {
+        self.index.generations_for_node(node_id)
+    }
+
+    /// One indexed generation, without reading across the project share.
+    pub fn get_generation(&self, id: Id) -> Result<Option<Generation>> {
+        self.index.generation(id)
+    }
+
     /// Attach an asset to a node in a role.
     ///
     /// Goes through `save_node` like any other edit to the node, which is the
@@ -947,6 +980,39 @@ impl Project {
 
         for rel in known.iter().filter(|rel| !seen.contains(*rel)) {
             self.index.remove_asset_by_rel_path(rel)?;
+            changed = true;
+        }
+        Ok(changed)
+    }
+
+    /// Fold generation records created by collaborators into the local index.
+    ///
+    /// Paths already known are not reopened. A generation is immutable by
+    /// contract, so its directory entry is all the evidence needed; this keeps
+    /// a watcher tick to one month-sharded listing instead of one SMB read per
+    /// result. An incomplete sync copy fails validation and is retried on the
+    /// next reconcile because no index row was created for it.
+    fn reconcile_generations(&mut self) -> Result<bool> {
+        let known = self.index.generation_paths()?;
+        let mut seen = std::collections::HashSet::new();
+        let mut changed = false;
+
+        for (rel, path) in generations::list_paths(&self.root) {
+            seen.insert(rel.clone());
+            if known.contains(&rel) {
+                continue;
+            }
+            if let Ok(Some((generation, rel, stamp))) = generations::read_at(&self.root, &path) {
+                self.index.upsert_generation(&generation, &rel, &stamp)?;
+                changed = true;
+            }
+        }
+
+        for rel in known.iter().filter(|rel| !seen.contains(*rel)) {
+            // Only the cache row disappears. There is no public deletion API
+            // for the canonical record; this merely reflects an external file
+            // removal without making SQLite authoritative.
+            self.index.remove_generation_by_rel_path(rel)?;
             changed = true;
         }
         Ok(changed)
@@ -1445,7 +1511,7 @@ impl Project {
 
     // ── reconciliation ───────────────────────────────────────────────────
 
-    /// Read every node file and rebuild the index from scratch.
+    /// Read the canonical project files and rebuild the index from scratch.
     pub fn rescan(&mut self) -> Result<()> {
         self.rescan_with(&Cancel::new(), &mut |_| {})
     }
@@ -1494,11 +1560,15 @@ impl Project {
         // a rebuild that emptied the asset table and then failed would leave a
         // library that is entirely intact looking empty.
         let blobs = assets::scan(&self.root);
+        let generation_records = generations::scan(&self.root);
 
         cancel.check()?;
         self.index.clear()?;
         for asset in &blobs {
             self.index.upsert_asset(asset)?;
+        }
+        for (generation, rel, stamp) in &generation_records {
+            self.index.upsert_generation(generation, rel, stamp)?;
         }
         for (node, rel, stamp) in &fresh {
             self.index.upsert_node(node, rel, stamp)?;
@@ -1607,6 +1677,7 @@ impl Project {
         }
 
         changed |= self.reconcile_assets()?;
+        changed |= self.reconcile_generations()?;
         Ok(changed)
     }
 
@@ -1669,6 +1740,7 @@ mod tests {
             "nodes",
             "assets/originals",
             "assets/thumbs",
+            "generations",
             ".wobu/tmp",
             ".wobu/sessions",
         ] {
@@ -1722,6 +1794,46 @@ mod tests {
 
         let reloaded = project.get_node(created.id).unwrap();
         assert_eq!(reloaded.notes_raw, "scarred, ex-guild");
+    }
+
+    #[test]
+    fn generations_are_append_only_and_indexed_per_node() {
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let make = |id: &str, prompt: &str| Generation {
+            id: Id::from_string(id).unwrap(),
+            node_id: node.id,
+            created_at: "2026-07-31T14:22:11Z".parse().unwrap(),
+            preset: "character_sheet".into(),
+            view_type: None,
+            user_prompt: "at dusk".into(),
+            compiled_prompt: prompt.into(),
+            negative_prompt: "text, watermark".into(),
+            backend: "gemini".into(),
+            model: "gemini-2.5-flash-image".into(),
+            seed: 42,
+            params: Default::default(),
+            output_asset_ids: vec![],
+            influence_snapshot: wobu_core::InfluenceSnapshot { layers: vec![] },
+        };
+        let first = make("01ARZ3NDEKTSV4RRFFQ69G5FAV", "first compiled prompt");
+        let second = make("01ARZ3NDEKTSV4RRFFQ69G5FAW", "second compiled prompt");
+
+        project.record_generation(first.clone()).unwrap();
+        project.record_generation(second.clone()).unwrap();
+        let history = project.list_generations(node.id).unwrap();
+        assert_eq!(history.len(), 2, "one node may have concurrent generation attempts");
+        assert!(history.contains(&first));
+        assert!(history.contains(&second));
+
+        let changed = make("01ARZ3NDEKTSV4RRFFQ69G5FAV", "must not replace the first");
+        assert!(matches!(project.record_generation(changed), Err(Error::AlreadyExists(_))));
+        assert_eq!(project.get_generation(first.id).unwrap(), Some(first));
+
+        project.index.clear().unwrap();
+        assert!(project.list_generations(node.id).unwrap().is_empty());
+        project.rescan().unwrap();
+        assert_eq!(project.list_generations(node.id).unwrap().len(), 2);
     }
 
     #[test]

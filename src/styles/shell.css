@@ -260,6 +260,13 @@
   color: var(--text-dim);
   font-weight: 550;
 }
+.status .dot:not(.dot-ok):not(.dot-warn) {
+  box-sizing: border-box;
+  border: 1px solid var(--text-faint);
+}
+.status .sync-caveat {
+  color: var(--text-dim);
+}
 .sspace {
   flex: 1;
 }

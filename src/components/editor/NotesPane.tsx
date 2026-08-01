@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DescriptionState, KindDef, SectionValue, WobuNode } from '../../lib/api'
 import { saveLabel, type useAutosaveNode } from '../../hooks/useAutosaveNode'
+import { AttributesEditor } from './AttributesEditor'
 
 const STATE_LABEL: Record<DescriptionState, string> = {
   none: 'not generated',
@@ -30,6 +31,12 @@ export function NotesPane({
           <span className="col-tag-save">{saveLabel(autosave.status)}</span>
         </div>
         <NotesField node={node} readOnly={readOnly} autosave={autosave} />
+        <AttributesEditor
+          node={node}
+          definitions={def?.attributes ?? []}
+          readOnly={readOnly}
+          autosave={autosave}
+        />
       </div>
 
       <div className="col col-ai">

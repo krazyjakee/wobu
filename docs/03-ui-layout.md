@@ -57,6 +57,9 @@ small dot.
   - **Notes** is the centre of gravity: a two-column split, raw notes on the left,
     enhanced structured description on the right, with the **Enhance** button between them.
     Left is yours, right is the machine's — the spatial split teaches the model of the app.
+    Kind-specific attributes are generated from the kind registry in an initially open,
+    collapsible section below Raw notes. They are human-authored Enhance inputs, so they belong
+    beside notes; a permanent editor sidebar would compete with the Influence Inspector.
   - **References**: image grid; each tile carries a role chip (`silhouette`, `palette`,
     `material`, `mood`, `pose`) and a weight. Drag-drop and paste to add.
   - **Concepts**: generated art for this entity. Hover for prompt/seed; pin to promote a

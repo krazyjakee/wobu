@@ -6,9 +6,9 @@
 //!
 //! The split worth remembering:
 //!
-//! - **The folder is canonical.** Every fact about a world lives in Markdown
-//!   inside the project directory, so it can sit on a NAS and be opened by
-//!   anyone who can see the path.
+//! - **The folder is canonical.** World entities live in Markdown and immutable
+//!   generation history lives in JSON inside the project directory, so it can
+//!   sit on a NAS and be opened by anyone who can see the path.
 //! - **The index is disposable.** It lives in local app data keyed by project
 //!   ULID, never inside the folder, because SQLite's locking is unsafe over
 //!   SMB/NFS. Deleting it is always safe; it rebuilds from the Markdown.
@@ -19,6 +19,7 @@ pub mod atomic;
 pub mod conflict;
 pub mod error;
 pub mod frontmatter;
+pub mod generations;
 pub mod image;
 pub mod index;
 pub mod markdown;

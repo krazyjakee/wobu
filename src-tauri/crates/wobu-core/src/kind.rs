@@ -167,6 +167,37 @@ pub struct SectionDef {
     pub value_kind: SectionValueKind,
 }
 
+/// The control the editor renders for one kind-specific attribute.
+///
+/// Kept separate from [`SectionValueKind`]: description sections are machine-
+/// written prose or lists, while attributes are small human-authored facts and
+/// therefore also need numeric and yes/no controls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttributeValueKind {
+    Text,
+    Number,
+    Boolean,
+}
+
+// Serialize only, like `SectionDef`: this is compile-time registry data sent to
+// the webview, never project data read back from disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttributeDef {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub value_kind: AttributeValueKind,
+}
+
+const fn attribute(key: &'static str, label: &'static str) -> AttributeDef {
+    AttributeDef {
+        key,
+        label,
+        value_kind: AttributeValueKind::Text,
+    }
+}
+
 const fn text(key: &'static str, label: &'static str) -> SectionDef {
     SectionDef { key, label, value_kind: SectionValueKind::Text }
 }
@@ -200,6 +231,13 @@ const PALETTE: SectionDef = list("palette", "Palette");
 const SIGNATURE: SectionDef = list("signature", "Signature details");
 const NEVER: SectionDef = list("never", "Never");
 
+// Small authored facts that do not belong in the generated visual description.
+// Kinds opt into these below. Their JSON keys are part of the on-disk format.
+const ERA_ATTRIBUTE: AttributeDef = attribute("era", "Era");
+const SCALE_ATTRIBUTE: AttributeDef = attribute("scale", "Scale");
+const BIOME_ATTRIBUTE: AttributeDef = attribute("biome", "Biome");
+const MATERIAL_ATTRIBUTE: AttributeDef = attribute("material", "Primary material");
+
 /// Everything the app needs to know about a node kind.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -219,6 +257,8 @@ pub struct KindDef {
     /// Exactly one instance per project, pinned above the rule in the navigator.
     pub singleton: bool,
     pub dir: &'static str,
+    /// Kind-specific facts the Notes tab renders as generated controls.
+    pub attributes: &'static [AttributeDef],
     pub sections: &'static [SectionDef],
     /// The link roles the UI offers when adding an influence to this kind.
     pub default_link_roles: &'static [LinkRole],
@@ -235,6 +275,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: true,
         dir: "style-guide",
+        attributes: &[],
         sections: &[MEDIUM, RENDERING, LINE_QUALITY, LIGHTING, PALETTE, NEVER],
         default_link_roles: &[],
     },
@@ -248,6 +289,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: true,
         dir: "world-bible",
+        attributes: &[ERA_ATTRIBUTE],
         sections: &[ERA, TONE, TECH_LEVEL, MATERIALS, PALETTE, NEVER],
         default_link_roles: &[LinkRole::StyledBy],
     },
@@ -261,6 +303,7 @@ const REGISTRY: &[KindDef] = &[
         nests: true,
         singleton: false,
         dir: "species",
+        attributes: &[SCALE_ATTRIBUTE],
         sections: &[SILHOUETTE, ANATOMY, MATERIALS, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::SpeciesOf, LinkRole::RelatedTo],
     },
@@ -274,6 +317,7 @@ const REGISTRY: &[KindDef] = &[
         nests: true,
         singleton: false,
         dir: "culture",
+        attributes: &[MATERIAL_ATTRIBUTE],
         sections: &[COSTUME, ORNAMENT, ICONOGRAPHY, WEAPONS, MATERIALS, PALETTE, NEVER],
         default_link_roles: &[LinkRole::SpeciesOf, LinkRole::LocatedIn, LinkRole::RelatedTo],
     },
@@ -287,6 +331,7 @@ const REGISTRY: &[KindDef] = &[
         nests: true,
         singleton: false,
         dir: "setting",
+        attributes: &[ERA_ATTRIBUTE, BIOME_ATTRIBUTE],
         sections: &[CLIMATE, ARCHITECTURE, LIGHT, WEAR, MATERIALS, PALETTE, NEVER],
         default_link_roles: &[LinkRole::MemberOf, LinkRole::RelatedTo],
     },
@@ -300,6 +345,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: false,
         dir: "character",
+        attributes: &[SCALE_ATTRIBUTE],
         sections: &[SILHOUETTE, ANATOMY, COSTUME, MATERIALS, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::SpeciesOf, LinkRole::MemberOf, LinkRole::LocatedIn],
     },
@@ -313,6 +359,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: false,
         dir: "creature",
+        attributes: &[SCALE_ATTRIBUTE, BIOME_ATTRIBUTE],
         sections: &[SILHOUETTE, ANATOMY, MATERIALS, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::SpeciesOf, LinkRole::LocatedIn],
     },
@@ -326,6 +373,7 @@ const REGISTRY: &[KindDef] = &[
         nests: true,
         singleton: false,
         dir: "prop",
+        attributes: &[SCALE_ATTRIBUTE, MATERIAL_ATTRIBUTE],
         sections: &[SILHOUETTE, MATERIALS, WEAR, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::MemberOf, LinkRole::LocatedIn],
     },
@@ -339,6 +387,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: false,
         dir: "environment",
+        attributes: &[BIOME_ATTRIBUTE],
         sections: &[ARCHITECTURE, LIGHT, CLIMATE, MATERIALS, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::LocatedIn, LinkRole::MemberOf],
     },
@@ -352,6 +401,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: false,
         dir: "vehicle",
+        attributes: &[SCALE_ATTRIBUTE, MATERIAL_ATTRIBUTE],
         sections: &[SILHOUETTE, MATERIALS, WEAR, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::MemberOf, LinkRole::LocatedIn],
     },
@@ -431,6 +481,31 @@ mod tests {
         assert_eq!(section_def("costume").unwrap().label, "Costume");
         assert!(section_def("").is_none());
         assert!(section_def("Silhouette").is_none(), "keys are the snake_case form");
+    }
+
+    #[test]
+    fn attribute_keys_are_unique_within_a_kind_and_safe_for_json() {
+        for def in REGISTRY {
+            let mut seen = std::collections::HashSet::new();
+            for attribute in def.attributes {
+                assert!(
+                    seen.insert(attribute.key),
+                    "duplicate {} attribute {}",
+                    def.kind,
+                    attribute.key
+                );
+                assert!(!attribute.key.is_empty(), "{} has an empty attribute key", def.kind);
+                assert!(
+                    attribute
+                        .key
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
+                    "{} attribute {} is not snake_case",
+                    def.kind,
+                    attribute.key
+                );
+            }
+        }
     }
 
     #[test]
