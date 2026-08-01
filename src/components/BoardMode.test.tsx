@@ -174,6 +174,13 @@ describe('BoardMode', () => {
     open({ assetId: 'asset-0', nodeId: 'kael' })
     const roleSelect = await screen.findByLabelText('Reference role')
     const dialog = screen.getByRole('dialog', { name: 'Attach board image' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAccessibleDescription(
+      /Choose how reference image asset-0 should influence Kael/,
+    )
+    // Asset data arrives asynchronously. The modal keeps the safe control it
+    // initially focused rather than stealing focus when the select appears.
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
     fireEvent.change(roleSelect, { target: { value: 'pose' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Attach reference' }))
 
@@ -185,6 +192,15 @@ describe('BoardMode', () => {
         weight: undefined,
       }),
     )
+  })
+
+  it('dismisses the attachment sheet with Escape and restores its request state', async () => {
+    assets = [asset(0)]
+    const view = open({ assetId: 'asset-0', nodeId: 'kael' })
+    await screen.findByRole('dialog', { name: 'Attach board image' })
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(view.onPendingAttach).toHaveBeenCalledWith(null)
   })
 
   it('does not invent a selected-node target and blocks writes when read-only', async () => {

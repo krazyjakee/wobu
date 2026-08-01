@@ -20,6 +20,7 @@ import { useAssets, useAssetThumb, useLinkAsset } from '../lib/queries'
 import { EMPTY_BOARD_LAYOUT, useBoard } from '../store/board'
 import { toast, useUI } from '../store/ui'
 import { Icon } from './Icon'
+import { Modal } from './Modal'
 
 export interface BoardAttachRequest {
   assetId: string
@@ -377,62 +378,65 @@ function AttachReferenceSheet({
   }
 
   return (
-    <div
-      className="scrim"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    <Modal
+      className="sheet board-attach-sheet"
+      titleId="board-attach-title"
+      descriptionId="board-attach-description"
+      onClose={onClose}
+      busy={link.isPending}
+      busyMessage={
+        link.isPending
+          ? 'Attaching the reference. This operation cannot be interrupted.'
+          : undefined
+      }
     >
-      <div
-        className="sheet board-attach-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Attach board image"
-      >
-        <h2>Attach board image</h2>
-        {asset && node ? (
-          <>
-            <p>
-              Choose how <b>{assetLabel(asset)}</b> should influence <b>{node.name}</b>.
-            </p>
-            <label>
-              <span>Reference role</span>
-              <select
-                aria-label="Reference role"
-                value={role}
-                disabled={readOnly || link.isPending}
-                onChange={(event) => setRole(event.target.value as AssetRole)}
-                autoFocus
-              >
-                {api.ASSET_ROLES.map((value) => (
-                  <option key={value} value={value}>
-                    {roleLabel(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="board-role-note">
-              Mood references are never sent to providers; other roles may be routed to compatible
-              image backends.
-            </p>
-          </>
-        ) : (
-          <p>The image or node no longer exists. Close this sheet and choose another target.</p>
-        )}
-        {error && <p className="board-error">Attach failed: {error}</p>}
-        <div className="sheet-actions">
-          <button className="btn btn-ghost" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={!asset || !node || readOnly || link.isPending}
-            onClick={() => void attach()}
-          >
-            {link.isPending ? 'Attaching…' : 'Attach reference'}
-          </button>
-        </div>
+      <h2 id="board-attach-title">Attach board image</h2>
+      {asset && node ? (
+        <>
+          <p id="board-attach-description">
+            Choose how <b>{assetLabel(asset)}</b> should influence <b>{node.name}</b>.
+          </p>
+          <label>
+            <span>Reference role</span>
+            <select
+              aria-label="Reference role"
+              value={role}
+              disabled={readOnly || link.isPending}
+              onChange={(event) => setRole(event.target.value as AssetRole)}
+              data-modal-initial-focus
+            >
+              {api.ASSET_ROLES.map((value) => (
+                <option key={value} value={value}>
+                  {roleLabel(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="board-role-note">
+            Mood references are never sent to providers; other roles may be routed to compatible
+            image backends.
+          </p>
+        </>
+      ) : (
+        <p id="board-attach-description">
+          The image or node no longer exists. Close this sheet and choose another target.
+        </p>
+      )}
+      {error && <p className="board-error">Attach failed: {error}</p>}
+      <div className="sheet-actions">
+        <button className="btn btn-ghost" type="button" onClick={onClose} disabled={link.isPending}>
+          Cancel
+        </button>
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={!asset || !node || readOnly || link.isPending}
+          onClick={() => void attach()}
+        >
+          {link.isPending ? 'Attaching…' : 'Attach reference'}
+        </button>
       </div>
-    </div>
+    </Modal>
   )
 }
 

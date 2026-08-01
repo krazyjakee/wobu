@@ -3,6 +3,7 @@ import type { KindDef, NodeKind, NodeSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
 import { useCreateNode } from '../lib/queries'
 import { labelFor } from '../lib/kinds'
+import { Modal } from './Modal'
 
 export function NewNodeSheet({
   initialKind,
@@ -59,89 +60,86 @@ export function NewNodeSheet({
   }
 
   return (
-    <div
-      className="scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
+    <Modal
+      titleId="new-node-title"
+      descriptionId="new-node-description"
+      onClose={onClose}
+      busy={create.isPending}
+      busyMessage={
+        create.isPending ? 'Creating the node. This operation cannot be interrupted.' : undefined
+      }
     >
-      <div className="sheet" role="dialog" aria-label="New node">
-        <h2>New node</h2>
-        <p>
-          Every entity is the same record — kind only selects the icon, the section schema and the
-          default link roles. This writes one Markdown file under <code>nodes/</code>.
-        </p>
+      <h2 id="new-node-title">New node</h2>
+      <p id="new-node-description">
+        Every entity is the same record — kind only selects the icon, the section schema and the
+        default link roles. This writes one Markdown file under <code>nodes/</code>.
+      </p>
 
-        {available.length === 0 ? (
-          <p>The kind registry is empty, so there is nothing to create.</p>
-        ) : (
-          <>
+      {available.length === 0 ? (
+        <p>The kind registry is empty, so there is nothing to create.</p>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor="nn-kind">Kind</label>
+            <select
+              id="nn-kind"
+              value={kind}
+              onChange={(e) => {
+                setKind(e.target.value as NodeKind)
+                setParentId('')
+              }}
+            >
+              {available.map((k) => (
+                <option key={k.kind} value={k.kind}>
+                  {labelFor(k, k.kind)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="nn-name">Name</label>
+            <input
+              id="nn-name"
+              data-modal-initial-focus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submit()
+              }}
+            />
+          </div>
+
+          {def?.nests && (
             <div className="field">
-              <label htmlFor="nn-kind">Kind</label>
-              <select
-                id="nn-kind"
-                value={kind}
-                onChange={(e) => {
-                  setKind(e.target.value as NodeKind)
-                  setParentId('')
-                }}
-              >
-                {available.map((k) => (
-                  <option key={k.kind} value={k.kind}>
-                    {labelFor(k, k.kind)}
+              <label htmlFor="nn-parent">Nest inside (optional)</label>
+              <select id="nn-parent" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                <option value="">— top level —</option>
+                {parents.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>
             </div>
+          )}
+        </>
+      )}
 
-            <div className="field">
-              <label htmlFor="nn-name">Name</label>
-              <input
-                id="nn-name"
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submit()
-                }}
-              />
-            </div>
+      {err && <div className="sheet-err">{err}</div>}
 
-            {def?.nests && (
-              <div className="field">
-                <label htmlFor="nn-parent">Nest inside (optional)</label>
-                <select
-                  id="nn-parent"
-                  value={parentId}
-                  onChange={(e) => setParentId(e.target.value)}
-                >
-                  <option value="">— top level —</option>
-                  {parents.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </>
-        )}
-
-        {err && <div className="sheet-err">{err}</div>}
-
-        <div className="sheet-actions">
-          <button className="btn btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={submit}
-            disabled={create.isPending || available.length === 0}
-          >
-            {create.isPending ? 'Creating…' : 'Create'}
-          </button>
-        </div>
+      <div className="sheet-actions">
+        <button className="btn btn-ghost" onClick={onClose} disabled={create.isPending}>
+          Cancel
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={submit}
+          disabled={create.isPending || available.length === 0}
+        >
+          {create.isPending ? 'Creating…' : 'Create'}
+        </button>
       </div>
-    </div>
+    </Modal>
   )
 }

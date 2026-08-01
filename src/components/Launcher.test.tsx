@@ -100,3 +100,21 @@ describe('launcher recent projects', () => {
     await act(async () => resolveForget?.())
   })
 })
+
+describe('new project sheet', () => {
+  it('uses modal semantics, closes with Escape, and restores focus to its opener', async () => {
+    showLauncher()
+    const opener = await screen.findByRole('button', { name: 'New project' })
+    opener.focus()
+    fireEvent.click(opener)
+
+    const dialog = screen.getByRole('dialog', { name: 'New project' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAccessibleDescription(/self-contained folder/)
+    expect(screen.getByLabelText('Project name')).toHaveFocus()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'New project' })).toBeNull()
+    expect(opener).toHaveFocus()
+  })
+})

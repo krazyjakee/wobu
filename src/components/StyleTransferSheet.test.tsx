@@ -34,14 +34,14 @@ function preview(missingAssetCount = 0) {
   }
 }
 
-function open() {
+function open(onClose = () => {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <StyleTransferSheet
         sourcePath="/source.wobu"
         kinds={kinds}
-        onClose={() => {}}
+        onClose={onClose}
         onImported={() => {}}
       />
     </QueryClientProvider>,
@@ -54,6 +54,19 @@ beforeEach(() => {
 })
 
 describe('StyleTransferSheet', () => {
+  it('starts on the safe Close action and dismisses with Escape', async () => {
+    h.invoke.mockResolvedValue(preview())
+    const onClose = vi.fn()
+    open(onClose)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Import style or subtree' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAccessibleDescription(/Reading the source project|Choose one root/)
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('blocks apply when a referenced source blob is missing', async () => {
     h.invoke.mockResolvedValue(preview(1))
     open()

@@ -10,6 +10,7 @@ import {
 import { useOpenProgress } from '../hooks/useOpenProgress'
 import { report } from '../store/ui'
 import { Icon } from './Icon'
+import { Modal } from './Modal'
 import { WindowControls } from './WindowControls'
 
 /**
@@ -352,60 +353,63 @@ function NewProjectSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
-      className="scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
+    <Modal
+      titleId="new-project-title"
+      descriptionId="new-project-description"
+      onClose={onClose}
+      busy={createProject.isPending}
+      busyMessage={
+        createProject.isPending
+          ? 'Creating the project folder. This operation cannot be interrupted.'
+          : undefined
+      }
     >
-      <div className="sheet" role="dialog" aria-label="New project">
-        <h2>New project</h2>
-        <p>
-          Wobu creates a self-contained folder — Markdown nodes, assets and generation history all
-          inside it. Put it wherever it belongs, including a network share.
-        </p>
+      <h2 id="new-project-title">New project</h2>
+      <p id="new-project-description">
+        Wobu creates a self-contained folder — Markdown nodes, assets and generation history all
+        inside it. Put it wherever it belongs, including a network share.
+      </p>
 
-        <div className="field">
-          <label htmlFor="np-loc">Location</label>
-          <div className="picker">
-            <input
-              id="np-loc"
-              value={parentDir}
-              placeholder="choose a parent folder…"
-              onChange={(e) => setParentDir(e.target.value)}
-            />
-            <button className="btn" onClick={pickParent}>
-              <Icon name="folder" size="sm" />
-              Browse
-            </button>
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="np-name">Project name</label>
+      <div className="field">
+        <label htmlFor="np-loc">Location</label>
+        <div className="picker">
           <input
-            id="np-name"
-            value={name}
-            placeholder="Ashfall"
-            autoFocus
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submit()
-            }}
+            id="np-loc"
+            value={parentDir}
+            placeholder="choose a parent folder…"
+            onChange={(e) => setParentDir(e.target.value)}
           />
-        </div>
-
-        {err && <div className="sheet-err">{err}</div>}
-
-        <div className="sheet-actions">
-          <button className="btn btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={submit} disabled={createProject.isPending}>
-            {createProject.isPending ? 'Creating…' : 'Create project'}
+          <button className="btn" onClick={pickParent}>
+            <Icon name="folder" size="sm" />
+            Browse
           </button>
         </div>
       </div>
-    </div>
+
+      <div className="field">
+        <label htmlFor="np-name">Project name</label>
+        <input
+          id="np-name"
+          value={name}
+          placeholder="Ashfall"
+          data-modal-initial-focus
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit()
+          }}
+        />
+      </div>
+
+      {err && <div className="sheet-err">{err}</div>}
+
+      <div className="sheet-actions">
+        <button className="btn btn-ghost" onClick={onClose} disabled={createProject.isPending}>
+          Cancel
+        </button>
+        <button className="btn btn-primary" onClick={submit} disabled={createProject.isPending}>
+          {createProject.isPending ? 'Creating…' : 'Create project'}
+        </button>
+      </div>
+    </Modal>
   )
 }

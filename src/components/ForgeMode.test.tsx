@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Generation, LoraStatus, ProjectSummary, QueueSnapshot } from '../lib/api'
 import { useUI } from '../store/ui'
@@ -480,7 +480,10 @@ describe('Forge mode', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Select generation two for comparison' }))
     fireEvent.click(screen.getByRole('button', { name: 'Compare selected · 2' }))
-    expect(await screen.findByRole('dialog', { name: 'Compare Forge results' })).toBeInTheDocument()
+    const comparison = await screen.findByRole('dialog', { name: 'Compare Forge results' })
+    expect(comparison).toHaveAttribute('aria-modal', 'true')
+    expect(comparison).toHaveAccessibleDescription(/Full-resolution comparison/)
+    expect(within(comparison).getByRole('button', { name: 'Close Forge comparison' })).toHaveFocus()
     expect(await screen.findByAltText('first portrait')).toHaveAttribute(
       'src',
       'asset:///original-asset-one',

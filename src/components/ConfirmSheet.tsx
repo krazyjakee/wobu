@@ -1,3 +1,5 @@
+import { Modal } from './Modal'
+
 export function ConfirmSheet({
   title,
   body,
@@ -16,30 +18,34 @@ export function ConfirmSheet({
   onConfirm: () => void
 }) {
   return (
-    <div
-      className="scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel()
-      }}
+    <Modal
+      role="alertdialog"
+      titleId="confirm-sheet-title"
+      descriptionId="confirm-sheet-description"
+      onClose={onCancel}
+      busy={busy}
+      busyMessage={busy ? 'Please wait for this operation to finish before closing.' : undefined}
     >
-      <div className="sheet" role="alertdialog" aria-label={title}>
-        <h2>{title}</h2>
-        <p>{body}</p>
-        <div className="sheet-actions">
-          <button className="btn btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            className={danger ? 'btn' : 'btn btn-primary'}
-            style={danger ? { borderColor: '#7d2b36', color: '#f0b3bb' } : undefined}
-            onClick={onConfirm}
-            disabled={busy}
-            autoFocus
-          >
-            {confirmLabel}
-          </button>
-        </div>
+      <h2 id="confirm-sheet-title">{title}</h2>
+      <p id="confirm-sheet-description">{body}</p>
+      <div className="sheet-actions">
+        <button
+          className="btn btn-ghost"
+          onClick={onCancel}
+          disabled={busy}
+          data-modal-initial-focus
+        >
+          Cancel
+        </button>
+        <button
+          className={danger ? 'btn' : 'btn btn-primary'}
+          style={danger ? { borderColor: '#7d2b36', color: '#f0b3bb' } : undefined}
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          {confirmLabel}
+        </button>
       </div>
-    </div>
+    </Modal>
   )
 }

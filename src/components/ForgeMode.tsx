@@ -6,6 +6,7 @@ import type { KindIndex } from '../lib/kinds'
 import { useAssetThumb, useGenerations, useLoraStatus, useTrainLora } from '../lib/queries'
 import { report, useUI } from '../store/ui'
 import { Inspector } from './Inspector'
+import { Modal } from './Modal'
 
 const TILE_MIN = 230
 const TILE_HEIGHT = 286
@@ -537,38 +538,37 @@ function CompareViewer({
   generations: Generation[]
   onClose: () => void
 }) {
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', close)
-    return () => window.removeEventListener('keydown', close)
-  }, [onClose])
-
   return (
-    <div className="scrim forge-compare-scrim" role="dialog" aria-label="Compare Forge results">
-      <section className="forge-compare">
-        <header>
-          <div>
-            <h2>Full-resolution comparison</h2>
-            <p>{generations.length} immutable results</p>
-          </div>
-          <button
-            className="ibtn"
-            type="button"
-            onClick={onClose}
-            aria-label="Close Forge comparison"
-          >
-            ×
-          </button>
-        </header>
-        <div className="forge-compare-images">
-          {generations.map((generation) => (
-            <CompareImage key={generation.id} generation={generation} />
-          ))}
+    <Modal
+      className="forge-compare"
+      scrimClassName="forge-compare-scrim"
+      titleId="forge-compare-title"
+      descriptionId="forge-compare-description"
+      onClose={onClose}
+    >
+      <header>
+        <div>
+          <h2 id="forge-compare-title">Compare Forge results</h2>
+          <p id="forge-compare-description">
+            Full-resolution comparison · {generations.length} immutable results
+          </p>
         </div>
-      </section>
-    </div>
+        <button
+          className="ibtn"
+          type="button"
+          onClick={onClose}
+          aria-label="Close Forge comparison"
+          data-modal-initial-focus
+        >
+          ×
+        </button>
+      </header>
+      <div className="forge-compare-images">
+        {generations.map((generation) => (
+          <CompareImage key={generation.id} generation={generation} />
+        ))}
+      </div>
+    </Modal>
   )
 }
 

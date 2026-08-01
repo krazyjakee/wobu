@@ -6,6 +6,7 @@ import { useNodeSearch, useUndo } from '../lib/queries'
 import { useDebounced } from '../hooks/useDebounced'
 import { useUI } from '../store/ui'
 import { Icon } from './Icon'
+import { Modal } from './Modal'
 
 function NodeRow({
   node,
@@ -197,53 +198,72 @@ export function CommandPalette({
   }
 
   return (
-    <div
-      className="scrim scrim-top"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) setOpen(false)
-      }}
+    <Modal
+      className="pal"
+      scrimClassName="scrim-top"
+      titleId="command-palette-title"
+      descriptionId="command-palette-description"
+      onClose={() => setOpen(false)}
     >
-      <div className="pal" role="dialog" aria-label="Command palette">
-        <div className="pal-in">
-          <Icon name="search" />
-          <input
-            autoFocus
-            spellCheck={false}
-            value={q}
-            placeholder="Jump to a node, or type a command…"
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setOpen(false)
-              } else if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                setCursor((c) => (rows.length ? (c + 1) % rows.length : 0))
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                setCursor((c) => (rows.length ? (c - 1 + rows.length) % rows.length : 0))
-              } else if (e.key === 'Enter') {
-                e.preventDefault()
-                pick(cursor)
-              }
-            }}
+      <h2 className="modal-sr-only" id="command-palette-title">
+        Command palette
+      </h2>
+      <p className="modal-sr-only" id="command-palette-description">
+        Search for a node or choose a workspace command.
+      </p>
+      <div className="pal-in">
+        <Icon name="search" />
+        <input
+          data-modal-initial-focus
+          spellCheck={false}
+          value={q}
+          placeholder="Jump to a node, or type a command…"
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setCursor((c) => (rows.length ? (c + 1) % rows.length : 0))
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setCursor((c) => (rows.length ? (c - 1 + rows.length) % rows.length : 0))
+            } else if (e.key === 'Enter') {
+              e.preventDefault()
+              pick(cursor)
+            }
+          }}
+        />
+        <kbd>esc</kbd>
+      </div>
+
+      <div className="pal-list" ref={listRef}>
+        {rows.length === 0 && (
+          <div className="pal-none">
+            {nodes.length === 0
+              ? 'This world has no nodes yet.'
+              : search.isFetching
+                ? 'Searching notes…'
+                : 'No match.'}
+          </div>
+        )}
+
+        {matchedNodes.length > 0 && <div className="pal-sec">Nodes</div>}
+        {matchedNodes.map((n, i) => (
+          <NodeRow
+            key={n.id}
+            node={n}
+            kinds={kinds}
+            on={cursor === i}
+            onHover={() => setCursor(i)}
+            onPick={() => pick(i)}
           />
-          <kbd>esc</kbd>
-        </div>
+        ))}
 
-        <div className="pal-list" ref={listRef}>
-          {rows.length === 0 && (
-            <div className="pal-none">
-              {nodes.length === 0
-                ? 'This world has no nodes yet.'
-                : search.isFetching
-                  ? 'Searching notes…'
-                  : 'No match.'}
-            </div>
-          )}
-
-          {matchedNodes.length > 0 && <div className="pal-sec">Nodes</div>}
-          {matchedNodes.map((n, i) => (
+        {/* Named rather than merged above: these matched something the user
+              cannot see on the row, so the heading is the explanation. */}
+        {matchedText.length > 0 && <div className="pal-sec">In notes and descriptions</div>}
+        {matchedText.map((n, j) => {
+          const i = matchedNodes.length + j
+          return (
             <NodeRow
               key={n.id}
               node={n}
@@ -252,47 +272,30 @@ export function CommandPalette({
               onHover={() => setCursor(i)}
               onPick={() => pick(i)}
             />
-          ))}
+          )
+        })}
 
-          {/* Named rather than merged above: these matched something the user
-              cannot see on the row, so the heading is the explanation. */}
-          {matchedText.length > 0 && <div className="pal-sec">In notes and descriptions</div>}
-          {matchedText.map((n, j) => {
-            const i = matchedNodes.length + j
-            return (
-              <NodeRow
-                key={n.id}
-                node={n}
-                kinds={kinds}
-                on={cursor === i}
-                onHover={() => setCursor(i)}
-                onPick={() => pick(i)}
-              />
-            )
-          })}
-
-          {matchedCmds.length > 0 && <div className="pal-sec">Commands</div>}
-          {matchedCmds.map((c, j) => {
-            const i = matchedNodes.length + matchedText.length + j
-            return (
-              <button
-                key={c.id}
-                className={cursor === i ? 'pal-row is-on' : 'pal-row'}
-                onMouseEnter={() => setCursor(i)}
-                onClick={() => pick(i)}
-              >
-                <Icon name={c.icon} size="sm" />
-                {c.label}
-                {c.hint && <span className="sub">{c.hint}</span>}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="pal-foot">
-          <kbd>↑↓</kbd> navigate <kbd>↵</kbd> open <kbd>esc</kbd> dismiss
-        </div>
+        {matchedCmds.length > 0 && <div className="pal-sec">Commands</div>}
+        {matchedCmds.map((c, j) => {
+          const i = matchedNodes.length + matchedText.length + j
+          return (
+            <button
+              key={c.id}
+              className={cursor === i ? 'pal-row is-on' : 'pal-row'}
+              onMouseEnter={() => setCursor(i)}
+              onClick={() => pick(i)}
+            >
+              <Icon name={c.icon} size="sm" />
+              {c.label}
+              {c.hint && <span className="sub">{c.hint}</span>}
+            </button>
+          )
+        })}
       </div>
-    </div>
+
+      <div className="pal-foot">
+        <kbd>↑↓</kbd> navigate <kbd>↵</kbd> open <kbd>esc</kbd> dismiss
+      </div>
+    </Modal>
   )
 }

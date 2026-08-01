@@ -130,6 +130,9 @@ describe('generation history', () => {
 
     fireEvent.click(tiles[0] as HTMLElement)
     const dialog = await screen.findByRole('dialog', { name: 'Generation details' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog).toHaveAccessibleDescription(/Kael · portrait/)
+    expect(within(dialog).getByRole('button', { name: 'Close generation details' })).toHaveFocus()
     expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'asset-1' })
     expect(within(dialog).getByRole('img').getAttribute('src')).toBe('asset:///original-asset-1')
   })

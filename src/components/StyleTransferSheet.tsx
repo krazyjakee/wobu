@@ -4,6 +4,7 @@ import { errorMessage, styleTransferPreview } from '../lib/api'
 import { useApplyStyleTransfer } from '../lib/queries'
 import { labelFor, type KindIndex } from '../lib/kinds'
 import { toast } from '../store/ui'
+import { Modal } from './Modal'
 
 export function StyleTransferSheet({
   sourcePath,
@@ -68,19 +69,27 @@ export function StyleTransferSheet({
   }
 
   return (
-    <div
-      className="scrim"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    <Modal
+      className="sheet transfer-sheet"
+      titleId="style-transfer-title"
+      descriptionId="style-transfer-description"
+      onClose={onClose}
+      busy={apply.isPending}
+      busyMessage={
+        apply.isPending ? 'Importing the subtree. This operation cannot be interrupted.' : undefined
+      }
     >
-      <div className="sheet transfer-sheet" role="dialog" aria-label="Import style or subtree">
-        <h2>Import style or subtree</h2>
-        {!preview && !error && <p>Reading the source project…</p>}
+      <h2 id="style-transfer-title">Import style or subtree</h2>
+      <p id="style-transfer-description">
+        {preview
+          ? `Choose one root from ${preview.sourceProjectName}. Its nested descendants and referenced images come with it; links to everything else stay behind.`
+          : error
+            ? 'The source project preview could not be read.'
+            : 'Reading the source project…'}
+      </p>
+      <div>
         {preview && (
           <>
-            <p>
-              Choose one root from <b>{preview.sourceProjectName}</b>. Its nested descendants and
-              referenced images come with it; links to everything else stay behind.
-            </p>
             <div className="field">
               <label htmlFor="transfer-root">Root</label>
               <select
@@ -131,39 +140,44 @@ export function StyleTransferSheet({
             <p className="transfer-lora">{preview.loraNote}</p>
           </>
         )}
-        {error && <div className="sheet-err">{error}</div>}
-        {partial && (
-          <div className="sheet-err" role="status">
-            Transfer stopped after {partial.appliedNodeIds.length} of {partial.plannedNodeCount}{' '}
-            nodes. {partial.failure} {partial.pendingNodeIds.length} node
-            {partial.pendingNodeIds.length === 1 ? '' : 's'} remain unapplied.
-            {partial.conflictPaths.length > 0 &&
-              ` Incoming content is recoverable at ${partial.conflictPaths.join(', ')}.`}
-          </div>
-        )}
-        <div className="sheet-actions">
-          <button className="btn btn-ghost" onClick={onClose}>
-            Close
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={submit}
-            disabled={
-              !candidate ||
-              candidate.missingAssetCount > 0 ||
-              candidate.missingLoraCount > 0 ||
-              apply.isPending ||
-              !!partial
-            }
-          >
-            {apply.isPending
-              ? 'Importing…'
-              : candidate?.replacesSingleton
-                ? 'Replace and import'
-                : 'Import'}
-          </button>
-        </div>
       </div>
-    </div>
+      {error && <div className="sheet-err">{error}</div>}
+      {partial && (
+        <div className="sheet-err" role="status">
+          Transfer stopped after {partial.appliedNodeIds.length} of {partial.plannedNodeCount}{' '}
+          nodes. {partial.failure} {partial.pendingNodeIds.length} node
+          {partial.pendingNodeIds.length === 1 ? '' : 's'} remain unapplied.
+          {partial.conflictPaths.length > 0 &&
+            ` Incoming content is recoverable at ${partial.conflictPaths.join(', ')}.`}
+        </div>
+      )}
+      <div className="sheet-actions">
+        <button
+          className="btn btn-ghost"
+          onClick={onClose}
+          disabled={apply.isPending}
+          data-modal-initial-focus
+        >
+          Close
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={submit}
+          disabled={
+            !candidate ||
+            candidate.missingAssetCount > 0 ||
+            candidate.missingLoraCount > 0 ||
+            apply.isPending ||
+            !!partial
+          }
+        >
+          {apply.isPending
+            ? 'Importing…'
+            : candidate?.replacesSingleton
+              ? 'Replace and import'
+              : 'Import'}
+        </button>
+      </div>
+    </Modal>
   )
 }
