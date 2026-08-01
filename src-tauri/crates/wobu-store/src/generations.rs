@@ -15,6 +15,15 @@ use crate::error::{Error, Result};
 use crate::paths;
 
 pub const GENERATIONS_DIR: &str = "generations";
+const SPEND_AGGREGATE: &str = ".wobu/spend/aggregate.json";
+
+/// The shell may keep a disposable aggregate of this canonical ledger for
+/// display polling. Receipt changes invalidate it; failure to remove a cache is
+/// deliberately ignored because paid admission never trusts it.
+pub(crate) fn invalidate_spend_aggregate(root: &Path) {
+    let path = root.join(SPEND_AGGREGATE);
+    let _ = std::fs::remove_file(path);
+}
 
 /// Persist one complete generation, refusing to reuse its id forever.
 pub fn write(root: &Path, generation: &Generation) -> Result<(String, Stamp)> {
@@ -23,6 +32,7 @@ pub fn write(root: &Path, generation: &Generation) -> Result<(String, Stamp)> {
     let mut bytes = serde_json::to_vec_pretty(generation)?;
     bytes.push(b'\n');
     let stamp = atomic::write_once(root, &target, &bytes)?;
+    invalidate_spend_aggregate(root);
     Ok((rel, stamp))
 }
 

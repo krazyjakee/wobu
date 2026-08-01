@@ -129,7 +129,7 @@ export function Inspector({
   const setSpendCeiling = useSetSpendCeiling(project.id)
   const recoverSpendLedger = useRecoverSpendLedger(project.id)
   const setLockedSeed = useSetLockedSeed()
-  const spend = spendQuery.data ?? imageReport.data?.spend
+  const spend = spendQuery.data
   useEffect(() => {
     const ceiling = spend?.ceilingUsdMicros
     setCeilingDollars(ceiling === null || ceiling === undefined ? '' : microsAsInput(ceiling))
@@ -266,10 +266,10 @@ export function Inspector({
 
   const costBlocked =
     paidEstimate !== null &&
-    (spend?.ledgerLocked === true ||
-      spend?.remainingUsdMicros === null ||
-      (spend?.remainingUsdMicros !== undefined &&
-        paidEstimate.batchUsdMicros > spend.remainingUsdMicros))
+    (!spend ||
+      spend.ledgerLocked === true ||
+      spend.remainingUsdMicros === null ||
+      paidEstimate.batchUsdMicros > spend.remainingUsdMicros)
   const gridBlocked = gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
   const generateDisabled =
     !selected ||

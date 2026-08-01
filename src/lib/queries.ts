@@ -496,7 +496,6 @@ export function useSetSpendCeiling(project: string) {
     mutationFn: api.spendCeilingSet,
     onSuccess: (status) => {
       qc.setQueryData(qk.spendStatus(project), status)
-      void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
     },
   })
 }
@@ -507,7 +506,6 @@ export function useRecoverSpendLedger(project: string) {
     mutationFn: api.spendRecoveryReset,
     onSuccess: (status) => {
       qc.setQueryData(qk.spendStatus(project), status)
-      void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
     },
   })
 }

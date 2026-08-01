@@ -1128,7 +1128,6 @@ export interface ImageReferenceReport {
   layers: ReferenceLayerReport[]
   /** Null for a local provider such as ComfyUI. */
   cost: CostEstimate | null
-  spend: SpendStatus
   lockedSeed: number | null
 }
 

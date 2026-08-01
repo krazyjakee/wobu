@@ -44,6 +44,8 @@ pub const GENERATION_RECORDED: &str = "generation:recorded";
 const PRICE_SOURCE: &str = "https://ai.google.dev/gemini-api/docs/pricing";
 const PRICE_CHECKED_AT: &str = "2026-08-01";
 const SPEND_DIR: &str = ".wobu/spend";
+const SPEND_AGGREGATE: &str = "aggregate.json";
+const SPEND_AGGREGATE_VERSION: u32 = 1;
 const LOCK_ATTEMPTS: usize = 200;
 const LORA_PROTOCOL: u32 = 1;
 
@@ -169,6 +171,20 @@ struct ReservationFile {
     id: Id,
     remaining_usd_micros: u64,
     created_at: String,
+}
+
+/// Disposable display cache for the immutable receipt ledger.
+///
+/// Admission never trusts this file. It reconstructs the same values from the
+/// canonical receipts while holding [`SpendLock`], then refreshes this cache as
+/// a side effect. Losing or corrupting it therefore costs one reconstruction,
+/// not either money or history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SpendAggregate {
+    version: u32,
+    spent_usd_micros: u64,
+    receipts: usize,
 }
 
 const MAX_GRID_CELLS: usize = 16;
@@ -1037,7 +1053,6 @@ pub struct ImageReferenceReport {
     buckets: Vec<ReferenceBucketReport>,
     layers: Vec<ReferenceLayerReport>,
     cost: Option<CostEstimate>,
-    spend: SpendStatus,
     locked_seed: Option<u64>,
 }
 
@@ -1135,7 +1150,7 @@ pub fn image_reference_report(
     seed: Option<u64>,
     grid: Option<VariantGrid>,
 ) -> CommandResult<ImageReferenceReport> {
-    let (root, nodes, provider, selected_model) = state.with(|project| {
+    let (nodes, provider, selected_model) = state.with(|project| {
         let selected = project
             .meta()
             .providers
@@ -1155,12 +1170,7 @@ pub fn image_reference_report(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_owned);
-        Ok((
-            project.root().to_path_buf(),
-            project.world_nodes()?.to_vec(),
-            provider,
-            selected_model,
-        ))
+        Ok((project.world_nodes()?.to_vec(), provider, selected_model))
     })?;
     let backend: Box<dyn ImageBackend> = match provider.as_str() {
         comfy::ID => Box::new(
@@ -1293,13 +1303,7 @@ pub fn image_reference_report(
             }
         })
         .collect();
-    Ok(ImageReferenceReport {
-        buckets,
-        layers,
-        cost,
-        spend: spend_status_for_report(&root)?,
-        locked_seed,
-    })
+    Ok(ImageReferenceReport { buckets, layers, cost, locked_seed })
 }
 
 #[derive(Debug, Clone)]
@@ -2621,7 +2625,7 @@ struct SpendReservation {
 impl SpendReservation {
     fn create(root: &Path, amount_usd_micros: u64) -> CommandResult<SpendReservation> {
         let _guard = SpendLock::acquire(root)?;
-        let status = read_spend_status_locked(root)?;
+        let status = reconstruct_spend_status_locked(root)?;
         let ceiling = status.ceiling_usd_micros.ok_or_else(|| {
             WobuError::new(
                 Code::SpendCeilingExceeded,
@@ -2664,6 +2668,14 @@ impl SpendReservation {
             ));
         }
         let _guard = SpendLock::acquire(&self.root)?;
+        // The receipt was persisted before this call. Refresh from canonical
+        // bytes rather than adding `amount_usd_micros` to a mutable counter: a
+        // second process may have reconstructed the aggregate in the narrow
+        // interval between that receipt landing and this lock being acquired.
+        // Re-reading makes that interleaving exact instead of double-counting.
+        reconstruct_spend_aggregate_with(&self.root, || {
+            Project::spend_ledger(&self.root).map_err(WobuError::from)
+        })?;
         let remaining = self.file.remaining_usd_micros - amount_usd_micros;
         if remaining > 0 {
             // Reservations are write-once. Publishing the replacement before
@@ -2705,18 +2717,18 @@ impl Drop for SpendReservation {
 
 fn spend_status_for(root: &Path) -> CommandResult<SpendStatus> {
     let _guard = SpendLock::acquire(root)?;
-    read_spend_status_locked(root)
+    reconstruct_spend_status_locked(root)
 }
 
 fn spend_status_for_report(root: &Path) -> CommandResult<SpendStatus> {
     match SpendLock::acquire(root) {
-        Ok(_guard) => read_spend_status_locked(root),
+        Ok(_guard) => read_cached_spend_status_locked(root),
         Err(_error) if root.join(SPEND_DIR).join("lock").exists() => {
             // Display-only fallback. Admission never uses this snapshot: it
             // still requires the exclusive lock. This lets the Inspector
             // explain and recover a crash-orphaned lock instead of replacing
             // the whole cost report with an opaque busy error.
-            let mut status = read_spend_status_locked(root)?;
+            let mut status = read_cached_spend_status_locked(root)?;
             status.ledger_locked = true;
             Ok(status)
         }
@@ -2724,13 +2736,85 @@ fn spend_status_for_report(root: &Path) -> CommandResult<SpendStatus> {
     }
 }
 
-fn read_spend_status_locked(root: &Path) -> CommandResult<SpendStatus> {
-    let (ceiling_usd_micros, receipts) = Project::spend_ledger(root)?;
-    let spent_usd_micros = receipts.into_iter().try_fold(0_u64, |total, generation| {
+/// Admission's view: canonical receipts are opened and validated every time.
+/// The aggregate is refreshed only after that succeeds, so no mutable cache can
+/// authorise spend or hide a malformed receipt.
+fn reconstruct_spend_status_locked(root: &Path) -> CommandResult<SpendStatus> {
+    let (ceiling_usd_micros, aggregate) = reconstruct_spend_aggregate_with(root, || {
+        Project::spend_ledger(root).map_err(WobuError::from)
+    })?;
+    status_with_reservations(root, ceiling_usd_micros, aggregate.spent_usd_micros)
+}
+
+/// Display's view: one small aggregate plus the changing reservation set.
+/// Cache loss is recoverable and pays for one strict reconstruction; unchanged
+/// five-second polls never walk a month shard or open a receipt.
+fn read_cached_spend_status_locked(root: &Path) -> CommandResult<SpendStatus> {
+    read_cached_spend_status_locked_with(root, || {
+        Project::spend_ledger(root).map_err(WobuError::from)
+    })
+}
+
+fn read_cached_spend_status_locked_with(
+    root: &Path,
+    reconstruct: impl FnOnce() -> CommandResult<(Option<u64>, Vec<Generation>)>,
+) -> CommandResult<SpendStatus> {
+    let (ceiling_usd_micros, aggregate) = match read_spend_aggregate(root) {
+        Some(aggregate) => (Project::spend_ceiling(root)?, aggregate),
+        None => reconstruct_spend_aggregate_with(root, reconstruct)?,
+    };
+    status_with_reservations(root, ceiling_usd_micros, aggregate.spent_usd_micros)
+}
+
+fn reconstruct_spend_aggregate_with(
+    root: &Path,
+    read_ledger: impl FnOnce() -> CommandResult<(Option<u64>, Vec<Generation>)>,
+) -> CommandResult<(Option<u64>, SpendAggregate)> {
+    let (ceiling_usd_micros, receipts) = read_ledger()?;
+    let spent_usd_micros = receipts.iter().try_fold(0_u64, |total, generation| {
         total
-            .checked_add(receipt_cost(&generation))
+            .checked_add(receipt_cost(generation))
             .ok_or_else(|| WobuError::new(Code::Invalid, "The project spend total is too large."))
     })?;
+    let aggregate = SpendAggregate {
+        version: SPEND_AGGREGATE_VERSION,
+        spent_usd_micros,
+        receipts: receipts.len(),
+    };
+    // Disposable optimisation only. A read-only or temporarily unavailable
+    // cache must never turn a successfully reconstructed canonical ledger into
+    // a failed admission; the next call can reconstruct it again.
+    let _ = write_spend_aggregate(root, &aggregate);
+    Ok((ceiling_usd_micros, aggregate))
+}
+
+fn read_spend_aggregate(root: &Path) -> Option<SpendAggregate> {
+    let path = root.join(SPEND_DIR).join(SPEND_AGGREGATE);
+    let aggregate: SpendAggregate = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    (aggregate.version == SPEND_AGGREGATE_VERSION).then_some(aggregate)
+}
+
+fn write_spend_aggregate(root: &Path, aggregate: &SpendAggregate) -> CommandResult<()> {
+    let path = root.join(SPEND_DIR).join(SPEND_AGGREGATE);
+    let mut file =
+        OpenOptions::new().write(true).create(true).truncate(true).open(&path).map_err(
+            |error| spend_io("The spend display cache could not be written.", &path, error),
+        )?;
+    serde_json::to_writer(&mut file, aggregate).map_err(|error| {
+        WobuError::new(Code::Internal, "The spend display cache could not be encoded.")
+            .with_detail(error.to_string())
+    })?;
+    file.flush()
+        .map_err(|error| spend_io("The spend display cache could not be written.", &path, error))?;
+    file.sync_all()
+        .map_err(|error| spend_io("The spend display cache could not be secured.", &path, error))
+}
+
+fn status_with_reservations(
+    root: &Path,
+    ceiling_usd_micros: Option<u64>,
+    spent_usd_micros: u64,
+) -> CommandResult<SpendStatus> {
     let reservations = root.join(SPEND_DIR).join("reservations");
     let mut reserved_usd_micros = 0_u64;
     let mut pending_reservations = 0_usize;
@@ -3140,8 +3224,73 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_poll_skips_four_thousand_artificially_slow_receipts() {
+        let project = TestProject::new(500_000_000);
+        std::fs::create_dir_all(project.root.join(SPEND_DIR).join("reservations")).unwrap();
+        let receipts: Vec<_> = (0..4_000)
+            .map(|_| {
+                let mut generation =
+                    receipt(project.node_id, gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
+                generation.params.insert("estimatedCostUsdMicros".into(), json!(67_000));
+                generation
+            })
+            .collect();
+        let opened = std::cell::Cell::new(0_usize);
+        let rebuild_started = std::time::Instant::now();
+        let rebuilt = read_cached_spend_status_locked_with(&project.root, || {
+            for _ in &receipts {
+                opened.set(opened.get() + 1);
+                // Models the fixed per-file cost of opening a receipt over a
+                // shared mount without making the test depend on one.
+                std::thread::sleep(Duration::from_micros(25));
+            }
+            Ok((Some(500_000_000), receipts))
+        })
+        .unwrap();
+        let rebuild_elapsed = rebuild_started.elapsed();
+        assert_eq!(opened.get(), 4_000);
+        assert_eq!(rebuilt.spent_usd_micros, 268_000_000);
+
+        opened.set(0);
+        let poll_started = std::time::Instant::now();
+        let unchanged = read_cached_spend_status_locked_with(&project.root, || {
+            opened.set(usize::MAX);
+            panic!("an unchanged poll reopened the canonical receipt ledger")
+        })
+        .unwrap();
+        let poll_elapsed = poll_started.elapsed();
+
+        assert_eq!(unchanged.spent_usd_micros, rebuilt.spent_usd_micros);
+        assert_eq!(opened.get(), 0, "the cached poll opened no receipt files");
+        assert!(
+            poll_elapsed < rebuild_elapsed,
+            "cached poll {poll_elapsed:?} did not beat artificial receipt latency {rebuild_elapsed:?}",
+        );
+    }
+
+    #[test]
+    fn cache_loss_reconstructs_from_canonical_receipts() {
+        let project = TestProject::new(200_000);
+        let mut generation =
+            receipt(project.node_id, gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
+        generation.params.insert("estimatedCostUsdMicros".into(), json!(67_000));
+        let mut store = Project::open(&project.root).unwrap();
+        store.record_generation(generation).unwrap();
+        drop(store);
+
+        let aggregate = project.root.join(SPEND_DIR).join(SPEND_AGGREGATE);
+        let _ = std::fs::remove_file(&aggregate);
+        let rebuilt = spend_status_for_report(&project.root).unwrap();
+        assert_eq!(rebuilt.spent_usd_micros, 67_000);
+        assert!(aggregate.is_file(), "the disposable aggregate was reconstructed");
+    }
+
+    #[test]
     fn malformed_canonical_receipt_fails_closed() {
         let project = TestProject::new(200_000);
+        // Establish a plausible cache first. Admission must ignore it rather
+        // than letting it hide a malformed receipt that arrives afterwards.
+        assert_eq!(spend_status_for_report(&project.root).unwrap().spent_usd_micros, 0);
         let month = project.root.join("generations/2026-08");
         std::fs::create_dir_all(&month).unwrap();
         std::fs::write(month.join(format!("{}.json", new_id())), b"{not-json").unwrap();

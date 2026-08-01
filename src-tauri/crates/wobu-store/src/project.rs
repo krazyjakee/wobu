@@ -377,11 +377,10 @@ impl Project {
         Ok(())
     }
 
-    /// Read only the shared ceiling and canonical receipts, without opening a
-    /// second local SQLite index. Spend admission calls this while holding its
-    /// cross-process ledger lock, and a network scan must not create two
-    /// independent `Project` owners for one index merely to sum JSON files.
-    pub fn spend_ledger(path: &Path) -> Result<(Option<u64>, Vec<Generation>)> {
+    /// Read the shared ceiling without opening the receipt ledger or a second
+    /// local SQLite index. Display polling uses this O(1) half while admission
+    /// uses [`spend_ledger`](Self::spend_ledger) below.
+    pub fn spend_ceiling(path: &Path) -> Result<Option<u64>> {
         let meta_path = path.join(PROJECT_FILE);
         atomic::recover_replace(path, &meta_path, PROJECT_META_RECOVERY)?;
         if !meta_path.is_file() {
@@ -390,8 +389,17 @@ impl Project {
         let raw =
             std::fs::read_to_string(&meta_path).map_err(|error| Error::io(&meta_path, error))?;
         let meta: ProjectMeta = serde_json::from_str(&raw)?;
+        Ok(meta.spend_ceiling_usd_micros)
+    }
+
+    /// Read the shared ceiling and every canonical receipt, without opening a
+    /// second local SQLite index. Spend admission calls this while holding its
+    /// cross-process ledger lock, and a network scan must not create two
+    /// independent `Project` owners for one index merely to sum JSON files.
+    pub fn spend_ledger(path: &Path) -> Result<(Option<u64>, Vec<Generation>)> {
+        let ceiling = Self::spend_ceiling(path)?;
         let receipts = generations::read_all_strict(path)?;
-        Ok((meta.spend_ceiling_usd_micros, receipts))
+        Ok((ceiling, receipts))
     }
 
     pub fn index(&self) -> &Index {
@@ -1587,12 +1595,17 @@ impl Project {
         let known = self.index.generation_paths()?;
         let mut seen = std::collections::HashSet::new();
         let mut changed = false;
+        let mut ledger_changed = false;
 
         for (rel, path) in generations::list_paths(&self.root) {
             seen.insert(rel.clone());
             if known.contains(&rel) {
                 continue;
             }
+            // Even a malformed new receipt changes the canonical spend ledger:
+            // admission must fail closed on it and display must not keep an old
+            // aggregate that makes the broken file invisible.
+            ledger_changed = true;
             if let Ok(Some((generation, rel, stamp))) = generations::read_at(&self.root, &path) {
                 self.index.upsert_generation(&generation, &rel, &stamp)?;
                 changed = true;
@@ -1605,6 +1618,10 @@ impl Project {
             // removal without making SQLite authoritative.
             self.index.remove_generation_by_rel_path(rel)?;
             changed = true;
+            ledger_changed = true;
+        }
+        if ledger_changed {
+            generations::invalidate_spend_aggregate(&self.root);
         }
         Ok(changed)
     }
@@ -2159,6 +2176,7 @@ impl Project {
         // one transaction, so a malformed row or SQLite failure restores the
         // previous complete read model rather than exposing a partial rebuild.
         self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken)?;
+        generations::invalidate_spend_aggregate(&self.root);
         on_progress(ScanProgress { done: total, total });
         Ok(())
     }
