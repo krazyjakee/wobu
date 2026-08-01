@@ -453,6 +453,15 @@
   border-bottom: 1px solid color-mix(in srgb, #c4384a 45%, transparent);
   color: #f0c2c8;
 }
+/* A read-only folder is a state, not a failure: it is an ordinary way to open
+   somebody else's world, and the alarm colouring above would say something
+   broke. It still occupies the banner row, because it is the one explanation
+   for every control that is switched off. */
+.banner[data-code='project.read_only'] {
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
 .banner > svg {
   flex: none;
   margin-top: 1px;

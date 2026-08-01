@@ -47,11 +47,13 @@ export function CommandPalette({
   kinds,
   onJump,
   onNewNode,
+  readOnly,
 }: {
   nodes: NodeSummary[]
   kinds: KindIndex
   onJump: (id: string) => void
   onNewNode: () => void
+  readOnly: boolean
 }) {
   const open = useUI((s) => s.paletteOpen)
   const setOpen = useUI((s) => s.setPaletteOpen)
@@ -77,17 +79,25 @@ export function CommandPalette({
    * teaches the user to distrust the whole list, and "Undo" on its own asks
    * them to remember what they last did — which is precisely what someone
    * reaching for undo has already failed to do.
+   *
+   * On a read-only folder the three that write are absent rather than disabled,
+   * by the same rule: the banner has already said why, and a greyed row in a
+   * list you are typing into is a second explanation nobody asked for.
    */
   const commands = useMemo<Cmd[]>(
     () => [
-      {
-        id: 'cmd:new',
-        label: 'New node…',
-        icon: 'plus',
-        hint: 'create',
-        run: () => onNewNode(),
-      },
-      ...(nextUndo
+      ...(readOnly
+        ? []
+        : [
+            {
+              id: 'cmd:new',
+              label: 'New node…',
+              icon: 'plus',
+              hint: 'create',
+              run: () => onNewNode(),
+            },
+          ]),
+      ...(!readOnly && nextUndo
         ? [
             {
               id: 'cmd:undo',
@@ -98,7 +108,7 @@ export function CommandPalette({
             },
           ]
         : []),
-      ...(nextRedo
+      ...(!readOnly && nextRedo
         ? [
             {
               id: 'cmd:redo',
@@ -124,7 +134,7 @@ export function CommandPalette({
         run: () => toggleInsp(),
       },
     ],
-    [onNewNode, toggleNav, toggleInsp, undo, redo, nextUndo, nextRedo],
+    [onNewNode, readOnly, toggleNav, toggleInsp, undo, redo, nextUndo, nextRedo],
   )
 
   const needle = q.trim().toLowerCase()

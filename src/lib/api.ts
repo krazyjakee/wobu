@@ -254,10 +254,12 @@ export function errorCode(e: unknown): ErrorCode | null {
  * failures are not here on purpose: `project.not_a_project` and
  * `project.schema_too_new` can only happen while the Launcher is on screen,
  * which has its own inline error slot and no workspace to put a banner above.
- * A read-only folder detected at open is likewise not a banner — the title
- * bar carries a `read-only` chip and the write controls disable themselves.
- * `write.read_only` reaching here means the folder changed under a session
- * that started writable, which the chip alone would not explain.
+ * A read-only folder detected at open does get a banner, but not through here:
+ * the Workspace raises `project.read_only` once when the project opens (see
+ * `src/lib/readOnly.ts`), because nothing failed — that is the state of the
+ * folder rather than the outcome of a command. `write.read_only` reaching
+ * *here* means a folder that started writable changed underneath the session,
+ * which is a failure and needs saying in its own words.
  */
 export type Surface = 'banner' | 'toast' | 'silent'
 

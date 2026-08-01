@@ -189,7 +189,7 @@ export function Navigator({
                 onContextMenu={(e) => {
                   e.preventDefault()
                   setCtx(null)
-                  onNewNode(g.kind, null)
+                  if (!readOnly) onNewNode(g.kind, null)
                 }}
               >
                 <Icon name="chev" />

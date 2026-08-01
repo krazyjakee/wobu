@@ -4,6 +4,7 @@ import type { Conflict, NodeKind, NodeSummary, ProjectSummary } from '../lib/api
 import { errorMessage } from '../lib/api'
 import { useConflicts, useCorruptFiles, useKinds, useNodes } from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
+import { READ_ONLY_BANNER, READ_ONLY_TEXT } from '../lib/readOnly'
 import { ancestorsOf, buildGroups, indexNodes } from '../lib/tree'
 import { useUI, report } from '../store/ui'
 import { TitleBar } from './TitleBar'
@@ -24,6 +25,7 @@ import { useKeyboard } from '../hooks/useKeyboard'
 const RAIL = 52
 
 export function Workspace({ project }: { project: ProjectSummary }) {
+  const readOnly = project.readOnly
   const kindsQ = useKinds()
   const nodesQ = useNodes(true)
   const corruptQ = useCorruptFiles(true)
@@ -109,16 +111,24 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     [byId, select, openAncestors],
   )
 
+  // The one gate every route to the New-node sheet passes through — the
+  // navigator's button and group headers, the palette, ⌘N. Disabling the
+  // controls is what the user sees; this is what makes it true.
+  const startNewNode = useCallback(
+    (kind: NodeKind | null, parentId: string | null) => {
+      if (readOnly) return
+      setNewNode({ kind, parentId })
+    },
+    [readOnly],
+  )
+
   const openNewNode = useCallback(() => {
     const sel = useUI.getState().selectedId
     const s = sel ? byId.get(sel) : undefined
-    setNewNode({
-      kind: s && !singletonKinds.has(s.kind) ? s.kind : null,
-      parentId: s?.parentId ?? null,
-    })
-  }, [byId, singletonKinds])
+    startNewNode(s && !singletonKinds.has(s.kind) ? s.kind : null, s?.parentId ?? null)
+  }, [byId, singletonKinds, startNewNode])
 
-  useKeyboard({ onNewNode: openNewNode })
+  useKeyboard({ onNewNode: openNewNode, readOnly })
 
   /* ── navigator resize ── */
   const dragging = useRef(false)
@@ -143,8 +153,20 @@ export function Workspace({ project }: { project: ProjectSummary }) {
 
   // Banners describe a condition of *this* project folder, so opening a
   // different one starts clean rather than inheriting the last one's trouble.
+  //
+  // Read-only is raised in the same breath, and this is the only place it is
+  // said: it was settled by `paths::is_writable()` at open and holds for the
+  // whole session, so it belongs to the project rather than to a node or a
+  // control. Keyed by code, so even if this ran again it would collapse to one.
   const clearBanners = useUI((s) => s.clearBanners)
-  useEffect(() => clearBanners(), [project.id, clearBanners])
+  useEffect(() => {
+    clearBanners()
+    if (readOnly) {
+      useUI
+        .getState()
+        .raiseBanner({ code: READ_ONLY_BANNER, text: READ_ONLY_TEXT, retryable: false })
+    }
+  }, [project.id, readOnly, clearBanners])
 
   useEffect(() => {
     if (kindsQ.isError) report(kindsQ.error, 'Kind registry unavailable')
@@ -186,10 +208,10 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 kinds={kindIndex}
                 loading={nodesQ.isPending}
                 error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
-                readOnly={project.readOnly}
+                readOnly={readOnly}
                 corrupt={corruptQ.data ?? []}
                 projectPath={project.path}
-                onNewNode={(kind, parentId) => setNewNode({ kind, parentId })}
+                onNewNode={startNewNode}
               />
             )}
             {!navCollapsed && (
@@ -224,7 +246,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 selected={selected}
                 chain={chain}
                 kinds={kindIndex}
-                readOnly={project.readOnly}
+                readOnly={readOnly}
                 onJump={jumpTo}
                 hasNodes={nodes.length > 0}
                 loading={nodesQ.isPending}
@@ -252,7 +274,13 @@ export function Workspace({ project }: { project: ProjectSummary }) {
 
       <StatusBar project={project} nodeCount={nodes.length} loading={nodesQ.isPending} />
 
-      <CommandPalette nodes={nodes} kinds={kindIndex} onJump={jumpTo} onNewNode={openNewNode} />
+      <CommandPalette
+        nodes={nodes}
+        kinds={kindIndex}
+        onJump={jumpTo}
+        onNewNode={openNewNode}
+        readOnly={readOnly}
+      />
 
       {newNode && (
         <NewNodeSheet

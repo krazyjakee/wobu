@@ -8,7 +8,7 @@ import { EDITOR_TABS, useUI } from '../store/ui'
  * does. ⌘E (Enhance) and ⌘↵ (Generate) are deliberately unbound — binding a
  * key to a feature that does not exist is a lie the user pays for later.
  */
-export function useKeyboard({ onNewNode }: { onNewNode: () => void }) {
+export function useKeyboard({ onNewNode, readOnly }: { onNewNode: () => void; readOnly: boolean }) {
   const { undo, redo } = useUndoRunner()
 
   useEffect(() => {
@@ -22,7 +22,10 @@ export function useKeyboard({ onNewNode }: { onNewNode: () => void }) {
       const intent = undoIntent(e, typing)
       if (intent) {
         e.preventDefault()
-        void (intent === 'undo' ? undo() : redo())
+        // Undo and redo replay writes, so on a read-only folder the shortcut is
+        // swallowed rather than left to fail at save time. There is nothing on
+        // the stack to reverse either — nothing here has written anything.
+        if (!readOnly) void (intent === 'undo' ? undo() : redo())
         return
       }
 
@@ -67,7 +70,7 @@ export function useKeyboard({ onNewNode }: { onNewNode: () => void }) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onNewNode, undo, redo])
+  }, [onNewNode, readOnly, undo, redo])
 }
 
 function isTyping(target: EventTarget | null): boolean {

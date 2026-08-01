@@ -41,9 +41,22 @@ const sent = () => h.mutate.mock.calls.map((c) => c[0] as WobuNode)
 
 /** Resolve the `listen()` promise so the share:online handler is registered. */
 async function render(n: WobuNode | undefined, delay = 500) {
-  const r = renderHook(({ node }: { node: WobuNode | undefined }) => useAutosaveNode(node, delay), {
-    initialProps: { node: n },
-  })
+  const r = renderHook(
+    ({ node }: { node: WobuNode | undefined }) => useAutosaveNode(node, { delay }),
+    { initialProps: { node: n } },
+  )
+  await act(async () => {})
+  return r
+}
+
+/** The same, on a folder that cannot be written to. */
+async function renderReadOnly(n: WobuNode, delay = 500) {
+  const r = renderHook(
+    ({ node }: { node: WobuNode }) => useAutosaveNode(node, { delay, readOnly: true }),
+    {
+      initialProps: { node: n },
+    },
+  )
   await act(async () => {})
   return r
 }
@@ -308,6 +321,46 @@ describe('a save that fails', () => {
     act(() => h.listeners.get('share:online')?.())
     expect(h.mutate).not.toHaveBeenCalled()
     expect(result.current.status).toBe('idle')
+  })
+})
+
+describe('a read-only folder', () => {
+  /*
+   * Nothing here may reach `node_upsert`. The backend would refuse it anyway,
+   * but by then the user has a failed save, a toast, and a debounce still
+   * holding text it will try to send again — which is the "degrade honestly"
+   * half of #19: the write controls are off, so the writer behind them is too.
+   */
+
+  it('never writes, however long the debounce is left to run', async () => {
+    const { result } = await renderReadOnly(node({ id: 'a' }))
+    act(() => result.current.queue({ notesRaw: 'typed anyway' }))
+    act(() => void vi.advanceTimersByTime(10_000))
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('does not claim to be saving anything', async () => {
+    // `dirty` would put "unsaved…" on screen for text that is never going to be
+    // saved, which is a promise the folder cannot keep.
+    const { result } = await renderReadOnly(node({ id: 'a' }))
+    act(() => result.current.queue({ notesRaw: 'typed anyway' }))
+    expect(result.current.status).toBe('idle')
+  })
+
+  it('writes nothing on flush, on unmount, or when the node is swapped out', async () => {
+    const { result, rerender, unmount } = await renderReadOnly(node({ id: 'a' }))
+    act(() => result.current.queue({ notesRaw: 'typed anyway' }))
+    act(() => result.current.flush())
+    act(() => rerender({ node: node({ id: 'b' }) }))
+    unmount()
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing when the share comes back, because nothing was held', async () => {
+    const { result } = await renderReadOnly(node({ id: 'a' }))
+    act(() => result.current.queue({ notesRaw: 'typed anyway' }))
+    act(() => h.listeners.get('share:online')?.())
+    expect(h.mutate).not.toHaveBeenCalled()
   })
 })
 
