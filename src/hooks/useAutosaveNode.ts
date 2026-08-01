@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import type { WobuNode } from '../lib/api'
-import { errorCode, isRetryable, isTauri } from '../lib/api'
+import { isRetryable, isTauri } from '../lib/api'
 import { useUpsertNode } from '../lib/queries'
+import {
+  editorWrites,
+  type EditorWriterHandle,
+  type EditorWriteState,
+  type EditorWriteView,
+} from '../lib/editorWrites'
 import { useSettings } from '../store/settings'
 import { report } from '../store/ui'
 
@@ -15,6 +21,8 @@ export interface AutosaveOptions {
   readOnly?: boolean
 }
 
+type WriteOutcome = { ok: true } | { ok: false; error: unknown }
+
 /**
  * Debounced writes through `node_upsert`. The queued patch is merged onto the
  * freshest node we hold. A `world:changed` refetch of the node being edited
@@ -26,11 +34,10 @@ export interface AutosaveOptions {
  *
  * A failure that could still succeed later — the share went away — puts the
  * patch *back* on the queue rather than dropping it, and the edit is resent
- * when `share:online` says the folder is reachable again. Anything else is a
- * genuine rejection, and holding onto it would only resend something the
- * backend has already refused. `write.conflict` is different: the conflict
- * card owns the decision, so the patch is retained until the user acts rather
- * than disappearing from the only writer that still knows it is unsaved.
+ * when `share:online` says the folder is reachable again. A rejected or
+ * conflicted patch is retained too: it must not retry in a loop, but keeping the
+ * editor open is only recoverable if correcting the input or resolving the
+ * conflict can resend the exact text that failed.
  *
  * A read-only folder is the one case where nothing is queued in the first
  * place: there is no later in which that write could succeed.
@@ -51,6 +58,20 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
   const patch = useRef<Partial<WobuNode> | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const mutate = useRef(upsert.mutate)
+  const writes = useRef(new Set<Promise<WriteOutcome>>())
+  const writeFailure = useRef<unknown>(null)
+  const retryWhenOnline = useRef(false)
+  const writer = useRef<EditorWriterHandle | null>(null)
+  const writeView = useRef<EditorWriteView>({
+    nodeId: node?.id ?? null,
+    state: 'clean',
+    error: null,
+  })
+
+  const updateWriteView = useCallback((state: EditorWriteState, error: unknown = null) => {
+    writeView.current = { ...writeView.current, state, error }
+    writer.current?.update(writeView.current)
+  }, [])
 
   // A refetch of this same node is the remote half of a rebase. Adopting it
   // while `patch` is pending is safe because the patch contains only fields the
@@ -69,34 +90,67 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
     mutate.current = upsert.mutate
   }, [upsert.mutate])
 
-  const send = useCallback(() => {
+  const send = useCallback((): Promise<WriteOutcome> | null => {
     const base = latest.current
     const p = patch.current
-    if (!base || !p) return
+    if (!base || !p) return null
     patch.current = null
     const next = { ...base, ...p }
     latest.current = next
     setStatus('saving')
+    // A send with nothing else active is either a new edit or an explicit
+    // retry. Its outcome supersedes the prior failure; concurrent operations
+    // cannot clear one another's failures.
+    if (writes.current.size === 0) writeFailure.current = null
+    updateWriteView('saving')
+
+    let settle: (outcome: WriteOutcome) => void = () => {}
+    const operation = new Promise<WriteOutcome>((resolve) => {
+      settle = resolve
+    })
+    writes.current.add(operation)
+
     mutate.current(next, {
       onSuccess: (saved) => {
+        writes.current.delete(operation)
+        retryWhenOnline.current = false
         if (!patch.current) latest.current = saved
-        setStatus('saved')
+        const nextState: EditorWriteState = writeFailure.current
+          ? 'failed'
+          : patch.current
+            ? 'pending'
+            : writes.current.size > 0
+              ? 'saving'
+              : 'clean'
+        setStatus(
+          nextState === 'pending'
+            ? 'dirty'
+            : nextState === 'saving'
+              ? 'saving'
+              : nextState === 'failed'
+                ? 'error'
+                : 'saved',
+        )
+        updateWriteView(nextState, writeFailure.current)
+        settle({ ok: true })
       },
       onError: (e) => {
+        writes.current.delete(operation)
         const retryable = isRetryable(e)
-        const conflict = errorCode(e) === 'write.conflict'
-        if (retryable || conflict) {
-          // Put it back, behind anything typed since — newer keystrokes win,
-          // but the text that failed to save is not lost.
-          patch.current = { ...p, ...(patch.current ?? {}) }
-          setStatus(retryable ? 'held' : 'error')
-        } else {
-          setStatus('error')
-        }
+        // Put it back, behind anything typed since — newer keystrokes win, but
+        // a rejected edit cannot become recoverable if its patch is discarded.
+        // Only retryable failures resend automatically on share:online.
+        patch.current = { ...p, ...(patch.current ?? {}) }
+        writeFailure.current = e
+        retryWhenOnline.current = retryable
+        setStatus(retryable ? 'held' : 'error')
+        updateWriteView('failed', e)
         report(e, 'Save failed')
+        settle({ ok: false, error: e })
       },
     })
-  }, [])
+    return operation
+  }, [updateWriteView])
 
   // The share came back — resend whatever has been waiting. `send` is a no-op
   // when there is no pending patch, so this costs nothing in the common case.
@@ -104,7 +158,9 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
     if (!isTauri()) return
     let disposed = false
     let unlisten: (() => void) | undefined
-    void listen('share:online', () => send())
+    void listen('share:online', () => {
+      if (retryWhenOnline.current) void send()
+    })
       .then((fn) => {
         if (disposed) fn()
         else unlisten = fn
@@ -123,7 +179,29 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
       window.clearTimeout(timer.current)
       timer.current = undefined
     }
-    send()
+    void send()
+  }, [send])
+
+  const flushAndSettle = useCallback(async () => {
+    if (timer.current !== undefined) {
+      window.clearTimeout(timer.current)
+      timer.current = undefined
+    }
+
+    while (true) {
+      if (patch.current && !send()) {
+        throw new Error('An editor write has no loaded node to save')
+      }
+      const active = [...writes.current]
+      if (active.length === 0) break
+      const outcomes = await Promise.all(active)
+      const failure = outcomes.find((outcome) => !outcome.ok)
+      if (failure && !failure.ok) throw failure.error
+    }
+
+    if (writeView.current.state === 'failed') {
+      throw writeView.current.error ?? new Error('An editor write failed')
+    }
   }, [send])
 
   const queue = useCallback(
@@ -135,14 +213,16 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
       // and a `saving…` label promising something that is not happening.
       if (readOnly) return
       patch.current = { ...(patch.current ?? {}), ...p }
+      retryWhenOnline.current = false
       setStatus('dirty')
+      updateWriteView('pending')
       if (timer.current !== undefined) window.clearTimeout(timer.current)
       timer.current = window.setTimeout(() => {
         timer.current = undefined
         send()
       }, delay)
     },
-    [delay, readOnly, send],
+    [delay, readOnly, send, updateWriteView],
   )
 
   // Flush on unmount and whenever the edited node is swapped out.
@@ -159,10 +239,24 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
       if (timer.current !== undefined) {
         window.clearTimeout(timer.current)
         timer.current = undefined
-        send()
+        void send()
       }
     }
   }, [id, send])
+
+  useEffect(() => {
+    const handle = editorWrites.register({ ...writeView.current, flushAndSettle })
+    writer.current = handle
+    return () => {
+      handle.unregister()
+      if (writer.current === handle) writer.current = null
+    }
+  }, [flushAndSettle])
+
+  useEffect(() => {
+    writeView.current = { ...writeView.current, nodeId: id ?? null }
+    writer.current?.update(writeView.current)
+  }, [id])
 
   return { queue, flush, status }
 }

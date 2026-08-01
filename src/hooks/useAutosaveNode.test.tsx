@@ -5,6 +5,7 @@ import type { WobuNode } from '../lib/api'
 import { node } from '../test/fixtures'
 import { useUI } from '../store/ui'
 import { useSettings } from '../store/settings'
+import { editorWrites } from '../lib/editorWrites'
 
 /*
  * This hook is the last thing standing between a keystroke and the disk, and
@@ -74,6 +75,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   h.mutate.mockReset()
   h.listeners.clear()
+  editorWrites.reset()
   useUI.setState({ toasts: [], banners: [] })
   useSettings.getState().reset()
   // Without this `isTauri()` is false and the share:online listener never
@@ -193,6 +195,24 @@ describe('flushing', () => {
     const { unmount } = await render(node({ id: 'a' }))
     unmount()
     expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the central view non-clean until every concurrent write settles', async () => {
+    const callbacks: MutateOpts[] = []
+    h.mutate.mockImplementation((_n: WobuNode, options: MutateOpts) => callbacks.push(options))
+    const { result } = await render(node({ id: 'a' }), 100)
+
+    act(() => result.current.queue({ notesRaw: 'one' }))
+    act(() => void vi.advanceTimersByTime(100))
+    act(() => result.current.queue({ notesRaw: 'two' }))
+    act(() => result.current.flush())
+    expect(callbacks).toHaveLength(2)
+
+    await act(async () => callbacks[1]?.onSuccess(node({ id: 'a', notesRaw: 'two' })))
+    expect(editorWrites.snapshot()).toMatchObject([{ nodeId: 'a', state: 'saving' }])
+
+    await act(async () => callbacks[0]?.onSuccess(node({ id: 'a', notesRaw: 'one' })))
+    expect(editorWrites.snapshot()).toMatchObject([{ nodeId: 'a', state: 'clean' }])
   })
 })
 
@@ -339,8 +359,9 @@ describe('a save that fails', () => {
     expect(sent()[1]).toMatchObject({ summary: 'remote winner', notesRaw: 'kept typing' })
   })
 
-  it('drops a patch the backend genuinely refused', async () => {
-    // Resending something already rejected just fails again, forever.
+  it('retains a rejected patch for an explicit recovery attempt', async () => {
+    // It does not loop automatically, but close must be able to keep the
+    // workspace alive while the user corrects the rejected value and retries.
     h.mutate.mockImplementation((_n: WobuNode, o: MutateOpts) => o.onError(rejected))
     const { result } = await render(node({ id: 'a' }))
     act(() => result.current.queue({ name: '' }))
@@ -348,8 +369,11 @@ describe('a save that fails', () => {
     expect(result.current.status).toBe('error')
 
     h.mutate.mockImplementation(() => {})
-    act(() => result.current.flush())
+    act(() => h.listeners.get('share:online')?.())
     expect(sent()).toHaveLength(1)
+    act(() => result.current.flush())
+    expect(sent()).toHaveLength(2)
+    expect(sent()[1]!.name).toBe('')
   })
 
   it('reports the failure on the surface its code calls for', async () => {

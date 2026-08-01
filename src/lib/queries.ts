@@ -38,6 +38,7 @@ import type {
 import { applyCommand, birthEntry, deletionEntry, editEntry, moveEntry, useUndoStack } from './undo'
 import { PRESENCE_POLL_MS, livePeers } from './presence'
 import { report, toast, useUI } from '../store/ui'
+import { closeProjectAfterEditorWrites } from './projectClose'
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
 
@@ -568,7 +569,7 @@ export function useApplyStyleTransfer() {
 export function useCloseProject() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.projectClose(),
+    mutationFn: closeProjectAfterEditorWrites,
     onSuccess: () => {
       qc.setQueryData(qk.projectCurrent, null)
       void qc.invalidateQueries({ queryKey: qk.projectRecent })

@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import type { CloseRequestedEvent } from '@tauri-apps/api/window'
 import { isTauri } from './api'
 
 /**
@@ -30,4 +31,12 @@ export async function isMaximized(): Promise<boolean> {
 export async function onResized(cb: () => void): Promise<() => void> {
   if (!isTauri()) return () => {}
   return getCurrentWindow().onResized(() => cb())
+}
+
+/** Renderer-side gate used to settle editor writes before the shell exits. */
+export async function onCloseRequested(
+  cb: (event: CloseRequestedEvent) => void | Promise<void>,
+): Promise<() => void> {
+  if (!isTauri()) return () => {}
+  return getCurrentWindow().onCloseRequested(cb)
 }

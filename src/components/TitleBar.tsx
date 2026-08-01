@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import type { NodeSummary, ProjectSummary } from '../lib/api'
 import { useCloseProject } from '../lib/queries'
 import { labelFor, type KindIndex } from '../lib/kinds'
-import { useUI, report } from '../store/ui'
+import { useUI } from '../store/ui'
+import { reportProjectCloseFailure } from '../lib/projectClose'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
 import { ContextMenu } from './navigator/ContextMenu'
@@ -26,6 +27,11 @@ export function TitleBar({
   const projectMenuButton = useRef<HTMLButtonElement>(null)
 
   const kindLabel = selected ? labelFor(kinds.get(selected.kind), selected.kind) : null
+  const requestProjectClose = () => {
+    closeProject.mutate(undefined, {
+      onError: (error) => reportProjectCloseFailure(error, requestProjectClose),
+    })
+  }
 
   return (
     <header className="titlebar" data-tauri-drag-region>
@@ -60,10 +66,9 @@ export function TitleBar({
               role="menuitem"
               onClick={() => {
                 setMenu(false)
-                closeProject.mutate(undefined, {
-                  onError: (e) => report(e),
-                })
+                requestProjectClose()
               }}
+              disabled={closeProject.isPending}
             >
               <Icon name="folder" size="sm" />
               Close project

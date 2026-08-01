@@ -7,6 +7,7 @@ import { Workspace } from './components/Workspace'
 import { Toasts } from './components/Toasts'
 import { Icon } from './components/Icon'
 import { useUiScale } from './hooks/useUiScale'
+import { useSafeWindowClose } from './hooks/useSafeWindowClose'
 
 export function App() {
   useWorldChangedListener()
@@ -21,6 +22,7 @@ export function App() {
   // covers every way the project can change — closed, swapped, or restored on a
   // reload that never went through `useOpenProject` at all.
   const projectId = current.data?.id ?? null
+  useSafeWindowClose(projectId !== null)
   useEffect(() => useUndoStack.getState().setProject(projectId), [projectId])
 
   // Outside the Tauri webview there is no backend at all — say so plainly
