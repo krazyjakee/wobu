@@ -239,7 +239,8 @@ pub fn sign(call: &Call<'_>, credentials: &Credentials, timestamp: i64) -> Signe
     let date = utc_date(timestamp);
     let scope = format!("{date}/{}/{TERMINATOR}", call.service);
     let to_sign = string_to_sign(timestamp, &scope, &canonical);
-    let signature = hex(&hmac(&signing_key(&credentials.secret_key, &date, call.service), &to_sign));
+    let signature =
+        hex(&hmac(&signing_key(&credentials.secret_key, &date, call.service), &to_sign));
 
     let authorization = format!(
         "{ALGORITHM} Credential={}/{scope}, SignedHeaders={signed_headers}, Signature={signature}",
@@ -287,9 +288,7 @@ fn canonical_request(
 ) -> String {
     let mut sorted: Vec<(String, String)> = headers
         .iter()
-        .map(|(name, value)| {
-            (name.trim().to_ascii_lowercase(), value.trim().to_ascii_lowercase())
-        })
+        .map(|(name, value)| (name.trim().to_ascii_lowercase(), value.trim().to_ascii_lowercase()))
         .collect();
     // ASCII ascending by the lowercased name. Sorting the original case would
     // put `X-TC-Action` before `content-type`, which is a different — valid
@@ -298,8 +297,7 @@ fn canonical_request(
 
     let canonical_headers: String =
         sorted.iter().map(|(name, value)| format!("{name}:{value}\n")).collect();
-    let signed: Vec<(&str, &str)> =
-        sorted.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect();
+    let signed: Vec<(&str, &str)> = sorted.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect();
 
     format!(
         "{method}\n{uri}\n{query}\n{canonical_headers}\n{}\n{}",
@@ -494,8 +492,10 @@ mod tests {
         // body alone. Hashing the whole request here instead still produces 64
         // hex characters in the right place.
         assert_eq!(sha256_hex(DOC_PAYLOAD.as_bytes()), DOC_HASHED_PAYLOAD);
-        assert!(canonical_request("POST", "/", "", &doc_headers(), DOC_PAYLOAD)
-            .ends_with(DOC_HASHED_PAYLOAD));
+        assert!(
+            canonical_request("POST", "/", "", &doc_headers(), DOC_PAYLOAD)
+                .ends_with(DOC_HASHED_PAYLOAD)
+        );
     }
 
     #[test]
@@ -807,11 +807,7 @@ mod tests {
             "POST",
             "/",
             "",
-            &[
-                ("content-type", CONTENT_TYPE),
-                ("host", call.host),
-                ("x-tc-action", call.action),
-            ],
+            &[("content-type", CONTENT_TYPE), ("host", call.host), ("x-tc-action", call.action)],
             call.body,
         );
         assert!(canonical.contains("\nx-tc-action:submithunyuanto3dprojob\n"), "{canonical}");

@@ -859,7 +859,11 @@ impl Index {
     pub fn asset(&self, id: Id) -> Result<Option<Asset>> {
         Ok(self
             .conn
-            .query_row(&format!("{ASSET_COLUMNS} WHERE id = ?1"), params![id.to_string()], asset_row)
+            .query_row(
+                &format!("{ASSET_COLUMNS} WHERE id = ?1"),
+                params![id.to_string()],
+                asset_row,
+            )
             .optional()?
             .flatten())
     }
@@ -1101,9 +1105,11 @@ impl Index {
     pub fn kind_and_parent(&self, id: Id) -> Result<Option<(NodeKind, Option<Id>)>> {
         let row: Option<(String, Option<String>)> = self
             .conn
-            .query_row("SELECT kind, parent_id FROM nodes WHERE id = ?1", params![id.to_string()], |r| {
-                Ok((r.get(0)?, r.get(1)?))
-            })
+            .query_row(
+                "SELECT kind, parent_id FROM nodes WHERE id = ?1",
+                params![id.to_string()],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
             .optional()?;
         Ok(row.and_then(|(kind, parent)| {
             kind.parse::<NodeKind>()
@@ -1121,9 +1127,11 @@ impl Index {
     pub fn singleton_of(&self, kind: NodeKind) -> Result<Option<Id>> {
         let id: Option<String> = self
             .conn
-            .query_row("SELECT id FROM nodes WHERE kind = ?1 LIMIT 1", params![kind.as_str()], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT id FROM nodes WHERE kind = ?1 LIMIT 1",
+                params![kind.as_str()],
+                |r| r.get(0),
+            )
             .optional()?;
         Ok(id.and_then(|s| Id::from_string(&s).ok()))
     }
@@ -1136,9 +1144,9 @@ impl Index {
 
     /// Everything pointing *at* this node — "3 characters inherit from this".
     pub fn backlinks(&self, id: Id) -> Result<Vec<LinkEdge>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT from_id, to_id, role, weight, enabled FROM links WHERE to_id = ?1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT from_id, to_id, role, weight, enabled FROM links WHERE to_id = ?1")?;
         let rows = stmt.query_map(params![id.to_string()], |r| {
             Ok((
                 r.get::<_, String>(0)?,
@@ -1168,9 +1176,9 @@ impl Index {
         let Some(expr) = fts_match_expr(query) else {
             return Ok(Vec::new());
         };
-        let mut stmt = self.conn.prepare(
-            "SELECT id FROM node_fts WHERE node_fts MATCH ?1 ORDER BY rank LIMIT 200",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id FROM node_fts WHERE node_fts MATCH ?1 ORDER BY rank LIMIT 200")?;
         let rows = stmt.query_map(params![expr], |r| r.get::<_, String>(0))?;
         Ok(rows.filter_map(|r| r.ok().and_then(|s| Id::from_string(&s).ok())).collect())
     }
@@ -1514,9 +1522,7 @@ fn asset_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Option<Asset>> {
 }
 
 /// One `asset_links` row as the tuple the collector parses.
-fn asset_link_row(
-    r: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(String, String, String, f32, i32)> {
+fn asset_link_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<(String, String, String, f32, i32)> {
     Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
 }
 
@@ -1703,8 +1709,7 @@ mod tests {
         ] {
             indexed(&index, &Node::new(kind, name).unwrap());
         }
-        let names: Vec<_> =
-            index.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
+        let names: Vec<_> = index.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
         assert_eq!(names, ["Art Style", "Vashk", "Aldo", "Zara"]);
     }
 
@@ -1784,8 +1789,10 @@ mod tests {
         let index = Index::in_memory().unwrap();
         let asset = wobu_core::new_id();
         let mut node = Node::new(NodeKind::Character, "Kael").unwrap();
-        node.asset_links =
-            vec![AssetRef::new(asset, AssetRole::FullRef), AssetRef::new(asset, AssetRole::Palette)];
+        node.asset_links = vec![
+            AssetRef::new(asset, AssetRole::FullRef),
+            AssetRef::new(asset, AssetRole::Palette),
+        ];
         indexed(&index, &node);
 
         assert_eq!(index.asset_links_of(node.id).unwrap().len(), 2);
@@ -1921,7 +1928,10 @@ mod tests {
         indexed(&index, &region);
         indexed(&index, &city);
 
-        assert_eq!(index.kind_and_parent(city.id).unwrap(), Some((NodeKind::Setting, Some(region.id))));
+        assert_eq!(
+            index.kind_and_parent(city.id).unwrap(),
+            Some((NodeKind::Setting, Some(region.id)))
+        );
         assert_eq!(index.kind_and_parent(region.id).unwrap(), Some((NodeKind::Setting, None)));
         assert_eq!(index.children_of(region.id).unwrap(), vec![city.id]);
     }

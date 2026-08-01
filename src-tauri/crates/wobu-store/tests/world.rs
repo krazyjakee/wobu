@@ -309,8 +309,7 @@ fn a_second_project_is_never_served_the_first_ones_world() {
 
     let second_dir = tempfile::tempdir().unwrap();
     let mut second = Project::create(second_dir.path(), "Sundering").unwrap();
-    let names: Vec<&str> =
-        second.world_nodes().unwrap().iter().map(|n| n.name.as_str()).collect();
+    let names: Vec<&str> = second.world_nodes().unwrap().iter().map(|n| n.name.as_str()).collect();
     assert_eq!(names.len(), 2, "the two singletons and nothing else");
     assert!(!names.contains(&"Kael Vantris"), "got {names:?}");
 }

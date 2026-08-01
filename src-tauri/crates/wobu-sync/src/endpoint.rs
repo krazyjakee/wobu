@@ -440,10 +440,7 @@ impl SyncEndpoint {
     /// because only the thing that owns the sessions knows which of them is
     /// worth waiting for.
     pub async fn shutdown(&self) -> Result<()> {
-        self.router
-            .shutdown()
-            .await
-            .map_err(|source| Error::Shutdown { source: Box::new(source) })
+        self.router.shutdown().await.map_err(|source| Error::Shutdown { source: Box::new(source) })
     }
 }
 

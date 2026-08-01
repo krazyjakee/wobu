@@ -99,8 +99,10 @@ pub async fn project_open(
         })
     })
     .await
-    .map_err(|e| WobuError::new(Code::Internal, "The scan thread stopped unexpectedly.")
-        .with_detail(e.to_string()))?;
+    .map_err(|e| {
+        WobuError::new(Code::Internal, "The scan thread stopped unexpectedly.")
+            .with_detail(e.to_string())
+    })?;
 
     state.finish_open();
     Ok(adopt(&app, &state, opened?))
@@ -168,12 +170,12 @@ fn adopt(app: &AppHandle, state: &AppState, project: Project) -> ProjectSummary 
     // A recents file we cannot write is an annoyance, not a failure to open —
     // the project itself is already fine.
     if let Err(e) = recent::record(&summary) {
-        diag::error(&format!("could not record recent project: {e}"));
+        diag::error(format!("could not record recent project: {e}"));
     }
     // The path is the single most useful line in a bug report: it says whether
     // the world was on a share, and `redact::scrub` leaves it intact because a
     // filesystem path is not a credential.
-    diag::info(&format!("opened project {} at {}", summary.id, summary.path));
+    diag::info(format!("opened project {} at {}", summary.id, summary.path));
     state.install(app, project);
     summary
 }
@@ -779,7 +781,7 @@ pub fn conflict_resolve(
 ) -> CommandResult<Resolved> {
     let outcome = state.with(|p| Ok(p.resolve_conflict(&rel_path, keep, &expected_hash)?))?;
     if matches!(outcome, Resolved::Done) {
-        diag::info(&format!("conflict resolved at {rel_path} keeping {keep:?}"));
+        diag::info(format!("conflict resolved at {rel_path} keeping {keep:?}"));
         // Only on a real change. A stale or raced resolution left the folder
         // exactly as it was, and waking the whole world for it would refetch
         // the node the user is mid-decision about.
@@ -908,12 +910,7 @@ pub fn log_info() -> LogInfo {
         None => (diag::dir().join("wobu.log"), diag::Level::default()),
     };
     let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-    LogInfo {
-        exists: path.is_file(),
-        path: path.to_string_lossy().into_owned(),
-        level,
-        size_bytes,
-    }
+    LogInfo { exists: path.is_file(), path: path.to_string_lossy().into_owned(), level, size_bytes }
 }
 
 #[tauri::command]
@@ -922,7 +919,7 @@ pub fn log_set_level(level: diag::Level) {
         d.set_level(level);
         // Recorded at error so it lands whatever the new level is — when
         // reading a log the first question is always "was it even on?".
-        diag::error(&format!("log level set to {level:?}"));
+        diag::error(format!("log level set to {level:?}"));
     }
 }
 
@@ -937,8 +934,9 @@ pub fn log_tail(lines: usize) -> String {
 #[tauri::command]
 pub fn log_reveal() -> CommandResult<()> {
     let dir = diag::dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| WobuError::new(Code::Io, "Could not open the log folder.").with_detail(e.to_string()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        WobuError::new(Code::Io, "Could not open the log folder.").with_detail(e.to_string())
+    })?;
 
     let path = diag::global().map(|d| d.path()).unwrap_or_else(|| dir.join("wobu.log"));
     let target = if path.is_file() { path } else { dir };
@@ -1143,8 +1141,8 @@ fn write_providers(
     let path = root.join("project.json");
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
-    let mut meta: serde_json::Value =
-        serde_json::from_str(&raw).map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
+    let mut meta: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
     let Some(object) = meta.as_object_mut() else {
         return Err(meta_write_failed("is not a JSON object", raw));
     };
@@ -1347,8 +1345,9 @@ fn probe_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>
 /// queue exists to prevent.
 #[tauri::command]
 pub fn job_cancel(jobs: State<'_, Jobs>, job_id: String) -> CommandResult<bool> {
-    let id = JobId::parse(&job_id)
-        .ok_or_else(|| WobuError::new(Code::Internal, "That is not a job id.").with_detail(job_id))?;
+    let id = JobId::parse(&job_id).ok_or_else(|| {
+        WobuError::new(Code::Internal, "That is not a job id.").with_detail(job_id)
+    })?;
     Ok(jobs.cancel(id))
 }
 
@@ -1371,6 +1370,8 @@ pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
 /// round-trip would agree with itself no matter what the frontend believes.
 #[cfg(test)]
 mod bridge {
+    use wobu_store::ImportWarning;
+
     use super::*;
 
     /// Verbatim from the `WobuNode` interface in `src/lib/api.ts`, including
@@ -1418,7 +1419,10 @@ mod bridge {
 
         let description = node.description.as_ref().expect("description should decode");
         assert_eq!(description.text("silhouette"), Some("Long-limbed."));
-        assert_eq!(description.list("materials"), Some(&["ashglass".to_string(), "bone".to_string()][..]));
+        assert_eq!(
+            description.list("materials"),
+            Some(&["ashglass".to_string(), "bone".to_string()][..])
+        );
     }
 
     #[test]
@@ -1429,9 +1433,15 @@ mod bridge {
         // The camelCase ones are the ones that would break silently: serde
         // renames them, TypeScript does not know that, and a missing key
         // arrives in the UI as `undefined` rather than as an error.
-        for key in
-            ["parentId", "notesRaw", "descriptionState", "coverAssetId", "assetLinks", "createdAt", "updatedAt"]
-        {
+        for key in [
+            "parentId",
+            "notesRaw",
+            "descriptionState",
+            "coverAssetId",
+            "assetLinks",
+            "createdAt",
+            "updatedAt",
+        ] {
             assert!(json.get(key).is_some(), "`{key}` is missing from the node payload");
         }
         assert_eq!(json["links"][0]["toId"], "01ARZ3NDEKTSV4RRFFQ69G5FAW");
@@ -1510,10 +1520,7 @@ mod bridge {
 
         assert_eq!(levels, ["off", "error", "warn", "info", "debug"]);
         // And back the other way, which is the direction the buttons use.
-        assert_eq!(
-            serde_json::from_str::<diag::Level>("\"debug\"").unwrap(),
-            diag::Level::Debug
-        );
+        assert_eq!(serde_json::from_str::<diag::Level>("\"debug\"").unwrap(), diag::Level::Debug);
     }
 
     #[test]
@@ -1577,10 +1584,11 @@ mod bridge {
         // something that costs money" design as the user experiences it: they
         // are what turns a failure into "try again — it will cost you". Dropped
         // on the wire, the UI has no way to tell a dead end from a question.
-        let failure = wobu_jobs::Failure::new("provider.bad_response", "The response was cut short.")
-            .retryable(true)
-            .billed(wobu_jobs::Billed::Charged)
-            .cost_note("812 in + 400 out");
+        let failure =
+            wobu_jobs::Failure::new("provider.bad_response", "The response was cut short.")
+                .retryable(true)
+                .billed(wobu_jobs::Billed::Charged)
+                .cost_note("812 in + 400 out");
         let state = wobu_jobs::JobState::Failed { failure, retry_held: true };
         let json = serde_json::to_value(&state).unwrap();
 
@@ -1621,8 +1629,16 @@ mod bridge {
         let json = serde_json::to_value(&conflict).unwrap();
 
         for key in [
-            "relPath", "nodeRelPath", "nodeId", "nodeName", "user", "savedAt", "mine", "parked",
-            "current", "currentHash",
+            "relPath",
+            "nodeRelPath",
+            "nodeId",
+            "nodeName",
+            "user",
+            "savedAt",
+            "mine",
+            "parked",
+            "current",
+            "currentHash",
         ] {
             assert!(json.get(key).is_some(), "`{key}` is missing from Conflict");
         }
@@ -1657,12 +1673,25 @@ mod bridge {
                 created_at: "2026-07-31T09:00:00Z".parse().unwrap(),
             },
             deduped: true,
+            warnings: vec![ImportWarning::MeshTooSmall],
         };
         let json = serde_json::to_value(&imported).unwrap();
 
         assert!(json.get("deduped").is_some(), "`deduped` is missing from ImportedAsset");
+        // The library card puts these next to the thumbnail, so they arrive as
+        // the snake_case tags the far side switches on rather than as prose —
+        // the wording is `ImportWarning::label`'s to change.
+        assert_eq!(json["warnings"], serde_json::json!(["mesh_too_small"]));
         for key in [
-            "id", "hash", "kind", "relPath", "thumbPath", "mime", "width", "height", "bytes",
+            "id",
+            "hash",
+            "kind",
+            "relPath",
+            "thumbPath",
+            "mime",
+            "width",
+            "height",
+            "bytes",
             "createdAt",
         ] {
             assert!(json["asset"].get(key).is_some(), "`{key}` is missing from Asset");
@@ -1680,8 +1709,14 @@ mod bridge {
         // `kind` is a bare snake_case string on the wire. A mismatch fails at
         // the bridge rather than at compile time, and every drop would be
         // rejected with nothing on screen to say why.
-        assert_eq!(serde_json::from_str::<AssetKind>("\"reference\"").unwrap(), AssetKind::Reference);
-        assert_eq!(serde_json::from_str::<AssetKind>("\"generated\"").unwrap(), AssetKind::Generated);
+        assert_eq!(
+            serde_json::from_str::<AssetKind>("\"reference\"").unwrap(),
+            AssetKind::Reference
+        );
+        assert_eq!(
+            serde_json::from_str::<AssetKind>("\"generated\"").unwrap(),
+            AssetKind::Generated
+        );
         assert_eq!(serde_json::from_str::<AssetKind>("\"upload\"").unwrap(), AssetKind::Upload);
         assert!(serde_json::from_str::<AssetKind>("\"Reference\"").is_err());
     }
@@ -1691,14 +1726,27 @@ mod bridge {
         let json = serde_json::to_value(kind_registry()).unwrap();
         let first = &json[0];
 
-        for key in ["kind", "label", "plural", "icon", "color", "layer", "dir", "nests", "singleton", "sections", "defaultLinkRoles"] {
+        for key in [
+            "kind",
+            "label",
+            "plural",
+            "icon",
+            "color",
+            "layer",
+            "dir",
+            "nests",
+            "singleton",
+            "sections",
+            "defaultLinkRoles",
+        ] {
             assert!(first.get(key).is_some(), "`{key}` is missing from KindDef");
         }
         for key in ["key", "label", "valueKind"] {
             assert!(first["sections"][0].get(key).is_some(), "`{key}` is missing from SectionDef");
         }
         // The union in `api.ts` is snake_case; the enum has to agree.
-        let kinds: Vec<&str> = json.as_array().unwrap().iter().map(|d| d["kind"].as_str().unwrap()).collect();
+        let kinds: Vec<&str> =
+            json.as_array().unwrap().iter().map(|d| d["kind"].as_str().unwrap()).collect();
         assert!(kinds.contains(&"style_guide"), "got {kinds:?}");
         assert!(kinds.contains(&"world_bible"), "got {kinds:?}");
     }
@@ -1708,11 +1756,9 @@ mod bridge {
         // The Settings pane posts one of these on every provider change, and a
         // rename on either side is a dropdown that silently stops working:
         // serde refuses the string and nothing is ever written.
-        for (capability, wire) in [
-            (Capability::Text, "text"),
-            (Capability::Image, "image"),
-            (Capability::Mesh, "mesh"),
-        ] {
+        for (capability, wire) in
+            [(Capability::Text, "text"), (Capability::Image, "image"), (Capability::Mesh, "mesh")]
+        {
             assert_eq!(serde_json::to_value(capability).unwrap(), wire);
             assert_eq!(
                 serde_json::from_value::<Capability>(serde_json::json!(wire)).unwrap(),
@@ -1925,7 +1971,14 @@ mod influence {
         }
         let card = &json["layers"][0];
         for key in [
-            "layer", "nodeId", "name", "kind", "reached", "distance", "weight", "slider",
+            "layer",
+            "nodeId",
+            "name",
+            "kind",
+            "reached",
+            "distance",
+            "weight",
+            "slider",
             "fragments",
         ] {
             assert!(card.get(key).is_some(), "`{key}` is missing from LayerCard");
@@ -1944,7 +1997,14 @@ mod influence {
         let fragment = &json["layers"][0]["fragments"][0];
 
         for key in [
-            "layer", "nodeId", "sourceName", "section", "text", "assetId", "weight", "target",
+            "layer",
+            "nodeId",
+            "sourceName",
+            "section",
+            "text",
+            "assetId",
+            "weight",
+            "target",
             "sendable",
         ] {
             assert!(fragment.get(key).is_some(), "`{key}` is missing from InfluenceFragment");
@@ -1995,9 +2055,11 @@ mod influence {
 
         // Visible to the panel, which is the point of attaching it: the card
         // counts it, and says it must not be sent.
-        let fragments = cards["layers"].as_array().unwrap().iter().flat_map(|c| {
-            c["fragments"].as_array().unwrap().iter()
-        });
+        let fragments = cards["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|c| c["fragments"].as_array().unwrap().iter());
         let shown = fragments
             .filter(|f| f["assetId"] == mood)
             .inspect(|f| {
@@ -2209,10 +2271,9 @@ mod influence {
         // `sliders` crosses as an array of `{ nodeId, value }`. A rename on
         // either side would fail at the bridge, and every drag would go nowhere
         // with nothing on screen to say why.
-        let settings: Vec<SliderSetting> = serde_json::from_str(
-            r#"[{"nodeId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","value":0.25}]"#,
-        )
-        .expect("sliders should decode");
+        let settings: Vec<SliderSetting> =
+            serde_json::from_str(r#"[{"nodeId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","value":0.25}]"#)
+                .expect("sliders should decode");
         let id: Id = "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap();
         assert_eq!(sliders_from(Some(settings)).get(id), 0.25);
         // Out of range is clamped rather than refused — the control's range is

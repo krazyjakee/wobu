@@ -2,7 +2,10 @@ import type { Mode } from '../store/ui'
 import { useUI } from '../store/ui'
 import { Icon } from './Icon'
 
-const COPY: Record<Exclude<Mode, 'library'>, { icon: string; title: string; ms: string; body: string }> = {
+const COPY: Record<
+  Exclude<Mode, 'library'>,
+  { icon: string; title: string; ms: string; body: string }
+> = {
   board: {
     icon: 'board',
     title: 'Board',

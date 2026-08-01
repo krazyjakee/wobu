@@ -31,11 +31,7 @@ pub struct Stamp {
 
 impl Stamp {
     pub fn of_bytes(bytes: &[u8], mtime_ms: i64) -> Stamp {
-        Stamp {
-            mtime_ms,
-            size: bytes.len() as u64,
-            hash: blake3::hash(bytes).to_hex().to_string(),
-        }
+        Stamp { mtime_ms, size: bytes.len() as u64, hash: blake3::hash(bytes).to_hex().to_string() }
     }
 }
 
@@ -220,10 +216,7 @@ fn reserve_conflict_sibling(target: &Path, peer: &str) -> Result<PathBuf> {
     }
     // A thousand conflicts on one file in one second is not a race, it is a
     // loop somewhere. Failing loudly beats quietly overwriting the thousandth.
-    Err(Error::io(
-        target,
-        std::io::Error::other("could not find a free conflict filename"),
-    ))
+    Err(Error::io(target, std::io::Error::other("could not find a free conflict filename")))
 }
 
 const MAX_CONFLICT_ATTEMPTS: u32 = 1000;

@@ -62,26 +62,29 @@ struct Ashfall {
 impl Ashfall {
     fn new() -> Ashfall {
         let mut style = node(NodeKind::StyleGuide, "Ashfall House Style");
-        describe(&mut style, [
-            ("medium", prose("Oil on board")),
-            ("never", list(&["photographic detail"])),
-        ]);
+        describe(
+            &mut style,
+            [("medium", prose("Oil on board")), ("never", list(&["photographic detail"]))],
+        );
 
         let mut vashk = node(NodeKind::Species, "Vashk");
-        describe(&mut vashk, [
-            ("silhouette", prose("Long-limbed, four-jointed")),
-            ("never", list(&["fur"])),
-        ]);
+        describe(
+            &mut vashk,
+            [("silhouette", prose("Long-limbed, four-jointed")), ("never", list(&["fur"]))],
+        );
 
         let pose_ref = wobu_core::new_id();
         let mood_ref = wobu_core::new_id();
         let mut kael = node(NodeKind::Character, "Kael Vantris");
-        describe(&mut kael, [
-            ("silhouette", prose("Tall, narrow, hooded")),
-            ("costume", prose("Ash-grey longcoat")),
-            ("palette", list(&["#2b2118", "#c2703a"])),
-            ("never", list(&["modern firearms", "clean surfaces"])),
-        ]);
+        describe(
+            &mut kael,
+            [
+                ("silhouette", prose("Tall, narrow, hooded")),
+                ("costume", prose("Ash-grey longcoat")),
+                ("palette", list(&["#2b2118", "#c2703a"])),
+                ("never", list(&["modern firearms", "clean surfaces"])),
+            ],
+        );
         kael.links.push(Link::new(vashk.id, LinkRole::SpeciesOf));
         kael.asset_links.push(AssetRef::new(pose_ref, AssetRole::Pose));
         kael.asset_links.push(AssetRef::new(mood_ref, AssetRole::Mood));
@@ -110,45 +113,69 @@ fn a_character_sheet_reads_out_layer_by_layer_and_section_by_section() {
     let sheet = default_preset(NodeKind::Character);
     let compiled = fragments(&stack, sheet, &Sliders::neutral());
 
-    assert_eq!(snapshot(&compiled), vec![
-        (Layer::Style, "Ashfall House Style", "medium", Text("Oil on board"), 1.0, Prompt),
-        (Layer::Style, "Ashfall House Style", "never", Text("photographic detail"), 1.0, Negative),
-        // A character sheet is read as a shape, so `silhouette` is the section it
-        // leans on hardest — 1.4 wherever it appears, at any depth in the stack.
-        (Layer::Ancestry, "Vashk", "silhouette", Text("Long-limbed, four-jointed"), 1.4, Prompt),
-        (Layer::Ancestry, "Vashk", "never", Text("fur"), 1.0, Negative),
-        (Layer::Subject, "Kael Vantris", "silhouette", Text("Tall, narrow, hooded"), 1.4, Prompt),
-        (Layer::Subject, "Kael Vantris", "costume", Text("Ash-grey longcoat"), 1.3, Prompt),
-        // A list section is one fragment per item, not one per list.
-        (Layer::Subject, "Kael Vantris", "palette", Text("#2b2118"), 1.0, Prompt),
-        (Layer::Subject, "Kael Vantris", "palette", Text("#c2703a"), 1.0, Prompt),
-        (Layer::Subject, "Kael Vantris", "never", Text("modern firearms"), 1.0, Negative),
-        (Layer::Subject, "Kael Vantris", "never", Text("clean surfaces"), 1.0, Negative),
-        // References follow the prose of the node they hang off, routed by role.
-        // The role travels on the body as well as being the section key, because
-        // the image budget maps roles to a backend's reference buckets and must
-        // not read one back out of a string (#44).
-        (
-            Layer::Subject,
-            "Kael Vantris",
-            "pose",
-            Asset { id: ashfall.pose_ref, role: AssetRole::Pose },
-            1.0,
-            StructureRef,
-        ),
-        (
-            Layer::Subject,
-            "Kael Vantris",
-            "mood",
-            Asset { id: ashfall.mood_ref, role: AssetRole::Mood },
-            1.0,
-            MoodboardOnly,
-        ),
-        // The framing text is the preset's own product copy and it lives in
-        // `wobu-core`; a second copy here would fail this snapshot for a wording
-        // edit that has nothing to do with extraction.
-        (Layer::Shot, "Character sheet · 3:4", "framing", Text(sheet.framing), 1.0, Prompt),
-    ]);
+    assert_eq!(
+        snapshot(&compiled),
+        vec![
+            (Layer::Style, "Ashfall House Style", "medium", Text("Oil on board"), 1.0, Prompt),
+            (
+                Layer::Style,
+                "Ashfall House Style",
+                "never",
+                Text("photographic detail"),
+                1.0,
+                Negative
+            ),
+            // A character sheet is read as a shape, so `silhouette` is the section it
+            // leans on hardest — 1.4 wherever it appears, at any depth in the stack.
+            (
+                Layer::Ancestry,
+                "Vashk",
+                "silhouette",
+                Text("Long-limbed, four-jointed"),
+                1.4,
+                Prompt
+            ),
+            (Layer::Ancestry, "Vashk", "never", Text("fur"), 1.0, Negative),
+            (
+                Layer::Subject,
+                "Kael Vantris",
+                "silhouette",
+                Text("Tall, narrow, hooded"),
+                1.4,
+                Prompt
+            ),
+            (Layer::Subject, "Kael Vantris", "costume", Text("Ash-grey longcoat"), 1.3, Prompt),
+            // A list section is one fragment per item, not one per list.
+            (Layer::Subject, "Kael Vantris", "palette", Text("#2b2118"), 1.0, Prompt),
+            (Layer::Subject, "Kael Vantris", "palette", Text("#c2703a"), 1.0, Prompt),
+            (Layer::Subject, "Kael Vantris", "never", Text("modern firearms"), 1.0, Negative),
+            (Layer::Subject, "Kael Vantris", "never", Text("clean surfaces"), 1.0, Negative),
+            // References follow the prose of the node they hang off, routed by role.
+            // The role travels on the body as well as being the section key, because
+            // the image budget maps roles to a backend's reference buckets and must
+            // not read one back out of a string (#44).
+            (
+                Layer::Subject,
+                "Kael Vantris",
+                "pose",
+                Asset { id: ashfall.pose_ref, role: AssetRole::Pose },
+                1.0,
+                StructureRef,
+            ),
+            (
+                Layer::Subject,
+                "Kael Vantris",
+                "mood",
+                Asset { id: ashfall.mood_ref, role: AssetRole::Mood },
+                1.0,
+                MoodboardOnly,
+            ),
+            // The framing text is the preset's own product copy and it lives in
+            // `wobu-core`; a second copy here would fail this snapshot for a wording
+            // edit that has nothing to do with extraction.
+            (Layer::Shot, "Character sheet · 3:4", "framing", Text(sheet.framing), 1.0, Prompt),
+        ]
+    );
 }
 
 #[test]
@@ -176,10 +203,7 @@ fn a_mood_reference_is_on_the_moodboard_and_reaches_no_backend() {
     // Stated the other way too, so that a filter which dropped *every* reference
     // would fail rather than pass this test by accident.
     assert!(
-        compiled
-            .iter()
-            .filter(|f| f.is_sendable())
-            .any(|f| f.asset_id() == Some(ashfall.pose_ref)),
+        compiled.iter().filter(|f| f.is_sendable()).any(|f| f.asset_id() == Some(ashfall.pose_ref)),
         "the pose reference is conditioning and must survive"
     );
 }
@@ -211,10 +235,8 @@ fn every_role_routes_its_reference_the_way_the_link_layer_says() {
     let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
 
     let routed: Vec<_> = compiled.iter().map(|f| (f.layer(), f.section(), f.target())).collect();
-    let expected: Vec<_> = references
-        .iter()
-        .map(|(layer, role, _)| (*layer, role.as_str(), role.target()))
-        .collect();
+    let expected: Vec<_> =
+        references.iter().map(|(layer, role, _)| (*layer, role.as_str(), role.target())).collect();
     assert_eq!(routed, expected);
 
     // Every mood reference in the stack, inherited or not, is held back; every
@@ -256,31 +278,34 @@ fn the_never_section_is_the_only_negative_in_the_whole_vocabulary() {
     vocabulary.sort_unstable_by_key(|(key, _)| *key);
     vocabulary.dedup();
 
-    assert_eq!(vocabulary, vec![
-        ("anatomy", Prompt),
-        ("architecture", Prompt),
-        ("climate", Prompt),
-        ("costume", Prompt),
-        ("era", Prompt),
-        ("iconography", Prompt),
-        ("light", Prompt),
-        ("lighting", Prompt),
-        ("line_quality", Prompt),
-        ("materials", Prompt),
-        ("medium", Prompt),
-        ("never", Negative),
-        ("ornament", Prompt),
-        // Hex strings are words in the prompt. `FragmentTarget::Palette` is the
-        // colour-conditioning channel and what arrives there is images.
-        ("palette", Prompt),
-        ("rendering", Prompt),
-        ("signature", Prompt),
-        ("silhouette", Prompt),
-        ("tech_level", Prompt),
-        ("tone", Prompt),
-        ("weapons", Prompt),
-        ("wear", Prompt),
-    ]);
+    assert_eq!(
+        vocabulary,
+        vec![
+            ("anatomy", Prompt),
+            ("architecture", Prompt),
+            ("climate", Prompt),
+            ("costume", Prompt),
+            ("era", Prompt),
+            ("iconography", Prompt),
+            ("light", Prompt),
+            ("lighting", Prompt),
+            ("line_quality", Prompt),
+            ("materials", Prompt),
+            ("medium", Prompt),
+            ("never", Negative),
+            ("ornament", Prompt),
+            // Hex strings are words in the prompt. `FragmentTarget::Palette` is the
+            // colour-conditioning channel and what arrives there is images.
+            ("palette", Prompt),
+            ("rendering", Prompt),
+            ("signature", Prompt),
+            ("silhouette", Prompt),
+            ("tech_level", Prompt),
+            ("tone", Prompt),
+            ("weapons", Prompt),
+            ("wear", Prompt),
+        ]
+    );
 }
 
 #[test]
@@ -290,10 +315,13 @@ fn the_preset_is_what_decides_which_sections_matter() {
     // Same world, same stack, same sliders — only the sheet being asked for
     // changes, and that has to be enough to change the weights.
     let mut lantern = node(NodeKind::Prop, "Ashglass Lantern");
-    describe(&mut lantern, [
-        ("silhouette", prose("A squat hexagonal cage")),
-        ("materials", prose("Blown ashglass over blackened iron")),
-    ]);
+    describe(
+        &mut lantern,
+        [
+            ("silhouette", prose("A squat hexagonal cage")),
+            ("materials", prose("Blown ashglass over blackened iron")),
+        ],
+    );
 
     let world = World::new([&lantern]);
     let stack = resolve(&world, lantern.id, None).unwrap();
@@ -324,14 +352,10 @@ fn a_preset_and_a_kind_that_disagree_about_a_section_are_both_ordinary() {
 
     // The section the preset never mentions is left at the registry's documented
     // 1.0, and the sections the preset boosts simply never come up.
-    assert_eq!(snapshot(&compiled), vec![(
-        Layer::Subject,
-        "Ashglass Lantern",
-        "wear",
-        Text("Soot in every seam"),
-        1.0,
-        Prompt
-    )]);
+    assert_eq!(
+        snapshot(&compiled),
+        vec![(Layer::Subject, "Ashglass Lantern", "wear", Text("Soot in every seam"), 1.0, Prompt)]
+    );
 }
 
 #[test]
@@ -341,10 +365,10 @@ fn a_weight_is_the_path_the_section_priority_and_the_slider_multiplied_out() {
     // of them silently missing is a stack that still compiles and still renders,
     // just not the way the user weighted it.
     let mut vashk = node(NodeKind::Species, "Vashk");
-    describe(&mut vashk, [
-        ("silhouette", prose("Long-limbed, four-jointed")),
-        ("never", list(&["fur"])),
-    ]);
+    describe(
+        &mut vashk,
+        [("silhouette", prose("Long-limbed, four-jointed")), ("never", list(&["fur"]))],
+    );
 
     let mut kael = node(NodeKind::Character, "Kael Vantris");
     // Held to its species at half strength: the path product.
@@ -357,12 +381,15 @@ fn a_weight_is_the_path_the_section_priority_and_the_slider_multiplied_out() {
     let compiled = fragments(&stack, default_preset(NodeKind::Character), &sliders);
 
     let weights: Vec<_> = compiled.iter().map(|f| (f.section(), f.weight())).collect();
-    assert_eq!(weights, vec![
-        // 0.5 path × 1.4 character-sheet silhouette × 0.5 slider.
-        ("silhouette", 0.35),
-        // 0.5 path × 1.0 (no opinion) × 0.5 slider.
-        ("never", 0.25),
-    ]);
+    assert_eq!(
+        weights,
+        vec![
+            // 0.5 path × 1.4 character-sheet silhouette × 0.5 slider.
+            ("silhouette", 0.35),
+            // 0.5 path × 1.0 (no opinion) × 0.5 slider.
+            ("never", 0.25),
+        ]
+    );
 }
 
 #[test]
@@ -441,14 +468,10 @@ fn the_shot_layer_contributes_the_presets_framing_text() {
 
     let with_shot = resolve(&world, kael.id, Some(Shot::new("Portrait study · 4:5"))).unwrap();
     let compiled = fragments(&with_shot, portrait, &Sliders::neutral());
-    assert_eq!(snapshot(&compiled), vec![(
-        Layer::Shot,
-        "Portrait study · 4:5",
-        "framing",
-        Text(portrait.framing),
-        1.0,
-        Prompt
-    )]);
+    assert_eq!(
+        snapshot(&compiled),
+        vec![(Layer::Shot, "Portrait study · 4:5", "framing", Text(portrait.framing), 1.0, Prompt)]
+    );
     assert_eq!(compiled[0].node_id(), None, "the shot is not a node");
 
     // Resolved for display rather than for a generation there is no shot at all,
@@ -463,11 +486,14 @@ fn nothing_blank_becomes_a_fragment() {
     // and the user editing it. A blank fragment is an empty row on the layer
     // card, an empty span in the prompt, and budget spent on nothing.
     let mut kael = node(NodeKind::Character, "Kael Vantris");
-    describe(&mut kael, [
-        ("silhouette", prose("   ")),
-        ("costume", prose("  Ash-grey longcoat  ")),
-        ("never", list(&["", "  ", "modern firearms"])),
-    ]);
+    describe(
+        &mut kael,
+        [
+            ("silhouette", prose("   ")),
+            ("costume", prose("  Ash-grey longcoat  ")),
+            ("never", list(&["", "  ", "modern firearms"])),
+        ],
+    );
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
@@ -475,10 +501,13 @@ fn nothing_blank_becomes_a_fragment() {
 
     // Surviving text is trimmed, because the compiler joins fragments with its
     // own separator and leading space would double it.
-    assert_eq!(snapshot(&compiled), vec![
-        (Layer::Subject, "Kael Vantris", "costume", Text("Ash-grey longcoat"), 1.3, Prompt),
-        (Layer::Subject, "Kael Vantris", "never", Text("modern firearms"), 1.0, Negative),
-    ]);
+    assert_eq!(
+        snapshot(&compiled),
+        vec![
+            (Layer::Subject, "Kael Vantris", "costume", Text("Ash-grey longcoat"), 1.3, Prompt),
+            (Layer::Subject, "Kael Vantris", "never", Text("modern firearms"), 1.0, Negative),
+        ]
+    );
 }
 
 #[test]
@@ -506,10 +535,10 @@ fn a_section_the_kind_does_not_declare_is_not_compiled() {
     // the editor refuses to show could still change the picture, which is
     // unarguable from the UI.
     let mut kael = node(NodeKind::Character, "Kael Vantris");
-    describe(&mut kael, [
-        ("climate", prose("Ash-choked and humid")),
-        ("silhouette", prose("Tall, narrow, hooded")),
-    ]);
+    describe(
+        &mut kael,
+        [("climate", prose("Ash-choked and humid")), ("silhouette", prose("Tall, narrow, hooded"))],
+    );
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
@@ -525,18 +554,24 @@ fn sections_compile_in_the_kinds_declared_order_however_the_file_was_written() {
     // prompt as one the app wrote, or two people with the same world get
     // different art and nothing on screen explains why.
     let mut written = node(NodeKind::Character, "Kael Vantris");
-    describe(&mut written, [
-        ("silhouette", prose("Tall, narrow, hooded")),
-        ("costume", prose("Ash-grey longcoat")),
-        ("never", list(&["modern firearms"])),
-    ]);
+    describe(
+        &mut written,
+        [
+            ("silhouette", prose("Tall, narrow, hooded")),
+            ("costume", prose("Ash-grey longcoat")),
+            ("never", list(&["modern firearms"])),
+        ],
+    );
 
     let mut shuffled = node(NodeKind::Character, "Kael Vantris");
-    describe(&mut shuffled, [
-        ("never", list(&["modern firearms"])),
-        ("costume", prose("Ash-grey longcoat")),
-        ("silhouette", prose("Tall, narrow, hooded")),
-    ]);
+    describe(
+        &mut shuffled,
+        [
+            ("never", list(&["modern firearms"])),
+            ("costume", prose("Ash-grey longcoat")),
+            ("silhouette", prose("Tall, narrow, hooded")),
+        ],
+    );
 
     let sheet = default_preset(NodeKind::Character);
     let compile = |node: &Node| {
@@ -598,15 +633,18 @@ fn an_absurd_stack_in_a_large_world_compiles_in_well_under_a_millisecond() {
     let mut bystanders: Vec<Node> = Vec::new();
     for i in 0..1_000 {
         let mut setting = node(NodeKind::Setting, &format!("District {i}"));
-        describe(&mut setting, [
-            ("climate", prose("Ash-choked and humid")),
-            ("architecture", prose("Stilted timber over black water")),
-            ("light", prose("Low sun through smoke")),
-            ("wear", prose("Salt-rotted and soot-stained")),
-            ("materials", prose("Tar, rope, blown glass")),
-            ("palette", list(&["#2b2118", "#c2703a", "#4fd1c5"])),
-            ("never", list(&["clean surfaces", "modern firearms"])),
-        ]);
+        describe(
+            &mut setting,
+            [
+                ("climate", prose("Ash-choked and humid")),
+                ("architecture", prose("Stilted timber over black water")),
+                ("light", prose("Low sun through smoke")),
+                ("wear", prose("Salt-rotted and soot-stained")),
+                ("materials", prose("Tar, rope, blown glass")),
+                ("palette", list(&["#2b2118", "#c2703a", "#4fd1c5"])),
+                ("never", list(&["clean surfaces", "modern firearms"])),
+            ],
+        );
         setting.asset_links.push(AssetRef::new(wobu_core::new_id(), AssetRole::Mood));
         if i < 100 {
             if let Some(previous) = chain.last() {

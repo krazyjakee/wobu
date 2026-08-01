@@ -389,13 +389,19 @@ enum Page {
     /// two-element arrays on the wire, which is about a third of the bytes of
     /// `{"nodeId":…,"hash":…}` repeated fifty thousand times, and the exact shape
     /// `Project::manifest` already hands over.
-    Nodes { entries: Vec<(Id, String)> },
-    Blobs { entries: Vec<Blob> },
+    Nodes {
+        entries: Vec<(Id, String)>,
+    },
+    Blobs {
+        entries: Vec<Blob>,
+    },
     /// The last page, carrying what this side actually holds — which is not what
     /// it sent, if its own cap bit. That difference is the only way the receiver
     /// can know it is looking at a partial picture, so it travels even when it is
     /// zero.
-    End { held: Counts },
+    End {
+        held: Counts,
+    },
 }
 
 /* ── validation ───────────────────────────────────────────────────────────── */
@@ -413,8 +419,7 @@ enum Page {
 /// receives — it is that this is where a peer's strings become strings this
 /// process keeps fifty thousand of.
 pub fn is_content_hash(hash: &str) -> bool {
-    hash.len() == HASH_HEX_LEN
-        && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    hash.len() == HASH_HEX_LEN && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 /// Whether a blob path is one this crate will pass on to be joined onto a project

@@ -106,16 +106,19 @@ fn a_character_resolves_in_the_documented_layer_order() {
     let world = ashfall.world();
     let stack = resolve(&world, ashfall.kael.id, Some(Shot::new("Character sheet · 3:4"))).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Style, "Ashfall House Style"),
-        (Layer::World, "Ashfall"),
-        (Layer::Ancestry, "Vashk"),
-        (Layer::Culture, "Ember Guild"),
-        (Layer::Place, "The Ember Coast"),
-        (Layer::Place, "Cinder Bay"),
-        (Layer::Subject, "Kael Vantris"),
-        (Layer::Shot, "Character sheet · 3:4"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Style, "Ashfall House Style"),
+            (Layer::World, "Ashfall"),
+            (Layer::Ancestry, "Vashk"),
+            (Layer::Culture, "Ember Guild"),
+            (Layer::Place, "The Ember Coast"),
+            (Layer::Place, "Cinder Bay"),
+            (Layer::Subject, "Kael Vantris"),
+            (Layer::Shot, "Character sheet · 3:4"),
+        ]
+    );
 }
 
 #[test]
@@ -138,21 +141,20 @@ fn the_place_chain_runs_region_to_district() {
     let world = World::new(nodes);
     let stack = resolve(&world, kael.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Place, "The Ember Coast"),
-        (Layer::Place, "Cinder Bay"),
-        (Layer::Place, "The Pilings"),
-        (Layer::Subject, "Kael Vantris"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Place, "The Ember Coast"),
+            (Layer::Place, "Cinder Bay"),
+            (Layer::Place, "The Pilings"),
+            (Layer::Subject, "Kael Vantris"),
+        ]
+    );
     // Nesting is the implicit link, and it must be recorded as such: the
     // Inspector shows why a layer is present, and "located in" would be a lie
     // for two of these three.
     let reached: Vec<_> = stack.in_layer(Layer::Place).map(|s| s.reached).collect();
-    assert_eq!(reached, vec![
-        Reached::Parent,
-        Reached::Parent,
-        Reached::Link(LinkRole::LocatedIn)
-    ]);
+    assert_eq!(reached, vec![Reached::Parent, Reached::Parent, Reached::Link(LinkRole::LocatedIn)]);
 
     // Region and city are nested, not weighted: `parent_id` is weight 1.0.
     assert!(stack.in_layer(Layer::Place).all(|s| s.weight == 1.0));
@@ -173,11 +175,14 @@ fn the_ancestry_chain_runs_outermost_first() {
     let world = World::new(vec![&ancestor, &subspecies, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Ancestry, "Vashk"),
-        (Layer::Ancestry, "Ashline Vashk"),
-        (Layer::Subject, "Kael Vantris"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Ancestry, "Vashk"),
+            (Layer::Ancestry, "Ashline Vashk"),
+            (Layer::Subject, "Kael Vantris"),
+        ]
+    );
 }
 
 #[test]
@@ -194,11 +199,14 @@ fn two_links_of_one_role_keep_the_order_they_are_written_in() {
     let world = World::new(vec![&first, &second, &halfblood]);
     let stack = resolve(&world, halfblood.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Ancestry, "Vashk"),
-        (Layer::Ancestry, "Sunborn"),
-        (Layer::Subject, "Sister Oru"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Ancestry, "Vashk"),
+            (Layer::Ancestry, "Sunborn"),
+            (Layer::Subject, "Sister Oru"),
+        ]
+    );
 }
 
 #[test]
@@ -243,11 +251,14 @@ fn a_link_cycle_terminates_and_the_first_visit_wins() {
     let world = World::new(vec![&inner, &outer, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Culture, "Deepwardens"),
-        (Layer::Culture, "Ember Guild"),
-        (Layer::Subject, "Kael Vantris"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Culture, "Deepwardens"),
+            (Layer::Culture, "Ember Guild"),
+            (Layer::Subject, "Kael Vantris"),
+        ]
+    );
 }
 
 #[test]
@@ -266,11 +277,14 @@ fn a_parent_ring_terminates() {
     let world = World::new(vec![&a, &b, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Place, "The Ember Coast"),
-        (Layer::Place, "Cinder Bay"),
-        (Layer::Subject, "Kael Vantris"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Place, "The Ember Coast"),
+            (Layer::Place, "Cinder Bay"),
+            (Layer::Subject, "Kael Vantris"),
+        ]
+    );
 }
 
 #[test]
@@ -289,11 +303,14 @@ fn a_node_reachable_by_two_routes_appears_once() {
     let world = World::new(vec![&bay, &guild, &lantern]);
     let stack = resolve(&world, lantern.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Culture, "Ember Guild"),
-        (Layer::Place, "Cinder Bay"),
-        (Layer::Subject, "Ashglass Lantern"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Culture, "Ember Guild"),
+            (Layer::Place, "Cinder Bay"),
+            (Layer::Subject, "Ashglass Lantern"),
+        ]
+    );
     // Reached at distance 1 by the direct link, not at distance 2 through the
     // guild — nearest wins, so the direct edge's weight is the one that counts.
     assert_eq!(stack.in_layer(Layer::Place).next().unwrap().distance, 1);
@@ -309,15 +326,18 @@ fn a_lateral_link_joins_the_subject_layer_without_dragging_its_own_stack() {
     let world = ashfall.world();
     let stack = resolve(&world, ashfall.lantern.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Style, "Ashfall House Style"),
-        (Layer::World, "Ashfall"),
-        (Layer::Culture, "Ember Guild"),
-        (Layer::Place, "The Ember Coast"),
-        (Layer::Place, "Cinder Bay"),
-        (Layer::Subject, "Kael Vantris"),
-        (Layer::Subject, "Ashglass Lantern"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::Style, "Ashfall House Style"),
+            (Layer::World, "Ashfall"),
+            (Layer::Culture, "Ember Guild"),
+            (Layer::Place, "The Ember Coast"),
+            (Layer::Place, "Cinder Bay"),
+            (Layer::Subject, "Kael Vantris"),
+            (Layer::Subject, "Ashglass Lantern"),
+        ]
+    );
     // Kael came in laterally, and Kael's own species is not in the stack.
     assert!(!stack.contains(ashfall.vashk.id));
     // The subject is still the last thing before the shot, whatever else shares
@@ -349,11 +369,14 @@ fn the_style_guide_resolves_as_its_own_subject() {
     let world = ashfall.world();
     let stack = resolve(&world, ashfall.style.id, Some(Shot::new("Material study"))).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::World, "Ashfall"),
-        (Layer::Subject, "Ashfall House Style"),
-        (Layer::Shot, "Material study"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![
+            (Layer::World, "Ashfall"),
+            (Layer::Subject, "Ashfall House Style"),
+            (Layer::Shot, "Material study"),
+        ]
+    );
     assert_eq!(stack.subject_source().unwrap().name(), "Ashfall House Style");
 }
 
@@ -389,10 +412,10 @@ fn a_link_to_a_deleted_node_is_stepped_over() {
     let world = World::new(vec![&guild, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Culture, "Ember Guild"),
-        (Layer::Subject, "Kael Vantris"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![(Layer::Culture, "Ember Guild"), (Layer::Subject, "Kael Vantris"),]
+    );
 }
 
 #[test]
@@ -427,10 +450,10 @@ fn a_disabled_link_does_not_block_another_route_to_the_same_node() {
     let world = World::new(vec![&bay, &guild, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
 
-    assert_eq!(snapshot(&stack), vec![
-        (Layer::Place, "Cinder Bay"),
-        (Layer::Subject, "Kael Vantris"),
-    ]);
+    assert_eq!(
+        snapshot(&stack),
+        vec![(Layer::Place, "Cinder Bay"), (Layer::Subject, "Kael Vantris"),]
+    );
 }
 
 #[test]
@@ -453,13 +476,16 @@ fn weights_multiply_along_the_chain_and_nesting_costs_nothing() {
     let stack = resolve(&world, kael.id, None).unwrap();
 
     let weights: Vec<_> = stack.sources().iter().map(|s| (s.name(), s.weight)).collect();
-    assert_eq!(weights, vec![
-        ("Deepwardens", 0.2),
-        ("Ember Guild", 0.4),
-        ("The Ember Coast", 0.5),
-        ("Cinder Bay", 0.5),
-        ("Kael Vantris", 1.0),
-    ]);
+    assert_eq!(
+        weights,
+        vec![
+            ("Deepwardens", 0.2),
+            ("Ember Guild", 0.4),
+            ("The Ember Coast", 0.5),
+            ("Cinder Bay", 0.5),
+            ("Kael Vantris", 1.0),
+        ]
+    );
 }
 
 #[test]

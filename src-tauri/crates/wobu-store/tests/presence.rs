@@ -90,12 +90,8 @@ fn a_session_that_stopped_beating_is_reaped_however_fresh_it_claims_to_be() {
     // A crashed peer whose last heartbeat happened to carry a timestamp from a
     // clock running fast would otherwise sit in the folder forever.
     let dir = folder();
-    let dead = plant(
-        dir.path(),
-        "nadia",
-        &stamp(Offset::zero()),
-        STALE_AFTER + Duration::from_secs(30),
-    );
+    let dead =
+        plant(dir.path(), "nadia", &stamp(Offset::zero()), STALE_AFTER + Duration::from_secs(30));
 
     assert!(peers_in(dir.path()).is_empty(), "a session that stopped beating stayed listed");
     assert!(!dead.exists(), "the stale file was left to accumulate");
@@ -197,12 +193,8 @@ fn opening_a_project_clears_out_what_a_crash_left_behind() {
     // presence panel still accumulates one file per crash, per closed lid, per
     // dropped VPN, and the listing presence depends on gets slower every month.
     let dir = folder();
-    let dead = plant(
-        dir.path(),
-        "nadia",
-        &stamp(Offset::zero()),
-        STALE_AFTER + Duration::from_secs(5),
-    );
+    let dead =
+        plant(dir.path(), "nadia", &stamp(Offset::zero()), STALE_AFTER + Duration::from_secs(5));
     let live = plant(dir.path(), "sam", &stamp(Offset::zero()), Duration::from_secs(2));
 
     let _presence = Presence::start(dir.path());

@@ -475,9 +475,9 @@ mod tests {
         for def in wobu_core::kind::kind_registry() {
             let body = Body::new(split(&wire_bytes(&document(def.kind), "completed", true), 64));
             let outcome = block_on(read_body(def.kind, body, &mut Discard, &Cancel::new()));
-            outcome
-                .result
-                .unwrap_or_else(|e| panic!("{} could not round-trip its own schema: {e}", def.kind));
+            outcome.result.unwrap_or_else(|e| {
+                panic!("{} could not round-trip its own schema: {e}", def.kind)
+            });
         }
     }
 
@@ -490,8 +490,12 @@ mod tests {
         let bytes = wire_bytes(&document(NodeKind::Character), "completed", true);
         let mut chunks = split(&bytes[..bytes.len() / 2], 37);
         chunks.push(Err("connection reset by peer".to_string()));
-        let outcome =
-            block_on(read_body(NodeKind::Character, Body::new(chunks), &mut Discard, &Cancel::new()));
+        let outcome = block_on(read_body(
+            NodeKind::Character,
+            Body::new(chunks),
+            &mut Discard,
+            &Cancel::new(),
+        ));
 
         assert!(matches!(outcome.result, Err(Error::Unavailable { .. })));
         assert_eq!(outcome.usage.input_tokens, 812);

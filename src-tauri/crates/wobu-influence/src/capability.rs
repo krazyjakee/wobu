@@ -365,11 +365,14 @@ mod tests {
                 )
             })
             .collect();
-        assert_eq!(rows, vec![
-            ("gemini-3.1-flash-lite-image", 14, None, None),
-            ("gemini-3.1-flash-image", 10, Some(4), None),
-            ("gemini-3-pro-image", 6, Some(5), Some(3)),
-        ]);
+        assert_eq!(
+            rows,
+            vec![
+                ("gemini-3.1-flash-lite-image", 14, None, None),
+                ("gemini-3.1-flash-image", 10, Some(4), None),
+                ("gemini-3-pro-image", 6, Some(5), Some(3)),
+            ]
+        );
 
         // And the reading that makes the dash mean "metered as objects": each row
         // is a partition of one fourteen-image budget into progressively more

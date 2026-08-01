@@ -481,7 +481,7 @@ mod tests {
         // that failed on a trailing `\n` would be a support conversation, not a
         // security property.
         let minted = ticket();
-        let sloppy = format!("  {}\n", minted);
+        let sloppy = format!("  {minted}\n");
 
         assert_eq!(sloppy.parse::<Ticket>().unwrap(), minted);
     }

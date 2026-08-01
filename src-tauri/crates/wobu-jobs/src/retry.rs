@@ -432,9 +432,8 @@ mod tests {
         // A task that cannot tell must not be read as "free". Silent spending is
         // the failure being designed against, so uncertainty falls towards
         // asking.
-        let failure = Failure::new("provider.bad_response", "…")
-            .retryable(true)
-            .billed(Billed::Unknown);
+        let failure =
+            Failure::new("provider.bad_response", "…").retryable(true).billed(Billed::Unknown);
         assert!(Billed::Unknown.spends_money());
         assert_eq!(decide(&RetryPolicy::default(), Attempts::default(), &failure), Verdict::Hold);
     }
@@ -492,15 +491,9 @@ mod tests {
         // reason to stop backing off.
         let policy = RetryPolicy::default();
         let long = rate_limited(Some(Duration::from_secs(42)));
-        assert_eq!(
-            decide(&policy, made(1), &long).delay(),
-            Some(Duration::from_secs(42)),
-        );
+        assert_eq!(decide(&policy, made(1), &long).delay(), Some(Duration::from_secs(42)),);
         let short = rate_limited(Some(Duration::from_millis(100)));
-        assert_eq!(
-            decide(&policy, made(3), &short).delay(),
-            Some(Duration::from_secs(4)),
-        );
+        assert_eq!(decide(&policy, made(3), &short).delay(), Some(Duration::from_secs(4)),);
     }
 
     #[test]
@@ -522,11 +515,10 @@ mod tests {
         let dropped = ProviderError::Unavailable { detail: "connection reset".into() };
         let free = Failure::from_provider(&dropped, Usage::default());
         assert_eq!(free.billed, Billed::Nothing);
-        let paid = Failure::from_provider(&dropped, Usage {
-            input_tokens: 812,
-            cached_input_tokens: 0,
-            output_tokens: 90,
-        });
+        let paid = Failure::from_provider(
+            &dropped,
+            Usage { input_tokens: 812, cached_input_tokens: 0, output_tokens: 90 },
+        );
         assert_eq!(paid.billed, Billed::Charged);
         assert_eq!(decide(&RetryPolicy::default(), Attempts::default(), &paid), Verdict::Hold);
     }

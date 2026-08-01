@@ -168,10 +168,7 @@ fn a_move_that_loses_the_race_leaves_the_file_alone() {
     let err = project.move_node(child.id, Some(parent.id)).unwrap_err();
     let on_disk = fs::read_to_string(&path).unwrap();
 
-    assert!(
-        on_disk.contains("nadia rewrote this"),
-        "a losing move must not clobber: {err}"
-    );
+    assert!(on_disk.contains("nadia rewrote this"), "a losing move must not clobber: {err}");
     assert_eq!(conflict_siblings(&path).len(), 1, "the move's version is kept beside it");
 }
 
@@ -201,8 +198,7 @@ fn resolving_a_conflict_can_itself_lose_a_race() {
 
     let siblings = conflict_siblings(&path);
     assert_eq!(siblings.len(), 2, "both losing versions are kept, got {siblings:?}");
-    let bodies: Vec<String> =
-        siblings.iter().map(|p| fs::read_to_string(p).unwrap()).collect();
+    let bodies: Vec<String> = siblings.iter().map(|p| fs::read_to_string(p).unwrap()).collect();
     assert!(bodies.iter().any(|b| b.contains("jake one")), "first loser lost their text");
     assert!(bodies.iter().any(|b| b.contains("jake resolved")), "second loser lost their text");
 }
@@ -285,8 +281,7 @@ fn staging_is_empty_once_the_write_lands() {
     n.notes_raw = "anything".into();
     project.save_node(n).unwrap();
 
-    let left: Vec<_> =
-        fs::read_dir(project.root().join(".wobu/tmp")).unwrap().flatten().collect();
+    let left: Vec<_> = fs::read_dir(project.root().join(".wobu/tmp")).unwrap().flatten().collect();
     assert!(left.is_empty(), "a completed write left staging behind: {left:?}");
 }
 

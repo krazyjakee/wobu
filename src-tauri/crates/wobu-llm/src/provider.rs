@@ -221,7 +221,9 @@ impl Usage {
     /// running job — and a spend meter pinned at the maximum is a visible bug,
     /// where a wrapped one is an invisible one.
     pub fn total_tokens(&self) -> u32 {
-        self.input_tokens.saturating_add(self.cached_input_tokens).saturating_add(self.output_tokens)
+        self.input_tokens
+            .saturating_add(self.cached_input_tokens)
+            .saturating_add(self.output_tokens)
     }
 }
 
@@ -357,8 +359,7 @@ mod tests {
         for def in wobu_core::kind::kind_registry() {
             let schema = EnhanceRequest::new(def.kind, "test-model", "…").schema();
             assert_eq!(
-                schema["properties"][QUESTIONS_KEY]["items"]["type"],
-                "string",
+                schema["properties"][QUESTIONS_KEY]["items"]["type"], "string",
                 "{} cannot be asked a question",
                 def.kind,
             );

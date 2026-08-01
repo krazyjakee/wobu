@@ -38,7 +38,9 @@ export function StatusBar({
 
       <div className="sspace" />
 
-      <span>{loading ? 'reading world…' : `${nodeCount} ${nodeCount === 1 ? 'node' : 'nodes'}`}</span>
+      <span>
+        {loading ? 'reading world…' : `${nodeCount} ${nodeCount === 1 ? 'node' : 'nodes'}`}
+      </span>
       <span className="sep" />
       <span>
         {navCollapsed ? '[ navigator hidden' : '[ navigator'} ·{' '}

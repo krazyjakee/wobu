@@ -322,9 +322,7 @@ impl AppState {
         let app = app.clone();
         let watched = root.to_path_buf();
 
-        let result = Watcher::start(root, move || {
-            this.on_folder_event(&app, &watched, generation)
-        });
+        let result = Watcher::start(root, move || this.on_folder_event(&app, &watched, generation));
 
         match result {
             Ok(w) => Some(w),
@@ -524,7 +522,7 @@ impl Notify for Bridge {
                 // never passes through it, so without this line the one class
                 // of error the user is most likely to ask about would be the
                 // one class missing from the log they send us.
-                diag::error(&format!("job {}: {}", failed.id, failed.failure.message));
+                diag::error(format!("job {}: {}", failed.id, failed.failure.message));
                 self.app.emit(events::JOB_ERROR, failed)
             }
         };

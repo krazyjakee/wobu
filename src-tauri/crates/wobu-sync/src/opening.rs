@@ -73,10 +73,7 @@ pub(crate) async fn offer(connection: &Connection, project: Id) -> Result<()> {
     send.write_all(&offer).await.map_err(Error::interrupted)?;
     send.finish().map_err(Error::interrupted)?;
 
-    let answer = recv
-        .read_to_end(MAX_OPENING_BYTES)
-        .await
-        .map_err(Error::interrupted)?;
+    let answer = recv.read_to_end(MAX_OPENING_BYTES).await.map_err(Error::interrupted)?;
     match serde_json::from_slice::<Answer>(&answer) {
         Ok(Answer::Held) => Ok(()),
         Ok(Answer::NotHeld) => Err(Error::ProjectNotHeld),
@@ -93,10 +90,7 @@ pub(crate) async fn offer(connection: &Connection, project: Id) -> Result<()> {
 pub(crate) async fn answer(connection: &Connection, projects: &dyn Projects) -> Result<Id> {
     let (mut send, mut recv) = connection.accept_bi().await.map_err(Error::interrupted)?;
 
-    let offer = recv
-        .read_to_end(MAX_OPENING_BYTES)
-        .await
-        .map_err(Error::interrupted)?;
+    let offer = recv.read_to_end(MAX_OPENING_BYTES).await.map_err(Error::interrupted)?;
     let offer: Offer = serde_json::from_slice(&offer).map_err(|_| Error::Malformed)?;
 
     // Asked once, for one project. `Projects::holds` cannot be handed the rest

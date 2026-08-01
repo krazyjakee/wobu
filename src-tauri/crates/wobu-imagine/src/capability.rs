@@ -228,10 +228,8 @@ mod tests {
         // The second of the three consequences #50 lists. A ratio left in the
         // dropdown that the backend does not take is either a late failure or,
         // per `docs/08-providers.md`, silently ignored and returned as a square.
-        let narrow = Capabilities {
-            aspect_ratios: vec![AspectRatio::parse("1:1").unwrap()],
-            ..remote()
-        };
+        let narrow =
+            Capabilities { aspect_ratios: vec![AspectRatio::parse("1:1").unwrap()], ..remote() };
         assert!(narrow.supports_aspect(AspectRatio::parse("1:1").unwrap()));
         assert!(!narrow.supports_aspect(AspectRatio::parse("21:9").unwrap()));
         assert!(remote().supports_aspect(AspectRatio::parse("21:9").unwrap()));

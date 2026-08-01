@@ -301,7 +301,11 @@ function Channel({
             : ''}
         </span>
         {text.length > 0 && (
-          <button className="btn-mini" onClick={copy} aria-label={`Copy the ${label.toLowerCase()}`}>
+          <button
+            className="btn-mini"
+            onClick={copy}
+            aria-label={`Copy the ${label.toLowerCase()}`}
+          >
             <Icon name="copy" size="sm" />
             Copy
           </button>

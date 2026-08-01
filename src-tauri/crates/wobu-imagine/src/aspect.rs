@@ -137,11 +137,9 @@ impl AspectRatio {
     /// failure with no useful message.
     pub fn fit(self, ceiling: Resolution) -> Resolution {
         let (width, height) = (u64::from(self.width), u64::from(self.height));
-        let fitted = u64::from(ceiling.width).min(u64::from(ceiling.height) * width / height).max(1);
-        Resolution {
-            width: fitted as u32,
-            height: (fitted * height / width).max(1) as u32,
-        }
+        let fitted =
+            u64::from(ceiling.width).min(u64::from(ceiling.height) * width / height).max(1);
+        Resolution { width: fitted as u32, height: (fitted * height / width).max(1) as u32 }
     }
 }
 

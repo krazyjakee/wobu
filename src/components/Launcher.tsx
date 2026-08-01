@@ -72,7 +72,11 @@ export function Launcher({ error }: { error: string | null }) {
 
   async function pickFolder() {
     try {
-      const picked = await openDialog({ directory: true, multiple: false, title: 'Open a Wobu project folder' })
+      const picked = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Open a Wobu project folder',
+      })
       if (typeof picked !== 'string') return
       openProject.mutate(picked, {
         onError: (e) => report(e),
@@ -119,9 +123,7 @@ export function Launcher({ error }: { error: string | null }) {
             pending={recent.isPending}
             failed={recent.isError ? errorMessage(recent.error) : null}
             busy={busy}
-            onOpen={(p) =>
-              openProject.mutate(p.path, { onError: (e) => report(e) })
-            }
+            onOpen={(p) => openProject.mutate(p.path, { onError: (e) => report(e) })}
           />
 
           {busy && <Scanning />}

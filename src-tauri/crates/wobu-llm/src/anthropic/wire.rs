@@ -230,8 +230,7 @@ impl Incoming {
         let fresh = count("input_tokens");
         let written = count("cache_creation_input_tokens");
         if fresh.is_some() || written.is_some() {
-            self.usage.input_tokens =
-                fresh.unwrap_or(0).saturating_add(written.unwrap_or(0));
+            self.usage.input_tokens = fresh.unwrap_or(0).saturating_add(written.unwrap_or(0));
         }
         if let Some(read) = count("cache_read_input_tokens") {
             self.usage.cached_input_tokens = read;
@@ -252,11 +251,7 @@ impl Incoming {
 ///
 /// The status decides, not the body, with two exceptions where the status is
 /// too coarse to act on and the message is the only thing that separates them.
-pub(crate) fn error_for_status(
-    status: u16,
-    body: &str,
-    retry_after: Option<Duration>,
-) -> Error {
+pub(crate) fn error_for_status(status: u16, body: &str, retry_after: Option<Duration>) -> Error {
     let parsed: Value = serde_json::from_str(body).unwrap_or(Value::Null);
     let kind = parsed["error"]["type"].as_str().unwrap_or_default();
     let message = parsed["error"]["message"].as_str().unwrap_or(body).trim();
@@ -304,13 +299,15 @@ pub(crate) fn error_for_type(kind: &str, message: &str) -> Error {
         "rate_limit_error" => Error::RateLimited { provider: LABEL, retry_after: None },
         "request_too_large" => Error::ContextTooLong,
         "invalid_request_error" if mentions_context(message) => Error::ContextTooLong,
-        "invalid_request_error" => {
-            Error::SchemaRejected { detail: format!("{kind}: {message}") }
-        }
+        "invalid_request_error" => Error::SchemaRejected { detail: format!("{kind}: {message}") },
         // `overloaded_error`, `api_error`, `timeout_error`, and whatever gets
         // added next. All of them mean try again later.
         _ => Error::Unavailable {
-            detail: if kind.is_empty() { message.to_string() } else { format!("{kind}: {message}") },
+            detail: if kind.is_empty() {
+                message.to_string()
+            } else {
+                format!("{kind}: {message}")
+            },
         },
     }
 }
@@ -569,9 +566,8 @@ mod tests {
             "input_tokens": 100, "cache_creation_input_tokens": 900,
             "cache_read_input_tokens": 4000, "output_tokens": 1}}})
         .to_string()];
-        let usage = feed(&events, &mut Discard)
-            .outcome(NodeKind::Character, Some(Error::Cancelled))
-            .usage;
+        let usage =
+            feed(&events, &mut Discard).outcome(NodeKind::Character, Some(Error::Cancelled)).usage;
         assert_eq!(usage.input_tokens, 1000);
         assert_eq!(usage.cached_input_tokens, 4000);
     }
@@ -659,7 +655,10 @@ mod tests {
 
     #[test]
     fn a_mid_stream_error_maps_by_type_because_there_is_no_status_left_to_read() {
-        assert!(matches!(error_for_type("overloaded_error", "Overloaded"), Error::Unavailable { .. }));
+        assert!(matches!(
+            error_for_type("overloaded_error", "Overloaded"),
+            Error::Unavailable { .. }
+        ));
         assert!(matches!(error_for_type("api_error", ""), Error::Unavailable { .. }));
         assert!(matches!(error_for_type("authentication_error", ""), Error::BadKey { .. }));
         assert!(matches!(error_for_type("billing_error", ""), Error::BillingRequired { .. }));
@@ -671,10 +670,7 @@ mod tests {
             error_for_type("invalid_request_error", "prompt is too long: 9 > 8"),
             Error::ContextTooLong
         ));
-        assert!(matches!(
-            error_for_type("an_error_type_from_2027", ""),
-            Error::Unavailable { .. }
-        ));
+        assert!(matches!(error_for_type("an_error_type_from_2027", ""), Error::Unavailable { .. }));
     }
 
     #[test]

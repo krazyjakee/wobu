@@ -28,9 +28,9 @@ pub(crate) mod stream;
 pub mod validate;
 
 pub use anthropic::AnthropicProvider;
-pub use gemini::GeminiProvider;
 pub use cancel::{Cancel, Cancelled};
 pub use error::{Error, Result};
+pub use gemini::GeminiProvider;
 pub use partial::read_partial;
 pub use provider::{
     DEFAULT_MAX_OUTPUT_TOKENS, DeltaSink, Discard, EnhanceOutcome, EnhanceRequest, QUESTIONS_KEY,

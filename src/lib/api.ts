@@ -37,13 +37,7 @@ export interface SectionDef {
 }
 
 export type InfluenceLayer =
-  | 'style'
-  | 'world'
-  | 'ancestry'
-  | 'culture'
-  | 'place'
-  | 'subject'
-  | 'shot'
+  'style' | 'world' | 'ancestry' | 'culture' | 'place' | 'subject' | 'shot'
 
 export interface KindDef {
   kind: NodeKind
@@ -87,13 +81,7 @@ export interface Link {
  * side should be written that assumes otherwise.
  */
 export type AssetRole =
-  | 'silhouette'
-  | 'palette'
-  | 'material'
-  | 'mood'
-  | 'pose'
-  | 'costume'
-  | 'full_ref'
+  'silhouette' | 'palette' | 'material' | 'mood' | 'pose' | 'costume' | 'full_ref'
 
 export const ASSET_ROLES: AssetRole[] = [
   'silhouette',
@@ -457,12 +445,8 @@ export const assetList = () => call<Asset[]>('asset_list')
  * no blob in this project — an asset id is derived from a file's hash, so one
  * that matches nothing here matches nothing anywhere.
  */
-export const assetLink = (
-  nodeId: string,
-  assetId: string,
-  role: AssetRole,
-  weight?: number,
-) => call<WobuNode>('asset_link', { nodeId, assetId, role, weight })
+export const assetLink = (nodeId: string, assetId: string, role: AssetRole, weight?: number) =>
+  call<WobuNode>('asset_link', { nodeId, assetId, role, weight })
 
 /**
  * Detach one.
@@ -502,12 +486,7 @@ export const assetSetCover = (nodeId: string, assetId: string | null) =>
  * returns — see `InfluenceFragment.sendable`.
  */
 export type FragmentTarget =
-  | 'prompt'
-  | 'negative'
-  | 'style_ref'
-  | 'structure_ref'
-  | 'palette'
-  | 'moodboard_only'
+  'prompt' | 'negative' | 'style_ref' | 'structure_ref' | 'palette' | 'moodboard_only'
 
 /**
  * How a source got into the stack, and therefore what the layer card says about
@@ -827,8 +806,7 @@ export const presencePeers = () => call<Peer[]>('presence_peers')
  * nodes are open, and a delta would drift the first time one closed while the
  * share was away.
  */
-export const presenceEditing = (nodeIds: string[]) =>
-  call<void>('presence_editing', { nodeIds })
+export const presenceEditing = (nodeIds: string[]) => call<void>('presence_editing', { nodeIds })
 
 /* ── provider keys ────────────────────────────────────────────────────────── */
 
@@ -998,11 +976,8 @@ export const projectProviders = () => call<ProviderSelections>('project_provider
  *
  * Rejects with `write.read_only` on a read-only folder.
  */
-export const projectProviderSelect = (
-  capability: Capability,
-  provider: string,
-  model?: string,
-) => call<ProviderSelections>('project_provider_select', { capability, provider, model })
+export const projectProviderSelect = (capability: Capability, provider: string, model?: string) =>
+  call<ProviderSelections>('project_provider_select', { capability, provider, model })
 
 /* ── storage and about ────────────────────────────────────────────────────── */
 
@@ -1293,8 +1268,7 @@ export const enhancePending = () => call<EnhanceReady[]>('enhance_pending')
  * rejection with `write.conflict`, the same as any other lost save race.
  */
 export type EnhanceAccepted =
-  | { outcome: 'saved'; node: WobuNode }
-  | { outcome: 'refusedEdit'; node: WobuNode }
+  { outcome: 'saved'; node: WobuNode } | { outcome: 'refusedEdit'; node: WobuNode }
 
 /**
  * Start an Enhance. Resolves with a job id before any of the work happens.
@@ -1319,11 +1293,8 @@ export const enhanceStart = (nodeId: string) => call<string>('enhance_start', { 
  * edit, or omit it for exactly what the model sent. `force` answers a previous
  * `refusedEdit` and means nothing else.
  */
-export const enhanceAccept = (
-  jobId: string,
-  description?: WobuDescription,
-  force?: boolean,
-) => call<EnhanceAccepted>('enhance_accept', { jobId, description, force })
+export const enhanceAccept = (jobId: string, description?: WobuDescription, force?: boolean) =>
+  call<EnhanceAccepted>('enhance_accept', { jobId, description, force })
 
 /** Reject one. Not an error when there is nothing left to reject. */
 export const enhanceDiscard = (jobId: string) => call<void>('enhance_discard', { jobId })

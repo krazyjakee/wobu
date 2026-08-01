@@ -90,3 +90,6 @@ wobu-llm.workspace = true
 # a dev-dependency is not in the shipped binary, at the version the workspace
 # lock had already resolved.
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true

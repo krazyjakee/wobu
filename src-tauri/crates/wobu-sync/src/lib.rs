@@ -231,7 +231,7 @@ mod opening;
 pub mod ticket;
 
 pub use blobs::{Blobs, Fetched, Offered, Unplaceable};
-pub use endpoint::{Config, Projects, Reach, Session, SyncEndpoint, Sessions};
+pub use endpoint::{Config, Projects, Reach, Session, Sessions, SyncEndpoint};
 pub use error::{Error, Result};
 pub use identity::{Identity, Origin};
 pub use manifest::{Blob, Counts, Exchange};

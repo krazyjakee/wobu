@@ -732,8 +732,18 @@ impl Project {
     /// there is no outcome enum: it either lands or it fails. What it does
     /// report is whether the bytes were already there.
     pub fn import_asset(&mut self, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsset> {
+        self.import_asset_with(bytes, kind, &Cancel::new())
+    }
+
+    /// `import_asset`, stoppable — see [`assets::import_with`].
+    pub fn import_asset_with(
+        &mut self,
+        bytes: &[u8],
+        kind: AssetKind,
+        cancel: &Cancel,
+    ) -> Result<ImportedAsset> {
         self.ensure_writable()?;
-        let imported = assets::import(&self.root, bytes, kind)?;
+        let imported = assets::import_with(&self.root, bytes, kind, cancel)?;
         self.index.upsert_asset(&imported.asset)?;
         Ok(imported)
     }
@@ -741,10 +751,27 @@ impl Project {
     /// The same, for a file the user dropped or picked rather than bytes the
     /// webview already holds.
     pub fn import_asset_file(&mut self, path: &Path, kind: AssetKind) -> Result<ImportedAsset> {
+        self.import_asset_file_with(path, kind, &Cancel::new())
+    }
+
+    /// `import_asset_file`, stoppable.
+    ///
+    /// The one import that can take minutes rather than milliseconds: a 300 MB
+    /// scan on a share is read a chunk at a time from a mount that may be
+    /// wedged, and #30 asks for a way out of that. Nothing here makes the *UI*
+    /// responsive — the call still blocks whichever thread it is on — so a
+    /// caller that must not stall has to run it off the one drawing the window
+    /// and hold the token; the token is what makes doing so worth anything.
+    pub fn import_asset_file_with(
+        &mut self,
+        path: &Path,
+        kind: AssetKind,
+        cancel: &Cancel,
+    ) -> Result<ImportedAsset> {
         // Read whole rather than streamed: the hash needs every byte anyway,
         // and it has to be hashed before we know where the file goes.
-        let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
-        self.import_asset(&bytes, kind)
+        let bytes = assets::read_cancellable(path, cancel)?;
+        self.import_asset_with(&bytes, kind, cancel)
     }
 
     pub fn list_assets(&self) -> Result<Vec<Asset>> {

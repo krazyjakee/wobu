@@ -1,0 +1,14 @@
+# The Rust workspace root is `src-tauri/`, so this file governs the shell crate
+# and everything under `crates/`.
+
+# `Max` rather than the default heuristics: it lets a struct literal, a call or a
+# method chain stay on one line for the full `max_width` instead of exploding at
+# the default 18/60/60 thresholds. This is how the crates were already written —
+# the defaults would have rewrapped roughly six times as many lines — and the
+# short data literals the tests are full of read better as one line than as five.
+use_small_heuristics = "Max"
+max_width = 100
+
+# Pinned rather than left on `Auto`, so a Windows checkout with `core.autocrlf`
+# cannot fail `cargo fmt --check` on line endings alone.
+newline_style = "Unix"

@@ -31,7 +31,7 @@ pub mod scan;
 pub mod watcher;
 
 pub use apply::{Applied, ApplyReport, Decision, Incoming, Outgoing, Plan, Refused};
-pub use assets::ImportedAsset;
+pub use assets::{ImportWarning, ImportedAsset};
 pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};

@@ -439,8 +439,7 @@ fn retry_info(error: &Value) -> Option<Duration> {
         }
         // `google.protobuf.Duration` in JSON: seconds with an optional
         // fractional part and a trailing `s`, as in "42s" or "1.500s".
-        let delay =
-            detail["retryDelay"].as_str().or_else(|| detail["retry_delay"].as_str())?;
+        let delay = detail["retryDelay"].as_str().or_else(|| detail["retry_delay"].as_str())?;
         let seconds: f64 = delay.trim_end_matches('s').parse().ok()?;
         (seconds.is_finite() && seconds >= 0.0).then(|| Duration::from_secs_f64(seconds))
     })
@@ -710,11 +709,9 @@ mod tests {
         // so folding the two together either bills the user for pressing Stop or
         // gives up on a transient failure.
         for (status, retryable) in [("failed", true), ("cancelled", false)] {
-            let events = [
-                json!({"event_type": "interaction.completed",
+            let events = [json!({"event_type": "interaction.completed",
                        "interaction": {"status": status, "usage": {"total_input_tokens": 3}}})
-                .to_string(),
-            ];
+            .to_string()];
             let outcome = feed(&events, &mut Discard).outcome(NodeKind::Character, None);
             let error = outcome.result.expect_err("neither status carries a description");
             assert_eq!(error.is_retryable(), retryable, "{status} -> {error}");
@@ -757,9 +754,8 @@ mod tests {
                    "total_thought_tokens": 60}}})
             .to_string(),
         ];
-        let usage = feed(&events, &mut Discard)
-            .outcome(NodeKind::Character, Some(Error::Cancelled))
-            .usage;
+        let usage =
+            feed(&events, &mut Discard).outcome(NodeKind::Character, Some(Error::Cancelled)).usage;
         // 900 includes the 400 cached, so the fresh half is 500 — and thoughts
         // are billed at the output rate, so 40 + 60.
         assert_eq!(usage.input_tokens, 500);

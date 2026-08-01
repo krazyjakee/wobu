@@ -18,7 +18,9 @@ describe('report — which surface an error lands on', () => {
    */
 
   it('raises a banner for a share that went away', () => {
-    report(err({ code: 'share.unmounted', message: 'the folder is not reachable', retryable: true }))
+    report(
+      err({ code: 'share.unmounted', message: 'the folder is not reachable', retryable: true }),
+    )
     const { banners, toasts } = useUI.getState()
     expect(toasts).toEqual([])
     expect(banners).toHaveLength(1)

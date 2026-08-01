@@ -7,9 +7,7 @@
 //! So the kept lists and the whole drop report are written out longhand, and a
 //! diff on one is meant to be read and argued with.
 
-use wobu_core::{
-    AssetRef, AssetRole, Id, Layer, Link, LinkRole, Node, NodeKind, default_preset,
-};
+use wobu_core::{AssetRef, AssetRole, Id, Layer, Link, LinkRole, Node, NodeKind, default_preset};
 use wobu_influence::{
     Bucket, Budget, Chars, CompiledImages, DropReason, Fragment, ImageBudget, RefBucket, Refs,
     Shot, Sliders, World, compile, compile_images, fragments, image_budget, resolve,
@@ -122,28 +120,37 @@ fn references_are_sorted_into_the_buckets_the_model_counts_them_in() {
     let extracted = ashfall.extract(&world, &Sliders::neutral());
     let images = compile_images(&extracted, image_budget("gemini-3-pro-image").unwrap());
 
-    assert_eq!(counters(&images), vec![
-        (RefBucket::Objects, 2, Some(6)),
-        (RefBucket::Characters, 2, Some(5)),
-        (RefBucket::StyleRefs, 3, Some(3)),
-    ]);
+    assert_eq!(
+        counters(&images),
+        vec![
+            (RefBucket::Objects, 2, Some(6)),
+            (RefBucket::Characters, 2, Some(5)),
+            (RefBucket::StyleRefs, 3, Some(3)),
+        ]
+    );
 
     // Objects: a silhouette is a shape, which is as likely to be a building as a
     // person, and a palette swatch is a picture of a thing. Neither is close to
     // the cap, so nothing here is dropped.
     let objects = images.bucket(RefBucket::Objects).unwrap();
-    assert_eq!(ashfall.kept(objects), vec![
-        (Layer::Ancestry, "Vashk", "vashk silhouette"),
-        (Layer::Subject, "Kael Vantris", "kael palette"),
-    ]);
+    assert_eq!(
+        ashfall.kept(objects),
+        vec![
+            (Layer::Ancestry, "Vashk", "vashk silhouette"),
+            (Layer::Subject, "Kael Vantris", "kael palette"),
+        ]
+    );
     assert_eq!(ashfall.casualties(objects), vec![]);
 
     // Characters: the pose references, inherited one included.
     let characters = images.bucket(RefBucket::Characters).unwrap();
-    assert_eq!(ashfall.kept(characters), vec![
-        (Layer::Ancestry, "Vashk", "vashk pose"),
-        (Layer::Subject, "Kael Vantris", "kael pose"),
-    ]);
+    assert_eq!(
+        ashfall.kept(characters),
+        vec![
+            (Layer::Ancestry, "Vashk", "vashk pose"),
+            (Layer::Subject, "Kael Vantris", "kael pose"),
+        ]
+    );
     assert_eq!(ashfall.casualties(characters), vec![]);
 
     // Style refs: five offered, three taken. A character sheet leans on the
@@ -151,15 +158,21 @@ fn references_are_sorted_into_the_buckets_the_model_counts_them_in() {
     // lightest and they are what goes — and the survivors come back in reading
     // order, not in the weight order the drop decision was made in.
     let style_refs = images.bucket(RefBucket::StyleRefs).unwrap();
-    assert_eq!(ashfall.kept(style_refs), vec![
-        (Layer::Subject, "Kael Vantris", "kael costume"),
-        (Layer::Subject, "Kael Vantris", "kael cloak"),
-        (Layer::Subject, "Kael Vantris", "kael portrait"),
-    ]);
-    assert_eq!(ashfall.casualties(style_refs), vec![
-        (Layer::Style, "Ashfall House Style", "house material", Cut),
-        (Layer::Style, "Ashfall House Style", "house grain", Cut),
-    ]);
+    assert_eq!(
+        ashfall.kept(style_refs),
+        vec![
+            (Layer::Subject, "Kael Vantris", "kael costume"),
+            (Layer::Subject, "Kael Vantris", "kael cloak"),
+            (Layer::Subject, "Kael Vantris", "kael portrait"),
+        ]
+    );
+    assert_eq!(
+        ashfall.casualties(style_refs),
+        vec![
+            (Layer::Style, "Ashfall House Style", "house material", Cut),
+            (Layer::Style, "Ashfall House Style", "house grain", Cut),
+        ]
+    );
 
     // The mood board is in none of them, kept or dropped. It is not a casualty —
     // it is doing exactly what it was attached to do.
@@ -214,27 +227,30 @@ fn a_model_that_does_not_separate_a_bucket_still_takes_the_references() {
     let lite = compile_images(&extracted, image_budget("gemini-3.1-flash-lite-image").unwrap());
     assert_eq!(counters(&lite), vec![(RefBucket::Objects, 9, Some(14))], "one category, nine refs");
     assert_eq!(lite.dropped().count(), 0);
-    assert_eq!(ashfall.kept(lite.bucket(RefBucket::Objects).unwrap()), vec![
-        (Layer::Style, "Ashfall House Style", "house material"),
-        (Layer::Style, "Ashfall House Style", "house grain"),
-        (Layer::Ancestry, "Vashk", "vashk silhouette"),
-        (Layer::Ancestry, "Vashk", "vashk pose"),
-        (Layer::Subject, "Kael Vantris", "kael costume"),
-        (Layer::Subject, "Kael Vantris", "kael cloak"),
-        (Layer::Subject, "Kael Vantris", "kael portrait"),
-        (Layer::Subject, "Kael Vantris", "kael palette"),
-        (Layer::Subject, "Kael Vantris", "kael pose"),
-    ]);
+    assert_eq!(
+        ashfall.kept(lite.bucket(RefBucket::Objects).unwrap()),
+        vec![
+            (Layer::Style, "Ashfall House Style", "house material"),
+            (Layer::Style, "Ashfall House Style", "house grain"),
+            (Layer::Ancestry, "Vashk", "vashk silhouette"),
+            (Layer::Ancestry, "Vashk", "vashk pose"),
+            (Layer::Subject, "Kael Vantris", "kael costume"),
+            (Layer::Subject, "Kael Vantris", "kael cloak"),
+            (Layer::Subject, "Kael Vantris", "kael portrait"),
+            (Layer::Subject, "Kael Vantris", "kael palette"),
+            (Layer::Subject, "Kael Vantris", "kael pose"),
+        ]
+    );
 
     // The middle model separates characters out but not style, so the style
     // references join the object pool and the two pose references get their own.
     // The report's shape is the backend's capability: as many counters as it has
     // categories, which is what the Inspector shows.
     let flash = compile_images(&extracted, image_budget("gemini-3.1-flash-image").unwrap());
-    assert_eq!(counters(&flash), vec![
-        (RefBucket::Objects, 7, Some(10)),
-        (RefBucket::Characters, 2, Some(4)),
-    ]);
+    assert_eq!(
+        counters(&flash),
+        vec![(RefBucket::Objects, 7, Some(10)), (RefBucket::Characters, 2, Some(4)),]
+    );
     assert_eq!(flash.dropped().count(), 0);
     assert!(flash.bucket(RefBucket::StyleRefs).is_none(), "it does not meter that separately");
 
@@ -296,12 +312,14 @@ fn a_reference_turned_all_the_way_down_is_silenced_rather_than_cut() {
     let extracted = ashfall.extract(&world, &sliders);
     let images = compile_images(&extracted, image_budget("gemini-3-pro-image").unwrap());
 
-    assert_eq!(ashfall.casualties(images.bucket(RefBucket::Objects).unwrap()), vec![
-        (Layer::Ancestry, "Vashk", "vashk silhouette", Silenced),
-    ]);
-    assert_eq!(ashfall.casualties(images.bucket(RefBucket::Characters).unwrap()), vec![
-        (Layer::Ancestry, "Vashk", "vashk pose", Silenced),
-    ]);
+    assert_eq!(
+        ashfall.casualties(images.bucket(RefBucket::Objects).unwrap()),
+        vec![(Layer::Ancestry, "Vashk", "vashk silhouette", Silenced),]
+    );
+    assert_eq!(
+        ashfall.casualties(images.bucket(RefBucket::Characters).unwrap()),
+        vec![(Layer::Ancestry, "Vashk", "vashk pose", Silenced),]
+    );
 
     // And a silenced reference costs the budget nothing, so turning one card down
     // can never be what takes another card's reference out of the request.
@@ -401,11 +419,14 @@ fn an_unlimited_budget_keeps_every_reference_and_has_no_denominator_to_print() {
     let extracted = ashfall.extract(&world, &Sliders::neutral());
     let images = compile_images(&extracted, ImageBudget::unlimited());
 
-    assert_eq!(counters(&images), vec![
-        (RefBucket::Objects, 2, None),
-        (RefBucket::Characters, 2, None),
-        (RefBucket::StyleRefs, 5, None),
-    ]);
+    assert_eq!(
+        counters(&images),
+        vec![
+            (RefBucket::Objects, 2, None),
+            (RefBucket::Characters, 2, None),
+            (RefBucket::StyleRefs, 5, None),
+        ]
+    );
     assert_eq!(images.dropped().count(), 0);
     assert_eq!(images.kept().count(), 9, "every reference but the mood board");
 }

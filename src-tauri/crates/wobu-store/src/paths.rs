@@ -47,8 +47,23 @@ pub fn from_rel_string(root: &Path, rel: &str) -> PathBuf {
 /// Filesystem types where `inotify`/`FSEvents` do not observe writes made by
 /// other hosts, and where SQLite's locking is unreliable.
 const NETWORK_FS: &[&str] = &[
-    "nfs", "nfs4", "cifs", "smb", "smbfs", "smb2", "afpfs", "ncpfs", "9p", "fuse.sshfs",
-    "fuse.davfs", "davfs", "fuse.rclone", "fuse.gvfsd-fuse", "glusterfs", "ceph", "lustre",
+    "nfs",
+    "nfs4",
+    "cifs",
+    "smb",
+    "smbfs",
+    "smb2",
+    "afpfs",
+    "ncpfs",
+    "9p",
+    "fuse.sshfs",
+    "fuse.davfs",
+    "davfs",
+    "fuse.rclone",
+    "fuse.gvfsd-fuse",
+    "glusterfs",
+    "ceph",
+    "lustre",
 ];
 
 /// Whether a path sits on a network mount.

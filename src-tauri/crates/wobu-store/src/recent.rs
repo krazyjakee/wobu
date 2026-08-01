@@ -37,7 +37,7 @@ fn list_in(path: &Path) -> Vec<RecentProject> {
     let mut entries: Vec<RecentProject> = serde_json::from_str(&raw).unwrap_or_default();
     // A project folder can be deleted, unmounted or renamed between sessions.
     entries.retain(|e| Path::new(&e.path).join("project.json").is_file());
-    entries.sort_by(|a, b| b.last_opened_at.cmp(&a.last_opened_at));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.last_opened_at));
     entries
 }
 

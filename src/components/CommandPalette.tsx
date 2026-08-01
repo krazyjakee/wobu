@@ -22,12 +22,12 @@ function NodeRow({
 }) {
   const def = kinds.get(node.kind)
   return (
-    <button
-      className={on ? 'pal-row is-on' : 'pal-row'}
-      onMouseEnter={onHover}
-      onClick={onPick}
-    >
-      <Icon name={spriteFor(def, node.kind)} size="sm" style={{ color: colorFor(def, node.kind) }} />
+    <button className={on ? 'pal-row is-on' : 'pal-row'} onMouseEnter={onHover} onClick={onPick}>
+      <Icon
+        name={spriteFor(def, node.kind)}
+        size="sm"
+        style={{ color: colorFor(def, node.kind) }}
+      />
       {node.name}
       <span className="sub">{node.summary || labelFor(def, node.kind)}</span>
     </button>

@@ -113,9 +113,10 @@ impl Machine {
             blobs: Some(blobs.clone()),
             ..Config::loopback()
         };
-        let endpoint = SyncEndpoint::bind(config, Arc::new(Held(project)), Arc::new(Sink(sessions)))
-            .await
-            .expect("a loopback endpoint binds without a network");
+        let endpoint =
+            SyncEndpoint::bind(config, Arc::new(Held(project)), Arc::new(Sink(sessions)))
+                .await
+                .expect("a loopback endpoint binds without a network");
         Machine { endpoint, blobs, inbox, scratch }
     }
 
@@ -302,7 +303,10 @@ async fn assets_and_generations_travel_together() {
     for blob in &wanted {
         assert!(client.root().join(&blob.rel_path).is_file(), "{} did not land", blob.rel_path);
     }
-    assert_eq!(std::fs::read(client.root().join(generation)).unwrap(), br#"{"id":"01ARZ3NDEKTSV4RRFFQ69G5FAV"}"#);
+    assert_eq!(
+        std::fs::read(client.root().join(generation)).unwrap(),
+        br#"{"id":"01ARZ3NDEKTSV4RRFFQ69G5FAV"}"#
+    );
 }
 
 /// Fetch-if-missing, which is the whole of the decision. A second call moves
@@ -313,8 +317,11 @@ async fn a_blob_already_here_is_not_fetched_again() {
     let blob = server.holds_original(&vec![9u8; REFERENCED]).await;
     let endpoint = client.endpoint.endpoint();
 
-    let first =
-        client.blobs.fetch(endpoint, session.addr(), std::slice::from_ref(&blob), PER_BLOB).await.unwrap();
+    let first = client
+        .blobs
+        .fetch(endpoint, session.addr(), std::slice::from_ref(&blob), PER_BLOB)
+        .await
+        .unwrap();
     let again = client.blobs.fetch(endpoint, session.addr(), &[blob], PER_BLOB).await.unwrap();
 
     assert_eq!(first.placed.len(), 1);
@@ -411,7 +418,9 @@ async fn no_path_a_peer_can_write_escapes_the_project_folder() {
     for entry in walk(&client.root()) {
         let rel = entry.strip_prefix(client.root()).unwrap().to_string_lossy().replace('\\', "/");
         assert!(
-            rel.starts_with("assets/") || rel.starts_with("generations/") || rel.starts_with(".wobu/"),
+            rel.starts_with("assets/")
+                || rel.starts_with("generations/")
+                || rel.starts_with(".wobu/"),
             "{rel} appeared in the project folder"
         );
     }
@@ -472,7 +481,11 @@ async fn a_symlinked_directory_in_the_project_folder_is_not_followed() {
 
     assert_eq!(fetched.refused, 1, "{fetched:?}");
     assert!(fetched.placed.is_empty());
-    assert_eq!(std::fs::read_dir(&elsewhere).unwrap().count(), 1, "something was written through the link");
+    assert_eq!(
+        std::fs::read_dir(&elsewhere).unwrap().count(),
+        1,
+        "something was written through the link"
+    );
     assert_eq!(std::fs::read(elsewhere.join("canary")).unwrap(), b"untouched");
 }
 
@@ -607,10 +620,8 @@ async fn a_blob_the_peer_cannot_produce_fails_alone() {
     // a peer, which is what `a_hash_that_does_not_match_the_path_it_names_is_refused`
     // is about.
     let absent = hash_of(b"written on no machine anywhere").await;
-    let phantom = Blob {
-        rel_path: format!("assets/originals/{}/{absent}.png", &absent[..2]),
-        hash: absent,
-    };
+    let phantom =
+        Blob { rel_path: format!("assets/originals/{}/{absent}.png", &absent[..2]), hash: absent };
 
     let fetched = client
         .blobs
@@ -747,7 +758,8 @@ async fn a_blob_store_inside_the_project_folder_is_refused() {
     let scratch = Scratch::new();
 
     let inside = Blobs::open(scratch.root(), scratch.root().join(".wobu/blobs")).await;
-    let also_inside = Blobs::open(scratch.root(), scratch.root().join("..").join("project").join("x")).await;
+    let also_inside =
+        Blobs::open(scratch.root(), scratch.root().join("..").join("project").join("x")).await;
     let outside = Blobs::open(scratch.root(), scratch.cache()).await;
 
     assert!(inside.is_err(), "a store inside the project folder was allowed");

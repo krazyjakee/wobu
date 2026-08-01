@@ -502,16 +502,19 @@ mod tests {
         // `docs/04-influence-engine.md` lists these eight and the kinds each is
         // for. Dropping one is a documentation change as much as a code one.
         let ids: Vec<&str> = REGISTRY.iter().map(|p| p.id).collect();
-        assert_eq!(ids, [
-            "character_sheet",
-            "turnaround",
-            "portrait_study",
-            "costume_plate",
-            "prop_orthographic",
-            "material_study",
-            "environment_matte",
-            "interior",
-        ]);
+        assert_eq!(
+            ids,
+            [
+                "character_sheet",
+                "turnaround",
+                "portrait_study",
+                "costume_plate",
+                "prop_orthographic",
+                "material_study",
+                "environment_matte",
+                "interior",
+            ]
+        );
         assert_eq!(preset("turnaround").unwrap().views.len(), 8, "the 3D backend wants eight");
     }
 }

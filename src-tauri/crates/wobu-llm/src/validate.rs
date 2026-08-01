@@ -44,8 +44,7 @@ pub struct ValidatedDescription {
 /// fence has ignored the request format, and that is a retry, not something to
 /// paper over here.
 pub fn parse_description(kind: NodeKind, raw: &str) -> Result<ValidatedDescription> {
-    let value: Value =
-        serde_json::from_str(raw).map_err(|e| Error::NotJson(e.to_string()))?;
+    let value: Value = serde_json::from_str(raw).map_err(|e| Error::NotJson(e.to_string()))?;
     validate_description(kind, &value)
 }
 
@@ -63,9 +62,8 @@ pub fn parse_description(kind: NodeKind, raw: &str) -> Result<ValidatedDescripti
 ///   response over a field we were going to discard would burn a paid call for
 ///   no gain.
 pub fn validate_description(kind: NodeKind, response: &Value) -> Result<ValidatedDescription> {
-    let object = response
-        .as_object()
-        .ok_or(Error::NotAnObject { found: json_type_name(response) })?;
+    let object =
+        response.as_object().ok_or(Error::NotAnObject { found: json_type_name(response) })?;
 
     let declared = kind_def(kind).sections;
     let mut sections = Vec::with_capacity(declared.len());
@@ -195,10 +193,9 @@ mod tests {
 
     #[test]
     fn a_well_formed_response_becomes_a_description_in_declared_order() {
-        let validated = validate_description(NodeKind::Character, &valid_response(
-            NodeKind::Character,
-        ))
-        .unwrap();
+        let validated =
+            validate_description(NodeKind::Character, &valid_response(NodeKind::Character))
+                .unwrap();
         let keys: Vec<&str> = validated.description.sections.keys().map(String::as_str).collect();
         assert_eq!(
             keys,
@@ -259,10 +256,10 @@ mod tests {
         ]);
 
         let validated = validate_description(NodeKind::Character, &response).unwrap();
-        assert_eq!(validated.questions, [
-            "What does the guild signet look like?",
-            "Is the longcoat waxed or oiled?",
-        ]);
+        assert_eq!(
+            validated.questions,
+            ["What does the guild signet look like?", "Is the longcoat waxed or oiled?",]
+        );
         assert!(!validated.description.sections.contains_key("questions"));
         // Not an oddity to be reported either — it is a field we asked for.
         assert!(validated.extra_sections.is_empty(), "{:?}", validated.extra_sections);
@@ -385,8 +382,8 @@ mod tests {
 
     #[test]
     fn text_that_is_not_json_is_a_retryable_failure_rather_than_a_panic() {
-        let err = parse_description(NodeKind::Character, "Sure! Here is the description:")
-            .unwrap_err();
+        let err =
+            parse_description(NodeKind::Character, "Sure! Here is the description:").unwrap_err();
         assert!(matches!(err, Error::NotJson(_)));
         assert!(err.is_retryable());
     }

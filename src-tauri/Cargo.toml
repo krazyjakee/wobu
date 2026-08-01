@@ -4,7 +4,33 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+# Not an aspiration: below this the workspace does not build, because
+# `libsqlite3-sys`'s build script uses `cfg_select!`. `rust-toolchain.toml`
+# pins the toolchain that is actually used; this is the floor cargo enforces.
+rust-version = "1.97"
+
+# Deliberately a short list. CI runs clippy with `-D warnings`, so every lint
+# here is one the whole workspace passes today — a group that needs a wall of
+# `#[allow]` to compile teaches people to reach for `#[allow]`. `clippy::pedantic`
+# was tried and dropped: it wants a `#[must_use]` on 280-odd accessors and an
+# `# Errors` section on every fallible function, which is a documentation policy
+# rather than a correctness one.
+[workspace.lints.rust]
+# Nothing in Wobu needs `unsafe`. Deny rather than warn: this is the one lint
+# where the right response to a hit is a conversation, not a fix in passing.
+unsafe_code = "deny"
+# `priority = -1` so a group never outranks a specific lint set beside it.
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Scaffolding that compiles. Each of these is fine in a working tree and is a
+# bug on `main`, which is exactly the split between a local run and CI's `-D`.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+# `format!("{}", x)` where `format!("{x}")` says the same thing.
+uninlined_format_args = "warn"
 
 [workspace.dependencies]
 wobu-core = { path = "crates/wobu-core" }
@@ -35,6 +61,9 @@ crate-type = ["lib", "cdylib", "staticlib"]
 # meaningful rather than red for a reason unrelated to any test.
 doctest = false
 
+[lints]
+workspace = true
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -52,7 +81,7 @@ keyring = "4.1.5"
 parking_lot = "0.12.5"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
-tauri = "2.11.5"
+tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-opener = "2.5.4"
 thiserror = "2.0.19"

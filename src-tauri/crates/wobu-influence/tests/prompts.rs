@@ -63,26 +63,29 @@ struct Ashfall {
 impl Ashfall {
     fn new() -> Ashfall {
         let mut style = node(NodeKind::StyleGuide, "Ashfall House Style");
-        describe(&mut style, [
-            ("medium", prose("Oil on board")),
-            ("never", list(&["photographic detail"])),
-        ]);
+        describe(
+            &mut style,
+            [("medium", prose("Oil on board")), ("never", list(&["photographic detail"]))],
+        );
 
         let mut vashk = node(NodeKind::Species, "Vashk");
-        describe(&mut vashk, [
-            ("silhouette", prose("Long-limbed, four-jointed")),
-            ("never", list(&["fur"])),
-        ]);
+        describe(
+            &mut vashk,
+            [("silhouette", prose("Long-limbed, four-jointed")), ("never", list(&["fur"]))],
+        );
 
         let pose_ref = wobu_core::new_id();
         let mood_ref = wobu_core::new_id();
         let mut kael = node(NodeKind::Character, "Kael Vantris");
-        describe(&mut kael, [
-            ("silhouette", prose("Tall, narrow, hooded")),
-            ("costume", prose("Ash-grey longcoat")),
-            ("palette", list(&["#2b2118", "#c2703a"])),
-            ("never", list(&["modern firearms", "clean surfaces"])),
-        ]);
+        describe(
+            &mut kael,
+            [
+                ("silhouette", prose("Tall, narrow, hooded")),
+                ("costume", prose("Ash-grey longcoat")),
+                ("palette", list(&["#2b2118", "#c2703a"])),
+                ("never", list(&["modern firearms", "clean surfaces"])),
+            ],
+        );
         kael.links.push(Link::new(vashk.id, LinkRole::SpeciesOf));
         kael.asset_links.push(AssetRef::new(pose_ref, AssetRole::Pose));
         kael.asset_links.push(AssetRef::new(mood_ref, AssetRole::Mood));
@@ -153,12 +156,15 @@ fn dropping_is_by_weight_and_emitting_is_by_layer() {
         compiled.prompt(),
         "Long-limbed, four-jointed, Tall, narrow, hooded, Ash-grey longcoat"
     );
-    assert_eq!(report(&compiled), vec![
-        (Layer::Style, "Ashfall House Style", "medium", Cut),
-        (Layer::Subject, "Kael Vantris", "palette", Cut),
-        (Layer::Subject, "Kael Vantris", "palette", Cut),
-        (Layer::Shot, "Character sheet · 3:4", "framing", Cut),
-    ]);
+    assert_eq!(
+        report(&compiled),
+        vec![
+            (Layer::Style, "Ashfall House Style", "medium", Cut),
+            (Layer::Subject, "Kael Vantris", "palette", Cut),
+            (Layer::Subject, "Kael Vantris", "palette", Cut),
+            (Layer::Shot, "Character sheet · 3:4", "framing", Cut),
+        ]
+    );
     // The negatives were nowhere near their own budget and are untouched.
     assert_eq!(compiled.negative(), "photographic detail, fur, modern firearms, clean surfaces");
     assert_eq!(compiled.overflow(), None);
@@ -177,10 +183,13 @@ fn ties_in_weight_are_broken_furthest_from_the_subject_first() {
         compile(&extracted, Budget { prompt: Chars::UNLIMITED, negative: Chars::new(33) });
 
     assert_eq!(compiled.negative(), "modern firearms, clean surfaces");
-    assert_eq!(report(&compiled), vec![
-        (Layer::Style, "Ashfall House Style", "never", Cut),
-        (Layer::Ancestry, "Vashk", "never", Cut),
-    ]);
+    assert_eq!(
+        report(&compiled),
+        vec![
+            (Layer::Style, "Ashfall House Style", "never", Cut),
+            (Layer::Ancestry, "Vashk", "never", Cut),
+        ]
+    );
 }
 
 #[test]
@@ -233,18 +242,21 @@ fn a_budget_too_small_for_one_fragment_keeps_the_strongest_and_says_so() {
 
     // And every single casualty is accounted for by card and section, rather
     // than the string having been cut off somewhere in the middle.
-    assert_eq!(report(&compiled), vec![
-        (Layer::Style, "Ashfall House Style", "medium", Cut),
-        (Layer::Style, "Ashfall House Style", "never", Cut),
-        (Layer::Ancestry, "Vashk", "silhouette", Cut),
-        (Layer::Ancestry, "Vashk", "never", Cut),
-        (Layer::Subject, "Kael Vantris", "costume", Cut),
-        (Layer::Subject, "Kael Vantris", "palette", Cut),
-        (Layer::Subject, "Kael Vantris", "palette", Cut),
-        (Layer::Subject, "Kael Vantris", "never", Cut),
-        (Layer::Subject, "Kael Vantris", "never", Cut),
-        (Layer::Shot, "Character sheet · 3:4", "framing", Cut),
-    ]);
+    assert_eq!(
+        report(&compiled),
+        vec![
+            (Layer::Style, "Ashfall House Style", "medium", Cut),
+            (Layer::Style, "Ashfall House Style", "never", Cut),
+            (Layer::Ancestry, "Vashk", "silhouette", Cut),
+            (Layer::Ancestry, "Vashk", "never", Cut),
+            (Layer::Subject, "Kael Vantris", "costume", Cut),
+            (Layer::Subject, "Kael Vantris", "palette", Cut),
+            (Layer::Subject, "Kael Vantris", "palette", Cut),
+            (Layer::Subject, "Kael Vantris", "never", Cut),
+            (Layer::Subject, "Kael Vantris", "never", Cut),
+            (Layer::Shot, "Character sheet · 3:4", "framing", Cut),
+        ]
+    );
 }
 
 #[test]
@@ -375,10 +387,13 @@ fn a_layer_turned_all_the_way_down_is_reported_as_silenced_rather_than_cut() {
     let extracted = ashfall.extract(&world, &sliders);
     let compiled = compile(&extracted, Budget::unlimited());
 
-    assert_eq!(report(&compiled), vec![
-        (Layer::Ancestry, "Vashk", "silhouette", Silenced),
-        (Layer::Ancestry, "Vashk", "never", Silenced),
-    ]);
+    assert_eq!(
+        report(&compiled),
+        vec![
+            (Layer::Ancestry, "Vashk", "silhouette", Silenced),
+            (Layer::Ancestry, "Vashk", "never", Silenced),
+        ]
+    );
     assert!(!compiled.prompt().contains("Long-limbed"));
     assert!(!compiled.negative().contains("fur"));
 

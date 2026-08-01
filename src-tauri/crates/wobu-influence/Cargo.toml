@@ -20,3 +20,6 @@ serde_json = "1.0.151"
 # format free to drift from the real one and keep passing, which is the drift the
 # fixtures exist to catch in the first place.
 wobu-store.workspace = true
+
+[lints]
+workspace = true

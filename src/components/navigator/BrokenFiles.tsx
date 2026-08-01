@@ -27,7 +27,9 @@ export function BrokenFiles({ files, projectPath }: { files: CorruptFile[]; proj
     <div className="broken">
       <div className="broken-h">
         <Icon name="lock" size="sm" />
-        {files.length === 1 ? '1 file could not be read' : `${files.length} files could not be read`}
+        {files.length === 1
+          ? '1 file could not be read'
+          : `${files.length} files could not be read`}
       </div>
       {files.map((f) => (
         <BrokenRow key={f.relPath} file={f} projectPath={projectPath} />

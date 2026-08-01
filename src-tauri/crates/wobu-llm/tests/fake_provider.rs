@@ -190,10 +190,7 @@ fn a_completed_call_streams_exactly_the_document_it_then_validates() {
         description_schema(NodeKind::Character)["properties"].as_object().unwrap().len(),
     );
     assert!(validated.extra_sections.is_empty());
-    assert_eq!(
-        wobu_llm::parse_description(NodeKind::Character, &streamed).unwrap(),
-        validated,
-    );
+    assert_eq!(wobu_llm::parse_description(NodeKind::Character, &streamed).unwrap(), validated,);
     assert_eq!(outcome.usage.input_tokens, 812);
     assert!(outcome.usage.output_tokens > 0);
 }

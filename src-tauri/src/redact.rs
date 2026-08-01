@@ -205,7 +205,9 @@ fn scrub_prefixes(input: &str) -> String {
             let Some(at) = rest.find(*prefix) else { continue };
             let better = match best {
                 None => true,
-                Some((best_at, best_len, _)) => at < best_at || (at == best_at && prefix.len() > best_len),
+                Some((best_at, best_len, _)) => {
+                    at < best_at || (at == best_at && prefix.len() > best_len)
+                }
             };
             if better {
                 best = Some((at, prefix.len(), issuer));
@@ -267,7 +269,13 @@ mod tests {
         ] {
             let safe = scrub(raw);
             assert!(safe.contains(MASK), "nothing redacted in: {safe}");
-            for leak in ["abcdefghijklmnop", "AIzaSyD-abcdefghijk", "eyJzdWIiOiIxIn0", "IOSFODNN7EXAMPLE", "16C7e42F292c6912E7710c838347Ae178B4a"] {
+            for leak in [
+                "abcdefghijklmnop",
+                "AIzaSyD-abcdefghijk",
+                "eyJzdWIiOiIxIn0",
+                "IOSFODNN7EXAMPLE",
+                "16C7e42F292c6912E7710c838347Ae178B4a",
+            ] {
                 assert!(!safe.contains(leak), "leaked `{leak}` in: {safe}");
             }
         }

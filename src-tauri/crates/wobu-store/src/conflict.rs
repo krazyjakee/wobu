@@ -89,7 +89,9 @@ pub fn parse(file_name: &str) -> Option<SiblingName> {
     // name with no extension at all is legal — `guarded_write` produces one for
     // a target that had none.
     let (body, ext) = match file_name.rsplit_once('.') {
-        Some((body, ext)) if !ext.contains(MARKER.trim_start_matches('.')) && body.contains(MARKER) => {
+        Some((body, ext))
+            if !ext.contains(MARKER.trim_start_matches('.')) && body.contains(MARKER) =>
+        {
             (body, Some(ext.to_string()))
         }
         _ => (file_name, None),
@@ -344,7 +346,8 @@ mod tests {
         assert_eq!(serde_json::to_value(Resolved::Done).unwrap()["outcome"], "done");
         assert_eq!(serde_json::to_value(Resolved::Stale).unwrap()["outcome"], "stale");
 
-        let raced = Resolved::Conflict { conflict_path: "nodes/character/kael.conflict-a-b.md".into() };
+        let raced =
+            Resolved::Conflict { conflict_path: "nodes/character/kael.conflict-a-b.md".into() };
         let json = serde_json::to_value(&raced).unwrap();
         assert_eq!(json["outcome"], "conflict");
         assert_eq!(json["conflictPath"], "nodes/character/kael.conflict-a-b.md");

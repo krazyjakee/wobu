@@ -1,0 +1,15 @@
+# Pinned, and pinned here rather than only in the workflow, so that a local
+# `cargo fmt` / `cargo clippy` and the one CI runs are the same program. Two
+# reasons that matters more than usual for this repo:
+#
+#   - CI denies every clippy warning, so a minor release that adds a lint would
+#     otherwise turn `main` red without a commit having touched it.
+#   - rustfmt's output is only stable within a release, so a developer on a newer
+#     toolchain would reformat the files the previous one had just formatted.
+#
+# 1.97 rather than the 1.88 the manifest used to claim because `libsqlite3-sys`,
+# which reaches the tree through `wobu-store`'s SQLite index, has a build script
+# that uses `cfg_select!` — on 1.94 the workspace does not build at all.
+[toolchain]
+channel = "1.97"
+components = ["clippy", "rustfmt"]

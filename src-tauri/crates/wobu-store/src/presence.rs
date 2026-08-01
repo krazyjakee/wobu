@@ -335,7 +335,7 @@ fn peers_excluding(root: &Path, own: Option<Id>) -> Vec<Peer> {
     // like, and a list of names that reshuffles itself on every poll reads as a
     // bug. Session ULIDs lead with a millisecond timestamp, so this comes out
     // roughly in the order people arrived.
-    peers.sort_by(|a, b| a.session_id.cmp(&b.session_id));
+    peers.sort_by_key(|a| a.session_id);
     peers
 }
 

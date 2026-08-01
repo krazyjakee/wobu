@@ -246,10 +246,10 @@ mod tests {
 
         // And the emitted string is what `overflow` measures, so the two extra
         // characters cannot make a prompt that fits report that it does not.
-        let compiled = compile(&[fragment(FragmentTarget::Prompt)], Budget {
-            prompt: Chars::new(9),
-            negative: Chars::UNLIMITED,
-        });
+        let compiled = compile(
+            &[fragment(FragmentTarget::Prompt)],
+            Budget { prompt: Chars::new(9), negative: Chars::UNLIMITED },
+        );
         assert_eq!(compiled.prompt(), "full body");
         assert_eq!(compiled.overflow(), None);
     }

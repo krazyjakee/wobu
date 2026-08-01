@@ -237,8 +237,7 @@ function Providers() {
   if (!statuses || !selected) return null
   const chosen = selected.providers
 
-  const status = (id: string): KeyStatus | undefined =>
-    statuses.find((s) => s.provider === id)
+  const status = (id: string): KeyStatus | undefined => statuses.find((s) => s.provider === id)
 
   /** Whether every credential this provider needs is present on this machine. */
   const configured = (provider: ProviderDef) =>
@@ -253,9 +252,9 @@ function Providers() {
     <section className="set-sec">
       <h3>Providers and models</h3>
       <p className="set-note">
-        Two different things live here and they belong to different people. What this project
-        uses is written into the project folder and travels with it, so opening a shared world
-        shows you the choices whoever built it made. Your keys never travel: they stay in this
+        Two different things live here and they belong to different people. What this project uses
+        is written into the project folder and travels with it, so opening a shared world shows you
+        the choices whoever built it made. Your keys never travel: they stay in this
         computer&rsquo;s keychain, and everyone who opens the same world runs it on their own.
       </p>
 
@@ -290,14 +289,14 @@ function Providers() {
         </div>
         <p className="set-note">
           Listed once each, because a key is not per capability — the same Gemini key writes text
-          and makes pictures. Nothing here is written into the project folder, and nothing you
-          paste is ever sent back to this window.
+          and makes pictures. Nothing here is written into the project folder, and nothing you paste
+          is ever sent back to this window.
         </p>
         {keychainDown && (
           <p className="prov-alert">
-            This computer&rsquo;s credential store is not answering. On Linux that usually means
-            the login keyring is locked; a headless session has none at all. Keys cannot be saved
-            until it is unlocked — a key already in the environment still works.
+            This computer&rsquo;s credential store is not answering. On Linux that usually means the
+            login keyring is locked; a headless session has none at all. Keys cannot be saved until
+            it is unlocked — a key already in the environment still works.
           </p>
         )}
         {KEYED.map((provider) => (
@@ -385,11 +384,8 @@ function CapabilityRow({
 
       {missing && chosen && (
         <p className="prov-gap">
-          <b>
-            {chosen.label} selected — no key on this machine.
-          </b>{' '}
-          {def.used} stays off until one is added, rather than failing once a job is already
-          running.
+          <b>{chosen.label} selected — no key on this machine.</b> {def.used} stays off until one is
+          added, rather than failing once a job is already running.
           <button
             className="btn-mini"
             onClick={() => onAddKey(chosen.credentials[0]?.id ?? chosen.id)}
@@ -406,8 +402,8 @@ function CapabilityRow({
       {selection.provider && !chosen && (
         <p className="prov-gap">
           <b>
-            This project selects <code>{selection.provider}</code>, which this version of Wobu
-            does not have.
+            This project selects <code>{selection.provider}</code>, which this version of Wobu does
+            not have.
           </b>{' '}
           Choosing one above replaces it for everyone.
         </p>
@@ -545,8 +541,8 @@ function ProviderKeys({
       {fromEnvironment && (
         <p className="set-note">
           Read from a <code>.env</code> at the repository root — a development fallback that only
-          exists in this build. There is nothing in the keychain behind it, so there is nothing
-          here to remove: to change it, edit that file. A key saved above takes priority over it.
+          exists in this build. There is nothing in the keychain behind it, so there is nothing here
+          to remove: to change it, edit that file. A key saved above takes priority over it.
         </p>
       )}
 
@@ -707,7 +703,9 @@ function CredentialRow({
       ) : (
         <>
           <span className={source ? 'prov-cred-state' : 'prov-cred-state is-absent'}>
-            <span className={source === 'keychain' ? 'dot dot-ok' : source ? 'dot dot-warn' : 'dot'} />
+            <span
+              className={source === 'keychain' ? 'dot dot-ok' : source ? 'dot dot-warn' : 'dot'}
+            />
             {source ? SOURCE_LABEL[source] : 'no key on this machine'}
           </span>
           <div className="set-acts prov-cred-acts">
@@ -731,7 +729,6 @@ function CredentialRow({
           </div>
         </>
       )}
-
     </div>
   )
 }
@@ -794,8 +791,7 @@ function Storage() {
       <div className="set-row">
         <span className="set-label">Size</span>
         <span className="set-value">
-          {formatSize(info.sizeBytes)} · {info.nodeCount}{' '}
-          {info.nodeCount === 1 ? 'node' : 'nodes'}
+          {formatSize(info.sizeBytes)} · {info.nodeCount} {info.nodeCount === 1 ? 'node' : 'nodes'}
         </span>
       </div>
 
@@ -1024,8 +1020,8 @@ function Diagnostics() {
     <section className="set-sec">
       <h3>Diagnostics</h3>
       <p className="set-note">
-        Wobu sends nothing anywhere. When something goes wrong, this file is the only account of
-        it — it stays on this machine until you hand it over yourself.
+        Wobu sends nothing anywhere. When something goes wrong, this file is the only account of it
+        — it stays on this machine until you hand it over yourself.
       </p>
 
       <div className="set-row">
@@ -1081,9 +1077,7 @@ function Diagnostics() {
       </div>
 
       {preview !== null && (
-        <pre className="set-log">
-          {preview.trim() ? preview : 'Nothing has been recorded yet.'}
-        </pre>
+        <pre className="set-log">{preview.trim() ? preview : 'Nothing has been recorded yet.'}</pre>
       )}
     </section>
   )

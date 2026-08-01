@@ -286,10 +286,7 @@ mod tests {
         // The flicker this guards: `\n` shown as a backslash and an n for one
         // frame, and `é` shown as four hex digits before it becomes an é.
         let whole = read_partial(r#"{"anatomy":"Four-jointed.\nAsh-glazed élan."}"#);
-        assert_eq!(
-            text(&whole, "anatomy").as_deref(),
-            Some("Four-jointed.\nAsh-glazed élan."),
-        );
+        assert_eq!(text(&whole, "anatomy").as_deref(), Some("Four-jointed.\nAsh-glazed élan."),);
 
         for cut in [r#"{"anatomy":"Four-jointed.\"#, r#"{"anatomy":"Four-jointed.\u00"#] {
             assert_eq!(text(&read_partial(cut), "anatomy").as_deref(), Some("Four-jointed."));

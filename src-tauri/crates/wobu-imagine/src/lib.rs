@@ -155,20 +155,20 @@ mod negotiate;
 pub mod tencent;
 
 pub use aspect::{AspectRatio, Resolution};
-pub use comfy::ComfyBackend;
-pub use gemini::GeminiBackend;
-pub use tencent::HunyuanBackend;
 pub use backend::{
     Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
     Reference, Watermark,
 };
 pub use capability::Capabilities;
+pub use comfy::ComfyBackend;
 pub use error::{Error, Result};
+pub use gemini::GeminiBackend;
 pub use mesh::{
     DEFAULT_FACE_COUNT, FACE_COUNT, GenerateType, GeneratedMesh, MeshBackend, MeshCapabilities,
     MeshFile, MeshFormat, MeshInput, MeshOutcome, MeshRequest, MeshUsage, MeshView, View,
 };
 pub use negotiate::{Downgrade, Downgraded, Negotiated, negotiate};
+pub use tencent::HunyuanBackend;
 
 /// The cancellation token, re-exported from `wobu-llm` rather than defined
 /// again here.

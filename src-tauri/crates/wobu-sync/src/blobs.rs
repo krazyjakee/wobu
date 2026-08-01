@@ -812,11 +812,7 @@ impl Blobs {
     /// download" to "between two adjacent syscalls". Closing it entirely needs
     /// `openat`/`O_NOFOLLOW` per component, which has no Windows equivalent
     /// worth the name; see [`place`] for why the line is drawn there.
-    async fn stage_and_rename(
-        &self,
-        hash: Hash,
-        rel_path: &str,
-    ) -> std::result::Result<(), ()> {
+    async fn stage_and_rename(&self, hash: Hash, rel_path: &str) -> std::result::Result<(), ()> {
         let tmp_dir = self.root.join(TMP_DIR);
         fs::create_dir_all(&tmp_dir).map_err(|_| ())?;
         // `<ULID>.part`, which is exactly what `wobu_store::atomic` writes and
@@ -826,7 +822,11 @@ impl Blobs {
 
         let exported = self.store.blobs().export(hash, &staged).await;
         let landed = exported.map_err(|_| ()).and_then(|_size| {
-            fs::File::options().write(true).open(&staged).and_then(|file| file.sync_all()).map_err(|_| ())
+            fs::File::options()
+                .write(true)
+                .open(&staged)
+                .and_then(|file| file.sync_all())
+                .map_err(|_| ())
         });
         if landed.is_err() {
             let _ = fs::remove_file(&staged);
@@ -866,10 +866,7 @@ impl Blobs {
     /// must stop accepting blob connections before the store they read from goes
     /// away.
     pub async fn shutdown(&self) -> Result<()> {
-        self.store
-            .shutdown()
-            .await
-            .map_err(|source| Error::BlobStore { source: Box::new(source) })
+        self.store.shutdown().await.map_err(|source| Error::BlobStore { source: Box::new(source) })
     }
 }
 
@@ -950,7 +947,8 @@ mod tests {
             format!("assets/meshes/af/{hash}/model.glb"),
             "generations/2026-07/01ARZ3NDEKTSV4RRFFQ69G5FAV.json".to_string(),
         ] {
-            let placed = place(&root, &good).unwrap_or_else(|e| panic!("{good} was refused: {e:?}"));
+            let placed =
+                place(&root, &good).unwrap_or_else(|e| panic!("{good} was refused: {e:?}"));
             assert!(placed.starts_with(&root));
             assert!(placed.to_string_lossy().ends_with(good.rsplit('/').next().unwrap()));
         }
@@ -1038,11 +1036,7 @@ mod tests {
             "generations/",
         ] {
             let refused = place(&root, hostile);
-            assert!(
-                refused.is_err(),
-                "{hostile:?} was placed at {:?}",
-                refused.unwrap().display()
-            );
+            assert!(refused.is_err(), "{hostile:?} was placed at {:?}", refused.unwrap().display());
         }
     }
 
@@ -1078,10 +1072,7 @@ mod tests {
         std::os::windows::fs::symlink_dir(&elsewhere, root.join("assets/originals")).unwrap();
 
         assert!(join(&root, "assets/originals/ab/x.png").is_ok(), "lexically it is fine");
-        assert_eq!(
-            place(&root, "assets/originals/ab/x.png"),
-            Err(Unplaceable::SymlinkedAncestor)
-        );
+        assert_eq!(place(&root, "assets/originals/ab/x.png"), Err(Unplaceable::SymlinkedAncestor));
     }
 
     #[test]
@@ -1096,10 +1087,7 @@ mod tests {
         #[cfg(windows)]
         std::os::windows::fs::symlink_file(root.join("bait"), dir.join("x.png")).unwrap();
 
-        assert_eq!(
-            place(&root, "assets/originals/ab/x.png"),
-            Err(Unplaceable::TargetIsNotAFile)
-        );
+        assert_eq!(place(&root, "assets/originals/ab/x.png"), Err(Unplaceable::TargetIsNotAFile));
     }
 
     #[test]
@@ -1107,10 +1095,7 @@ mod tests {
         let root = root();
         fs::create_dir_all(root.join("assets/originals/ab/x.png")).unwrap();
 
-        assert_eq!(
-            place(&root, "assets/originals/ab/x.png"),
-            Err(Unplaceable::TargetIsNotAFile)
-        );
+        assert_eq!(place(&root, "assets/originals/ab/x.png"), Err(Unplaceable::TargetIsNotAFile));
     }
 
     /* ── the reasons are the reasons ──────────────────────────────────── */

@@ -121,7 +121,11 @@ fn route(target: FragmentTarget, caps: &Capabilities) -> Route {
     match target {
         FragmentTarget::Prompt => Route::Send,
         FragmentTarget::Negative => {
-            if caps.negative_prompt { Route::Send } else { Route::Withheld(Downgrade::NotSent) }
+            if caps.negative_prompt {
+                Route::Send
+            } else {
+                Route::Withheld(Downgrade::NotSent)
+            }
         }
         // Style transfer is the one image channel every backend has in some
         // form: it is "here is a picture, make it look like this", which is what
@@ -131,7 +135,11 @@ fn route(target: FragmentTarget, caps: &Capabilities) -> Route {
         // budget already answers that by keeping nothing.
         FragmentTarget::StyleRef => Route::Send,
         FragmentTarget::StructureRef => {
-            if caps.controlnet { Route::Send } else { Route::Withheld(Downgrade::MoodboardOnly) }
+            if caps.controlnet {
+                Route::Send
+            } else {
+                Route::Withheld(Downgrade::MoodboardOnly)
+            }
         }
         // Colour conditioning has no capability flag either, and that is #44's
         // call rather than a gap here: `RefBucket::for_role` files a `palette`
@@ -265,9 +273,7 @@ pub fn negotiate<'a>(
     for fragment in fragments {
         match route(fragment.target(), caps) {
             Route::Send | Route::Private => kept.push(*fragment),
-            Route::Withheld(reason) => {
-                downgrades.push(Downgraded { fragment: *fragment, reason })
-            }
+            Route::Withheld(reason) => downgrades.push(Downgraded { fragment: *fragment, reason }),
         }
     }
 
@@ -316,7 +322,11 @@ mod tests {
         )
     }
 
-    fn text(section: &'static str, body: &'static str, target: FragmentTarget) -> Fragment<'static> {
+    fn text(
+        section: &'static str,
+        body: &'static str,
+        target: FragmentTarget,
+    ) -> Fragment<'static> {
         Fragment::new(&source(Layer::Subject), section, FragmentBody::Text(body), 1.0, target)
     }
 
@@ -363,15 +373,12 @@ mod tests {
         ];
 
         let downgraded = negotiate(&stack, aspect("3:4"), &remote());
-        let withheld: Vec<_> = downgraded
-            .downgrades()
-            .iter()
-            .map(|d| (d.fragment.section(), d.reason))
-            .collect();
-        assert_eq!(withheld, [
-            ("pose", Downgrade::MoodboardOnly),
-            ("silhouette", Downgrade::MoodboardOnly),
-        ]);
+        let withheld: Vec<_> =
+            downgraded.downgrades().iter().map(|d| (d.fragment.section(), d.reason)).collect();
+        assert_eq!(
+            withheld,
+            [("pose", Downgrade::MoodboardOnly), ("silhouette", Downgrade::MoodboardOnly),]
+        );
         assert!(!downgraded.is_exact());
         assert_eq!(downgraded.images().kept().count(), 1, "only the material reference is sent");
 

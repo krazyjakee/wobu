@@ -53,7 +53,11 @@ describe('buildGroups', () => {
   })
 
   it('omits kinds with no nodes rather than showing empty groups', () => {
-    const groups = buildGroups([summary({ id: 'a', kind: 'species' })], ['species', 'character'], defs)
+    const groups = buildGroups(
+      [summary({ id: 'a', kind: 'species' })],
+      ['species', 'character'],
+      defs,
+    )
     expect(groups.map((g) => g.kind)).toEqual(['species'])
   })
 

@@ -42,24 +42,25 @@ pub fn resolve<'a>(
     // The singletons follow, ahead of anything the walk finds, so that a
     // `styled_by` link that happens to reach the Style Guide at depth cannot
     // demote it out of layer 1.
-    enqueue(&mut queue, &mut visited, Pending {
-        node: subject_node,
-        layer: Layer::Subject,
-        reached: Reached::Subject,
-        weight: 1.0,
-        distance: 0,
-    });
-    for (root, layer) in
-        [(world.style_guide(), Layer::Style), (world.world_bible(), Layer::World)]
+    enqueue(
+        &mut queue,
+        &mut visited,
+        Pending {
+            node: subject_node,
+            layer: Layer::Subject,
+            reached: Reached::Subject,
+            weight: 1.0,
+            distance: 0,
+        },
+    );
+    for (root, layer) in [(world.style_guide(), Layer::Style), (world.world_bible(), Layer::World)]
     {
         if let Some(node) = root {
-            enqueue(&mut queue, &mut visited, Pending {
-                node,
-                layer,
-                reached: Reached::Root,
-                weight: 1.0,
-                distance: 0,
-            });
+            enqueue(
+                &mut queue,
+                &mut visited,
+                Pending { node, layer, reached: Reached::Root, weight: 1.0, distance: 0 },
+            );
         }
     }
 
@@ -88,13 +89,17 @@ pub fn resolve<'a>(
         // because nesting is structural and the user cannot reorder it, which
         // makes it the stabler of the two tie-breaks.
         if let Some(parent) = current.node.parent_id.and_then(|id| world.get(id)) {
-            enqueue(&mut queue, &mut visited, Pending {
-                node: parent,
-                layer: current.layer,
-                reached: Reached::Parent,
-                weight: current.weight,
-                distance: current.distance + 1,
-            });
+            enqueue(
+                &mut queue,
+                &mut visited,
+                Pending {
+                    node: parent,
+                    layer: current.layer,
+                    reached: Reached::Parent,
+                    weight: current.weight,
+                    distance: current.distance + 1,
+                },
+            );
         }
 
         for link in &current.node.links {
@@ -109,17 +114,21 @@ pub fn resolve<'a>(
             // would take the Inspector down for a dangling edge the user cannot
             // even see from here.
             let Some(target) = world.get(link.to_id) else { continue };
-            enqueue(&mut queue, &mut visited, Pending {
-                node: target,
-                layer: link.role.layer(),
-                reached: Reached::Link(link.role),
-                // Weights multiply along the chain: a character held loosely to
-                // its culture is held no more tightly to that culture's parent.
-                // Taking only the last edge's weight would let a 0.2 link be
-                // undone by a 1.0 one further out.
-                weight: current.weight * link.weight.clamp(0.0, 1.0),
-                distance: current.distance + 1,
-            });
+            enqueue(
+                &mut queue,
+                &mut visited,
+                Pending {
+                    node: target,
+                    layer: link.role.layer(),
+                    reached: Reached::Link(link.role),
+                    // Weights multiply along the chain: a character held loosely to
+                    // its culture is held no more tightly to that culture's parent.
+                    // Taking only the last edge's weight would let a 0.2 link be
+                    // undone by a 1.0 one further out.
+                    weight: current.weight * link.weight.clamp(0.0, 1.0),
+                    distance: current.distance + 1,
+                },
+            );
         }
     }
 

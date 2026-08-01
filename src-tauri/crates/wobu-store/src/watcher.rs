@@ -56,7 +56,8 @@ impl Watcher {
         root: &Path,
         on_change: impl Fn() -> bool + Send + Sync + 'static,
     ) -> Result<Watcher> {
-        let strategy = if crate::paths::is_network_path(root) { Strategy::Poll } else { Strategy::Local };
+        let strategy =
+            if crate::paths::is_network_path(root) { Strategy::Poll } else { Strategy::Local };
         match strategy {
             Strategy::Local => Watcher::start_local(root, on_change),
             Strategy::Poll => Ok(Watcher::start_poll(on_change)),

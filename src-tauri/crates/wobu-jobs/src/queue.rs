@@ -198,13 +198,16 @@ impl Queue {
         let snapshot = {
             let mut registry = self.0.lock();
             registry.order.push_back(id);
-            registry.jobs.insert(id, Record {
-                kind: task.kind(),
-                label: task.label(),
-                state: JobState::Queued,
-                attempt: 0,
-                cancel: cancel.clone(),
-            });
+            registry.jobs.insert(
+                id,
+                Record {
+                    kind: task.kind(),
+                    label: task.label(),
+                    state: JobState::Queued,
+                    attempt: 0,
+                    cancel: cancel.clone(),
+                },
+            );
             registry.snapshot()
         };
         self.0.notify.notify(Event::State(snapshot));

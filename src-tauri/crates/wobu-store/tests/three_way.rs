@@ -127,7 +127,10 @@ fn we_are_at_the_base_so_their_version_lands_and_the_base_moves() {
     assert!(project.get_node(node.id).unwrap().notes_raw.contains("nadia rewrote"));
 
     let moved = base(&project, NADIA, node.id);
-    assert_eq!(moved.as_deref(), Some(wobu_store::atomic::hash_bytes(theirs.text.as_bytes()).as_str()));
+    assert_eq!(
+        moved.as_deref(),
+        Some(wobu_store::atomic::hash_bytes(theirs.text.as_bytes()).as_str())
+    );
 }
 
 #[test]
@@ -391,9 +394,7 @@ fn resolving_a_conflict_in_favour_of_the_peer_settles_the_sync() {
     project.apply_from_peer(NADIA, std::slice::from_ref(&theirs)).unwrap();
 
     let card = project.conflicts().unwrap().remove(0);
-    project
-        .resolve_conflict(&card.rel_path, wobu_store::Keep::Parked, &card.current_hash)
-        .unwrap();
+    project.resolve_conflict(&card.rel_path, wobu_store::Keep::Parked, &card.current_hash).unwrap();
     assert_eq!(fs::read_to_string(&path).unwrap(), theirs.text);
 
     let after = project.apply_from_peer(NADIA, std::slice::from_ref(&theirs)).unwrap();
@@ -469,7 +470,8 @@ fn a_node_deleted_on_one_side_is_left_alone_on_both() {
     // Their side deleted it, so it is simply not in the batch — nothing arrives.
     // Ours deleted it, and their copy arrives anyway:
     fs::remove_file(&path).unwrap();
-    let report = project.apply_from_peer(NADIA, &[from_peer(&node, "still here on nadia's")]).unwrap();
+    let report =
+        project.apply_from_peer(NADIA, &[from_peer(&node, "still here on nadia's")]).unwrap();
 
     assert_eq!(only(&report), &Applied::Deleted);
     assert!(!path.exists(), "a deletion was undone by a sync");
@@ -546,17 +548,11 @@ fn a_half_transferred_payload_is_refused_and_writes_nothing() {
     agree(&project, NADIA, node.id);
     let ours = fs::read_to_string(&path).unwrap();
 
-    let truncated = Incoming {
-        node_id: node.id,
-        slug: node.slug.clone(),
-        text: "---\nid: 01JW".into(),
-    };
+    let truncated =
+        Incoming { node_id: node.id, slug: node.slug.clone(), text: "---\nid: 01JW".into() };
     let report = project.apply_from_peer(NADIA, &[truncated]).unwrap();
 
-    assert!(
-        matches!(only(&report), Applied::Refused(Refused::Unreadable { .. })),
-        "{report:?}"
-    );
+    assert!(matches!(only(&report), Applied::Refused(Refused::Unreadable { .. })), "{report:?}");
     assert_eq!(fs::read_to_string(&path).unwrap(), ours);
     assert!(siblings(&path).is_empty());
     assert!(!report.changed_the_folder());

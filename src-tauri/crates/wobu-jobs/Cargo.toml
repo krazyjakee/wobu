@@ -31,3 +31,6 @@ tokio = { version = "1.53.1", features = [
     "test-util",
     "time",
 ] }
+
+[lints]
+workspace = true

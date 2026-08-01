@@ -31,14 +31,7 @@ import type {
   SliderSetting,
   WobuNode,
 } from './api'
-import {
-  applyCommand,
-  birthEntry,
-  deletionEntry,
-  editEntry,
-  moveEntry,
-  useUndoStack,
-} from './undo'
+import { applyCommand, birthEntry, deletionEntry, editEntry, moveEntry, useUndoStack } from './undo'
 import { report, toast, useUI } from '../store/ui'
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
@@ -182,7 +175,9 @@ export function useResolveConflict() {
       api.conflictResolve(v.relPath, v.keep, v.expectedHash),
     onSuccess: (result) => {
       if (result.outcome === 'stale') {
-        toast('That node changed while the conflict was open. Nothing was written — here it is again.')
+        toast(
+          'That node changed while the conflict was open. Nothing was written — here it is again.',
+        )
       } else if (result.outcome === 'conflict') {
         toast(`Someone saved first. Your pick was kept as ${result.conflictPath}.`, 'error')
       }
@@ -555,13 +550,7 @@ export function useUnlinkAsset() {
 /** Re-weight or mute a reference without detaching it. */
 export function useUpdateAssetLink() {
   return useAssetLinkMutation(
-    (v: {
-      nodeId: string
-      assetId: string
-      role: AssetRole
-      weight?: number
-      enabled?: boolean
-    }) =>
+    (v: { nodeId: string; assetId: string; role: AssetRole; weight?: number; enabled?: boolean }) =>
       api.assetLinkUpdate(v.nodeId, v.assetId, v.role, {
         weight: v.weight,
         enabled: v.enabled,

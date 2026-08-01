@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
-import { closeWindow, isMaximized, minimizeWindow, onResized, toggleMaximizeWindow } from '../lib/window'
+import {
+  closeWindow,
+  isMaximized,
+  minimizeWindow,
+  onResized,
+  toggleMaximizeWindow,
+} from '../lib/window'
 
 export function WindowControls() {
   const [max, setMax] = useState(false)

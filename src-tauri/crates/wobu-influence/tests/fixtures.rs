@@ -322,18 +322,21 @@ fn the_seven_layers_read_off_disk_in_the_documented_order() {
     let subject = saltmarch.id("Wren Alder");
     let stack = resolve(&world, subject, Some(Shot::new("Character sheet · 3:4"))).unwrap();
 
-    assert_eq!(stack_rows(&stack), vec![
-        (Layer::Style, "Saltmarch House Style", 1.0),
-        (Layer::World, "Saltmarch", 1.0),
-        (Layer::Ancestry, "Fenwrought", 1.0),
-        (Layer::Culture, "The Reed Wardens", 1.0),
-        // Nested in the file by `parent:`, not linked — and the parent is
-        // therefore further out, which is what puts the region first.
-        (Layer::Place, "The Long Shallows", 1.0),
-        (Layer::Place, "Stiltmoor", 1.0),
-        (Layer::Subject, "Wren Alder", 1.0),
-        (Layer::Shot, "Character sheet · 3:4", 1.0),
-    ]);
+    assert_eq!(
+        stack_rows(&stack),
+        vec![
+            (Layer::Style, "Saltmarch House Style", 1.0),
+            (Layer::World, "Saltmarch", 1.0),
+            (Layer::Ancestry, "Fenwrought", 1.0),
+            (Layer::Culture, "The Reed Wardens", 1.0),
+            // Nested in the file by `parent:`, not linked — and the parent is
+            // therefore further out, which is what puts the region first.
+            (Layer::Place, "The Long Shallows", 1.0),
+            (Layer::Place, "Stiltmoor", 1.0),
+            (Layer::Subject, "Wren Alder", 1.0),
+            (Layer::Shot, "Character sheet · 3:4", 1.0),
+        ]
+    );
 }
 
 #[test]
@@ -349,51 +352,54 @@ fn the_layer_cards_list_what_the_files_actually_say() {
     let sheet = default_preset(NodeKind::Character);
     let extracted = saltmarch_fragments(&world, saltmarch.id("Wren Alder"), sheet);
 
-    assert_eq!(fragment_rows(&extracted), vec![
-        (Layer::Style, "Saltmarch House Style", "medium", 1.0, Prompt),
-        (Layer::Style, "Saltmarch House Style", "lighting", 1.0, Prompt),
-        // A list section is one fragment per item, not one per list, so a budget
-        // can shed one swatch without taking the palette with it.
-        (Layer::Style, "Saltmarch House Style", "palette", 1.0, Prompt),
-        (Layer::Style, "Saltmarch House Style", "palette", 1.0, Prompt),
-        (Layer::Style, "Saltmarch House Style", "never", 1.0, Negative),
-        (Layer::Style, "Saltmarch House Style", "never", 1.0, Negative),
-        // References follow the prose of the card they hang off, routed by role.
-        (Layer::Style, "Saltmarch House Style", "material", 1.0, StyleRef),
-        (Layer::Style, "Saltmarch House Style", "material", 1.0, StyleRef),
-        (Layer::World, "Saltmarch", "era", 1.0, Prompt),
-        (Layer::World, "Saltmarch", "tone", 1.0, Prompt),
-        (Layer::World, "Saltmarch", "never", 1.0, Negative),
-        (Layer::World, "Saltmarch", "never", 1.0, Negative),
-        // A character sheet is read as a shape, so `silhouette` is 1.4 wherever
-        // it appears and `anatomy` 1.2 — at any depth in the stack.
-        (Layer::Ancestry, "Fenwrought", "silhouette", 1.4, Prompt),
-        (Layer::Ancestry, "Fenwrought", "anatomy", 1.2, Prompt),
-        (Layer::Ancestry, "Fenwrought", "never", 1.0, Negative),
-        (Layer::Culture, "The Reed Wardens", "costume", 1.3, Prompt),
-        (Layer::Culture, "The Reed Wardens", "ornament", 1.0, Prompt),
-        (Layer::Culture, "The Reed Wardens", "never", 1.0, Negative),
-        // A role whose name is also a section key picks up that section's
-        // priority, which is why these two are 1.3 and the house style's
-        // `material` references are 1.0 — `materials` is the section key.
-        (Layer::Culture, "The Reed Wardens", "costume", 1.3, StyleRef),
-        (Layer::Culture, "The Reed Wardens", "costume", 1.3, StyleRef),
-        (Layer::Place, "The Long Shallows", "climate", 1.0, Prompt),
-        // Flat light is the point of a character sheet, so a location's ambient
-        // light is actively unhelpful here however strongly the world argues.
-        (Layer::Place, "The Long Shallows", "light", 0.3, Prompt),
-        (Layer::Place, "Stiltmoor", "architecture", 1.0, Prompt),
-        (Layer::Place, "Stiltmoor", "wear", 1.0, Prompt),
-        (Layer::Subject, "Wren Alder", "silhouette", 1.4, Prompt),
-        (Layer::Subject, "Wren Alder", "costume", 1.3, Prompt),
-        (Layer::Subject, "Wren Alder", "materials", 1.0, Prompt),
-        (Layer::Subject, "Wren Alder", "signature", 1.0, Prompt),
-        (Layer::Subject, "Wren Alder", "never", 1.0, Negative),
-        (Layer::Subject, "Wren Alder", "costume", 1.3, StyleRef),
-        (Layer::Subject, "Wren Alder", "pose", 1.0, StructureRef),
-        (Layer::Subject, "Wren Alder", "mood", 1.0, MoodboardOnly),
-        (Layer::Shot, "Character sheet · 3:4", "framing", 1.0, Prompt),
-    ]);
+    assert_eq!(
+        fragment_rows(&extracted),
+        vec![
+            (Layer::Style, "Saltmarch House Style", "medium", 1.0, Prompt),
+            (Layer::Style, "Saltmarch House Style", "lighting", 1.0, Prompt),
+            // A list section is one fragment per item, not one per list, so a budget
+            // can shed one swatch without taking the palette with it.
+            (Layer::Style, "Saltmarch House Style", "palette", 1.0, Prompt),
+            (Layer::Style, "Saltmarch House Style", "palette", 1.0, Prompt),
+            (Layer::Style, "Saltmarch House Style", "never", 1.0, Negative),
+            (Layer::Style, "Saltmarch House Style", "never", 1.0, Negative),
+            // References follow the prose of the card they hang off, routed by role.
+            (Layer::Style, "Saltmarch House Style", "material", 1.0, StyleRef),
+            (Layer::Style, "Saltmarch House Style", "material", 1.0, StyleRef),
+            (Layer::World, "Saltmarch", "era", 1.0, Prompt),
+            (Layer::World, "Saltmarch", "tone", 1.0, Prompt),
+            (Layer::World, "Saltmarch", "never", 1.0, Negative),
+            (Layer::World, "Saltmarch", "never", 1.0, Negative),
+            // A character sheet is read as a shape, so `silhouette` is 1.4 wherever
+            // it appears and `anatomy` 1.2 — at any depth in the stack.
+            (Layer::Ancestry, "Fenwrought", "silhouette", 1.4, Prompt),
+            (Layer::Ancestry, "Fenwrought", "anatomy", 1.2, Prompt),
+            (Layer::Ancestry, "Fenwrought", "never", 1.0, Negative),
+            (Layer::Culture, "The Reed Wardens", "costume", 1.3, Prompt),
+            (Layer::Culture, "The Reed Wardens", "ornament", 1.0, Prompt),
+            (Layer::Culture, "The Reed Wardens", "never", 1.0, Negative),
+            // A role whose name is also a section key picks up that section's
+            // priority, which is why these two are 1.3 and the house style's
+            // `material` references are 1.0 — `materials` is the section key.
+            (Layer::Culture, "The Reed Wardens", "costume", 1.3, StyleRef),
+            (Layer::Culture, "The Reed Wardens", "costume", 1.3, StyleRef),
+            (Layer::Place, "The Long Shallows", "climate", 1.0, Prompt),
+            // Flat light is the point of a character sheet, so a location's ambient
+            // light is actively unhelpful here however strongly the world argues.
+            (Layer::Place, "The Long Shallows", "light", 0.3, Prompt),
+            (Layer::Place, "Stiltmoor", "architecture", 1.0, Prompt),
+            (Layer::Place, "Stiltmoor", "wear", 1.0, Prompt),
+            (Layer::Subject, "Wren Alder", "silhouette", 1.4, Prompt),
+            (Layer::Subject, "Wren Alder", "costume", 1.3, Prompt),
+            (Layer::Subject, "Wren Alder", "materials", 1.0, Prompt),
+            (Layer::Subject, "Wren Alder", "signature", 1.0, Prompt),
+            (Layer::Subject, "Wren Alder", "never", 1.0, Negative),
+            (Layer::Subject, "Wren Alder", "costume", 1.3, StyleRef),
+            (Layer::Subject, "Wren Alder", "pose", 1.0, StructureRef),
+            (Layer::Subject, "Wren Alder", "mood", 1.0, MoodboardOnly),
+            (Layer::Shot, "Character sheet · 3:4", "framing", 1.0, Prompt),
+        ]
+    );
 }
 
 #[test]
@@ -475,22 +481,25 @@ fn a_text_budget_too_small_says_which_sentences_it_cut() {
          Stooped even for a Fenwrought, \
          Warden reed-cloth cut short at the shin."
     );
-    assert_eq!(report(&compiled), vec![
-        (Layer::Style, "Saltmarch House Style", "medium", Cut),
-        (Layer::Style, "Saltmarch House Style", "lighting", Cut),
-        (Layer::Style, "Saltmarch House Style", "palette", Cut),
-        (Layer::Style, "Saltmarch House Style", "palette", Cut),
-        (Layer::World, "Saltmarch", "era", Cut),
-        (Layer::World, "Saltmarch", "tone", Cut),
-        (Layer::Culture, "The Reed Wardens", "ornament", Cut),
-        (Layer::Place, "The Long Shallows", "climate", Cut),
-        (Layer::Place, "The Long Shallows", "light", Cut),
-        (Layer::Place, "Stiltmoor", "architecture", Cut),
-        (Layer::Place, "Stiltmoor", "wear", Cut),
-        (Layer::Subject, "Wren Alder", "materials", Cut),
-        (Layer::Subject, "Wren Alder", "signature", Cut),
-        (Layer::Shot, "Character sheet · 3:4", "framing", Cut),
-    ]);
+    assert_eq!(
+        report(&compiled),
+        vec![
+            (Layer::Style, "Saltmarch House Style", "medium", Cut),
+            (Layer::Style, "Saltmarch House Style", "lighting", Cut),
+            (Layer::Style, "Saltmarch House Style", "palette", Cut),
+            (Layer::Style, "Saltmarch House Style", "palette", Cut),
+            (Layer::World, "Saltmarch", "era", Cut),
+            (Layer::World, "Saltmarch", "tone", Cut),
+            (Layer::Culture, "The Reed Wardens", "ornament", Cut),
+            (Layer::Place, "The Long Shallows", "climate", Cut),
+            (Layer::Place, "The Long Shallows", "light", Cut),
+            (Layer::Place, "Stiltmoor", "architecture", Cut),
+            (Layer::Place, "Stiltmoor", "wear", Cut),
+            (Layer::Subject, "Wren Alder", "materials", Cut),
+            (Layer::Subject, "Wren Alder", "signature", Cut),
+            (Layer::Shot, "Character sheet · 3:4", "framing", Cut),
+        ]
+    );
     // The report is in reading order, not drop order, so it walks alongside the
     // layer cards — which is why the 0.3 ambient light that went first is listed
     // in the middle.
@@ -537,22 +546,27 @@ fn the_style_bucket_overflows_before_any_other_does() {
     );
     let images = compile_images(&extracted, image_budget("gemini-3-pro-image").unwrap());
 
-    assert_eq!(kept(&images, RefBucket::StyleRefs), vec![
-        (Layer::Culture, "The Reed Wardens", "warden reed-cloth"),
-        (Layer::Culture, "The Reed Wardens", "warden shell collar"),
-        (Layer::Subject, "Wren Alder", "wren coat"),
-    ]);
-    assert_eq!(lost(&images, RefBucket::StyleRefs), vec![
-        (Layer::Style, "Saltmarch House Style", "house reed weave", Cut),
-        (Layer::Style, "Saltmarch House Style", "house wet plank", Cut),
-    ]);
+    assert_eq!(
+        kept(&images, RefBucket::StyleRefs),
+        vec![
+            (Layer::Culture, "The Reed Wardens", "warden reed-cloth"),
+            (Layer::Culture, "The Reed Wardens", "warden shell collar"),
+            (Layer::Subject, "Wren Alder", "wren coat"),
+        ]
+    );
+    assert_eq!(
+        lost(&images, RefBucket::StyleRefs),
+        vec![
+            (Layer::Style, "Saltmarch House Style", "house reed weave", Cut),
+            (Layer::Style, "Saltmarch House Style", "house wet plank", Cut),
+        ]
+    );
     // The pose is a character reference and never competed for a style slot,
     // and the moodboard reference occupies nothing at all.
-    assert_eq!(kept(&images, RefBucket::Characters), vec![(
-        Layer::Subject,
-        "Wren Alder",
-        "wren punting pose"
-    )]);
+    assert_eq!(
+        kept(&images, RefBucket::Characters),
+        vec![(Layer::Subject, "Wren Alder", "wren punting pose")]
+    );
     assert_eq!(lost(&images, RefBucket::Characters), vec![]);
     assert_eq!(kept(&images, RefBucket::Objects), vec![]);
 }
@@ -568,12 +582,15 @@ fn a_ring_of_links_on_disk_contributes_each_court_exactly_once() {
     let world = ouroboros.world();
     let stack = resolve(&world, ouroboros.id("Moss"), None).unwrap();
 
-    assert_eq!(stack_rows(&stack), vec![
-        (Layer::Culture, "The Briar Court", 1.0),
-        (Layer::Culture, "The Hollow Court", 1.0),
-        (Layer::Place, "The Sunken Mill", 0.0),
-        (Layer::Subject, "Moss", 1.0),
-    ]);
+    assert_eq!(
+        stack_rows(&stack),
+        vec![
+            (Layer::Culture, "The Briar Court", 1.0),
+            (Layer::Culture, "The Hollow Court", 1.0),
+            (Layer::Place, "The Sunken Mill", 0.0),
+            (Layer::Subject, "Moss", 1.0),
+        ]
+    );
 
     let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
     let compiled = compile(&extracted, Budget::unlimited());
@@ -604,20 +621,26 @@ fn a_link_weighted_to_zero_on_disk_keeps_its_card_and_silences_its_fragments() {
         .into_iter()
         .filter(|(layer, ..)| *layer == Layer::Place)
         .collect();
-    assert_eq!(mill, vec![
-        (Layer::Place, "The Sunken Mill", "architecture", 0.0, Prompt),
-        (Layer::Place, "The Sunken Mill", "never", 0.0, Negative),
-    ]);
+    assert_eq!(
+        mill,
+        vec![
+            (Layer::Place, "The Sunken Mill", "architecture", 0.0, Prompt),
+            (Layer::Place, "The Sunken Mill", "never", 0.0, Negative),
+        ]
+    );
 
     // And nothing of the mill is sent, under a budget with room for everything —
     // so this cannot be mistaken for the budget's doing.
     let compiled = compile(&extracted, Budget::unlimited());
     assert!(!compiled.prompt().contains("millhouse"), "{}", compiled.prompt());
     assert!(!compiled.negative().contains("Dry stonework"), "{}", compiled.negative());
-    assert_eq!(report(&compiled), vec![
-        (Layer::Place, "The Sunken Mill", "architecture", Silenced),
-        (Layer::Place, "The Sunken Mill", "never", Silenced),
-    ]);
+    assert_eq!(
+        report(&compiled),
+        vec![
+            (Layer::Place, "The Sunken Mill", "architecture", Silenced),
+            (Layer::Place, "The Sunken Mill", "never", Silenced),
+        ]
+    );
 }
 
 /* ── the worked example ───────────────────────────────────────────────────── */
@@ -637,14 +660,17 @@ fn the_hand_written_example_project_resolves_the_way_stacks_rs_claims_it_does() 
         resolve(&world, ashfall.id("Kael Vantris"), Some(Shot::new("Character sheet · 3:4")))
             .unwrap();
 
-    assert_eq!(stack_rows(&stack), vec![
-        (Layer::Style, "Ashfall House Style", 1.0),
-        (Layer::World, "Ashfall", 1.0),
-        (Layer::Ancestry, "Vashk", 1.0),
-        (Layer::Culture, "Ember Guild", 1.0),
-        (Layer::Place, "The Ember Coast", 1.0),
-        (Layer::Place, "Cinder Bay", 1.0),
-        (Layer::Subject, "Kael Vantris", 1.0),
-        (Layer::Shot, "Character sheet · 3:4", 1.0),
-    ]);
+    assert_eq!(
+        stack_rows(&stack),
+        vec![
+            (Layer::Style, "Ashfall House Style", 1.0),
+            (Layer::World, "Ashfall", 1.0),
+            (Layer::Ancestry, "Vashk", 1.0),
+            (Layer::Culture, "Ember Guild", 1.0),
+            (Layer::Place, "The Ember Coast", 1.0),
+            (Layer::Place, "Cinder Bay", 1.0),
+            (Layer::Subject, "Kael Vantris", 1.0),
+            (Layer::Shot, "Character sheet · 3:4", 1.0),
+        ]
+    );
 }

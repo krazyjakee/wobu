@@ -69,11 +69,7 @@ impl Cancel {
     /// at file boundaries, which bounds the wait by one file's latency rather
     /// than by the whole remaining folder.
     pub fn check(&self) -> crate::error::Result<()> {
-        if self.is_cancelled() {
-            Err(crate::error::Error::Cancelled)
-        } else {
-            Ok(())
-        }
+        if self.is_cancelled() { Err(crate::error::Error::Cancelled) } else { Ok(()) }
     }
 }
 

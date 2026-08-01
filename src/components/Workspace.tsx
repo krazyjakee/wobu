@@ -38,9 +38,9 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const select = useUI((s) => s.select)
   const openAncestors = useUI((s) => s.openAncestors)
 
-  const [newNode, setNewNode] = useState<
-    { kind: NodeKind | null; parentId: string | null } | null
-  >(null)
+  const [newNode, setNewNode] = useState<{ kind: NodeKind | null; parentId: string | null } | null>(
+    null,
+  )
 
   const kindIndex = useMemo(() => indexKinds(kindsQ.data), [kindsQ.data])
   const nodes = useMemo(() => nodesQ.data ?? [], [nodesQ.data])
@@ -65,17 +65,19 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   }, [kindsQ.data, nodes])
 
   const groups = useMemo(
-    () => buildGroups(nodes.filter((n) => !singletonKinds.has(n.kind)), kindOrder, kindIndex),
+    () =>
+      buildGroups(
+        nodes.filter((n) => !singletonKinds.has(n.kind)),
+        kindOrder,
+        kindIndex,
+      ),
     [nodes, singletonKinds, kindOrder, kindIndex],
   )
 
   const conflicts = useMemo(() => conflictsQ.data ?? [], [conflictsQ.data])
 
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null
-  const chain = useMemo(
-    () => (selected ? ancestorsOf(selected.id, byId) : []),
-    [selected, byId],
-  )
+  const chain = useMemo(() => (selected ? ancestorsOf(selected.id, byId) : []), [selected, byId])
 
   // Conflicts on the node the editor is showing get a card; the rest get one
   // line saying where they are. A conflict on a node nobody happens to open is
