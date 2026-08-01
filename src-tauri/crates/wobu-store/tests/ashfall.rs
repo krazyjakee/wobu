@@ -21,12 +21,35 @@ fn id(s: &str) -> Id {
 
 /// Opening a project probes writability and stages temp files, so the folder is
 /// copied out of the repo first — a test must not dirty a committed fixture.
+///
+/// The copy also gets its own ULID and its own index, because every test here
+/// opens the same fixture and they run in parallel. `Index::open_for` keys the
+/// database by project ULID under app data, so sharing one would mean nine
+/// threads — and any second `cargo test` running at the same time — meeting in
+/// one SQLite file and dropping each other's tables during the schema-version
+/// rebuild.
 fn open_a_copy() -> (tempfile::TempDir, Project) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("Ashfall.wobu");
     copy_dir(&fixture(), &root);
-    let project = Project::open(&root).expect("the example project should open");
+    give_it_its_own_id(&root);
+    let project = Project::open_at_index(&root, &index_beside(&dir))
+        .expect("the example project should open");
     (dir, project)
+}
+
+/// The index for a copy, kept next to it rather than in shared app data.
+fn index_beside(dir: &tempfile::TempDir) -> PathBuf {
+    dir.path().join("index.sqlite")
+}
+
+/// A ULID nobody else has, so nothing keyed by project id can collide either.
+fn give_it_its_own_id(root: &Path) {
+    let path = root.join("project.json");
+    let mut meta: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    meta["id"] = wobu_core::new_id().to_string().into();
+    std::fs::write(&path, serde_json::to_string_pretty(&meta).unwrap()).unwrap();
 }
 
 fn copy_dir(from: &Path, to: &Path) {
@@ -171,26 +194,22 @@ fn search_reaches_into_notes_and_descriptions() {
     let hits = project.index().search("ashglass").unwrap();
     assert!(!hits.is_empty(), "full-text search should reach description prose");
 
-    let names: Vec<String> = hits
-        .iter()
-        .filter_map(|id| project.get_node(*id).ok())
-        .map(|n| n.name)
-        .collect();
+    let names: Vec<String> =
+        hits.iter().filter_map(|id| project.get_node(*id).ok()).map(|n| n.name).collect();
     assert!(names.iter().any(|n| n == "Ashglass Lantern"), "{names:?}");
 }
 
 #[test]
 fn deleting_the_index_loses_nothing_from_the_folder() {
-    let (_dir, project) = open_a_copy();
-    let before: Vec<String> =
-        project.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
+    let (dir, project) = open_a_copy();
+    let before: Vec<String> = project.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
     let root = project.root().to_path_buf();
     drop(project);
 
     // The index is a cache keyed by project ULID; blowing it away must be safe.
-    let reopened = Project::open(&root).unwrap();
+    let reopened = Project::open_at_index(&root, &index_beside(&dir)).unwrap();
     reopened.index().clear().unwrap();
-    let rebuilt = Project::open(&root).unwrap();
+    let rebuilt = Project::open_at_index(&root, &index_beside(&dir)).unwrap();
 
     let after: Vec<String> = rebuilt.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
     assert_eq!(after, before);

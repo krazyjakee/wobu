@@ -437,12 +437,15 @@ impl MeshBackend for HunyuanBackend {
     fn capabilities(&self, model: &str) -> MeshCapabilities {
         let (max_views, generate_types) = match model {
             MODEL_3_1 => (8, vec![GenerateType::Normal, GenerateType::Geometry]),
-            MODEL_3_0 => (4, vec![
-                GenerateType::Normal,
-                GenerateType::Geometry,
-                GenerateType::LowPoly,
-                GenerateType::Sketch,
-            ]),
+            MODEL_3_0 => (
+                4,
+                vec![
+                    GenerateType::Normal,
+                    GenerateType::Geometry,
+                    GenerateType::LowPoly,
+                    GenerateType::Sketch,
+                ],
+            ),
             _ => (4, vec![GenerateType::Normal, GenerateType::Geometry]),
         };
         MeshCapabilities {
@@ -644,10 +647,7 @@ fn preview_of(bytes: &[u8]) -> String {
 /// separated from the errors the API reports about itself.
 fn unreachable(error: &reqwest::Error) -> Error {
     let detail = if error.is_timeout() {
-        format!(
-            "{LABEL} did not answer within {} seconds",
-            CONNECT_TIMEOUT.as_secs(),
-        )
+        format!("{LABEL} did not answer within {} seconds", CONNECT_TIMEOUT.as_secs(),)
     } else if error.is_connect() {
         format!(
             "could not connect to {LABEL} — check this machine's network and any proxy between \
@@ -791,7 +791,10 @@ mod tests {
 
     fn backend() -> HunyuanBackend {
         HunyuanBackend::new(
-            Credentials::new("AKIDzzzzzzzzzzzz", SecretKey::new("Gu5t9xGARNpq86cd98joQYCN3Cozk1qA")),
+            Credentials::new(
+                "AKIDzzzzzzzzzzzz",
+                SecretKey::new("Gu5t9xGARNpq86cd98joQYCN3Cozk1qA"),
+            ),
             Region::ApSingapore,
         )
         .unwrap()
@@ -833,8 +836,8 @@ mod tests {
         // The documented vocabulary in the order a job sends it. Everything the
         // user sees during a mesh generation is read off these, and there is no
         // websocket to fall back on if one is misread.
-        let files = watched(vec![poll("WAIT"), poll("WAIT"), poll("RUN"), done()], &Cancel::new())
-            .unwrap();
+        let files =
+            watched(vec![poll("WAIT"), poll("WAIT"), poll("RUN"), done()], &Cancel::new()).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].kind, "OBJ");
         assert!(files[0].url.starts_with("https://cos.example/a.zip"));
@@ -867,11 +870,10 @@ mod tests {
             &Cancel::new(),
         ))
         .unwrap();
-        assert_eq!(sink.0, [
-            "queued at Tencent Hunyuan3D",
-            "generating the mesh",
-            "downloading the mesh",
-        ]);
+        assert_eq!(
+            sink.0,
+            ["queued at Tencent Hunyuan3D", "generating the mesh", "downloading the mesh",]
+        );
     }
 
     #[test]
@@ -891,7 +893,8 @@ mod tests {
         // not stopped generating, so the money is spent either way. A bare
         // "timed out" reads as though nothing happened.
         let mut answers = std::iter::repeat_with(|| poll("RUN"));
-        let schedule = Schedule { first: Duration::ZERO, max: Duration::ZERO, deadline: Duration::ZERO };
+        let schedule =
+            Schedule { first: Duration::ZERO, max: Duration::ZERO, deadline: Duration::ZERO };
         let error = block_on(watch(
             schedule,
             || {
@@ -961,7 +964,11 @@ mod tests {
         cancel.cancel();
         let started = Instant::now();
         let outcome = block_on(watch(
-            Schedule { first: Duration::from_secs(30), max: Duration::from_secs(30), deadline: Duration::from_secs(60) },
+            Schedule {
+                first: Duration::from_secs(30),
+                max: Duration::from_secs(30),
+                deadline: Duration::from_secs(60),
+            },
             || async { panic!("a cancelled watch must not poll the provider") },
             &mut Discard,
             &cancel,
@@ -1049,8 +1056,10 @@ mod tests {
         let sent: Vec<(&str, &str)> = signed.headers().collect();
         assert!(sent.contains(&("Content-Type", CONTENT_TYPE)));
         assert!(sent.iter().any(|(name, value)| *name == "X-TC-Version" && *value == "2023-09-01"));
-        assert!(sent.iter().any(|(name, value)| *name == "X-TC-Action"
-            && *value == "SubmitHunyuanTo3DProJob"));
+        assert!(
+            sent.iter()
+                .any(|(name, value)| *name == "X-TC-Action" && *value == "SubmitHunyuanTo3DProJob")
+        );
     }
 
     #[test]
@@ -1135,8 +1144,8 @@ mod tests {
         // Almost always an XML error document from object storage — an expired
         // signature, a bucket policy — and its first line is the whole diagnosis.
         // Reported as "not a mesh" with nothing else, it is a dead end.
-        let error = assemble(b"<?xml version=\"1.0\"?><Error><Code>AccessDenied".to_vec())
-            .unwrap_err();
+        let error =
+            assemble(b"<?xml version=\"1.0\"?><Error><Code>AccessDenied".to_vec()).unwrap_err();
         assert!(error.to_string().contains("AccessDenied"), "{error}");
         assert!(matches!(error, Error::NotAMesh { .. }));
 
@@ -1152,7 +1161,10 @@ mod tests {
         // These are signed object-storage URLs and the signature is most of their
         // length. A filename built from the whole URL is unusable on every
         // filesystem there is.
-        assert_eq!(preview_name("https://cos.example/jobs/a3f9.png?q-signature=deadbeef"), "a3f9.png");
+        assert_eq!(
+            preview_name("https://cos.example/jobs/a3f9.png?q-signature=deadbeef"),
+            "a3f9.png"
+        );
         assert_eq!(preview_name("https://cos.example/jobs/a3f9"), "preview.png");
         assert_eq!(preview_name(""), "preview.png");
     }

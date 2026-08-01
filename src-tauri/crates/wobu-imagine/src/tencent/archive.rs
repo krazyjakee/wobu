@@ -147,12 +147,12 @@ fn find_eocd(bytes: &[u8]) -> Result<Directory, Error> {
         .rev()
         .find(|at| u32_at(bytes, *at) == Some(EOCD))
         .ok_or_else(|| {
-            broken(
-                "the download begins like a ZIP and has no end-of-central-directory record, so it \
+        broken(
+            "the download begins like a ZIP and has no end-of-central-directory record, so it \
                  is truncated"
-                    .to_owned(),
-            )
-        })?;
+                .to_owned(),
+        )
+    })?;
 
     let entries = u16_at(bytes, start + 10).unwrap_or(0) as usize;
     let offset = u32_at(bytes, start + 16).unwrap_or(0);
@@ -225,7 +225,10 @@ fn read_central(bytes: &[u8], at: usize) -> Result<Entry, Error> {
 fn read_data(bytes: &[u8], entry: &Entry) -> Result<Vec<u8>, Error> {
     const FIXED: usize = 30;
     if u32_at(bytes, entry.local) != Some(LOCAL_HEADER) {
-        return Err(broken(format!("`{}` does not start where the archive says it does", entry.name)));
+        return Err(broken(format!(
+            "`{}` does not start where the archive says it does",
+            entry.name
+        )));
     }
     let name_len = u16_at(bytes, entry.local + 26).unwrap_or(0) as usize;
     let extra_len = u16_at(bytes, entry.local + 28).unwrap_or(0) as usize;
@@ -247,7 +250,9 @@ fn read_data(bytes: &[u8], entry: &Entry) -> Result<Vec<u8>, Error> {
                 .map_err(|e| broken(format!("`{}` would not decompress: {e}", entry.name)))?;
             out
         }
-        other => return Err(unsupported(&format!("compression method {other} (in `{}`)", entry.name))),
+        other => {
+            return Err(unsupported(&format!("compression method {other} (in `{}`)", entry.name)));
+        }
     };
 
     if out.len() as u64 != u64::from(entry.uncompressed) {

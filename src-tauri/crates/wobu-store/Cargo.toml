@@ -7,6 +7,21 @@ edition.workspace = true
 blake3 = "1.8.5"
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
+# Decoding and downscaling, for thumbnails and nothing else (#25). The feature
+# list is exactly the four formats `crate::image` recognises, so a blob that
+# imports is a blob that thumbnails; `default-features = false` drops the other
+# fourteen codecs and rayon, none of which anything here asks for.
+#
+# Deliberately *not* used to identify an image: `crate::image` parses headers by
+# hand precisely so that a truncated file on a share comes back as `None` rather
+# than as a decoder's opinion, and the extension a blob is stored under has to
+# stay a pure function of the bytes.
+image = { version = "0.25.10", default-features = false, features = [
+    "gif",
+    "jpeg",
+    "png",
+    "webp",
+] }
 indexmap = { version = "2.14.0", features = ["serde"] }
 notify = "8.2.0"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
@@ -16,8 +31,27 @@ serde_norway = "0.9.42"
 thiserror = "2.0.19"
 ulid = { version = "3.0.0", features = ["serde"] }
 walkdir = "2.5.0"
+# libwebp, for the encode half of #25. `image` can *decode* WebP but its encoder
+# is lossless only, and a lossless thumbnail measures around six times the bytes
+# of a lossy one at the same size — which matters here in a way it would not in
+# a local cache, because these files live in the project folder and cross a
+# share. `default-features = false` drops its optional `image` bridge; the two
+# meet through a byte slice instead.
+webp = { version = "0.3.1", default-features = false }
 wobu-core.workspace = true
 
 [dev-dependencies]
+# The integration tests need real encoded pictures rather than the hand-written
+# headers everything else in this crate is tested with: a thumbnail has to
+# survive a decoder, so a fixture that stops after IHDR proves nothing.
+image = { version = "0.25.10", default-features = false, features = [
+    "gif",
+    "jpeg",
+    "png",
+    "webp",
+] }
 tempfile = "3.27.0"
 walkdir = "2.5.0"
+
+[lints]
+workspace = true

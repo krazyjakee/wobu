@@ -39,7 +39,7 @@ export function Editor({
   const setTab = useUI((s) => s.setTab)
   const nodeQ = useNode(selected?.id ?? null)
   const node = nodeQ.data
-  const autosave = useAutosaveNode(node)
+  const autosave = useAutosaveNode(node, { readOnly })
 
   if (!selected) {
     return (
@@ -120,10 +120,21 @@ export function Editor({
 
         <div className="ed-actions">
           <span className="col-tag-save">{saveLabel(autosave.status)}</span>
+          {/* Enhance is M4 and Generate is M5, and neither is wired up — the
+              button is disabled for that reason first. Both write to the node
+              like any other edit (docs/07-file-shares.md), so when they land
+              they stay disabled on a read-only folder: keep `readOnly` in the
+              condition below and add Generate's button beside this one with the
+              same test. The banner is already on screen and explains it, so
+              nothing here needs its own sentence about the share. */}
           <button
             className="btn btn-ai"
             disabled
-            title="Enhance arrives in M4 — no LLM provider is wired up yet"
+            title={
+              readOnly
+                ? 'This share is read-only, and Enhance writes to the node'
+                : 'Enhance arrives in M4 — no LLM provider is wired up yet'
+            }
           >
             <Icon name="spark" size="sm" />
             Enhance

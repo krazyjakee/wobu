@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use iroh::{EndpointAddr, SecretKey};
 use tokio::sync::mpsc;
 use wobu_core::{Id, new_id};
 use wobu_sync::{
@@ -132,19 +133,29 @@ async fn a_ticket_for_a_project_the_peer_has_dropped_is_refused_like_any_other_d
     assert!(inbox.try_recv().is_err(), "a refused ticket reached the application anyway");
 }
 
-/// **The grant is not checked, and this is the test that says so out loud.**
+/// **The grant is not checked, this is the test that says so out loud, and it is
+/// a decision rather than an unfinished job.**
 ///
 /// Two peers reach a session while holding completely different grants for the
-/// same project. That is today's truth and it must not be assumed away: nothing
-/// in `wobu/sync/1` presents a grant, because checking one is authorisation and
-/// authorisation is #90 — `Projects::holds` takes one project and returns one
-/// bool, with nowhere to put a second input.
+/// same project. That is the truth and it must not be assumed away: nothing in
+/// `wobu/sync/1` presents a grant, because checking one is authorisation and
+/// `Projects::holds` takes one project and returns one bool, with nowhere to put
+/// a second input.
 ///
-/// When #90 arrives this test is the one that changes, and changing it should
-/// require reading the paragraph above. Until then, a ticket grants exactly what
-/// knowing a project ULID and an address grants, and the UI must not imply more.
+/// #90 asked whether that should change and closed `wontfix`, so this test is not
+/// a placeholder waiting for a feature to invert it. `wobu_sync::ticket::Grant`
+/// carries the whole argument; the part that matters when reading *this* file is
+/// that the forgery below is not an attack anybody could actually mount. It needs
+/// `issued.addr()` — the sharing peer's ed25519 endpoint id — and the project
+/// ULID, and the only artefact in the system that puts those two together is a
+/// ticket, which carries the real grant beside them. The test can forge one
+/// because it minted the endpoint in the line above; a stranger cannot.
+///
+/// So a ticket grants exactly what knowing a project ULID and a peer's endpoint
+/// id grants, the UI must not imply more, and a change that made this test fail
+/// would be reopening a closed question rather than finishing an open one.
 #[tokio::test]
-async fn a_grant_is_not_checked_by_wobu_sync_1() {
+async fn a_grant_is_not_checked_and_that_is_deliberate() {
     let project = new_id();
     let (sharing, _inbox) = peer(vec![project]).await;
     let (accepting, _accepting_inbox) = peer(vec![project]).await;
@@ -158,6 +169,45 @@ async fn a_grant_is_not_checked_by_wobu_sync_1() {
     let session = accepting.connect_ticket(&pasted(&forged)).await;
 
     assert!(session.is_ok(), "{session:?}");
+}
+
+/// The other half of the same decision, and the reason the forgery above is not
+/// an attack: **a grant is not the unguessable thing in a ticket, the pair of the
+/// other two fields is.**
+///
+/// A peer who reads a project ULID off a `project.json` on a NAS learns one of
+/// the two things a dial needs and not the other. Give them the *harder* half as
+/// well — the sharing machine's socket, which is what an address is — and the
+/// dial still fails, because iroh will not hand over a connection to a machine
+/// presenting a different key than the one asked for. It fails at TLS, before
+/// `wobu/sync/1` exists to have an opinion, which is where a grant check would
+/// have sat.
+///
+/// Pinned here because the argument in `ticket::Grant` rests on it, and prose is
+/// not a test.
+#[tokio::test]
+async fn a_project_ulid_and_a_route_without_the_peers_endpoint_id_reach_nothing() {
+    let project = new_id();
+    let (sharing, mut inbox) = peer(vec![project]).await;
+    let (guesser, _guesser_inbox) = peer(vec![project]).await;
+
+    // The sharing peer's real socket, with an endpoint id that is not theirs.
+    // That is the most a project folder could ever disclose: the ULID is in
+    // `project.json` and a machine's address is observable, but the ed25519 key
+    // lives in a keychain and only a ticket carries it beside the ULID.
+    let stranger = EndpointAddr::from_parts(
+        SecretKey::generate().public(),
+        sharing.addr().addrs.iter().cloned(),
+    );
+    let dialled = guesser.connect(stranger, project).await;
+
+    assert!(dialled.is_err(), "a dial with the wrong endpoint id succeeded: {dialled:?}");
+    assert!(inbox.try_recv().is_err(), "a guessed ULID reached the sharing peer anyway");
+
+    // And the same peer, dialled by ticket, connects — so the refusal above is
+    // about the identity and not about the endpoint being unreachable.
+    let honest = pasted(&sharing.ticket(project, Grant::generate()));
+    assert!(guesser.connect_ticket(&honest).await.is_ok());
 }
 
 /// Accepting a ticket for a project already on this machine joins the replica

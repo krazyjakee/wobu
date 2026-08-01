@@ -22,7 +22,7 @@ const QUIT_BLOCKED: &str = "share:quit-blocked";
 pub fn run() {
     // Before the builder, so that a failure to start is itself recorded.
     diag::init(diag::dir());
-    diag::info(&format!("wobu {} starting", env!("CARGO_PKG_VERSION")));
+    diag::info(format!("wobu {} starting", env!("CARGO_PKG_VERSION")));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -98,6 +98,10 @@ pub fn run() {
             commands::asset_import,
             commands::asset_import_bytes,
             commands::asset_list,
+            commands::asset_thumb,
+            commands::asset_original,
+            commands::asset_thumbs_ensure,
+            commands::asset_thumbs_cancel,
             commands::asset_link,
             commands::asset_unlink,
             commands::asset_link_update,

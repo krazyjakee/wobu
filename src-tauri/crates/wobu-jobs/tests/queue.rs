@@ -396,8 +396,7 @@ async fn jobs_start_in_the_order_they_were_submitted() {
     let log = Arc::new(Log::default());
     for n in 0..5 {
         queue.submit(
-            Fake::new(&format!("job {n}"), [Step::Work(Duration::from_millis(5))])
-                .logging_to(&log),
+            Fake::new(&format!("job {n}"), [Step::Work(Duration::from_millis(5))]).logging_to(&log),
         );
     }
     settle_all(&queue, &recorder).await;
@@ -413,9 +412,8 @@ async fn a_job_that_keeps_failing_goes_to_the_back_rather_than_holding_the_front
     // long as the provider stays unhappy.
     let (queue, recorder) = queue_with(Config { concurrency: 1, ..Config::default() });
     let log = Arc::new(Log::default());
-    let unlucky = queue.submit(
-        Fake::new("unlucky", [Step::Fail(transient()), Step::Finish]).logging_to(&log),
-    );
+    let unlucky = queue
+        .submit(Fake::new("unlucky", [Step::Fail(transient()), Step::Finish]).logging_to(&log));
     let ordinary = queue.submit(Fake::new("ordinary", [Step::Finish]).logging_to(&log));
 
     settle(&queue, &recorder, ordinary).await;
@@ -521,10 +519,8 @@ async fn a_task_that_ignores_its_token_is_aborted_rather_than_left_running() {
     // the grace the future is dropped outright — which is what closes the
     // socket. `dropped` rising while `returned` does not is the proof: that
     // future never reached its own return.
-    let (queue, recorder) = queue_with(Config {
-        cancel_grace: Duration::from_millis(50),
-        ..Config::default()
-    });
+    let (queue, recorder) =
+        queue_with(Config { cancel_grace: Duration::from_millis(50), ..Config::default() });
     let task = Fake::new("stubborn", [Step::Ignore]);
     let log = task.log();
     let id = queue.submit(task);

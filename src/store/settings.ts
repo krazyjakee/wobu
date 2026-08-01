@@ -69,9 +69,7 @@ export const useSettings = create<SettingsState>()(
       setUiScale: (v) => set({ uiScale: clamp(v, SCALE_MIN, SCALE_MAX, DEFAULTS.uiScale) }),
       setAutosaveDelay: (v) =>
         set({
-          autosaveDelay: Math.round(
-            clamp(v, AUTOSAVE_MIN, AUTOSAVE_MAX, DEFAULTS.autosaveDelay),
-          ),
+          autosaveDelay: Math.round(clamp(v, AUTOSAVE_MIN, AUTOSAVE_MAX, DEFAULTS.autosaveDelay)),
         }),
       reset: () => set(DEFAULTS),
     }),

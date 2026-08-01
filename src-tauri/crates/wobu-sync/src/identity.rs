@@ -211,10 +211,7 @@ struct OsStore;
 
 impl Store for OsStore {
     fn get(&self) -> Result<Option<String>, Unavailable> {
-        match keyring::Entry::new(SERVICE, ENTRY)
-            .map_err(|_| Unavailable)?
-            .get_password()
-        {
+        match keyring::Entry::new(SERVICE, ENTRY).map_err(|_| Unavailable)?.get_password() {
             Ok(password) => Ok(Some(password)),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(_) => Err(Unavailable),

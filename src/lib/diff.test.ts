@@ -106,7 +106,13 @@ describe('diffLines', () => {
 
     expect(rows).toHaveLength(400)
     expect(rows.filter((r) => r.kind !== 'same')).toEqual([
-      { kind: 'changed', left: 'line 200', right: 'line 200, rewritten', leftNo: 201, rightNo: 201 },
+      {
+        kind: 'changed',
+        left: 'line 200',
+        right: 'line 200, rewritten',
+        leftNo: 201,
+        rightNo: 201,
+      },
     ])
   })
 
@@ -151,7 +157,10 @@ describe('collapse', () => {
   })
 
   it('leaves a run short enough to be worth showing', () => {
-    const rows = collapse(diffLines(lines('a', 'b', 'old', 'c', 'd'), lines('a', 'b', 'new', 'c', 'd')), 2)
+    const rows = collapse(
+      diffLines(lines('a', 'b', 'old', 'c', 'd'), lines('a', 'b', 'new', 'c', 'd')),
+      2,
+    )
     expect(shape(rows)).toEqual(['=a', '=b', '~old|new', '=c', '=d'])
   })
 

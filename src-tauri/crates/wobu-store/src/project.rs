@@ -60,7 +60,9 @@ pub enum SaveOutcome {
     Saved(Box<Node>),
     /// Someone else changed the file since we loaded it. Ours was written
     /// alongside; the UI raises a diff rather than merging prose.
-    Conflict { conflict_path: String },
+    Conflict {
+        conflict_path: String,
+    },
 }
 
 /// What happened to an enhanced description on its way to disk.
@@ -76,13 +78,20 @@ pub enum Enhanced {
     /// told to overwrite it. The node comes back untouched so the UI can show
     /// the user what it is about to replace and ask.
     RefusedEdit(Box<Node>),
-    Conflict { conflict_path: String },
+    Conflict {
+        conflict_path: String,
+    },
 }
 
 pub struct Project {
     root: PathBuf,
     meta: ProjectMeta,
     index: Index,
+    /// Where [`index`](Project::index) actually is. Held rather than derived
+    /// from the ULID because [`open_at_index`](Project::open_at_index) can put
+    /// it somewhere else, and a caller that deletes the file to force a rebuild
+    /// must be told the truth about which file that is.
+    index_path: PathBuf,
     on_network_share: bool,
     read_only: bool,
     /// Who we are, fixed at open. See [`crate::peer`] — it is a short alias for
@@ -132,12 +141,14 @@ impl Project {
         std::fs::write(root.join(PROJECT_FILE), serde_json::to_string_pretty(&meta)?)
             .map_err(|e| Error::io(root.join(PROJECT_FILE), e))?;
 
+        let index_path = paths::index_path(&meta.id);
         let index = Index::open_for(&meta.id)?;
         index.clear()?;
         let mut project = Project {
             root,
             meta,
             index,
+            index_path,
             on_network_share: false,
             read_only: false,
             peer: crate::peer::alias().to_owned(),
@@ -167,6 +178,27 @@ impl Project {
         cancel: &Cancel,
         on_progress: &mut impl FnMut(ScanProgress),
     ) -> Result<Project> {
+        Project::open_inner(path, None, cancel, on_progress)
+    }
+
+    /// `open`, with the index at a path the caller picks.
+    ///
+    /// [`paths::index_path`] keys the database by project ULID under app data,
+    /// which is what the app wants — the index has to outlive the share being
+    /// remounted somewhere else. A test suite wants the opposite: several tests
+    /// opening one copied fixture in parallel would meet in a single SQLite
+    /// file and drop each other's tables mid-query when the schema version has
+    /// moved. Nothing in the app should call this.
+    pub fn open_at_index(path: &Path, index_path: &Path) -> Result<Project> {
+        Project::open_inner(path, Some(index_path), &Cancel::new(), &mut |_| {})
+    }
+
+    fn open_inner(
+        path: &Path,
+        index_path: Option<&Path>,
+        cancel: &Cancel,
+        on_progress: &mut impl FnMut(ScanProgress),
+    ) -> Result<Project> {
         let root = path.to_path_buf();
         let meta_path = root.join(PROJECT_FILE);
         if !meta_path.is_file() {
@@ -187,11 +219,15 @@ impl Project {
         // open so the UI can say so, not on the first failed save.
         let read_only = !paths::is_writable(&root);
 
-        let index = Index::open_for(&meta.id)?;
+        let (index, index_path) = match index_path {
+            Some(path) => (Index::open_at(path)?, path.to_path_buf()),
+            None => (Index::open_for(&meta.id)?, paths::index_path(&meta.id)),
+        };
         let mut project = Project {
             root,
             meta,
             index,
+            index_path,
             on_network_share,
             read_only,
             peer: crate::peer::alias().to_owned(),
@@ -423,9 +459,9 @@ impl Project {
 
         match self.write_node(&node, None)? {
             SaveOutcome::Saved(saved) => Ok(*saved),
-            SaveOutcome::Conflict { conflict_path } => Err(Error::AlreadyExists(
-                paths::from_rel_string(&self.root, &conflict_path),
-            )),
+            SaveOutcome::Conflict { conflict_path } => {
+                Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
+            }
         }
     }
 
@@ -695,9 +731,28 @@ impl Project {
     /// Content addressing means this cannot conflict, so unlike `save_node`
     /// there is no outcome enum: it either lands or it fails. What it does
     /// report is whether the bytes were already there.
+    ///
+    /// **No thumbnail is made here**, and that is deliberate rather than an
+    /// omission. Nothing in this method decodes a pixel — that is the whole of
+    /// why an import can accept a file a sync client has not finished copying —
+    /// and a decode is both the expensive step and the one that can fail on a
+    /// blob that is otherwise perfectly storable. Folding it in would let a
+    /// half-copied file turn a successful import into a failed one. Callers
+    /// follow up with [`ensure_thumb`](Self::ensure_thumb), off whichever thread
+    /// they are not drawing the window with; see `crate::thumbs`.
     pub fn import_asset(&mut self, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsset> {
+        self.import_asset_with(bytes, kind, &Cancel::new())
+    }
+
+    /// `import_asset`, stoppable — see [`assets::import_with`].
+    pub fn import_asset_with(
+        &mut self,
+        bytes: &[u8],
+        kind: AssetKind,
+        cancel: &Cancel,
+    ) -> Result<ImportedAsset> {
         self.ensure_writable()?;
-        let imported = assets::import(&self.root, bytes, kind)?;
+        let imported = assets::import_with(&self.root, bytes, kind, cancel)?;
         self.index.upsert_asset(&imported.asset)?;
         Ok(imported)
     }
@@ -705,10 +760,27 @@ impl Project {
     /// The same, for a file the user dropped or picked rather than bytes the
     /// webview already holds.
     pub fn import_asset_file(&mut self, path: &Path, kind: AssetKind) -> Result<ImportedAsset> {
+        self.import_asset_file_with(path, kind, &Cancel::new())
+    }
+
+    /// `import_asset_file`, stoppable.
+    ///
+    /// The one import that can take minutes rather than milliseconds: a 300 MB
+    /// scan on a share is read a chunk at a time from a mount that may be
+    /// wedged, and #30 asks for a way out of that. Nothing here makes the *UI*
+    /// responsive — the call still blocks whichever thread it is on — so a
+    /// caller that must not stall has to run it off the one drawing the window
+    /// and hold the token; the token is what makes doing so worth anything.
+    pub fn import_asset_file_with(
+        &mut self,
+        path: &Path,
+        kind: AssetKind,
+        cancel: &Cancel,
+    ) -> Result<ImportedAsset> {
         // Read whole rather than streamed: the hash needs every byte anyway,
         // and it has to be hashed before we know where the file goes.
-        let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
-        self.import_asset(&bytes, kind)
+        let bytes = assets::read_cancellable(path, cancel)?;
+        self.import_asset_with(&bytes, kind, cancel)
     }
 
     pub fn list_assets(&self) -> Result<Vec<Asset>> {
@@ -763,7 +835,12 @@ impl Project {
     /// week. Removing the last link is not evidence that anybody wants the
     /// picture gone, and deleting it would be unrecoverable in a way that
     /// unlinking is not.
-    pub fn unlink_asset(&mut self, node_id: Id, asset_id: Id, role: AssetRole) -> Result<SaveOutcome> {
+    pub fn unlink_asset(
+        &mut self,
+        node_id: Id,
+        asset_id: Id,
+        role: AssetRole,
+    ) -> Result<SaveOutcome> {
         self.ensure_writable()?;
 
         let mut node = self.get_node(node_id)?;
@@ -795,7 +872,8 @@ impl Project {
         self.ensure_writable()?;
 
         let mut node = self.get_node(node_id)?;
-        let Some(link) = node.asset_links.iter_mut().find(|l| l.asset_id == asset_id && l.role == role)
+        let Some(link) =
+            node.asset_links.iter_mut().find(|l| l.asset_id == asset_id && l.role == role)
         else {
             return Err(Error::NoSuchAssetLink {
                 asset: asset_id.to_string(),
@@ -872,6 +950,89 @@ impl Project {
             changed = true;
         }
         Ok(changed)
+    }
+
+    // ── thumbnails ───────────────────────────────────────────────────────
+    //
+    // The argument for all of it — why the files are in the project folder
+    // rather than in a local cache, and why two builds may disagree about their
+    // contents without anything being lost — is in `crate::thumbs`.
+
+    /// Every blob the index has no thumbnail recorded against.
+    ///
+    /// What a project that arrived over sync hands to
+    /// [`thumbs::ensure_all`](crate::thumbs::ensure_all). Read out in one go and
+    /// returned by value on purpose: the pass that follows takes seconds to
+    /// minutes and must run with nothing of this project's held, which is the
+    /// same rule the shell's project mutex is built on.
+    ///
+    /// Filtered from the index rather than from a directory listing, because
+    /// `assets::describe_at` already stats the thumbnail when it describes a
+    /// blob — so this costs one local SQLite read where the honest-looking
+    /// version costs one round trip per asset over SMB.
+    pub fn missing_thumbs(&self) -> Result<Vec<crate::thumbs::ThumbTarget>> {
+        Ok(self
+            .index
+            .list_assets()?
+            .into_iter()
+            .filter(|asset| asset.thumb_path.is_none())
+            .map(|asset| crate::thumbs::ThumbTarget {
+                asset_id: asset.id,
+                hash: asset.hash,
+                rel_path: asset.rel_path,
+            })
+            .collect())
+    }
+
+    /// Make one blob's thumbnail if the folder has not got one, and record it.
+    ///
+    /// The lazy half of #25, and the one a grid tile reaches for. `Ok(None)`
+    /// covers all three ways there is legitimately no thumbnail and never will
+    /// be one right now — no such asset, a folder nothing can be written into,
+    /// and a blob whose pixels will not decode — because each of those is a tile
+    /// that falls back to a placeholder rather than an error the user can act
+    /// on. Anything else is a real failure and is reported.
+    pub fn ensure_thumb(&mut self, id: Id, cancel: &Cancel) -> Result<Option<String>> {
+        let Some(asset) = self.index.asset(id)? else { return Ok(None) };
+
+        // Only when one has to be *made*. A read-only share that already holds
+        // thumbnails — the ordinary way a folder is published — still serves
+        // them, and refusing here would blank the grid on exactly that project.
+        if !crate::thumbs::exists(&self.root, &asset.hash) && self.ensure_writable().is_err() {
+            return Ok(None);
+        }
+
+        match crate::thumbs::ensure(&self.root, &asset.hash, &asset.rel_path, cancel) {
+            Ok(thumb) => {
+                self.record_thumbs(&[id])?;
+                Ok(Some(thumb.rel_path))
+            }
+            Err(Error::Undecodable { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Note that these blobs now have thumbnails in the folder.
+    ///
+    /// Every id is re-checked against the disk rather than trusted, because the
+    /// caller of the bulk pass is holding a list assembled before it ran and the
+    /// index is the thing the UI reads: a row claiming a thumbnail that is not
+    /// there is a broken image in the grid, which is worse than the null it
+    /// replaced.
+    pub fn record_thumbs(&mut self, ids: &[Id]) -> Result<()> {
+        for id in ids {
+            let Some(mut asset) = self.index.asset(*id)? else { continue };
+            let rel = crate::thumbs::rel_path(&asset.hash);
+            if !crate::thumbs::exists(&self.root, &asset.hash) {
+                continue;
+            }
+            if asset.thumb_path.as_deref() == Some(rel.as_str()) {
+                continue;
+            }
+            asset.thumb_path = Some(rel);
+            self.index.upsert_asset(&asset)?;
+        }
+        Ok(())
     }
 
     // ── replication ──────────────────────────────────────────────────────
@@ -1375,7 +1536,7 @@ impl Project {
 
     /// Where the index file for this project lives.
     pub fn index_path(&self) -> PathBuf {
-        paths::index_path(&self.meta.id)
+        self.index_path.clone()
     }
 
     /// Fold external edits (Obsidian, git pull, a collaborator on the share)
@@ -1503,9 +1664,14 @@ mod tests {
         let (dir, project) = new_project();
         let root = dir.path().join("ashfall.wobu");
         assert_eq!(project.root(), root);
-        for expected in
-            ["project.json", "nodes", "assets/originals", "assets/thumbs", ".wobu/tmp", ".wobu/sessions"]
-        {
+        for expected in [
+            "project.json",
+            "nodes",
+            "assets/originals",
+            "assets/thumbs",
+            ".wobu/tmp",
+            ".wobu/sessions",
+        ] {
             assert!(root.join(expected).exists(), "missing {expected}");
         }
     }
@@ -1538,10 +1704,7 @@ mod tests {
     fn creating_a_project_twice_in_the_same_place_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         Project::create(dir.path(), "Ashfall").unwrap();
-        assert!(matches!(
-            Project::create(dir.path(), "Ashfall"),
-            Err(Error::AlreadyExists(_))
-        ));
+        assert!(matches!(Project::create(dir.path(), "Ashfall"), Err(Error::AlreadyExists(_))));
     }
 
     #[test]
@@ -1681,7 +1844,8 @@ mod tests {
         let node = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
         let path = project.root().join("nodes/species/vashk.md");
 
-        let text = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Vashk-Prime");
+        let text =
+            std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Vashk-Prime");
         // Push mtime forward; a same-second write can otherwise look unchanged.
         std::fs::write(&path, text).unwrap();
         filetime_bump(&path);
@@ -1702,8 +1866,7 @@ mod tests {
         let sunborn = project.create_node(NodeKind::Species, "Sunborn", None).unwrap();
 
         let dir = project.root().join("nodes/species");
-        let (a, b, tmp) =
-            (dir.join("vashk.md"), dir.join("sunborn.md"), dir.join("swap.tmp"));
+        let (a, b, tmp) = (dir.join("vashk.md"), dir.join("sunborn.md"), dir.join("swap.tmp"));
         std::fs::rename(&a, &tmp).unwrap();
         std::fs::rename(&b, &a).unwrap();
         std::fs::rename(&tmp, &b).unwrap();
@@ -1956,7 +2119,8 @@ mod tests {
         let path = project.root().join("nodes/species/vashk.md");
 
         // Nadia saves while we hold an older copy.
-        let theirs = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Nadia's Vashk");
+        let theirs =
+            std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Nadia's Vashk");
         std::fs::write(&path, theirs).unwrap();
         filetime_bump(&path);
 

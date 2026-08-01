@@ -214,10 +214,7 @@ mod tests {
     #[test]
     fn blob_paths_are_sharded_and_relative() {
         let hash = "a3f9c1d2e4b5a6978081726354453627a3f9c1d2e4b5a6978081726354453627";
-        assert_eq!(
-            original_path(hash, "png"),
-            format!("assets/originals/a3/{hash}.png")
-        );
+        assert_eq!(original_path(hash, "png"), format!("assets/originals/a3/{hash}.png"));
         assert_eq!(thumb_path(hash), format!("assets/thumbs/a3/{hash}.webp"));
         assert_eq!(mesh_path(hash), format!("assets/meshes/a3/{hash}.glb"));
         for p in [original_path(hash, "png"), thumb_path(hash), mesh_path(hash)] {

@@ -640,10 +640,13 @@ mod tests {
         assert_eq!(returned.mime, "image/png");
 
         // And a response with text alongside the picture still finds the picture.
-        let mixed = response("completed", vec![
-            json!({"type": "text", "text": "Here is the image you asked for."}),
-            inline(&expected),
-        ]);
+        let mixed = response(
+            "completed",
+            vec![
+                json!({"type": "text", "text": "Here is the image you asked for."}),
+                inline(&expected),
+            ],
+        );
         assert_eq!(image(&mixed).unwrap().bytes, expected);
     }
 
@@ -708,9 +711,12 @@ mod tests {
         // file that no thumbnail can open.
         assert!(matches!(image(b"<html>502</html>"), Err(Error::NotAnImage { .. })));
 
-        let broken = response("completed", vec![json!({
-            "type": "image", "mime_type": "image/png", "data": "not base64!!",
-        })]);
+        let broken = response(
+            "completed",
+            vec![json!({
+                "type": "image", "mime_type": "image/png", "data": "not base64!!",
+            })],
+        );
         let error = image(&broken).unwrap_err();
         assert!(error.to_string().contains("image/png"), "{error}");
         assert_eq!(error.code(), "provider.bad_response");
@@ -722,10 +728,13 @@ mod tests {
         // the first. A `uri` coming back means it was not honoured — and this
         // crate has no fetcher, so reporting "no image" would hide the one fact
         // that explains it.
-        let body = response("completed", vec![json!({
-            "type": "image", "mime_type": "image/png",
-            "uri": "https://generativelanguage.googleapis.com/…",
-        })]);
+        let body = response(
+            "completed",
+            vec![json!({
+                "type": "image", "mime_type": "image/png",
+                "uri": "https://generativelanguage.googleapis.com/…",
+            })],
+        );
         let error = image(&body).unwrap_err();
         assert!(error.to_string().contains("link to the image"), "{error}");
     }
@@ -848,10 +857,10 @@ mod tests {
         // and the body is HTML. Depending on the JSON shape would make that a
         // mystery, on a call that has already cost money.
         assert!(matches!(error_for_status(401, b"<html>...", None), Error::BadKey { .. }));
-        assert!(matches!(error_for_status(429, b"", None), Error::RateLimited {
-            retry_after: None,
-            ..
-        }));
+        assert!(matches!(
+            error_for_status(429, b"", None),
+            Error::RateLimited { retry_after: None, .. }
+        ));
         assert!(matches!(error_for_status(400, b"", None), Error::Unsupported { .. }));
         assert!(matches!(error_for_status(502, b"bad gateway", None), Error::Unavailable { .. }));
 

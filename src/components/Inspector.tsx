@@ -7,13 +7,7 @@ import { Icon } from './Icon'
  * prompt are `wobu-influence`'s job and arrive with M5 — so this panel shows
  * its own shape and says so, rather than inventing layers.
  */
-export function Inspector({
-  selected,
-  kinds,
-}: {
-  selected: NodeSummary | null
-  kinds: KindIndex
-}) {
+export function Inspector({ selected, kinds }: { selected: NodeSummary | null; kinds: KindIndex }) {
   const def = selected ? kinds.get(selected.kind) : undefined
   const color = selected ? colorFor(def, selected.kind) : 'var(--border-str)'
 

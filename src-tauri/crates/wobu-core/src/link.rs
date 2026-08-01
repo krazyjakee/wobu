@@ -147,6 +147,9 @@ mod tests {
     fn hand_edited_weights_are_clamped() {
         let id = Id::nil();
         assert_eq!(Link { weight: 4.0, ..Link::new(id, LinkRole::MemberOf) }.clamped().weight, 1.0);
-        assert_eq!(Link { weight: -1.0, ..Link::new(id, LinkRole::MemberOf) }.clamped().weight, 0.0);
+        assert_eq!(
+            Link { weight: -1.0, ..Link::new(id, LinkRole::MemberOf) }.clamped().weight,
+            0.0
+        );
     }
 }

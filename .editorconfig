@@ -1,0 +1,20 @@
+# The editor half of the house style. Prettier owns `src/` and rustfmt owns
+# `src-tauri/`, so this file exists mainly for everything neither of them
+# touches — Markdown, TOML, YAML, and the moment before a formatter has run.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.rs]
+indent_size = 4
+
+# Two trailing spaces are a hard line break in Markdown, so stripping them
+# silently changes the rendered document.
+[*.md]
+trim_trailing_whitespace = false

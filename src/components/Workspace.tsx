@@ -2,10 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Conflict, NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
-import { useConflicts, useCorruptFiles, useKinds, useNodes } from '../lib/queries'
+import {
+  useConflicts,
+  useCorruptFiles,
+  useKinds,
+  useNodes,
+  usePresence,
+  useReportEditing,
+} from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
+import { PRESENCE_BANNER, editingText, editorsByNode, editorsOf, openedText } from '../lib/presence'
+import { READ_ONLY_BANNER, READ_ONLY_TEXT } from '../lib/readOnly'
 import { ancestorsOf, buildGroups, indexNodes } from '../lib/tree'
-import { useUI, report } from '../store/ui'
+import { useUI, report, toast } from '../store/ui'
 import { TitleBar } from './TitleBar'
 import { ModeRail } from './ModeRail'
 import { StatusBar } from './StatusBar'
@@ -24,10 +33,12 @@ import { useKeyboard } from '../hooks/useKeyboard'
 const RAIL = 52
 
 export function Workspace({ project }: { project: ProjectSummary }) {
+  const readOnly = project.readOnly
   const kindsQ = useKinds()
   const nodesQ = useNodes(true)
   const corruptQ = useCorruptFiles(true)
   const conflictsQ = useConflicts(true)
+  const { peers, ready: presenceReady } = usePresence(true)
 
   const mode = useUI((s) => s.mode)
   const navWidth = useUI((s) => s.navWidth)
@@ -38,9 +49,9 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const select = useUI((s) => s.select)
   const openAncestors = useUI((s) => s.openAncestors)
 
-  const [newNode, setNewNode] = useState<
-    { kind: NodeKind | null; parentId: string | null } | null
-  >(null)
+  const [newNode, setNewNode] = useState<{ kind: NodeKind | null; parentId: string | null } | null>(
+    null,
+  )
 
   const kindIndex = useMemo(() => indexKinds(kindsQ.data), [kindsQ.data])
   const nodes = useMemo(() => nodesQ.data ?? [], [nodesQ.data])
@@ -65,17 +76,19 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   }, [kindsQ.data, nodes])
 
   const groups = useMemo(
-    () => buildGroups(nodes.filter((n) => !singletonKinds.has(n.kind)), kindOrder, kindIndex),
+    () =>
+      buildGroups(
+        nodes.filter((n) => !singletonKinds.has(n.kind)),
+        kindOrder,
+        kindIndex,
+      ),
     [nodes, singletonKinds, kindOrder, kindIndex],
   )
 
   const conflicts = useMemo(() => conflictsQ.data ?? [], [conflictsQ.data])
 
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null
-  const chain = useMemo(
-    () => (selected ? ancestorsOf(selected.id, byId) : []),
-    [selected, byId],
-  )
+  const chain = useMemo(() => (selected ? ancestorsOf(selected.id, byId) : []), [selected, byId])
 
   // Conflicts on the node the editor is showing get a card; the rest get one
   // line saying where they are. A conflict on a node nobody happens to open is
@@ -90,6 +103,14 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
     return [here, elsewhere]
   }, [conflicts, selected])
+
+  // Everyone else's Wobu is told which node we have open, so their navigator can
+  // put a dot on it. Advisory in both directions: nothing sent here reserves a
+  // node, and nothing that comes back disables anything below.
+  useReportEditing(selectedId)
+
+  const peerEditors = useMemo(() => editorsByNode(peers), [peers])
+  const editorsHere = useMemo(() => editorsOf(selectedId, peers), [selectedId, peers])
 
   // A selection that no longer exists (deleted, or removed on disk) is dropped
   // rather than left pointing at nothing.
@@ -107,16 +128,24 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     [byId, select, openAncestors],
   )
 
+  // The one gate every route to the New-node sheet passes through — the
+  // navigator's button and group headers, the palette, ⌘N. Disabling the
+  // controls is what the user sees; this is what makes it true.
+  const startNewNode = useCallback(
+    (kind: NodeKind | null, parentId: string | null) => {
+      if (readOnly) return
+      setNewNode({ kind, parentId })
+    },
+    [readOnly],
+  )
+
   const openNewNode = useCallback(() => {
     const sel = useUI.getState().selectedId
     const s = sel ? byId.get(sel) : undefined
-    setNewNode({
-      kind: s && !singletonKinds.has(s.kind) ? s.kind : null,
-      parentId: s?.parentId ?? null,
-    })
-  }, [byId, singletonKinds])
+    startNewNode(s && !singletonKinds.has(s.kind) ? s.kind : null, s?.parentId ?? null)
+  }, [byId, singletonKinds, startNewNode])
 
-  useKeyboard({ onNewNode: openNewNode })
+  useKeyboard({ onNewNode: openNewNode, readOnly })
 
   /* ── navigator resize ── */
   const dragging = useRef(false)
@@ -141,8 +170,62 @@ export function Workspace({ project }: { project: ProjectSummary }) {
 
   // Banners describe a condition of *this* project folder, so opening a
   // different one starts clean rather than inheriting the last one's trouble.
+  //
+  // Read-only is raised in the same breath, and this is the only place it is
+  // said: it was settled by `paths::is_writable()` at open and holds for the
+  // whole session, so it belongs to the project rather than to a node or a
+  // control. Keyed by code, so even if this ran again it would collapse to one.
   const clearBanners = useUI((s) => s.clearBanners)
-  useEffect(() => clearBanners(), [project.id, clearBanners])
+  useEffect(() => {
+    clearBanners()
+    if (readOnly) {
+      useUI
+        .getState()
+        .raiseBanner({ code: READ_ONLY_BANNER, text: READ_ONLY_TEXT, retryable: false })
+    }
+  }, [project.id, readOnly, clearBanners])
+
+  // Both presence effects below are declared *after* that one on purpose:
+  // effects run in source order, so opening a project clears the banners first
+  // and this raises against the clean slate rather than into one about to be
+  // wiped.
+
+  // "Nadia has this project open." — once per project open, on the first answer
+  // that comes back rather than on every poll, and silent when nobody else is
+  // here. Announcing an empty folder every time is how the one message that
+  // matters gets dismissed unread.
+  const greeted = useRef<string | null>(null)
+  useEffect(() => {
+    if (!presenceReady || greeted.current === project.id) return
+    greeted.current = project.id
+    const text = openedText(peers)
+    if (text) toast(text)
+  }, [project.id, presenceReady, peers])
+
+  // The passive banner, raised once per *event* — this node becoming one that
+  // somebody else has open — rather than once per poll. Keyed by code exactly as
+  // the read-only banner is (#19), and the remembered key is what lets a
+  // dismissal stick until the situation itself changes.
+  //
+  // Informational, and that is the whole design: it names what happens if you
+  // both save. Nothing under it is disabled, and nothing may be.
+  const bannerKey = useRef<string | null>(null)
+  useEffect(() => {
+    const key = editorsHere.length
+      ? `${project.id}|${selectedId}|${editorsHere.map((p) => p.sessionId).join(',')}`
+      : null
+    if (bannerKey.current === key) return
+    bannerKey.current = key
+    if (!key) {
+      useUI.getState().clearBanner(PRESENCE_BANNER)
+      return
+    }
+    useUI.getState().raiseBanner({
+      code: PRESENCE_BANNER,
+      text: editingText(editorsHere, selected?.name ?? 'this node'),
+      retryable: false,
+    })
+  }, [project.id, selectedId, editorsHere, selected?.name])
 
   useEffect(() => {
     if (kindsQ.isError) report(kindsQ.error, 'Kind registry unavailable')
@@ -184,10 +267,11 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 kinds={kindIndex}
                 loading={nodesQ.isPending}
                 error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
-                readOnly={project.readOnly}
+                readOnly={readOnly}
                 corrupt={corruptQ.data ?? []}
+                editedElsewhere={peerEditors}
                 projectPath={project.path}
-                onNewNode={(kind, parentId) => setNewNode({ kind, parentId })}
+                onNewNode={startNewNode}
               />
             )}
             {!navCollapsed && (
@@ -222,7 +306,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 selected={selected}
                 chain={chain}
                 kinds={kindIndex}
-                readOnly={project.readOnly}
+                readOnly={readOnly}
                 onJump={jumpTo}
                 hasNodes={nodes.length > 0}
                 loading={nodesQ.isPending}
@@ -248,9 +332,20 @@ export function Workspace({ project }: { project: ProjectSummary }) {
         )}
       </div>
 
-      <StatusBar project={project} nodeCount={nodes.length} loading={nodesQ.isPending} />
+      <StatusBar
+        project={project}
+        nodeCount={nodes.length}
+        loading={nodesQ.isPending}
+        peers={peers}
+      />
 
-      <CommandPalette nodes={nodes} kinds={kindIndex} onJump={jumpTo} onNewNode={openNewNode} />
+      <CommandPalette
+        nodes={nodes}
+        kinds={kindIndex}
+        onJump={jumpTo}
+        onNewNode={openNewNode}
+        readOnly={readOnly}
+      />
 
       {newNode && (
         <NewNodeSheet

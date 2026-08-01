@@ -139,7 +139,11 @@
   border-right: 0;
 }
 .col-ai {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ai) 4%, transparent), transparent 220px);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ai) 4%, transparent),
+    transparent 220px
+  );
 }
 .col-head {
   display: flex;

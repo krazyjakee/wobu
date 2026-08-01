@@ -136,7 +136,9 @@ enum Ask {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "answer", rename_all = "snake_case")]
 enum Answer {
-    Body { node: Box<Outgoing> },
+    Body {
+        node: Box<Outgoing>,
+    },
     /// The end of a run of [`Answer::Body`]. A peer that asked for eight nodes
     /// and got three followed by this has been told, truthfully, that the other
     /// five are not there — a node deleted between a manifest and a request is
@@ -149,7 +151,9 @@ enum Answer {
     /// trusts and a hash the peer echoes is a hash the peer chose. Letting the
     /// receiver name the agreed bytes would let it license an overwrite of a
     /// file it has never seen.
-    Agreed { ids: Vec<Id> },
+    Agreed {
+        ids: Vec<Id>,
+    },
     /// Acknowledges [`Ask::Done`].
     Finished,
 }
@@ -470,8 +474,10 @@ mod tests {
         // than left in a comment: the product is what a stranger can make this
         // process hold at once, and `BATCH` has to stay well under the cap so
         // that a peer running this build never trips its own peer's limit.
-        assert!(BATCH <= MAX_BODIES, "this build would push more than a peer will read");
-        assert!(MAX_BODIES.saturating_mul(MAX_LINE) <= 128 * 1024 * 1024);
+        // Both are `const` blocks, so a build that breaks the arithmetic fails
+        // to compile rather than waiting for the test to be run.
+        const { assert!(BATCH <= MAX_BODIES, "this build would push more than a peer will read") };
+        const { assert!(MAX_BODIES.saturating_mul(MAX_LINE) <= 128 * 1024 * 1024) };
     }
 
     #[test]

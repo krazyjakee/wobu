@@ -78,7 +78,8 @@ function lcsOps(a: string[], b: string[]): Op[] {
   let j = 0
   while (i < n && j < m) {
     if (a[i] === b[j]) ops.push({ kind: 'same', a: i++, b: j++ })
-    else if (table[(i + 1) * w + j]! >= table[i * w + j + 1]!) ops.push({ kind: 'removed', a: i++, b: j })
+    else if (table[(i + 1) * w + j]! >= table[i * w + j + 1]!)
+      ops.push({ kind: 'removed', a: i++, b: j })
     else ops.push({ kind: 'added', a: i, b: j++ })
   }
   while (i < n) ops.push({ kind: 'removed', a: i++, b: j })
@@ -112,9 +113,21 @@ function pair(removed: Op[], added: Op[], a: string[], b: string[], offset: numb
         rightNo: offset + d.b + 1,
       })
     } else if (r) {
-      rows.push({ kind: 'removed', left: a[r.a]!, right: null, leftNo: offset + r.a + 1, rightNo: null })
+      rows.push({
+        kind: 'removed',
+        left: a[r.a]!,
+        right: null,
+        leftNo: offset + r.a + 1,
+        rightNo: null,
+      })
     } else if (d) {
-      rows.push({ kind: 'added', left: null, right: b[d.b]!, leftNo: null, rightNo: offset + d.b + 1 })
+      rows.push({
+        kind: 'added',
+        left: null,
+        right: b[d.b]!,
+        leftNo: null,
+        rightNo: offset + d.b + 1,
+      })
     }
   }
   return rows
@@ -135,7 +148,11 @@ export function diffLines(left: string, right: string): DiffRow[] {
   let head = 0
   while (head < a.length && head < b.length && a[head] === b[head]) head++
   let tail = 0
-  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) {
+  while (
+    tail < a.length - head &&
+    tail < b.length - head &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  ) {
     tail++
   }
 
@@ -149,9 +166,15 @@ export function diffLines(left: string, right: string): DiffRow[] {
     // Too big to align honestly, so it is not aligned at all rather than
     // aligned badly: everything on the left is removed, everything on the
     // right added, and the card's "open both" is the real answer.
-    rows.push(...pair(midA.map((_, k) => ({ kind: 'removed' as const, a: k, b: 0 })),
-                      midB.map((_, k) => ({ kind: 'added' as const, a: 0, b: k })),
-                      midA, midB, head))
+    rows.push(
+      ...pair(
+        midA.map((_, k) => ({ kind: 'removed' as const, a: k, b: 0 })),
+        midB.map((_, k) => ({ kind: 'added' as const, a: 0, b: k })),
+        midA,
+        midB,
+        head,
+      ),
+    )
   } else {
     let k = 0
     const ops = lcsOps(midA, midB)

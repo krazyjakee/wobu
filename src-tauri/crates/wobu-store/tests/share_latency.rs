@@ -117,11 +117,8 @@ fn reconcile_does_read_the_one_file_that_moved() {
     let (_dir, root) = world(20);
     let mut project = Project::open(&root).unwrap();
 
-    let target = project
-        .index()
-        .rel_path_of(project.list_nodes().unwrap()[0].id)
-        .unwrap()
-        .expect("indexed");
+    let target =
+        project.index().rel_path_of(project.list_nodes().unwrap()[0].id).unwrap().expect("indexed");
     let path = wobu_store::paths::from_rel_string(&root, &target);
     let text = fs::read_to_string(&path).unwrap();
     fs::write(&path, text.replace("## Notes", "## Notes\n\nedited elsewhere")).unwrap();

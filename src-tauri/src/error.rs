@@ -231,14 +231,8 @@ impl WobuError {
         // Constructing an error is the same event as the user seeing one, so
         // this is the one place that catches every failure for the log without
         // a `diag::error` at each call site — the same argument as redaction.
-        diag::error(&format!("{}: {message}", code.as_str()));
-        WobuError {
-            code,
-            message,
-            detail: None,
-            retryable: code.retryable(),
-            conflict_path: None,
-        }
+        diag::error(format!("{}: {message}", code.as_str()));
+        WobuError { code, message, detail: None, retryable: code.retryable(), conflict_path: None }
     }
 
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
@@ -246,7 +240,7 @@ impl WobuError {
         // A separate line rather than part of the one above, because the detail
         // is the OS's own wording and is often the only thing in the log that
         // says *why*. At debug so a quiet log still carries the summary.
-        diag::record(diag::Level::Debug, &format!("  detail: {detail}"));
+        diag::record(diag::Level::Debug, format!("  detail: {detail}"));
         self.detail = Some(detail);
         self
     }
@@ -291,7 +285,19 @@ impl From<StoreError> for WobuError {
             // so it lands in the same bucket as any other rejected argument.
             StoreError::NotAConflict(_) => Code::Invalid,
             StoreError::Malformed { .. } | StoreError::MissingFrontmatter(_) => Code::Malformed,
-            StoreError::NotAnImage => Code::NotAnImage,
+            // An animation shares the code and not the sentence. `NotAnImage`
+            // is what the webview already switches on to put a refused drop
+            // back on the drop target rather than in an error toast, and the
+            // two refusals want exactly the same handling there — what differs
+            // is the wording, which travels in `message` and needs no new code
+            // on the far side to be read.
+            StoreError::NotAnImage | StoreError::AnimatedImage => Code::NotAnImage,
+            // A blob already in the library whose pixels will not come back
+            // out — almost always one a sync client has not finished copying.
+            // `Malformed` rather than `NotAnImage`, because nothing was dropped
+            // on a drop target and there is no import to put back: the file is
+            // in the folder and it is the *contents* that are wrong.
+            StoreError::Undecodable { .. } => Code::Malformed,
             StoreError::ReadOnly => Code::ReadOnly,
             StoreError::Disconnected => Code::ShareUnmounted,
             StoreError::Cancelled => Code::Cancelled,
@@ -330,7 +336,10 @@ fn is_gone(e: &std::io::Error) -> bool {
     use std::io::ErrorKind;
     matches!(
         e.kind(),
-        ErrorKind::NotFound | ErrorKind::NotConnected | ErrorKind::HostUnreachable | ErrorKind::BrokenPipe
+        ErrorKind::NotFound
+            | ErrorKind::NotConnected
+            | ErrorKind::HostUnreachable
+            | ErrorKind::BrokenPipe
     )
 }
 
@@ -400,8 +409,9 @@ mod tests {
     #[test]
     fn a_key_cannot_reach_the_webview_through_any_field() {
         // The constructor is the only way in, so this covers every crate.
-        let e = WobuError::new(Code::ProviderBadKey, "401 from x-api-key: sk-ant-api03-leakleakleak")
-            .with_detail("retried with Authorization: Bearer sk-ant-api03-leakleakleak");
+        let e =
+            WobuError::new(Code::ProviderBadKey, "401 from x-api-key: sk-ant-api03-leakleakleak")
+                .with_detail("retried with Authorization: Bearer sk-ant-api03-leakleakleak");
 
         let serialised = json(&e).to_string();
         assert!(!serialised.contains("sk-ant-api03-leakleakleak"), "{serialised}");

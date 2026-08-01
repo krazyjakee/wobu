@@ -90,8 +90,14 @@ function addKey(): HTMLElement {
 
 /** Everything React Query is holding, as text a key could be found in. */
 function cached(): string {
-  const queries = qc.getQueryCache().getAll().map((q) => ({ key: q.queryKey, state: q.state }))
-  const mutations = qc.getMutationCache().getAll().map((m) => m.state)
+  const queries = qc
+    .getQueryCache()
+    .getAll()
+    .map((q) => ({ key: q.queryKey, state: q.state }))
+  const mutations = qc
+    .getMutationCache()
+    .getAll()
+    .map((m) => m.state)
   return JSON.stringify({ queries, mutations })
 }
 
@@ -166,9 +172,7 @@ describe('a project whose provider has no key here', () => {
     selections = { providers: { text: { provider: 'gemini' } }, readOnly: false }
     await open()
 
-    expect(
-      await screen.findByText(/Gemini selected — no key on this machine/),
-    ).toBeTruthy()
+    expect(await screen.findByText(/Gemini selected — no key on this machine/)).toBeTruthy()
     expect(screen.getByText(/Enhance stays off until one is added/)).toBeTruthy()
 
     // And the way out is one click from the sentence, not a hunt through the

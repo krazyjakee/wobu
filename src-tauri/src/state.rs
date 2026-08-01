@@ -108,6 +108,15 @@ pub struct AppState {
     /// every command needs for the whole duration of a scan that can take
     /// minutes on a NAS.
     opening: Arc<Mutex<Option<Cancel>>>,
+    /// The cancel token for a thumbnail pass currently running, if any.
+    ///
+    /// Its own slot rather than sharing `opening`, because the two overlap: a
+    /// project that arrives over sync with no `assets/thumbs/` starts drawing
+    /// them as soon as it is open, and cancelling that must not read as
+    /// cancelling a scan that is no longer running — nor the reverse, which
+    /// would leave the user's "stop opening this" quietly grinding through a
+    /// library.
+    thumbing: Arc<Mutex<Option<Cancel>>>,
     /// Whoever needs to know which project is open — in practice `sync.rs`, and
     /// nothing else. See [`Handover`].
     ///
@@ -262,6 +271,25 @@ impl AppState {
         }
     }
 
+    /// Hand out a cancel token for a thumbnail pass about to start, replacing
+    /// any previous one for the reason [`begin_open`](Self::begin_open) gives.
+    pub fn begin_thumbs(&self) -> Cancel {
+        let cancel = Cancel::new();
+        *self.thumbing.lock() = Some(cancel.clone());
+        cancel
+    }
+
+    pub fn finish_thumbs(&self) {
+        *self.thumbing.lock() = None;
+    }
+
+    /// Stop the thumbnail pass in flight, if there is one.
+    pub fn cancel_thumbs(&self) {
+        if let Some(cancel) = self.thumbing.lock().as_ref() {
+            cancel.cancel();
+        }
+    }
+
     /// Install a freshly opened project, replacing (and closing) whatever was
     /// open before, then start watching its folder.
     pub fn install(&self, app: &AppHandle, project: Project) {
@@ -296,6 +324,10 @@ impl AppState {
         // below sees a stale generation and bows out rather than reconciling a
         // project on its way out.
         self.generation.fetch_add(1, Ordering::SeqCst);
+        // A thumbnail pass holds no lock and no handle on the project — that is
+        // the point of it — so nothing else would ever stop it reading the
+        // folder of a world the user has shut, or of the one they shut it for.
+        self.cancel_thumbs();
 
         // Read the id and give the lock straight back before telling sync, so
         // that a round which is inside `with_project` at this instant can finish
@@ -322,9 +354,7 @@ impl AppState {
         let app = app.clone();
         let watched = root.to_path_buf();
 
-        let result = Watcher::start(root, move || {
-            this.on_folder_event(&app, &watched, generation)
-        });
+        let result = Watcher::start(root, move || this.on_folder_event(&app, &watched, generation));
 
         match result {
             Ok(w) => Some(w),
@@ -445,6 +475,7 @@ impl AppState {
             slot: Arc::clone(&self.slot),
             generation: Arc::clone(&self.generation),
             opening: Arc::clone(&self.opening),
+            thumbing: Arc::clone(&self.thumbing),
             handover: Arc::clone(&self.handover),
         }
     }
@@ -524,7 +555,7 @@ impl Notify for Bridge {
                 // never passes through it, so without this line the one class
                 // of error the user is most likely to ask about would be the
                 // one class missing from the log they send us.
-                diag::error(&format!("job {}: {}", failed.id, failed.failure.message));
+                diag::error(format!("job {}: {}", failed.id, failed.failure.message));
                 self.app.emit(events::JOB_ERROR, failed)
             }
         };

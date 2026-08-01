@@ -82,7 +82,7 @@ use wobu_sync::{Disposition, Identity, Origin, Reach, Ticket};
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::state::{self, AppState};
-use manager::{SyncManager, Setup, Wake};
+use manager::{Setup, SyncManager, Wake};
 use shares::Shares;
 
 /// How long a share dialog will wait for a relay before minting the ticket
@@ -130,10 +130,10 @@ impl SyncState {
         let identity = Identity::load();
         let alias = identity.alias();
         match identity.origin() {
-            Origin::Ephemeral => diag::error(&format!(
+            Origin::Ephemeral => diag::error(format!(
                 "sync: the credential store would not answer; syncing as {alias} for this run only"
             )),
-            origin => diag::info(&format!("sync: this installation is {alias} ({origin:?})")),
+            origin => diag::info(format!("sync: this installation is {alias} ({origin:?})")),
         }
         // #76's wiring, and the whole reason the alias is loaded before anything
         // else. A `false` means somebody already installed one — two calls in
@@ -146,15 +146,11 @@ impl SyncState {
         let slot = Arc::clone(&self.manager);
         let wake: Arc<dyn Wake> = Arc::new(Window { app: app.clone(), state: state.handle() });
         tauri::async_runtime::spawn(async move {
-            let setup = Setup {
-                identity,
-                reach: Reach::Internet,
-                shares: Shares::load(),
-                poll: true,
-            };
+            let setup =
+                Setup { identity, reach: Reach::Internet, shares: Shares::load(), poll: true };
             match SyncManager::start(state, wake, setup).await {
                 Ok(manager) => {
-                    diag::info(&format!(
+                    diag::info(format!(
                         "sync: listening as {} for {} project(s)",
                         manager.identity().alias(),
                         manager.shares().len()
@@ -165,7 +161,7 @@ impl SyncState {
                 // is lost is syncing, and an app that refused to start because a
                 // UDP socket would not bind would be worse than one that says so
                 // in its log and carries on.
-                Err(e) => diag::error(&format!("sync: could not start: {}", e.message)),
+                Err(e) => diag::error(format!("sync: could not start: {}", e.message)),
             }
         });
     }
@@ -370,7 +366,7 @@ pub async fn sync_accept(token: String, sync: State<'_, SyncState>) -> CommandRe
 
     let joined = manager.accept(&ticket) == Disposition::Join;
     if joined {
-        diag::info(&format!("sync: joined {project} with {alias}"));
+        diag::info(format!("sync: joined {project} with {alias}"));
     }
     Ok(Accepted { project, alias, joined })
 }
@@ -485,13 +481,10 @@ pub mod tests {
         let theirs = new_id();
         manager.share(mine, &dir.join("Ashfall.wobu"));
 
-        let peer = SyncEndpoint::bind(
-            wobu_sync::Config::loopback(),
-            Arc::new(Nothing),
-            Arc::new(Nothing),
-        )
-        .await
-        .unwrap();
+        let peer =
+            SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
+                .await
+                .unwrap();
 
         let held = peer.ticket(mine, Grant::generate());
         let unknown = peer.ticket(theirs, Grant::generate());
@@ -557,9 +550,11 @@ pub mod tests {
         // endpoint sits in iroh's own connect timeout, which is half a minute,
         // and "did not get in within three seconds" is the whole of what this
         // asserts. A timeout here is a pass — it is the peer not getting in.
-        let after =
-            tokio::time::timeout(Duration::from_secs(3), dialler.connect(manager.endpoint().addr(), held))
-                .await;
+        let after = tokio::time::timeout(
+            Duration::from_secs(3),
+            dialler.connect(manager.endpoint().addr(), held),
+        )
+        .await;
         assert!(!matches!(after, Ok(Ok(_))), "a shut-down manager admitted somebody: {after:?}");
 
         dialler.shutdown().await.unwrap();
@@ -648,14 +643,10 @@ pub mod tests {
         // The peer's half of the manifest exchange: it holds nothing. Under the
         // rule `wobu-sync` states twice, that is "never had it" and not
         // "deleted", so the app's side plans to send rather than to remove.
-        let exchange = wobu_sync::manifest::exchange(
-            &session,
-            &[],
-            &[],
-            wobu_sync::manifest::IDLE_TIMEOUT,
-        )
-        .await
-        .expect("both sides swap manifests");
+        let exchange =
+            wobu_sync::manifest::exchange(&session, &[], &[], wobu_sync::manifest::IDLE_TIMEOUT)
+                .await
+                .expect("both sides swap manifests");
         assert!(exchange.is_whole());
         // A fresh project is not empty — `Project::create` seeds it — so this
         // asks whether the node reached the manifest rather than counting.

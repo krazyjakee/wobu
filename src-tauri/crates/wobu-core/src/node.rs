@@ -435,8 +435,7 @@ mod tests {
         let region = node(NodeKind::Setting, "Ember Coast");
         let city_id = crate::new_id();
         let region_id = region.id;
-        let lookup =
-            move |id: Id| (id == city_id).then_some((NodeKind::Setting, Some(region_id)));
+        let lookup = move |id: Id| (id == city_id).then_some((NodeKind::Setting, Some(region_id)));
 
         assert!(matches!(
             validate_parent(&region, Some(city_id), &lookup),

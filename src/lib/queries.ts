@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -23,6 +23,7 @@ import type {
   KindDef,
   NodeKind,
   NodeSummary,
+  Peer,
   ProjectSummary,
   ProviderSelections,
   PromptBudget,
@@ -31,14 +32,8 @@ import type {
   SliderSetting,
   WobuNode,
 } from './api'
-import {
-  applyCommand,
-  birthEntry,
-  deletionEntry,
-  editEntry,
-  moveEntry,
-  useUndoStack,
-} from './undo'
+import { applyCommand, birthEntry, deletionEntry, editEntry, moveEntry, useUndoStack } from './undo'
+import { PRESENCE_POLL_MS, livePeers } from './presence'
 import { report, toast, useUI } from '../store/ui'
 
 /* ── keys ─────────────────────────────────────────────────────────────────── */
@@ -70,6 +65,9 @@ export const qk = {
   // in the world yet, and a collaborator's edit does not change what a provider
   // already sent us.
   enhancePending: ['enhance_pending'] as const,
+  // Nor is this one: presence moves on its own heartbeat, and a collaborator
+  // opening a node changes who is here without changing the world at all.
+  peers: ['presence_peers'] as const,
 }
 
 /** Everything that the file watcher can invalidate. */
@@ -182,7 +180,9 @@ export function useResolveConflict() {
       api.conflictResolve(v.relPath, v.keep, v.expectedHash),
     onSuccess: (result) => {
       if (result.outcome === 'stale') {
-        toast('That node changed while the conflict was open. Nothing was written — here it is again.')
+        toast(
+          'That node changed while the conflict was open. Nothing was written — here it is again.',
+        )
       } else if (result.outcome === 'conflict') {
         toast(`Someone saved first. Your pick was kept as ${result.conflictPath}.`, 'error')
       }
@@ -190,6 +190,55 @@ export function useResolveConflict() {
     },
     onError: (e) => report(e, 'Could not resolve the conflict'),
   })
+}
+
+/* ── presence ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Who else has this project open, polled.
+ *
+ * `ready` is separate from the list because the two say different things: an
+ * empty list before the first answer means "we have not looked yet", and an
+ * empty list after it means "nobody is here". The greeting on open is allowed
+ * to fire on the second and must never fire on the first.
+ *
+ * A failed poll is reported nowhere. Either no project is open yet, or the
+ * share is away and the banner for that is already on screen — and a toast
+ * every ten seconds about a courtesy feature is noise. The list keeps whatever
+ * it last knew until `livePeers` ages it out.
+ */
+export function usePresence(enabled: boolean): { peers: Peer[]; ready: boolean } {
+  const { data, isSuccess } = useQuery({
+    queryKey: qk.peers,
+    queryFn: api.presencePeers,
+    enabled,
+    refetchInterval: PRESENCE_POLL_MS,
+    retry: false,
+  })
+
+  const peers = useMemo(() => livePeers(data), [data])
+  return { peers, ready: isSuccess }
+}
+
+/**
+ * Tell everyone else which node this session has open.
+ *
+ * Fire-and-forget, and a failure is swallowed: this is what puts a dot on
+ * somebody else's navigator, and a courtesy that could not be paid — a
+ * read-only share, no project open yet — is not worth interrupting anyone for.
+ *
+ * The whole list every time rather than an add/remove pair, matching
+ * `presence_editing`. A `null` selection sends `[]`, and that is the half worth
+ * keeping: without it the last node we happened to look at stays marked as ours
+ * on everyone else's rows for the rest of the session.
+ */
+export function useReportEditing(nodeId: string | null): void {
+  useEffect(() => {
+    if (!api.isTauri()) return
+    void api.presenceEditing(nodeId ? [nodeId] : []).catch(() => {
+      /* advisory in both directions: nobody needs to hear that a courtesy failed */
+    })
+  }, [nodeId])
 }
 
 /**
@@ -327,6 +376,10 @@ export function useCloseProject() {
       qc.removeQueries({ queryKey: qk.assets })
       // Cached hits name nodes in a world that is no longer open.
       qc.removeQueries({ queryKey: ['node_search'] })
+      // As are the people in it. Removed rather than left to age out, because a
+      // minute of the launcher still knowing who was in the folder we just
+      // closed is a minute of describing a project nobody has open.
+      qc.removeQueries({ queryKey: qk.peers })
       // As do cached stacks — removed rather than invalidated, because a stale
       // one served for a moment would be the *previous* project's world on
       // screen, which is the one thing a local-first app must never do.
@@ -555,13 +608,7 @@ export function useUnlinkAsset() {
 /** Re-weight or mute a reference without detaching it. */
 export function useUpdateAssetLink() {
   return useAssetLinkMutation(
-    (v: {
-      nodeId: string
-      assetId: string
-      role: AssetRole
-      weight?: number
-      enabled?: boolean
-    }) =>
+    (v: { nodeId: string; assetId: string; role: AssetRole; weight?: number; enabled?: boolean }) =>
       api.assetLinkUpdate(v.nodeId, v.assetId, v.role, {
         weight: v.weight,
         enabled: v.enabled,

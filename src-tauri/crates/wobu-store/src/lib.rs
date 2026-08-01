@@ -28,10 +28,11 @@ pub mod presence;
 pub mod project;
 pub mod recent;
 pub mod scan;
+pub mod thumbs;
 pub mod watcher;
 
 pub use apply::{Applied, ApplyReport, Decision, Incoming, Outgoing, Plan, Refused};
-pub use assets::ImportedAsset;
+pub use assets::{ImportWarning, ImportedAsset};
 pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};
@@ -39,4 +40,5 @@ pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{Enhanced, Project, ProjectMeta, ProjectSummary, SaveOutcome};
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};
+pub use thumbs::{ThumbTarget, Thumbnail};
 pub use watcher::{Strategy, Watcher};

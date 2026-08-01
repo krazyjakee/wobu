@@ -238,10 +238,7 @@ fn read_level(dir: &Path) -> Level {
     {
         return level;
     }
-    fs::read_to_string(dir.join(LEVEL_FILE))
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_default()
+    fs::read_to_string(dir.join(LEVEL_FILE)).ok().and_then(|s| s.parse().ok()).unwrap_or_default()
 }
 
 /* ── the process-wide log ─────────────────────────────────────────────────── */
@@ -287,10 +284,7 @@ mod tests {
     fn scratch(name: &str) -> PathBuf {
         static N: AtomicUsize = AtomicUsize::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "wobu-diag-{}-{name}-{n}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("wobu-diag-{}-{name}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

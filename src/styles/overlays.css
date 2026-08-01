@@ -453,6 +453,20 @@
   border-bottom: 1px solid color-mix(in srgb, #c4384a 45%, transparent);
   color: #f0c2c8;
 }
+/* A read-only folder is a state, not a failure: it is an ordinary way to open
+   somebody else's world, and the alarm colouring above would say something
+   broke. It still occupies the banner row, because it is the one explanation
+   for every control that is switched off. */
+.banner[data-code='project.read_only'],
+/* Same reasoning, and it matters more here: somebody else having a node open is
+   an ordinary Tuesday on a shared folder, and nothing under this banner is
+   disabled because of it. Alarm colouring would read as "stop typing", which is
+   the one thing advisory presence must never say. */
+.banner[data-code='presence.editing_elsewhere'] {
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
 .banner > svg {
   flex: none;
   margin-top: 1px;

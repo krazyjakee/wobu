@@ -69,6 +69,37 @@ pub enum Error {
     #[error("that file is not an image Wobu can read (PNG, JPEG, GIF and WebP are supported)")]
     NotAnImage,
 
+    /// An import of an animation — an animated GIF, an APNG, an animated WebP.
+    ///
+    /// Its own variant rather than folding into [`Error::NotAnImage`], because
+    /// the two need opposite advice: that one means "convert it", and this one
+    /// means "export the frame you meant". Telling someone their animated GIF
+    /// is not an image Wobu can read would be both wrong and unactionable —
+    /// they can see it perfectly well in their file browser.
+    ///
+    /// Refusing rather than silently taking frame one is the deliberate half.
+    /// A reference image is one picture; picking a frame on the user's behalf
+    /// makes the asset depend on a choice nothing on screen records, and
+    /// re-encoding a single frame out would make the blob's hash depend on our
+    /// encoder rather than on their file. See `assets`' module docs.
+    #[error(
+        "that image holds more than one frame — export the single frame you want and import that"
+    )]
+    AnimatedImage,
+
+    /// A blob already in the library whose pixels will not come back out.
+    ///
+    /// Distinct from [`Error::NotAnImage`], which is a file refused at the
+    /// door, and the difference is what the caller does next. This one is
+    /// reached only by something that decodes — a thumbnail, and later a
+    /// provider payload — and the usual cause is a blob a sync client has not
+    /// finished copying: the header parsed, which is how it got indexed, and
+    /// the pixel data stops early. That is a *transient* state, so the answer
+    /// is to leave the thumbnail unmade and ask again later rather than to
+    /// write a broken one or drop the asset.
+    #[error("{path} could not be decoded: {reason}")]
+    Undecodable { path: PathBuf, reason: String },
+
     #[error("the project folder is read-only")]
     ReadOnly,
 

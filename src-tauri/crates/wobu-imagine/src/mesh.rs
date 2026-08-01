@@ -342,10 +342,7 @@ impl MeshFile {
 
     /// Lowercased, without the dot, empty for a name with no extension.
     pub fn extension(&self) -> String {
-        self.name
-            .rsplit_once('.')
-            .map(|(_, ext)| ext.to_ascii_lowercase())
-            .unwrap_or_default()
+        self.name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).unwrap_or_default()
     }
 }
 
@@ -375,7 +372,8 @@ pub enum MeshFormat {
 impl MeshFormat {
     /// What the file is, judged by its name.
     pub fn from_filename(name: &str) -> MeshFormat {
-        let ext = name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).unwrap_or_default();
+        let ext =
+            name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).unwrap_or_default();
         match ext.as_str() {
             "glb" => MeshFormat::Glb,
             "gltf" => MeshFormat::Gltf,
@@ -710,8 +708,7 @@ mod tests {
         // The case this non-`Result` shape exists for, and it is the common case
         // here rather than the rare one: a mesh job is minutes long, so nearly
         // every way it fails happens after the money was spent.
-        let outcome =
-            MeshOutcome::new(MeshUsage::billed(1), Err(Error::NoMesh)) ;
+        let outcome = MeshOutcome::new(MeshUsage::billed(1), Err(Error::NoMesh));
         assert!(outcome.usage.is_billed());
         assert!(!outcome.is_ok());
 

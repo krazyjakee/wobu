@@ -287,9 +287,7 @@ mod tests {
         // status code, so an adapter that lumps them together produces either a
         // hammered key or a dead end.
         assert!(!Error::BadKey { provider: "Anthropic" }.is_retryable());
-        assert!(
-            Error::RateLimited { provider: "Anthropic", retry_after: None }.is_retryable()
-        );
+        assert!(Error::RateLimited { provider: "Anthropic", retry_after: None }.is_retryable());
     }
 
     #[test]

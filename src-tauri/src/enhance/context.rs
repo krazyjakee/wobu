@@ -216,10 +216,7 @@ fn reference_roles(node: &Node) -> Option<String> {
     if roles.is_empty() {
         return None;
     }
-    Some(format!(
-        "\n## Reference images already attached\n\n{}\n",
-        roles.join(", "),
-    ))
+    Some(format!("\n## Reference images already attached\n\n{}\n", roles.join(", "),))
 }
 
 #[cfg(test)]
@@ -249,26 +246,30 @@ mod tests {
     }
 
     fn ashfall() -> Ashfall {
-        let style = described_node(NodeKind::StyleGuide, "Ashfall House Style", &[(
-            "rendering",
-            SectionValue::Text("Ash-dusted, matte, hand-painted".into()),
-        )]);
-        let vashk = described_node(NodeKind::Species, "Vashk", &[
-            ("anatomy", SectionValue::Text("Four-jointed digitigrade legs".into())),
-            ("never", SectionValue::List(vec!["upright plantigrade stance".into()])),
-        ]);
-        let guild = described_node(NodeKind::Culture, "Cinder Guild", &[(
-            "costume",
-            SectionValue::Text("Ash-grey longcoats, brass fastenings".into()),
-        )]);
+        let style = described_node(
+            NodeKind::StyleGuide,
+            "Ashfall House Style",
+            &[("rendering", SectionValue::Text("Ash-dusted, matte, hand-painted".into()))],
+        );
+        let vashk = described_node(
+            NodeKind::Species,
+            "Vashk",
+            &[
+                ("anatomy", SectionValue::Text("Four-jointed digitigrade legs".into())),
+                ("never", SectionValue::List(vec!["upright plantigrade stance".into()])),
+            ],
+        );
+        let guild = described_node(
+            NodeKind::Culture,
+            "Cinder Guild",
+            &[("costume", SectionValue::Text("Ash-grey longcoats, brass fastenings".into()))],
+        );
 
         let mut kael = Node::new(NodeKind::Character, "Kael Vantris").unwrap();
         kael.summary = "Ashfall scout, guild-sworn.".into();
         kael.notes_raw = "Forelimb a joint short. Carries a bone censer.".into();
-        kael.links = vec![
-            Link::new(vashk.id, LinkRole::SpeciesOf),
-            Link::new(guild.id, LinkRole::MemberOf),
-        ];
+        kael.links =
+            vec![Link::new(vashk.id, LinkRole::SpeciesOf), Link::new(guild.id, LinkRole::MemberOf)];
         kael.attributes.insert("height_cm".into(), Value::from(190));
         kael.attributes.insert("hide".into(), Value::from("ash-grey"));
         kael.description = Some(Description::from_sections([(

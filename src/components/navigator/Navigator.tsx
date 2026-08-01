@@ -4,6 +4,7 @@ import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
+import { editingTitle } from '../../lib/presence'
 import { useUI, report, toast } from '../../store/ui'
 import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
@@ -28,6 +29,7 @@ export function Navigator({
   error,
   readOnly,
   corrupt,
+  editedElsewhere,
   projectPath,
   onNewNode,
 }: {
@@ -40,6 +42,8 @@ export function Navigator({
   error: string | null
   readOnly: boolean
   corrupt: CorruptFile[]
+  /** Node id → who else has it open. Advisory; see `lib/presence.ts`. */
+  editedElsewhere: Map<string, string>
   projectPath: string
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
 }) {
@@ -128,6 +132,7 @@ export function Navigator({
                   style={{ color: colorFor(def, n.kind) }}
                 />
                 <span className="nm">{n.name}</span>
+                <PeerDot who={editedElsewhere.get(n.id)} />
                 <StaleDot state={n.descriptionState} />
               </button>
             )
@@ -189,7 +194,7 @@ export function Navigator({
                 onContextMenu={(e) => {
                   e.preventDefault()
                   setCtx(null)
-                  onNewNode(g.kind, null)
+                  if (!readOnly) onNewNode(g.kind, null)
                 }}
               >
                 <Icon name="chev" />
@@ -220,6 +225,7 @@ export function Navigator({
                       onDropOn={(id) => doMove(id)}
                       setDropId={setDropId}
                       readOnly={readOnly}
+                      editedElsewhere={editedElsewhere}
                     />
                   ))}
                 </div>
@@ -308,6 +314,26 @@ function StaleDot({ state }: { state: NodeSummary['descriptionState'] }) {
   )
 }
 
+/**
+ * Somebody else has this node open.
+ *
+ * Quiet on purpose, and quieter than the stale dot beside it. This marks a
+ * *coincidence*, not a problem: both of you can type, both of you can save, and
+ * a save that loses the race is parked as a conflict file rather than lost. A
+ * marker that read as a warning would teach people to wait for a row to clear,
+ * which is the hard-lock behaviour presence exists to avoid (`docs/07-file-shares.md`).
+ *
+ * `who` is absent for almost every row, which is also why it is the prop: a
+ * boolean would need a second lookup to say a name in the tooltip, and a dot
+ * with no name attached is just a mark.
+ */
+function PeerDot({ who }: { who: string | undefined }) {
+  if (!who) return null
+  return (
+    <span className="peer" role="img" aria-label={editingTitle(who)} title={editingTitle(who)} />
+  )
+}
+
 function deleteWarning(node: NodeSummary, nodes: NodeSummary[]): string {
   const kids = descendantsOf(node.id, nodes).size
   const base = 'Its Markdown file is removed from the project folder.'
@@ -382,6 +408,7 @@ function Row({
   onDropOn,
   setDropId,
   readOnly,
+  editedElsewhere,
 }: {
   t: TreeNode
   kinds: KindIndex
@@ -399,6 +426,7 @@ function Row({
   onDropOn: (id: string) => void
   setDropId: (id: string | null) => void
   readOnly: boolean
+  editedElsewhere: Map<string, string>
 }) {
   const n = t.node
   const def = kinds.get(n.kind)
@@ -460,6 +488,7 @@ function Row({
         )}
         <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
         <span className="nm">{n.name}</span>
+        <PeerDot who={editedElsewhere.get(n.id)} />
         <StaleDot state={n.descriptionState} />
       </button>
       {hasKids &&
@@ -483,6 +512,7 @@ function Row({
             onDropOn={onDropOn}
             setDropId={setDropId}
             readOnly={readOnly}
+            editedElsewhere={editedElsewhere}
           />
         ))}
     </>

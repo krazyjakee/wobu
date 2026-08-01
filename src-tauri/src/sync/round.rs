@@ -287,9 +287,9 @@ async fn answer(
                 bodies::bodies(&mut send, &outgoing).await?;
             }
             Request::Give(nodes) => {
-                let incoming: Vec<Incoming> =
-                    nodes.into_iter().map(Incoming::from).collect();
-                let report = replica.with(|project| Ok(project.apply_from_peer(peer, &incoming)?))?;
+                let incoming: Vec<Incoming> = nodes.into_iter().map(Incoming::from).collect();
+                let report =
+                    replica.with(|project| Ok(project.apply_from_peer(peer, &incoming)?))?;
                 absorb(&mut half, &report);
                 // Acknowledged *after* the write, which is the only ordering
                 // that makes an acknowledgement mean anything: the peer moves a
@@ -337,10 +337,7 @@ fn agreed(report: &ApplyReport) -> Vec<Id> {
         .outcomes
         .iter()
         .filter(|(_, applied)| {
-            matches!(
-                applied,
-                Applied::FastForwarded { .. } | Applied::Converged | Applied::InStep
-            )
+            matches!(applied, Applied::FastForwarded { .. } | Applied::Converged | Applied::InStep)
         })
         .map(|(id, _)| *id)
         .collect()
@@ -361,7 +358,7 @@ fn absorb(half: &mut Half, report: &ApplyReport) {
         // Worth a log line and nothing more. A refusal is per node and never
         // aborts a batch — one mangled file from one peer must not stop the
         // other two hundred good ones — and the strings inside are a stranger's.
-        crate::diag::error(&format!("sync: refused node {id}: {why:?}"));
+        crate::diag::error(format!("sync: refused node {id}: {why:?}"));
     }
 }
 

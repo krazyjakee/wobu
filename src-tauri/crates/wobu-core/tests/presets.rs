@@ -30,13 +30,10 @@ fn presets_for_preserves_registry_order() {
     // The dropdown order is the table order in `docs/04-influence-engine.md`, not
     // whatever a filter happens to produce.
     let ids = |kind| presets_for(kind).iter().map(|p| p.id).collect::<Vec<_>>();
-    assert_eq!(ids(NodeKind::Character), [
-        "character_sheet",
-        "turnaround",
-        "portrait_study",
-        "costume_plate",
-        "material_study"
-    ]);
+    assert_eq!(
+        ids(NodeKind::Character),
+        ["character_sheet", "turnaround", "portrait_study", "costume_plate", "material_study"]
+    );
     assert_eq!(ids(NodeKind::Environment), ["material_study", "environment_matte", "interior"]);
 }
 
@@ -102,17 +99,20 @@ fn presets_cross_the_bridge_as_camel_case_json() {
     let object = value.as_object().unwrap();
     let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
     keys.sort_unstable();
-    assert_eq!(keys, [
-        "aspect",
-        "defaultFor",
-        "framing",
-        "id",
-        "images",
-        "kinds",
-        "label",
-        "priorities",
-        "views",
-    ]);
+    assert_eq!(
+        keys,
+        [
+            "aspect",
+            "defaultFor",
+            "framing",
+            "id",
+            "images",
+            "kinds",
+            "label",
+            "priorities",
+            "views",
+        ]
+    );
     assert_eq!(value["kinds"], serde_json::json!(["prop", "vehicle"]));
     assert_eq!(value["views"], serde_json::json!(["front", "side", "top"]));
     assert_eq!(value["priorities"][0], serde_json::json!({"section": "silhouette", "weight": 1.5}));

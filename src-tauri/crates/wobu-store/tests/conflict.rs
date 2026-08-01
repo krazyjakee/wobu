@@ -122,12 +122,8 @@ fn a_conflict_sibling_is_never_indexed_as_a_node() {
 
     project.rescan().unwrap();
 
-    let named: Vec<_> = project
-        .list_nodes()
-        .unwrap()
-        .into_iter()
-        .filter(|n| n.name == "Kael Vantris")
-        .collect();
+    let named: Vec<_> =
+        project.list_nodes().unwrap().into_iter().filter(|n| n.name == "Kael Vantris").collect();
     assert_eq!(named.len(), 1, "the sibling was scanned as a node: {named:?}");
     assert_eq!(named[0].id, node.id);
 
@@ -246,8 +242,7 @@ fn keeping_the_current_version_removes_only_the_sibling() {
     let c = project.conflicts().unwrap().pop().unwrap();
     let winner = fs::read(&path).unwrap();
 
-    let outcome =
-        project.resolve_conflict(&c.rel_path, Keep::Current, &c.current_hash).unwrap();
+    let outcome = project.resolve_conflict(&c.rel_path, Keep::Current, &c.current_hash).unwrap();
 
     assert_eq!(outcome, Resolved::Done);
     assert!(!sibling.exists(), "the rejected version should be gone");
@@ -335,10 +330,7 @@ fn resolving_one_of_two_conflicts_leaves_the_other_alone() {
         .find(|c| c.rel_path == first_rel)
         .unwrap()
         .current_hash;
-    assert_eq!(
-        project.resolve_conflict(&first_rel, Keep::Current, &hash).unwrap(),
-        Resolved::Done,
-    );
+    assert_eq!(project.resolve_conflict(&first_rel, Keep::Current, &hash).unwrap(), Resolved::Done,);
 
     assert!(!first.exists());
     assert_eq!(fs::read(&second).unwrap(), untouched, "the other sibling was swept up");
@@ -358,8 +350,11 @@ fn a_path_that_is_not_a_conflict_sibling_is_refused() {
     assert!(project.resolve_conflict("project.json", Keep::Current, "").is_err());
     assert!(
         project
-            .resolve_conflict("nodes/character/nothing.conflict-jake-20260731T142211Z.md",
-                Keep::Current, "")
+            .resolve_conflict(
+                "nodes/character/nothing.conflict-jake-20260731T142211Z.md",
+                Keep::Current,
+                ""
+            )
             .is_err(),
         "a sibling that does not exist is not a resolution",
     );
@@ -420,6 +415,9 @@ fn a_sibling_is_stamped_with_this_installations_peer_alias_and_not_with_a_login(
     if let Ok(login) = std::env::var("USER")
         && login != alias
     {
-        assert!(!name.contains(&format!(".conflict-{login}-")), "a login named the sibling: {name}");
+        assert!(
+            !name.contains(&format!(".conflict-{login}-")),
+            "a login named the sibling: {name}"
+        );
     }
 }

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
@@ -99,8 +99,10 @@ pub async fn project_open(
         })
     })
     .await
-    .map_err(|e| WobuError::new(Code::Internal, "The scan thread stopped unexpectedly.")
-        .with_detail(e.to_string()))?;
+    .map_err(|e| {
+        WobuError::new(Code::Internal, "The scan thread stopped unexpectedly.")
+            .with_detail(e.to_string())
+    })?;
 
     state.finish_open();
     Ok(adopt(&app, &state, opened?))
@@ -168,14 +170,49 @@ fn adopt(app: &AppHandle, state: &AppState, project: Project) -> ProjectSummary 
     // A recents file we cannot write is an annoyance, not a failure to open —
     // the project itself is already fine.
     if let Err(e) = recent::record(&summary) {
-        diag::error(&format!("could not record recent project: {e}"));
+        diag::error(format!("could not record recent project: {e}"));
     }
     // The path is the single most useful line in a bug report: it says whether
     // the world was on a share, and `redact::scrub` leaves it intact because a
     // filesystem path is not a credential.
-    diag::info(&format!("opened project {} at {}", summary.id, summary.path));
+    diag::info(format!("opened project {} at {}", summary.id, summary.path));
+    allow_assets(app, project.root());
     state.install(app, project);
     summary
+}
+
+/// Let the webview read this project's images off disk, and nothing else.
+///
+/// The asset protocol ships with an empty scope in `tauri.conf.json`; this is
+/// the only thing that ever widens it, and it widens it to one directory of one
+/// project the user has just picked. That is the whole security story for #25 —
+/// a grid of a thousand tiles must not base64 a thousand files through the IPC
+/// bridge, so the webview needs to load them by path, and the price of that is
+/// saying exactly which paths.
+///
+/// Scoped to `assets/` rather than to the project root, which is narrower than
+/// the issue asks for and deliberately so: the only things the webview ever
+/// loads as *files* are thumbnails and originals, and both are under there.
+/// Everything else in the folder — `nodes/**`, `project.json`, `.wobu/` —
+/// already reaches the frontend through commands that decide what it may see,
+/// and a scope covering the root would quietly also cover whatever lands in the
+/// folder next.
+///
+/// **The scope only ever grows, within one run.** Tauri's filesystem scope has
+/// no way to withdraw an allowance — `forbid_directory` is permanent, so using
+/// it on close would make reopening the same project impossible — which means a
+/// session that opens three worlds ends up able to read the assets of all three.
+/// That is worth stating rather than hiding, and it is a small thing: they are
+/// three folders this user opened themselves, in this session, and nothing
+/// survives the process exiting.
+fn allow_assets(app: &AppHandle, root: &Path) {
+    let assets = root.join("assets");
+    if let Err(e) = app.asset_protocol_scope().allow_directory(&assets, true) {
+        // Not fatal, and not silent. Everything else about the project works;
+        // what breaks is that the grid draws placeholders, and this line is the
+        // only thing that would ever explain why.
+        diag::error(format!("could not allow {}: {e}", assets.display()));
+    }
 }
 
 /* ── nodes ────────────────────────────────────────────────────────────────── */
@@ -265,24 +302,59 @@ pub fn node_move(
 /// No `world:changed` is emitted. The import writes a file inside the folder,
 /// so the watcher raises the event on its own, and firing a second one here
 /// would refetch the whole world twice for one drag.
+///
+/// `async` with the work on a blocking thread: reading a 300 MB scan off a
+/// share is minutes, drawing its thumbnail is a decode, and neither may run on
+/// the thread painting the window (#25).
 #[tauri::command]
-pub fn asset_import(
+pub async fn asset_import(
     state: State<'_, AppState>,
     path: String,
     kind: AssetKind,
 ) -> CommandResult<ImportedAsset> {
-    state.with(|p| Ok(p.import_asset_file(&PathBuf::from(path), kind)?))
+    let handle = state.handle();
+    blocking("The import thread stopped unexpectedly.", move || {
+        let imported = handle.with(|p| Ok(p.import_asset_file(&PathBuf::from(path), kind)?))?;
+        Ok(thumbnailed(&handle, imported))
+    })
+    .await?
 }
 
 /// The same, for bytes the webview already holds — a paste, or a drop the
 /// browser handed over as data rather than as a path.
 #[tauri::command]
-pub fn asset_import_bytes(
+pub async fn asset_import_bytes(
     state: State<'_, AppState>,
     bytes: Vec<u8>,
     kind: AssetKind,
 ) -> CommandResult<ImportedAsset> {
-    state.with(|p| Ok(p.import_asset(&bytes, kind)?))
+    let handle = state.handle();
+    blocking("The import thread stopped unexpectedly.", move || {
+        let imported = handle.with(|p| Ok(p.import_asset(&bytes, kind)?))?;
+        Ok(thumbnailed(&handle, imported))
+    })
+    .await?
+}
+
+/// Draw the thumbnail for a blob that has just landed, and fold it into what
+/// the import reports.
+///
+/// A second lock acquisition rather than one, deliberately: the import and the
+/// decode are separate pieces of work and the project mutex is given back
+/// between them, so a paste of twenty references does not lock every other
+/// command out for twenty decodes in a row.
+///
+/// A thumbnail that cannot be drawn is *not* an import failure and is swallowed
+/// here. The blob is in the folder, indexed, linkable and sendable; the picture
+/// beside it is a preview. `wobu_store::thumbs` is built so that the next thing
+/// to ask — a tile scrolling into view, `asset_thumbs_ensure` — tries again.
+fn thumbnailed(state: &AppState, mut imported: ImportedAsset) -> ImportedAsset {
+    let id = imported.asset.id;
+    match state.with(|p| Ok(p.ensure_thumb(id, &wobu_store::Cancel::new())?)) {
+        Ok(thumb) => imported.asset.thumb_path = thumb,
+        Err(e) => diag::error(format!("could not thumbnail {id}: {}", e.message)),
+    }
+    imported
 }
 
 /// Every blob in the open project, newest first.
@@ -351,6 +423,156 @@ pub fn asset_set_cover(
     asset_id: Option<Id>,
 ) -> CommandResult<Node> {
     state.with(|p| saved(p.set_cover_asset(node_id, asset_id)?))
+}
+
+/* ── thumbnails (#25) ─────────────────────────────────────────────────────── */
+
+/// Emitted while the library's missing thumbnails are being drawn. Payload is
+/// `ScanProgress`, the same shape `project:open-progress` carries.
+pub const THUMB_PROGRESS: &str = "assets:thumb-progress";
+
+/// The absolute path of one blob's thumbnail, drawing it if the folder has not
+/// got one.
+///
+/// **This is what a grid tile binds to, and it is the only thing it binds to.**
+/// The path comes back for `convertFileSrc`, so the webview loads a ~30 KB WebP
+/// over the asset protocol instead of being handed a base64 copy of a 40 MB
+/// scan for every tile on screen. Full-resolution originals are `asset_original`
+/// and are fetched one at a time, when an image is actually opened.
+///
+/// `async` with the work on a blocking thread, because drawing one is a decode
+/// and a resize: cheap for a screenshot, a few hundred milliseconds for a
+/// 6000px scan, and neither belongs on the thread painting the window.
+///
+/// `null` rather than an error for the three cases where there is legitimately
+/// no thumbnail — no such asset, a read-only or unreachable folder, a blob whose
+/// pixels will not decode. A tile draws a placeholder for all three; none of
+/// them is something the user can act on.
+#[tauri::command]
+pub async fn asset_thumb(
+    state: State<'_, AppState>,
+    asset_id: Id,
+) -> CommandResult<Option<String>> {
+    let handle = state.handle();
+    let rel = blocking("The thumbnail thread stopped unexpectedly.", move || {
+        handle.with(|p| Ok(p.ensure_thumb(asset_id, &wobu_store::Cancel::new())?))
+    })
+    .await??;
+
+    state.peek(|p| Ok(rel.and_then(|rel| absolute(p?, &rel))))
+}
+
+/// The absolute path of one blob itself, for the viewer.
+///
+/// Deliberately a separate command from `asset_thumb` rather than a flag on it:
+/// the grid must never be able to reach an original by accident, because a
+/// hundred tiles each pulling a 40 MB file off a share is the failure this whole
+/// issue is about. One call, one picture, when somebody opens it.
+#[tauri::command]
+pub fn asset_original(state: State<'_, AppState>, asset_id: Id) -> CommandResult<Option<String>> {
+    state.with(|p| {
+        let asset = p.get_asset(asset_id)?;
+        Ok(asset.and_then(|a| absolute(p, &a.rel_path)))
+    })
+}
+
+/// Draw every thumbnail the open project is missing.
+///
+/// The other half of "missing thumbs are regenerated lazily": a folder that
+/// arrived over sync, out of a zip or off a USB stick can have a full
+/// `assets/originals/` and no `assets/thumbs/` at all. `asset_thumb` covers one
+/// tile scrolling into view; this covers the case where the answer is "all of
+/// them", and it exists so that the grid is not drawing a thousand placeholders
+/// while a thousand separate commands queue up behind the project mutex.
+///
+/// Three steps for one reason, and it is the rule in `state.rs`: read the list
+/// under the lock, grind through it with *nothing* held, then record the results
+/// under the lock again. The middle step is minutes for a large library on a
+/// share, and holding the mutex across it would freeze every other command.
+///
+/// Returns how many blobs now have a thumbnail. Progress is emitted rather than
+/// returned, exactly as `project_open`'s is.
+#[tauri::command]
+pub async fn asset_thumbs_ensure(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<usize> {
+    let targets = state.with(|p| Ok(p.missing_thumbs()?))?;
+    let root = state.peek(|p| p.map(|p| p.root().to_path_buf()));
+    let (Some(root), false) = (root, targets.is_empty()) else { return Ok(0) };
+
+    let cancel = state.begin_thumbs();
+    let done = {
+        let emitter = app.clone();
+        blocking("The thumbnail thread stopped unexpectedly.", move || {
+            let mut last = 0u8;
+            wobu_store::thumbs::ensure_all(&root, &targets, &cancel, &mut |p| {
+                // Throttled to whole percentage points, for the reason
+                // `project_open` throttles: a thousand events through the
+                // bridge is work taken from the pass itself.
+                let pct = p.percent();
+                if pct != last {
+                    last = pct;
+                    let _ = emitter.emit(THUMB_PROGRESS, p);
+                }
+            })
+        })
+        .await?
+    };
+    state.finish_thumbs();
+
+    // Cancelling reports nothing and loses nothing. `Cancelled` is not a
+    // failure (see `wobu_store::Error`), and every thumbnail the pass did draw
+    // is on disk at a path only that picture can claim — so the next tile to ask
+    // for one, or the next run of this, finds it already there and free.
+    let made = match done {
+        Ok(made) => made,
+        Err(wobu_store::Error::Cancelled) => return Ok(0),
+        Err(e) => return Err(e.into()),
+    };
+    state.with(|p| Ok(p.record_thumbs(&made)?))?;
+    // The folder gained files, but under `assets/thumbs/` — which the watcher
+    // does not treat as a world change, and which nothing would otherwise
+    // invalidate. Without this the grid keeps its placeholders until something
+    // else happens to touch the project.
+    let _ = app.emit(WORLD_CHANGED, ());
+    Ok(made.len())
+}
+
+/// Stop a thumbnail pass in progress.
+///
+/// A no-op when there is none, for the same reason `project_open_cancel` is: the
+/// user can press it at the moment the pass finishes and that race must not be
+/// an error.
+#[tauri::command]
+pub fn asset_thumbs_cancel(state: State<'_, AppState>) {
+    state.cancel_thumbs();
+}
+
+/// A project-relative path as the absolute one `convertFileSrc` needs.
+///
+/// The join happens here rather than in the webview on purpose. Every path Wobu
+/// stores is `/`-separated and project-relative, because the same share is
+/// `/Volumes/art/…` on one machine and `Z:\art\…` on another — and a frontend
+/// doing that join would be a second place that has to know which. `None` when
+/// the path does not resolve to a file, so a tile is never pointed at a URL that
+/// will 404.
+fn absolute(project: &Project, rel: &str) -> Option<String> {
+    let path = wobu_store::paths::from_rel_string(project.root(), rel);
+    path.is_file().then(|| path.to_string_lossy().into_owned())
+}
+
+/// Run `f` on a blocking thread, turning a lost thread into a command error.
+///
+/// Shared by the thumbnail commands so that "the pool went away" reads the same
+/// from all of them; `project_open` predates it and spells its own out inline.
+async fn blocking<T: Send + 'static>(
+    lost: &'static str,
+    f: impl FnOnce() -> T + Send + 'static,
+) -> CommandResult<T> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| WobuError::new(Code::Internal, lost).with_detail(e.to_string()))
 }
 
 /// The node that was written, or the conflict that stopped it.
@@ -779,7 +1001,7 @@ pub fn conflict_resolve(
 ) -> CommandResult<Resolved> {
     let outcome = state.with(|p| Ok(p.resolve_conflict(&rel_path, keep, &expected_hash)?))?;
     if matches!(outcome, Resolved::Done) {
-        diag::info(&format!("conflict resolved at {rel_path} keeping {keep:?}"));
+        diag::info(format!("conflict resolved at {rel_path} keeping {keep:?}"));
         // Only on a real change. A stale or raced resolution left the folder
         // exactly as it was, and waking the whole world for it would refetch
         // the node the user is mid-decision about.
@@ -908,12 +1130,7 @@ pub fn log_info() -> LogInfo {
         None => (diag::dir().join("wobu.log"), diag::Level::default()),
     };
     let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-    LogInfo {
-        exists: path.is_file(),
-        path: path.to_string_lossy().into_owned(),
-        level,
-        size_bytes,
-    }
+    LogInfo { exists: path.is_file(), path: path.to_string_lossy().into_owned(), level, size_bytes }
 }
 
 #[tauri::command]
@@ -922,7 +1139,7 @@ pub fn log_set_level(level: diag::Level) {
         d.set_level(level);
         // Recorded at error so it lands whatever the new level is — when
         // reading a log the first question is always "was it even on?".
-        diag::error(&format!("log level set to {level:?}"));
+        diag::error(format!("log level set to {level:?}"));
     }
 }
 
@@ -937,8 +1154,9 @@ pub fn log_tail(lines: usize) -> String {
 #[tauri::command]
 pub fn log_reveal() -> CommandResult<()> {
     let dir = diag::dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| WobuError::new(Code::Io, "Could not open the log folder.").with_detail(e.to_string()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        WobuError::new(Code::Io, "Could not open the log folder.").with_detail(e.to_string())
+    })?;
 
     let path = diag::global().map(|d| d.path()).unwrap_or_else(|| dir.join("wobu.log"));
     let target = if path.is_file() { path } else { dir };
@@ -1143,8 +1361,8 @@ fn write_providers(
     let path = root.join("project.json");
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
-    let mut meta: serde_json::Value =
-        serde_json::from_str(&raw).map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
+    let mut meta: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| meta_write_failed("could not be read", e.to_string()))?;
     let Some(object) = meta.as_object_mut() else {
         return Err(meta_write_failed("is not a JSON object", raw));
     };
@@ -1347,8 +1565,9 @@ fn probe_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>
 /// queue exists to prevent.
 #[tauri::command]
 pub fn job_cancel(jobs: State<'_, Jobs>, job_id: String) -> CommandResult<bool> {
-    let id = JobId::parse(&job_id)
-        .ok_or_else(|| WobuError::new(Code::Internal, "That is not a job id.").with_detail(job_id))?;
+    let id = JobId::parse(&job_id).ok_or_else(|| {
+        WobuError::new(Code::Internal, "That is not a job id.").with_detail(job_id)
+    })?;
     Ok(jobs.cancel(id))
 }
 
@@ -1371,6 +1590,8 @@ pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
 /// round-trip would agree with itself no matter what the frontend believes.
 #[cfg(test)]
 mod bridge {
+    use wobu_store::ImportWarning;
+
     use super::*;
 
     /// Verbatim from the `WobuNode` interface in `src/lib/api.ts`, including
@@ -1418,7 +1639,10 @@ mod bridge {
 
         let description = node.description.as_ref().expect("description should decode");
         assert_eq!(description.text("silhouette"), Some("Long-limbed."));
-        assert_eq!(description.list("materials"), Some(&["ashglass".to_string(), "bone".to_string()][..]));
+        assert_eq!(
+            description.list("materials"),
+            Some(&["ashglass".to_string(), "bone".to_string()][..])
+        );
     }
 
     #[test]
@@ -1429,9 +1653,15 @@ mod bridge {
         // The camelCase ones are the ones that would break silently: serde
         // renames them, TypeScript does not know that, and a missing key
         // arrives in the UI as `undefined` rather than as an error.
-        for key in
-            ["parentId", "notesRaw", "descriptionState", "coverAssetId", "assetLinks", "createdAt", "updatedAt"]
-        {
+        for key in [
+            "parentId",
+            "notesRaw",
+            "descriptionState",
+            "coverAssetId",
+            "assetLinks",
+            "createdAt",
+            "updatedAt",
+        ] {
             assert!(json.get(key).is_some(), "`{key}` is missing from the node payload");
         }
         assert_eq!(json["links"][0]["toId"], "01ARZ3NDEKTSV4RRFFQ69G5FAW");
@@ -1510,10 +1740,7 @@ mod bridge {
 
         assert_eq!(levels, ["off", "error", "warn", "info", "debug"]);
         // And back the other way, which is the direction the buttons use.
-        assert_eq!(
-            serde_json::from_str::<diag::Level>("\"debug\"").unwrap(),
-            diag::Level::Debug
-        );
+        assert_eq!(serde_json::from_str::<diag::Level>("\"debug\"").unwrap(), diag::Level::Debug);
     }
 
     #[test]
@@ -1577,10 +1804,11 @@ mod bridge {
         // something that costs money" design as the user experiences it: they
         // are what turns a failure into "try again — it will cost you". Dropped
         // on the wire, the UI has no way to tell a dead end from a question.
-        let failure = wobu_jobs::Failure::new("provider.bad_response", "The response was cut short.")
-            .retryable(true)
-            .billed(wobu_jobs::Billed::Charged)
-            .cost_note("812 in + 400 out");
+        let failure =
+            wobu_jobs::Failure::new("provider.bad_response", "The response was cut short.")
+                .retryable(true)
+                .billed(wobu_jobs::Billed::Charged)
+                .cost_note("812 in + 400 out");
         let state = wobu_jobs::JobState::Failed { failure, retry_held: true };
         let json = serde_json::to_value(&state).unwrap();
 
@@ -1621,8 +1849,16 @@ mod bridge {
         let json = serde_json::to_value(&conflict).unwrap();
 
         for key in [
-            "relPath", "nodeRelPath", "nodeId", "nodeName", "user", "savedAt", "mine", "parked",
-            "current", "currentHash",
+            "relPath",
+            "nodeRelPath",
+            "nodeId",
+            "nodeName",
+            "user",
+            "savedAt",
+            "mine",
+            "parked",
+            "current",
+            "currentHash",
         ] {
             assert!(json.get(key).is_some(), "`{key}` is missing from Conflict");
         }
@@ -1657,12 +1893,25 @@ mod bridge {
                 created_at: "2026-07-31T09:00:00Z".parse().unwrap(),
             },
             deduped: true,
+            warnings: vec![ImportWarning::MeshTooSmall],
         };
         let json = serde_json::to_value(&imported).unwrap();
 
         assert!(json.get("deduped").is_some(), "`deduped` is missing from ImportedAsset");
+        // The library card puts these next to the thumbnail, so they arrive as
+        // the snake_case tags the far side switches on rather than as prose —
+        // the wording is `ImportWarning::label`'s to change.
+        assert_eq!(json["warnings"], serde_json::json!(["mesh_too_small"]));
         for key in [
-            "id", "hash", "kind", "relPath", "thumbPath", "mime", "width", "height", "bytes",
+            "id",
+            "hash",
+            "kind",
+            "relPath",
+            "thumbPath",
+            "mime",
+            "width",
+            "height",
+            "bytes",
             "createdAt",
         ] {
             assert!(json["asset"].get(key).is_some(), "`{key}` is missing from Asset");
@@ -1680,8 +1929,14 @@ mod bridge {
         // `kind` is a bare snake_case string on the wire. A mismatch fails at
         // the bridge rather than at compile time, and every drop would be
         // rejected with nothing on screen to say why.
-        assert_eq!(serde_json::from_str::<AssetKind>("\"reference\"").unwrap(), AssetKind::Reference);
-        assert_eq!(serde_json::from_str::<AssetKind>("\"generated\"").unwrap(), AssetKind::Generated);
+        assert_eq!(
+            serde_json::from_str::<AssetKind>("\"reference\"").unwrap(),
+            AssetKind::Reference
+        );
+        assert_eq!(
+            serde_json::from_str::<AssetKind>("\"generated\"").unwrap(),
+            AssetKind::Generated
+        );
         assert_eq!(serde_json::from_str::<AssetKind>("\"upload\"").unwrap(), AssetKind::Upload);
         assert!(serde_json::from_str::<AssetKind>("\"Reference\"").is_err());
     }
@@ -1691,14 +1946,27 @@ mod bridge {
         let json = serde_json::to_value(kind_registry()).unwrap();
         let first = &json[0];
 
-        for key in ["kind", "label", "plural", "icon", "color", "layer", "dir", "nests", "singleton", "sections", "defaultLinkRoles"] {
+        for key in [
+            "kind",
+            "label",
+            "plural",
+            "icon",
+            "color",
+            "layer",
+            "dir",
+            "nests",
+            "singleton",
+            "sections",
+            "defaultLinkRoles",
+        ] {
             assert!(first.get(key).is_some(), "`{key}` is missing from KindDef");
         }
         for key in ["key", "label", "valueKind"] {
             assert!(first["sections"][0].get(key).is_some(), "`{key}` is missing from SectionDef");
         }
         // The union in `api.ts` is snake_case; the enum has to agree.
-        let kinds: Vec<&str> = json.as_array().unwrap().iter().map(|d| d["kind"].as_str().unwrap()).collect();
+        let kinds: Vec<&str> =
+            json.as_array().unwrap().iter().map(|d| d["kind"].as_str().unwrap()).collect();
         assert!(kinds.contains(&"style_guide"), "got {kinds:?}");
         assert!(kinds.contains(&"world_bible"), "got {kinds:?}");
     }
@@ -1708,11 +1976,9 @@ mod bridge {
         // The Settings pane posts one of these on every provider change, and a
         // rename on either side is a dropdown that silently stops working:
         // serde refuses the string and nothing is ever written.
-        for (capability, wire) in [
-            (Capability::Text, "text"),
-            (Capability::Image, "image"),
-            (Capability::Mesh, "mesh"),
-        ] {
+        for (capability, wire) in
+            [(Capability::Text, "text"), (Capability::Image, "image"), (Capability::Mesh, "mesh")]
+        {
             assert_eq!(serde_json::to_value(capability).unwrap(), wire);
             assert_eq!(
                 serde_json::from_value::<Capability>(serde_json::json!(wire)).unwrap(),
@@ -1925,7 +2191,14 @@ mod influence {
         }
         let card = &json["layers"][0];
         for key in [
-            "layer", "nodeId", "name", "kind", "reached", "distance", "weight", "slider",
+            "layer",
+            "nodeId",
+            "name",
+            "kind",
+            "reached",
+            "distance",
+            "weight",
+            "slider",
             "fragments",
         ] {
             assert!(card.get(key).is_some(), "`{key}` is missing from LayerCard");
@@ -1944,7 +2217,14 @@ mod influence {
         let fragment = &json["layers"][0]["fragments"][0];
 
         for key in [
-            "layer", "nodeId", "sourceName", "section", "text", "assetId", "weight", "target",
+            "layer",
+            "nodeId",
+            "sourceName",
+            "section",
+            "text",
+            "assetId",
+            "weight",
+            "target",
             "sendable",
         ] {
             assert!(fragment.get(key).is_some(), "`{key}` is missing from InfluenceFragment");
@@ -1995,9 +2275,11 @@ mod influence {
 
         // Visible to the panel, which is the point of attaching it: the card
         // counts it, and says it must not be sent.
-        let fragments = cards["layers"].as_array().unwrap().iter().flat_map(|c| {
-            c["fragments"].as_array().unwrap().iter()
-        });
+        let fragments = cards["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|c| c["fragments"].as_array().unwrap().iter());
         let shown = fragments
             .filter(|f| f["assetId"] == mood)
             .inspect(|f| {
@@ -2209,10 +2491,9 @@ mod influence {
         // `sliders` crosses as an array of `{ nodeId, value }`. A rename on
         // either side would fail at the bridge, and every drag would go nowhere
         // with nothing on screen to say why.
-        let settings: Vec<SliderSetting> = serde_json::from_str(
-            r#"[{"nodeId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","value":0.25}]"#,
-        )
-        .expect("sliders should decode");
+        let settings: Vec<SliderSetting> =
+            serde_json::from_str(r#"[{"nodeId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","value":0.25}]"#)
+                .expect("sliders should decode");
         let id: Id = "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap();
         assert_eq!(sliders_from(Some(settings)).get(id), 0.25);
         // Out of range is clamped rather than refused — the control's range is

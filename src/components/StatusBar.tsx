@@ -1,4 +1,5 @@
-import type { ProjectSummary } from '../lib/api'
+import type { Peer, ProjectSummary } from '../lib/api'
+import { sessionsText, sessionsTitle } from '../lib/presence'
 import { useUI } from '../store/ui'
 
 /**
@@ -9,13 +10,18 @@ export function StatusBar({
   project,
   nodeCount,
   loading,
+  peers,
 }: {
   project: ProjectSummary
   nodeCount: number
   loading: boolean
+  peers: Peer[]
 }) {
   const navCollapsed = useUI((s) => s.navCollapsed)
   const inspCollapsed = useUI((s) => s.inspCollapsed)
+  // Absent rather than "1 session" when nobody else is here. A count that never
+  // changes is a count nobody reads, and the point of this one is that it moved.
+  const sessions = sessionsText(peers)
 
   return (
     <footer className="status">
@@ -38,7 +44,16 @@ export function StatusBar({
 
       <div className="sspace" />
 
-      <span>{loading ? 'reading world…' : `${nodeCount} ${nodeCount === 1 ? 'node' : 'nodes'}`}</span>
+      {sessions && (
+        <>
+          <span className="presence" role="img" aria-label="Other sessions in this project" />
+          <span title={sessionsTitle(peers)}>{sessions}</span>
+          <span className="sep" />
+        </>
+      )}
+      <span>
+        {loading ? 'reading world…' : `${nodeCount} ${nodeCount === 1 ? 'node' : 'nodes'}`}
+      </span>
       <span className="sep" />
       <span>
         {navCollapsed ? '[ navigator hidden' : '[ navigator'} ·{' '}

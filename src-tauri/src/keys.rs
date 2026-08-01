@@ -224,6 +224,9 @@ impl Lookup {
     }
 }
 
+/// How a development-time variable is read.
+type ReadVar = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
+
 /// The process-wide answer to "what is this provider's key".
 ///
 /// Managed Tauri state, registered in `lib.rs`. Holds no reference to the open
@@ -232,11 +235,11 @@ impl Lookup {
 /// one.
 pub struct Keys {
     store: Box<dyn Store>,
-    /// How a development-time variable is read. A field rather than a direct
-    /// call so the fallback can be tested without the test depending on the
-    /// environment of whoever runs it — which would make it pass or fail based
-    /// on whether the developer happens to have a real key exported.
-    var: Box<dyn Fn(&str) -> Option<String> + Send + Sync>,
+    /// A field rather than a direct call so the fallback can be tested without
+    /// the test depending on the environment of whoever runs it — which would
+    /// make it pass or fail based on whether the developer happens to have a
+    /// real key exported.
+    var: ReadVar,
     /// Resolved lookups, by provider.
     ///
     /// Not a speed optimisation. A locked Secret Service prompts the user on
@@ -281,19 +284,15 @@ impl Keys {
             return Err(WobuError::new(Code::Invalid, "A key cannot be empty."));
         }
 
-        self.store.set(provider, key).map_err(|e| {
-            unavailable("Your key was not saved.", e)
-        })?;
+        self.store.set(provider, key).map_err(|e| unavailable("Your key was not saved.", e))?;
         self.forget(provider);
         Ok(self.status(provider))
     }
 
     /// Remove this machine's stored key for a provider.
     pub fn delete(&self, provider: &str) -> CommandResult<KeyRemoval> {
-        let removed = self
-            .store
-            .delete(provider)
-            .map_err(|e| unavailable("The key was not removed.", e))?;
+        let removed =
+            self.store.delete(provider).map_err(|e| unavailable("The key was not removed.", e))?;
         self.forget(provider);
         Ok(KeyRemoval { removed, status: self.status(provider) })
     }
@@ -323,7 +322,7 @@ impl Keys {
             Some(secret) => {
                 Lookup { source: Some(Source::Keychain), secret: Some(secret), keychain }
             }
-            None => match self.from_env(provider) {
+            None => match self.env_secret(provider) {
                 Some(secret) => {
                     Lookup { source: Some(Source::Environment), secret: Some(secret), keychain }
                 }
@@ -341,7 +340,7 @@ impl Keys {
         found
     }
 
-    fn from_env(&self, provider: &str) -> Option<Secret> {
+    fn env_secret(&self, provider: &str) -> Option<Secret> {
         for name in env_names(provider) {
             let Some(value) = (self.var)(&name) else { continue };
             let value = value.trim();
@@ -590,8 +589,7 @@ mod tests {
         assert!(!removal.contains(KEY), "a key reached the webview in a removal: {removal}");
 
         // 5. The log on disk, which is the file a user pastes into an issue.
-        let dir = std::env::temp_dir()
-            .join(format!("wobu-keys-redact-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("wobu-keys-redact-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let log = diag::Diagnostics::new(dir.clone());
         log.record(diag::Level::Error, &format!("POST failed, Authorization: Bearer {KEY}"));
@@ -790,7 +788,11 @@ mod tests {
         let shell = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let root = path.parent().expect("a parent").canonicalize().expect("the repo root exists");
         assert_eq!(root, shell.parent().expect("a parent above src-tauri"));
-        assert!(root.join("src-tauri/Cargo.toml").is_file(), "not the repo root: {}", root.display());
+        assert!(
+            root.join("src-tauri/Cargo.toml").is_file(),
+            "not the repo root: {}",
+            root.display()
+        );
         assert!(root.join(".env.example").is_file(), "the documented names live here");
 
         // 2. It cannot be redirected. `dev_env_path` takes no argument and reads

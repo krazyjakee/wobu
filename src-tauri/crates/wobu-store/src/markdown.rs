@@ -172,15 +172,12 @@ pub fn to_markdown(node: &Node) -> Result<String> {
 pub fn from_markdown(text: &str, path: &Path) -> Result<Node> {
     let crate::frontmatter::Split { yaml, body } = crate::frontmatter::split(path, text)?;
 
-    let fm: Frontmatter = serde_norway::from_str(yaml).map_err(|e| Error::Malformed {
-        path: path.to_path_buf(),
-        reason: e.to_string(),
-    })?;
+    let fm: Frontmatter = serde_norway::from_str(yaml)
+        .map_err(|e| Error::Malformed { path: path.to_path_buf(), reason: e.to_string() })?;
 
     let (notes, description_block) = split_body(body);
-    let description = description_block
-        .map(|block| parse_description(fm.kind, block))
-        .filter(|d| !d.is_empty());
+    let description =
+        description_block.map(|block| parse_description(fm.kind, block)).filter(|d| !d.is_empty());
 
     let slug = path
         .file_stem()
@@ -268,8 +265,8 @@ fn parse_description(kind: NodeKind, block: &str) -> Description {
     let mut buffer: Vec<&str> = Vec::new();
 
     let flush = |def: Option<&'static wobu_core::SectionDef>,
-                     buffer: &mut Vec<&str>,
-                     sections: &mut IndexMap<String, SectionValue>| {
+                 buffer: &mut Vec<&str>,
+                 sections: &mut IndexMap<String, SectionValue>| {
         let Some(def) = def else {
             buffer.clear();
             return;
@@ -342,10 +339,8 @@ mod tests {
             "silhouette".into(),
             SectionValue::Text("Tall, narrow-shouldered, forward-canted stance.".into()),
         );
-        sections.insert(
-            "palette".into(),
-            SectionValue::List(vec!["#2b2118".into(), "#c2703a".into()]),
-        );
+        sections
+            .insert("palette".into(), SectionValue::List(vec!["#2b2118".into(), "#c2703a".into()]));
         sections.insert("never".into(), SectionValue::List(vec!["Modern firearms".into()]));
         n.description = Some(Description { sections });
         n.description_state = DescriptionState::Fresh;
@@ -371,7 +366,8 @@ mod tests {
     fn round_trips_a_node_with_nothing_in_it() {
         let original = Node::new(NodeKind::Prop, "Ashglass Lantern").unwrap();
         let text = to_markdown(&original).unwrap();
-        let parsed = from_markdown(&text, &PathBuf::from("nodes/prop/ashglass-lantern.md")).unwrap();
+        let parsed =
+            from_markdown(&text, &PathBuf::from("nodes/prop/ashglass-lantern.md")).unwrap();
         assert_eq!(parsed, original);
     }
 
@@ -400,7 +396,8 @@ mod tests {
     fn slug_comes_from_the_filename_not_the_name() {
         // Renaming a node must not silently move the file, so disk wins.
         let text = to_markdown(&character()).unwrap();
-        let parsed = from_markdown(&text, &PathBuf::from("nodes/character/legacy-name.md")).unwrap();
+        let parsed =
+            from_markdown(&text, &PathBuf::from("nodes/character/legacy-name.md")).unwrap();
         assert_eq!(parsed.slug, "legacy-name");
         assert_eq!(parsed.name, "Kael Vantris");
     }

@@ -303,9 +303,12 @@ impl SyncEndpoint {
         //
         // Note what is not registered beside it: no gate, no authorisation hook,
         // no per-peer filter. A peer that reaches this router has proved its key
-        // and nothing else, and deciding what it may read is #90's, which is why
-        // `Blobs::protocol` passes `None` for `iroh-blobs`' event sender rather
-        // than an empty one that looks like a place to put a rule.
+        // and nothing else, which is why `Blobs::protocol` passes `None` for
+        // `iroh-blobs`' event sender rather than an empty one that looks like a
+        // place to put a rule. #90 asked whether there should be a rule and closed
+        // `wontfix`; this ALPN is also half of why, because a gate on
+        // `wobu/sync/1` would never have covered the connection the bytes actually
+        // move on. See `ticket::Grant`.
         if let Some(blobs) = &config.blobs {
             builder = builder.accept(crate::blobs::ALPN, blobs.protocol());
         }
@@ -418,8 +421,11 @@ impl SyncEndpoint {
     /// out, and it is a method rather than a line at the call site so that the
     /// next sentence has somewhere to live: **the grant is not sent.** Nothing in
     /// `wobu/sync/1` presents or checks one, so accepting a ticket proves no more
-    /// to the other side than dialling with a guessed ULID would. That is #90's
-    /// to change, and [`crate::ticket`] says why it is not this crate's.
+    /// to the other side than dialling with the peer's endpoint id and the project
+    /// ULID would. #90 asked whether it should and closed `wontfix` — the pair a
+    /// dialler needs is only ever handed out inside a ticket, so a grant check
+    /// would refuse nobody who could have got this far. [`crate::ticket::Grant`]
+    /// is where that is argued out.
     ///
     /// Fails with [`Error::ProjectNotHeld`] if the peer no longer has the project
     /// — which, since there is no revocation, is the only way a share ever stops
@@ -440,10 +446,7 @@ impl SyncEndpoint {
     /// because only the thing that owns the sessions knows which of them is
     /// worth waiting for.
     pub async fn shutdown(&self) -> Result<()> {
-        self.router
-            .shutdown()
-            .await
-            .map_err(|source| Error::Shutdown { source: Box::new(source) })
+        self.router.shutdown().await.map_err(|source| Error::Shutdown { source: Box::new(source) })
     }
 }
 

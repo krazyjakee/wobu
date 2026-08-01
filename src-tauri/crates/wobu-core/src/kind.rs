@@ -363,10 +363,7 @@ pub fn kind_registry() -> &'static [KindDef] {
 }
 
 pub fn kind_def(kind: NodeKind) -> &'static KindDef {
-    REGISTRY
-        .iter()
-        .find(|d| d.kind == kind)
-        .expect("every NodeKind variant has a registry entry")
+    REGISTRY.iter().find(|d| d.kind == kind).expect("every NodeKind variant has a registry entry")
 }
 
 /// The definition behind a section key, whichever kinds declare it.

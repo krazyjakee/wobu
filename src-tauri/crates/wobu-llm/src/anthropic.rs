@@ -150,7 +150,9 @@ impl TextProvider for AnthropicProvider {
             Ok(body) => body,
             // Only reachable if the generated schema is not serialisable, which
             // is our bug in the same way a rejected schema is.
-            Err(e) => return EnhanceOutcome::unbilled(Error::SchemaRejected { detail: e.to_string() }),
+            Err(e) => {
+                return EnhanceOutcome::unbilled(Error::SchemaRejected { detail: e.to_string() });
+            }
         };
 
         let send = self
@@ -400,15 +402,11 @@ mod tests {
         let mut streamed = String::new();
         let mut sink = |json: &str| streamed.push_str(json);
 
-        let outcome =
-            block_on(read_body(NodeKind::Character, body, &mut sink, &Cancel::new()));
+        let outcome = block_on(read_body(NodeKind::Character, body, &mut sink, &Cancel::new()));
 
         let validated = outcome.result.expect("a whole tool call should validate");
         assert_eq!(streamed, expected);
-        assert_eq!(
-            crate::parse_description(NodeKind::Character, &streamed).unwrap(),
-            validated,
-        );
+        assert_eq!(crate::parse_description(NodeKind::Character, &streamed).unwrap(), validated,);
         assert_eq!(outcome.usage.input_tokens, 812);
         assert_eq!(outcome.usage.output_tokens, 289);
     }
@@ -422,9 +420,9 @@ mod tests {
         for def in wobu_core::kind::kind_registry() {
             let body = Body::new(split(&wire_bytes(&document(def.kind), "tool_use", true), 64));
             let outcome = block_on(read_body(def.kind, body, &mut Discard, &Cancel::new()));
-            outcome
-                .result
-                .unwrap_or_else(|e| panic!("{} could not round-trip its own schema: {e}", def.kind));
+            outcome.result.unwrap_or_else(|e| {
+                panic!("{} could not round-trip its own schema: {e}", def.kind)
+            });
         }
     }
 
@@ -436,8 +434,12 @@ mod tests {
         let bytes = wire_bytes(&document(NodeKind::Character), "tool_use", true);
         let mut chunks = split(&bytes[..bytes.len() / 2], 37);
         chunks.push(Err("connection reset by peer".to_string()));
-        let outcome =
-            block_on(read_body(NodeKind::Character, Body::new(chunks), &mut Discard, &Cancel::new()));
+        let outcome = block_on(read_body(
+            NodeKind::Character,
+            Body::new(chunks),
+            &mut Discard,
+            &Cancel::new(),
+        ));
 
         assert!(matches!(outcome.result, Err(Error::Unavailable { .. })));
         assert_eq!(outcome.usage.input_tokens, 812);

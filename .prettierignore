@@ -1,0 +1,28 @@
+# Build output and vendored trees. Prettier does not read `.gitignore`, so the
+# generated ones have to be repeated here — `src-tauri/gen/` in particular only
+# exists after a `tauri dev` or `tauri build`, which is exactly the shape of bug
+# `npm run check` is meant not to have: green on a clean CI checkout and red for
+# everyone who has actually run the app.
+dist/
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+
+# Lockfiles are the package manager's format, not ours.
+package-lock.json
+src-tauri/Cargo.lock
+
+# Rust has its own formatter; see `src-tauri/rustfmt.toml`.
+*.rs
+
+# Markdown is left alone on purpose, and for two separate reasons.
+#
+# `docs/` is hand-set prose: Prettier rewrites `*emphasis*` to `_emphasis_` and
+# repads every table, which is several hundred lines of diff that says nothing
+# about the documents.
+#
+# `examples/Ashfall.wobu/` is not prose at all — it is a project folder in
+# Wobu's own on-disk format, read off disk by the `wobu-influence` and
+# `wobu-store` fixture tests. A formatter is the wrong tool for a file whose
+# layout is the thing under test.
+*.md

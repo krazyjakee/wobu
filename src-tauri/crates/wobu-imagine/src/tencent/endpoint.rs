@@ -88,7 +88,8 @@ pub enum Region {
 
 impl Region {
     /// Every region the endpoint serves. This is the whole dropdown.
-    pub const ALL: [Region; 3] = [Region::ApSingapore, Region::NaSiliconValley, Region::EuFrankfurt];
+    pub const ALL: [Region; 3] =
+        [Region::ApSingapore, Region::NaSiliconValley, Region::EuFrankfurt];
 
     pub fn as_str(self) -> &'static str {
         match self {

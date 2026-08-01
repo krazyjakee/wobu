@@ -528,7 +528,9 @@ fn classify(code: &str, said: String) -> Error {
     // The images we sent. Also ours — `wire.rs` checks the format and the size
     // budget before signing, so reaching this means our checks and their decoder
     // disagree, and the detail is what says which.
-    if lower.contains("imagedecode") || lower.contains("imagedownload") || lower.contains("imagesize")
+    if lower.contains("imagedecode")
+        || lower.contains("imagedownload")
+        || lower.contains("imagesize")
     {
         return Error::Unsupported { detail: said };
     }
@@ -581,10 +583,19 @@ mod tests {
         // parameter rather than a one-entry array.
         let all = MeshRequest::from_views("3.1", View::ALL.into_iter().map(view).collect());
         let sent = body(&all);
-        let names: Vec<&str> =
-            sent["MultiViewImages"].as_array().unwrap().iter().map(|v| v["ViewType"].as_str().unwrap()).collect();
-        assert_eq!(names, ["front", "left", "right", "back", "top", "bottom", "left_front", "right_front"]);
-        assert!(sent["MultiViewImages"][0]["ViewImageBase64"].as_str().unwrap().starts_with("iVBORw"));
+        let names: Vec<&str> = sent["MultiViewImages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["ViewType"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            ["front", "left", "right", "back", "top", "bottom", "left_front", "right_front"]
+        );
+        assert!(
+            sent["MultiViewImages"][0]["ViewImageBase64"].as_str().unwrap().starts_with("iVBORw")
+        );
         assert!(sent.get("ImageBase64").is_none());
 
         let one = MeshRequest::from_views("3.1", vec![view(View::Front)]);
@@ -599,8 +610,10 @@ mod tests {
         // produce one is a Turnaround batch where two images got the same tag, and
         // the provider's answer is a rejection after several megabytes have
         // crossed the world.
-        let request =
-            MeshRequest::from_views("3.1", vec![view(View::Front), view(View::Left), view(View::Front)]);
+        let request = MeshRequest::from_views(
+            "3.1",
+            vec![view(View::Front), view(View::Left), view(View::Front)],
+        );
         let error = submit_body(&request, &caps()).unwrap_err();
         assert!(error.to_string().contains("`front`"), "{error}");
         assert_eq!(error.code(), "internal", "we built it, so it is our bug");
@@ -647,10 +660,13 @@ mod tests {
         // Single-image input takes webp and multi-view does not. The narrower of
         // the two limits is the one that applies, and the provider's rejection
         // arrives after the upload.
-        let request = MeshRequest::from_views("3.1", vec![
-            view(View::Front),
-            MeshView::new(View::Left, vec![b'R', b'I', b'F', b'F'], "image/webp"),
-        ]);
+        let request = MeshRequest::from_views(
+            "3.1",
+            vec![
+                view(View::Front),
+                MeshView::new(View::Left, vec![b'R', b'I', b'F', b'F'], "image/webp"),
+            ],
+        );
         let error = submit_body(&request, &caps()).unwrap_err();
         assert!(error.to_string().contains("image/webp"), "{error}");
         assert!(error.to_string().contains("JPEG and PNG"), "{error}");

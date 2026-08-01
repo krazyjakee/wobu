@@ -254,10 +254,10 @@ mod tests {
         // checkpoints this machine has never downloaded, and every one of them
         // is a 400 after the user has picked it from a dropdown.
         let installed = Installed::parse(&object_info()).unwrap();
-        assert_eq!(installed.checkpoints(), [
-            "sd_xl_base_1.0.safetensors",
-            "dreamshaper_8.safetensors",
-        ]);
+        assert_eq!(
+            installed.checkpoints(),
+            ["sd_xl_base_1.0.safetensors", "dreamshaper_8.safetensors",]
+        );
         assert_eq!(installed.unets(), ["flux1-dev.safetensors"]);
         assert_eq!(installed.family_of("flux1-dev.safetensors"), Some(Family::Unet));
         assert_eq!(installed.family_of("sd_xl_base_1.0.safetensors"), Some(Family::Checkpoint),);

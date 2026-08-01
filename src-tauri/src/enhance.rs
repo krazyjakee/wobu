@@ -270,7 +270,7 @@ pub fn enhance_start(
     let secret = keys.secret(&selection.provider).ok_or_else(|| no_key(&selection.provider))?;
     let provider = text_provider(&selection.provider, &secret)?;
     let model = selection.model.unwrap_or_else(|| provider.default_model().to_owned());
-    diag::info(&format!("enhance {node_id} with {} {model}", provider.label()));
+    diag::info(format!("enhance {node_id} with {} {model}", provider.label()));
 
     let emitter = app.clone();
     let id = jobs.queue().submit(EnhanceTask {
@@ -330,7 +330,12 @@ pub fn enhance_accept(
             ));
         }
         let description = description.unwrap_or(ready.description);
-        Ok(project.accept_enhanced(ready.node_id, description, &ready.sources, force.unwrap_or(false))?)
+        Ok(project.accept_enhanced(
+            ready.node_id,
+            description,
+            &ready.sources,
+            force.unwrap_or(false),
+        )?)
     })?;
 
     match outcome {
@@ -375,7 +380,10 @@ pub fn enhance_discard(pending: State<'_, Pending>, job_id: String) -> CommandRe
 /// Empty rather than an error when nothing is open — the same reasoning as
 /// `presence_peers`. A poll that raced a close is ordinary.
 #[tauri::command]
-pub fn enhance_pending(state: State<'_, AppState>, pending: State<'_, Pending>) -> Vec<EnhanceReady> {
+pub fn enhance_pending(
+    state: State<'_, AppState>,
+    pending: State<'_, Pending>,
+) -> Vec<EnhanceReady> {
     match state.peek(|project| project.map(|p| p.id())) {
         Some(project) => pending.list(project),
         None => Vec::new(),
@@ -470,8 +478,9 @@ fn selection(providers: &Map<String, Value>) -> Selection {
 /// build one with.
 fn text_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>> {
     let built = match id {
-        anthropic::ID => AnthropicProvider::new(key.expose())
-            .map(|p| Arc::new(p) as Arc<dyn TextProvider>),
+        anthropic::ID => {
+            AnthropicProvider::new(key.expose()).map(|p| Arc::new(p) as Arc<dyn TextProvider>)
+        }
         gemini::ID => {
             GeminiProvider::new(key.expose()).map(|p| Arc::new(p) as Arc<dyn TextProvider>)
         }
@@ -576,7 +585,7 @@ impl EnhanceTask {
                     // Not a failure — `wobu-llm` drops them and says so — but a
                     // provider that has started inventing fields should show up
                     // somewhere other than a shrug.
-                    diag::info(&format!(
+                    diag::info(format!(
                         "{} volunteered sections {} does not declare: {}",
                         self.provider.label(),
                         self.kind,
@@ -648,10 +657,9 @@ fn failure(error: &ProviderError, usage: Usage) -> Failure {
     // "again" means.
     failure.cost_note(match usage.cached_input_tokens {
         0 => format!("{} in + {} out", usage.input_tokens, usage.output_tokens),
-        cached => format!(
-            "{} in ({cached} cached) + {} out",
-            usage.input_tokens, usage.output_tokens,
-        ),
+        cached => {
+            format!("{} in ({cached} cached) + {} out", usage.input_tokens, usage.output_tokens,)
+        }
     })
 }
 
@@ -809,7 +817,10 @@ mod tests {
 
         let waiting = task.pending.get(job).expect("the description is waiting");
         assert_eq!(waiting.node_id, task.node_id);
-        assert_eq!(waiting.sources, task.sources, "the stamp is made of the walk it was built from");
+        assert_eq!(
+            waiting.sources, task.sources,
+            "the stamp is made of the walk it was built from"
+        );
         assert!(waiting.description.sections.contains_key("never"));
 
         // And the questions rode out beside the description rather than inside
@@ -1039,10 +1050,10 @@ mod tests {
             "text": { "provider": "gemini", "model": "gemini-3.6-flash" },
             "image": { "provider": "comfyui" },
         });
-        assert_eq!(selection(providers.as_object().unwrap()), Selection {
-            provider: "gemini".into(),
-            model: Some("gemini-3.6-flash".into()),
-        });
+        assert_eq!(
+            selection(providers.as_object().unwrap()),
+            Selection { provider: "gemini".into(), model: Some("gemini-3.6-flash".into()) }
+        );
     }
 
     #[test]
@@ -1051,9 +1062,13 @@ mod tests {
         // this state, and Enhance has to work in it. An absent model is the
         // adapter's own default rather than a string spelled out here, because
         // model ids move faster than anything else in `docs/08-providers.md`.
-        for empty in [json!({}), json!({ "image": { "provider": "comfyui" } }), json!({
-            "text": { "model": "  " }
-        })] {
+        for empty in [
+            json!({}),
+            json!({ "image": { "provider": "comfyui" } }),
+            json!({
+                "text": { "model": "  " }
+            }),
+        ] {
             let selection = selection(empty.as_object().unwrap());
             assert_eq!(selection.provider, anthropic::ID);
             assert_eq!(selection.model, None, "{empty}");
@@ -1103,10 +1118,7 @@ mod tests {
         // so the pane renders a half-written description with the component it
         // already has rather than a second one.
         assert_eq!(json["description"]["sections"]["silhouette"]["type"], "text");
-        assert_eq!(
-            json["description"]["sections"]["silhouette"]["value"],
-            "Tall, narrow-should",
-        );
+        assert_eq!(json["description"]["sections"]["silhouette"]["value"], "Tall, narrow-should",);
     }
 
     #[test]

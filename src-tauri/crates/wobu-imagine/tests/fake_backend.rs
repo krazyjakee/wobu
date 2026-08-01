@@ -335,10 +335,7 @@ fn one_stack_and_two_backends_produce_two_visibly_different_requests() {
     assert!(!remote.is_exact());
     let told: Vec<_> =
         remote.downgrades().iter().map(|d| (d.fragment.section(), d.reason)).collect();
-    assert_eq!(told, [
-        ("never", Downgrade::NotSent),
-        ("pose", Downgrade::MoodboardOnly),
-    ]);
+    assert_eq!(told, [("never", Downgrade::NotSent), ("pose", Downgrade::MoodboardOnly),]);
     assert_eq!(remote.images().kept().count(), 1, "only the costume reference survives");
 
     // And the mood reference is in neither report on either backend. It is doing
@@ -361,8 +358,9 @@ fn a_negotiated_request_is_one_the_backend_can_answer_without_substituting_anyth
     let caps = gemini.capabilities("gemini-3.1-flash-lite-image");
 
     let negotiated = negotiate(&extracted, aspect, &caps);
-    let request = ImageRequest::new("gemini-3.1-flash-lite-image", "a hooded figure", 9, &negotiated)
-        .with_references(references(&negotiated));
+    let request =
+        ImageRequest::new("gemini-3.1-flash-lite-image", "a hooded figure", 9, &negotiated)
+            .with_references(references(&negotiated));
 
     // The lite model is 1K only, so the request is sized for it and not for the
     // 4K the pro model would have taken.
@@ -499,7 +497,8 @@ fn the_reference_budget_a_backend_declares_is_the_one_the_request_is_built_to() 
     // A local backend has no cap at all, so all five go, and the Inspector has
     // no denominator to print rather than printing `usize::MAX`.
     let comfy = LocalComfy::new();
-    let unlimited = negotiate(&extracted, AspectRatio::parse("1:1").unwrap(), &comfy.capabilities("flux-dev"));
+    let unlimited =
+        negotiate(&extracted, AspectRatio::parse("1:1").unwrap(), &comfy.capabilities("flux-dev"));
     let style = unlimited.images().bucket(RefBucket::StyleRefs).unwrap();
     assert_eq!(style.kept().len(), 5);
     assert_eq!(style.cap().limit(), None);

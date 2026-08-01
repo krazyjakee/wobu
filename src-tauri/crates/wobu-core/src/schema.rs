@@ -130,8 +130,12 @@ mod tests {
                     section.key
                 );
             }
-            let required: Vec<&str> =
-                schema["required"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+            let required: Vec<&str> = schema["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect();
             assert_eq!(
                 required,
                 def.sections.iter().map(|s| s.key).collect::<Vec<_>>(),

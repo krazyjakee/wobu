@@ -513,8 +513,10 @@ async fn a_stream_that_ends_without_saying_so_is_not_a_manifest() {
     ] {
         let (_accepting, _dialling, inbound, outbound) = pair().await;
 
-        let (ours, ()) =
-            tokio::join!(manifest::exchange(&inbound, &[], &[], IDLE), writes_by_hand(&outbound, written));
+        let (ours, ()) = tokio::join!(
+            manifest::exchange(&inbound, &[], &[], IDLE),
+            writes_by_hand(&outbound, written)
+        );
 
         assert!(matches!(ours, Err(Error::ManifestMalformed)), "{written:?} gave {ours:?}");
     }

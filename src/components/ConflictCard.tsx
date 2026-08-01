@@ -85,8 +85,8 @@ export function ConflictCard({
       <p className="conflict-note">
         {/* Said plainly, because the fear this card has to answer immediately is
             "have I lost what I just typed". Nothing has been thrown away yet. */}
-        Both versions are on disk. Nothing has been deleted, and nothing will be until you
-        choose — the one you do not keep is removed then.
+        Both versions are on disk. Nothing has been deleted, and nothing will be until you choose —
+        the one you do not keep is removed then.
       </p>
 
       {differs ? (

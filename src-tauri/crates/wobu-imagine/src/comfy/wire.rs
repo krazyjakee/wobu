@@ -414,20 +414,23 @@ mod tests {
         assert_eq!(events[0], Event::Status { queue_remaining: 2 });
         assert_eq!(events[1], Event::ExecutionStart { prompt_id: "p1".into() });
         assert_eq!(events[2], Event::Other, "an event we do not read is not a failure");
-        assert_eq!(events[3], Event::Executing {
-            prompt_id: Some("p1".into()),
-            node: Some("3".into())
-        },);
+        assert_eq!(
+            events[3],
+            Event::Executing { prompt_id: Some("p1".into()), node: Some("3".into()) },
+        );
         assert_eq!(events[4], Event::Progress { prompt_id: Some("p1".into()), value: 7, max: 25 });
-        assert_eq!(events[5], Event::Executed {
-            prompt_id: "p1".into(),
-            node: "9".into(),
-            images: vec![ImageRef {
-                filename: "wobu_00007_.png".into(),
-                subfolder: String::new(),
-                kind: "output".into(),
-            }],
-        });
+        assert_eq!(
+            events[5],
+            Event::Executed {
+                prompt_id: "p1".into(),
+                node: "9".into(),
+                images: vec![ImageRef {
+                    filename: "wobu_00007_.png".into(),
+                    subfolder: String::new(),
+                    kind: "output".into(),
+                }],
+            }
+        );
         assert_eq!(events[6], Event::Executing { prompt_id: Some("p1".into()), node: None });
         assert_eq!(events[7], Event::ExecutionSuccess { prompt_id: "p1".into() });
     }

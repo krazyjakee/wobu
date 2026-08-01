@@ -149,6 +149,12 @@ pub trait Wake: Send + Sync + 'static {
 ///
 /// Two states and no third. In particular there is no "both" and no "nobody,
 /// permanently": see the module documentation.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "exactly one of these exists per shared project, behind a Mutex and \
+              never moved through a channel, so boxing the Project would buy an \
+              allocation and a pointer chase to save a few hundred bytes once"
+)]
 enum Held {
     /// The window has it. Reach it through [`AppState`], so that the index the
     /// UI is reading from and the index sync is writing to are the same one.
@@ -306,11 +312,8 @@ impl SyncManager {
         });
 
         let accepts: Arc<Accepts> = Arc::new(Accepts(Arc::downgrade(&manager)));
-        let config = Config {
-            identity: Some(setup.identity),
-            reach: setup.reach,
-            ..Config::default()
-        };
+        let config =
+            Config { identity: Some(setup.identity), reach: setup.reach, ..Config::default() };
         let endpoint = SyncEndpoint::bind(config, accepts.clone(), accepts)
             .await
             .map_err(|e| WobuError::from(e).with_detail("binding the sync endpoint"))?;
@@ -449,7 +452,10 @@ impl SyncManager {
                 // could be tidied, and failing the command would leave the two
                 // halves disagreeing.
                 if let Err(e) = replica.with(|p| Ok(p.forget_peer(peer)?)) {
-                    diag::error(&format!("sync: could not forget peer for {project}: {}", e.message));
+                    diag::error(format!(
+                        "sync: could not forget peer for {project}: {}",
+                        e.message
+                    ));
                 }
             }
         }
@@ -485,9 +491,7 @@ impl SyncManager {
 
     /// The open project's folder, if the open project is this one.
     fn open_root(&self, project: Id) -> Option<PathBuf> {
-        self.state.peek(|open| {
-            open.filter(|p| p.id() == project).map(|p| p.root().to_path_buf())
-        })
+        self.state.peek(|open| open.filter(|p| p.id() == project).map(|p| p.root().to_path_buf()))
     }
 
     /// Add a replica, or leave the one that is there.
@@ -538,7 +542,7 @@ impl SyncManager {
 
             match outcome {
                 Ok(outcome) => worked |= outcome.did_something(),
-                Err(e) => diag::error(&format!("sync: round with a peer failed: {}", e.message)),
+                Err(e) => diag::error(format!("sync: round with a peer failed: {}", e.message)),
             }
         }
         worked
@@ -631,7 +635,7 @@ impl SyncManager {
         }
         match tokio::time::timeout(SHUTDOWN_BUDGET, self.endpoint().shutdown()).await {
             Ok(Ok(())) => diag::info("sync: endpoint closed"),
-            Ok(Err(e)) => diag::error(&format!("sync: endpoint shutdown failed: {e}")),
+            Ok(Err(e)) => diag::error(format!("sync: endpoint shutdown failed: {e}")),
             Err(_elapsed) => diag::error("sync: endpoint shutdown timed out; dropping it"),
         }
     }
@@ -697,10 +701,11 @@ impl Sessions for Accepts {
             return;
         };
 
-        let outcome = tokio::time::timeout(SESSION_BUDGET, round::run(&manager, &replica, &session));
+        let outcome =
+            tokio::time::timeout(SESSION_BUDGET, round::run(&manager, &replica, &session));
         match outcome.await {
             Ok(Ok(_)) => {}
-            Ok(Err(e)) => diag::error(&format!("sync: inbound round failed: {}", e.message)),
+            Ok(Err(e)) => diag::error(format!("sync: inbound round failed: {}", e.message)),
             Err(_elapsed) => diag::error("sync: inbound round ran out of time"),
         }
         drop(gate);
@@ -751,7 +756,9 @@ impl From<wobu_sync::Error> for WobuError {
                 "The other machine no longer has this project. \
                  A share cannot be taken back, so this means they removed it.",
             ),
-            _ => WobuError::new(Code::Io, "Could not reach the other machine.").with_detail(message),
+            _ => {
+                WobuError::new(Code::Io, "Could not reach the other machine.").with_detail(message)
+            }
         }
     }
 }
@@ -763,6 +770,6 @@ impl From<wobu_sync::Error> for WobuError {
 /// them the share did not happen when it did.
 fn report(result: std::io::Result<()>) {
     if let Err(e) = result {
-        diag::error(&format!("sync: could not write the share list: {e}"));
+        diag::error(format!("sync: could not write the share list: {e}"));
     }
 }

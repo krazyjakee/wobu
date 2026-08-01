@@ -350,9 +350,9 @@ impl ApplyReport {
     /// two-hundred-node sync firing two hundred refetches would be worse than
     /// not refetching at all.
     pub fn changed_the_folder(&self) -> bool {
-        self.outcomes.iter().any(|(_, a)| {
-            matches!(a, Applied::FastForwarded { .. } | Applied::Conflicted { .. })
-        })
+        self.outcomes
+            .iter()
+            .any(|(_, a)| matches!(a, Applied::FastForwarded { .. } | Applied::Conflicted { .. }))
     }
 
     /// The nodes the peer is behind on, for the caller to push.
@@ -474,7 +474,8 @@ pub fn apply(
         let mut node = match markdown::from_markdown(&item.text, &announced) {
             Ok(node) => node,
             Err(e) => {
-                outcomes.push((id, Applied::Refused(Refused::Unreadable { reason: e.to_string() })));
+                outcomes
+                    .push((id, Applied::Refused(Refused::Unreadable { reason: e.to_string() })));
                 continue;
             }
         };
@@ -745,9 +746,7 @@ fn stem_of(rel: &str) -> String {
 }
 
 fn relative_to(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .map(paths::to_rel_string)
-        .unwrap_or_else(|_| paths::to_rel_string(path))
+    path.strip_prefix(root).map(paths::to_rel_string).unwrap_or_else(|_| paths::to_rel_string(path))
 }
 
 #[cfg(test)]

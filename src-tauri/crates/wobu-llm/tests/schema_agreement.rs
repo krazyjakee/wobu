@@ -31,8 +31,7 @@ fn every_kind_can_round_trip_a_response_built_from_its_own_schema() {
         let validated = validate_description(def.kind, &response_from_schema(def.kind))
             .unwrap_or_else(|e| panic!("{} rejected its own schema's shape: {e}", def.kind));
 
-        let keys: Vec<&str> =
-            validated.description.sections.keys().map(String::as_str).collect();
+        let keys: Vec<&str> = validated.description.sections.keys().map(String::as_str).collect();
         let declared: Vec<&str> = def.sections.iter().map(|s| s.key).collect();
         assert_eq!(keys, declared, "{} lost or reordered a section", def.kind);
         assert!(validated.extra_sections.is_empty(), "{}", def.kind);
