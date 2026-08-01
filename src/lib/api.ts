@@ -443,6 +443,9 @@ export const projectOpenCancel = () => call<void>('project_open_cancel')
 
 export const projectRecent = () => call<ProjectSummary[]>('project_recent')
 
+/** Remove one launcher hint without touching the project folder it points to. */
+export const projectRecentForget = (id: string) => call<void>('project_recent_forget', { id })
+
 export const projectCurrent = () => call<ProjectSummary | null>('project_current')
 
 export const projectClose = () => call<void>('project_close')

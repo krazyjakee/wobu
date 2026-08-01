@@ -218,6 +218,10 @@ mod tests {
 
         let names: Vec<_> = list_in(&recents).into_iter().map(|e| e.name).collect();
         assert_eq!(names, vec!["brine"]);
+        assert!(
+            Path::new(&a.path).join("project.json").is_file(),
+            "forgetting a launcher entry must not touch the project folder"
+        );
     }
 
     #[test]

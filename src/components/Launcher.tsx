@@ -1,7 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { errorMessage, projectOpenCancel, type ProjectSummary, type ScanProgress } from '../lib/api'
-import { useCreateProject, useOpenProject, useRecentProjects } from '../lib/queries'
+import {
+  useCreateProject,
+  useForgetRecentProject,
+  useOpenProject,
+  useRecentProjects,
+} from '../lib/queries'
 import { useOpenProgress } from '../hooks/useOpenProgress'
 import { report } from '../store/ui'
 import { Icon } from './Icon'
@@ -66,7 +71,9 @@ function pct(p: ScanProgress): number {
 export function Launcher({ error }: { error: string | null }) {
   const recent = useRecentProjects()
   const openProject = useOpenProject()
+  const forgetRecent = useForgetRecentProject()
   const [newOpen, setNewOpen] = useState(false)
+  const [openFailure, setOpenFailure] = useState<{ id: string; message: string } | null>(null)
 
   const busy = openProject.isPending
 
@@ -84,6 +91,23 @@ export function Launcher({ error }: { error: string | null }) {
     } catch (e) {
       report(e)
     }
+  }
+
+  function openRecent(project: ProjectSummary) {
+    setOpenFailure(null)
+    openProject.mutate(project.path, {
+      onError: (reason) => {
+        report(reason)
+        setOpenFailure({ id: project.id, message: errorMessage(reason) })
+      },
+    })
+  }
+
+  function removeRecent(project: ProjectSummary) {
+    forgetRecent.mutate(project.id, {
+      onSuccess: () => setOpenFailure((failure) => (failure?.id === project.id ? null : failure)),
+      onError: (reason) => report(reason, `Could not remove ${project.name} from Recent`),
+    })
   }
 
   return (
@@ -123,7 +147,10 @@ export function Launcher({ error }: { error: string | null }) {
             pending={recent.isPending}
             failed={recent.isError ? errorMessage(recent.error) : null}
             busy={busy}
-            onOpen={(p) => openProject.mutate(p.path, { onError: (e) => report(e) })}
+            openFailure={openFailure}
+            removingId={forgetRecent.isPending ? forgetRecent.variables : null}
+            onOpen={openRecent}
+            onRemove={removeRecent}
           />
 
           {busy && <Scanning />}
@@ -151,13 +178,19 @@ function RecentGrid({
   pending,
   failed,
   busy,
+  openFailure,
+  removingId,
   onOpen,
+  onRemove,
 }: {
   recent: ProjectSummary[] | undefined
   pending: boolean
   failed: string | null
   busy: boolean
+  openFailure: { id: string; message: string } | null
+  removingId: string | null
   onOpen: (p: ProjectSummary) => void
+  onRemove: (p: ProjectSummary) => void
 }) {
   if (failed) {
     return <div className="lch-empty">Recent projects could not be read — {failed}</div>
@@ -174,16 +207,103 @@ function RecentGrid({
   return (
     <div className="lch-grid">
       {recent.map((p) => (
-        <button key={p.id} className="lch-card" onClick={() => onOpen(p)} disabled={busy}>
-          <span className="nm">
-            {p.name}
-            {p.readOnly && <span className="tag">read-only</span>}
-            {!p.readOnly && p.onNetworkShare && <span className="tag">share</span>}
-          </span>
-          <span className="pth">{p.path}</span>
-          <span className="when">{lastOpened(p.lastOpenedAt)}</span>
-        </button>
+        <RecentCard
+          key={p.id}
+          project={p}
+          busy={busy}
+          removing={removingId === p.id}
+          failure={openFailure?.id === p.id ? openFailure.message : null}
+          onOpen={() => onOpen(p)}
+          onRemove={() => onRemove(p)}
+        />
       ))}
+    </div>
+  )
+}
+
+function RecentCard({
+  project,
+  busy,
+  removing,
+  failure,
+  onOpen,
+  onRemove,
+}: {
+  project: ProjectSummary
+  busy: boolean
+  removing: boolean
+  failure: string | null
+  onOpen: () => void
+  onRemove: () => void
+}) {
+  const [menu, setMenu] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menu) return
+    const closeOutside = (event: MouseEvent) => {
+      if (!wrap.current?.contains(event.target as Node)) setMenu(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenu(false)
+    }
+    window.addEventListener('mousedown', closeOutside)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('mousedown', closeOutside)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [menu])
+
+  return (
+    <div className="lch-card" ref={wrap}>
+      <button className="lch-card-open" onClick={onOpen} disabled={busy || removing}>
+        <span className="nm">
+          {project.name}
+          {project.readOnly && <span className="tag">read-only</span>}
+          {!project.readOnly && project.onNetworkShare && <span className="tag">share</span>}
+        </span>
+        <span className="pth">{project.path}</span>
+        <span className="when">{lastOpened(project.lastOpenedAt)}</span>
+      </button>
+      <button
+        className="lch-card-more"
+        aria-label={`More actions for ${project.name}`}
+        aria-haspopup="menu"
+        aria-expanded={menu}
+        onClick={() => setMenu((value) => !value)}
+        disabled={busy || removing}
+      >
+        ⋯
+      </button>
+      {menu && (
+        <div className="ctx lch-card-menu" role="menu">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setMenu(false)
+              onRemove()
+            }}
+          >
+            Remove from Recent
+          </button>
+          <p>Removes this launcher entry only. Project files stay on disk.</p>
+        </div>
+      )}
+      {failure && (
+        <div className="lch-open-failure" role="alert">
+          <p>Could not open this project: {failure}</p>
+          <div>
+            <button className="btn-mini" onClick={onOpen} disabled={busy || removing}>
+              Retry
+            </button>
+            <button className="btn-mini" onClick={onRemove} disabled={busy || removing}>
+              {removing ? 'Removing…' : 'Remove from Recent'}
+            </button>
+          </div>
+          <small>Removing changes this launcher list only. Project files stay on disk.</small>
+        </div>
+      )}
     </div>
   )
 }

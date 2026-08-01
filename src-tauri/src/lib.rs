@@ -87,6 +87,7 @@ pub fn run() {
             commands::project_close,
             commands::project_current,
             commands::project_recent,
+            commands::project_recent_forget,
             commands::style_transfer_preview,
             commands::style_transfer_apply,
             commands::share_offline,

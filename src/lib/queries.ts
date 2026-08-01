@@ -525,6 +525,25 @@ export function useOpenProject() {
   })
 }
 
+export function useForgetRecentProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.projectRecentForget(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: qk.projectRecent })
+      const previous = qc.getQueryData<ProjectSummary[]>(qk.projectRecent)
+      qc.setQueryData<ProjectSummary[]>(qk.projectRecent, (current) =>
+        current?.filter((project) => project.id !== id),
+      )
+      return { previous }
+    },
+    onError: (_error, _id, context) => {
+      if (context?.previous) qc.setQueryData(qk.projectRecent, context.previous)
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: qk.projectRecent }),
+  })
+}
+
 export function useCreateProject() {
   const qc = useQueryClient()
   return useMutation({

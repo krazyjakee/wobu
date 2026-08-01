@@ -218,6 +218,14 @@ pub fn project_recent() -> Vec<ProjectSummary> {
     recent::list_summaries()
 }
 
+/// Forget one launcher entry. The project folder and everything inside it are
+/// deliberately outside this command's scope.
+#[tauri::command]
+pub fn project_recent_forget(id: Id) -> CommandResult<()> {
+    recent::forget(id)?;
+    Ok(())
+}
+
 /// Whether the open project's folder is currently unreachable.
 ///
 /// The `share:offline` / `share:online` events are the live signal; this is
