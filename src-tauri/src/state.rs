@@ -377,14 +377,8 @@ impl Jobs {
         Jobs(Queue::with_runtime(Config::default(), Bridge { app: app.clone() }, runtime))
     }
 
-    /// For the commands that submit work.
-    ///
-    /// Nothing calls it yet: Enhance (#37) and the image backends (#40) are the
-    /// callers it exists for, and wiring those through is their issue rather
-    /// than the queue's. The same `#[allow]` and the same reasoning as the
-    /// provider codes in `error.rs`, which were also defined before anything
-    /// raised them.
-    #[allow(dead_code)] // submitted through once #37 lands; see above
+    /// For the commands that submit work — `enhance_start` today, the image
+    /// backends (#40) next.
     pub fn queue(&self) -> &Queue {
         &self.0
     }

@@ -57,7 +57,11 @@ const SERVICE: &str = "wobu";
 pub struct Secret(String);
 
 impl Secret {
-    fn new(value: impl Into<String>) -> Secret {
+    /// `pub(crate)` so that `enhance.rs`'s tests can build an adapter without a
+    /// real credential. Nothing outside this crate can mint one, which is the
+    /// property that matters: a `Secret` in the wild has come from the keychain
+    /// or from the development-time fallback and from nowhere else.
+    pub(crate) fn new(value: impl Into<String>) -> Secret {
         Secret(value.into())
     }
 
@@ -66,7 +70,6 @@ impl Secret {
     /// Named so that reaching for it reads as a claim rather than as a getter:
     /// the caller is about to put a credential somewhere, and the only somewhere
     /// that is allowed is an outbound request header.
-    #[allow(dead_code)] // read by the adapters once Enhance lands (#37); see below
     pub fn expose(&self) -> &str {
         &self.0
     }
@@ -257,7 +260,6 @@ impl Keys {
     /// The only way a [`Secret`] leaves this module, and it goes to an adapter
     /// constructor — `AnthropicProvider::new(key)` — rather than into a struct
     /// the UI can see.
-    #[allow(dead_code)] // called once Enhance is wired up (#37); see below
     pub fn secret(&self, provider: &str) -> Option<Secret> {
         self.lookup(provider).secret
     }

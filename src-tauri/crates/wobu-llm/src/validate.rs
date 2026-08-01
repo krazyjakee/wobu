@@ -13,6 +13,7 @@ use wobu_core::schema::{PALETTE_KEY, is_hex_color};
 use wobu_core::{Description, SectionValue};
 
 use crate::error::{Error, Result, json_type_name};
+use crate::provider::QUESTIONS_KEY;
 
 /// A response that passed. `extra_sections` is not a failure — see
 /// [`validate_description`].
@@ -20,6 +21,14 @@ use crate::error::{Error, Result, json_type_name};
 pub struct ValidatedDescription {
     /// Sections in the kind's declared order, ready to write to a node.
     pub description: Description,
+    /// What the model would have had to invent, asked instead.
+    ///
+    /// Beside the description rather than inside it, because that is the whole
+    /// of the argument in [`QUESTIONS_KEY`]: these are addressed to the person
+    /// who wrote the notes, they stop being true once answered, and nothing here
+    /// may reach the node. Empty is the ordinary case and means the notes
+    /// settled everything — not that the model was not asked.
+    pub questions: Vec<String>,
     /// Sections the model volunteered that this kind does not declare. Dropped
     /// from `description`, kept here so a provider that has started inventing
     /// fields shows up in a log rather than only in a shrug. Order follows the
@@ -78,14 +87,35 @@ pub fn validate_description(kind: NodeKind, response: &Value) -> Result<Validate
 
     let extra_sections = object
         .keys()
+        .filter(|key| key.as_str() != QUESTIONS_KEY)
         .filter(|key| !declared.iter().any(|def| def.key == key.as_str()))
         .cloned()
         .collect();
 
     Ok(ValidatedDescription {
         description: Description::from_sections(sections),
+        questions: questions(object.get(QUESTIONS_KEY)),
         extra_sections,
     })
+}
+
+/// The questions, read as leniently as anything here is read.
+///
+/// A malformed `questions` is never a failure, and that asymmetry with the
+/// sections above is deliberate: the description is what becomes canon and is
+/// worth another paid call to get right, whereas a question is a note in the
+/// margin. Burning a call the model otherwise answered perfectly, because it put
+/// a number in the list it was not obliged to send at all, would be the app
+/// spending the user's money on tidiness.
+fn questions(value: Option<&Value>) -> Vec<String> {
+    let Some(Value::Array(items)) = value else { return Vec::new() };
+    items
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|q| !q.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 fn text_section(key: &'static str, value: &Value) -> Result<SectionValue> {
@@ -204,14 +234,61 @@ mod tests {
         // Undeclared sections are dropped on read anyway, so rejecting one would
         // waste a whole call over a field we never intended to keep.
         let mut response = valid_response(NodeKind::Character);
-        response["questions"] = json!(["What does the guild signet look like?"]);
         response["climate"] = json!("does not belong on a character");
+        response["era"] = json!("nor does this");
 
         let validated = validate_description(NodeKind::Character, &response).unwrap();
-        assert!(!validated.description.sections.contains_key("questions"));
+        assert!(!validated.description.sections.contains_key("climate"));
         let mut extra = validated.extra_sections;
         extra.sort();
-        assert_eq!(extra, vec!["climate", "questions"]);
+        assert_eq!(extra, vec!["climate", "era"]);
+    }
+
+    #[test]
+    fn a_question_comes_back_beside_the_description_and_never_inside_it() {
+        // The placement is the decision. A question that reached
+        // `description.sections` would be normalised onto the node, written into
+        // the Markdown, and extracted as a fragment into every prompt compiled
+        // from that entity — so "what colour is the guild signet?" would end up
+        // in the text handed to an image backend.
+        let mut response = valid_response(NodeKind::Character);
+        response[crate::provider::QUESTIONS_KEY] = json!([
+            "What does the guild signet look like?",
+            "  ",
+            "Is the longcoat waxed or oiled?",
+        ]);
+
+        let validated = validate_description(NodeKind::Character, &response).unwrap();
+        assert_eq!(validated.questions, [
+            "What does the guild signet look like?",
+            "Is the longcoat waxed or oiled?",
+        ]);
+        assert!(!validated.description.sections.contains_key("questions"));
+        // Not an oddity to be reported either — it is a field we asked for.
+        assert!(validated.extra_sections.is_empty(), "{:?}", validated.extra_sections);
+    }
+
+    #[test]
+    fn a_response_with_nothing_to_ask_is_the_ordinary_one() {
+        let validated =
+            validate_description(NodeKind::Character, &valid_response(NodeKind::Character))
+                .unwrap();
+        assert!(validated.questions.is_empty());
+    }
+
+    #[test]
+    fn a_malformed_questions_field_costs_a_shrug_rather_than_a_second_paid_call() {
+        // The asymmetry with the sections above, stated. `questions` is optional
+        // and marginal; failing a description the model got right because the
+        // list it volunteered has a number in it would be spending the user's
+        // money on tidiness.
+        for bad in [json!("just one, as prose"), json!([7, "and a real one"]), json!(null)] {
+            let mut response = valid_response(NodeKind::Character);
+            response[crate::provider::QUESTIONS_KEY] = bad.clone();
+            let validated = validate_description(NodeKind::Character, &response)
+                .unwrap_or_else(|e| panic!("{bad} failed the whole response: {e}"));
+            assert!(validated.description.sections.contains_key("never"));
+        }
     }
 
     #[test]

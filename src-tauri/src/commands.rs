@@ -30,6 +30,7 @@ use wobu_store::{
 };
 
 use crate::diag;
+use crate::enhance::Pending;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::keys::{KeyRemoval, KeyStatus, Keys};
 use crate::state::{AppState, Jobs, WORLD_CHANGED};
@@ -108,9 +109,16 @@ pub fn project_open_cancel(state: State<'_, AppState>) {
     state.cancel_open();
 }
 
+/// Close the open project.
+///
+/// Any enhanced description still waiting to be accepted goes with it. It could
+/// not be written into another project anyway — `enhance_accept` checks which
+/// world it came from — but a description of somebody's world should not still
+/// be sitting in this process after they have shut it.
 #[tauri::command]
-pub fn project_close(state: State<'_, AppState>) -> CommandResult<()> {
+pub fn project_close(state: State<'_, AppState>, pending: State<'_, Pending>) -> CommandResult<()> {
     state.close();
+    pending.clear();
     Ok(())
 }
 

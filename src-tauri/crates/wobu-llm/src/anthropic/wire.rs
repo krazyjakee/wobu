@@ -362,7 +362,16 @@ mod tests {
         // validated into a node.
         let body = request_body(&request());
         assert_eq!(body["tools"][0]["name"], TOOL_NAME);
-        assert_eq!(body["tools"][0]["input_schema"], description_schema(NodeKind::Character));
+        // Against the *request's* schema rather than the registry's, because
+        // that is the one the validator applies on the way back and it is one
+        // property wider — `questions`, which is per call and never a section.
+        // Comparing against the registry here would let an adapter that quietly
+        // dropped that property still pass.
+        assert_eq!(body["tools"][0]["input_schema"], request().schema());
+        assert_eq!(
+            body["tools"][0]["input_schema"]["properties"]["palette"],
+            description_schema(NodeKind::Character)["properties"]["palette"],
+        );
         assert_eq!(body["tool_choice"]["type"], "tool");
         assert_eq!(body["tool_choice"]["name"], TOOL_NAME);
         assert_eq!(body["tool_choice"]["disable_parallel_tool_use"], true);

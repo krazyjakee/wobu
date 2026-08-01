@@ -3,6 +3,7 @@
 
 mod commands;
 mod diag;
+mod enhance;
 mod error;
 mod keys;
 mod redact;
@@ -34,6 +35,13 @@ pub fn run() {
         // reach a project folder is a type that could one day read a key out of
         // one, and project folders live on shares.
         .manage(keys::Keys::default())
+        // Descriptions that have come back from a provider and not yet been
+        // accepted, edited or rejected. Beside the project rather than inside
+        // it for the same reason the queue is: the call that produced one
+        // outlives the project it was started for, and each entry records which
+        // project it belongs to so an accept can never be answered against a
+        // different world.
+        .manage(enhance::Pending::default())
         .setup(|app| {
             // Not another `.manage(Default::default())`: the queue reports
             // itself by emitting, and there is no `AppHandle` to emit through
@@ -83,6 +91,10 @@ pub fn run() {
             commands::asset_set_cover,
             commands::influence_resolve,
             commands::prompt_compile,
+            enhance::enhance_start,
+            enhance::enhance_accept,
+            enhance::enhance_discard,
+            enhance::enhance_pending,
             commands::conflicts,
             commands::conflict_resolve,
             commands::presence_peers,

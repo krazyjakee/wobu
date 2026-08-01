@@ -255,6 +255,16 @@ impl Project {
         self.meta.id
     }
 
+    /// The open project's `project.json`, already parsed.
+    ///
+    /// Exists so the shell can read the provider selection without re-opening
+    /// and re-parsing the file on every Enhance. It is safe to share and holds
+    /// no key — `docs/08-providers.md` is explicit that only the *selection*
+    /// lives here, because project folders get put on shares.
+    pub fn meta(&self) -> &ProjectMeta {
+        &self.meta
+    }
+
     pub fn index(&self) -> &Index {
         &self.index
     }

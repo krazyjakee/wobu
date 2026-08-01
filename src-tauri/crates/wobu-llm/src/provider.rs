@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use wobu_core::NodeKind;
 use wobu_core::schema::description_schema;
 
@@ -32,6 +32,25 @@ use crate::validate::ValidatedDescription;
 /// Output tokens are billed on what is produced, not on the cap, whereas a cap
 /// set too tight buys a truncated response that has to be paid for twice.
 pub const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 4096;
+
+/// The one property [`EnhanceRequest::schema`] adds to the kind's own schema,
+/// and the only thing a model may send back that is not a description section.
+///
+/// It is here rather than in `wobu_core`'s registry, and that placement is the
+/// argument. A section in the registry is *canon*: it is normalised onto the
+/// node, written into the Markdown, and extracted as a weighted fragment into
+/// every prompt compiled from that entity. "What colour is the guild signet?" is
+/// none of those things — it is a property of one call, addressed to the person
+/// who wrote the notes, and it stops being true the moment they answer it. So it
+/// is declared per *request*, read off the response beside the description
+/// ([`crate::ValidatedDescription::questions`]), and has no route to disk at all.
+///
+/// Declared rather than merely tolerated, even though `wobu_core::schema` makes
+/// undeclared fields non-fatal. The schema says `additionalProperties: false`,
+/// so a field asked for in prose and refused by the schema is a model told two
+/// opposite things — and the one that would give way is the instruction not to
+/// confabulate, which is the whole reason the field exists.
+pub const QUESTIONS_KEY: &str = "questions";
 
 /// One Enhance call: fill in every section of `kind`'s description.
 ///
@@ -103,8 +122,26 @@ impl EnhanceRequest {
     /// with a mime type and nothing else. The name Anthropic requires is an
     /// invention of that adapter and has no business being in a request Gemini
     /// also has to read.
+    ///
+    /// [`QUESTIONS_KEY`] is added here and *not* to `required`: a model with
+    /// nothing to ask omits it, which is the common case and must not be a
+    /// missing-section failure. See there for why it is not a section.
     pub fn schema(&self) -> Value {
-        description_schema(self.kind)
+        let mut schema = description_schema(self.kind);
+        if let Some(properties) = schema["properties"].as_object_mut() {
+            properties.insert(
+                QUESTIONS_KEY.to_string(),
+                json!({
+                    "type": "array",
+                    "description": "Facts the notes do not settle and that you would \
+                                    otherwise have had to invent. One short question each, \
+                                    addressed to the person who wrote the notes. Leave this \
+                                    out when the notes settle everything.",
+                    "items": { "type": "string" },
+                }),
+            );
+        }
+        schema
     }
 }
 
@@ -280,6 +317,13 @@ pub trait TextProvider: Send + Sync {
 mod tests {
     use super::*;
 
+    /// `schema()` minus the one property it adds, so a test can compare against
+    /// the registry's answer without restating what the addition is.
+    fn sections_only(mut schema: Value) -> Value {
+        schema["properties"].as_object_mut().unwrap().remove(QUESTIONS_KEY);
+        schema
+    }
+
     #[test]
     fn a_request_carries_the_schema_for_its_kind_rather_than_a_prompt_asking_for_json() {
         // Structured output is the point of the trait. If this ever came back
@@ -289,7 +333,7 @@ mod tests {
         let schema = request.schema();
         assert_eq!(schema["type"], "object");
         assert!(schema["properties"]["palette"].is_object());
-        assert_eq!(schema, description_schema(NodeKind::Character));
+        assert_eq!(sections_only(schema), description_schema(NodeKind::Character));
     }
 
     #[test]
@@ -300,7 +344,30 @@ mod tests {
         for kind in [NodeKind::Character, NodeKind::Setting, NodeKind::Prop] {
             let request = EnhanceRequest::new(kind, "test-model", "…");
             assert_eq!(request.kind, kind);
-            assert_eq!(request.schema(), description_schema(kind));
+            assert_eq!(sections_only(request.schema()), description_schema(kind));
+        }
+    }
+
+    #[test]
+    fn every_kind_may_ask_a_question_and_no_kind_is_required_to() {
+        // "Ask rather than confabulate" is only an instruction the model can
+        // follow if the shape it was handed has somewhere to put the question —
+        // and a `questions` the schema required would turn "the notes settle
+        // everything" into a wasted call.
+        for def in wobu_core::kind::kind_registry() {
+            let schema = EnhanceRequest::new(def.kind, "test-model", "…").schema();
+            assert_eq!(
+                schema["properties"][QUESTIONS_KEY]["items"]["type"],
+                "string",
+                "{} cannot be asked a question",
+                def.kind,
+            );
+            let required: Vec<&str> =
+                schema["required"].as_array().unwrap().iter().filter_map(|v| v.as_str()).collect();
+            assert!(!required.contains(&QUESTIONS_KEY), "{} is forced to ask one", def.kind);
+            // And the object is still closed, so `questions` is the only thing
+            // a model is invited to send that is not a section.
+            assert_eq!(schema["additionalProperties"], false, "{}", def.kind);
         }
     }
 

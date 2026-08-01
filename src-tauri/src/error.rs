@@ -99,9 +99,9 @@ pub enum Code {
     // Defined here rather than when the provider crates land, which is the
     // entire point of this taxonomy: `wobu-llm` and `wobu-imagine` should find
     // the codes already waiting rather than invent their own shapes.
-    /// No API key configured for the selected provider.
+    /// No API key configured for the selected provider. Raised by
+    /// `enhance_start`, before anything is submitted or spent.
     #[serde(rename = "provider.no_key")]
-    #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
     ProviderNoKey,
     /// The OS credential store could not be reached: a locked login keyring, a
     /// headless Linux session, no Secret Service on the bus.

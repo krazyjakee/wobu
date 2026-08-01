@@ -500,8 +500,12 @@ mod tests {
         assert_eq!(body["response_format"]["mime_type"], "application/json");
         assert_eq!(
             body["response_format"]["schema"],
-            description_schema(NodeKind::Character),
+            request().schema(),
             "the schema sent must be the one the validator applies, unedited",
+        );
+        assert_eq!(
+            body["response_format"]["schema"]["properties"]["palette"],
+            description_schema(NodeKind::Character)["properties"]["palette"],
         );
         assert!(body["generation_config"].get("response_schema").is_none());
         assert!(body["generation_config"].get("response_mime_type").is_none());
