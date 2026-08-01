@@ -10,13 +10,15 @@
 //! SMB and NFS, and WAL mode does not work there at all. The documented failure
 //! mode is corruption, not an error message. See `docs/02-data-model.md`.
 //!
-//! One table — `sync_state` — is not a cache of the Markdown, because no folder
-//! can tell you what a peer once held. It is still safe to delete, which is the
-//! rule that actually matters here; losing it costs a re-compare on the next
-//! sync and nothing else. The argument is on the table itself.
+//! Two tables — `sync_state` and `sync_rejected` — are not a cache of the
+//! Markdown, because no folder can tell you what a peer once held or what a
+//! person once refused. They are still safe to delete, which is the rule that
+//! actually matters here; losing them costs a re-compare on the next sync and a
+//! run of conflict cards nobody needed, and nothing else. The argument is on
+//! each table.
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -32,7 +34,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 7;
+pub const INDEX_VERSION: u32 = 8;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -176,6 +178,48 @@ CREATE TABLE IF NOT EXISTS sync_state (
     base_hash   TEXT NOT NULL,
     PRIMARY KEY (peer_id, node_id)
 );
+
+-- One version of one node, from one peer, that a person looked at and said no
+-- to. The other half of `sync_state` above, and the reason it needs a table of
+-- its own rather than a column beside `base_hash`.
+--
+-- A conflict deliberately does *not* move the base (#80, and the argument is in
+-- `crate::apply`): moving it to the remote hash would stop the re-compare, which
+-- is exactly what makes it tempting, but it claims agreement on bytes nobody
+-- agreed to and the base is precisely what a later fast-forward trusts. So the
+-- base stays put, the disagreement is rediscovered every round, and a card the
+-- user has already dismissed comes straight back (#89). Agreement and refusal
+-- are two different facts about the same pair of machines, and the only way to
+-- record the second without corrupting the first is to record it separately.
+--
+-- **`rejected_hash` is in the primary key, and that is the whole of the safety
+-- argument.** A two-column `(peer_id, node_id)` version of this table is the
+-- obvious one and it silently eats edits: the user rejects Tuesday's paragraph,
+-- the peer writes a better one on Wednesday, and Wednesday never appears on this
+-- machine at all — no card, no file, no trace. Keyed on the bytes, a refusal
+-- suppresses exactly the version that was refused and nothing else. Every later
+-- version from that same peer is a new hash and conflicts as loudly as it should.
+--
+-- Rows accumulate and are never swept. One row is three short strings, a person
+-- can only make them by pressing a button, and the alternative — expiring them
+-- on a timer or a count — is a card that reappears weeks later for a decision
+-- already made, which is the bug this table exists to fix arriving late.
+--
+-- Not derived from the folder, exactly like `sync_state`, and safe to lose for
+-- the same reason: with the table gone every refusal is forgotten, the next sync
+-- parks one redundant sibling per rejected node, and a person dismisses a card
+-- they had dismissed before. That is a cost in patience and not in text, which is
+-- why the version bump above is allowed to drop this along with everything else.
+--
+-- Nothing here may ever *cause* a write. A row can only ever turn a `Conflict`
+-- into "do nothing" — see `crate::apply::already_refused`. If it could reach any
+-- other arm of the table, a corrupt or forged row would become an overwrite.
+CREATE TABLE IF NOT EXISTS sync_rejected (
+    peer_id       TEXT NOT NULL,
+    node_id       TEXT NOT NULL,
+    rejected_hash TEXT NOT NULL,
+    PRIMARY KEY (peer_id, node_id, rejected_hash)
+);
 "#;
 
 /// A node file that is on disk and cannot be read.
@@ -300,7 +344,8 @@ impl Index {
                  DROP TABLE IF EXISTS node_fts;
                  DROP TABLE IF EXISTS assets;
                  DROP TABLE IF EXISTS corrupt;
-                 DROP TABLE IF EXISTS sync_state;",
+                 DROP TABLE IF EXISTS sync_state;
+                 DROP TABLE IF EXISTS sync_rejected;",
             )?;
             self.conn.execute_batch(SCHEMA)?;
             self.conn.execute(
@@ -330,6 +375,18 @@ impl Index {
     /// rebuild triggered by a corrupt index or an impatient user would
     /// otherwise silently reset agreement with every peer and turn the next
     /// sync into a wall of conflicts.
+    ///
+    /// `sync_rejected` is not in the list either, and the reasoning is the same
+    /// sentence with a different noun: re-reading the Markdown says nothing
+    /// about which versions a person looked at and refused. It is worth being
+    /// explicit that the two are not symmetrical in *danger*, though, because
+    /// that is the thing that would justify treating them differently. A stale
+    /// base can license a fast-forward, so keeping one is the risky direction; a
+    /// stale refusal can only ever suppress a card, and only for bytes byte-
+    /// identical to ones a human already rejected from that same peer. Keeping
+    /// it through a rebuild is therefore cheap in the one direction that matters,
+    /// and dropping it would throw away a record of a human decision on the
+    /// strength of an index repair the user asked for for unrelated reasons.
     pub fn clear(&self) -> Result<()> {
         self.conn.execute_batch(
             "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
@@ -1137,6 +1194,16 @@ impl Index {
      * to hold. Ids are ULIDs and never reused, so a base left behind by a node
      * that really was deleted can only ever be read back for the node it was
      * written for.
+     *
+     * The same is true of the refusals below, and it is worth walking rather
+     * than assuming, because the two tables are not obviously alike. A base
+     * survives `remove_node` so that a blinking folder cannot *destroy*
+     * agreement; a refusal survives it so that a blinking folder cannot
+     * *resurrect* a card. Those pull in opposite directions and both land on
+     * "leave the row alone", which is the answer that costs nothing either way:
+     * a leftover refusal is three strings keyed to a ULID that will never be
+     * issued again, and it can only ever match the node it was written for and
+     * the exact bytes that were refused.
      */
 
     /// What this project and `peer_id` last agreed the node's bytes were.
@@ -1244,9 +1311,145 @@ impl Index {
     /// forgetting too much re-compares, forgetting too little trusts. So this
     /// deletes rather than tombstones, and callers should reach for it whenever
     /// they are unsure.
+    ///
+    /// **Refusals go with the bases**, in the same transaction, and the same
+    /// sentence explains why. A refusal is a fact about a *relationship* — this
+    /// person, having seen who it came from, said no to that — so a relationship
+    /// that has ended cannot leave one behind. If the id came back it would be a
+    /// share re-granted or a ticket re-issued, and the first thing this project
+    /// would do with a stale refusal is decline to show the user a version of
+    /// their world that a machine they have just re-admitted is holding. That is
+    /// the one way a row in this table can cost text rather than patience, and
+    /// it is closed here.
+    ///
+    /// The asymmetry still holds in the other direction, too, which is what
+    /// makes this an easy call: forgetting a refusal costs one redundant card,
+    /// and only if the peer returns *and* still holds the exact bytes that were
+    /// refused.
     pub fn forget_peer(&self, peer_id: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM sync_state WHERE peer_id = ?1", params![peer_id])?;
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM sync_state WHERE peer_id = ?1", params![peer_id])?;
+        tx.execute("DELETE FROM sync_rejected WHERE peer_id = ?1", params![peer_id])?;
+        tx.commit()?;
         Ok(())
+    }
+
+    /* ── refusals ────────────────────────────────────────────────────────
+     *
+     * `sync_state` records what two machines agreed. This records what one
+     * person refused. The table carries the argument for existing; these are the
+     * three questions asked of it, and they are deliberately the same shape as
+     * the three above so that the two halves of #89 read as one mechanism.
+     *
+     * A hash here is a *remote* hash — the bytes a peer sent and a human
+     * declined — and it is the full BLAKE3 hex `crate::atomic::Stamp` holds, not
+     * the truncated `source_version`. Mixing them would be worse here than
+     * anywhere else in this file: `source_version` is blind to names and
+     * summaries, so a refusal keyed on one would also suppress a rename the peer
+     * made afterwards, which is the exact lost edit the third column exists to
+     * prevent.
+     */
+
+    /// Record that a person refused one version of one node from one peer.
+    ///
+    /// Idempotent, because the button is. `DO NOTHING` rather than
+    /// `DO UPDATE`: every column is in the primary key, so a second press of the
+    /// same decision has nothing to say that the first did not.
+    ///
+    /// Singular where [`record_bases`] is plural, and that is not an oversight.
+    /// Agreement settles in batches — a whole sync round reaches it at once —
+    /// whereas a refusal is one person, one card, one press, and a batch API
+    /// here would be an invitation to synthesise refusals from something other
+    /// than a human decision. There is exactly one caller and it should stay
+    /// that way.
+    ///
+    /// [`record_bases`]: Index::record_bases
+    pub fn record_rejection(&self, peer_id: &str, node_id: Id, rejected_hash: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO sync_rejected (peer_id, node_id, rejected_hash) VALUES (?1,?2,?3)
+             ON CONFLICT(peer_id, node_id, rejected_hash) DO NOTHING",
+            params![peer_id, node_id.to_string(), rejected_hash],
+        )?;
+        Ok(())
+    }
+
+    /// Every version this project refused from one peer, node by node, in one
+    /// query.
+    ///
+    /// The shape [`crate::apply::apply`] wants, and the counterpart of
+    /// [`bases_for_peer`]: a whole batch is compared at once, so asking per node
+    /// would turn one indexed scan into a few hundred round trips over a table
+    /// that fits in a page.
+    ///
+    /// The value is a *set* per node and not a single hash. That is the trap in
+    /// this feature written into a type: a node can be refused more than once —
+    /// two different paragraphs from the same peer, on two different days — and
+    /// a shape that could only hold the latest would make the earlier refusal
+    /// come back, which is the bug being fixed.
+    ///
+    /// Rows whose `node_id` this build cannot parse are skipped, with the same
+    /// forgiveness [`bases_for_peer`] shows. One unreadable row costs that node
+    /// a redundant conflict card, not the sync.
+    ///
+    /// [`bases_for_peer`]: Index::bases_for_peer
+    pub fn rejections_for_peer(&self, peer_id: &str) -> Result<HashMap<Id, HashSet<String>>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT node_id, rejected_hash FROM sync_rejected WHERE peer_id = ?1")?;
+        let rows = stmt.query_map(params![peer_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        let mut out: HashMap<Id, HashSet<String>> = HashMap::new();
+        for row in rows {
+            let (node_id, hash) = row?;
+            let Ok(node_id) = Id::from_string(&node_id) else { continue };
+            out.entry(node_id).or_default().insert(hash);
+        }
+        Ok(out)
+    }
+
+    /// Whether one exact version of one node was refused from one peer.
+    ///
+    /// The single-row read, for callers holding one decision rather than a
+    /// batch — and for tests, which is where the distinction between "this hash"
+    /// and "this node" most needs asserting.
+    pub fn is_rejected(&self, peer_id: &str, node_id: Id, hash: &str) -> Result<bool> {
+        let found: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM sync_rejected
+                 WHERE peer_id = ?1 AND node_id = ?2 AND rejected_hash = ?3",
+                params![peer_id, node_id.to_string(), hash],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(found.is_some())
+    }
+
+    /// Every peer id this project has ever agreed or disagreed with.
+    ///
+    /// Exists for one caller — [`crate::Project::resolve_conflict`], which holds
+    /// a conflict sibling's *alias* and needs the id behind it. An alias is
+    /// derived from the id and there is no table mapping one back (#76's whole
+    /// argument), so the only honest way to invert it is to re-derive it over a
+    /// candidate set and see which candidate matches. This is that set.
+    ///
+    /// Deliberately sourced from both tables rather than from `sync_state`
+    /// alone: once a peer has had a refusal recorded, it must stay resolvable
+    /// even if every base with it is later replaced or dropped, or a second
+    /// refusal for the same peer would land nowhere.
+    pub fn known_peers(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT peer_id FROM sync_state
+             UNION
+             SELECT peer_id FROM sync_rejected",
+        )?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
     }
 }
 

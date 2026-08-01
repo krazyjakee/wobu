@@ -62,7 +62,7 @@
 //! [`base_hash`]: crate::Index::base_hash
 //! [`Project::record_agreed`]: crate::Project::record_agreed
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -159,6 +159,52 @@ pub fn decide(local: Option<&str>, remote: Option<&str>, base: Option<&str>) -> 
             (false, false) if l == r => Decision::Converged,
             (false, false) => Decision::Conflict,
         },
+    }
+}
+
+/* ── the one thing three hashes cannot know ───────────────────────────────── */
+
+/// Whether this exact incoming version is one a person already refused from this
+/// peer.
+///
+/// A conflict does not move the base — see [`apply`] — so the same disagreement
+/// is rediscovered on every round, for ever, and the user who resolved it with
+/// [`Keep::Current`] watches their card come back (#89). The base cannot be the
+/// thing that fixes it: moving it would claim agreement on bytes nobody agreed
+/// to, and the base is what a later fast-forward trusts. So refusal is recorded
+/// as its own fact, in `sync_rejected`, and this is where it is read.
+///
+/// **Kept out of [`decide`] on purpose.** `decide` is a total function of three
+/// hashes, and every row of its table can be asserted without a filesystem
+/// anywhere near it; a fourth argument reaching into the index would move the
+/// most important logic in M3 somewhere it can only be tested through IO. This
+/// is a separate, equally pure predicate that runs *after* it, so both stay
+/// testable and the composition is one line at each call site.
+///
+/// ## What it may and may not touch
+///
+/// It answers `true` for exactly one row of the table — [`Decision::Conflict`] —
+/// and nothing else can be reached from here. That bound is the whole safety
+/// argument: a `true` can only ever turn "park a sibling" into "do nothing", so
+/// the worst a corrupt, forged or mistaken row can do is withhold a card. If it
+/// could reach [`Decision::FastForward`] it would be a row in a database
+/// authorising an overwrite of somebody's file, and no row may ever do that.
+///
+/// And it compares the *remote hash*, not the node. Rejecting Tuesday's
+/// paragraph must not suppress Wednesday's: a later, different version from the
+/// same peer is a different hash, is not in the set, and conflicts as loudly as
+/// it should. That is the trap this feature is made of and it lives on this
+/// line.
+///
+/// [`Keep::Current`]: crate::Keep
+pub fn already_refused(
+    decision: Decision,
+    remote: Option<&str>,
+    refused: Option<&HashSet<String>>,
+) -> bool {
+    match (decision, remote, refused) {
+        (Decision::Conflict, Some(remote), Some(refused)) => refused.contains(remote),
+        _ => false,
     }
 }
 
@@ -268,6 +314,18 @@ pub enum Applied {
     /// for byte. Nothing was written — see [`apply`] for why this exists.
     #[serde(rename_all = "camelCase")]
     AlreadyParked { conflict_path: String },
+    /// Their version is one a person already looked at and refused from this
+    /// peer. Nothing was written, nothing was parked, and **the base did not
+    /// move** — a refusal is not an agreement, and recording one as if it were
+    /// would license a fast-forward onto the very bytes the user declined.
+    ///
+    /// Reported as its own outcome rather than folded into [`InStep`](Self::InStep)
+    /// because the two are opposite facts that happen to require the same amount
+    /// of work. `InStep` says the two machines hold the same thing; this says
+    /// they hold different things and the user has settled which one stands
+    /// here. A sync log that could not tell them apart would make #89 impossible
+    /// to confirm fixed and its regression impossible to notice.
+    AlreadyRefused,
     /// One side deleted it. Nothing was written and nothing was removed.
     Deleted,
     /// The payload was not usable. Nothing was written.
@@ -368,6 +426,25 @@ impl ApplyReport {
 /// This is also what makes losing the index survivable: a schema bump drops
 /// every base, the next sync reads the whole world as concurrent, and without
 /// this it would park a second copy of every divergent file at once.
+///
+/// ## Why a refused version is not parked at all
+///
+/// `AlreadyParked` keeps the folder from filling up with identical siblings, but
+/// the card itself still stands until a human answers it — and when they answer
+/// it with "mine", the sibling goes and the whole cycle starts again on the next
+/// round (#89). [`already_refused`] is where that stops: the refusal is read
+/// once per batch, out of `sync_rejected`, and an incoming version that matches
+/// one is reported and otherwise ignored.
+///
+/// The read is here, in the same breath as [`Index::bases_for_peer`], rather
+/// than in `Project`. Both are per-peer sync bookkeeping, both are wanted by
+/// exactly the two functions in this module, and splitting them across two files
+/// would mean a caller that reached `apply` without going through `Project` —
+/// which the tests do, and which nothing forbids — would silently get the old
+/// behaviour back. The consult is *not* in [`decide`], which stays a pure
+/// function of three hashes; see [`already_refused`].
+///
+/// [`Index::bases_for_peer`]: crate::Index::bases_for_peer
 pub fn apply(
     root: &Path,
     index: &Index,
@@ -375,6 +452,7 @@ pub fn apply(
     incoming: &[Incoming],
 ) -> Result<ApplyReport> {
     let bases = index.bases_for_peer(peer_id)?;
+    let refusals = index.rejections_for_peer(peer_id)?;
     // Their alias, not ours. Every sibling this function writes holds *their*
     // bytes, so stamping it with this installation's name would attribute a
     // paragraph on the card to the person who did not write it.
@@ -426,7 +504,18 @@ pub fn apply(
         let local = atomic::read_stamped(&path)?;
         let local_hash = local.as_ref().map(|(_, s)| s.hash.as_str());
 
-        match decide(local_hash, Some(&their_hash), base) {
+        let decision = decide(local_hash, Some(&their_hash), base);
+        // Before the match rather than as an arm of it, because it is not a
+        // sixth outcome of comparing three hashes — it is a fact about a person
+        // that only applies to one of the five. Keeping it here is what makes
+        // "a refusal can only ever suppress a conflict" true by construction
+        // rather than by reading every arm below.
+        if already_refused(decision, Some(&their_hash), refusals.get(&id)) {
+            outcomes.push((id, Applied::AlreadyRefused));
+            continue;
+        }
+
+        match decision {
             Decision::InStep => outcomes.push((id, Applied::InStep)),
             Decision::SendOurs => outcomes.push((id, Applied::SendOurs)),
             Decision::Deleted => outcomes.push((id, Applied::Deleted)),
@@ -533,8 +622,17 @@ fn already_parked(target: &Path, hash: &str) -> Result<Option<PathBuf>> {
 /// file over SMB, and it is safe because nothing acts on it — [`apply`] decides
 /// again against the disk when the bytes arrive. The worst a stale plan can do
 /// is ask for a file it did not need.
+///
+/// Versions the user already refused from this peer are left out of `wanted`
+/// entirely. Asking for bytes whose only possible destination is a sibling that
+/// [`apply`] will decline to write is a transfer with no outcome, and over a
+/// slow link it is the same transfer on every round for ever. They are not put
+/// in `skipped` either — that means "one side deleted this" and is a different
+/// sentence — so a refused node contributes to no list at all, which is exactly
+/// what a plan should say about work that does not need doing.
 pub fn plan(index: &Index, peer_id: &str, remote: &[(Id, String)]) -> Result<Plan> {
     let bases = index.bases_for_peer(peer_id)?;
+    let refusals = index.rejections_for_peer(peer_id)?;
     let ours = index.node_hashes()?;
     let theirs: HashMap<Id, &str> = remote.iter().map(|(id, h)| (*id, h.as_str())).collect();
 
@@ -549,7 +647,11 @@ pub fn plan(index: &Index, peer_id: &str, remote: &[(Id, String)]) -> Result<Pla
     for id in ids {
         let local = ours.get(&id).map(String::as_str);
         let remote = theirs.get(&id).copied();
-        match decide(local, remote, bases.get(&id).map(String::as_str)) {
+        let decision = decide(local, remote, bases.get(&id).map(String::as_str));
+        if already_refused(decision, remote, refusals.get(&id)) {
+            continue;
+        }
+        match decision {
             // Both need their bytes: one to write, one to park.
             Decision::FastForward | Decision::Conflict => plan.wanted.push(id),
             Decision::SendOurs => plan.send.push(id),
@@ -607,7 +709,12 @@ impl Plan {
 /// a name that failed to be a name would make the file unresolvable from inside
 /// the app. Note that it is a *name*, never a decision — twenty-eight bits is
 /// grindable, and nothing here may ever compare aliases to decide anything.
-fn alias_of(peer_id: &str) -> String {
+///
+/// `pub(crate)` for [`crate::Project::resolve_conflict`], which has a sibling's
+/// alias and needs to know which peer id it came from. That is the *only* other
+/// caller and it must stay that way: it uses this to re-derive candidates and
+/// then keys everything on the full id, never on the alias.
+pub(crate) fn alias_of(peer_id: &str) -> String {
     match endpoint_bytes(peer_id) {
         Some(bytes) => wobu_core::peer::alias(&bytes),
         None => wobu_core::peer::alias(blake3::hash(peer_id.as_bytes()).as_bytes()),
@@ -775,6 +882,98 @@ mod tests {
             for remote in [None, Some("a"), Some("b")] {
                 for base in [None, Some("a"), Some("b")] {
                     let _: Decision = decide(local, remote, base);
+                }
+            }
+        }
+    }
+
+    /* ── refusals ────────────────────────────────────────────────────── */
+
+    fn refusals(hashes: &[&str]) -> HashSet<String> {
+        hashes.iter().map(|h| h.to_string()).collect()
+    }
+
+    #[test]
+    fn a_refused_version_arriving_again_is_not_a_conflict() {
+        // The bug (#89) in one line. The user said no to these exact bytes from
+        // this exact peer; a base cannot record that without lying about
+        // agreement, so the refusal is its own fact and this is where it lands.
+        let theirs = h(b"nadia's second act");
+        let refused = refusals(&[&theirs]);
+        assert!(already_refused(Decision::Conflict, Some(&theirs), Some(&refused)));
+    }
+
+    #[test]
+    fn refusing_one_version_does_not_suppress_a_later_different_one() {
+        // **The trap this whole feature is made of, and the reason the hash is
+        // in the primary key.** Rejecting Tuesday's paragraph must not silence
+        // Wednesday's: a `(peer, node)` table would make the peer's later work
+        // vanish on this machine with no card, no file and no trace, which is a
+        // genuinely lost edit rather than a redundant card.
+        let tuesday = h(b"nadia's second act");
+        let wednesday = h(b"nadia's second act, rewritten");
+        let refused = refusals(&[&tuesday]);
+
+        assert!(already_refused(Decision::Conflict, Some(&tuesday), Some(&refused)));
+        assert!(
+            !already_refused(Decision::Conflict, Some(&wednesday), Some(&refused)),
+            "a later version from the same peer was silently swallowed",
+        );
+
+        // And refusing the second one as well leaves the first still refused —
+        // a node can be argued about more than once, so the set has to grow
+        // rather than be replaced.
+        let both = refusals(&[&tuesday, &wednesday]);
+        assert!(already_refused(Decision::Conflict, Some(&tuesday), Some(&both)));
+        assert!(already_refused(Decision::Conflict, Some(&wednesday), Some(&both)));
+    }
+
+    #[test]
+    fn a_refusal_can_only_ever_suppress_a_conflict() {
+        // The safety bound, stated as an exhaustive assertion rather than as a
+        // comment. Every other row of the table either writes to a node file or
+        // moves a base, so a row in a database that could reach one would be a
+        // row authorising an overwrite — and a corrupt, forged or simply
+        // mistaken row must never be able to do that.
+        let theirs = h(b"theirs");
+        let refused = refusals(&[&theirs]);
+        for decision in [
+            Decision::InStep,
+            Decision::FastForward,
+            Decision::SendOurs,
+            Decision::Converged,
+            Decision::Deleted,
+        ] {
+            assert!(
+                !already_refused(decision, Some(&theirs), Some(&refused)),
+                "{decision:?} was suppressed by a refusal",
+            );
+        }
+        assert!(already_refused(Decision::Conflict, Some(&theirs), Some(&refused)));
+    }
+
+    #[test]
+    fn nothing_recorded_for_this_node_refuses_nothing() {
+        // The ordinary case — almost every node, on almost every sync — and the
+        // one where an empty-set-means-everything bug would be catastrophic and
+        // completely silent.
+        let theirs = h(b"theirs");
+        assert!(!already_refused(Decision::Conflict, Some(&theirs), None));
+        assert!(!already_refused(Decision::Conflict, Some(&theirs), Some(&refusals(&[]))));
+        // A node the peer does not have cannot match a refusal about bytes.
+        assert!(!already_refused(Decision::Conflict, None, Some(&refusals(&[&theirs]))));
+    }
+
+    #[test]
+    fn the_predicate_is_pure_and_never_fails() {
+        // The same statement `decide_never_writes_and_never_fails` makes, for
+        // the same reason: the consult deliberately did not go inside `decide`,
+        // and it earns that only by being as testable as `decide` is. A `&Path`
+        // or a `Result` here would put the last decision in M3 behind IO.
+        for decision in [Decision::InStep, Decision::Conflict, Decision::FastForward] {
+            for remote in [None, Some("a"), Some("b")] {
+                for set in [None, Some(refusals(&[])), Some(refusals(&["a"]))] {
+                    let _: bool = already_refused(decision, remote, set.as_ref());
                 }
             }
         }

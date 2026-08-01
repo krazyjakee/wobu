@@ -971,13 +971,14 @@ impl Project {
         self.index.record_bases(peer_id, agreed)
     }
 
-    /// Forget everything agreed with a peer: a share revoked, a ticket rotated,
-    /// an identity that will not be dialled again.
+    /// Forget everything agreed *and everything refused* with a peer: a share
+    /// revoked, a ticket rotated, an identity that will not be dialled again.
     ///
     /// Cheap to be wrong about in one direction only. Forgetting too much costs
     /// a re-compare and some conflict cards; forgetting too little leaves a base
-    /// attributed to a machine nobody has any reason to still trust. Reach for
-    /// it whenever unsure.
+    /// attributed to a machine nobody has any reason to still trust, or a
+    /// refusal that would quietly withhold a version from a machine that has
+    /// since been re-admitted. Reach for it whenever unsure.
     pub fn forget_peer(&self, peer_id: &str) -> Result<()> {
         self.index.forget_peer(peer_id)
     }
@@ -1060,6 +1061,18 @@ impl Project {
     /// that check, "keep theirs" would quietly throw away the parked version in
     /// favour of text the user never saw, which is the same silent loss the
     /// whole conflict machinery exists to prevent.
+    ///
+    /// [`Keep::Current`] additionally writes the refusal down, so that the next
+    /// sync round does not park the same bytes again and re-ask a question that
+    /// has been answered (#89). [`Keep::Parked`] needs no such bookkeeping and
+    /// deliberately does none: taking their version makes their bytes the local
+    /// file, so the next compare sees `local == remote` and reads `Converged`,
+    /// which is not a conflict and never consults a refusal. A refusal can only
+    /// ever suppress a `Conflict`, and a `Conflict` requires the two sides to
+    /// differ — so any row left over from an earlier decision about this node
+    /// simply stops matching, with nothing to clear. See `record_refusal` below
+    /// for how a sibling's alias is turned into the peer id a refusal is keyed
+    /// on, and for the two cases where it honestly cannot be.
     pub fn resolve_conflict(
         &mut self,
         rel_path: &str,
@@ -1101,7 +1114,19 @@ impl Project {
             // guard above is what makes this safe — it is the reason a bare
             // delete here cannot discard a version the user did not reject.
             Keep::Current => {
+                // Read before the delete, obviously, and kept even if the
+                // recording below finds nobody to attribute it to: the hash of
+                // the bytes being refused is the whole content of the decision.
+                let refused = atomic::read_stamped(&sibling)?.map(|(_, stamp)| stamp.hash);
                 self.remove_sibling(&sibling)?;
+                // After the removal, not before. A refusal recorded for a card
+                // that is still on screen would be a row describing a decision
+                // that did not land — and the order that matters is the same one
+                // `Keep::Parked` uses below: the index only ever learns about a
+                // change the folder already made.
+                if let Some(refused) = refused {
+                    self.record_refusal(&name, &target_rel, &refused)?;
+                }
                 Ok(Resolved::Done)
             }
             Keep::Parked => {
@@ -1152,6 +1177,94 @@ impl Project {
                 }
             }
         }
+    }
+
+    /// Write down that a person refused these exact bytes, so the next sync does
+    /// not park them again.
+    ///
+    /// A conflict does not move the base — deliberately, and #80's argument for
+    /// that stands — so the same disagreement is rediscovered every round and the
+    /// card the user has just dismissed comes straight back (#89). This is the
+    /// other half: `sync_rejected` holds the refusal, and
+    /// [`crate::apply::already_refused`] reads it.
+    ///
+    /// ## Finding the peer, when all we have is an alias
+    ///
+    /// The refusal is keyed on a full 64-hex `EndpointId`, because an alias is
+    /// twenty-eight bits of a public key and this codebase's standing rule is
+    /// that an alias is displayed and never decides anything. But a conflict
+    /// sibling only *carries* an alias — that is the whole of what its filename
+    /// can carry, since the name is a contract with other machines that must read
+    /// the same on all of them — and there is no table mapping one back to an id,
+    /// by design (#76).
+    ///
+    /// So the alias is inverted the only honest way: re-derive it, with the same
+    /// pure function, over every peer id this project already knows, and take the
+    /// answer only if **exactly one** matches. The decision is then keyed on the
+    /// full id, so the alias has narrowed a candidate set rather than authorised
+    /// anything.
+    ///
+    /// Both failure modes are deliberately the same failure, and it is the
+    /// harmless one — nothing is recorded, and the card comes back exactly as it
+    /// does today:
+    ///
+    /// - **No candidate matches.** The sibling came from a peer this project has
+    ///   never settled or refused anything with, or from a build with a different
+    ///   derivation, or the name was hand-made. Guessing here would attach a
+    ///   person's decision to a machine that had nothing to do with it.
+    /// - **Several candidates match.** Two ids sharing an alias is a thirty-two
+    ///   bit coincidence, or somebody grinding keypairs. Recording for all of
+    ///   them would let a ground key suppress one specific version of one node
+    ///   from an honest peer, which is a lost edit — small, targeted, and silent.
+    ///   Recording for none costs one redundant card.
+    ///
+    /// The node also has to be one the index knows, because a refusal is keyed by
+    /// node id and a sibling beside an unindexed file has no id to key on. That
+    /// is the same shrug for the same reason.
+    ///
+    /// A caller that *does* hold a real peer id — `wobu-sync`, or a shell command
+    /// wired to a card that carries one — should use [`reject_from_peer`] and
+    /// skip all of the above.
+    ///
+    /// [`reject_from_peer`]: Project::reject_from_peer
+    fn record_refusal(
+        &self,
+        name: &conflict::SiblingName,
+        target_rel: &str,
+        refused_hash: &str,
+    ) -> Result<()> {
+        let Some(alias) = name.peer.as_deref() else { return Ok(()) };
+        let Some((node_id, _)) = self.index.node_at_rel_path(target_rel)? else { return Ok(()) };
+
+        let mut matches = self
+            .index
+            .known_peers()?
+            .into_iter()
+            .filter(|peer_id| apply::alias_of(peer_id) == alias);
+        let (Some(peer_id), None) = (matches.next(), matches.next()) else { return Ok(()) };
+
+        self.index.record_rejection(&peer_id, node_id, refused_hash)
+    }
+
+    /// Refuse one version of one node from a peer named by its id.
+    ///
+    /// The seam without the guesswork, for a caller that knows which machine sent
+    /// the bytes. [`resolve_conflict`] cannot know — it is handed a filename, and
+    /// a filename holds an alias — so it re-derives; this takes the id straight.
+    ///
+    /// `hash` is the full BLAKE3 hex of the version being refused, as
+    /// [`crate::apply::Outgoing::hash`] and `Stamp` spell it. A truncated
+    /// `source_version` here would suppress a later rename from the same peer,
+    /// because a version is blind to names.
+    ///
+    /// Nothing is written to the folder and nothing is deleted. A refusal only
+    /// ever turns a future conflict into "do nothing" — it can never authorise a
+    /// write — so this is safe to call for a decision that turns out to be
+    /// redundant, and idempotent for one made twice.
+    ///
+    /// [`resolve_conflict`]: Project::resolve_conflict
+    pub fn reject_from_peer(&self, peer_id: &str, node_id: Id, hash: &str) -> Result<()> {
+        self.index.record_rejection(peer_id, node_id, hash)
     }
 
     /// The single `remove_file` call that may name a conflict sibling.
