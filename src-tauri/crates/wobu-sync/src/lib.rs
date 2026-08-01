@@ -29,9 +29,18 @@
 //! - No signature verification. Nothing in this crate reads a `Signature`, and
 //!   `iroh::SecretKey` is used only to *be* an identity, never to sign anything.
 //! - No authorisation. Holding a project and being *allowed* to sync it are
-//!   different questions, and the second one is not answered here. iroh's
-//!   `EndpointHooks::after_handshake` is where it would go; it is unused, and
-//!   `docs/10-sync-spike.md` flags it as read-but-not-tried.
+//!   different questions, and the second one is not answered here — #90 asked it
+//!   and closed `wontfix`; see [`ticket::Grant`]. `docs/10-sync-spike.md` flags
+//!   iroh's `EndpointHooks::after_handshake` as read-but-not-tried and as the
+//!   candidate seam. It is the wrong one, and that is worth writing down so it is
+//!   not tried twice: `after_handshake` runs before any application byte, so it
+//!   has no project id — the project is named in the opening message, which has
+//!   not been sent yet — and its rejection is a QUIC-level close carrying iroh's
+//!   own code rather than the `NOT_HELD` code and fixed reason [`endpoint`]
+//!   refuses with.
+//!   A peer turned away there is told something a peer turned away for
+//!   [`Error::ProjectNotHeld`] is not, which is the one disclosure this crate
+//!   exists to avoid making.
 //!
 //! If a change to this crate needs a cryptographic primitive, the change is
 //! wrong. That is the whole of the rule.
@@ -50,10 +59,12 @@
 //! is worth naming here: it is thirty-two random bytes in a ticket, it is not a
 //! key, and nothing derives, signs, encrypts or challenges with it. It exists to
 //! tell "I was invited" apart from "I read a project ULID off a shared folder",
-//! which is an *authorisation* input and therefore #90's business rather than
-//! this crate's — nothing on `wobu/sync/1` presents or checks one today. Asking
-//! the OS for random bytes and putting them in a token is not a primitive. Doing
-//! anything else with them would be.
+//! which is an *authorisation* input — and nothing on `wobu/sync/1` presents or
+//! checks one. #90 asked whether it should and closed `wontfix`; [`ticket::Grant`]
+//! carries that argument, and the short form is that a peer who could not produce
+//! the grant could not have dialled either. Asking the OS for random bytes and
+//! putting them in a token is not a primitive. Doing anything else with them
+//! would be.
 //!
 //! ## The refusal is the security-relevant path
 //!
@@ -220,7 +231,8 @@
 //!   `Router`'s abort-on-drop is why it must exist.
 //! - **#83 status and presence** — [`Session::is_relayed`] now,
 //!   `Connection::path_events` when a live badge is wanted.
-//! - **#90 authorisation, if it is ever wanted** — not here. See above.
+//! - **#90 authorisation** — closed `wontfix`, so this is not a seam and nothing
+//!   is owed against it. [`ticket::Grant`] is where the argument lives.
 
 pub mod blobs;
 pub mod endpoint;
