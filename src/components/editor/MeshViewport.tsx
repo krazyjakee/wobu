@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { createRenderLoop } from './meshRenderLoop'
 
 export default function MeshViewport({
   url,
@@ -18,21 +19,23 @@ export default function MeshViewport({
   const object = useRef<THREE.Object3D | null>(null)
   const turntableRef = useRef(turntable)
   const wireframeRef = useRef(wireframe)
+  const invalidateRef = useRef<() => void>(() => undefined)
 
   useEffect(() => {
     turntableRef.current = turntable
+    invalidateRef.current()
   }, [turntable])
 
   useEffect(() => {
     wireframeRef.current = wireframe
     setWireframe(object.current, wireframe)
+    invalidateRef.current()
   }, [wireframe])
 
   useEffect(() => {
     const element = host.current
     if (!element) return
     let disposed = false
-    let frame = 0
 
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x111319)
@@ -68,26 +71,37 @@ export default function MeshViewport({
     const marker = scaleMarker()
     scene.add(marker)
 
+    const clock = new THREE.Clock()
+    const loop = createRenderLoop({
+      isHidden: () => document.hidden,
+      isTurntableEnabled: () => turntableRef.current,
+      updateControls: () => controls.update(),
+      rotate: (delta) => {
+        turntableRoot.rotation.y += delta * 0.45
+      },
+      render: () => renderer.render(scene, camera),
+      getDelta: () => clock.getDelta(),
+      resetClock: () => clock.start(),
+      stopClock: () => clock.stop(),
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (frame) => cancelAnimationFrame(frame),
+    })
+    invalidateRef.current = loop.invalidate
+    const visibilityChanged = () => loop.visibilityChanged()
+    document.addEventListener('visibilitychange', visibilityChanged)
+    controls.addEventListener('change', loop.invalidate)
+
     const resize = () => {
       const width = Math.max(element.clientWidth, 1)
       const height = Math.max(element.clientHeight, 1)
       renderer.setSize(width, height, false)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
+      loop.invalidate()
     }
     const observer = new ResizeObserver(resize)
     observer.observe(element)
     resize()
-
-    const clock = new THREE.Clock()
-    const draw = () => {
-      frame = requestAnimationFrame(draw)
-      if (turntableRef.current) turntableRoot.rotation.y += clock.getDelta() * 0.45
-      else clock.getDelta()
-      controls.update()
-      renderer.render(scene, camera)
-    }
-    draw()
 
     new GLTFLoader().load(
       url,
@@ -118,6 +132,7 @@ export default function MeshViewport({
         camera.position.set(distance * 0.9, size.y * 0.65, distance * 1.25)
         camera.updateProjectionMatrix()
         controls.update()
+        loop.invalidate()
       },
       undefined,
       (error) => {
@@ -129,7 +144,10 @@ export default function MeshViewport({
 
     return () => {
       disposed = true
-      cancelAnimationFrame(frame)
+      invalidateRef.current = () => undefined
+      loop.dispose()
+      document.removeEventListener('visibilitychange', visibilityChanged)
+      controls.removeEventListener('change', loop.invalidate)
       observer.disconnect()
       controls.dispose()
       if (object.current) disposeObject(object.current)
