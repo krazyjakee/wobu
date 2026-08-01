@@ -227,6 +227,7 @@ export type ErrorCode =
   | 'project.already_exists'
   | 'project.schema_too_new'
   | 'project.none_open'
+  | 'transfer.same_project'
   | 'node.not_found'
   | 'node.malformed'
   | 'node.invalid'
@@ -356,6 +357,48 @@ export const projectCreate = (parentDir: string, name: string) =>
 
 export const projectOpen = (path: string) => call<ProjectSummary>('project_open', { path })
 
+export interface TransferCandidate {
+  rootId: string
+  kind: NodeKind
+  name: string
+  nodeCount: number
+  referenceCount: number
+  externalLinkCount: number
+  missingAssetCount: number
+  replacesSingleton: boolean
+}
+
+export interface TransferPreview {
+  version: number
+  sourceProjectId: string
+  sourceProjectName: string
+  defaultRootId: string | null
+  candidates: TransferCandidate[]
+  pinnedLoras: string[]
+  loraNote: string
+}
+
+export interface TransferOutcome {
+  completed: boolean
+  rootId: string
+  importedRootId: string
+  plannedNodeCount: number
+  appliedNodeIds: string[]
+  pendingNodeIds: string[]
+  referenceCount: number
+  dedupedReferenceCount: number
+  droppedExternalLinkCount: number
+  replacedSingleton: boolean
+  conflictPaths: string[]
+  failure: string | null
+}
+
+export const styleTransferPreview = (sourcePath: string) =>
+  call<TransferPreview>('style_transfer_preview', { sourcePath })
+
+export const styleTransferApply = (sourcePath: string, rootId: string) =>
+  call<TransferOutcome>('style_transfer_apply', { sourcePath, rootId })
+
 /**
  * How far through the first scan of a project the backend is.
  *
@@ -381,6 +424,17 @@ export const projectRecent = () => call<ProjectSummary[]>('project_recent')
 export const projectCurrent = () => call<ProjectSummary | null>('project_current')
 
 export const projectClose = () => call<void>('project_close')
+
+export interface WikiExport {
+  destination: string
+  nodeCount: number
+  imageCount: number
+  missingImages: number
+}
+
+/** Render the open world into a new, self-contained static-site folder. */
+export const projectExportWiki = (destination: string) =>
+  call<WikiExport>('project_export_wiki', { destination })
 
 /**
  * Whether the open project's folder is currently unreachable.

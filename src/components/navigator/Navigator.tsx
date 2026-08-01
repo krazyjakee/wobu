@@ -34,6 +34,7 @@ export function Navigator({
   editedElsewhere,
   projectPath,
   onNewNode,
+  onStyleTransfer,
   onAssetDrop,
 }: {
   nodes: NodeSummary[]
@@ -49,6 +50,7 @@ export function Navigator({
   editedElsewhere: Map<string, string>
   projectPath: string
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
+  onStyleTransfer?: () => void
   /** Board-only drop path; absent in Library so node reparenting is unchanged. */
   onAssetDrop?: (assetId: string, nodeId: string) => void
 }) {
@@ -285,10 +287,17 @@ export function Navigator({
       )}
 
       {view === 'tree' && (
-        <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
-          <Icon name="plus" size="sm" />
-          New entity
-        </button>
+        <div className="nav-actions">
+          <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
+            <Icon name="plus" size="sm" />
+            New entity
+          </button>
+          {onStyleTransfer && (
+            <button className="nav-import" onClick={onStyleTransfer} disabled={readOnly}>
+              Import style/subtree…
+            </button>
+          )}
+        </div>
       )}
 
       {ctx && (

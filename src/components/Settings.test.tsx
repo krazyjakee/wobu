@@ -16,11 +16,11 @@ import { useUI } from '../store/ui'
  * screen, not about markup.
  */
 
-const h = vi.hoisted(() => ({ invoke: vi.fn(), openUrl: vi.fn() }))
+const h = vi.hoisted(() => ({ invoke: vi.fn(), openUrl: vi.fn(), reveal: vi.fn() }))
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: h.openUrl }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: h.openUrl, revealItemInDir: h.reveal }))
 
 /** What the backend answers, per command. Overwritten per test. */
 let keyStatuses: KeyStatus[] = []
@@ -105,6 +105,7 @@ function cached(): string {
 beforeEach(() => {
   h.invoke.mockReset()
   h.openUrl.mockReset()
+  h.reveal.mockReset()
   h.openUrl.mockResolvedValue(undefined)
   h.invoke.mockImplementation((cmd: string, args?: Record<string, unknown>) =>
     Promise.resolve(backend(cmd, args)),

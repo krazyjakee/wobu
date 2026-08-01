@@ -272,6 +272,17 @@ pub fn import(root: &Path, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsse
     import_with(root, bytes, kind, &Cancel::new())
 }
 
+/// Validate transfer-staged bytes without writing them. Transfer applies are
+/// planned in full before their first canonical node mutation, so importing is
+/// not an acceptable way to discover a malformed or animated source blob.
+pub(crate) fn validate_import(bytes: &[u8]) -> Result<()> {
+    let Some(info) = image::probe(bytes) else { return Err(Error::NotAnImage) };
+    if info.frames == Frames::Multiple {
+        return Err(Error::AnimatedImage);
+    }
+    Ok(())
+}
+
 /// `import`, stoppable.
 ///
 /// The token is checked at the two points that matter and nowhere else. Hashing

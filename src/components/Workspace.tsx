@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { Conflict, NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
 import {
@@ -26,10 +27,12 @@ import { Editor } from './editor/Editor'
 import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
+import { StyleTransferSheet } from './StyleTransferSheet'
 import { MilestoneMode } from './MilestoneMode'
 import { AssetsMode } from './AssetsMode'
 import { BoardMode, type BoardAttachRequest } from './BoardMode'
 import { HistoryMode } from './HistoryMode'
+import { ForgeMode } from './ForgeMode'
 import { Settings } from './Settings'
 import { Banners } from './Banners'
 import { ConflictCard, ConflictsElsewhere } from './ConflictCard'
@@ -61,6 +64,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     null,
   )
   const [boardAttach, setBoardAttach] = useState<BoardAttachRequest | null>(null)
+  const [transferSource, setTransferSource] = useState<string | null>(null)
 
   const kindIndex = useMemo(() => indexKinds(kindsQ.data), [kindsQ.data])
   const nodes = useMemo(() => nodesQ.data ?? [], [nodesQ.data])
@@ -153,6 +157,20 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     const s = sel ? byId.get(sel) : undefined
     startNewNode(s && !singletonKinds.has(s.kind) ? s.kind : null, s?.parentId ?? null)
   }, [byId, singletonKinds, startNewNode])
+
+  const startStyleTransfer = useCallback(async () => {
+    if (readOnly) return
+    try {
+      const picked = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Choose a Wobu project to import from',
+      })
+      if (typeof picked === 'string') setTransferSource(picked)
+    } catch (error) {
+      report(error, 'Could not choose a source project')
+    }
+  }, [readOnly])
 
   useKeyboard({ onNewNode: openNewNode, readOnly })
 
@@ -285,6 +303,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 editedElsewhere={peerEditors}
                 projectPath={project.path}
                 onNewNode={startNewNode}
+                onStyleTransfer={() => void startStyleTransfer()}
               />
             )}
             {!navCollapsed && (
@@ -354,6 +373,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 editedElsewhere={peerEditors}
                 projectPath={project.path}
                 onNewNode={startNewNode}
+                onStyleTransfer={() => void startStyleTransfer()}
                 onAssetDrop={
                   readOnly
                     ? undefined
@@ -378,10 +398,19 @@ export function Workspace({ project }: { project: ProjectSummary }) {
             readOnly={readOnly}
             onJump={jumpTo}
           />
+        ) : mode === 'forge' ? (
+          <ForgeMode
+            project={project}
+            nodes={nodes}
+            selected={selected}
+            kinds={kindIndex}
+            queue={queue}
+            onJump={jumpTo}
+          />
         ) : mode === 'history' ? (
           <HistoryMode nodes={nodes} readOnly={readOnly} onJump={jumpTo} />
         ) : mode === 'settings' ? (
-          <Settings />
+          <Settings project={project} />
         ) : (
           <MilestoneMode mode={mode} queue={queue} />
         )}
@@ -414,6 +443,18 @@ export function Workspace({ project }: { project: ProjectSummary }) {
           onClose={() => setNewNode(null)}
           onCreated={(id) => {
             setNewNode(null)
+            jumpTo(id)
+          }}
+        />
+      )}
+
+      {transferSource && (
+        <StyleTransferSheet
+          sourcePath={transferSource}
+          kinds={kindIndex}
+          onClose={() => setTransferSource(null)}
+          onImported={(id) => {
+            setTransferSource(null)
             jumpTo(id)
           }}
         />

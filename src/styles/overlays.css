@@ -1,4 +1,19 @@
 /* ── launcher ─────────────────────────────────────────────────────────────── */
+.transfer-sheet {
+  max-width: 560px;
+}
+.transfer-summary,
+.transfer-lora {
+  margin-top: 10px;
+}
+.transfer-lora {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.sheet-warning {
+  color: var(--warn, #e2a44f);
+}
+
 .launcher {
   display: grid;
   grid-template-rows: 40px 1fr;

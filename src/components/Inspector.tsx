@@ -30,11 +30,13 @@ export function Inspector({
   selected,
   kinds: _kinds,
   onJump,
+  surface = 'sidebar',
 }: {
   project: ProjectSummary
   selected: NodeSummary | null
   kinds: KindIndex
   onJump: (id: string) => void
+  surface?: 'sidebar' | 'forge'
 }) {
   const presets = usePresets(selected?.kind ?? null)
   const backend = useStatusBarBackend(project.id)
@@ -262,7 +264,7 @@ export function Inspector({
   const gridBlocked =
     gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
 
-  return (
+  const inspector = (
     <>
       <aside className="insp">
         <div className="insp-head">
@@ -542,6 +544,11 @@ export function Inspector({
       <PromptBox project={project} subject={selected} options={options} onJump={onJump} />
     </>
   )
+  return surface === 'forge' ? (
+    <section className="forge-inspector" aria-label="Forge generation controls">
+      {inspector}
+    </section>
+  ) : inspector
 }
 
 function formatUsd(micros: number): string {

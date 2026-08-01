@@ -93,6 +93,26 @@ the link edges. It lives in **local app data keyed by project ULID**, never in t
 folder — SQLite's locking is unsafe over SMB/NFS and WAL mode doesn't work there at all.
 Schema or hash mismatch triggers a rebuild from Markdown; deleting the index is always safe.
 
+## Static world wiki export
+
+`project_export_wiki` renders the open project to a new folder outside the project. The result is
+a read-only projection, not another canonical store: it contains grouped index and node pages,
+reference and concept galleries, an SVG influence graph, copied image originals/thumbnails, and
+one stylesheet. Every link is relative, so the folder can be browsed from disk or uploaded to an
+ordinary static host without a server, JavaScript, or a database.
+
+The exporter reconciles and clones nodes/assets while holding the project lock, then releases it
+before strictly reading generation receipts, copying media, and rendering. Malformed receipts fail
+closed before the destination is claimed; missing image blobs instead produce visible placeholders
+and a warning count because the rest of the world remains useful. User-authored text is escaped in
+text and attribute contexts, with only a small escaped Markdown block subset rendered as HTML.
+
+Export paths are intentionally one-shot. The destination must not exist, its existing parent is
+canonicalised before checking that it lies outside the project, and no previous export is ever
+overwritten. A `.wobu-export-incomplete` marker is created first, `index.html` is written last, and
+the marker is removed only after success. A failed export is left visibly incomplete and
+recoverable; the exporter never cleans up or deletes user data.
+
 Board geometry follows the same ownership rule for a different reason. Pan, zoom, and image
 coordinates are persisted in the webview's machine-local storage under `wobu.board-layouts.v1`,
 keyed by project ULID. They are personal UI state, not canonical world data: putting them in

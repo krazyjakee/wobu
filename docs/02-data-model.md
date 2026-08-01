@@ -203,3 +203,29 @@ never seen it, and nothing is lost; the first open just takes a little longer.
 
 Concurrency, conflict handling and the network-share performance story are in
 [07 — Projects on file shares](07-file-shares.md).
+
+### Importing a style or subtree
+
+“Import style/subtree” reads another `.wobu` folder through a disposable local index. A selected
+root brings only its `parent_id` descendants: explicit links between selected nodes are remapped to
+fresh destination ids, while links outside the selection are reported in preview and omitted. A
+selected root is detached from any unselected source parent.
+
+Ordinary entities receive fresh ids and collision-free slugs. Importing a singleton such as the Art
+Style replaces the destination singleton's authored content but preserves its destination id, slug
+and `created_at`; existing destination links to that singleton therefore remain valid, and imported
+descendants point to the preserved id. Source enhancement stamps are cleared and imported
+descriptions are marked edited, because the destination did not run the enhancement that produced
+them. Provider selections, secrets, generation history and spend records never transfer.
+
+Every cover and reference blob is read and hash-checked before destination node publication. Missing
+or mismatched blobs block apply; valid blobs keep their content-derived ids and deduplicate against
+bytes already present. Asset roles, weights and muted state are retained, while thumbnails remain
+derived and are regenerated lazily. ComfyUI LoRAs are installation-local today—there is no pinned
+LoRA field in the project schema—so the versioned transfer preview states that they are not copied
+and reserves an empty metadata seam for a future project-owned representation.
+
+The destination is also fully preflighted before its first node write. Guarded writes still matter on
+a shared folder: if another author wins a race after preflight, the command returns an explicit
+partial report containing applied and pending node ids plus any conflict sibling paths. It never
+claims the transfer was atomic; already copied content-addressed blobs are safe reusable orphans.

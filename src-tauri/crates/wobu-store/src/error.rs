@@ -19,6 +19,17 @@ pub enum Error {
     #[error("{0} already exists")]
     AlreadyExists(PathBuf),
 
+    #[error("choose a new export folder path, not {0}")]
+    InvalidExportDestination(PathBuf),
+
+    #[error("the static wiki destination must be outside the project folder: {0}")]
+    ExportInsideProject(PathBuf),
+
+    #[error(
+        "resolve {corrupt} broken node file(s) and {conflicts} conflict(s) before exporting"
+    )]
+    ExportBlocked { corrupt: usize, conflicts: usize },
+
     #[error(
         "this project was written by a newer version of Wobu (schema {found}, this build understands {supported})"
     )]
@@ -139,6 +150,9 @@ pub enum Error {
 
     #[error("no project is open")]
     NoProjectOpen,
+
+    #[error("the source and destination are the same project")]
+    TransferSameProject,
 
     /// The user stopped a long scan.
     ///

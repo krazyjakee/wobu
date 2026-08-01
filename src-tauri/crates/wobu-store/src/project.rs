@@ -26,6 +26,7 @@ use crate::index::{CorruptFile, Index, Touched};
 use crate::markdown;
 use crate::paths;
 use crate::scan::{Cancel, ScanProgress};
+use crate::transfer::{TransferBundle, TransferOutcome};
 
 const PROJECT_FILE: &str = "project.json";
 const PROJECT_META_RECOVERY: &str = "project.json.recovery";
@@ -229,7 +230,8 @@ impl Project {
     /// remounted somewhere else. A test suite wants the opposite: several tests
     /// opening one copied fixture in parallel would meet in a single SQLite
     /// file and drop each other's tables mid-query when the schema version has
-    /// moved. Nothing in the app should call this.
+    /// moved. Tests and read-only transfer scans call this with a disposable
+    /// path; ordinary project opens must keep using the project-id index.
     pub fn open_at_index(path: &Path, index_path: &Path) -> Result<Project> {
         Project::open_inner(path, Some(index_path), &Cancel::new(), &mut |_| {})
     }
@@ -519,6 +521,27 @@ impl Project {
         Ok(&self.world)
     }
 
+    /// Clone one complete, reconciled view for the static wiki renderer.
+    ///
+    /// The caller performs `reconcile` first so it can emit `world:changed` if
+    /// the export noticed an external edit. Rendering and image copies happen
+    /// after this snapshot releases the shell's project lock.
+    pub fn wiki_snapshot(&mut self) -> Result<crate::wiki::WikiSnapshot> {
+        let corrupt = self.corrupt_files()?.len();
+        let conflicts = self.conflicts()?.len();
+        if corrupt > 0 || conflicts > 0 {
+            return Err(Error::ExportBlocked { corrupt, conflicts });
+        }
+        let nodes = self.world_nodes()?.to_vec();
+        let assets = self.list_assets()?;
+        Ok(crate::wiki::WikiSnapshot::new(
+            self.root.clone(),
+            self.meta.name.clone(),
+            nodes,
+            assets,
+        ))
+    }
+
     // ── writing ──────────────────────────────────────────────────────────
 
     pub fn create_node(
@@ -550,6 +573,203 @@ impl Project {
                 Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
             }
         }
+    }
+
+    /// Apply a fully staged style/subtree transfer to this project.
+    ///
+    /// The complete target graph, filenames and Markdown are validated before
+    /// any node is written. Asset copies happen first and are content-addressed,
+    /// so an unexpected failure can leave only harmless reusable blobs before
+    /// the first entity. Once node publication starts, every guarded write is
+    /// accounted for in the returned report; a conflict is never flattened
+    /// into an apparent all-or-nothing success.
+    pub fn apply_transfer(&mut self, bundle: TransferBundle) -> Result<TransferOutcome> {
+        self.apply_transfer_with(bundle, |_| {})
+    }
+
+    fn apply_transfer_with(
+        &mut self,
+        bundle: TransferBundle,
+        after_preflight: impl FnOnce(&mut Project),
+    ) -> Result<TransferOutcome> {
+        self.ensure_writable()?;
+        let destination_root = std::fs::canonicalize(&self.root)
+            .map_err(|error| Error::io(&self.root, error))?;
+        if destination_root == bundle.source_root || self.id() == bundle.source_project_id {
+            return Err(Error::TransferSameProject);
+        }
+
+        let selected: std::collections::HashSet<Id> =
+            bundle.nodes.iter().map(|node| node.id).collect();
+        if !bundle.nodes.iter().any(|node| node.id == bundle.root_id) {
+            return Err(Error::NoSuchNode(bundle.root_id.to_string()));
+        }
+
+        // Identity and slug allocation is an in-memory preflight. Singleton
+        // identity is kept exactly so existing destination backlinks survive;
+        // ordinary nodes receive fresh ids and collision-free paths.
+        let existing = self.list_nodes()?;
+        let mut taken: std::collections::HashMap<NodeKind, std::collections::HashSet<String>> =
+            std::collections::HashMap::new();
+        for node in &existing {
+            taken.entry(node.kind).or_default().insert(node.slug.clone());
+        }
+        let mut identities: std::collections::HashMap<Id, Node> =
+            std::collections::HashMap::new();
+        for source in &bundle.nodes {
+            if kind_def(source.kind).singleton {
+                let summary = existing
+                    .iter()
+                    .find(|node| node.kind == source.kind)
+                    .ok_or_else(|| Error::NoSuchNode(source.kind.as_str().to_string()))?;
+                identities.insert(source.id, self.get_node(summary.id)?);
+                continue;
+            }
+
+            let mut identity = Node::new(source.kind, &source.name)?;
+            while self.index.node(identity.id)?.is_some()
+                || identities.values().any(|node| node.id == identity.id)
+            {
+                identity.id = wobu_core::new_id();
+            }
+            let kind_taken = taken.entry(source.kind).or_default();
+            identity.slug = wobu_core::unique_slug(&identity.slug, &|slug| {
+                kind_taken.contains(slug)
+                    || self.root.join(format!("{NODES_DIR}/{}/{}.md", source.kind.dir(), slug)).exists()
+            });
+            kind_taken.insert(identity.slug.clone());
+            identities.insert(source.id, identity);
+        }
+
+        let id_map: std::collections::HashMap<Id, Id> = identities
+            .iter()
+            .map(|(source, target)| (*source, target.id))
+            .collect();
+        let mut planned = Vec::with_capacity(bundle.nodes.len());
+        for source in &bundle.nodes {
+            let identity = identities
+                .get(&source.id)
+                .ok_or_else(|| Error::NoSuchNode(source.id.to_string()))?;
+            let mut target = source.clone();
+            target.id = identity.id;
+            target.slug = identity.slug.clone();
+            target.created_at = identity.created_at;
+            target.parent_id = source.parent_id.and_then(|parent| id_map.get(&parent).copied());
+            target.links.retain(|link| selected.contains(&link.to_id));
+            for link in &mut target.links {
+                link.to_id = id_map[&link.to_id];
+            }
+            target.enhanced_from = None;
+            target.description_state = match &target.description {
+                Some(description) if !description.is_empty() => DescriptionState::Edited,
+                _ => DescriptionState::None,
+            };
+            target.touch();
+            planned.push(target);
+        }
+
+        let planned_lookup: std::collections::HashMap<Id, (NodeKind, Option<Id>)> = planned
+            .iter()
+            .map(|node| (node.id, (node.kind, node.parent_id)))
+            .collect();
+        for node in &planned {
+            node.validate()?;
+            let lookup = |id: Id| {
+                planned_lookup
+                    .get(&id)
+                    .copied()
+                    .or_else(|| self.index.kind_and_parent(id).ok().flatten())
+            };
+            wobu_core::validate_parent(node, node.parent_id, &lookup)?;
+            // Serialisation belongs in preflight too: a value that cannot be
+            // represented in frontmatter must not be discovered half-way in.
+            let _ = markdown::to_markdown(node)?;
+        }
+        for asset in &bundle.assets {
+            crate::assets::validate_import(&asset.bytes)?;
+            let hash = atomic::hash_bytes(&asset.bytes);
+            if crate::assets::asset_id(&hash) != Some(asset.id) {
+                return Err(Error::NoSuchAsset(asset.id.to_string()));
+            }
+        }
+
+        // Parents publish first. This also makes a singleton root's children
+        // point at its preserved destination id before their own write.
+        planned.sort_by_key(|node| {
+            let mut depth = 0usize;
+            let mut parent = node.parent_id;
+            while let Some(id) = parent {
+                let Some((_, next)) = planned_lookup.get(&id) else { break };
+                depth += 1;
+                parent = *next;
+            }
+            depth
+        });
+        let expected_stamps: std::collections::HashMap<Id, Option<atomic::Stamp>> = planned
+            .iter()
+            .map(|node| {
+                let stamp = if kind_def(node.kind).singleton {
+                    self.index.stamp_of(node.id)
+                } else {
+                    Ok(None)
+                }?;
+                Ok((node.id, stamp))
+            })
+            .collect::<Result<_>>()?;
+
+        let imported_root_id = id_map[&bundle.root_id];
+        let mut outcome = TransferOutcome {
+            completed: false,
+            root_id: bundle.root_id,
+            imported_root_id,
+            planned_node_count: planned.len(),
+            applied_node_ids: Vec::new(),
+            pending_node_ids: planned.iter().map(|node| node.id).collect(),
+            reference_count: bundle.assets.len(),
+            deduped_reference_count: 0,
+            dropped_external_link_count: bundle.external_link_count,
+            replaced_singleton: bundle.replaces_singleton,
+            conflict_paths: Vec::new(),
+            failure: None,
+        };
+
+        // Production passes a no-op. The seam makes the race contract
+        // deterministic in a unit test: a collaborator can win after every
+        // byte/path preflight but before the first guarded publication.
+        after_preflight(self);
+
+        for asset in &bundle.assets {
+            match self.import_asset(&asset.bytes, asset.kind) {
+                Ok(imported) => outcome.deduped_reference_count += usize::from(imported.deduped),
+                Err(error) => {
+                    outcome.failure = Some(error.to_string());
+                    return Ok(outcome);
+                }
+            }
+        }
+
+        for node in planned {
+            let expected = expected_stamps.get(&node.id).and_then(Option::as_ref);
+            match self.write_node(&node, expected) {
+                Ok(SaveOutcome::Saved(saved)) => {
+                    outcome.applied_node_ids.push(saved.id);
+                    outcome.pending_node_ids.retain(|id| *id != saved.id);
+                }
+                Ok(SaveOutcome::Conflict { conflict_path }) => {
+                    outcome.conflict_paths.push(conflict_path.clone());
+                    outcome.failure = Some(format!(
+                        "A destination node changed during transfer; the incoming version was parked as {conflict_path}."
+                    ));
+                    return Ok(outcome);
+                }
+                Err(error) => {
+                    outcome.failure = Some(error.to_string());
+                    return Ok(outcome);
+                }
+            }
+        }
+        outcome.completed = true;
+        Ok(outcome)
     }
 
     /// Save an edited node, refusing to clobber a concurrent change.
@@ -2838,6 +3058,50 @@ mod tests {
         assert_eq!(
             reopened.meta().spend_ceiling_usd_micros,
             Some(DEFAULT_SPEND_CEILING_USD_MICROS)
+        );
+    }
+
+    #[test]
+    fn transfer_reports_a_guarded_write_race_with_pending_ids() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let mut source = Project::create(source_dir.path(), "Source").unwrap();
+        let source_style = source
+            .list_nodes()
+            .unwrap()
+            .into_iter()
+            .find(|node| node.kind == NodeKind::StyleGuide)
+            .unwrap();
+        let mut style = source.get_node(source_style.id).unwrap();
+        style.notes_raw = "the incoming house style".to_string();
+        assert!(matches!(source.save_node(style).unwrap(), SaveOutcome::Saved(_)));
+        let source_root = source.root().to_path_buf();
+        drop(source);
+
+        let bundle = crate::transfer::stage(&source_root, source_style.id).unwrap();
+        let (_destination_dir, mut destination) = new_project();
+        let destination_style = destination
+            .list_nodes()
+            .unwrap()
+            .into_iter()
+            .find(|node| node.kind == NodeKind::StyleGuide)
+            .unwrap();
+
+        let outcome = destination
+            .apply_transfer_with(bundle, |project| {
+                let mut changed = project.get_node(destination_style.id).unwrap();
+                changed.notes_raw = "a collaborator won the race".to_string();
+                assert!(matches!(project.save_node(changed).unwrap(), SaveOutcome::Saved(_)));
+            })
+            .unwrap();
+
+        assert!(!outcome.completed);
+        assert!(outcome.applied_node_ids.is_empty());
+        assert_eq!(outcome.pending_node_ids, vec![destination_style.id]);
+        assert_eq!(outcome.conflict_paths.len(), 1);
+        assert!(outcome.failure.as_deref().unwrap().contains("parked"));
+        assert_eq!(
+            destination.get_node(destination_style.id).unwrap().notes_raw,
+            "a collaborator won the race"
         );
     }
 

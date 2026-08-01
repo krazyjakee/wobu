@@ -54,6 +54,9 @@ pub enum Code {
     /// A command needing an open project was called without one.
     #[serde(rename = "project.none_open")]
     NoProjectOpen,
+    /// A transfer selected the project that is already open as its source.
+    #[serde(rename = "transfer.same_project")]
+    TransferSameProject,
 
     // ── node ─────────────────────────────────────────────────────────────
     /// No node with that id — usually a tab pointing at something deleted.
@@ -286,8 +289,12 @@ impl From<StoreError> for WobuError {
         let code = match &e {
             StoreError::NotAProject(_) => Code::NotAProject,
             StoreError::AlreadyExists(_) => Code::AlreadyExists,
+            StoreError::InvalidExportDestination(_)
+            | StoreError::ExportInsideProject(_)
+            | StoreError::ExportBlocked { .. } => Code::Invalid,
             StoreError::SchemaTooNew { .. } => Code::SchemaTooNew,
             StoreError::NoProjectOpen => Code::NoProjectOpen,
+            StoreError::TransferSameProject => Code::TransferSameProject,
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
             StoreError::NoSuchNodeLink { .. } | StoreError::InvalidNodeLinkRole { .. } => {
                 Code::Invalid
@@ -379,6 +386,7 @@ mod tests {
             (Code::NotAProject, "project.not_a_project"),
             (Code::SchemaTooNew, "project.schema_too_new"),
             (Code::NoProjectOpen, "project.none_open"),
+            (Code::TransferSameProject, "transfer.same_project"),
             (Code::NoSuchNode, "node.not_found"),
             (Code::Invalid, "node.invalid"),
             (Code::Conflict, "write.conflict"),

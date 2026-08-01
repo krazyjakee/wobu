@@ -89,8 +89,12 @@ Backend health, active image model, job queue depth, active LLM, last generation
 ## Secondary screens
 
 - **Launcher** — recent projects as cover-art cards, New / Open. Shown when no project is open.
-- **Forge** — the Inspector's controls promoted to full width with a large result grid, for
-  when you're iterating on one subject and want to compare 20 variants.
+- **Forge** — the Inspector's attributed influence stack, compiled prompt, and shot controls
+  promoted to full width for sustained iteration on one selected subject. Its receipt history is
+  a large virtualized thumbnail grid so long runs stay responsive. Select two to four completed
+  results to open their originals side by side; the originals are fetched only when that viewer
+  opens. Variant grids batch one explicit axis at a time (seed, one fragment weight, preset, or
+  aspect), keeping the other compiled inputs fixed and labelling each receipt with its varied axis.
 - **Board** — freeform pan/zoom canvas for mood boarding; images can be dragged onto a node
   to become references.
 - **Settings** — providers (Anthropic key, ComfyUI URL, Replicate/fal tokens), model defaults,

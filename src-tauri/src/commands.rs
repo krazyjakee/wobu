@@ -36,7 +36,7 @@ use wobu_llm::{
 };
 use wobu_store::{
     AssetUsage, Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary,
-    Resolved, SaveOutcome, recent,
+    Resolved, SaveOutcome, TransferOutcome, TransferPreview, WikiExport, recent, transfer,
 };
 
 use crate::diag;
@@ -71,6 +71,73 @@ pub fn project_create(
 ) -> CommandResult<ProjectSummary> {
     let project = Project::create(&PathBuf::from(parent_dir), &name)?;
     Ok(adopt(&app, &state, project))
+}
+
+/// Inspect a source with a throwaway local index. The open destination is not
+/// locked during the source scan.
+#[tauri::command]
+pub async fn style_transfer_preview(
+    state: State<'_, AppState>,
+    source_path: String,
+) -> CommandResult<TransferPreview> {
+    let destination = state.peek(|project| {
+        project.map(|project| (project.id(), project.root().to_path_buf()))
+    });
+    let source = PathBuf::from(source_path);
+    let same_path = destination.as_ref().is_some_and(|(_, root)| {
+        std::fs::canonicalize(&source)
+            .ok()
+            .zip(std::fs::canonicalize(root).ok())
+            .is_some_and(|(source, destination)| source == destination)
+    });
+    if same_path {
+        return Err(wobu_store::Error::TransferSameProject.into());
+    }
+    let preview = tauri::async_runtime::spawn_blocking(move || transfer::preview(&source))
+        .await
+        .map_err(|error| {
+            WobuError::new(Code::Internal, "Style transfer preview stopped unexpectedly.")
+                .with_detail(error.to_string())
+        })??;
+    if destination.is_some_and(|(id, _)| id == preview.source_project_id) {
+        return Err(wobu_store::Error::TransferSameProject.into());
+    }
+    Ok(preview)
+}
+
+/// Stage the source outside the destination lock, then publish the preflighted
+/// graph through guarded writes. A non-complete outcome is a recoverable
+/// partial report, not a command error that would hide what already landed.
+#[tauri::command]
+pub async fn style_transfer_apply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    source_path: String,
+    root_id: Id,
+) -> CommandResult<TransferOutcome> {
+    let destination = state
+        .peek(|project| project.map(|project| (project.id(), project.root().to_path_buf())))
+        .ok_or_else(WobuError::no_project_open)?;
+    let source = PathBuf::from(source_path);
+    let same_path = std::fs::canonicalize(&source)
+        .ok()
+        .zip(std::fs::canonicalize(&destination.1).ok())
+        .is_some_and(|(source, destination)| source == destination);
+    if same_path {
+        return Err(wobu_store::Error::TransferSameProject.into());
+    }
+    let bundle = tauri::async_runtime::spawn_blocking(move || transfer::stage(&source, root_id))
+        .await
+        .map_err(|error| {
+            WobuError::new(Code::Internal, "Style transfer staging stopped unexpectedly.")
+                .with_detail(error.to_string())
+        })??;
+    if bundle.source_project_id() == destination.0 {
+        return Err(wobu_store::Error::TransferSameProject.into());
+    }
+    let outcome = state.with_project(destination.0, |project| Ok(project.apply_transfer(bundle)?))?;
+    let _ = app.emit(WORLD_CHANGED, ());
+    Ok(outcome)
 }
 
 /// Emitted while a first open is scanning. Payload is `ScanProgress`.
@@ -262,6 +329,36 @@ pub fn project_reload(app: AppHandle, state: State<'_, AppState>) -> CommandResu
     })?;
     let _ = app.emit(WORLD_CHANGED, ());
     Ok(())
+}
+
+/// Render a read-only, self-contained projection into a newly claimed folder.
+///
+/// Only reconciliation and cloning happen under the project lock. Strictly
+/// reading every generation receipt, copying media, and rendering HTML can all
+/// be slow on a share, so the store performs those steps on a blocking thread
+/// after the lock has been released.
+#[tauri::command]
+pub async fn project_export_wiki(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    destination: String,
+) -> CommandResult<WikiExport> {
+    if destination.trim().is_empty() {
+        return Err(wobu_store::Error::InvalidExportDestination(PathBuf::from(destination)).into());
+    }
+    let (snapshot, changed) = state.with(|project| {
+        let changed = project.reconcile()?;
+        Ok((project.wiki_snapshot()?, changed))
+    })?;
+    if changed {
+        let _ = app.emit(WORLD_CHANGED, ());
+    }
+    let destination = PathBuf::from(destination);
+    let exported = blocking("The static wiki export stopped unexpectedly.", move || {
+        wobu_store::wiki::export(snapshot, &destination)
+    })
+    .await??;
+    Ok(exported)
 }
 
 /// Full-text search over names, summaries, notes and descriptions.

@@ -138,6 +138,17 @@ describe('the read-only banner', () => {
   })
 })
 
+describe('Forge shortcut', () => {
+  it('toggles Forge and Library with command-backslash', async () => {
+    await open(false)
+    fireEvent.keyDown(window, { key: '\\', metaKey: true })
+    expect(useUI.getState().mode).toBe('forge')
+    expect(await screen.findByRole('main', { name: 'Forge' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: '\\', metaKey: true })
+    expect(useUI.getState().mode).toBe('library')
+  })
+})
+
 describe('the write controls, on a read-only folder', () => {
   it('does not offer to create anything, by any of the routes there', async () => {
     // A disabled button is only the visible half. ⌘N and the group header's

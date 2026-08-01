@@ -120,6 +120,11 @@ under `Generation.params`: grid id, cell index/total, axis, and the axis-specifi
 enough to regroup and reconstruct the grid without parsing prompts. The full cell count and each
 cell's negotiated resolution feed the paid estimate and spend reservation before any job queues.
 
+Forge exposes this same Inspector state rather than maintaining a second generation form. It pairs
+the controls and visible compiled prompt with a virtualized receipt grid for the chosen subject;
+receipt tiles surface their variation axis, and two to four completed outputs can be compared from
+their full-resolution originals without eagerly loading those originals into the grid.
+
 ### History, replay and drift
 
 Each completed request also records the transient sliders and Shot controls that produced its

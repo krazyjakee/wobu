@@ -9,6 +9,7 @@ import type {
   LogInfo,
   LogLevel,
   ProbeResult,
+  ProjectSummary,
   ProviderSelection,
 } from '../lib/api'
 import {
@@ -42,6 +43,7 @@ import {
 import { report, toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { Icon } from './Icon'
+import { WikiExportSection } from './WikiExportSection'
 
 /**
  * The Settings surface.
@@ -51,7 +53,7 @@ import { Icon } from './Icon'
  * here is stubbed: a control that looks configurable but is not is worse than
  * an honest absence, which is why there is no theme switch — see Appearance.
  */
-export function Settings() {
+export function Settings({ project }: { project?: ProjectSummary }) {
   return (
     <div className="settings-mode">
       <div className="settings">
@@ -60,6 +62,7 @@ export function Settings() {
         <Storage />
         <EditorPrefs />
         <Appearance />
+        {project && <WikiExportSection project={project} />}
         <Diagnostics />
         <About />
       </div>

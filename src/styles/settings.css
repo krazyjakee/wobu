@@ -108,6 +108,23 @@
   flex-wrap: wrap;
 }
 
+.wiki-export-result {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.wiki-export-warning,
+.wiki-export-error {
+  color: var(--warn, #e2a44f);
+}
+.wiki-export-error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .set-log {
   margin: 10px 0 0;
   padding: 10px;

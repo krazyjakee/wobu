@@ -30,7 +30,9 @@ pub mod project;
 pub mod recent;
 pub mod scan;
 pub mod thumbs;
+pub mod transfer;
 pub mod watcher;
+pub mod wiki;
 
 pub use apply::{Applied, ApplyReport, Decision, Incoming, Outgoing, Plan, Refused};
 pub use assets::{ImportWarning, ImportedAsset, StoredMesh};
@@ -44,4 +46,6 @@ pub use project::{
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};
 pub use thumbs::{ThumbTarget, Thumbnail};
+pub use transfer::{TransferBundle, TransferCandidate, TransferOutcome, TransferPreview};
 pub use watcher::{Strategy, Watcher};
+pub use wiki::{WikiExport, WikiSnapshot};

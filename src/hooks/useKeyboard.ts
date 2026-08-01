@@ -5,8 +5,8 @@ import { EDITOR_TABS, useUI } from '../store/ui'
 
 /**
  * The keyboard map from docs/03-ui-layout.md, restricted to what M1 actually
- * does. ⌘E (Enhance) and ⌘↵ (Generate) are deliberately unbound — binding a
- * key to a feature that does not exist is a lie the user pays for later.
+ * does. ⌘E (Enhance) and ⌘↵ (Generate) remain owned by their editing surfaces;
+ * mode navigation lives here so it behaves identically wherever focus was.
  */
 export function useKeyboard({ onNewNode, readOnly }: { onNewNode: () => void; readOnly: boolean }) {
   const { undo, redo } = useUndoRunner()
@@ -44,6 +44,12 @@ export function useKeyboard({ onNewNode, readOnly }: { onNewNode: () => void; re
       if (mod && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         onNewNode()
+        return
+      }
+
+      if (mod && e.key === '\\') {
+        e.preventDefault()
+        ui.setMode(ui.mode === 'forge' ? 'library' : 'forge')
         return
       }
 

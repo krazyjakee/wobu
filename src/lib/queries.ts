@@ -533,6 +533,15 @@ export function useCreateProject() {
   })
 }
 
+export function useApplyStyleTransfer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (value: { sourcePath: string; rootId: string }) =>
+      api.styleTransferApply(value.sourcePath, value.rootId),
+    onSuccess: () => invalidateWorld(qc),
+  })
+}
+
 export function useCloseProject() {
   const qc = useQueryClient()
   return useMutation({
