@@ -191,6 +191,7 @@ impl Code {
                 | Code::ShareUnmounted
                 | Code::ProviderRateLimited
                 | Code::ProviderUnavailable
+                | Code::ProviderBadResponse
         )
     }
 }
@@ -363,6 +364,12 @@ mod tests {
         assert!(Code::ShareUnmounted.retryable());
         assert!(Code::ProviderRateLimited.retryable());
         assert!(Code::Io.retryable());
+        // The one this list was actually missing. `wobu-llm` and `wobu-imagine`
+        // both classify a truncated or malformed answer as retryable and the
+        // queue acts on that, so omitting it here meant the queue quietly
+        // retrying a failure the UI was simultaneously refusing to offer a
+        // "Try again" for — the two halves of one decision disagreeing.
+        assert!(Code::ProviderBadResponse.retryable());
 
         // A second attempt makes a second conflict file, not a resolution.
         assert!(!Code::Conflict.retryable());
