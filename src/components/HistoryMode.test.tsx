@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Generation } from '../lib/api'
 import { summary } from '../test/fixtures'
@@ -97,13 +97,24 @@ describe('project generation history', () => {
     expect(
       await screen.findAllByRole('button', { name: /Open generation/ }, { timeout: 5_000 }),
     ).toHaveLength(2)
+    const portrait = screen.getByRole('button', { name: 'Open generation portrait-9' })
+    await waitFor(() => expect(portrait.querySelector('img')).toHaveAttribute('loading', 'lazy'))
+    expect(portrait.querySelector('img')).toHaveAttribute('alt', 'portrait nine')
+    expect(screen.getByText('No preview')).toBeInTheDocument()
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
     fireEvent.change(screen.getByLabelText('Filter history by preset'), {
       target: { value: 'portrait' },
     })
     expect(screen.getAllByRole('button', { name: /Open generation/ })).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Filter history by seed'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open generation portrait-9' }))
-    expect(await screen.findByRole('dialog', { name: 'Generation details' })).toBeInTheDocument()
+    const detail = await screen.findByRole('dialog', { name: 'Generation details' })
+    expect(detail).toHaveAccessibleDescription(
+      `Kael · portrait · comfyui / flux-dev · seed 9 · ${new Date(generations[0]!.createdAt).toLocaleString()}`,
+    )
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'asset-9' }),
+    )
   })
 
   it('shows applied and downgraded LoRAs while ignoring malformed receipt entries', async () => {

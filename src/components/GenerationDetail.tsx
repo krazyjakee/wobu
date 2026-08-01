@@ -7,6 +7,7 @@ import type {
 import { generationLoraReceipt, sceneComposition } from '../lib/api'
 import { useCompiledPrompt, useInfluenceStack, useReplayGeneration } from '../lib/queries'
 import { generationDrift } from '../lib/generationDiff'
+import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
 import { Modal } from './Modal'
 
 export function GenerationDetail({
@@ -52,9 +53,9 @@ export function GenerationDetail({
         <div>
           <h2 id="generation-detail-title">Generation details</h2>
           <p id="generation-detail-description">
-            {scene ? `Scene · ${scene.subjectNames.join(' + ')}` : nodeName} · {generation.preset} ·{' '}
-            {generation.backend} / {generation.model} · seed {generation.seed} ·{' '}
-            {new Date(generation.createdAt).toLocaleString()}
+            <GenerationSubject generation={generation} fallback={nodeName} /> · {generation.preset}{' '}
+            · <GenerationModelSeed generation={generation} includeBackend /> ·{' '}
+            <GenerationTimestamp generation={generation} />
           </p>
         </div>
         <div className="generation-detail-actions">

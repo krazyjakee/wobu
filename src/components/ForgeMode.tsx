@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { Generation, NodeSummary, ProjectSummary, QueueSnapshot } from '../lib/api'
 import type { KindIndex } from '../lib/kinds'
-import { useAssetThumb, useGenerations, useLoraStatus, useTrainLora } from '../lib/queries'
+import { useGenerations, useLoraStatus, useTrainLora } from '../lib/queries'
 import { report, useUI } from '../store/ui'
+import { LazyAssetThumbnail } from './AssetMedia'
+import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
 import { Inspector } from './Inspector'
 import { Modal } from './Modal'
+import { useVirtualCardWindow } from './useVirtualCardWindow'
 
 const TILE_MIN = 230
 const TILE_HEIGHT = 286
@@ -86,7 +89,7 @@ export function ForgeMode({
       {selected ? (
         <ForgeResults subject={selected} queue={queue} />
       ) : (
-        <section className="forge-no-subject">
+        <section className="forge-no-subject empty-state">
           <h3>Choose a subject</h3>
           <p>
             Its influence stack, attributed prompt, batch controls, and generation history will fill
@@ -383,7 +386,7 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
         </div>
       )}
       {history.isError ? (
-        <p className="forge-results-empty">
+        <p className="forge-results-empty empty-state">
           Could not read results: {api.errorMessage(history.error)}
         </p>
       ) : (
@@ -413,26 +416,20 @@ function VirtualResultGrid({
   loading: boolean
   onToggle: (generation: Generation) => void
 }) {
-  const viewport = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 1100, height: 500 })
-  const [scrollTop, setScrollTop] = useState(0)
-  const hasResults = generations.length > 0
-
-  useEffect(() => {
-    const element = viewport.current
-    if (!element) return
-    const measure = () =>
-      setSize({ width: Math.max(1, element.clientWidth - 24), height: element.clientHeight })
-    measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [hasResults])
+  const { viewportRef, start, end, tileWidth, totalHeight, onScroll, position } =
+    useVirtualCardWindow({
+      count: generations.length,
+      tileMin: TILE_MIN,
+      tileHeight: TILE_HEIGHT,
+      gap: GAP,
+      overscan: OVERSCAN,
+      initialWidth: 1100,
+      initialHeight: 500,
+    })
 
   if (generations.length === 0) {
     return (
-      <div className="forge-results-empty">
+      <div className="forge-results-empty empty-state">
         <h3>{loading ? 'Reading results…' : 'No results yet'}</h3>
         <p>
           {loading
@@ -443,33 +440,20 @@ function VirtualResultGrid({
     )
   }
 
-  const columns = Math.max(1, Math.floor((size.width + GAP) / (TILE_MIN + GAP)))
-  const tileWidth = (size.width - GAP * (columns - 1)) / columns
-  const rows = Math.ceil(generations.length / columns)
-  const startRow = Math.max(0, Math.floor(scrollTop / TILE_HEIGHT) - OVERSCAN)
-  const endRow = Math.min(rows, Math.ceil((scrollTop + size.height) / TILE_HEIGHT) + OVERSCAN)
-  const start = startRow * columns
-  const end = Math.min(generations.length, endRow * columns)
-
   return (
-    <div
-      className="forge-grid-viewport"
-      ref={viewport}
-      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-    >
-      <div className="forge-grid" style={{ height: rows * TILE_HEIGHT }}>
+    <div className="forge-grid-viewport" ref={viewportRef} onScroll={onScroll}>
+      <div className="forge-grid" style={{ height: totalHeight }}>
         {generations.slice(start, end).map((generation, offset) => {
           const index = start + offset
-          const row = Math.floor(index / columns)
-          const column = index % columns
+          const cardPosition = position(index)
           return (
             <ForgeResultTile
               key={generation.id}
               generation={generation}
               selected={selectedIds.has(generation.id)}
               width={tileWidth}
-              top={row * TILE_HEIGHT}
-              left={column * (tileWidth + GAP)}
+              top={cardPosition.top}
+              left={cardPosition.left}
               onToggle={() => onToggle(generation)}
             />
           )
@@ -495,12 +479,10 @@ function ForgeResultTile({
   onToggle: () => void
 }) {
   const assetId = generation.outputAssetIds[0] ?? null
-  const thumb = useAssetThumb(assetId)
   const variation = variationLabel(generation)
-  const scene = api.sceneComposition(generation)
   return (
     <button
-      className={`forge-result${selected ? ' is-selected' : ''}`}
+      className={`forge-result media-card selectable-media-card${selected ? ' is-selected' : ''}`}
       style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
       type="button"
       aria-label={`${selected ? 'Remove' : 'Select'} generation ${generation.id} ${selected ? 'from' : 'for'} comparison`}
@@ -508,23 +490,27 @@ function ForgeResultTile({
       disabled={!assetId}
       onClick={onToggle}
     >
-      <span className="forge-result-image">
-        {thumb.data ? (
-          <img src={convertFileSrc(thumb.data)} alt="" />
-        ) : (
-          <span>{assetId ? 'Loading preview…' : 'No output'}</span>
-        )}
+      <span className="forge-result-image asset-media-frame">
+        <LazyAssetThumbnail
+          assetId={assetId}
+          alt=""
+          loadingLabel="Loading preview…"
+          missingLabel="No output"
+          errorLabel="Loading preview…"
+        />
         <b>{selected ? 'Selected' : assetId ? 'Compare' : 'Receipt only'}</b>
       </span>
-      <span className="forge-result-meta">
+      <span className="forge-result-meta media-card-copy">
         <b>
-          {scene ? `Scene · ${scene.subjectNames.join(' + ')}` : generation.preset}
+          <GenerationSubject generation={generation} fallback={generation.preset} />
           {variation ? ` · ${variation}` : ''}
         </b>
         <span>
-          {generation.model} · seed {generation.seed}
+          <GenerationModelSeed generation={generation} />
         </span>
-        <small>{new Date(generation.createdAt).toLocaleString()}</small>
+        <small>
+          <GenerationTimestamp generation={generation} />
+        </small>
         <p>{generation.compiledPrompt}</p>
       </span>
     </button>
@@ -576,7 +562,6 @@ function CompareImage({ generation }: { generation: Generation }) {
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const assetId = generation.outputAssetIds[0] ?? null
-  const scene = api.sceneComposition(generation)
   useEffect(() => {
     let disposed = false
     setSrc(null)
@@ -610,9 +595,11 @@ function CompareImage({ generation }: { generation: Generation }) {
         )}
       </div>
       <figcaption>
-        <b>{scene ? `Scene · ${scene.subjectNames.join(' + ')}` : generation.preset}</b>
+        <b>
+          <GenerationSubject generation={generation} fallback={generation.preset} />
+        </b>
         <span>
-          {generation.model} · seed {generation.seed}
+          <GenerationModelSeed generation={generation} />
         </span>
       </figcaption>
     </figure>

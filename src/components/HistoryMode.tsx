@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { Generation, NodeSummary } from '../lib/api'
-import { useAssetThumb, useGenerationHistory } from '../lib/queries'
+import { useGenerationHistory } from '../lib/queries'
 import { report, useUI } from '../store/ui'
+import { LazyAssetThumbnail } from './AssetMedia'
 import { GenerationDetail } from './GenerationDetail'
+import { GenerationPresetModel, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
 
 export function HistoryMode({
   nodes,
@@ -135,13 +137,15 @@ export function HistoryMode({
       </div>
 
       {history.isError && (
-        <p className="history-error">
+        <p className="history-error inline-error">
           Could not read generation history: {api.errorMessage(history.error)}
         </p>
       )}
-      {history.isPending && <p className="history-empty">Reading generation history…</p>}
+      {history.isPending && (
+        <p className="history-empty empty-state">Reading generation history…</p>
+      )}
       {!history.isPending && !history.isError && filtered.length === 0 && (
-        <p className="history-empty">No generations match these filters.</p>
+        <p className="history-empty empty-state">No generations match these filters.</p>
       )}
       <div className="history-grid">
         {filtered.map((generation) => (
@@ -179,30 +183,33 @@ function HistoryTile({
   onOpen: () => void
   onJump: (() => void) | null
 }) {
-  const thumb = useAssetThumb(generation.outputAssetIds[0] ?? null)
-  const scene = api.sceneComposition(generation)
+  const assetId = generation.outputAssetIds[0] ?? null
   return (
-    <article className="history-tile">
+    <article className="history-tile media-card">
       <button
         type="button"
         className="history-open"
         onClick={onOpen}
         aria-label={`Open generation ${generation.id}`}
       >
-        <div className="history-image">
-          {thumb.data ? (
-            <img src={convertFileSrc(thumb.data)} alt={generation.compiledPrompt} />
-          ) : (
-            <span>No preview</span>
-          )}
+        <div className="history-image asset-media-frame">
+          <LazyAssetThumbnail
+            assetId={assetId}
+            alt={generation.compiledPrompt}
+            loadingLabel="No preview"
+            missingLabel="No preview"
+            errorLabel="No preview"
+          />
         </div>
-        <div className="history-tile-copy">
-          <b>{scene ? `Scene · ${scene.subjectNames.join(' + ')}` : nodeName}</b>
+        <div className="history-tile-copy media-card-copy">
+          <b>
+            <GenerationSubject generation={generation} fallback={nodeName} />
+          </b>
           <span>
-            {scene ? `Multi-entity · ${generation.preset}` : generation.preset} · {generation.model}
+            <GenerationPresetModel generation={generation} />
           </span>
           <span>
-            seed {generation.seed} · {new Date(generation.createdAt).toLocaleString()}
+            seed {generation.seed} · <GenerationTimestamp generation={generation} />
           </span>
           <p>{generation.compiledPrompt}</p>
         </div>

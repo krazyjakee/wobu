@@ -495,10 +495,15 @@ describe('Forge mode', () => {
         <Harness />
       </QueryClientProvider>,
     )
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Select generation one for comparison' }),
-    )
+    const first = await screen.findByRole('button', {
+      name: 'Select generation one for comparison',
+    })
+    expect(first).toHaveAttribute('aria-pressed', 'false')
+    expect(first.querySelector('img')).toHaveAttribute('loading', 'lazy')
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
+    fireEvent.click(first)
     fireEvent.click(screen.getByRole('button', { name: 'Select generation two for comparison' }))
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
     fireEvent.click(screen.getByRole('button', { name: 'Compare selected · 2' }))
     const comparison = await screen.findByRole('dialog', { name: 'Compare Forge results' })
     expect(comparison).toHaveAttribute('aria-modal', 'true')
@@ -534,5 +539,20 @@ describe('Forge mode', () => {
       expect(thumbnailIds.size).toBeGreaterThan(0)
       expect(thumbnailIds.size).toBeLessThan(generations.length)
     })
+  })
+
+  it('keeps the Forge preview loading label while a mounted thumbnail is pending', async () => {
+    const defaultInvoke = h.invoke.getMockImplementation()!
+    h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
+      if (command === 'asset_thumb') return new Promise(() => {})
+      return defaultInvoke(command, args)
+    })
+    renderForge()
+
+    const first = await screen.findByRole('button', {
+      name: 'Select generation one for comparison',
+    })
+    expect(within(first).getByText('Loading preview…')).toBeInTheDocument()
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
   })
 })

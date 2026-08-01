@@ -122,7 +122,23 @@ describe('AssetsMode', () => {
     const mounted = view.container.querySelectorAll('.asset-library-tile').length
     expect(mounted).toBeLessThan(assets.length)
     expect(view.container.querySelector('.asset-grid')).toHaveStyle({ height: '2160px' })
+    const firstTile = screen.getByRole('button', { name: 'Select reference asset asset-0' })
+    expect(firstTile).toHaveAttribute('aria-pressed', 'false')
+    expect(firstTile.querySelector('img')).toHaveAttribute('loading', 'lazy')
     expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
+  })
+
+  it('preserves the asset preview error label', async () => {
+    assets = [asset('broken')]
+    h.invoke.mockImplementation((command: string) => {
+      if (command === 'asset_list') return Promise.resolve(assets)
+      if (command === 'asset_usage_list') return Promise.resolve([])
+      if (command === 'asset_thumb') return Promise.reject(new Error('thumbnail failed'))
+      return Promise.resolve(null)
+    })
+    open()
+
+    expect(await screen.findByText('Preview failed')).toBeInTheDocument()
   })
 
   it('filters by kind, role, node, linked-node tag, and orphan state', async () => {

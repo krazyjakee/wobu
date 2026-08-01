@@ -1,0 +1,56 @@
+/*
+ * Shared card geometry and state presentation. Feature styles still own
+ * dimensions, copy hierarchy, and badges: an asset selection, a Forge compare
+ * choice, and a history navigation card have different semantics even though
+ * their media frames share the same visual substrate.
+ */
+.media-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--media-card-background, var(--bg-panel));
+}
+.selectable-media-card {
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+.selectable-media-card:hover,
+.selectable-media-card.is-selected {
+  border-color: var(--media-card-active-border);
+}
+.selectable-media-card.is-selected {
+  box-shadow: 0 0 0 1px var(--media-card-active-shadow);
+}
+.asset-media-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.asset-media-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-card-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.empty-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  color: var(--text-faint);
+  text-align: center;
+}
+.inline-error {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #c4384a 34%, transparent);
+  border-radius: var(--r-sm);
+  color: #e79aa5;
+  font-size: 11px;
+}

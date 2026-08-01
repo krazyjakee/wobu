@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { ComponentProps, CSSProperties } from 'react'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { Conflict, NodeKind, NodeSummary, ProjectSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
@@ -278,6 +278,21 @@ export function Workspace({ project }: { project: ProjectSummary }) {
       .filter(Boolean)
       .join(' '),
   }
+  const navigatorProps: ComponentProps<typeof Navigator> = {
+    nodes,
+    byId,
+    pinned,
+    groups,
+    kinds: kindIndex,
+    loading: nodesQ.isPending,
+    error: nodesQ.isError ? errorMessage(nodesQ.error) : null,
+    readOnly,
+    corrupt: corruptQ.data ?? [],
+    editedElsewhere: peerEditors,
+    projectPath: project.path,
+    onNewNode: startNewNode,
+    onStyleTransfer: () => void startStyleTransfer(),
+  }
 
   return (
     <div className="app">
@@ -289,23 +304,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
 
         {mode === 'library' ? (
           <>
-            {!navCollapsed && (
-              <Navigator
-                nodes={nodes}
-                byId={byId}
-                pinned={pinned}
-                groups={groups}
-                kinds={kindIndex}
-                loading={nodesQ.isPending}
-                error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
-                readOnly={readOnly}
-                corrupt={corruptQ.data ?? []}
-                editedElsewhere={peerEditors}
-                projectPath={project.path}
-                onNewNode={startNewNode}
-                onStyleTransfer={() => void startStyleTransfer()}
-              />
-            )}
+            {!navCollapsed && <Navigator {...navigatorProps} />}
             {!navCollapsed && (
               <div
                 className={isDragging ? 'resizer is-dragging' : 'resizer'}
@@ -361,19 +360,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
           <>
             {!navCollapsed && (
               <Navigator
-                nodes={nodes}
-                byId={byId}
-                pinned={pinned}
-                groups={groups}
-                kinds={kindIndex}
-                loading={nodesQ.isPending}
-                error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
-                readOnly={readOnly}
-                corrupt={corruptQ.data ?? []}
-                editedElsewhere={peerEditors}
-                projectPath={project.path}
-                onNewNode={startNewNode}
-                onStyleTransfer={() => void startStyleTransfer()}
+                {...navigatorProps}
                 onAssetDrop={
                   readOnly ? undefined : (assetId, nodeId) => setBoardAttach({ assetId, nodeId })
                 }

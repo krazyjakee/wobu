@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SectionDef, SectionValue, WobuNode } from '../../lib/api'
 import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
+import {
+  orderedSectionDefinitions,
+  sectionValuesEqual,
+  type SectionMap,
+} from './structuredSections'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
-type SectionMap = Record<string, SectionValue>
 
 export function DescriptionEditor({
   node,
@@ -42,7 +46,7 @@ export function DescriptionEditor({
     const nextDraft: SectionMap = { ...incoming }
     const nextStored: SectionMap = { ...incoming }
     for (const key of [...pending.current]) {
-      if (sameSection(incoming, storedRef.current, key)) {
+      if (sectionValuesEqual(incoming[key], storedRef.current[key])) {
         pending.current.delete(key)
         continue
       }
@@ -77,7 +81,7 @@ export function DescriptionEditor({
 
   return (
     <div className="description-editor">
-      {orderedSections(definitions, draft).map((definition) => {
+      {orderedSectionDefinitions(definitions, draft).map((definition) => {
         const value = valueFor(definition, draft)
         return (
           <section
@@ -255,17 +259,6 @@ function ListEditor({
   )
 }
 
-function orderedSections(definitions: SectionDef[], sections: SectionMap): SectionDef[] {
-  const ordered = [...definitions]
-  const seen = new Set(definitions.map((definition) => definition.key))
-  for (const [key, value] of Object.entries(sections)) {
-    if (!seen.has(key)) {
-      ordered.push({ key, label: key.replace(/_/g, ' '), valueKind: value.type })
-    }
-  }
-  return ordered
-}
-
 function valueFor(definition: SectionDef, sections: SectionMap): SectionValue {
   const value = sections[definition.key]
   if (value?.type === definition.valueKind) return value
@@ -284,24 +277,6 @@ function persistedValue(value: SectionValue): SectionValue {
 function copySection(from: SectionMap, to: SectionMap, key: string) {
   if (Object.hasOwn(from, key)) to[key] = from[key]!
   else delete to[key]
-}
-
-function sameSection(incoming: SectionMap, local: SectionMap, key: string): boolean {
-  const incomingHas = Object.hasOwn(incoming, key)
-  const localHas = Object.hasOwn(local, key)
-  if (incomingHas !== localHas) return false
-  if (!incomingHas) return true
-  const left = incoming[key]!
-  const right = local[key]!
-  if (left.type !== right.type) return false
-  if (left.type === 'text' && right.type === 'text') return left.value === right.value
-  if (left.type === 'list' && right.type === 'list') {
-    return (
-      left.value.length === right.value.length &&
-      left.value.every((item, index) => item === right.value[index])
-    )
-  }
-  return false
 }
 
 function isHexColour(value: string): boolean {

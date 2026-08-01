@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { SectionDef, SectionValue, WobuDescription } from '../../lib/api'
 import type { EnhanceSession } from './useEnhanceSession'
-
-type SectionMap = WobuDescription['sections']
+import {
+  orderedSectionDefinitions,
+  sectionValuesEqual,
+  type SectionMap,
+} from './structuredSections'
 
 export function EnhanceReview({
   current,
@@ -23,7 +26,7 @@ export function EnhanceReview({
 
   const sections = useMemo(
     () =>
-      orderedSections(
+      orderedSectionDefinitions(
         definitions,
         effectiveCurrent?.sections ?? {},
         candidate?.description.sections ?? {},
@@ -102,7 +105,7 @@ export function EnhanceReview({
           {sections.map((section) => {
             const before = effectiveCurrent?.sections[section.key]
             const after = candidate.description.sections[section.key]
-            const changed = !sameValue(before, after)
+            const changed = !sectionValuesEqual(before, after)
             const useNew = accepted.has(section.key)
             return (
               <section
@@ -226,21 +229,6 @@ function SectionPreview({
   )
 }
 
-function orderedSections(
-  definitions: SectionDef[],
-  current: SectionMap,
-  proposed: SectionMap,
-): SectionDef[] {
-  const ordered = [...definitions]
-  const seen = new Set(ordered.map((section) => section.key))
-  for (const [key, value] of [...Object.entries(current), ...Object.entries(proposed)]) {
-    if (seen.has(key)) continue
-    seen.add(key)
-    ordered.push({ key, label: key.replace(/_/g, ' '), valueKind: value.type })
-  }
-  return ordered
-}
-
 function mergeSections(
   current: SectionMap,
   proposed: SectionMap,
@@ -253,19 +241,6 @@ function mergeSections(
     else delete merged[key]
   }
   return merged
-}
-
-function sameValue(left: SectionValue | undefined, right: SectionValue | undefined): boolean {
-  if (!left || !right) return left === right
-  if (left.type !== right.type) return false
-  if (left.type === 'text' && right.type === 'text') return left.value === right.value
-  if (left.type === 'list' && right.type === 'list') {
-    return (
-      left.value.length === right.value.length &&
-      left.value.every((item, index) => item === right.value[index])
-    )
-  }
-  return false
 }
 
 function changeLabel(before: SectionValue | undefined, after: SectionValue | undefined): string {

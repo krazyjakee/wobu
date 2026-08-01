@@ -1,18 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { useEffect, useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import type { Asset, AssetKind, AssetRole, AssetUsage, NodeSummary } from '../lib/api'
 import type { KindIndex } from '../lib/kinds'
 import { labelFor } from '../lib/kinds'
-import {
-  useAssets,
-  useAssetThumb,
-  useAssetUsages,
-  useDeleteAsset,
-  useLinkAsset,
-} from '../lib/queries'
+import { useAssets, useAssetUsages, useDeleteAsset, useLinkAsset } from '../lib/queries'
 import { useUI } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
+import { LazyAssetThumbnail } from './AssetMedia'
+import { useVirtualCardWindow } from './useVirtualCardWindow'
 
 const KINDS: AssetKind[] = ['reference', 'generated', 'upload']
 const TILE_MIN = 174
@@ -190,11 +185,13 @@ export function AssetsMode({
       </div>
 
       {(assets.isError || usages.isError) && (
-        <p className="asset-library-error">
+        <p className="asset-library-error inline-error">
           Could not read the asset library: {api.errorMessage(assets.error ?? usages.error)}
         </p>
       )}
-      {deleteError && <p className="asset-library-error">Delete failed: {deleteError}</p>}
+      {deleteError && (
+        <p className="asset-library-error inline-error">Delete failed: {deleteError}</p>
+      )}
 
       <div className="asset-library-body">
         <VirtualAssetGrid
@@ -250,26 +247,20 @@ function VirtualAssetGrid({
   loading: boolean
   onSelect: (id: string) => void
 }) {
-  const viewport = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 900, height: 650 })
-  const [scrollTop, setScrollTop] = useState(0)
-  const hasAssets = assets.length > 0
-
-  useEffect(() => {
-    const element = viewport.current
-    if (!element) return
-    const measure = () =>
-      setSize({ width: Math.max(1, element.clientWidth - 24), height: element.clientHeight })
-    measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [hasAssets])
+  const { viewportRef, start, end, tileWidth, totalHeight, onScroll, position } =
+    useVirtualCardWindow({
+      count: assets.length,
+      tileMin: TILE_MIN,
+      tileHeight: TILE_HEIGHT,
+      gap: GAP,
+      overscan: OVERSCAN,
+      initialWidth: 900,
+      initialHeight: 650,
+    })
 
   if (assets.length === 0) {
     return (
-      <div className="asset-library-empty">
+      <div className="asset-library-empty empty-state">
         <h3>{loading ? 'Reading assets…' : 'No assets match'}</h3>
         <p>
           {loading
@@ -280,25 +271,12 @@ function VirtualAssetGrid({
     )
   }
 
-  const columns = Math.max(1, Math.floor((size.width + GAP) / (TILE_MIN + GAP)))
-  const tileWidth = (size.width - GAP * (columns - 1)) / columns
-  const rows = Math.ceil(assets.length / columns)
-  const startRow = Math.max(0, Math.floor(scrollTop / TILE_HEIGHT) - OVERSCAN)
-  const endRow = Math.min(rows, Math.ceil((scrollTop + size.height) / TILE_HEIGHT) + OVERSCAN)
-  const start = startRow * columns
-  const end = Math.min(assets.length, endRow * columns)
-
   return (
-    <div
-      className="asset-grid-viewport"
-      ref={viewport}
-      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-    >
-      <div className="asset-grid" style={{ height: rows * TILE_HEIGHT }}>
+    <div className="asset-grid-viewport" ref={viewportRef} onScroll={onScroll}>
+      <div className="asset-grid" style={{ height: totalHeight }}>
         {assets.slice(start, end).map((asset, offset) => {
           const index = start + offset
-          const row = Math.floor(index / columns)
-          const column = index % columns
+          const cardPosition = position(index)
           return (
             <AssetTile
               key={asset.id}
@@ -307,8 +285,8 @@ function VirtualAssetGrid({
               usageKnown={usageKnown}
               selected={selectedId === asset.id}
               width={tileWidth}
-              top={row * TILE_HEIGHT}
-              left={column * (tileWidth + GAP)}
+              top={cardPosition.top}
+              left={cardPosition.left}
               onSelect={() => onSelect(asset.id)}
             />
           )
@@ -337,25 +315,26 @@ function AssetTile({
   left: number
   onSelect: () => void
 }) {
-  const thumb = useAssetThumb(asset.id)
   return (
     <button
-      className={`asset-library-tile${selected ? ' is-selected' : ''}`}
+      className={`asset-library-tile media-card selectable-media-card${selected ? ' is-selected' : ''}`}
       style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
       type="button"
       aria-label={`Select ${kindLabel(asset.kind).toLocaleLowerCase()} asset ${asset.id}`}
       aria-pressed={selected}
       onClick={onSelect}
     >
-      <span className="asset-library-image">
-        {thumb.data ? (
-          <img src={convertFileSrc(thumb.data)} alt="" />
-        ) : (
-          <span>{thumb.isError ? 'Preview failed' : 'Loading preview…'}</span>
-        )}
+      <span className="asset-library-image asset-media-frame">
+        <LazyAssetThumbnail
+          assetId={asset.id}
+          alt=""
+          loadingLabel="Loading preview…"
+          missingLabel="Preview failed"
+          errorLabel="Preview failed"
+        />
         {usageKnown && usageCount === 0 && <b>Orphan</b>}
       </span>
-      <span className="asset-library-tile-meta">
+      <span className="asset-library-tile-meta media-card-copy">
         <b>{kindLabel(asset.kind)}</b>
         <small>
           {asset.width}×{asset.height} · {formatBytes(asset.bytes)}
@@ -385,7 +364,6 @@ function AssetDetails({
   onJump: (id: string) => void
   onDelete: (asset: Asset) => void
 }) {
-  const thumb = useAssetThumb(asset?.id ?? null)
   const linkAsset = useLinkAsset()
   const [nodeId, setNodeId] = useState(nodes[0]?.id ?? '')
   const [role, setRole] = useState<AssetRole>('full_ref')
@@ -425,11 +403,13 @@ function AssetDetails({
   return (
     <aside className="asset-details" aria-label={`Details for asset ${asset.id}`}>
       <div className="asset-details-preview">
-        {thumb.data ? (
-          <img src={convertFileSrc(thumb.data)} alt="Selected asset thumbnail" />
-        ) : (
-          <span>{thumb.isError ? 'Preview failed' : 'Loading thumbnail…'}</span>
-        )}
+        <LazyAssetThumbnail
+          assetId={asset.id}
+          alt="Selected asset thumbnail"
+          loadingLabel="Loading thumbnail…"
+          missingLabel="Preview failed"
+          errorLabel="Preview failed"
+        />
       </div>
       <h3>{kindLabel(asset.kind)} asset</h3>
       <dl>
@@ -524,7 +504,7 @@ function AssetDetails({
         >
           {linkAsset.isPending ? 'Attaching…' : alreadyAttached ? 'Already attached' : 'Attach'}
         </button>
-        {error && <p className="asset-library-error">Attach failed: {error}</p>}
+        {error && <p className="asset-library-error inline-error">Attach failed: {error}</p>}
       </section>
 
       {usageKnown && usages.length === 0 ? (
