@@ -1,0 +1,42 @@
+[package]
+name = "wobu-sync"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Boxed futures for the two traits this crate asks the app to implement. The
+# accept side stores them behind `Arc<dyn _>` — one router serves every peer, so
+# the handler cannot be generic over the caller's type without infecting
+# `SyncEndpoint` with a parameter that #82's manager would have to carry too.
+async-trait = "0.1.91"
+# Pinned to the pairing `docs/10-sync-spike.md` compiled and ran: iroh 1.0.3
+# against iroh-blobs 0.103.0. Anything else fails at *resolve* time, and one of
+# the two failure modes reports an `ed25519-dalek` conflict rather than naming
+# iroh at all — see the spike before changing this line. Default features are
+# taken as-is because `tls-ring` is one of them and `endpoint::presets` does not
+# exist without a crypto provider feature.
+iroh = "1.0.3"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.19"
+# The spike's headline finding: iroh asks for `tokio ^1.44.1` and the workspace
+# is on 1.53.1, so the lock unifies and sync runs on the runtime Tauri already
+# started. Declaring the workspace's exact version keeps it that way. A second
+# runtime here would mean the endpoint's accept loop living on threads the app
+# cannot cancel, which is precisely the shutdown hang #82 has to avoid.
+tokio = { version = "1.53.1", features = ["rt", "time", "macros"] }
+# For `Id`. The project identifier on the wire is the same ULID the rest of Wobu
+# uses for a project, not a sync-local name for one, and a type alias declared
+# again here would be a second place for that to stop being true.
+wobu-core = { workspace = true }
+
+[dev-dependencies]
+# `rt-multi-thread` because two endpoints in one process is two accept loops and
+# a current-thread runtime would hide a `Send` bound the app will hit; `sync`
+# for the channel the fake session sink is built from.
+tokio = { version = "1.53.1", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+] }
