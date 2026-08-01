@@ -1,15 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react'
 
-export interface MenuItem {
-  id: string
-  label: string
-  icon?: string
-  danger?: boolean
-  disabled?: boolean
-  onPick: () => void
-}
-
 export function ContextMenu({
   x,
   y,

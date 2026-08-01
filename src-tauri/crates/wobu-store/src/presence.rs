@@ -86,7 +86,7 @@ pub struct Peer {
     pub session_id: Id,
     pub user: String,
     /// Best effort, and `unknown` on platforms that do not hand it to us. See
-    /// [`current_host`].
+    /// `current_host`.
     pub host: String,
     /// How long ago their file was last refreshed, by **our** clock.
     ///
@@ -274,7 +274,7 @@ impl PresenceHandle {
 
 impl Drop for Presence {
     /// A clean close takes the session file with it, so nobody waits a minute
-    /// to stop seeing us. A crash does not, which is what [`reap`] is for.
+    /// to stop seeing us. A crash does not, which is what `reap` is for.
     fn drop(&mut self) {
         self.handle.stop.store(true, Ordering::Relaxed);
         // Held so a beat already in flight finishes before the delete, and so

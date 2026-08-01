@@ -27,7 +27,7 @@
 //!    completely different websites. This is the failure `docs/08-providers.md`
 //!    predicts will generate support tickets, because Gemini *text* is free and
 //!    every Gemini image model is billing-only: the same key that just enhanced
-//!    a species will refuse to draw it. See [`no_free_tier`].
+//!    a species will refuse to draw it. See `no_free_tier`.
 //! 2. **It reads the dimensions off the returned image.** The request cannot
 //!    even carry pixels — the API takes a size *class* — and there are credible
 //!    reports of the size and aspect being ignored outright. What the picture
@@ -629,7 +629,7 @@ pub enum KeyCheck {
     /// billing.
     BadKey,
     /// The account cannot pay, which the probe found out early — the good case.
-    /// Carries [`no_free_tier`]'s sentence, so Settings and the failed Generate
+    /// Carries `no_free_tier`'s sentence, so Settings and the failed Generate
     /// say the same thing.
     BillingRequired { detail: String },
     /// Offline, rate limited, a 5xx, or an endpoint Google has retired. None of

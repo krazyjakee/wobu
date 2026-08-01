@@ -64,7 +64,7 @@ pub const QUERY: &str = "QueryHunyuanTo3DProJob";
 
 /// How long a `JobId` stays valid.
 ///
-/// Not enforced by a timer — see [`JobTicket`] — but the number the poll deadline
+/// Not enforced by a timer — see `JobTicket` — but the number the poll deadline
 /// is checked against, so that raising the deadline past it is a test failure
 /// rather than a job that vanishes overnight.
 pub const JOB_ID_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
@@ -78,7 +78,7 @@ pub const JOB_ID_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 ///
 /// An enum and not a string, because the failure a string produces is a
 /// well-formed signed request that is refused for a reason the user cannot fix,
-/// and because it makes the region a *value* that a [`JobTicket`] can carry.
+/// and because it makes the region a *value* that a `JobTicket` can carry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Region {
     ApSingapore,

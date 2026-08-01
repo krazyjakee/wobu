@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6.31.0/schema.json",
+  "include": ["files", "dependencies", "devDependencies", "exports", "types"],
+  "ignoreExportsUsedInFile": true,
+  "treatConfigHintsAsErrors": true
+}

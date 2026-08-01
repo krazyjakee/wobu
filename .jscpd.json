@@ -1,0 +1,19 @@
+{
+  "minTokens": 80,
+  "minLines": 8,
+  "format": ["typescript", "tsx", "rust"],
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/test/**",
+    "**/tests/**",
+    "**/fixtures/**",
+    "**/templates/**",
+    "**/generated/**",
+    "**/gen/**",
+    "**/target/**"
+  ],
+  "reporters": ["console"]
+}

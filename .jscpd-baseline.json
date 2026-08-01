@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "detector": {
+    "minLines": 8,
+    "minTokens": 80
+  },
+  "formats": {
+    "rust": {
+      "clones": 48,
+      "duplicatedLines": 845
+    },
+    "tsx": {
+      "clones": 3,
+      "duplicatedLines": 39
+    },
+    "typescript": {
+      "clones": 0,
+      "duplicatedLines": 0
+    }
+  }
+}

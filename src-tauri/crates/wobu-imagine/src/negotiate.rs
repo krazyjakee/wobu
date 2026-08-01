@@ -251,7 +251,7 @@ impl<'a> Negotiated<'a> {
 ///
 /// Total by construction, in both directions:
 ///
-/// - Over what the stack wants, because [`route`] matches every
+/// - Over what the stack wants, because `route` matches every
 ///   `FragmentTarget` exhaustively and the compiler will not let a new one
 ///   through.
 /// - Over what the backend offers, because every capability that can be absent

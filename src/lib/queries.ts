@@ -11,7 +11,6 @@ import { listen } from '@tauri-apps/api/event'
 import * as api from './api'
 import type {
   Asset,
-  AssetKind,
   AssetRole,
   Capability,
   CompiledPrompt,
@@ -992,29 +991,6 @@ export function useAssetThumb(assetId: string | null): UseQueryResult<string | n
 }
 
 /**
- * Bring a picture into the project folder.
- *
- * Only the asset list is invalidated, not the whole world: an import writes a
- * blob and touches nothing a node knows about, so refetching every node and
- * every search would be work for no change on screen.
- *
- * A re-import is silent about being a re-import. `deduped` is there for a
- * caller that wants to say "already in your library", but it is not a failure
- * and nothing here treats it as one — the user asked for that picture to be in
- * the project, and it is.
- */
-export function useImportAsset() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (v: { path: string; kind?: AssetKind }) => api.assetImport(v.path, v.kind),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: qk.assets })
-    },
-    onError: (e) => report(e, 'Could not import that image'),
-  })
-}
-
-/**
  * Attach, detach, re-weight, and choose a cover.
  *
  * One hook for all four because they share a shape and, more to the point, a
@@ -1062,18 +1038,6 @@ export function useUnlinkAsset() {
     (v: { nodeId: string; assetId: string; role: AssetRole }) =>
       api.assetUnlink(v.nodeId, v.assetId, v.role),
     'Could not remove that reference',
-  )
-}
-
-/** Re-weight or mute a reference without detaching it. */
-export function useUpdateAssetLink() {
-  return useAssetLinkMutation(
-    (v: { nodeId: string; assetId: string; role: AssetRole; weight?: number; enabled?: boolean }) =>
-      api.assetLinkUpdate(v.nodeId, v.assetId, v.role, {
-        weight: v.weight,
-        enabled: v.enabled,
-      }),
-    'Could not change that reference',
   )
 }
 

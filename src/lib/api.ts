@@ -806,19 +806,6 @@ export const assetLink = (nodeId: string, assetId: string, role: AssetRole, weig
 export const assetUnlink = (nodeId: string, assetId: string, role: AssetRole) =>
   call<WobuNode>('asset_unlink', { nodeId, assetId, role })
 
-/**
- * Change a link's weight, its enabled flag, or both.
- *
- * Omit either to leave it alone. Sending the whole link from a slider would let
- * its stale copy of `enabled` undo a mute the user just applied.
- */
-export const assetLinkUpdate = (
-  nodeId: string,
-  assetId: string,
-  role: AssetRole,
-  patch: { weight?: number; enabled?: boolean },
-) => call<WobuNode>('asset_link_update', { nodeId, assetId, role, ...patch })
-
 /** Choose the image on a node's card, or pass `null` to clear it. */
 export const assetSetCover = (nodeId: string, assetId: string | null) =>
   call<WobuNode>('asset_set_cover', { nodeId, assetId })
@@ -1708,24 +1695,6 @@ export interface JobPreview {
   /** Opaque on purpose: how a latent preview reaches here is #40's decision. */
   image: string
   step?: number
-}
-
-/**
- * Another attempt is coming, and this arrives *before* the wait, not after.
- *
- * When `costsMoney` is true this is the only warning anyone gets before a second
- * charge, so it is not a toast to swallow.
- */
-export interface JobRetry {
-  id: string
-  kind: JobKind
-  label: string
-  /** The attempt that failed. */
-  attempt: number
-  maxAttempts: number
-  inMs: number
-  costsMoney: boolean
-  failure: JobFailure
 }
 
 export interface JobDone {

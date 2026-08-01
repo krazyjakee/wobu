@@ -9,7 +9,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// The same two groups as `wobu_llm::Error`, and the split means the same thing,
 /// which is the point of keeping them side by side — the job queue reads it as
-/// a billing guess ([`wobu_jobs::Billed`], `retry.rs`):
+/// a billing guess (`wobu_jobs::Billed`, `retry.rs`):
 ///
 /// - **The call**: a key, a quota, a socket, a ComfyUI that is not running.
 ///   Nothing was generated, so nothing was charged. Every vendor spells these

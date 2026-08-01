@@ -65,7 +65,7 @@ pub struct Config {
     ///
     /// An `Identity` rather than a bare `SecretKey`, and that is the point of
     /// the type: the key is `pub(crate)` behind it, so the only thing in this
-    /// workspace that can reach an ed25519 secret is [`Config::bind`] below,
+    /// workspace that can reach an ed25519 secret is `Config::bind` below,
     /// handing it to iroh. A `pub secret_key` field would put one in every
     /// struct that ever holds a `Config`.
     pub identity: Option<Identity>,

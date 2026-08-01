@@ -236,7 +236,7 @@ pub struct RetryPolicy {
     /// First wait. Doubles per attempt.
     pub base_delay: Duration,
     /// Ceiling on the waits this crate invents. Not a ceiling on the ones a
-    /// provider asks for: see [`delay_for`].
+    /// provider asks for: see `delay_for`.
     pub max_delay: Duration,
 }
 

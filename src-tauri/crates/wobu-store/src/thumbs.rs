@@ -43,7 +43,7 @@
 //! grid on its side while the card beside it reported portrait dimensions.
 //!
 //! The tag is read once, by [`crate::image::probe`], and mapped onto the
-//! decoder's own transform in [`turn`]. It is deliberately not re-read from the
+//! decoder's own transform in `turn`. It is deliberately not re-read from the
 //! decoder's metadata: two readers of one tag are two chances to disagree about
 //! which way up a photograph goes.
 

@@ -7,7 +7,6 @@ edition.workspace = true
 async-trait = "0.1.91"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
-thiserror = "2.0.19"
 # `time` on top of what was already declared: the wait between attempts is a
 # sleep, and the grace a cancelled job gets to wind down is a timeout. Pinned to
 # the version already in the workspace lock, which is Tauri's, so this adds no

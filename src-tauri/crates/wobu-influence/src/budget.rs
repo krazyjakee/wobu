@@ -51,7 +51,7 @@ impl Chars {
 
     /// The character budget for a backend that states its limit in tokens.
     ///
-    /// [`CHARS_PER_TOKEN`] is deliberately the low estimate, because the two
+    /// `CHARS_PER_TOKEN` is deliberately the low estimate, because the two
     /// failure directions are not symmetric. Under-filling costs a slightly
     /// thinner prompt, and the drop report then says exactly which fragments
     /// paid for it, so the user can see it and argue. Over-filling costs a

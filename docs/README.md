@@ -17,6 +17,7 @@ that context automatically.
 | [09 — Roadmap](09-roadmap.md) | Milestones from prototype to 3D |
 | [12 — Packaging & Releases](12-releasing.md) | Tagged bundles, signing and updater policy, version stamping |
 | [13 — Acceptance Evidence](13-acceptance-evidence.md) | Repeatable M1/M5 contracts and the live smoke checks they cannot replace |
+| [14 — Code-health Checks](14-code-health.md) | Dead-code, direct-dependency, public-surface, and duplication regression gates |
 
 Two constraints shape most of the above and are worth knowing up front:
 

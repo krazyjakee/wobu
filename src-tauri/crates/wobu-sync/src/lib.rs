@@ -12,10 +12,10 @@
 //! and mutually authenticated before this crate sees it**. iroh is QUIC with
 //! TLS 1.3 where each endpoint's ed25519 public key *is* its TLS certificate, so
 //! by the time a `Connection` exists both sides have proved possession of the
-//! secret key behind the [`EndpointId`] the other one is looking at.
+//! secret key behind the `EndpointId` the other one is looking at.
 //! `Connection::remote_id` is that proof's output, not a claim the peer made.
 //!
-//! So the opening exchange in [`opening`] does exactly one thing: **it states
+//! So the opening exchange in `opening` does exactly one thing: **it states
 //! which project this connection is about, and gets back whether the other side
 //! holds it.** One ULID out, one word back.
 //!
@@ -103,21 +103,21 @@
 //!
 //! [`Identity`] — an ed25519 keypair whose secret half lives in the OS keychain
 //! at `wobu/sync`, per installation, never in the project folder. The public
-//! half is the [`EndpointId`] above, so a peer's name and its TLS certificate
+//! half is the `EndpointId` above, so a peer's name and its TLS certificate
 //! are the same thirty-two bytes, which is why nothing in this crate has to
 //! check that they match.
 //!
 //! Two things follow, and both are easy to get subtly wrong later:
 //!
 //! - The identity is **not** a `SecretKey` field anybody can read. It is
-//!   `pub(crate)` behind [`Identity`], and [`Config::bind`] handing it to iroh's
+//!   `pub(crate)` behind [`Identity`], and `Config::bind` handing it to iroh's
 //!   builder is the only place in the workspace it is touched. The rule against
 //!   cryptographic primitives above is what makes that sufficient: the key is
 //!   used to *be* somebody, never to sign anything.
 //! - [`Identity::alias`] — `amber-heron-4f1a` — is for **display only**. It is
 //!   twenty-eight bits, which is a name and not a key, and a peer who wanted to
 //!   collide with somebody's alias could grind one out in seconds. Anything
-//!   deciding anything compares the full [`EndpointId`].
+//!   deciding anything compares the full `EndpointId`.
 //!
 //! ## Runtime
 //!

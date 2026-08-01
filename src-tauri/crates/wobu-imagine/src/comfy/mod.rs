@@ -17,7 +17,7 @@
 //!    produces a 400 with a Python traceback in it, which is a failure the user
 //!    cannot act on — see `probe.rs`.
 //! 3. **Cancelling interrupts the render.** Closing the websocket stops the
-//!    reporting; the graph keeps the GPU. [`ComfyBackend::stop`] tells ComfyUI to
+//!    reporting; the graph keeps the GPU. `ComfyBackend::stop` tells ComfyUI to
 //!    stop, and picks between two calls that are not interchangeable.
 //! 4. **A failure says which of three things went wrong.** Not running, running
 //!    somewhere else, and running but missing a node are three different
@@ -29,7 +29,7 @@
 //! object references need IPAdapter, which is a third-party pack, and structure
 //! references need a ControlNet model that most installs do not have. So the
 //! shipped workflows are text-to-image and this backend declares no reachable
-//! reference mechanisms — see [`no_reference_mechanisms`]. ComfyUI's counting
+//! reference mechanisms — see `no_reference_mechanisms`. ComfyUI's counting
 //! budget stays unlimited, because a missing graph input is not a vendor quota.
 //! That is not the same as ignoring references:
 //! [`negotiate`](crate::negotiate) reports every withheld picture on the card it

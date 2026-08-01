@@ -2,7 +2,7 @@
 //!
 //! A preset is the recipe that turns one description into a particular *kind* of
 //! sheet: which sections matter, how the shot is framed, what aspect, how many
-//! images. Everything that varies per preset is declared in [`REGISTRY`] and
+//! images. Everything that varies per preset is declared in `REGISTRY` and
 //! nowhere else, for the same reason kinds are (`kind.rs`) — a ninth preset is a
 //! row in a table, not a feature. `a_preset_the_registry_has_never_heard_of_still_behaves`
 //! is what holds that line: every accessor reads the struct, so nothing can grow

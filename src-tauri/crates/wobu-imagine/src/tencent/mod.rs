@@ -15,7 +15,7 @@
 //!    action rather than a wrong host. `endpoint.rs` holds the three constants and
 //!    there is no setter for any of them.
 //! 2. **It polls the region it submitted to.** Not by remembering to: the submit
-//!    returns a [`JobTicket`] that owns its [`Endpoint`], and the poll builds its
+//!    returns a `JobTicket` that owns its `Endpoint`, and the poll builds its
 //!    call from the ticket. A job submitted to Singapore and polled in Frankfurt
 //!    is not an error, it is `FailedOperation.JobNotFound` — the same answer as a
 //!    job that never existed, on a call that was billed.
@@ -42,7 +42,7 @@
 //!
 //! **A crash-resumable job.** A `JobId` outlives our process by up to 24 hours, so
 //! resuming one after a restart would save real money. It is deliberately not done
-//! here: [`JobTicket`] is not serialisable, because a resumable-looking record with
+//! here: `JobTicket` is not serialisable, because a resumable-looking record with
 //! an expiry nobody checks is worse than no record, and the decision about what
 //! `wobu-jobs` persists across a restart is not this adapter's to make by accident.
 //!

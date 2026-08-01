@@ -90,7 +90,6 @@ serde_json = "1.0.151"
 tauri = { version = "2.11.5", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-opener = "2.5.4"
-thiserror = "2.0.19"
 # The runtime Tauri already started, named here so `sync.rs` can put a deadline
 # on a network step and a channel between the poller and the manager. The exact
 # version `wobu-sync` declares, so the lock unifies and there is one runtime in
