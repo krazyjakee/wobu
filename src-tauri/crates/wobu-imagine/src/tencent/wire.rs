@@ -460,9 +460,10 @@ pub(crate) fn failure(code: &str, message: &str) -> Error {
         "FailedOperation.ServiceNotActivated" | "ResourceUnavailable.NotExist" => {
             Error::Unavailable {
                 detail: format!(
-                    "{BACKEND} is not switched on for this Tencent Cloud account. Activate the 3D \
-                     service in the Tencent Cloud console, then try again — nothing else about \
-                     your key is wrong"
+                    "{BACKEND} is not activated for this Tencent Cloud account. Open \
+                     https://console.tencentcloud.com/hunyuan, accept the service terms and \
+                     activate Hunyuan 3D, then try again — the key itself is not the problem \
+                     ({code})"
                 ),
             }
         }
@@ -483,8 +484,9 @@ pub(crate) fn failure(code: &str, message: &str) -> Error {
         // `endpoint.rs` rather than something the user chose.
         "UnsupportedRegion" | "InvalidParameterValue.Region" => Error::Unsupported {
             detail: format!(
-                "{BACKEND} does not serve this region — wobu should only ever send one of the \
-                 three it supports ({code})"
+                "{BACKEND} rejected the processing region. Choose Singapore (ap-singapore), \
+                 Silicon Valley (na-siliconvalley) or Frankfurt (eu-frankfurt) in Settings \
+                 ({code})"
             ),
         },
 
@@ -495,7 +497,9 @@ pub(crate) fn failure(code: &str, message: &str) -> Error {
             Error::Unavailable {
                 detail: format!(
                     "{BACKEND} has no record of this job. A job id is only valid for 24 hours, \
-                     and it can only be asked about in the region it was submitted to"
+                     and it can only be queried in the processing region selected when it was \
+                     submitted. Start a new job; if this happened immediately, reselect the same \
+                     region in Settings ({code})"
                 ),
             }
         }
@@ -768,8 +772,9 @@ mod tests {
         let body = br#"{"Response":{"Error":{"Code":"FailedOperation.ServiceNotActivated",
             "Message":"service not activated"},"RequestId":"7f6a"}}"#;
         let error = submitted(body).unwrap_err();
-        assert!(error.to_string().contains("not switched on"), "{error}");
-        assert!(error.to_string().contains("console"), "{error}");
+        assert!(error.to_string().contains("not activated"), "{error}");
+        assert!(error.to_string().contains("https://console.tencentcloud.com/hunyuan"), "{error}");
+        assert!(error.to_string().contains("key itself is not the problem"), "{error}");
         assert!(error.is_retryable(), "activating it and pressing Try again is the fix");
     }
 
@@ -867,7 +872,10 @@ mod tests {
         }
         let region = failure("UnsupportedRegion", "");
         assert_eq!(region.code(), "internal");
-        assert!(region.to_string().contains("three"), "{region}");
+        assert!(region.to_string().contains("ap-singapore"), "{region}");
+        assert!(region.to_string().contains("na-siliconvalley"), "{region}");
+        assert!(region.to_string().contains("eu-frankfurt"), "{region}");
+        assert!(region.to_string().contains("Settings"), "{region}");
     }
 
     #[test]
@@ -878,7 +886,8 @@ mod tests {
         // who hit it to the wrong place.
         let error = failure("FailedOperation.JobNotFound", "job not found");
         assert!(error.to_string().contains("24 hours"), "{error}");
-        assert!(error.to_string().contains("region it was submitted to"), "{error}");
+        assert!(error.to_string().contains("processing region"), "{error}");
+        assert!(error.to_string().contains("Start a new job"), "{error}");
     }
 
     #[test]

@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import * as api from '../../lib/api'
 import type {
+  AssetRole,
   Generation,
   JobPreview,
   JobProgress,
@@ -10,14 +11,39 @@ import type {
   QueueSnapshot,
   WobuNode,
 } from '../../lib/api'
-import { useAssetThumb, useGenerations } from '../../lib/queries'
+import {
+  useAssetThumb,
+  useGenerations,
+  useLinkAsset,
+  useNodeLinks,
+  useNodes,
+  useUnlinkAsset,
+} from '../../lib/queries'
+import { labelFor, pluralFor, type KindIndex } from '../../lib/kinds'
+import { influenceDependentsOf } from '../../lib/tree'
 
 type Signal = { progress?: JobProgress; preview?: JobPreview }
 
-export function ConceptsPane({ node, queue }: { node: WobuNode; queue: QueueSnapshot }) {
+export function ConceptsPane({
+  node,
+  queue,
+  kinds,
+  readOnly,
+}: {
+  node: WobuNode
+  queue: QueueSnapshot
+  kinds: KindIndex
+  readOnly: boolean
+}) {
   const history = useGenerations(node.id)
+  const nodes = useNodes(true)
+  const links = useNodeLinks(true)
   const signals = useGenerationSignals(node.id)
   const [viewer, setViewer] = useState<{ src: string; label: string } | null>(null)
+  const dependents = useMemo(
+    () => influenceDependentsOf(node.id, nodes.data ?? [], links.data ?? []),
+    [links.data, node.id, nodes.data],
+  )
   const jobs = useMemo(
     () =>
       queue.jobs.filter(
@@ -48,7 +74,18 @@ export function ConceptsPane({ node, queue }: { node: WobuNode; queue: QueueSnap
           <LiveTile key={job.id} job={job} signal={signals[job.id]} />
         ))}
         {(history.data ?? []).map((generation) => (
-          <GenerationTile key={generation.id} generation={generation} onOpen={setViewer} />
+          <GenerationTile
+            key={generation.id}
+            generation={generation}
+            node={node}
+            dependents={dependents}
+            kinds={kinds}
+            scopeUnknown={
+              nodes.isPending || links.isPending || nodes.isError || links.isError
+            }
+            readOnly={readOnly}
+            onOpen={setViewer}
+          />
         ))}
       </div>
       {viewer && <FullImage viewer={viewer} onClose={() => setViewer(null)} />}
@@ -156,15 +193,33 @@ function liveLabel(job: JobSnapshot): string {
 
 function GenerationTile({
   generation,
+  node,
+  dependents,
+  kinds,
+  scopeUnknown,
+  readOnly,
   onOpen,
 }: {
   generation: Generation
+  node: WobuNode
+  dependents: ReturnType<typeof influenceDependentsOf>
+  kinds: KindIndex
+  scopeUnknown: boolean
+  readOnly: boolean
   onOpen: (viewer: { src: string; label: string }) => void
 }) {
   const assetId = generation.outputAssetIds[0] ?? null
   const thumb = useAssetThumb(assetId)
+  const linkAsset = useLinkAsset()
+  const unlinkAsset = useUnlinkAsset()
   const [opening, setOpening] = useState(false)
+  const pinnedRoles = assetId
+    ? node.assetLinks.filter((link) => link.assetId === assetId).map((link) => link.role)
+    : []
+  const [role, setRole] = useState<AssetRole>(pinnedRoles[0] ?? 'full_ref')
   const [error, setError] = useState<string | null>(null)
+  const pinned = pinnedRoles.includes(role)
+  const changingPin = linkAsset.isPending || unlinkAsset.isPending
 
   async function open() {
     if (!assetId) return
@@ -178,6 +233,17 @@ function GenerationTile({
       setError(api.errorMessage(reason))
     } finally {
       setOpening(false)
+    }
+  }
+
+  async function togglePin() {
+    if (!assetId || readOnly) return
+    setError(null)
+    try {
+      if (pinned) await unlinkAsset.mutateAsync({ nodeId: node.id, assetId, role })
+      else await linkAsset.mutateAsync({ nodeId: node.id, assetId, role })
+    } catch (reason) {
+      setError(`${pinned ? 'Could not unpin' : 'Could not pin'}: ${api.errorMessage(reason)}`)
     }
   }
 
@@ -198,6 +264,9 @@ function GenerationTile({
           {generation.outputAssetIds.length > 1 && (
             <b className="concept-count">+{generation.outputAssetIds.length - 1}</b>
           )}
+          {pinnedRoles.length > 0 && (
+            <b className="concept-pinned">Pinned · {pinnedRoles.map(roleLabel).join(', ')}</b>
+          )}
           <span className="concept-hover">
             <span>{generation.compiledPrompt}</span>
             <code>seed {generation.seed}</code>
@@ -206,11 +275,118 @@ function GenerationTile({
       </button>
       <div className="concept-caption">
         <span>{generation.model}</span>
+        <span className="concept-seed-source">{seedSourceLabel(generation)}</span>
         <time dateTime={generation.createdAt}>{new Date(generation.createdAt).toLocaleString()}</time>
       </div>
+      {assetId && (
+        <div className="concept-pin-controls">
+          <div className="concept-pin-action">
+            <label>
+              <span>Reference role</span>
+              <select
+                aria-label={`Reference role for generation ${generation.id}`}
+                value={role}
+                disabled={readOnly || changingPin}
+                onChange={(event) => setRole(event.target.value as AssetRole)}
+              >
+                {api.ASSET_ROLES.map((choice) => (
+                  <option value={choice} key={choice}>
+                    {roleLabel(choice)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className={pinned ? 'btn-mini is-pinned' : 'btn-mini'}
+              type="button"
+              aria-label={`${pinned ? 'Unpin' : 'Pin'} generation ${generation.id} as ${roleLabel(role)}`}
+              aria-pressed={pinned}
+              disabled={readOnly || changingPin}
+              onClick={() => void togglePin()}
+            >
+              {changingPin ? 'Saving…' : pinned ? 'Unpin' : 'Pin'}
+            </button>
+          </div>
+          <p className="concept-pin-consequence">
+            {pinConsequence(role, node, dependents, kinds, scopeUnknown)}
+          </p>
+        </div>
+      )}
       {error && <p className="concept-failure">{error}</p>}
     </article>
   )
+}
+
+function pinConsequence(
+  role: AssetRole,
+  node: WobuNode,
+  dependents: ReturnType<typeof influenceDependentsOf>,
+  kinds: KindIndex,
+  pending: boolean,
+): string {
+  if (role === 'mood') {
+    return 'Mood is human-only across this entity’s downstream influence stacks; it is never sent to an image model.'
+  }
+  const nodeKind = labelFor(kinds.get(node.kind), node.kind).toLocaleLowerCase()
+  const reach = pending
+    ? `this ${nodeKind} and every downstream entity that inherits from it`
+    : dependents.length > 0
+      ? `this ${nodeKind} and ${dependentSummary(dependents, kinds)} downstream`
+      : `this ${nodeKind}`
+  return `Future generations for ${reach} can inherit this ${roleConsequence(role)}.`
+}
+
+function dependentSummary(
+  nodes: ReturnType<typeof influenceDependentsOf>,
+  kinds: KindIndex,
+): string {
+  const counts = new Map<WobuNode['kind'], number>()
+  for (const node of nodes) counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1)
+  return [...counts.entries()]
+    .map(([kind, count]) => {
+      const def = kinds.get(kind)
+      const name = count === 1 ? labelFor(def, kind) : pluralFor(def, kind)
+      return `${count} ${name.toLocaleLowerCase()}`
+    })
+    .join(', ')
+}
+
+function roleConsequence(role: Exclude<AssetRole, 'mood'>): string {
+  if (role === 'full_ref') return 'appearance-locking full reference'
+  if (role === 'silhouette') return 'structural silhouette reference'
+  if (role === 'pose') return 'structural pose reference'
+  if (role === 'palette') return 'colour reference'
+  if (role === 'material') return 'material style reference'
+  return 'costume style reference'
+}
+
+function roleLabel(role: AssetRole): string {
+  return role === 'full_ref'
+    ? 'Full reference'
+    : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
+}
+
+function seedSourceLabel(generation: Generation): string {
+  if (generation.params.usedLockedSeed === true) return 'used locked seed'
+  const source = generation.params.seedSource
+  switch (source) {
+    case 'locked':
+      return generation.params.usedLockedSeed === false
+        ? 'provider changed locked seed'
+        : 'used locked seed'
+    case 'locked_derived':
+      return 'used locked-seed family'
+    case 'rerolled':
+      return 'used explicit re-roll'
+    case 'rerolled_derived':
+      return 'used re-roll family'
+    case 'grid':
+      return 'variant seed cell'
+    case 'random_derived':
+      return 'used random-seed family'
+    default:
+      return 'used unlocked seed'
+  }
 }
 
 function FullImage({

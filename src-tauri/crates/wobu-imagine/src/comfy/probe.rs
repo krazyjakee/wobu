@@ -91,6 +91,7 @@ pub struct Installed {
     unets: Vec<String>,
     loras: Vec<String>,
     controlnets: Vec<String>,
+    mesh_models: Vec<String>,
 }
 
 impl Installed {
@@ -116,6 +117,7 @@ impl Installed {
             unets: combo("UNETLoader", "unet_name"),
             loras: combo("LoraLoader", "lora_name"),
             controlnets: combo("ControlNetLoader", "control_net_name"),
+            mesh_models: combo("Hy3D_2_1SimpleMeshGen", "model"),
         })
     }
 
@@ -146,6 +148,11 @@ impl Installed {
     /// downgraded.
     pub fn controlnets(&self) -> &[String] {
         &self.controlnets
+    }
+
+    /// Hunyuan3D 2.1 checkpoints offered by the installed custom node.
+    pub fn mesh_models(&self) -> &[String] {
+        &self.mesh_models
     }
 
     /// Whether a structure reference could be honoured: the loader exists *and*
@@ -323,6 +330,26 @@ mod tests {
         .unwrap();
         let installed = Installed::parse(&new_shape).unwrap();
         assert_eq!(installed.checkpoints(), ["a.safetensors"]);
+    }
+
+    #[test]
+    fn the_hunyuan_node_advertises_the_shape_models_it_can_open() {
+        let object_info = serde_json::to_vec(&json!({
+            "Hy3D_2_1SimpleMeshGen": {
+                "input": {"required": {
+                    "model": [["hunyuan3d-dit-v2-1.ckpt"], {}],
+                    "image": ["IMAGE", {}]
+                }}
+            },
+            "Hy3DPostprocessMesh": {"input": {"required": {}}},
+            "Hy3DExportMesh": {"input": {"required": {}}}
+        }))
+        .unwrap();
+        let installed = Installed::parse(&object_info).unwrap();
+        assert_eq!(installed.mesh_models(), ["hunyuan3d-dit-v2-1.ckpt"]);
+        assert!(installed.has_class("Hy3D_2_1SimpleMeshGen"));
+        assert!(installed.has_class("Hy3DPostprocessMesh"));
+        assert!(installed.has_class("Hy3DExportMesh"));
     }
 
     #[test]

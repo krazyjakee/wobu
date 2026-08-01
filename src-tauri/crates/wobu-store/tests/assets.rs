@@ -17,8 +17,8 @@
 use std::fs;
 use std::path::Path;
 
-use wobu_core::AssetKind;
-use wobu_store::Project;
+use wobu_core::{AssetKind, AssetRole, NodeKind};
+use wobu_store::{Error, Project, SaveOutcome};
 
 /* ── fixtures ─────────────────────────────────────────────────────────────── */
 
@@ -216,6 +216,78 @@ fn a_dedup_keeps_the_moment_the_picture_first_arrived() {
 
     let month = chrono::Utc::now() - chrono::Duration::days(29);
     assert!(second.asset.created_at < month, "{}", second.asset.created_at);
+}
+
+/* ── deliberate orphan deletion ─────────────────────────────────────────── */
+
+#[test]
+fn deleting_an_orphan_removes_its_blob_and_index_row() {
+    let (_dir, mut project) = new_project();
+    let asset = project.import_asset(&png(96, 64), AssetKind::Upload).unwrap().asset;
+    let original = project.root().join(&asset.rel_path);
+
+    project.delete_asset(asset.id).unwrap();
+
+    assert!(!original.exists());
+    assert!(project.get_asset(asset.id).unwrap().is_none());
+    assert!(project.list_assets().unwrap().is_empty());
+}
+
+#[test]
+fn deleting_refuses_links_and_covers_even_after_the_ui_called_an_asset_an_orphan() {
+    let (_dir, mut project) = new_project();
+    let linked = project.import_asset(&png(100, 80), AssetKind::Reference).unwrap().asset;
+    let covered = project.import_asset(&png(101, 80), AssetKind::Upload).unwrap().asset;
+    let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+    project.link_asset(node.id, linked.id, AssetRole::FullRef, None).unwrap();
+    project.set_cover_asset(node.id, Some(covered.id)).unwrap();
+
+    for asset in [linked, covered] {
+        let error = project.delete_asset(asset.id).unwrap_err();
+        assert!(matches!(error, Error::AssetInUse { nodes: 1, .. }), "{error}");
+        assert!(project.root().join(&asset.rel_path).is_file());
+        assert!(project.get_asset(asset.id).unwrap().is_some());
+    }
+}
+
+#[test]
+fn deletion_reads_canonical_markdown_instead_of_trusting_a_stale_local_index() {
+    let (_dir, mut project) = new_project();
+    let asset = project.import_asset(&png(111, 81), AssetKind::Reference).unwrap().asset;
+    let mut node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+
+    // Simulate Obsidian or a collaborator writing after this Wobu's last
+    // reconcile. The local index still says orphan; only the file says linked.
+    node.asset_links.push(wobu_core::asset::AssetRef::new(asset.id, AssetRole::FullRef));
+    let path = project.root().join("nodes/character/kael.md");
+    fs::write(&path, wobu_store::markdown::to_markdown(&node).unwrap()).unwrap();
+    assert!(project.index().asset_backlinks(asset.id).unwrap().is_empty());
+
+    let error = project.delete_asset(asset.id).unwrap_err();
+    assert!(matches!(error, Error::AssetInUse { nodes: 1, .. }), "{error}");
+    assert!(project.root().join(&asset.rel_path).is_file());
+}
+
+#[test]
+fn asset_usage_groups_roles_cover_and_linked_node_tags() {
+    let (_dir, mut project) = new_project();
+    let asset = project.import_asset(&png(120, 90), AssetKind::Reference).unwrap().asset;
+    let mut node = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+    node.tags = vec!["playable".into(), "ashlands".into()];
+    node.cover_asset_id = Some(asset.id);
+    node.asset_links.push(wobu_core::asset::AssetRef::new(asset.id, AssetRole::Palette));
+    match project.save_node(node).unwrap() {
+        SaveOutcome::Saved(_) => {}
+        SaveOutcome::Conflict { conflict_path } => panic!("unexpected conflict at {conflict_path}"),
+    }
+
+    let usage = project.asset_usages().unwrap().pop().unwrap();
+    assert_eq!(usage.asset_id, asset.id);
+    assert_eq!(usage.node_name, "Vashk");
+    assert_eq!(usage.node_tags, ["playable", "ashlands"]);
+    assert!(usage.cover);
+    assert_eq!(usage.roles.len(), 1);
+    assert_eq!(usage.roles[0].role, AssetRole::Palette);
 }
 
 /* ── two writers ──────────────────────────────────────────────────────────── */

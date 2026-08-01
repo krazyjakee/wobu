@@ -14,6 +14,10 @@ import {
   useImageReferenceReport,
   useInfluenceStack,
   usePresets,
+  useRecoverSpendLedger,
+  useSetSpendCeiling,
+  useSetLockedSeed,
+  useSpendStatus,
   useStatusBarBackend,
 } from '../lib/queries'
 import { report, toast } from '../store/ui'
@@ -37,13 +41,18 @@ export function Inspector({
   const [presetId, setPresetId] = useState<string>()
   const [aspect, setAspect] = useState('')
   const [model, setModel] = useState('')
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 0xffffffff))
+  const [seed, setSeed] = useState(randomSeed)
+  const [seedOverride, setSeedOverride] = useState(false)
+  const [gridAxis, setGridAxis] = useState<'none' | api.VariantGrid['axis']>('none')
+  const [gridValues, setGridValues] = useState('')
+  const [gridNodeId, setGridNodeId] = useState('')
   const [weights, setWeights] = useState<Record<string, number>>({})
   const [muted, setMuted] = useState<Set<string>>(new Set())
   const [shotWeight, setShotWeight] = useState(1)
   const [shotMuted, setShotMuted] = useState(false)
   const [shotPrompt, setShotPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [ceilingDollars, setCeilingDollars] = useState('')
 
   useEffect(() => {
     setPresetId(undefined)
@@ -52,6 +61,11 @@ export function Inspector({
     setShotWeight(1)
     setShotMuted(false)
     setShotPrompt('')
+    setSeed(randomSeed())
+    setSeedOverride(false)
+    setGridAxis('none')
+    setGridValues('')
+    setGridNodeId('')
   }, [selected?.id])
 
   const chosenPreset =
@@ -90,10 +104,33 @@ export function Inspector({
   )
   const stack = useInfluenceStack(selected?.id ?? null, options)
   const compiled = useCompiledPrompt(selected?.id ?? null, options)
+  const grid = useMemo(
+    () => parseVariantGrid(gridAxis, gridValues, gridNodeId),
+    [gridAxis, gridNodeId, gridValues],
+  )
   const imageReport = useImageReferenceReport(selected?.id ?? null, {
     ...options,
+    aspect,
     model: model.trim() || undefined,
+    grid: grid.value,
   })
+  const lockedSeed = imageReport.isPlaceholderData ? null : (imageReport.data?.lockedSeed ?? null)
+  const usesLockedSeed = lockedSeed !== null && !seedOverride && gridAxis !== 'seed'
+  useEffect(() => {
+    if (!imageReport.data || imageReport.isPlaceholderData || seedOverride) return
+    if (lockedSeed !== null) setSeed(lockedSeed)
+    else setSeedOverride(true)
+  }, [imageReport.data, imageReport.isPlaceholderData, lockedSeed, seedOverride])
+  const paidEstimate = imageReport.data?.cost ?? null
+  const spendQuery = useSpendStatus(project.id, paidEstimate !== null)
+  const setSpendCeiling = useSetSpendCeiling(project.id)
+  const recoverSpendLedger = useRecoverSpendLedger(project.id)
+  const setLockedSeed = useSetLockedSeed()
+  const spend = spendQuery.data ?? imageReport.data?.spend
+  useEffect(() => {
+    const ceiling = spend?.ceilingUsdMicros
+    setCeilingDollars(ceiling === null || ceiling === undefined ? '' : microsAsInput(ceiling))
+  }, [spend?.ceilingUsdMicros])
   const dropped = useMemo(() => {
     const count = new Map<string, number>()
     for (const item of compiled.data?.dropped ?? []) {
@@ -135,16 +172,95 @@ export function Inspector({
         shot: options.shot,
         aspect,
         model: model.trim() || undefined,
-        seed,
+        seed: seedOverride ? seed : undefined,
+        grid: grid.value,
       })
       toast(`Generation queued · ${job.slice(-6)}`)
-      setSeed(Math.floor(Math.random() * 0xffffffff))
+      if (lockedSeed === null && gridAxis === 'none') setSeed(randomSeed())
+      void spendQuery.refetch()
     } catch (error) {
       report(error, 'Could not start generation')
     } finally {
       setGenerating(false)
     }
   }
+
+  const changeGridAxis = (axis: typeof gridAxis) => {
+    setGridAxis(axis)
+    if (axis === 'seed') setGridValues([seed, seed + 1, seed + 2, seed + 3].join(', '))
+    if (axis === 'fragment_weight') {
+      setGridValues('0.4, 0.7, 1')
+      setGridNodeId((current) => current || stack.data?.layers.find((layer) => layer.nodeId)?.nodeId || '')
+    }
+    if (axis === 'preset') {
+      setGridValues(
+        (presets.data ?? [])
+          .filter((preset) => preset.views.length === 0)
+          .slice(0, 4)
+          .map((preset) => preset.id)
+          .join(', '),
+      )
+    }
+    if (axis === 'aspect') setGridValues('1:1, 3:4, 4:3')
+    if (axis === 'none') setGridValues('')
+  }
+
+  const reroll = () => {
+    setSeed(randomSeed())
+    setSeedOverride(true)
+  }
+
+  const saveLockedSeed = async (next: number | null) => {
+    if (!selected) return
+    try {
+      await setLockedSeed.mutateAsync({ nodeId: selected.id, seed: next })
+      setSeedOverride(next === null)
+      if (next !== null) setSeed(next)
+      await imageReport.refetch()
+      toast(next === null ? 'Seed lock cleared' : 'Seed locked to this entity')
+    } catch (error) {
+      report(error, next === null ? 'Could not clear the seed lock' : 'Could not lock the seed')
+    }
+  }
+
+  const saveCeiling = async () => {
+    const trimmed = ceilingDollars.trim()
+    const dollars = trimmed === '' ? null : Number(trimmed)
+    if (dollars !== null && (!Number.isFinite(dollars) || dollars < 0)) {
+      report(new Error('Enter a non-negative dollar amount, or leave it blank to disable paid generation.'))
+      return
+    }
+    try {
+      await setSpendCeiling.mutateAsync(
+        dollars === null ? null : Math.min(Number.MAX_SAFE_INTEGER, Math.round(dollars * 1_000_000)),
+      )
+      toast(dollars === null ? 'Paid generation disabled' : 'Shared spend ceiling saved')
+    } catch (error) {
+      report(error, 'Could not save the spend ceiling')
+    }
+  }
+
+  const recoverReservations = async () => {
+    const confirmed = window.confirm(
+      'Recover pending spend reservations only after every Wobu window using this project has stopped paid generation. The old ledger will be archived, not deleted. Continue?',
+    )
+    if (!confirmed) return
+    try {
+      await recoverSpendLedger.mutateAsync(true)
+      toast('Pending spend ledger archived')
+    } catch (error) {
+      report(error, 'Could not recover the spend ledger')
+    }
+  }
+
+  const costBlocked =
+    paidEstimate !== null &&
+    (spend?.ledgerLocked === true ||
+      spend?.remainingUsdMicros === null ||
+      (spend?.remainingUsdMicros !== undefined &&
+        paidEstimate.batchUsdMicros > spend.remainingUsdMicros))
+  const gridBlocked =
+    gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
 
   return (
     <>
@@ -241,29 +357,239 @@ export function Inspector({
               placeholder="Optional framing, action, weather, or camera direction"
             />
           </label>
-          <label>
-            <span>Seed</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={seed}
-              onChange={(event) => setSeed(Math.max(0, Number(event.target.value) || 0))}
-            />
-          </label>
+          <div className="seed-controls">
+            <label>
+              <span>Seed</span>
+              <input
+                type="number"
+                min={0}
+                max={Number.MAX_SAFE_INTEGER}
+                step={1}
+                value={seed}
+                onChange={(event) => {
+                  setSeed(Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Number(event.target.value) || 0)))
+                  setSeedOverride(true)
+                }}
+              />
+            </label>
+            <div className={usesLockedSeed ? 'seed-state is-locked' : 'seed-state'}>
+              {lockedSeed === null
+                ? 'Unlocked seed'
+                : gridAxis === 'seed'
+                  ? `Locked at ${lockedSeed} · grid varies seed`
+                : usesLockedSeed
+                  ? `Locked · next result uses ${lockedSeed}`
+                  : `Locked at ${lockedSeed} · next result is re-rolled`}
+            </div>
+            <div className="seed-actions">
+              <button className="btn-mini" onClick={reroll}>Re-roll</button>
+              {lockedSeed === null ? (
+                <button
+                  className="btn-mini"
+                  disabled={project.readOnly || setLockedSeed.isPending}
+                  onClick={() => void saveLockedSeed(seed)}
+                >
+                  Lock seed
+                </button>
+              ) : (
+                <>
+                  {seedOverride && (
+                    <button
+                      className="btn-mini"
+                      onClick={() => {
+                        setSeed(lockedSeed)
+                        setSeedOverride(false)
+                      }}
+                    >
+                      Use locked
+                    </button>
+                  )}
+                  <button
+                    className="btn-mini"
+                    disabled={project.readOnly || setLockedSeed.isPending}
+                    onClick={() => void saveLockedSeed(null)}
+                  >
+                    Clear lock
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="variant-controls">
+            <label>
+              <span>Variant grid</span>
+              <select
+                value={gridAxis}
+                onChange={(event) => changeGridAxis(event.target.value as typeof gridAxis)}
+                disabled={chosenPreset?.views.length !== 0}
+              >
+                <option value="none">Off</option>
+                <option value="seed">Vary seed</option>
+                <option value="fragment_weight">Vary fragment weight</option>
+                <option value="preset">Vary preset</option>
+                <option value="aspect">Vary aspect</option>
+              </select>
+            </label>
+            {gridAxis === 'fragment_weight' && (
+              <label>
+                <span>Layer</span>
+                <select value={gridNodeId} onChange={(event) => setGridNodeId(event.target.value)}>
+                  {(stack.data?.layers ?? [])
+                    .filter((layer) => layer.nodeId)
+                    .map((layer) => (
+                      <option key={layer.nodeId as string} value={layer.nodeId as string}>
+                        {layer.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            {gridAxis !== 'none' && (
+              <label className="variant-values">
+                <span>Cell values · comma separated</span>
+                <input value={gridValues} onChange={(event) => setGridValues(event.target.value)} />
+              </label>
+            )}
+            {gridAxis !== 'none' && (
+              <small className={grid.error ? 'variant-error' : ''}>
+                {grid.error ?? `${grid.value?.values.length ?? 0} outputs · exactly one axis varies`}
+              </small>
+            )}
+          </div>
+          {paidEstimate && spend && (
+            <div className="spend-panel" aria-label="Generation cost and project spend ceiling">
+              <div className="spend-estimate">
+                <b>Estimated {formatUsd(paidEstimate.batchUsdMicros)} batch</b>
+                <span>
+                  {paidEstimate.images}{paidEstimate.variesByCell
+                    ? ' outputs · cell price varies'
+                    : ` × ${formatUsd(paidEstimate.perImageUsdMicros)} output`}
+                  {paidEstimate.conservativeFallback ? ' · conservative fallback' : ''}
+                </span>
+              </div>
+              <div className="spend-running">
+                <span>
+                  Receipted {formatUsd(spend.spentUsdMicros)}
+                  {spend.reservedUsdMicros > 0
+                    ? ` · ${formatUsd(spend.reservedUsdMicros)} pending`
+                    : ''}
+                </span>
+                <span>
+                  {spend.ceilingUsdMicros === null
+                    ? 'Paid generation disabled'
+                    : `${formatUsd(spend.remainingUsdMicros ?? 0)} remaining`}
+                </span>
+              </div>
+              <div className="spend-ceiling">
+                <label>
+                  <span>Shared ceiling (USD)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={ceilingDollars}
+                    placeholder="Disabled"
+                    onChange={(event) => setCeilingDollars(event.target.value)}
+                    disabled={project.readOnly || setSpendCeiling.isPending}
+                  />
+                </label>
+                <button
+                  className="btn-mini"
+                  disabled={project.readOnly || setSpendCeiling.isPending}
+                  onClick={() => void saveCeiling()}
+                >
+                  {setSpendCeiling.isPending ? 'Saving…' : 'Save ceiling'}
+                </button>
+              </div>
+              {(spend.ledgerLocked || spend.pendingReservations > 0) && (
+                <div className="spend-recovery">
+                  <span>
+                    {spend.ledgerLocked
+                      ? 'The ledger is locked, possibly after a crash.'
+                      : `${spend.pendingReservations} batch reservation${spend.pendingReservations === 1 ? '' : 's'} pending.`}
+                  </span>
+                  <button
+                    className="btn-mini"
+                    disabled={project.readOnly || recoverSpendLedger.isPending}
+                    onClick={() => void recoverReservations()}
+                  >
+                    Recover…
+                  </button>
+                </div>
+              )}
+              <small title={`Pricing checked ${paidEstimate.checkedAt}`}>
+                Indicative output price; input tokens and optional search charges are not included.
+              </small>
+            </div>
+          )}
           <button
             className="btn-primary shot-generate"
-            disabled={!selected || !chosenPreset || generating || project.readOnly}
+            disabled={
+              !selected || !chosenPreset || generating || project.readOnly || costBlocked || gridBlocked
+              || !imageReport.data || imageReport.isPlaceholderData
+            }
             onClick={() => void generate()}
           >
             <Icon name="image" size="sm" />
-            {generating ? 'Queueing…' : 'Generate'}
+            {generating
+              ? 'Queueing…'
+              : paidEstimate
+                ? `Generate · est. ${formatUsd(paidEstimate.batchUsdMicros)}`
+                : 'Generate'}
           </button>
         </div>
       </aside>
       <PromptBox project={project} subject={selected} options={options} onJump={onJump} />
     </>
   )
+}
+
+function formatUsd(micros: number): string {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(micros / 1_000_000)
+}
+
+function microsAsInput(micros: number): string {
+  return (micros / 1_000_000).toFixed(6).replace(/\.?0+$/, '')
+}
+
+function randomSeed(): number {
+  return Math.floor(Math.random() * 0xffffffff)
+}
+
+type GridParse = { value?: api.VariantGrid; error?: string }
+
+function parseVariantGrid(
+  axis: 'none' | api.VariantGrid['axis'],
+  source: string,
+  nodeId: string,
+): GridParse {
+  if (axis === 'none') return {}
+  const raw = source.split(',').map((value) => value.trim()).filter(Boolean)
+  if (raw.length < 2 || raw.length > 16) return { error: 'Enter 2 to 16 distinct cell values.' }
+  if (new Set(raw).size !== raw.length) return { error: 'Every grid cell must be different.' }
+
+  if (axis === 'seed') {
+    const values = raw.map(Number)
+    if (values.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+      return { error: 'Seeds must be non-negative whole numbers.' }
+    }
+    return { value: { axis, values } }
+  }
+  if (axis === 'fragment_weight') {
+    const values = raw.map(Number)
+    if (!nodeId) return { error: 'Choose the influence layer whose weight should vary.' }
+    if (values.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
+      return { error: 'Fragment weights must be numbers from 0 to 1.' }
+    }
+    return { value: { axis, nodeId, values } }
+  }
+  if (axis === 'preset') return { value: { axis, values: raw } }
+  return { value: { axis, values: raw } }
 }
 
 function Layer({

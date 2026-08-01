@@ -28,7 +28,16 @@ use crate::paths;
 use crate::scan::{Cancel, ScanProgress};
 
 const PROJECT_FILE: &str = "project.json";
+const PROJECT_META_RECOVERY: &str = "project.json.recovery";
 const NODES_DIR: &str = "nodes";
+
+/// New and pre-ceiling projects start with the same modest shared guardrail.
+/// Stored as integer USD micros: no floating-point drift in an admission check.
+pub const DEFAULT_SPEND_CEILING_USD_MICROS: u64 = 10_000_000;
+
+fn default_spend_ceiling() -> Option<u64> {
+    Some(DEFAULT_SPEND_CEILING_USD_MICROS)
+}
 
 /// `project.json`. Records *which* provider a project prefers, never a key —
 /// keys live in the OS keychain, because project folders get shared.
@@ -41,6 +50,9 @@ pub struct ProjectMeta {
     pub created_at: DateTime<Utc>,
     #[serde(default)]
     pub providers: serde_json::Map<String, serde_json::Value>,
+    /// Shared because it authorises spend by this project, not by one machine.
+    #[serde(default = "default_spend_ceiling")]
+    pub spend_ceiling_usd_micros: Option<u64>,
 }
 
 /// What the launcher and title bar bind to.
@@ -55,6 +67,32 @@ pub struct ProjectSummary {
     pub on_network_share: bool,
     pub read_only: bool,
     pub last_opened_at: Option<DateTime<Utc>>,
+}
+
+/// One role an asset plays on one node in the Assets library detail panel.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetUsageRole {
+    pub role: AssetRole,
+    pub weight: f32,
+    pub enabled: bool,
+}
+
+/// Every reason one node keeps an asset from being an orphan.
+///
+/// Grouped per node so the frontend can show the name and tags once even when
+/// the same image is both a palette and full reference. `cover` is independent
+/// of roles in the node model and still counts as use for safe deletion.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetUsage {
+    pub asset_id: Id,
+    pub node_id: Id,
+    pub node_name: String,
+    pub node_kind: NodeKind,
+    pub node_tags: Vec<String>,
+    pub roles: Vec<AssetUsageRole>,
+    pub cover: bool,
 }
 
 #[derive(Debug)]
@@ -139,6 +177,7 @@ impl Project {
             schema_version: SCHEMA_VERSION,
             created_at: Utc::now(),
             providers: serde_json::Map::new(),
+            spend_ceiling_usd_micros: default_spend_ceiling(),
         };
         std::fs::write(root.join(PROJECT_FILE), serde_json::to_string_pretty(&meta)?)
             .map_err(|e| Error::io(root.join(PROJECT_FILE), e))?;
@@ -203,6 +242,7 @@ impl Project {
     ) -> Result<Project> {
         let root = path.to_path_buf();
         let meta_path = root.join(PROJECT_FILE);
+        atomic::recover_replace(&root, &meta_path, PROJECT_META_RECOVERY)?;
         if !meta_path.is_file() {
             return Err(Error::NotAProject(root));
         }
@@ -311,6 +351,46 @@ impl Project {
         &self.meta
     }
 
+    /// Set the shared spend guardrail while preserving metadata fields this
+    /// build does not understand. The full JSON is staged and published through
+    /// the store's crash-recoverable metadata replacement path.
+    pub fn set_spend_ceiling(&mut self, ceiling_usd_micros: Option<u64>) -> Result<()> {
+        self.ensure_writable()?;
+        let path = self.root.join(PROJECT_FILE);
+        let bytes = std::fs::read(&path).map_err(|error| Error::io(&path, error))?;
+        let mut value: serde_json::Value = serde_json::from_slice(&bytes)?;
+        let object = value.as_object_mut().ok_or_else(|| {
+            Error::Json(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "project.json must contain a JSON object",
+            )))
+        })?;
+        object.insert(
+            "spendCeilingUsdMicros".into(),
+            ceiling_usd_micros.map_or(serde_json::Value::Null, |amount| amount.into()),
+        );
+        let encoded = serde_json::to_vec_pretty(&value)?;
+        atomic::replace_metadata(&self.root, &path, PROJECT_META_RECOVERY, &encoded)?;
+        self.meta.spend_ceiling_usd_micros = ceiling_usd_micros;
+        Ok(())
+    }
+
+    /// Read only the shared ceiling and canonical receipts, without opening a
+    /// second local SQLite index. Spend admission calls this while holding its
+    /// cross-process ledger lock, and a network scan must not create two
+    /// independent `Project` owners for one index merely to sum JSON files.
+    pub fn spend_ledger(path: &Path) -> Result<(Option<u64>, Vec<Generation>)> {
+        let meta_path = path.join(PROJECT_FILE);
+        atomic::recover_replace(path, &meta_path, PROJECT_META_RECOVERY)?;
+        if !meta_path.is_file() {
+            return Err(Error::NotAProject(path.to_path_buf()));
+        }
+        let raw = std::fs::read_to_string(&meta_path).map_err(|error| Error::io(&meta_path, error))?;
+        let meta: ProjectMeta = serde_json::from_str(&raw)?;
+        let receipts = generations::read_all_strict(path)?;
+        Ok((meta.spend_ceiling_usd_micros, receipts))
+    }
+
     pub fn index(&self) -> &Index {
         &self.index
     }
@@ -338,6 +418,11 @@ impl Project {
 
     pub fn list_nodes(&self) -> Result<Vec<NodeSummary>> {
         self.index.list_nodes()
+    }
+
+    /// Every explicit influence edge, read from the local derived index.
+    pub fn node_links(&self) -> Result<Vec<LinkEdge>> {
+        self.index.links()
     }
 
     /// A parser message with the project root taken out of it.
@@ -476,6 +561,14 @@ impl Project {
 
         let expected = self.index.stamp_of(node.id)?;
         self.write_node(&node, expected.as_ref())
+    }
+
+    /// Persist the entity identity seed through the same guarded node write as
+    /// every other shared edit. `None` explicitly clears the lock.
+    pub fn set_locked_seed(&mut self, id: Id, seed: Option<u64>) -> Result<SaveOutcome> {
+        let mut node = self.get_node(id)?;
+        node.locked_seed = seed;
+        self.save_node(node)
     }
 
     /// Land the result of an enhance, stamping what it was enhanced from.
@@ -894,6 +987,99 @@ impl Project {
         self.index.list_assets()
     }
 
+    /// Project-wide reference/cover usage for filtering and orphan discovery.
+    ///
+    /// The full nodes come from the local index-backed world cache, never from
+    /// opening every Markdown file over the project share. Tags deliberately
+    /// come from the linked node: assets have no mutable metadata document of
+    /// their own, while node tags are canonical and already shared.
+    pub fn asset_usages(&mut self) -> Result<Vec<AssetUsage>> {
+        let mut out = Vec::new();
+        for node in self.world_nodes()? {
+            let mut by_asset: std::collections::BTreeMap<Id, Vec<AssetUsageRole>> =
+                std::collections::BTreeMap::new();
+            for link in &node.asset_links {
+                by_asset.entry(link.asset_id).or_default().push(AssetUsageRole {
+                    role: link.role,
+                    weight: link.weight,
+                    enabled: link.enabled,
+                });
+            }
+            if let Some(cover) = node.cover_asset_id {
+                by_asset.entry(cover).or_default();
+            }
+            for (asset_id, roles) in by_asset {
+                out.push(AssetUsage {
+                    asset_id,
+                    node_id: node.id,
+                    node_name: node.name.clone(),
+                    node_kind: node.kind,
+                    node_tags: node.tags.clone(),
+                    roles,
+                    cover: node.cover_asset_id == Some(asset_id),
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// Permanently remove one unreferenced blob and its derived thumbnail.
+    ///
+    /// A UI confirmation is necessary but not sufficient: the reference check
+    /// lives here and reads canonical Markdown afresh so a stale local index
+    /// cannot authorise deletion. There is no cross-process transaction over a
+    /// shared folder, so another editor could still write after that read; the
+    /// destructive path makes the safety window as narrow as the filesystem
+    /// permits and never relies on the long-lived world cache.
+    ///
+    /// Generation receipts deliberately do not block deletion. Issue #28
+    /// defines an orphan as an asset with no node use; generated images are
+    /// disposable, while their immutable receipt remains as an honest record
+    /// whose output is now missing. The confirmation sheet says that plainly.
+    /// Missing files are accepted because reconcile may have observed their
+    /// disappearance after the index snapshot; dropping the stale row still
+    /// achieves the requested end state.
+    pub fn delete_asset(&mut self, id: Id) -> Result<()> {
+        self.ensure_writable()?;
+        let asset = self
+            .get_asset(id)?
+            .ok_or_else(|| Error::NoSuchAsset(id.to_string()))?;
+        let users = self.canonical_asset_users(id)?;
+        if users > 0 {
+            return Err(Error::AssetInUse {
+                asset: id.to_string(),
+                nodes: users,
+            });
+        }
+
+        if let Some(thumb) = &asset.thumb_path {
+            remove_asset_file(&paths::from_rel_string(&self.root, thumb))?;
+        }
+        remove_asset_file(&paths::from_rel_string(&self.root, &asset.rel_path))?;
+        self.index.remove_asset_by_rel_path(&asset.rel_path)?;
+        Ok(())
+    }
+
+    /// Count use from the source-of-truth files, bypassing every index stamp
+    /// shortcut. A malformed file makes deletion fail closed: until it can be
+    /// read, we cannot prove that it does not contain the asset id.
+    fn canonical_asset_users(&self, id: Id) -> Result<usize> {
+        let mut users = 0;
+        // Conflict siblings are included. They are not active nodes today, but
+        // the user may resolve one by keeping it tomorrow; deleting an asset it
+        // names would make that resolution manufacture a dangling reference.
+        for (_, path) in self.markdown_files() {
+            let Some((text, _)) = atomic::read_stamped(&path)? else { continue };
+            let node = markdown::from_markdown(&text, &path)?;
+            if node.cover_asset_id == Some(id)
+                || node.asset_links.iter().any(|link| link.asset_id == id)
+            {
+                users += 1;
+            }
+        }
+        Ok(users)
+    }
+
     pub fn get_asset(&self, id: Id) -> Result<Option<Asset>> {
         self.index.asset(id)
     }
@@ -923,6 +1109,11 @@ impl Project {
     /// A node's generation history for the Concepts grid, newest first.
     pub fn list_generations(&self, node_id: Id) -> Result<Vec<Generation>> {
         self.index.generations_for_node(node_id)
+    }
+
+    /// Every immutable receipt, for reconstructing project spend.
+    pub fn list_all_generations(&self) -> Result<Vec<Generation>> {
+        generations::read_all_strict(&self.root)
     }
 
     /// One indexed generation, without reading across the project share.
@@ -1819,6 +2010,14 @@ impl Project {
     }
 }
 
+fn remove_asset_file(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(Error::io(path, error)),
+    }
+}
+
 /// Conflict siblings are for a human to resolve. Indexing one would put a ghost
 /// duplicate of the node in the navigator, and — far worse — make it a save
 /// target, so that resolving the conflict could start a new one.
@@ -1944,7 +2143,7 @@ mod tests {
 
     #[test]
     fn nodes_land_at_the_documented_path() {
-        let (dir, mut project) = new_project();
+        let (_dir, mut project) = new_project();
         project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
         assert!(dir.path().join("ashfall.wobu/nodes/character/kael-vantris.md").is_file());
     }
@@ -2521,6 +2720,51 @@ mod tests {
         }
         let meta = std::fs::read_to_string(project.root().join(PROJECT_FILE)).unwrap();
         assert!(!meta.contains(&root_string));
+    }
+
+    #[test]
+    fn spend_ceiling_is_shared_and_preserves_unknown_metadata() {
+        let (_dir, mut project) = new_project();
+        assert_eq!(
+            project.meta().spend_ceiling_usd_micros,
+            Some(DEFAULT_SPEND_CEILING_USD_MICROS)
+        );
+        let path = project.root().join(PROJECT_FILE);
+        let mut meta: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        meta.as_object_mut()
+            .unwrap()
+            .insert("futureMetadata".into(), serde_json::json!({ "kept": true }));
+        std::fs::write(&path, serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
+
+        project.set_spend_ceiling(Some(2_500_000)).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(saved["spendCeilingUsdMicros"], 2_500_000);
+        assert_eq!(saved["futureMetadata"]["kept"], true);
+        assert_eq!(project.meta().spend_ceiling_usd_micros, Some(2_500_000));
+
+        project.set_spend_ceiling(None).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path).unwrap())
+            .unwrap()["spendCeilingUsdMicros"]
+            .is_null());
+    }
+
+    #[test]
+    fn project_without_a_ceiling_gets_the_default_guardrail() {
+        let (_dir, project) = new_project();
+        let path = project.root().join(PROJECT_FILE);
+        let mut meta: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        meta.as_object_mut().unwrap().remove("spendCeilingUsdMicros");
+        std::fs::write(&path, serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
+        let root = project.root().to_path_buf();
+        drop(project);
+        let reopened = Project::open(&root).unwrap();
+        assert_eq!(
+            reopened.meta().spend_ceiling_usd_micros,
+            Some(DEFAULT_SPEND_CEILING_USD_MICROS)
+        );
     }
 
     /// Nudge mtime forward so a write inside the same filesystem timestamp

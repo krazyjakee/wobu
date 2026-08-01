@@ -242,7 +242,7 @@ pub(crate) async fn until_cancelled<F: std::future::Future>(
     .await
 }
 
-enum Next<T, E> {
+pub(crate) enum Next<T, E> {
     Frame(std::result::Result<T, E>),
     End,
     Cancelled,
@@ -254,7 +254,7 @@ enum Next<T, E> {
 /// waiting still wins. A local render is the case that makes this matter most:
 /// the frames arrive several a second and there is always one ready, so a loop
 /// that checked the flag second would keep the GPU for the rest of the render.
-async fn next<S, T, E>(mut frames: Pin<&mut S>, cancel: &Cancel) -> Next<T, E>
+pub(crate) async fn next<S, T, E>(mut frames: Pin<&mut S>, cancel: &Cancel) -> Next<T, E>
 where
     S: Stream<Item = std::result::Result<T, E>>,
 {

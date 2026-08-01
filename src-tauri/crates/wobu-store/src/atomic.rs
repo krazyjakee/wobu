@@ -289,6 +289,80 @@ fn stage_and_rename(project_root: &Path, target: &Path, bytes: &[u8]) -> Result<
     Ok(())
 }
 
+/// Replace mutable project metadata without ever exposing partially written
+/// bytes. Unix can atomically rename over an existing target. Windows cannot,
+/// so it publishes the synced staging inode with hard links and keeps the old
+/// inode at `recovery_name` until the new name is in place. [`recover_replace`]
+/// restores that old inode if the process dies in the short remove/link gap.
+pub fn replace_metadata(
+    project_root: &Path,
+    target: &Path,
+    recovery_name: &str,
+    bytes: &[u8],
+) -> Result<()> {
+    #[cfg(not(windows))]
+    let _ = recovery_name;
+    let tmp_dir = project_root.join(".wobu").join("tmp");
+    crate::paths::ensure_dir(&tmp_dir)?;
+    let tmp = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
+    {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+            .map_err(|error| Error::io(&tmp, error))?;
+        file.write_all(bytes).map_err(|error| Error::io(&tmp, error))?;
+        file.sync_all().map_err(|error| Error::io(&tmp, error))?;
+    }
+
+    #[cfg(not(windows))]
+    let published = fs::rename(&tmp, target).map_err(|error| Error::io(target, error));
+
+    #[cfg(windows)]
+    let published = {
+        let recovery = project_root.join(".wobu").join(recovery_name);
+        if target.is_file() && recovery.exists() {
+            fs::remove_file(&recovery).map_err(|error| Error::io(&recovery, error))?;
+        }
+        fs::hard_link(target, &recovery).map_err(|error| Error::io(&recovery, error))?;
+        if let Err(error) = fs::remove_file(target) {
+            let _ = fs::remove_file(&recovery);
+            return Err(Error::io(target, error));
+        }
+        match fs::hard_link(&tmp, target) {
+            Ok(()) => {
+                let _ = fs::remove_file(&recovery);
+                Ok(())
+            }
+            Err(error) => {
+                let _ = fs::hard_link(&recovery, target);
+                Err(Error::io(target, error))
+            }
+        }
+    };
+
+    let _ = fs::remove_file(&tmp);
+    published
+}
+
+/// Restore the old metadata inode after an interrupted Windows replacement.
+/// A hard link is a no-clobber publication: if another process already restored
+/// or replaced the target, this leaves its winner untouched.
+pub fn recover_replace(project_root: &Path, target: &Path, recovery_name: &str) -> Result<()> {
+    if target.is_file() {
+        return Ok(());
+    }
+    let recovery = project_root.join(".wobu").join(recovery_name);
+    if !recovery.is_file() {
+        return Ok(());
+    }
+    match fs::hard_link(&recovery, target) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(Error::io(target, error)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

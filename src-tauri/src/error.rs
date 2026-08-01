@@ -86,6 +86,10 @@ pub enum Code {
     /// gone", and the surfaces that raise it are different.
     #[serde(rename = "asset.not_found")]
     NoSuchAsset,
+    /// A destructive library action named a blob that still has a node link or
+    /// is still used as a cover. The user can resolve it by detaching first.
+    #[serde(rename = "asset.in_use")]
+    AssetInUse,
 
     // ── share ────────────────────────────────────────────────────────────
     /// The folder went away underneath us — an unmounted share, usually.
@@ -162,6 +166,12 @@ pub enum Code {
     #[serde(rename = "provider.context_too_long")]
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
     ProviderContextTooLong,
+
+    // ── spend ───────────────────────────────────────────────────────────
+    /// A paid batch plus receipts and reservations would cross the project's
+    /// shared ceiling. Retrying unchanged would spend the same amount.
+    #[serde(rename = "billing.ceiling_exceeded")]
+    SpendCeilingExceeded,
 
     // ── generic ──────────────────────────────────────────────────────────
     /// The user stopped a long operation. Not a failure, and the UI shows
@@ -283,6 +293,7 @@ impl From<StoreError> for WobuError {
                 Code::Invalid
             }
             StoreError::NoSuchAsset(_) | StoreError::NoSuchAssetLink { .. } => Code::NoSuchAsset,
+            StoreError::AssetInUse { .. } => Code::AssetInUse,
             // A resolution that named something other than a conflict sibling
             // is a bug on the calling side, not a decision the user got wrong,
             // so it lands in the same bucket as any other rejected argument.
@@ -373,10 +384,12 @@ mod tests {
             (Code::ReadOnly, "write.read_only"),
             (Code::NotAnImage, "asset.not_an_image"),
             (Code::NoSuchAsset, "asset.not_found"),
+            (Code::AssetInUse, "asset.in_use"),
             (Code::ShareUnmounted, "share.unmounted"),
             (Code::ProviderNoKey, "provider.no_key"),
             (Code::ProviderKeychainUnavailable, "provider.keychain_unavailable"),
             (Code::ProviderBillingRequired, "provider.billing_required"),
+            (Code::SpendCeilingExceeded, "billing.ceiling_exceeded"),
             (Code::Io, "io.failed"),
             (Code::Internal, "internal"),
         ];
@@ -404,6 +417,7 @@ mod tests {
         assert!(!Code::NotAnImage.retryable());
         // The id is derived from a hash, so it will not start matching a file.
         assert!(!Code::NoSuchAsset.retryable());
+        assert!(!Code::AssetInUse.retryable());
         assert!(!Code::Invalid.retryable());
         assert!(!Code::ProviderNoKey.retryable());
         // A locked keyring stays locked until the user unlocks it, so a "Try

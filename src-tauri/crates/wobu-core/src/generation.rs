@@ -85,12 +85,45 @@ pub struct Generation {
     pub influence_snapshot: InfluenceSnapshot,
 }
 
+/// One cell in a reconstructable variant grid. Stored under
+/// `Generation.params.variation`; a typed shape here prevents four callers from
+/// inventing four almost-compatible JSON conventions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationVariation {
+    pub grid_id: Id,
+    pub index: u16,
+    pub total: u16,
+    #[serde(flatten)]
+    pub value: VariationValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "axis", rename_all = "snake_case")]
+pub enum VariationValue {
+    Seed { seed: u64 },
+    FragmentWeight {
+        #[serde(rename = "nodeId")]
+        node_id: Id,
+        weight: f32,
+    },
+    Preset { preset: String },
+    Aspect { aspect: String },
+}
+
 impl Generation {
     /// Generation records are filed by month so a long-lived project does not
     /// end up with one directory holding tens of thousands of entries — which is
     /// what makes a listing over SMB crawl.
     pub fn rel_path(&self) -> String {
         format!("generations/{}/{}.json", self.created_at.format("%Y-%m"), self.id)
+    }
+
+    pub fn variation(&self) -> Option<GenerationVariation> {
+        self.params
+            .get("variation")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok())
     }
 }
 
@@ -100,7 +133,7 @@ mod tests {
 
     #[test]
     fn generations_are_filed_by_month() {
-        let g = Generation {
+        let mut g = Generation {
             id: Id::from_string("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap(),
             node_id: crate::new_id(),
             created_at: "2026-07-31T14:22:11Z".parse::<DateTime<Utc>>().unwrap(),
@@ -117,5 +150,14 @@ mod tests {
             influence_snapshot: InfluenceSnapshot { layers: vec![] },
         };
         assert_eq!(g.rel_path(), "generations/2026-07/01ARZ3NDEKTSV4RRFFQ69G5FAV.json");
+
+        let variation = GenerationVariation {
+            grid_id: crate::new_id(),
+            index: 1,
+            total: 3,
+            value: VariationValue::FragmentWeight { node_id: g.node_id, weight: 0.7 },
+        };
+        g.params.insert("variation".into(), serde_json::to_value(&variation).unwrap());
+        assert_eq!(g.variation(), Some(variation));
     }
 }

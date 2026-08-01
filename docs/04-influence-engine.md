@@ -105,6 +105,21 @@ not merely advisory.
 Tencent's input guidance (plain background, no text, single object, subject filling >50% of frame) is
 baked into the preset's framing fragments for the same reason.
 
+### Locked seeds and variant grids
+
+An entity may persist one shared `locked_seed` in its Markdown frontmatter. Generate uses that
+seed whenever the Inspector has not explicitly re-rolled it; ordinary preset batches retain
+their deterministic adjacent-seed family, and each receipt records whether it used the exact
+lock, a derived member of that family, an explicit re-roll, or a seed-grid cell.
+
+A variant grid emits one image per explicit cell value. It either varies seed while holding the
+compiled inputs fixed, or holds one seed while varying exactly one of fragment weight, preset,
+or aspect. Named-view presets such as Turnaround are excluded because reducing an eight-view
+contract to one cell would destroy its meaning. Every receipt stores a typed `variation` object
+under `Generation.params`: grid id, cell index/total, axis, and the axis-specific value. This is
+enough to regroup and reconstruct the grid without parsing prompts. The full cell count and each
+cell's negotiated resolution feed the paid estimate and spend reservation before any job queues.
+
 ## The Enhance pipeline
 
 `⌘E` on any node:

@@ -25,15 +25,15 @@ use wobu_influence::{
     Budget, Chars, DropReason, Dropped, Fragment, FragmentBody, Reached, ResolvedStack, Shot,
     Sliders, World, compile, fragments, resolve,
 };
-use wobu_imagine::{comfy, gemini as image_gemini};
+use wobu_imagine::{comfy, gemini as image_gemini, tencent::Region as HunyuanRegion};
 use wobu_jobs::{JobId, QueueSnapshot};
 use wobu_llm::{
     AnthropicProvider, Cancel, Discard, EnhanceOutcome, EnhanceRequest, GeminiProvider,
     TextProvider, Usage, anthropic, gemini,
 };
 use wobu_store::{
-    Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary, Resolved,
-    SaveOutcome, recent,
+    AssetUsage, Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary,
+    Resolved, SaveOutcome, recent,
 };
 
 use crate::diag;
@@ -230,6 +230,13 @@ pub fn node_list(state: State<'_, AppState>) -> CommandResult<Vec<NodeSummary>> 
     state.with(|p| Ok(p.list_nodes()?))
 }
 
+/// All explicit influence edges for the read-only relationship map.
+/// Parent edges are already present on `NodeSummary` and are derived by the UI.
+#[tauri::command]
+pub fn node_links(state: State<'_, AppState>) -> CommandResult<Vec<LinkEdge>> {
+    state.with(|p| Ok(p.node_links()?))
+}
+
 /// Node files that are on disk and cannot be parsed.
 ///
 /// Separate from `node_list` because a file a sync client truncated may never
@@ -283,6 +290,16 @@ pub fn node_create(
 #[tauri::command]
 pub fn node_upsert(state: State<'_, AppState>, node: Node) -> CommandResult<Node> {
     state.with(|p| saved(p.save_node(node)?))
+}
+
+/// Lock or clear the entity seed without posting a stale copy of the node.
+#[tauri::command]
+pub fn node_seed_lock_set(
+    state: State<'_, AppState>,
+    node_id: Id,
+    seed: Option<u64>,
+) -> CommandResult<Node> {
+    state.with(|project| saved(project.set_locked_seed(node_id, seed)?))
 }
 
 #[tauri::command]
@@ -414,6 +431,20 @@ fn thumbnailed(state: &AppState, mut imported: ImportedAsset) -> ImportedAsset {
 #[tauri::command]
 pub fn asset_list(state: State<'_, AppState>) -> CommandResult<Vec<Asset>> {
     state.with(|p| Ok(p.list_assets()?))
+}
+
+/// Every node/role/cover using every asset, assembled from the index-backed
+/// world cache so tag and node filters do not open hundreds of Markdown files.
+#[tauri::command]
+pub fn asset_usage_list(state: State<'_, AppState>) -> CommandResult<Vec<AssetUsage>> {
+    state.with(|p| Ok(p.asset_usages()?))
+}
+
+/// Permanently remove one true orphan. The store repeats the usage check after
+/// UI confirmation and refuses any asset linked or used as a cover.
+#[tauri::command]
+pub fn asset_delete(state: State<'_, AppState>, asset_id: Id) -> CommandResult<()> {
+    state.with(|p| Ok(p.delete_asset(asset_id)?))
 }
 
 /// Immutable Concepts history for one node, already newest first in SQLite.
@@ -1376,6 +1407,7 @@ pub fn project_provider_select(
     capability: Capability,
     provider: String,
     model: Option<String>,
+    region: Option<String>,
 ) -> CommandResult<ProviderSelections> {
     let provider = provider.trim().to_owned();
     if provider.is_empty() {
@@ -1385,6 +1417,7 @@ pub fn project_provider_select(
     // real answer and is spelled as the absence of the field — the same thing
     // `enhance.rs` reads an empty string as.
     let model = model.map(|m| m.trim().to_owned()).filter(|m| !m.is_empty());
+    let region = provider_region(capability, &provider, region)?;
 
     state.with(|project| {
         if project.is_read_only() {
@@ -1416,6 +1449,13 @@ pub fn project_provider_select(
                 chosen.remove("model");
             }
         }
+        // Omitted means "leave the existing region alone": provider buttons
+        // and model edits do not silently move an existing project between
+        // data-processing regions. A value only comes from the explicit
+        // Hunyuan region picker above.
+        if let Some(region) = region {
+            chosen.insert("region".to_owned(), serde_json::Value::String(region));
+        }
         providers.insert(capability.key().to_owned(), serde_json::Value::Object(chosen));
         write_providers(&root, &providers)?;
 
@@ -1430,6 +1470,25 @@ pub fn project_provider_select(
         *project = Project::open(&root)?;
         Ok(selections(project))
     })
+}
+
+fn provider_region(
+    capability: Capability,
+    provider: &str,
+    region: Option<String>,
+) -> CommandResult<Option<String>> {
+    let region = region.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    if let Some(region) = &region
+        && (capability != Capability::Mesh
+            || provider != "hunyuan3d"
+            || HunyuanRegion::parse(region).is_none())
+    {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Tencent Hunyuan3D region must be ap-singapore, na-siliconvalley or eu-frankfurt.",
+        ));
+    }
+    Ok(region)
 }
 
 fn selections(project: &Project) -> ProviderSelections {
@@ -1843,7 +1902,7 @@ pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
 /// round-trip would agree with itself no matter what the frontend believes.
 #[cfg(test)]
 mod bridge {
-    use wobu_store::ImportWarning;
+    use wobu_store::{AssetUsageRole, ImportWarning};
 
     use super::*;
 
@@ -1965,6 +2024,38 @@ mod bridge {
                 .unwrap();
         assert_eq!(bare.weight, 1.0);
         assert!(bare.enabled);
+    }
+
+    #[test]
+    fn asset_usage_matches_the_project_wide_library_interface() {
+        let usage = AssetUsage {
+            asset_id: "01ARZ3NDEKTSV4RRFFQ69G5FAX".parse().unwrap(),
+            node_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap(),
+            node_name: "Vashk".into(),
+            node_kind: NodeKind::Species,
+            node_tags: vec!["playable".into()],
+            roles: vec![AssetUsageRole {
+                role: AssetRole::FullRef,
+                weight: 0.8,
+                enabled: true,
+            }],
+            cover: true,
+        };
+        let json = serde_json::to_value(usage).unwrap();
+
+        for key in [
+            "assetId",
+            "nodeId",
+            "nodeName",
+            "nodeKind",
+            "nodeTags",
+            "roles",
+            "cover",
+        ] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from AssetUsage");
+        }
+        assert_eq!(json["roles"][0]["role"], "full_ref");
+        assert_eq!(json["nodeTags"][0], "playable");
     }
 
     #[test]
@@ -2279,6 +2370,21 @@ mod bridge {
             assert_eq!(capability.key(), wire);
         }
         assert!(serde_json::from_str::<Capability>("\"Text\"").is_err());
+    }
+
+    #[test]
+    fn only_the_three_hunyuan_regions_can_cross_the_command_boundary() {
+        for region in ["ap-singapore", "na-siliconvalley", "eu-frankfurt"] {
+            assert_eq!(
+                provider_region(Capability::Mesh, "hunyuan3d", Some(region.into())).unwrap(),
+                Some(region.into()),
+            );
+        }
+        assert!(
+            provider_region(Capability::Mesh, "hunyuan3d", Some("ap-guangzhou".into())).is_err()
+        );
+        assert!(provider_region(Capability::Image, "gemini", Some("eu-frankfurt".into())).is_err());
+        assert_eq!(provider_region(Capability::Mesh, "hunyuan3d", None).unwrap(), None);
     }
 
     #[test]

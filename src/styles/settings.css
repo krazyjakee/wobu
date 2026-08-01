@@ -200,6 +200,35 @@
   border-color: var(--accent);
 }
 
+.prov-region {
+  display: grid;
+  grid-template-columns: 150px minmax(190px, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+}
+.prov-region label {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.prov-region select {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-str);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12px;
+}
+.prov-region span {
+  grid-column: 2;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
 .prov-model {
   display: flex;
   align-items: center;
@@ -276,6 +305,41 @@
 .prov-key-where {
   font-size: 11px;
   color: var(--text-faint);
+}
+
+.prov-onboarding ol {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 0;
+  list-style: none;
+  counter-reset: onboarding;
+}
+.prov-onboarding li {
+  display: grid;
+  grid-template-columns: 24px 155px 1fr;
+  align-items: start;
+  gap: 7px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-faint);
+  counter-increment: onboarding;
+}
+.prov-onboarding li::before {
+  content: counter(onboarding);
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--border-str);
+  border-radius: 50%;
+  color: var(--text-dim);
+}
+.prov-onboarding .btn-mini {
+  justify-content: center;
+}
+.prov-onboarding code {
+  color: var(--text-dim);
 }
 
 .prov-cred {

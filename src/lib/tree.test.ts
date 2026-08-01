@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ancestorsOf, buildGroups, descendantsOf, filterTree, indexNodes } from './tree'
+import {
+  ancestorsOf,
+  buildGroups,
+  descendantsOf,
+  filterTree,
+  indexNodes,
+  influenceDependentsOf,
+} from './tree'
 import type { TreeNode } from './tree'
 import { kindDef, kindIndex, summary } from '../test/fixtures'
 
@@ -206,6 +213,39 @@ describe('descendantsOf', () => {
   it('terminates on a cycle', () => {
     const cyclic = [summary({ id: 'p', parentId: 'q' }), summary({ id: 'q', parentId: 'p' })]
     expect([...descendantsOf('p', cyclic)].sort()).toEqual(['p', 'q'])
+  })
+})
+
+describe('influenceDependentsOf', () => {
+  const nodes = [
+    summary({ id: 'style', kind: 'style_guide' }),
+    summary({ id: 'world', kind: 'world_bible' }),
+    summary({ id: 'vashk', kind: 'species' }),
+    summary({ id: 'deep-vashk', kind: 'species', parentId: 'vashk' }),
+    summary({ id: 'guild', kind: 'culture' }),
+    summary({ id: 'kael', kind: 'character' }),
+    summary({ id: 'friend', kind: 'character' }),
+  ]
+  const links = [
+    { fromId: 'kael', toId: 'deep-vashk', role: 'species_of' as const, weight: 1, enabled: true },
+    { fromId: 'kael', toId: 'guild', role: 'member_of' as const, weight: 1, enabled: true },
+    { fromId: 'friend', toId: 'kael', role: 'related_to' as const, weight: 1, enabled: true },
+  ]
+
+  it('includes transitive inheritance and project roots, but stops beyond lateral sources', () => {
+    expect(influenceDependentsOf('vashk', nodes, links).map((node) => node.id)).toEqual([
+      'deep-vashk',
+      'kael',
+    ])
+    expect(influenceDependentsOf('guild', nodes, links).map((node) => node.id)).toEqual(['kael'])
+    expect(influenceDependentsOf('world', nodes, links).map((node) => node.id)).toEqual([
+      'style',
+      'vashk',
+      'deep-vashk',
+      'guild',
+      'kael',
+      'friend',
+    ])
   })
 })
 

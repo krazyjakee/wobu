@@ -74,6 +74,8 @@ struct Frontmatter {
     tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cover: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    locked_seed: Option<u64>,
     #[serde(default)]
     description_state: DescriptionState,
     /// What the last enhance read. Canonically here rather than in the index,
@@ -102,6 +104,7 @@ pub fn to_markdown(node: &Node) -> Result<String> {
         parent: node.parent_id,
         tags: node.tags.clone(),
         cover: node.cover_asset_id,
+        locked_seed: node.locked_seed,
         description_state: node.description_state,
         enhanced_from: node.enhanced_from.clone(),
         links: node
@@ -198,6 +201,7 @@ pub fn from_markdown(text: &str, path: &Path) -> Result<Node> {
         attributes: fm.attributes,
         tags: fm.tags,
         cover_asset_id: fm.cover,
+        locked_seed: fm.locked_seed,
         links: fm
             .links
             .into_iter()
@@ -333,6 +337,7 @@ mod tests {
         n.links.push(Link::new(wobu_core::new_id(), LinkRole::MemberOf));
         n.asset_links.push(AssetRef::new(wobu_core::new_id(), AssetRole::Pose));
         n.cover_asset_id = Some(wobu_core::new_id());
+        n.locked_seed = Some(424_242);
 
         let mut sections = IndexMap::new();
         sections.insert(
@@ -379,6 +384,7 @@ mod tests {
         assert!(text.contains("\n### Silhouette\n"));
         assert!(text.contains("\n- #2b2118\n"), "lists render as markdown bullets");
         assert!(text.contains("kind: character"));
+        assert!(text.contains("locked_seed: 424242"));
     }
 
     #[test]

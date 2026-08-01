@@ -153,6 +153,7 @@ mod aspect;
 mod backend;
 mod capability;
 pub mod comfy;
+pub mod comfy_mesh;
 mod dimensions;
 mod error;
 pub mod gemini;
@@ -167,6 +168,7 @@ pub use backend::{
 };
 pub use capability::{Capabilities, ReferenceMechanism, ReferenceMechanisms};
 pub use comfy::ComfyBackend;
+pub use comfy_mesh::ComfyMeshBackend;
 pub use error::{Error, Result};
 pub use gemini::GeminiBackend;
 pub use mesh::{

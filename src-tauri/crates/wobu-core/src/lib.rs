@@ -21,7 +21,8 @@ pub mod slug;
 pub use asset::{Asset, AssetKind, AssetLink, AssetRef, AssetRole};
 pub use error::{Error, Result};
 pub use generation::{
-    FragmentTarget, Generation, InfluenceSnapshot, SnapshotFragment, SnapshotLayer,
+    FragmentTarget, Generation, GenerationVariation, InfluenceSnapshot, SnapshotFragment,
+    SnapshotLayer, VariationValue,
 };
 pub use kind::{
     AttributeDef, AttributeValueKind, KindDef, Layer, NodeKind, SectionDef, SectionValueKind,

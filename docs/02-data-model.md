@@ -33,6 +33,7 @@ Project
 | `attributes` | json | kind-specific facts (scale, era, biome, material…); controls come from `KindDef.attributes` |
 | `tags` | string[] | |
 | `cover_asset_id` | ulid? | |
+| `locked_seed` | u64? | shared entity identity seed; explicit re-rolls do not overwrite it |
 | `created_at` / `updated_at` | ts | |
 
 `description_state = stale` when `notes_raw` or an upstream influence changed after the last
@@ -113,7 +114,7 @@ path. Nothing about a project is stored in a global application database.
 
 ```
 Ashfall.wobu/
-├── project.json                  id (ULID), name, schema version, provider selection
+├── project.json                  id, name, schema version, providers, shared spend ceiling
 ├── nodes/
 │   ├── species/vashk.md          YAML frontmatter + notes + description
 │   ├── setting/cinder-bay.md
@@ -125,6 +126,7 @@ Ashfall.wobu/
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
     ├── sessions/<session-id>.json  heartbeat locks — who else has this open
+    ├── spend/reservations/*.json   paid batches admitted but not fully receipted
     └── tmp/                        staging for atomic writes (same filesystem)
 ```
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import type {
   AboutInfo,
   Capability,
@@ -94,6 +95,10 @@ interface ProviderDef {
   checkable?: boolean
   /** Said instead of a key field, for a provider that needs none. */
   instead?: string
+  /** Material capability or licence difference a user must see before selecting it. */
+  tierNote?: string
+  /** Whether credentials need the Tencent account-safety setup shown before the fields. */
+  hunyuanOnboarding?: boolean
 }
 
 const ANTHROPIC: ProviderDef = {
@@ -129,7 +134,26 @@ const HUNYUAN3D: ProviderDef = {
     { id: 'tencent-secret-id', label: 'Secret ID' },
     { id: 'tencent-secret-key', label: 'Secret key' },
   ],
-  where: 'the Tencent Cloud console',
+  where: 'a Tencent CAM sub-account',
+  hunyuanOnboarding: true,
+}
+
+const HUNYUAN_REGIONS = [
+  { id: 'ap-singapore', label: 'Singapore (Asia-Pacific)' },
+  { id: 'na-siliconvalley', label: 'Silicon Valley (North America)' },
+  { id: 'eu-frankfurt', label: 'Frankfurt (Europe)' },
+] as const
+
+const COMFYUI_MESH: ProviderDef = {
+  id: 'comfyui',
+  label: 'Local 2.1 (ComfyUI)',
+  credentials: [],
+  tierNote:
+    'Explicit local tier — never an automatic fallback when a Tencent key is absent. It uses the ' +
+    'older, lower-quality Hunyuan3D 2.1 shape model: one front image, geometry-only output and at ' +
+    'least 10 GB VRAM, with no per-job fee and image data staying on your ComfyUI machine. Wobu ' +
+    'does not install its weights or nodes. Tencent’s model licence excludes the EU, UK and South ' +
+    'Korea, so check that you are permitted to use it where you are.',
 }
 
 interface CapabilityDef {
@@ -185,9 +209,11 @@ const CAPABILITIES: CapabilityDef[] = [
     label: 'Mesh',
     used: 'Concept 3D',
     icon: 'cube',
-    providers: [HUNYUAN3D, COMFYUI],
+    providers: [HUNYUAN3D, COMFYUI_MESH],
     model: false,
-    unused: 'Nothing in this build makes meshes yet, so the choice is recorded and not read.',
+    unused:
+      'The mesh adapter is ready, but the Concept 3D generation surface is not in this build yet. ' +
+      'The choice is recorded; local is only used when this project explicitly selects it.',
   },
 ]
 
@@ -341,6 +367,7 @@ function CapabilityRow({
   const select = useSelectProvider()
   const chosen = def.providers.find((p) => p.id === selection.provider)
   const missing = chosen && !configured(chosen)
+  const hunyuanRegion = HUNYUAN_REGIONS.find((region) => region.id === selection.region)?.id ?? ''
 
   return (
     // Grouped and named because the same provider appears under more than one
@@ -371,6 +398,55 @@ function CapabilityRow({
           </button>
         ))}
       </div>
+
+      {def.providers.map(
+        (provider) =>
+          provider.tierNote && (
+            <p className="set-note" key={`${provider.id}-tier-note`}>
+              <b>{provider.label}:</b> {provider.tierNote}
+            </p>
+          ),
+      )}
+
+      {def.capability === 'mesh' && chosen?.id === HUNYUAN3D.id && (
+        <div className="prov-region">
+          <label htmlFor="hunyuan-region">Tencent processing region</label>
+          <select
+            id="hunyuan-region"
+            aria-label="Tencent Hunyuan3D region"
+            value={hunyuanRegion}
+            disabled={readOnly || select.isPending}
+            onChange={(event) =>
+              select.mutate({
+                capability: 'mesh',
+                provider: HUNYUAN3D.id,
+                model: selection.model,
+                region: event.currentTarget.value,
+              })
+            }
+          >
+            <option value="" disabled>
+              Choose a region…
+            </option>
+            {HUNYUAN_REGIONS.map((region) => (
+              <option key={region.id} value={region.id}>
+                {region.label}
+              </option>
+            ))}
+          </select>
+          <span>
+            Required. Tencent only serves these three regions, and every poll stays in the region
+            where its job was submitted.
+          </span>
+        </div>
+      )}
+
+      {chosen?.id === HUNYUAN3D.id && !hunyuanRegion && (
+        <p className="prov-gap">
+          <b>Choose a Tencent processing region.</b> Concept 3D stays off until the project records
+          one; Wobu will not guess where to send its images.
+        </p>
+      )}
 
       {def.model && chosen && (
         <ModelField
@@ -525,6 +601,8 @@ function ProviderKeys({
 
       {provider.instead && <p className="set-note">{provider.instead}</p>}
 
+      {provider.hunyuanOnboarding && <HunyuanOnboarding />}
+
       {provider.credentials.map((credential) => (
         <CredentialRow
           key={credential.id}
@@ -569,6 +647,64 @@ function ProviderKeys({
           </span>
         </p>
       )}
+    </div>
+  )
+}
+
+/** The account-side work required before a Tencent key can safely be pasted. */
+function HunyuanOnboarding() {
+  async function visit(url: string, what: string) {
+    try {
+      await openUrl(url)
+    } catch (error) {
+      report(error, `Could not open ${what}`)
+    }
+  }
+
+  return (
+    <div className="prov-onboarding" aria-label="Tencent Hunyuan3D setup">
+      <p className="prov-alert">
+        <b>Do not paste a root-account key.</b> A root SecretKey controls the whole Tencent Cloud
+        account. Create a dedicated CAM sub-account and paste only that sub-account&rsquo;s key here.
+      </p>
+      <ol>
+        <li>
+          <button
+            className="btn-mini"
+            onClick={() => void visit('https://console.tencentcloud.com/hunyuan', 'Hunyuan 3D')}
+          >
+            Activate Hunyuan 3D
+          </button>
+          <span>Sign in as the account owner, accept the service terms and activate it first.</span>
+        </li>
+        <li>
+          <button
+            className="btn-mini"
+            onClick={() => void visit('https://console.tencentcloud.com/cam', 'CAM users')}
+          >
+            Open CAM users
+          </button>
+          <span>
+            Create a dedicated sub-account and attach Tencent&rsquo;s verified{' '}
+            <code>QcloudAI3DFullAccess</code> managed policy. Tencent does not currently publish
+            this policy&rsquo;s action JSON, so Wobu does not suggest an unverified custom prefix.
+          </span>
+        </li>
+        <li>
+          <button
+            className="btn-mini"
+            onClick={() =>
+              void visit('https://console.tencentcloud.com/cam/capi', 'CAM API keys')
+            }
+          >
+            Create sub-account API key
+          </button>
+          <span>
+            Create the SecretId/SecretKey while using that sub-account. Tencent shows SecretKey
+            once; store it immediately, then paste the pair below.
+          </span>
+        </li>
+      </ol>
     </div>
   )
 }

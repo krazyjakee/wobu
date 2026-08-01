@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import type { CorruptFile, NodeKind, NodeSummary } from '../../lib/api'
-import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
+import { errorMessage, type CorruptFile, type NodeKind, type NodeSummary } from '../../lib/api'
+import { useDeleteNode, useDuplicateNode, useMoveNode, useNodeLinks } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
@@ -10,6 +10,7 @@ import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { BrokenFiles } from './BrokenFiles'
+import { RelationshipGraph } from './RelationshipGraph'
 
 const DRAG_MIME = 'application/x-wobu-node'
 
@@ -60,10 +61,12 @@ export function Navigator({
   const [confirm, setConfirm] = useState<NodeSummary | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropId, setDropId] = useState<string | null>(null)
+  const [view, setView] = useState<'tree' | 'graph'>('tree')
 
   const move = useMoveNode()
   const del = useDeleteNode()
   const dup = useDuplicateNode()
+  const linksQ = useNodeLinks(view === 'graph')
 
   const forbidden = useMemo(
     () => (dragId ? descendantsOf(dragId, nodes) : new Set<string>()),
@@ -111,7 +114,16 @@ export function Navigator({
         )}
       </div>
 
-      {pinned.length > 0 && (
+      <div className="nav-view-switch" role="group" aria-label="Navigator view">
+        <button aria-pressed={view === 'tree'} onClick={() => setView('tree')}>
+          Tree
+        </button>
+        <button aria-pressed={view === 'graph'} onClick={() => setView('graph')}>
+          Graph
+        </button>
+      </div>
+
+      {view === 'tree' && pinned.length > 0 && (
         <div className="nav-pinned">
           {pinned.map((n) => {
             const def = kinds.get(n.kind)
@@ -140,16 +152,17 @@ export function Navigator({
         </div>
       )}
 
-      <div className="nav-tree">
-        <BrokenFiles files={corrupt} projectPath={projectPath} />
-        {loading && <p className="nav-note">Reading the world…</p>}
-        {error && <p className="nav-note">Could not list nodes — {error}</p>}
-        {!loading && !error && nodes.length === 0 && (
-          <p className="nav-note">
-            This project has no nodes yet. <b>New entity</b> writes the first Markdown file into{' '}
-            <b>nodes/</b>.
-          </p>
-        )}
+      {view === 'tree' ? (
+        <div className="nav-tree">
+          <BrokenFiles files={corrupt} projectPath={projectPath} />
+          {loading && <p className="nav-note">Reading the world…</p>}
+          {error && <p className="nav-note">Could not list nodes — {error}</p>}
+          {!loading && !error && nodes.length === 0 && (
+            <p className="nav-note">
+              This project has no nodes yet. <b>New entity</b> writes the first Markdown file into{' '}
+              <b>nodes/</b>.
+            </p>
+          )}
 
         {/*
           The filter stays name-and-summary only; the palette is the search
@@ -164,14 +177,14 @@ export function Navigator({
           jobs, and the palette does the second one honestly, with a heading
           that says which half of the search found each row.
         */}
-        {filter && !groups.some((g) => filterTree(g.roots, filter).length > 0) && (
-          <p className="nav-note">
-            Nothing here matches <b>{filter}</b>. This box filters names and summaries — press{' '}
-            <kbd>Ctrl+K</kbd> to search inside notes and descriptions too.
-          </p>
-        )}
+          {filter && !groups.some((g) => filterTree(g.roots, filter).length > 0) && (
+            <p className="nav-note">
+              Nothing here matches <b>{filter}</b>. This box filters names and summaries — press{' '}
+              <kbd>Ctrl+K</kbd> to search inside notes and descriptions too.
+            </p>
+          )}
 
-        {groups.map((g) => {
+          {groups.map((g) => {
           const visible = filterTree(g.roots, filter)
           if (filter && visible.length === 0) return null
           const open = !closedGroups[g.kind] || !!filter
@@ -232,13 +245,30 @@ export function Navigator({
               )}
             </div>
           )
-        })}
-      </div>
+          })}
+        </div>
+      ) : (
+        <div className="nav-graph-shell">
+          <BrokenFiles files={corrupt} projectPath={projectPath} />
+          <RelationshipGraph
+            nodes={nodes}
+            links={linksQ.data ?? []}
+            kinds={kinds}
+            selectedId={selectedId}
+            filter={filter}
+            loading={loading || linksQ.isPending}
+            error={error ?? (linksQ.isError ? errorMessage(linksQ.error) : null)}
+            onSelect={select}
+          />
+        </div>
+      )}
 
-      <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
-        <Icon name="plus" size="sm" />
-        New entity
-      </button>
+      {view === 'tree' && (
+        <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
+          <Icon name="plus" size="sm" />
+          New entity
+        </button>
+      )}
 
       {ctx && (
         <ContextMenu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)}>

@@ -5,7 +5,7 @@ const MODES: { mode: Mode; icon: string; tip: string }[] = [
   { mode: 'library', icon: 'library', tip: 'Library' },
   { mode: 'board', icon: 'board', tip: 'Board — M3' },
   { mode: 'forge', icon: 'forge', tip: 'Forge — M6' },
-  { mode: 'assets', icon: 'assets', tip: 'Assets — M3' },
+  { mode: 'assets', icon: 'assets', tip: 'Assets' },
 ]
 
 export function ModeRail() {

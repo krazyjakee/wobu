@@ -27,6 +27,7 @@ import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
+import { AssetsMode } from './AssetsMode'
 import { Settings } from './Settings'
 import { Banners } from './Banners'
 import { ConflictCard, ConflictsElsewhere } from './ConflictCard'
@@ -330,6 +331,13 @@ export function Workspace({ project }: { project: ProjectSummary }) {
               </div>
             )}
           </>
+        ) : mode === 'assets' ? (
+          <AssetsMode
+            nodes={nodes}
+            kinds={kindIndex}
+            readOnly={readOnly}
+            onJump={jumpTo}
+          />
         ) : mode === 'settings' ? (
           <Settings />
         ) : (

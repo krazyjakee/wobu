@@ -148,6 +148,8 @@ export interface WobuNode {
   tags: string[]
   /** The image shown on this entity's card. Independent of `assetLinks`. */
   coverAssetId: string | null
+  /** Shared identity seed used whenever Generate has no explicit re-roll. */
+  lockedSeed: number | null
   links: Link[]
   assetLinks: AssetLink[]
   createdAt: string
@@ -186,6 +188,24 @@ export interface Asset {
   createdAt: string
 }
 
+export interface AssetUsageRole {
+  role: AssetRole
+  weight: number
+  enabled: boolean
+}
+
+/** One node's complete use of an asset, including its independent cover use. */
+export interface AssetUsage {
+  assetId: string
+  nodeId: string
+  nodeName: string
+  nodeKind: NodeKind
+  /** Canonical tags on the linked node; assets have no mutable tag document. */
+  nodeTags: string[]
+  roles: AssetUsageRole[]
+  cover: boolean
+}
+
 /* ── environment ──────────────────────────────────────────────────────────── */
 
 /** True when running inside the Tauri webview (as opposed to a bare `vite dev`). */
@@ -214,6 +234,7 @@ export type ErrorCode =
   | 'write.read_only'
   | 'asset.not_an_image'
   | 'asset.not_found'
+  | 'asset.in_use'
   | 'share.unmounted'
   | 'provider.no_key'
   | 'provider.keychain_unavailable'
@@ -224,6 +245,7 @@ export type ErrorCode =
   | 'provider.unavailable'
   | 'provider.bad_response'
   | 'provider.context_too_long'
+  | 'billing.ceiling_exceeded'
   | 'io.failed'
   | 'cancelled'
   | 'internal'
@@ -411,6 +433,9 @@ export const syncStatus = () => call<SyncStatus>('sync_status')
 
 export const nodeList = () => call<NodeSummary[]>('node_list')
 
+/** Every explicit influence edge. Parent edges are derived from NodeSummary. */
+export const nodeLinks = () => call<LinkEdge[]>('node_links')
+
 /**
  * A node file that is on disk and cannot be read — a sync client copied it
  * half-written, most likely, leaving truncated YAML frontmatter.
@@ -447,6 +472,10 @@ export const nodeCreate = (kind: NodeKind, name: string, parentId: string | null
   call<WobuNode>('node_create', { kind, name, parentId })
 
 export const nodeUpsert = (node: WobuNode) => call<WobuNode>('node_upsert', { node })
+
+/** Set the node-persisted identity seed, or null to clear it. */
+export const nodeSeedLockSet = (nodeId: string, seed: number | null) =>
+  call<WobuNode>('node_seed_lock_set', { nodeId, seed })
 
 export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 
@@ -510,6 +539,12 @@ export const assetImportBytes = (bytes: Uint8Array, kind: AssetKind = 'reference
 
 /** Every blob in the open project, newest first. */
 export const assetList = () => call<Asset[]>('asset_list')
+
+/** Every node/role/cover using every asset, for library filters and details. */
+export const assetUsageList = () => call<AssetUsage[]>('asset_usage_list')
+
+/** Permanently delete one orphan; the backend refuses every linked/cover use. */
+export const assetDelete = (assetId: string) => call<void>('asset_delete', { assetId })
 
 /** Thumbnail path for grids; null when the asset is absent or cannot decode. */
 export const assetThumb = (assetId: string) => call<string | null>('asset_thumb', { assetId })
@@ -850,7 +885,14 @@ export interface GenerateOptions {
   aspect?: string
   model?: string
   seed?: number
+  grid?: VariantGrid
 }
+
+export type VariantGrid =
+  | { axis: 'seed'; values: number[] }
+  | { axis: 'fragment_weight'; nodeId: string; values: number[] }
+  | { axis: 'preset'; values: string[] }
+  | { axis: 'aspect'; values: string[] }
 
 export interface ReferenceBucketReport {
   bucket: 'objects' | 'characters' | 'style_refs'
@@ -868,15 +910,55 @@ export interface ReferenceLayerReport {
   reasons: string[]
 }
 
+export interface CostEstimate {
+  currency: 'USD'
+  perImageUsdMicros: number
+  batchUsdMicros: number
+  images: number
+  variesByCell: boolean
+  indicative: boolean
+  conservativeFallback: boolean
+  checkedAt: string
+  sourceUrl: string
+}
+
+export interface SpendStatus {
+  /** Null deliberately disables paid generation; it is never an unlimited ceiling. */
+  ceilingUsdMicros: number | null
+  /** Reconstructed from immutable generation receipts. */
+  spentUsdMicros: number
+  /** Paid batches admitted but not yet fully receipted. */
+  reservedUsdMicros: number
+  remainingUsdMicros: number | null
+  pendingReservations: number
+  oldestReservationAt: string | null
+  /** True when a prior process may have crashed while holding the ledger. */
+  ledgerLocked: boolean
+}
+
 export interface ImageReferenceReport {
   buckets: ReferenceBucketReport[]
   layers: ReferenceLayerReport[]
+  /** Null for a local provider such as ComfyUI. */
+  cost: CostEstimate | null
+  spend: SpendStatus
+  lockedSeed: number | null
 }
 
 export const imageReferenceReport = (
   subjectId: string,
-  options: Pick<GenerateOptions, 'preset' | 'sliders' | 'shot' | 'model'> = {},
+  options: Pick<GenerateOptions, 'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid'> = {},
 ) => call<ImageReferenceReport>('image_reference_report', { subjectId, ...options })
+
+export const spendStatus = () => call<SpendStatus>('spend_status')
+
+/** Null disables paid generation for the project. Amounts are integer USD micros. */
+export const spendCeilingSet = (ceilingUsdMicros: number | null) =>
+  call<SpendStatus>('spend_ceiling_set', { ceilingUsdMicros })
+
+/** Archive crash-orphaned reservations after every paid job has stopped. */
+export const spendRecoveryReset = (confirmNoPaidJobs: boolean) =>
+  call<SpendStatus>('spend_recovery_reset', { confirmNoPaidJobs })
 
 /** Queue one negotiated image generation and return its job id. */
 export const generateStart = (subjectId: string, options: GenerateOptions = {}) =>
@@ -1120,13 +1202,15 @@ export type Capability = 'text' | 'image' | 'mesh'
 /**
  * One capability's entry in `project.json`.
  *
- * Both fields are optional because both have meaningful absences: no `provider`
- * is "nobody has chosen", and no `model` is "whatever the adapter's default is",
- * which moves faster than any list we could ship.
+ * All fields are optional because each has a meaningful absence: no `provider`
+ * is "nobody has chosen", no `model` is "whatever the adapter's default is",
+ * and no `region` means a hosted Hunyuan3D selection is not ready to run.
  */
 export interface ProviderSelection {
   provider?: string
   model?: string
+  /** Tencent Hunyuan3D only; kept beside the provider because submit and poll must agree. */
+  region?: string
 }
 
 /**
@@ -1158,13 +1242,23 @@ export const projectProviders = () => call<ProviderSelections>('project_provider
  *
  * Merged rather than replaced on the Rust side, so default params set by another
  * build survive a change of provider. Passing no `model` clears the model, which
- * is how "use the adapter's default" is spelled — a caller that does not offer a
- * model editor should pass the one already there rather than omitting it.
+ * is how "use the adapter's default" is spelled. Omitting `region` leaves it
+ * unchanged; only the explicit Hunyuan region picker sends one.
  *
  * Rejects with `write.read_only` on a read-only folder.
  */
-export const projectProviderSelect = (capability: Capability, provider: string, model?: string) =>
-  call<ProviderSelections>('project_provider_select', { capability, provider, model })
+export const projectProviderSelect = (
+  capability: Capability,
+  provider: string,
+  model?: string,
+  region?: string,
+) =>
+  call<ProviderSelections>('project_provider_select', {
+    capability,
+    provider,
+    model,
+    ...(region === undefined ? {} : { region }),
+  })
 
 /** A provider/model pair after backend defaults have been resolved. */
 export interface ActiveModel {

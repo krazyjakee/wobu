@@ -49,9 +49,11 @@ export const qk = {
   // Installation-wide catch-up for the two live sync event streams.
   syncStatus: ['sync_status'] as const,
   nodes: ['node_list'] as const,
+  links: ['node_links'] as const,
   corrupt: ['corrupt_files'] as const,
   conflicts: ['conflicts'] as const,
   assets: ['asset_list'] as const,
+  assetUsages: ['asset_usage_list'] as const,
   generations: (nodeId: string) => ['generation_list', nodeId] as const,
   assetThumb: (assetId: string) => ['asset_thumb', assetId] as const,
   node: (id: string) => ['node_get', id] as const,
@@ -73,6 +75,7 @@ export const qk = {
   prompt: (id: string, opts: PromptOptions) => ['prompt_compile', id, opts] as const,
   imageReferences: (id: string, opts: api.GenerateOptions) =>
     ['image_reference_report', id, opts] as const,
+  spendStatus: (project: string) => ['spend_status', project] as const,
   // Not part of `invalidateWorld`: a description waiting to be accepted is not
   // in the world yet, and a collaborator's edit does not change what a provider
   // already sent us.
@@ -85,6 +88,7 @@ export const qk = {
 /** Everything that the file watcher can invalidate. */
 export function invalidateWorld(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: qk.nodes })
+  void qc.invalidateQueries({ queryKey: qk.links })
   void qc.invalidateQueries({ queryKey: ['node_get'] })
   void qc.invalidateQueries({ queryKey: ['node_backlinks'] })
   // A file breaking and a file being edited arrive as the same event, so the
@@ -94,6 +98,7 @@ export function invalidateWorld(qc: QueryClient) {
   // A conflict sibling can be parked by another machine, so the only signal
   // this side ever gets that one appeared is the folder having changed.
   void qc.invalidateQueries({ queryKey: qk.conflicts })
+  void qc.invalidateQueries({ queryKey: qk.assetUsages })
   // Editing a node changes what it matches. Without this the palette keeps
   // offering a hit for a phrase the user just deleted.
   void qc.invalidateQueries({ queryKey: ['node_search'] })
@@ -213,6 +218,16 @@ export function useNodes(enabled: boolean): UseQueryResult<NodeSummary[]> {
   return useQuery({
     queryKey: qk.nodes,
     queryFn: api.nodeList,
+    enabled,
+    retry: false,
+  })
+}
+
+/** All explicit edges for project-wide, read-only relationship views. */
+export function useNodeLinks(enabled: boolean): UseQueryResult<LinkEdge[]> {
+  return useQuery({
+    queryKey: qk.links,
+    queryFn: api.nodeLinks,
     enabled,
     retry: false,
   })
@@ -434,7 +449,10 @@ export function useCompiledPrompt(
 
 export function useImageReferenceReport(
   subjectId: string | null,
-  options: Pick<api.GenerateOptions, 'preset' | 'sliders' | 'shot' | 'model'> = {},
+  options: Pick<
+    api.GenerateOptions,
+    'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid'
+  > = {},
 ): UseQueryResult<api.ImageReferenceReport> {
   return useQuery({
     queryKey: qk.imageReferences(subjectId ?? '', options),
@@ -444,6 +462,43 @@ export function useImageReferenceReport(
     staleTime: Infinity,
     gcTime: 30_000,
     retry: false,
+  })
+}
+
+/**
+ * Spend changes while paid jobs run, even when no Inspector control changes.
+ * Poll only while a paid estimate is visible; local ComfyUI has no provider
+ * charge and should not repeatedly reopen the shared project ledger.
+ */
+export function useSpendStatus(project: string, enabled: boolean): UseQueryResult<api.SpendStatus> {
+  return useQuery({
+    queryKey: qk.spendStatus(project),
+    queryFn: api.spendStatus,
+    enabled,
+    refetchInterval: 5_000,
+    retry: false,
+  })
+}
+
+export function useSetSpendCeiling(project: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.spendCeilingSet,
+    onSuccess: (status) => {
+      qc.setQueryData(qk.spendStatus(project), status)
+      void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
+    },
+  })
+}
+
+export function useRecoverSpendLedger(project: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.spendRecoveryReset,
+    onSuccess: (status) => {
+      qc.setQueryData(qk.spendStatus(project), status)
+      void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
+    },
   })
 }
 
@@ -486,6 +541,7 @@ export function useCloseProject() {
       qc.removeQueries({ queryKey: qk.corrupt })
       qc.removeQueries({ queryKey: qk.conflicts })
       qc.removeQueries({ queryKey: qk.assets })
+      qc.removeQueries({ queryKey: qk.assetUsages })
       // Cached hits name nodes in a world that is no longer open.
       qc.removeQueries({ queryKey: ['node_search'] })
       // As are the people in it. Removed rather than left to age out, because a
@@ -544,6 +600,22 @@ export function useUpsertNode() {
     // for. The caller's own `onError` still runs; this only refetches.
     onError: (e) => {
       if (api.errorCode(e) === 'write.conflict') invalidateWorld(qc)
+    },
+  })
+}
+
+export function useSetLockedSeed() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ nodeId, seed }: { nodeId: string; seed: number | null }) =>
+      api.nodeSeedLockSet(nodeId, seed),
+    onSuccess: (node) => {
+      qc.setQueryData(qk.node(node.id), node)
+      void qc.invalidateQueries({ queryKey: qk.nodes })
+      void qc.invalidateQueries({ queryKey: ['image_reference_report', node.id] })
+    },
+    onError: (error) => {
+      if (api.errorCode(error) === 'write.conflict') invalidateWorld(qc)
     },
   })
 }
@@ -706,6 +778,32 @@ export function useAssets(enabled: boolean): UseQueryResult<Asset[]> {
   })
 }
 
+/** Project-wide asset use, including linked-node tags and independent covers. */
+export function useAssetUsages(enabled: boolean): UseQueryResult<api.AssetUsage[]> {
+  return useQuery({
+    queryKey: qk.assetUsages,
+    queryFn: api.assetUsageList,
+    enabled,
+    retry: false,
+  })
+}
+
+/** Permanently delete a true orphan after the caller has confirmed it. */
+export function useDeleteAsset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (assetId: string) => api.assetDelete(assetId),
+    onSuccess: (_nothing, assetId) => {
+      qc.setQueryData<Asset[]>(qk.assets, (current) =>
+        current?.filter((asset) => asset.id !== assetId),
+      )
+      qc.removeQueries({ queryKey: qk.assetThumb(assetId) })
+      void qc.invalidateQueries({ queryKey: qk.assetUsages })
+    },
+    onError: (error) => report(error, 'Could not delete that asset'),
+  })
+}
+
 /** One node's immutable Concepts history, newest first. */
 export function useGenerations(nodeId: string): UseQueryResult<api.Generation[]> {
   const qc = useQueryClient()
@@ -808,6 +906,7 @@ function useAssetLinkMutation<V>(run: (v: V) => Promise<WobuNode>, whileDoing: s
     onSuccess: (node) => {
       qc.setQueryData(qk.node(node.id), node)
       void qc.invalidateQueries({ queryKey: qk.nodes })
+      void qc.invalidateQueries({ queryKey: qk.assetUsages })
     },
     onError: (e) => {
       // A lost race has already parked a sibling on disk, and the card for it
@@ -991,8 +1090,12 @@ export function useStatusBarBackend(project: string): UseQueryResult<api.StatusB
 export function useSelectProvider() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (v: { capability: Capability; provider: string; model?: string }) =>
-      api.projectProviderSelect(v.capability, v.provider, v.model),
+    mutationFn: (v: {
+      capability: Capability
+      provider: string
+      model?: string
+      region?: string
+    }) => api.projectProviderSelect(v.capability, v.provider, v.model, v.region),
     onSuccess: (selections) => {
       qc.setQueryData(qk.projectProviders, selections)
       void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })

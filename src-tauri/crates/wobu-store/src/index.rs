@@ -1283,6 +1283,40 @@ impl Index {
         Ok(out)
     }
 
+    /// Every explicit influence edge in the world.
+    ///
+    /// The relationship map is a project-wide view, so asking `backlinks` once
+    /// per node would turn one local-index read into hundreds of queries. The
+    /// index already owns the complete edge table; return it in one pass.
+    pub fn links(&self) -> Result<Vec<LinkEdge>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT from_id, to_id, role, weight, enabled
+             FROM links ORDER BY from_id, to_id, role",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, f32>(3)?,
+                r.get::<_, i32>(4)?,
+            ))
+        })?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let (from, to, role, weight, enabled) = row?;
+            let (Ok(from_id), Ok(to_id)) = (Id::from_string(&from), Id::from_string(&to)) else {
+                continue;
+            };
+            let Ok(role) = serde_json::from_value(serde_json::Value::String(role)) else {
+                continue;
+            };
+            out.push(LinkEdge { from_id, to_id, role, weight, enabled: enabled != 0 });
+        }
+        Ok(out)
+    }
+
     /// Full-text search over names, summaries, notes and descriptions.
     pub fn search(&self, query: &str) -> Result<Vec<Id>> {
         let Some(expr) = fts_match_expr(query) else {
@@ -1850,6 +1884,25 @@ mod tests {
         let back = index.backlinks(species.id).unwrap();
         assert_eq!(back.len(), 3);
         assert!(back.iter().all(|e| e.role == LinkRole::SpeciesOf));
+    }
+
+    #[test]
+    fn links_answer_the_whole_relationship_map_in_one_read() {
+        let index = Index::in_memory().unwrap();
+        let species = Node::new(NodeKind::Species, "Vashk").unwrap();
+        let culture = Node::new(NodeKind::Culture, "Ember Guild").unwrap();
+        let mut character = Node::new(NodeKind::Character, "Kael").unwrap();
+        character.links.push(Link::new(species.id, LinkRole::SpeciesOf));
+        character.links.push(Link::new(culture.id, LinkRole::MemberOf));
+        for node in [&species, &culture, &character] {
+            indexed(&index, node);
+        }
+
+        let links = index.links().unwrap();
+        assert_eq!(links.len(), 2);
+        assert!(links.iter().all(|edge| edge.from_id == character.id));
+        assert!(links.iter().any(|edge| edge.to_id == species.id));
+        assert!(links.iter().any(|edge| edge.to_id == culture.id));
     }
 
     #[test]

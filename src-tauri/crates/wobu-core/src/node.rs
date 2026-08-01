@@ -215,6 +215,10 @@ pub struct Node {
     /// thumbnail silently changed what gets sent to a backend.
     #[serde(default)]
     pub cover_asset_id: Option<Id>,
+    /// The entity's shared identity seed. Generation uses it when the caller
+    /// does not explicitly re-roll, so collaborators get the same baseline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locked_seed: Option<u64>,
     #[serde(default)]
     pub links: Vec<Link>,
     /// Reference images attached to this entity, each with a role that decides
@@ -251,6 +255,7 @@ impl Node {
             attributes: serde_json::Map::new(),
             tags: Vec::new(),
             cover_asset_id: None,
+            locked_seed: None,
             links: Vec::new(),
             asset_links: Vec::new(),
             created_at: now,

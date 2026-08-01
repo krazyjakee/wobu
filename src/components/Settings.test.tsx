@@ -16,10 +16,11 @@ import { useUI } from '../store/ui'
  * screen, not about markup.
  */
 
-const h = vi.hoisted(() => ({ invoke: vi.fn() }))
+const h = vi.hoisted(() => ({ invoke: vi.fn(), openUrl: vi.fn() }))
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: h.openUrl }))
 
 /** What the backend answers, per command. Overwritten per test. */
 let keyStatuses: KeyStatus[] = []
@@ -103,6 +104,8 @@ function cached(): string {
 
 beforeEach(() => {
   h.invoke.mockReset()
+  h.openUrl.mockReset()
+  h.openUrl.mockResolvedValue(undefined)
   h.invoke.mockImplementation((cmd: string, args?: Record<string, unknown>) =>
     Promise.resolve(backend(cmd, args)),
   )
@@ -232,6 +235,63 @@ describe('a machine with no credential store', () => {
 })
 
 describe('the shared selection', () => {
+  it('requires an explicit supported Tencent processing region and stores it with the project', async () => {
+    selections = { providers: { mesh: { provider: 'hunyuan3d' } }, readOnly: false }
+    await open()
+
+    const mesh = within(screen.getByRole('group', { name: 'Mesh — Concept 3D' }))
+    const region = mesh.getByLabelText('Tencent Hunyuan3D region') as HTMLSelectElement
+    expect(region.value).toBe('')
+    expect(mesh.getByText(/Concept 3D stays off until the project records one/)).toBeTruthy()
+    expect([...region.options].map((option) => option.value)).toEqual([
+      '',
+      'ap-singapore',
+      'na-siliconvalley',
+      'eu-frankfurt',
+    ])
+
+    fireEvent.change(region, { target: { value: 'eu-frankfurt' } })
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('project_provider_select', {
+        capability: 'mesh',
+        provider: 'hunyuan3d',
+        model: undefined,
+        region: 'eu-frankfurt',
+      }),
+    )
+  })
+
+  it('presents local Hunyuan3D as an explicit older tier before it is selected', async () => {
+    await open()
+
+    const mesh = within(screen.getByRole('group', { name: 'Mesh — Concept 3D' }))
+    expect(mesh.getByRole('button', { name: 'Local 2.1 (ComfyUI)' })).toBeTruthy()
+    expect(mesh.getByText(/never an automatic fallback/)).toBeTruthy()
+    expect(mesh.getByText(/older, lower-quality Hunyuan3D 2.1/)).toBeTruthy()
+    expect(mesh.getByText(/one front image, geometry-only output/)).toBeTruthy()
+    expect(mesh.getByText(/at least 10 GB VRAM/)).toBeTruthy()
+    expect(mesh.getByText(/no per-job fee/)).toBeTruthy()
+    expect(mesh.getByText(/staying on your ComfyUI machine/)).toBeTruthy()
+    expect(mesh.getByText(/licence excludes the EU, UK and South Korea/)).toBeTruthy()
+  })
+
+  it('records local meshing only when the user explicitly chooses it', async () => {
+    await open()
+
+    const mesh = within(screen.getByRole('group', { name: 'Mesh — Concept 3D' }))
+    const local = mesh.getByRole('button', { name: 'Local 2.1 (ComfyUI)' })
+    expect(local.className).not.toContain('is-on')
+    expect(mesh.queryByText(/Nothing chosen, so Concept 3D uses/)).toBeNull()
+    fireEvent.click(local)
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('project_provider_select', {
+        capability: 'mesh',
+        provider: 'comfyui',
+        model: undefined,
+      }),
+    )
+  })
+
   it('does not carry one vendor’s model id across to another', async () => {
     // `claude-sonnet-5` handed to Gemini is a request that fails for a reason
     // nothing on screen explains, and the user would have to know that a model
@@ -278,6 +338,27 @@ describe('the shared selection', () => {
     for (const button of screen.getAllByRole('button', { name: 'Add key' })) {
       expect((button as HTMLButtonElement).disabled).toBe(false)
     }
+  })
+})
+
+describe('Tencent Hunyuan3D onboarding', () => {
+  it('puts activation and a scoped CAM sub-account before the credential fields', async () => {
+    await open()
+
+    const setup = within(screen.getByLabelText('Tencent Hunyuan3D setup'))
+    expect(setup.getByText(/Do not paste a root-account key/)).toBeTruthy()
+    expect(setup.getByText(/dedicated CAM sub-account/)).toBeTruthy()
+    expect(setup.getByText(/QcloudAI3DFullAccess/)).toBeTruthy()
+    expect(setup.getByText(/does not currently publish this policy’s action JSON/)).toBeTruthy()
+
+    fireEvent.click(setup.getByRole('button', { name: 'Activate Hunyuan 3D' }))
+    fireEvent.click(setup.getByRole('button', { name: 'Open CAM users' }))
+    fireEvent.click(setup.getByRole('button', { name: 'Create sub-account API key' }))
+    await waitFor(() => {
+      expect(h.openUrl).toHaveBeenCalledWith('https://console.tencentcloud.com/hunyuan')
+      expect(h.openUrl).toHaveBeenCalledWith('https://console.tencentcloud.com/cam')
+      expect(h.openUrl).toHaveBeenCalledWith('https://console.tencentcloud.com/cam/capi')
+    })
   })
 })
 

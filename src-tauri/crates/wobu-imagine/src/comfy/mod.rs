@@ -37,8 +37,8 @@
 //! [`Installed::controlnets`] is public so the UI can say *why*.
 
 mod probe;
-mod socket;
-mod wire;
+pub(crate) mod socket;
+pub(crate) mod wire;
 mod workflow;
 
 use std::collections::BTreeMap;
@@ -266,7 +266,7 @@ impl ComfyBackend {
     /// `/queue` has been re-read and confirms ours is the one on the GPU. The
     /// re-read is what closes the window between the last websocket event and
     /// the cancellation: `started` from the watch loop is a fact about the past.
-    async fn stop(&self, prompt_id: &str, started: bool) {
+    pub(crate) async fn stop(&self, prompt_id: &str, started: bool) {
         // Errors are dropped throughout: the user has already pressed Stop and
         // is going to get `Error::Cancelled` whatever these say. A ComfyUI that
         // has gone away has also stopped rendering.
@@ -390,12 +390,12 @@ impl ComfyBackend {
         })
     }
 
-    fn ws_url(&self) -> String {
+    pub(crate) fn ws_url(&self) -> String {
         let host = self.base.strip_prefix("http").unwrap_or(&self.base);
         format!("ws{host}/ws?clientId={}", self.client_id)
     }
 
-    async fn get(&self, path: &str, cancel: &Cancel) -> Result<Vec<u8>> {
+    pub(crate) async fn get(&self, path: &str, cancel: &Cancel) -> Result<Vec<u8>> {
         self.send(self.client.get(format!("{}/{path}", self.base)), path, cancel).await
     }
 
@@ -406,6 +406,52 @@ impl ComfyBackend {
             .header("content-type", "application/json")
             .body(serde_json::to_vec(&body).unwrap_or_default());
         self.send(request, path, cancel).await
+    }
+
+    /// Queue a graph under this backend's websocket client id.
+    pub(crate) async fn queue(
+        &self,
+        graph: serde_json::Map<String, Value>,
+        cancel: &Cancel,
+    ) -> Result<String> {
+        let queued = self.post("prompt", wire::prompt_body(graph, &self.client_id), cancel).await?;
+        wire::queued(&queued).ok_or_else(|| Error::Unavailable {
+            detail: "ComfyUI accepted the workflow but gave it no prompt id".into(),
+        })
+    }
+
+    /// Upload one workflow input and return the name `LoadImage` accepts.
+    pub(crate) async fn upload_image(
+        &self,
+        filename: &str,
+        mime: &str,
+        bytes: &[u8],
+        cancel: &Cancel,
+    ) -> Result<String> {
+        let part = reqwest::multipart::Part::bytes(bytes.to_vec())
+            .file_name(filename.to_owned())
+            .mime_str(mime)
+            .map_err(|error| Error::Unsupported { detail: error.to_string() })?;
+        let form = reqwest::multipart::Form::new()
+            .part("image", part)
+            .text("type", "input")
+            .text("overwrite", "true");
+        let request = self
+            .client
+            .post(format!("{}/upload/image", self.base))
+            .multipart(form);
+        let body = self.send(request, "upload/image", cancel).await?;
+        let value: Value = serde_json::from_slice(&body).map_err(|_| Error::Unavailable {
+            detail: "ComfyUI accepted the input image but returned no usable filename".into(),
+        })?;
+        let name = value.get("name").and_then(Value::as_str).unwrap_or_default();
+        let subfolder = value.get("subfolder").and_then(Value::as_str).unwrap_or_default();
+        if name.is_empty() {
+            return Err(Error::Unavailable {
+                detail: "ComfyUI accepted the input image but returned no usable filename".into(),
+            });
+        }
+        Ok(if subfolder.is_empty() { name.to_owned() } else { format!("{subfolder}/{name}") })
     }
 
     async fn send(

@@ -47,7 +47,9 @@ Filter box at top. Two pinned singletons — **Art Style** and **World Canon** �
 rule, because they are the roots of every influence stack and should never be hunted for.
 Below: collapsible groups per node kind, each nesting by `parent_id`. Drag to re-parent.
 Right-click for New / Duplicate / Delete. A node with unresolved `stale` descriptions gets a
-small dot.
+small dot. A **Tree · Graph** switch replaces the tree with a read-only relationship map that
+draws implicit parent links and explicit cross-kind influences; selecting a graph node opens the
+same document editor, while link editing remains in the Relations tab.
 
 ### Editor (fluid)
 - **Sticky header** — name (inline-editable), kind badge, and the *influence breadcrumb*:

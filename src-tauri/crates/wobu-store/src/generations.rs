@@ -85,6 +85,24 @@ pub(crate) fn scan(root: &Path) -> Vec<(Generation, String, Stamp)> {
         .collect()
 }
 
+/// Read every canonical receipt and fail closed on a malformed one.
+///
+/// Concepts can skip a file while a sync client is copying it and catch it on
+/// the next reconcile. A spend ceiling cannot: silently omitting a paid receipt
+/// would authorise more work than the project allows.
+pub(crate) fn read_all_strict(root: &Path) -> Result<Vec<Generation>> {
+    let mut receipts = Vec::new();
+    for (_, path) in list_paths(root) {
+        if let Some((generation, _, _)) = read_at(root, &path)? {
+            receipts.push(generation);
+        }
+    }
+    receipts.sort_by(|left, right| {
+        left.created_at.cmp(&right.created_at).then_with(|| left.id.cmp(&right.id))
+    });
+    Ok(receipts)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, Utc};

@@ -55,6 +55,14 @@ pub enum Error {
     #[error("no {role} link from that node to asset {asset}")]
     NoSuchAssetLink { asset: String, role: String },
 
+    /// Destructive asset deletion is only available for true orphans.
+    ///
+    /// Checked at the store boundary rather than trusted to the library UI: a
+    /// collaborator can attach the image after the confirmation sheet opens,
+    /// and deleting then would leave their frontmatter pointing at nothing.
+    #[error("asset {asset} is still used by {nodes} node(s); detach it and clear any covers first")]
+    AssetInUse { asset: String, nodes: usize },
+
     /// A resolution named a path that is not a conflict sibling.
     ///
     /// Its own variant rather than a generic invalid-argument, because

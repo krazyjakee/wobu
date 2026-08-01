@@ -367,6 +367,14 @@ and output, on both Standard and Batch. Per-image output cost at the sizes we se
 | `gemini-3.1-flash-image` | $0.067 | $0.101 | $0.151 |
 | `gemini-3-pro-image` | $0.134 | $0.134 | $0.240 |
 
+The local estimator keeps Google's exact published values in integer USD micros:
+Flash Lite 1K is $0.0336, Flash 0.5K is $0.045, and the rounded table above covers the sizes
+Wobu normally negotiates. The legacy `gemini-2.5-flash-image` 1K output is $0.039. These are
+**Standard synchronous output-image prices**, because that is the API path the adapter calls;
+Google's asynchronous Batch API discount does not apply. Variable input-token and optional
+Google Search grounding charges are not knowable before the call and are explicitly excluded
+from the indicative estimate.
+
 So the adapter must detect this specific failure and say *"Gemini image generation requires
 billing enabled on your Google account"* with a link — not surface a raw 429/403. Ideally we
 probe capability at key-entry time and show it in Settings before the user ever hits Generate.
@@ -529,24 +537,48 @@ discovered:
   reference implementation was verified against a live account — roughly 40 lines. The signed
   header set is `content-type;host;x-tc-action`, with `X-TC-Timestamp`, `X-TC-Version` and
   `X-TC-Region` sent unsigned alongside `Authorization`.)
-- **The `SecretKey` is an account-wide master credential**, not a scoped token — materially
-  more dangerous to hold than an OpenAI-style key. Keychain storage is mandatory, and the
-  onboarding copy should actively steer users to create a **CAM sub-account key scoped to the
-  3D service** rather than pasting their root credentials.
-  🚩 The exact CAM policy/action prefix to recommend is unverified.
-- **`Region` is a required parameter**, restricted to the three regions verified above, and the
-  poll must target the same region as the submit.
-- **Signatures expire after 5 minutes of clock skew** (`AuthFailure.SignatureExpire`). Desktop
-  clocks drift, so this error must map to a specific "check your system clock" message.
-- **A fresh account hits `FailedOperation.ServiceNotActivated` before anything works** — the 3D
-  service requires explicit activation in the console. This should be an onboarding step with
-  a link, not a runtime error.
+- **A root account's `SecretKey` is an account-wide master credential**, not a scoped token —
+  materially more dangerous to hold than an OpenAI-style key. Wobu's onboarding therefore says
+  not to paste one. Tencent's current
+  [international quick-start](https://intl.cloud.tencent.com/ind/document/product/1284/75287)
+  instructs the primary account to create/authorise a CAM sub-account with the managed
+  **`QcloudAI3DFullAccess`** policy, then create that sub-account's SecretId/SecretKey. That is the
+  verified recommendation shown in Settings, and the pair remains in the OS keychain.
+- **Do not publish a guessed two-action custom policy.** Tencent's public quick-start names the
+  managed policy, but its current
+  [CAM product catalogue](https://intl.cloud.tencent.com/document/product/598/10588) does not list
+  AI3D and Tencent does not publish `QcloudAI3DFullAccess`'s policy JSON or an AI3D action-prefix
+  table. Neither the SDK package name nor the API signing service proves a CAM action prefix, so
+  there is not enough evidence to ask a user to deploy either an `ai3d:…` or `hunyuan:…` custom
+  action. The managed policy is full access *within the AI3D service*, not operation-minimal;
+  replacing it with a narrower custom policy remains blocked on Tencent publishing or confirming
+  the action table.
+- **`Region` is a required parameter** in both current
+  [Submit](https://intl.cloud.tencent.com/ind/document/api/1284/75540) and
+  [Query](https://intl.cloud.tencent.com/ind/document/api/1284/75541) documentation. Settings makes
+  the user explicitly choose Singapore, Silicon Valley or Frankfurt and writes that choice beside
+  the mesh provider in `project.json`; no location is silently guessed. The poll targets the same
+  region as the submit by carrying it on the in-memory job ticket.
+- **Signatures expire after 5 minutes of clock skew** (`AuthFailure.SignatureExpire`), as Tencent's
+  [Signature v3 guide](https://intl.cloud.tencent.com/document/product/627/64494) specifies. Desktop
+  clocks drift, so this error maps to a specific "check your system clock and enable automatic time
+  synchronisation" message rather than telling the user to replace a working key.
+- **A fresh account hits `FailedOperation.ServiceNotActivated` before anything works.** Activation
+  is now step one, linked to the [Tencent HY console](https://console.tencentcloud.com/hunyuan),
+  before CAM setup and before the credential fields. The runtime mapping remains as a backstop.
+- The four actionable failures keep four different remedies: `ServiceNotActivated` links to
+  activation; `AuthFailure.SignatureExpire` says to correct the operating-system clock;
+  `UnsupportedRegion` lists the three choices from Settings; and `JobNotFound` explains both the
+  24-hour ID expiry and a submit/query region mismatch.
 
 ### Remaining unknowns
 
-Viability and regions are settled. Still open, none of them blocking:
+Viability and regions are settled. Still open, none of them blocking the verified managed-policy
+onboarding:
 
-- 🚩 The CAM policy / action prefix to recommend for a least-privilege sub-account key.
+- 🚩 A narrower operation-only CAM policy is unverified because Tencent publishes neither the
+  AI3D action-prefix table nor the contents of `QcloudAI3DFullAccess`. The UI intentionally does not
+  turn the inferred `ai3d` prefix into security instructions.
 - 🚩 Current pricing and free-credit allowance — the international `Query` response omits the
   `ResultCreditConsumed` field that the mainland one returns, so **we cannot read spend back
   from the API** and the cost estimate will have to be a local model of published prices.
@@ -554,14 +586,60 @@ Viability and regions are settled. Still open, none of them blocking:
   Tencent Cloud console being the only source, which matches the `SecretId`/`SecretKey` shape
   we verified.
 
-### Local fallback is a different tier, not a fallback
+### Local Hunyuan3D 2.1 is a different tier, not a fallback
 
-Tencent's open-weight releases stop at **Hunyuan3D-2.1**; there are no 3.x weights, and the
-strong indication is that 3.x is cloud-only. So running Hunyuan3D locally under ComfyUI gets
-you a materially older and lower-quality model — worth offering for cost and privacy reasons,
-but it must be presented as a **different quality tier**, not a drop-in substitute when the
-cloud key is missing.
-🚩 ComfyUI node availability and VRAM requirements for 2.1 are unverified.
+The local feasibility spike was repeated against current upstream source on **2026-08-01**.
+Tencent's current public model repository is
+[Hunyuan3D 2.1](https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1), with the official checkpoints
+also published on [Hugging Face](https://huggingface.co/tencent/Hunyuan3D-2.1). It is materially
+older and lower quality than hosted Hunyuan3D 3.1. Wobu therefore exposes it as **Local 2.1
+(ComfyUI)**, an explicit cost/privacy tier. Selecting hosted Hunyuan3D without a Tencent key
+does not select this adapter, and no runtime error or missing credential can make that switch.
+
+The viable first workflow is deliberately **shape only**:
+
+- one PNG or JPEG front view enters ComfyUI's built-in `LoadImage` node;
+- `Hy3D_2_1SimpleMeshGen` runs the official 2.1 shape checkpoint;
+- `Hy3DPostprocessMesh` applies the requested face budget; and
+- `Hy3DExportMesh` writes a GLB; current ComfyUI's core `Preview3D` node publishes its relative
+  path in history so Wobu can retrieve the output bytes.
+
+The three `Hy3D…` custom nodes and their input names were verified at
+[`kijai/ComfyUI-Hunyuan3DWrapper` commit `2609efa`](https://github.com/kijai/ComfyUI-Hunyuan3DWrapper/blob/2609efa38f6a98292476f714839b7c1e5f9b699a/nodes.py).
+Tencent's own repository also lists
+[`visualbruno/ComfyUI-Hunyuan3d-2-1`](https://github.com/visualbruno/ComfyUI-Hunyuan3d-2-1)
+as a community integration. Wobu installs neither node pack and does not download or rename model
+files. The adapter expects the official `hunyuan3d-dit-v2-1/model.fp16.ckpt` architecture to be
+installed as `ComfyUI/models/diffusion_models/hunyuan3d-dit-v2-1.ckpt`, matching the integration's
+documented filename, and probes all five node classes and that exact model choice before queueing
+work. The
+[checkpoint is published by Tencent](https://huggingface.co/tencent/Hunyuan3D-2.1/blob/main/hunyuan3d-dit-v2-1/model.fp16.ckpt);
+the rename does not change its contents. The `Preview3D` bridge is required because current ComfyUI persists UI output in history,
+not every ordinary node return; that behaviour was checked against
+[`ComfyUI` commit `d8e6aa5`](https://github.com/Comfy-Org/ComfyUI/blob/d8e6aa55f377d9914e64bf07d7633dfe6abbf643/execution.py).
+
+The local capability declaration is intentionally smaller than the hosted one: maximum one view,
+`Geometry` only, no PBR and no text-to-mesh. Hunyuan3D Shape 2.1 does not consume the eight-image
+Turnaround contract used by hosted 3.1, so the adapter rejects eight views rather than silently
+choosing one. Tencent's published requirements are **10 GB VRAM for shape**, **21 GB for texture**,
+and **29 GB for shape plus texture**. The texture path also needs its custom rasterisation modules;
+it is not part of this initial graph. Local jobs report no provider billing, although electricity,
+hardware and any remote ComfyUI hosting remain the user's costs.
+
+> **Licence restriction:** Tencent calls 2.1 open source in its project copy, but its
+> [Community License](https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1/blob/main/LICENSE) expressly
+> excludes use in the **European Union, United Kingdom and South Korea**. Wobu cannot determine a
+> user's legal entitlement. It discloses the restriction before selection and does not distribute
+> the code or weights.
+
+The adapter uses ComfyUI's documented
+[`/upload/image`, `/prompt`, WebSocket, history and view` protocol](https://docs.comfy.org/development/comfyui-server/comms_routes),
+following ComfyUI's own
+[WebSocket API example](https://github.com/Comfy-Org/ComfyUI/blob/master/script_examples/websockets_api_example.py)
+by opening the socket before queueing the graph. Node and graph compatibility were source-verified,
+but this development environment had no physical ComfyUI/Hunyuan3D GPU installation, so an
+end-to-end run on the pinned node pack remains a release qualification step rather than a claimed
+result.
 
 ---
 
@@ -642,11 +720,22 @@ Consequences the user can actually see:
 
 BYOK means the user pays per call, so the app must never surprise them:
 
-- The Generate button shows an **estimated cost** for the batch when the selected provider is
-  paid (Gemini image is roughly $0.05–0.24 per image depending on model and size; treat these
-  as indicative and re-check).
-- Local ComfyUI shows no cost — that asymmetry is the point, and it's a good default.
-- A per-project **spend ceiling** with a hard stop, because a turnaround loop is exactly the
-  kind of thing that runs 200 images unattended.
-- Every generation record already stores the provider, model and params, so actual spend is
-  reconstructable from the project folder.
+- The Generate button shows the paid batch's **indicative output cost**. Current known Gemini
+  prices are $0.0336–$0.24 per output depending on model and size; an unknown paid Gemini model
+  is conservatively reserved at the highest known $0.24 rate until its price table is updated.
+- Local ComfyUI has no provider cost and therefore creates no spend reservation.
+- `project.json` stores the shared `spendCeilingUsdMicros` guardrail. New and older projects
+  default to $10; explicit `null` disables paid generation rather than meaning unlimited.
+- Admission holds the shared spend ledger lock while it sums all pending reservations and
+  atomically publishes the whole batch reservation. Concurrent Generate clicks, queued batches,
+  and another Wobu process therefore cannot each spend the same remaining allowance.
+- Running spend is reconstructed from immutable generation receipts. New receipts record
+  `estimatedCostUsdMicros` plus the pricing source/check date; older Gemini receipts are priced
+  from their recorded model and dimensions. A provider-reported billed failure also gets an
+  immutable receipt, so failure does not make a real charge disappear.
+- Reservations are write-once and replaced before their predecessor is retired, so a crash can
+  only stop early by over-reserving. They are never stolen merely because a network-share lock
+  looks old. The Inspector exposes pending/locked state and a deliberate recovery action that
+  first refuses while this window has queued or running generation, requires confirmation that
+  other Wobu instances have stopped, and archives the old ledger under `.wobu/` rather than
+  deleting the evidence.

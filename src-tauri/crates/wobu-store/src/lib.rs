@@ -38,7 +38,9 @@ pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};
 pub use presence::{Peer, Presence, PresenceHandle};
-pub use project::{Enhanced, Project, ProjectMeta, ProjectSummary, SaveOutcome};
+pub use project::{
+    AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary, SaveOutcome,
+};
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};
 pub use thumbs::{ThumbTarget, Thumbnail};

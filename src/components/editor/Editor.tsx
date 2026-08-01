@@ -9,6 +9,7 @@ import { modKey } from '../TitleBar'
 import { NotesPane } from './NotesPane'
 import { RelationsPane } from './RelationsPane'
 import { ConceptsPane } from './ConceptsPane'
+import { ReferencesPane } from './ReferencesPane'
 import { TabEmpty } from './TabEmpty'
 import { useAutosaveNode, saveLabel } from '../../hooks/useAutosaveNode'
 import { useEnhanceSession } from './useEnhanceSession'
@@ -201,15 +202,15 @@ export function Editor({
               />
             )}
             {tab === 'refs' && (
-              <TabEmpty
-                icon="image"
-                title="References"
-                milestone="M3 — References"
-                body="Image import, content-addressed storage, thumbnails, and per-image role and weight. Until that exists there is nothing here — and nothing pretending to be here."
+              <ReferencesPane
+                key={node.id}
+                node={node}
+                readOnly={readOnly}
+                autosave={autosave}
               />
             )}
             {tab === 'concepts' && (
-              <ConceptsPane node={node} queue={queue} />
+              <ConceptsPane node={node} queue={queue} kinds={kinds} readOnly={readOnly} />
             )}
             {tab === 'three' && (
               <TabEmpty

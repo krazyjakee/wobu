@@ -1,8 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Generation, JobPreview, JobProgress, QueueSnapshot } from '../../lib/api'
-import { node as buildNode } from '../../test/fixtures'
+import type {
+  Generation,
+  JobPreview,
+  JobProgress,
+  LinkEdge,
+  NodeSummary,
+  QueueSnapshot,
+  WobuNode,
+} from '../../lib/api'
+import { kindDef, kindIndex, node as buildNode, summary } from '../../test/fixtures'
 import { ConceptsPane } from './ConceptsPane'
 
 const h = vi.hoisted(() => ({
@@ -44,24 +52,57 @@ function generation(over: Partial<Generation> & Pick<Generation, 'id'>): Generat
 
 const emptyQueue: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
 let history: Generation[] = []
+let worldNodes: NodeSummary[] = []
+let worldLinks: LinkEdge[] = []
+const kinds = kindIndex([
+  kindDef('style_guide'),
+  kindDef('world_bible'),
+  kindDef('species'),
+  kindDef('culture'),
+  kindDef('character'),
+  kindDef('creature'),
+])
 
-function open(queue: QueueSnapshot = emptyQueue) {
+function open(
+  queue: QueueSnapshot = emptyQueue,
+  subject: WobuNode = node,
+  readOnly = false,
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
-      <ConceptsPane node={node} queue={queue} />
+      <ConceptsPane node={subject} queue={queue} kinds={kinds} readOnly={readOnly} />
     </QueryClientProvider>,
   )
 }
 
 beforeEach(() => {
   history = []
+  worldNodes = [summary({ id: node.id, kind: node.kind, name: node.name })]
+  worldLinks = []
   h.invoke.mockReset()
   h.listeners.clear()
-  h.invoke.mockImplementation((command: string, args?: { assetId?: string }) => {
+  h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
     if (command === 'generation_list') return Promise.resolve(history)
+    if (command === 'node_list') return Promise.resolve(worldNodes)
+    if (command === 'node_links') return Promise.resolve(worldLinks)
     if (command === 'asset_thumb') return Promise.resolve(`/thumb-${args?.assetId}`)
     if (command === 'asset_original') return Promise.resolve(`/original-${args?.assetId}`)
+    if (command === 'asset_link') {
+      return Promise.resolve({
+        ...node,
+        assetLinks: [
+          ...node.assetLinks,
+          {
+            assetId: String(args?.assetId),
+            role: args?.role,
+            weight: 1,
+            enabled: true,
+          },
+        ],
+      })
+    }
+    if (command === 'asset_unlink') return Promise.resolve({ ...node, assetLinks: [] })
     if (command === 'job_cancel') return Promise.resolve(true)
     return Promise.resolve(null)
   })
@@ -89,6 +130,99 @@ describe('generation history', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Full-resolution concept' })
     expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'asset-1' })
     expect(within(dialog).getByRole('img').getAttribute('src')).toBe('asset:///original-asset-1')
+  })
+
+  it('states whether each persisted result used the lock, its family, or an explicit re-roll', async () => {
+    history = [
+      generation({ id: 'locked', params: { seedSource: 'locked', usedLockedSeed: true } }),
+      generation({ id: 'family', params: { seedSource: 'locked_derived', usedLockedSeed: false } }),
+      generation({ id: 'rerolled', params: { seedSource: 'rerolled' } }),
+      generation({ id: 'grid', params: { seedSource: 'grid' } }),
+    ]
+    open()
+
+    expect(await screen.findByText('used locked seed')).toBeTruthy()
+    expect(screen.getByText('used locked-seed family')).toBeTruthy()
+    expect(screen.getByText('used explicit re-roll')).toBeTruthy()
+    expect(screen.getByText('variant seed cell')).toBeTruthy()
+  })
+
+  it('pins with an explicit role through AssetLink without changing generation history', async () => {
+    history = [generation({ id: 'candidate' })]
+    open()
+
+    const role = (await screen.findByLabelText(
+      'Reference role for generation candidate',
+    )) as HTMLSelectElement
+    expect(role.value).toBe('full_ref')
+    fireEvent.change(role, { target: { value: 'palette' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Pin generation candidate as Palette' }))
+
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_link', {
+        nodeId: 'kael',
+        assetId: 'asset-1',
+        role: 'palette',
+        weight: undefined,
+      }),
+    )
+    expect(screen.getByRole('button', { name: /Open generation from/ })).toBeInTheDocument()
+    expect(h.invoke).not.toHaveBeenCalledWith('generation_delete', expect.anything())
+  })
+
+  it('unpins the chosen role without deleting the immutable generation', async () => {
+    history = [generation({ id: 'pinned' })]
+    open(
+      emptyQueue,
+      buildNode({
+        ...node,
+        assetLinks: [{ assetId: 'asset-1', role: 'full_ref', weight: 1, enabled: true }],
+      }),
+    )
+
+    expect(await screen.findByText('Pinned · Full reference')).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Unpin generation pinned as Full reference' }),
+    )
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_unlink', {
+        nodeId: 'kael',
+        assetId: 'asset-1',
+        role: 'full_ref',
+      }),
+    )
+    expect(screen.getByRole('button', { name: /Open generation from/ })).toBeInTheDocument()
+  })
+
+  it('states how an upstream pin reaches downstream generations', async () => {
+    const species = buildNode({ id: 'vashk', name: 'Vashk', kind: 'species' })
+    history = [generation({ id: 'species-concept', nodeId: species.id })]
+    worldNodes = [
+      summary({ id: 'style', kind: 'style_guide' }),
+      summary({ id: 'world', kind: 'world_bible' }),
+      summary({ id: 'vashk', name: 'Vashk', kind: 'species' }),
+      summary({ id: 'kael', name: 'Kael', kind: 'character' }),
+    ]
+    worldLinks = [
+      { fromId: 'kael', toId: 'vashk', role: 'species_of', weight: 1, enabled: true },
+    ]
+    open(emptyQueue, species)
+
+    expect(
+      await screen.findByText(
+        'Future generations for this species and 1 character downstream can inherit this appearance-locking full reference.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('leaves pinning visible but unavailable in a read-only project', async () => {
+    history = [generation({ id: 'readonly' })]
+    open(emptyQueue, node, true)
+
+    expect(await screen.findByLabelText('Reference role for generation readonly')).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Pin generation readonly as Full reference' }),
+    ).toBeDisabled()
   })
 })
 

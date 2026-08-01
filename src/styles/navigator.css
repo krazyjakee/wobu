@@ -36,6 +36,30 @@
 .nav-search .clear:hover {
   color: var(--text);
 }
+.nav-view-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 0 8px 8px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+}
+.nav-view-switch button {
+  padding: 4px 8px;
+  border-radius: 3px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.nav-view-switch button:hover {
+  color: var(--text);
+}
+.nav-view-switch button[aria-pressed='true'] {
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+}
 .nav-pinned {
   padding: 0 8px 8px;
   border-bottom: 1px solid var(--border);
@@ -212,6 +236,180 @@
 }
 .nav-note b {
   color: var(--text-dim);
+}
+
+/* ── relationship graph ───────────────────────────────────────────────────
+   This deliberately borrows the navigator column instead of becoming a
+   canvas mode. It is another way to *read and select* the same documents; no
+   graph element is draggable and every editing affordance stays in Relations. */
+.nav-graph-shell,
+.relationship-graph {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.nav-graph-shell {
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+.graph-explainer {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px 7px;
+}
+.graph-explainer strong {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.graph-explainer span,
+.graph-footnote {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 10px 8px;
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.graph-legend i {
+  display: block;
+  width: 15px;
+  border-top: 1.5px solid var(--text-faint);
+}
+.graph-legend i.is-influence {
+  border-color: var(--accent);
+}
+.graph-legend i.is-muted {
+  border-top-style: dashed;
+  opacity: 0.55;
+}
+.graph-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-faint) 18%, transparent) 0.7px, transparent 0.8px);
+  background-size: 14px 14px;
+}
+.graph-canvas {
+  position: relative;
+}
+.graph-canvas > svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.graph-group-label text {
+  fill: var(--text-faint);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.graph-group-label line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.graph-edge {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.58;
+  transition: opacity 0.12s, stroke-width 0.12s;
+}
+.graph-edge.is-parent {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+.graph-edge.is-muted {
+  stroke-dasharray: 4 4;
+  opacity: 0.25;
+}
+.graph-canvas.has-selection .graph-edge:not(.is-connected) {
+  opacity: 0.07;
+}
+.graph-canvas.has-selection .graph-edge.is-connected {
+  stroke-width: 2.2;
+  opacity: 0.9;
+}
+.graph-canvas marker path {
+  fill: var(--accent);
+}
+.graph-node {
+  --graph-kind: var(--accent);
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 112px;
+  height: 46px;
+  padding: 6px 9px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--graph-kind);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
+  color: var(--text-dim);
+  text-align: left;
+  box-shadow: 0 2px 8px color-mix(in srgb, #000 18%, transparent);
+  transition: opacity 0.12s, border-color 0.12s, background 0.12s;
+}
+.graph-node:hover,
+.graph-node:focus-visible {
+  border-color: var(--border-str);
+  border-left-color: var(--graph-kind);
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.graph-node.is-sel {
+  border-color: var(--accent);
+  border-left-color: var(--graph-kind);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
+  color: var(--text);
+}
+.graph-node.is-dim {
+  opacity: 0.26;
+}
+.graph-node > .ic {
+  flex: none;
+  color: var(--graph-kind);
+}
+.graph-node > span {
+  display: grid;
+  min-width: 0;
+}
+.graph-node strong,
+.graph-node small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.graph-node strong {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.graph-node small {
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+.graph-footnote {
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
 }
 
 /* ── broken files ─────────────────────────────────────────────────────────
