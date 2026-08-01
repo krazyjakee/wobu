@@ -12,6 +12,7 @@ import { ConceptsPane } from './ConceptsPane'
 import { ReferencesPane } from './ReferencesPane'
 import { ThreePane } from './ThreePane'
 import { useAutosaveNode, saveLabel } from '../../hooks/useAutosaveNode'
+import { useActionShortcut } from '../../hooks/useKeyboard'
 import { useEnhanceSession } from './useEnhanceSession'
 
 const TAB_LABEL: Record<EditorTab, string> = {
@@ -46,6 +47,13 @@ export function Editor({
   const node = nodeQ.data
   const autosave = useAutosaveNode(node, { readOnly })
   const enhance = useEnhanceSession(node?.id ?? selected?.id ?? null, queue)
+  const enhanceDisabled = !node || enhance.starting || (readOnly && !enhance.active)
+  const triggerEnhance = () => {
+    if (enhanceDisabled) return
+    setTab('notes')
+    if (!enhance.active) enhance.start()
+  }
+  useActionShortcut('enhance', !enhanceDisabled, triggerEnhance)
   // The two project roots influence everything, but do not locate an entity in
   // the world's hierarchy. The breadcrumb is the ancestry/culture/place spine
   // of the resolved stack; using the resolver (rather than reading only the
@@ -140,7 +148,7 @@ export function Editor({
           <span className="col-tag-save">{saveLabel(autosave.status)}</span>
           <button
             className="btn btn-ai"
-            disabled={!node || enhance.starting || (readOnly && !enhance.active)}
+            disabled={enhanceDisabled}
             title={
               readOnly
                 ? 'This share is read-only, and Enhance writes to the node'
@@ -150,10 +158,7 @@ export function Editor({
                     ? 'Review the stopped local draft'
                     : 'Turn notes and influences into reviewed canonical sections'
             }
-            onClick={() => {
-              setTab('notes')
-              if (!enhance.active) enhance.start()
-            }}
+            onClick={triggerEnhance}
           >
             <Icon name="spark" size="sm" />
             {enhance.starting

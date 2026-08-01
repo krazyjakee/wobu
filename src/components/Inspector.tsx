@@ -21,6 +21,7 @@ import {
   useStatusBarBackend,
 } from '../lib/queries'
 import { report, toast } from '../store/ui'
+import { useActionShortcut } from '../hooks/useKeyboard'
 import { Icon } from './Icon'
 import { PromptBox } from './inspector/PromptBox'
 
@@ -270,6 +271,16 @@ export function Inspector({
       (spend?.remainingUsdMicros !== undefined &&
         paidEstimate.batchUsdMicros > spend.remainingUsdMicros))
   const gridBlocked = gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
+  const generateDisabled =
+    !selected ||
+    !chosenPreset ||
+    generating ||
+    project.readOnly ||
+    costBlocked ||
+    gridBlocked ||
+    !imageReport.data ||
+    imageReport.isPlaceholderData
+  useActionShortcut('generate', !generateDisabled, () => void generate())
 
   const inspector = (
     <>
@@ -550,16 +561,7 @@ export function Inspector({
           )}
           <button
             className="btn-primary shot-generate"
-            disabled={
-              !selected ||
-              !chosenPreset ||
-              generating ||
-              project.readOnly ||
-              costBlocked ||
-              gridBlocked ||
-              !imageReport.data ||
-              imageReport.isPlaceholderData
-            }
+            disabled={generateDisabled}
             onClick={() => void generate()}
           >
             <Icon name="image" size="sm" />

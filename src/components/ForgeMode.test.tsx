@@ -5,6 +5,7 @@ import type { Generation, LoraStatus, ProjectSummary, QueueSnapshot } from '../l
 import { useUI } from '../store/ui'
 import { kindDef, kindIndex, summary } from '../test/fixtures'
 import { ForgeMode } from './ForgeMode'
+import { Inspector } from './Inspector'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({
@@ -25,6 +26,8 @@ const project: ProjectSummary = {
 }
 const queue: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
 let lora: LoraStatus
+let imageConfigured: boolean
+let paidGenerationBlocked: boolean
 const preset = {
   id: 'portrait',
   label: 'Portrait',
@@ -85,9 +88,21 @@ function Harness({
   )
 }
 
+function renderForge(openProject: ProjectSummary = project) {
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <Harness openProject={openProject} />
+    </QueryClientProvider>,
+  )
+}
+
 beforeEach(() => {
   h.invoke.mockReset()
   useUI.setState({ selectedId: 'kael' })
+  imageConfigured = true
+  paidGenerationBlocked = false
   lora = {
     subjectId: 'kael',
     pinnedCount: 15,
@@ -105,7 +120,9 @@ beforeEach(() => {
     if (command === 'preset_list') return Promise.resolve([preset])
     if (command === 'status_bar_backend')
       return Promise.resolve({
-        image: { provider: 'comfyui', label: 'ComfyUI', model: 'flux-dev', contextTokens: null },
+        image: imageConfigured
+          ? { provider: 'comfyui', label: 'ComfyUI', model: 'flux-dev', contextTokens: null }
+          : null,
         text: { provider: 'anthropic', label: 'Anthropic', model: 'claude', contextTokens: 1 },
         health: { state: 'connected', externalQueue: 0 },
       })
@@ -161,11 +178,21 @@ beforeEach(() => {
         dropped: [],
         overflow: null,
       })
-    if (command === 'image_reference_report')
+    if (command === 'image_reference_report') {
+      if (!imageConfigured) return Promise.resolve(null)
       return Promise.resolve({
         buckets: [],
         layers: [],
-        cost: null,
+        cost: paidGenerationBlocked
+          ? {
+              perImageUsdMicros: 25_000,
+              batchUsdMicros: 25_000,
+              images: 1,
+              variesByCell: false,
+              conservativeFallback: false,
+              checkedAt: '2026-08-01T12:00:00Z',
+            }
+          : null,
         spend: {
           ceilingUsdMicros: null,
           spentUsdMicros: 0,
@@ -177,6 +204,8 @@ beforeEach(() => {
         },
         lockedSeed: null,
       })
+    }
+    if (command === 'spend_status') return Promise.resolve(null)
     if (command === 'generation_list') {
       return Promise.resolve(args?.nodeId === 'kael' ? generations : [])
     }
@@ -236,6 +265,105 @@ describe('Forge mode', () => {
         }),
       ),
     )
+  })
+
+  it.each([
+    ['Command', { metaKey: true }],
+    ['Control', { ctrlKey: true }],
+  ])('queues Generate with %s-Enter from the Forge Inspector', async (_platform, modifier) => {
+    renderForge()
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+
+    fireEvent.keyDown(window, { key: 'Enter', ...modifier })
+
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'generate_start',
+        expect.objectContaining({ subjectId: 'kael', preset: 'portrait' }),
+      ),
+    )
+  })
+
+  it('queues Generate with Command-Enter from the Library Inspector surface', async () => {
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <Inspector project={project} selected={nodes[0]!} kinds={kinds} onJump={() => {}} />
+      </QueryClientProvider>,
+    )
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'generate_start',
+        expect.objectContaining({ subjectId: 'kael', preset: 'portrait' }),
+      ),
+    )
+  })
+
+  it('does not Generate while the shortcut originates in an editable control', async () => {
+    renderForge()
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+
+    fireEvent.keyDown(screen.getByLabelText('Extra shot prompt'), {
+      key: 'Enter',
+      metaKey: true,
+    })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
+  })
+
+  it('does not Generate from a read-only project', async () => {
+    renderForge({ ...project, readOnly: true })
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeDisabled())
+
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
+  })
+
+  it('does not Generate without a configured image provider or reference report', async () => {
+    imageConfigured = false
+    renderForge()
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeDisabled())
+
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
+  })
+
+  it('does not Generate until paid-provider cost consent is available', async () => {
+    paidGenerationBlocked = true
+    renderForge()
+    const generate = await screen.findByRole('button', { name: /^Generate · est/ })
+    await waitFor(() => expect(generate).toBeDisabled())
+
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
+  })
+
+  it('does not Generate an invalid variant grid', async () => {
+    renderForge()
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Variant grid'), { target: { value: 'seed' } })
+    fireEvent.change(screen.getByLabelText('Cell values · comma separated'), {
+      target: { value: 'only-one' },
+    })
+    await waitFor(() => expect(generate).toBeDisabled())
+
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
   })
 
   it('queues an ordered multi-entity scene from the selected Forge subject', async () => {

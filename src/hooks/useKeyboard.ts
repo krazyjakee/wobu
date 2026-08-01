@@ -1,12 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useUndoRunner } from '../lib/queries'
 import { undoIntent } from '../lib/undo'
 import { EDITOR_TABS, useUI } from '../store/ui'
 
 /**
- * The keyboard map from docs/03-ui-layout.md, restricted to what M1 actually
- * does. ⌘E (Enhance) and ⌘↵ (Generate) remain owned by their editing surfaces;
- * mode navigation lives here so it behaves identically wherever focus was.
+ * The global part of the keyboard map from docs/03-ui-layout.md. Enhance and
+ * Generate remain owned by their editing surfaces because only those surfaces
+ * know whether their actions are currently eligible; mode navigation lives
+ * here so it behaves identically wherever focus was.
  */
 export function useKeyboard({ onNewNode, readOnly }: { onNewNode: () => void; readOnly: boolean }) {
   const { undo, redo } = useUndoRunner()
@@ -77,6 +78,39 @@ export function useKeyboard({ onNewNode, readOnly }: { onNewNode: () => void; re
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onNewNode, readOnly, undo, redo])
+}
+
+export type ActionShortcut = 'enhance' | 'generate'
+
+/** Register an editing-surface action without stealing keys from text controls. */
+export function useActionShortcut(shortcut: ActionShortcut, enabled: boolean, action: () => void) {
+  const enabledRef = useRef(enabled)
+  const actionRef = useRef(action)
+  useLayoutEffect(() => {
+    enabledRef.current = enabled
+    actionRef.current = action
+  }, [action, enabled])
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!matchesActionShortcut(event, shortcut) || isTyping(event.target)) return
+
+      // These are application commands whenever focus is outside an editable
+      // control. Swallow the browser's own Cmd/Ctrl+E even when the visible
+      // action is disabled, just as a disabled toolbar button swallows clicks.
+      event.preventDefault()
+      if (!enabledRef.current || event.repeat) return
+      actionRef.current()
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [shortcut])
+}
+
+function matchesActionShortcut(event: KeyboardEvent, shortcut: ActionShortcut): boolean {
+  if ((!event.metaKey && !event.ctrlKey) || event.shiftKey || event.altKey) return false
+  return shortcut === 'enhance' ? event.key.toLowerCase() === 'e' : event.key === 'Enter'
 }
 
 function isTyping(target: EventTarget | null): boolean {

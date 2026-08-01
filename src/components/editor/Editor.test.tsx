@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InfluenceStack, KindDef, LayerCard, NodeSummary, WobuNode } from '../../lib/api'
 import { kindDef, kindIndex, node as buildNode, summary } from '../../test/fixtures'
@@ -9,6 +9,7 @@ import { Editor } from './Editor'
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
+vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
 
 const selected: NodeSummary = summary({ id: 'kael', name: 'Kael Vantris' })
 const selectedNode: WobuNode = buildNode({ id: selected.id, name: selected.name })
@@ -63,14 +64,14 @@ const stack: InfluenceStack = {
   ],
 }
 
-function renderEditor(onJump = vi.fn()) {
+function renderEditor(onJump = vi.fn(), readOnly = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
       <Editor
         selected={selected}
         kinds={kindIndex(kinds)}
-        readOnly={false}
+        readOnly={readOnly}
         onJump={onJump}
         hasNodes
         loading={false}
@@ -128,5 +129,42 @@ describe('the editor influence breadcrumb', () => {
     renderEditor()
 
     expect(await screen.findByText('nothing')).toBeTruthy()
+  })
+})
+
+describe('Enhance shortcut', () => {
+  it.each([
+    ['Command', { metaKey: true }],
+    ['Control', { ctrlKey: true }],
+  ])('starts Enhance with %s-E for the selected node', async (_platform, modifier) => {
+    renderEditor()
+    const enhance = await screen.findByRole('button', { name: 'Enhance' })
+    await waitFor(() => expect(enhance).toBeEnabled())
+
+    const dispatched = fireEvent.keyDown(window, { key: 'e', ...modifier })
+    expect(dispatched).toBe(false)
+
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('enhance_start', { nodeId: selected.id }),
+    )
+  })
+
+  it('does not Enhance while the shortcut originates in an editable control', async () => {
+    renderEditor()
+    const notes = await screen.findByPlaceholderText(/Messy is fine/)
+
+    fireEvent.keyDown(notes, { key: 'e', metaKey: true })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('enhance_start', expect.anything())
+  })
+
+  it('does not Enhance when the visible action is unavailable on a read-only project', async () => {
+    renderEditor(vi.fn(), true)
+    await screen.findByDisplayValue('Kael Vantris')
+    expect(screen.getByRole('button', { name: 'Enhance' })).toBeDisabled()
+
+    fireEvent.keyDown(window, { key: 'e', ctrlKey: true })
+
+    expect(h.invoke).not.toHaveBeenCalledWith('enhance_start', expect.anything())
   })
 })
