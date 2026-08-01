@@ -31,6 +31,7 @@ use wobu_store::{
 
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
+use crate::keys::{KeyRemoval, KeyStatus, Keys};
 use crate::state::{AppState, Jobs, WORLD_CHANGED};
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
@@ -932,6 +933,49 @@ pub fn log_reveal() -> CommandResult<()> {
         WobuError::new(Code::Io, "Could not show the log in the file manager.")
             .with_detail(e.to_string())
     })
+}
+
+/* ── provider keys ────────────────────────────────────────────────────────── */
+
+/// Whether this machine has a key for each of these providers.
+///
+/// Presence, never value — `keys.rs` says why, and there is no command anywhere
+/// that returns key material. A list rather than one provider at a time because
+/// the pane that renders these renders every row at once, and a call per row
+/// would be a credential-store round trip per row.
+///
+/// No `Result`: a machine with no keychain, or a locked one, is an ordinary
+/// machine, and the answer for it is "unconfigured" rather than a failure.
+#[tauri::command]
+pub fn provider_key_status(keys: State<'_, Keys>, providers: Vec<String>) -> Vec<KeyStatus> {
+    providers.iter().map(|p| keys.status(p)).collect()
+}
+
+/// Store a key for a provider.
+///
+/// The one command that carries key material, and it carries it *inwards*: the
+/// user pasted it into a field, so it is already in the webview and the only
+/// question is where it goes next. Nothing sends one back.
+///
+/// The argument is never logged. `WobuError::new` and `diag` both scrub, so even
+/// a mistake here would be masked rather than published — but the rule is that
+/// nothing in this function mentions `key` at all.
+#[tauri::command]
+pub fn provider_key_set(
+    keys: State<'_, Keys>,
+    provider: String,
+    key: String,
+) -> CommandResult<KeyStatus> {
+    keys.set(&provider, &key)
+}
+
+/// Remove this machine's stored key for a provider.
+///
+/// The result tells "removed" and "there was nothing to remove" apart, because
+/// they are different sentences and only one of them is worth showing.
+#[tauri::command]
+pub fn provider_key_delete(keys: State<'_, Keys>, provider: String) -> CommandResult<KeyRemoval> {
+    keys.delete(&provider)
 }
 
 /* ── jobs ─────────────────────────────────────────────────────────────────── */

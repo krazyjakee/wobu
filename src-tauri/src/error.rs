@@ -103,6 +103,17 @@ pub enum Code {
     #[serde(rename = "provider.no_key")]
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
     ProviderNoKey,
+    /// The OS credential store could not be reached: a locked login keyring, a
+    /// headless Linux session, no Secret Service on the bus.
+    ///
+    /// Distinct from `provider.no_key`, which says the user has not set one up,
+    /// and from `internal`, which this file reserves for bugs — a locked keyring
+    /// is neither. It is raised only when *storing* a key, because a lookup that
+    /// finds nothing is an ordinary unconfigured state and `keys.rs` degrades to
+    /// it silently rather than putting a dialog in front of someone who has not
+    /// asked for a provider yet.
+    #[serde(rename = "provider.keychain_unavailable")]
+    ProviderKeychainUnavailable,
     /// The key is present and rejected.
     #[serde(rename = "provider.bad_key")]
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
@@ -337,6 +348,7 @@ mod tests {
             (Code::NoSuchAsset, "asset.not_found"),
             (Code::ShareUnmounted, "share.unmounted"),
             (Code::ProviderNoKey, "provider.no_key"),
+            (Code::ProviderKeychainUnavailable, "provider.keychain_unavailable"),
             (Code::ProviderBillingRequired, "provider.billing_required"),
             (Code::Io, "io.failed"),
             (Code::Internal, "internal"),
@@ -361,6 +373,9 @@ mod tests {
         assert!(!Code::NoSuchAsset.retryable());
         assert!(!Code::Invalid.retryable());
         assert!(!Code::ProviderNoKey.retryable());
+        // A locked keyring stays locked until the user unlocks it, so a "Try
+        // again" here would fail identically and teach them to distrust it.
+        assert!(!Code::ProviderKeychainUnavailable.retryable());
     }
 
     #[test]

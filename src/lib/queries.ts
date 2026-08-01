@@ -18,6 +18,7 @@ import type {
   ConflictKeep,
   CorruptFile,
   InfluenceStack,
+  KeyStatus,
   KindDef,
   NodeKind,
   NodeSummary,
@@ -50,6 +51,10 @@ export const qk = {
   assets: ['asset_list'] as const,
   node: (id: string) => ['node_get', id] as const,
   search: (q: string) => ['node_search', q] as const,
+  // Per installation, not per project — which is why nothing in
+  // `invalidateWorld` touches it. Opening someone else's world does not change
+  // which keys this machine has.
+  providerKeys: (providers: string[]) => ['provider_key_status', providers] as const,
   // The engine is a pure function of the world and these arguments, so the
   // arguments belong in the key: two presets, or two positions of the same
   // slider, are two different answers and neither invalidates the other.
@@ -561,6 +566,65 @@ export function useSetCoverAsset() {
     (v: { nodeId: string; assetId: string | null }) => api.assetSetCover(v.nodeId, v.assetId),
     'Could not set that cover image',
   )
+}
+
+/* ── provider keys ────────────────────────────────────────────────────────── */
+
+/**
+ * Whether this machine has a key for each of these providers.
+ *
+ * Presence, never value: there is no query here that returns key material,
+ * because there is no command that returns it. What this answers is the
+ * question the UI actually has — "Gemini is selected; can this machine run it?"
+ *
+ * `staleTime: Infinity` because the answer only changes when this app changes
+ * it, and the two mutations below invalidate when they do. A key edited in
+ * Seahorse or Keychain Access while Wobu is open is picked up on the next run;
+ * the Rust side caches for the same reason, which is that a locked Secret
+ * Service prompts the user on every read.
+ */
+export function useProviderKeys(providers: string[]): UseQueryResult<KeyStatus[]> {
+  return useQuery({
+    queryKey: qk.providerKeys(providers),
+    queryFn: () => api.providerKeyStatus(providers),
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
+/**
+ * Save a key for a provider.
+ *
+ * The caller is responsible for clearing its own input afterwards. React Query
+ * keeps `variables` on the mutation until it is reset, so a key pasted here
+ * stays reachable from the mutation's state — harmless, since the user typed it
+ * into this process, but not something to leave sitting in a form.
+ */
+export function useSetProviderKey() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { provider: string; key: string }) => api.providerKeySet(v.provider, v.key),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
+    },
+  })
+}
+
+/**
+ * Remove this machine's stored key for a provider.
+ *
+ * The result says whether anything was actually removed, and what the provider
+ * resolves to now — which on a development build can still be "configured",
+ * because the repo-root `.env` answers after the keychain does not.
+ */
+export function useDeleteProviderKey() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (provider: string) => api.providerKeyDelete(provider),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
+    },
+  })
 }
 
 /* ── undo ─────────────────────────────────────────────────────────────────── */

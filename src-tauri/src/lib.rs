@@ -4,6 +4,7 @@
 mod commands;
 mod diag;
 mod error;
+mod keys;
 mod redact;
 mod state;
 
@@ -28,6 +29,11 @@ pub fn run() {
         // has to be initialised on this side or every pick fails.
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        // Beside `AppState` rather than inside it, and that is the point: keys
+        // belong to the installation, not to the open project. A type that could
+        // reach a project folder is a type that could one day read a key out of
+        // one, and project folders live on shares.
+        .manage(keys::Keys::default())
         .setup(|app| {
             // Not another `.manage(Default::default())`: the queue reports
             // itself by emitting, and there is no `AppHandle` to emit through
@@ -88,6 +94,9 @@ pub fn run() {
             commands::log_set_level,
             commands::log_tail,
             commands::log_reveal,
+            commands::provider_key_status,
+            commands::provider_key_set,
+            commands::provider_key_delete,
             commands::job_cancel,
             commands::job_list,
         ])

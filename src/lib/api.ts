@@ -212,6 +212,7 @@ export type ErrorCode =
   | 'asset.not_found'
   | 'share.unmounted'
   | 'provider.no_key'
+  | 'provider.keychain_unavailable'
   | 'provider.bad_key'
   | 'provider.billing_required'
   | 'provider.rate_limited'
@@ -827,6 +828,73 @@ export const presencePeers = () => call<Peer[]>('presence_peers')
  */
 export const presenceEditing = (nodeIds: string[]) =>
   call<void>('presence_editing', { nodeIds })
+
+/* ── provider keys ────────────────────────────────────────────────────────── */
+
+/**
+ * Where a provider's key came from.
+ *
+ * `environment` only ever appears in a development build — a repo-root `.env`,
+ * or a variable exported into the process. A shipped Wobu reads keys from the
+ * OS keychain and from nowhere else.
+ */
+export type KeySource = 'keychain' | 'environment'
+
+/**
+ * Whether this computer has a credential store that answers.
+ *
+ * `unavailable` is not a failure: a headless Linux box or a session whose login
+ * keyring is locked has no store, and the app still runs. What it means is that
+ * a key cannot be *saved* here, which is worth saying beside the field rather
+ * than discovering when Save fails.
+ */
+export type KeychainState = 'ready' | 'unavailable'
+
+/**
+ * Presence, never value.
+ *
+ * Keys live in the Rust process and in this machine's keychain; none of them
+ * ever crosses the bridge, which is why there is no field here that could carry
+ * one. Keys are per *installation*, so a project shared from a drive opens with
+ * *your* keys — `project.json` records only which provider and model were
+ * chosen, and a collaborator without a key gets `source: null` rather than an
+ * error.
+ */
+export interface KeyStatus {
+  provider: string
+  /** `null` means no key on this machine. A state, not a failure. */
+  source: KeySource | null
+  keychain: KeychainState
+}
+
+/** Takes a list because a providers pane renders every row at once. */
+export const providerKeyStatus = (providers: string[]) =>
+  call<KeyStatus[]>('provider_key_status', { providers })
+
+/**
+ * The one call that carries key material, and it carries it *inwards*: the user
+ * pasted it into a field, so it is already in the webview and the only question
+ * is where it goes next. Nothing sends one back.
+ *
+ * Rejects with `provider.keychain_unavailable` when there is no store to save
+ * into — the message says to unlock the login keyring.
+ */
+export const providerKeySet = (provider: string, key: string) =>
+  call<KeyStatus>('provider_key_set', { provider, key })
+
+export interface KeyRemoval {
+  /** False when there was nothing stored. A no-op, not a failure. */
+  removed: boolean
+  /**
+   * What the provider resolves to now. On a development build this can still be
+   * configured after a successful delete, because the repo-root `.env` answers
+   * next — which is the one outcome worth showing rather than assuming.
+   */
+  status: KeyStatus
+}
+
+export const providerKeyDelete = (provider: string) =>
+  call<KeyRemoval>('provider_key_delete', { provider })
 
 /* ── storage and about ────────────────────────────────────────────────────── */
 
