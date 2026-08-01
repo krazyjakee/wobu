@@ -80,6 +80,34 @@ pub enum Error {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
+    /// A manifest page arrived that this build will not read: not
+    /// `wobu/sync/1` JSON, longer than [`crate::manifest::MAX_PAGE_BYTES`], or a
+    /// stream that stopped without saying it had finished.
+    ///
+    /// One variant for all three, and no detail in any of them, for the reason
+    /// [`Error::Malformed`] gives: the bytes that failed were written by a peer,
+    /// and an error message quoting them is a log line a peer controls. It is
+    /// separate from `Malformed` only because that one's message names the
+    /// opening exchange, and a user shown "your opening message is wrong" for a
+    /// failure two round trips later has been told something untrue.
+    ///
+    /// Note what this is *not*: a peer whose manifest is merely too long is not
+    /// an error at all. That degrades — see [`crate::manifest::Exchange::is_whole`]
+    /// — because failing outright would leave a project that grew past the cap
+    /// unable to sync the deletion that would bring it back under.
+    #[error("the peer's manifest is not readable as wobu/sync/1")]
+    ManifestMalformed,
+
+    /// The peer went silent part-way through a manifest exchange.
+    ///
+    /// A bound on **silence rather than on size**, which is why the field is
+    /// named `idle` and not `within`: every read and every page write gets the
+    /// same deadline afresh, so a large manifest over a slow link completes as
+    /// long as it keeps arriving. Seeing this means the peer stopped, not that it
+    /// was slow.
+    #[error("the peer went quiet for {idle:?} during the manifest exchange")]
+    ManifestTimedOut { idle: Duration },
+
     /// The string somebody pasted is not a Wobu project ticket.
     ///
     /// One variant for every way that can be true — the wrong clipboard entry,

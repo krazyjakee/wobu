@@ -63,6 +63,29 @@
 //! - [`Error::ProjectNotHeld`] carries nothing, so a caller cannot log or
 //!   surface something the wire did not say.
 //!
+//! ## A peer not having something is not a peer having deleted it
+//!
+//! The second standing rule of this crate, and the one with teeth. [`manifest`]
+//! swaps a full list of what each side holds, and a node in our list and not in
+//! theirs is ambiguous between "they deleted it" and "they never had it". M3 has
+//! no tombstones, so nothing on the wire can tell those apart, and **every
+//! absence is read as the second one** — by this crate, and by
+//! `wobu_store::apply::decide` one crate over, which reaches the same conclusion
+//! from the same reasoning.
+//!
+//! So a delete does not propagate. Remove a node on one machine and it is still
+//! on the other; sync again and it may come back. That is a documented
+//! shortcoming rather than a bug, because the alternative is not close: an absent
+//! entry is also what a half-mounted share, a failed transfer and a manifest this
+//! crate truncated all look like, and a delete driven by absence turns any one of
+//! those into a world-wide erase of somebody else's writing. A delete that
+//! quietly comes back is an annoyance; a delete that quietly happens is
+//! unrecoverable.
+//!
+//! Making deletion work is a schema change — a replicated record saying a
+//! deletion happened, with rules about when it may be forgotten — and not a wire
+//! change. Nothing may be added to [`manifest`] to approximate one.
+//!
 //! ## Who a peer is
 //!
 //! [`Identity`] — an ed25519 keypair whose secret half lives in the OS keychain
@@ -128,10 +151,25 @@
 //!   entry, and cloning a project a [`Disposition::Clone`] ticket names. Neither
 //!   belongs here — a transport crate that wrote files would be `identity.rs`'s
 //!   argument against a file fallback, lost.
-//! - **#79 manifest exchange, #81 blob transfer** — [`Session::connection`] and
+//! - **#79 manifest exchange** — done, in [`manifest`]: [`manifest::exchange`]
+//!   swaps `(node id, hash)` for every node and `(rel_path, hash)` for every blob
+//!   under `assets/` and `generations/`, paged and capped, in both directions at
+//!   once. It takes and returns the exact `Vec<(Id, String)>` that
+//!   `wobu_store::Project::manifest` produces and `plan_against_peer` consumes,
+//!   so the shell adapts nothing. **This crate does not diff manifests** — #80
+//!   landed that as a pure function in `wobu_store::apply::decide`, and a second
+//!   copy of it here would be the milestone's most consequential decision made
+//!   twice, in the crate with no filesystem to test it against.
+//!   What is *not* done is the wiring, for the same reason as #76: the shell does
+//!   not depend on this crate yet, so nothing assembles the blob half or feeds
+//!   the node half back into a `Project`.
+//! - **#81 blob transfer** — [`Session::connection`] and
 //!   [`SyncEndpoint::endpoint`]. The opening exchange finished its stream, so a
 //!   later protocol owns whatever streams it opens; blobs registers a second
-//!   ALPN on the same router.
+//!   ALPN on the same router. [`manifest::Blob`] is the list of what to fetch,
+//!   and its `rel_path` has been through [`manifest::is_syncable_rel_path`] —
+//!   which is a syntax check and not a permission, so the validation still has to
+//!   happen on the near side of whatever join places the file.
 //! - **#82 `SyncManager`** — [`Sessions`] is the trait it implements, and the
 //!   `Router`'s abort-on-drop is why it must exist.
 //! - **#83 status and presence** — [`Session::is_relayed`] now,
@@ -141,12 +179,14 @@
 pub mod endpoint;
 pub mod error;
 pub mod identity;
+pub mod manifest;
 mod opening;
 pub mod ticket;
 
 pub use endpoint::{Config, Projects, Reach, Session, SyncEndpoint, Sessions};
 pub use error::{Error, Result};
 pub use identity::{Identity, Origin};
+pub use manifest::{Blob, Counts, Exchange};
 pub use ticket::{Disposition, Grant, Ticket};
 /// The project identifier, re-exported rather than aliased: the ULID on the wire
 /// is the same one the rest of Wobu calls a project, and a second name for it
