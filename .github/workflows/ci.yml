@@ -18,9 +18,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # `npm run check` and nothing else, on purpose: the point of that script is
-  # that a developer can run the whole frontend gate locally, so anything CI
-  # does here that the script does not do is a way for the two to disagree.
   frontend:
     name: Frontend — typecheck, lint, format, tests
     runs-on: ubuntu-latest
@@ -35,6 +32,12 @@ jobs:
       - run: npm ci
 
       - run: npm run check
+
+      - name: Test the release asset verifier
+        run: >-
+          node --test
+          .github/scripts/verify-no-source-maps.test.mjs
+          .github/scripts/vite-source-maps.test.mjs
 
   rust:
     name: Rust — fmt, clippy, tests
@@ -145,6 +148,12 @@ jobs:
           key: bundle
 
       - run: npm ci
+
+      - name: Build frontend release assets
+        run: npm run build
+
+      - name: Reject source maps from packaged frontend assets
+        run: node .github/scripts/verify-no-source-maps.mjs dist
 
       # `tauri.conf.json` points `beforeBuildCommand` at `npm run build`, so the
       # frontend is typechecked and bundled as part of this. Nothing here signs

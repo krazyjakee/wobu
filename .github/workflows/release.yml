@@ -77,6 +77,14 @@ jobs:
 
       - run: npm ci
 
+      # Tauri packages `dist` as-is. Check it before tauri-action can publish a
+      # draft containing source maps; the action's repeated build is deterministic.
+      - name: Build frontend release assets
+        run: npm run build
+
+      - name: Reject source maps from packaged frontend assets
+        run: node .github/scripts/verify-no-source-maps.mjs dist
+
       # This intentionally has no Apple/Windows signing credentials and no
       # TAURI_SIGNING_PRIVATE_KEY. See docs/12-releasing.md: beta releases are
       # unsigned manual downloads, not updater payloads.
