@@ -18,7 +18,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 use wobu_core::{Id, new_id};
-use wobu_sync::{ALPN, Config, Error, Projects, Session, Sessions, SyncEndpoint};
+use wobu_sync::{ALPN, Config, Error, Identity, Projects, Session, Sessions, SyncEndpoint};
 
 /// The projects one machine holds.
 struct Held(Vec<Id>);
@@ -45,8 +45,19 @@ impl Sessions for Sink {
 /// One peer: an endpoint holding `held`, and the queue its inbound sessions
 /// land in.
 async fn peer(held: Vec<Id>) -> (SyncEndpoint, mpsc::UnboundedReceiver<Session>) {
+    bind(held, None).await
+}
+
+/// `peer`, with the identity chosen. `None` leaves iroh to mint one per bind,
+/// which is what every test but the identity one wants: they need two endpoints
+/// that are not each other, and do not care which.
+async fn bind(
+    held: Vec<Id>,
+    identity: Option<Identity>,
+) -> (SyncEndpoint, mpsc::UnboundedReceiver<Session>) {
     let (sessions, inbox) = mpsc::unbounded_channel();
     let config = Config {
+        identity,
         // Short, because every wait in these tests is a loopback round trip and
         // one test deliberately waits the whole timeout out.
         open_timeout: Duration::from_millis(500),
@@ -196,4 +207,49 @@ async fn a_loopback_endpoint_cannot_look_a_peer_up_at_all() {
     let bare = dialling.connect(accepting.id(), project).await;
 
     assert!(matches!(bare, Err(Error::Dial { .. })), "{bare:?}");
+}
+
+/// The whole of #76, against real TLS rather than against our own struct.
+///
+/// The claim is not that `Identity` remembers a key — a unit test covers that —
+/// but that the key it remembers is the one the *peer* ends up looking at. A
+/// bind that quietly ignored `Config::identity`, or an iroh that derived its
+/// endpoint id from something else, would pass every test in `identity.rs` and
+/// still leave a collaborator seeing a different person after every restart.
+#[tokio::test]
+async fn an_identity_is_the_same_peer_across_binds_and_is_what_the_other_side_sees() {
+    let project = new_id();
+    let identity = Identity::ephemeral();
+
+    let (first, _first_inbox) = bind(vec![project], Some(identity.clone())).await;
+    let addr = first.addr();
+    assert_eq!(first.id(), identity.id(), "the bound endpoint is not the identity's key");
+    assert_eq!(first.alias(), identity.alias());
+
+    // The other side's view, which is the one that matters: `Session::peer` is
+    // iroh's output from the TLS handshake, not anything this side claimed.
+    let (dialling, _dialling_inbox) = peer(vec![project]).await;
+    let session = dialling.connect(addr, project).await.expect("both sides hold the project");
+    assert_eq!(session.peer(), identity.id());
+    session.close();
+    first.shutdown().await.unwrap();
+
+    // And again, on a fresh endpoint — the restart this exists to survive.
+    let (second, _second_inbox) = bind(vec![project], Some(identity.clone())).await;
+    assert_eq!(second.id(), identity.id(), "the same identity bound as a different peer");
+    assert_eq!(second.alias(), identity.alias());
+}
+
+/// The behaviour #76 replaces, stated so it cannot come back by accident: with
+/// no identity, iroh mints a key per bind and the endpoint is a stranger every
+/// time. Fine for the tests above, which only need two endpoints that are not
+/// each other; fatal for an app, where an endpoint id is a person's name.
+#[tokio::test]
+async fn no_identity_still_means_a_new_peer_on_every_bind() {
+    let project = new_id();
+
+    let (first, _first_inbox) = bind(vec![project], None).await;
+    let (second, _second_inbox) = bind(vec![project], None).await;
+
+    assert_ne!(first.id(), second.id());
 }

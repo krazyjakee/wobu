@@ -1,10 +1,16 @@
 //! The losers of a guarded write, and what a person can do about them.
 //!
 //! [`crate::atomic::guarded_write`] parks the version that lost a race beside
-//! the one that won, as `<stem>.conflict-<user>-<timestamp>[-n].<ext>`. This
+//! the one that won, as `<stem>.conflict-<peer>-<timestamp>[-n].<ext>`. This
 //! module is the other half of that: reading those names back into something
 //! the UI can put on a card, and carrying out the one decision a human makes
 //! about them.
+//!
+//! `<peer>` is a short alias for the writer's ed25519 key ([`crate::peer`]),
+//! which since #76 is what replaces the `$USER` that used to go there. The
+//! difference that matters to *this* module is that the name means the same
+//! thing on every machine, so a sibling written on somebody else's laptop and
+//! synced onto ours is attributable rather than merely labelled.
 //!
 //! **Nothing here runs on a timer, a scan or a rebuild.** A conflict sibling is
 //! the only remaining copy of somebody's paragraph, so the sole code path in
@@ -40,18 +46,28 @@ pub fn is_sibling(file_name: &str) -> bool {
     file_name.contains(MARKER)
 }
 
-/// `kael-vantris.conflict-jake-20260731T142211Z.md` taken apart.
+/// `kael-vantris.conflict-amber-heron-4f1a-20260731T142211Z.md` taken apart.
 ///
-/// `user` and `saved_at` are optional because a name that does not parse is
+/// `peer` and `saved_at` are optional because a name that does not parse is
 /// still a file holding somebody's only copy of a paragraph. Refusing to list
 /// one we cannot label would make it unresolvable from inside the app, which is
 /// a worse outcome than a card that says "someone, at some point".
+///
+/// That optionality is also the migration story, and it is the whole of it: a
+/// sibling written by a build from before #76 says `jake` where a new one says
+/// `amber-heron-4f1a`, and both parse, because the parser only ever cared that
+/// the fragment before the timestamp is a slug. Nothing renames anything — a
+/// conflict sibling is somebody's only copy, and touching one to tidy up a name
+/// is not a trade this crate makes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SiblingName {
     /// `kael-vantris` — the node file it lost to, minus the extension.
     pub stem: String,
     pub ext: Option<String>,
-    pub user: Option<String>,
+    /// The alias of whoever lost the race. Named `peer` rather than `user`
+    /// because it is a key's short name and not a login: nothing on this machine
+    /// can produce somebody else's, which was the point of #76.
+    pub peer: Option<String>,
     pub saved_at: Option<DateTime<Utc>>,
 }
 
@@ -88,15 +104,16 @@ pub fn parse(file_name: &str) -> Option<SiblingName> {
         return None;
     }
 
-    // `<user>-<timestamp>` with an optional `-<n>`, where the user is a slug
-    // and so may itself contain hyphens. The timestamp is the only component
-    // with a fixed shape, so it is what the split is anchored on. `slugify`
-    // lowercases, which is why a slug can never be mistaken for one: the `T`
-    // and `Z` are matched literally.
+    // `<peer>-<timestamp>` with an optional `-<n>`, where the peer alias is a
+    // slug and so may itself contain hyphens — `amber-heron-4f1a` is three
+    // components on its own. The timestamp is the only part with a fixed shape,
+    // so it is what the split is anchored on. `slugify` lowercases, which is why
+    // an alias can never be mistaken for one: the `T` and `Z` are matched
+    // literally.
     let parts: Vec<&str> = tail.split('-').collect();
     let stamp_at = parts.iter().position(|p| parse_stamp(p).is_some());
 
-    let (user, saved_at) = match stamp_at {
+    let (peer, saved_at) = match stamp_at {
         Some(i) if i > 0 => (Some(parts[..i].join("-")), parse_stamp(parts[i])),
         // No timestamp, or nothing before it. Still a sibling; just an unlabelled one.
         _ => (None, None),
@@ -105,7 +122,7 @@ pub fn parse(file_name: &str) -> Option<SiblingName> {
     Some(SiblingName {
         stem: stem.to_string(),
         ext,
-        user: user.filter(|u| !u.is_empty()),
+        peer: peer.filter(|p| !p.is_empty()),
         saved_at,
     })
 }
@@ -131,14 +148,25 @@ pub struct Conflict {
     /// is still resolvable, it just cannot be named after an entity.
     pub node_id: Option<Id>,
     pub node_name: Option<String>,
-    /// Who lost the race, from the filename. `None` for a sibling whose name
-    /// nothing here could read.
+    /// Who lost the race, from the filename: the peer alias, or `None` for a
+    /// sibling whose name nothing here could read.
+    ///
+    /// Still called `user` on the wire, because it is what the card puts in
+    /// front of a person and "user" is the word `src/components/ConflictCard.tsx`
+    /// renders it under. The Rust side calls it a peer everywhere else; see
+    /// [`SiblingName::peer`] for why the distinction is worth keeping.
     pub user: Option<String>,
     pub saved_at: Option<DateTime<Utc>>,
-    /// Whether this session's user is the one stamped on the sibling — the
-    /// difference between a card that says "keep mine" and one that says "keep
-    /// Nadia's". Wrong-but-harmless on a share where two people share a login,
-    /// which is why nothing but the wording depends on it.
+    /// Whether this installation's peer alias is the one stamped on the sibling
+    /// — the difference between a card that says "keep mine" and one that says
+    /// "keep Nadia's".
+    ///
+    /// Before #76 this was wrong-but-harmless on a share where two people shared
+    /// a login. It is now wrong only when a machine could not reach its keychain
+    /// and is running under the unattributed fallback, in which case it reads
+    /// `false` for siblings that really were ours. Still nothing but the wording
+    /// depends on it, and that is still on purpose: an alias is twenty-eight bits
+    /// and may never decide anything.
     pub mine: bool,
     /// The text that was set aside.
     pub parked: String,
@@ -195,21 +223,57 @@ mod tests {
     #[test]
     fn the_name_guarded_write_produces_round_trips() {
         // The one case that has to work; everything below is a variation on it.
-        let n = parsed("kael-vantris.conflict-jake-20260731T142211Z.md");
+        // The peer is an alias — three hyphenated components of its own, which
+        // is the shape the parser has to survive since #76.
+        let n = parsed("kael-vantris.conflict-amber-heron-4f1a-20260731T142211Z.md");
         assert_eq!(n.stem, "kael-vantris");
         assert_eq!(n.ext.as_deref(), Some("md"));
-        assert_eq!(n.user.as_deref(), Some("jake"));
+        assert_eq!(n.peer.as_deref(), Some("amber-heron-4f1a"));
         assert_eq!(n.saved_at.unwrap().to_rfc3339(), "2026-07-31T14:22:11+00:00");
         assert_eq!(n.target_file_name(), "kael-vantris.md");
     }
 
     #[test]
-    fn a_user_slug_with_hyphens_is_not_split_across_the_timestamp() {
-        // `slugify("Nadia Okonkwo")` is `nadia-okonkwo`, so splitting on the
-        // first hyphen would have named the user "nadia" and lost the rest.
+    fn a_name_a_pre_identity_build_wrote_still_parses() {
+        // The migration, and the whole of it. A share that has been in use since
+        // before #76 has `$USER` siblings sitting in it, and each one is still
+        // somebody's only copy of a paragraph. Nothing renames them — they parse,
+        // they list, and the card labels them with whatever login wrote them.
+        let n = parsed("kael-vantris.conflict-jake-20260731T142211Z.md");
+        assert_eq!(n.peer.as_deref(), Some("jake"));
+        assert_eq!(n.target_file_name(), "kael-vantris.md");
+
+        // Including the collision that made #76 worth doing: everyone on a
+        // default install was `user`, and the file is still resolvable.
+        let n = parsed("kael-vantris.conflict-user-20260731T142211Z.md");
+        assert_eq!(n.peer.as_deref(), Some("user"));
+    }
+
+    #[test]
+    fn a_peer_alias_with_hyphens_is_not_split_across_the_timestamp() {
+        // Every alias has two of these — `amber-heron-4f1a` — so splitting on
+        // the first hyphen would name the peer "amber" and lose the rest, which
+        // is a card that attributes a paragraph to the wrong person. The old
+        // `slugify("Nadia Okonkwo")` case is the same failure and is kept.
         let n = parsed("kael-vantris.conflict-nadia-okonkwo-20260731T142211Z.md");
-        assert_eq!(n.user.as_deref(), Some("nadia-okonkwo"));
+        assert_eq!(n.peer.as_deref(), Some("nadia-okonkwo"));
         assert_eq!(n.stem, "kael-vantris");
+
+        let n = parsed("kael-vantris.conflict-silver-plover-00ff-20260731T142211Z.md");
+        assert_eq!(n.peer.as_deref(), Some("silver-plover-00ff"));
+        assert_eq!(n.stem, "kael-vantris");
+    }
+
+    #[test]
+    fn an_alias_whose_suffix_is_all_digits_is_not_read_as_a_timestamp() {
+        // A quarter of aliases end in four hex characters that are entirely
+        // numeric, and the split anchors on a numeric-looking component. The
+        // format needs sixteen characters with a literal `T` and `Z`, so this
+        // cannot land in the wrong place — restated as an assertion because the
+        // failure is silent and misattributes somebody's writing.
+        let n = parsed("kael-vantris.conflict-golden-otter-2026-20260731T142211Z.md");
+        assert_eq!(n.peer.as_deref(), Some("golden-otter-2026"));
+        assert_eq!(n.saved_at.unwrap().to_rfc3339(), "2026-07-31T14:22:11+00:00");
     }
 
     #[test]
@@ -218,7 +282,7 @@ mod tests {
         // of the stamp would make the second one unparseable and therefore
         // unlabelled on the card.
         let n = parsed("kael-vantris.conflict-jake-20260731T142211Z-2.md");
-        assert_eq!(n.user.as_deref(), Some("jake"));
+        assert_eq!(n.peer.as_deref(), Some("jake"));
         assert_eq!(n.saved_at.unwrap().to_rfc3339(), "2026-07-31T14:22:11+00:00");
         assert_eq!(n.target_file_name(), "kael-vantris.md");
     }
@@ -256,7 +320,7 @@ mod tests {
         // can make one, and the target it names has to be the file it sits
         // beside rather than the original node.
         let n = parsed("kael.conflict-jake-20260731T142211Z.conflict-nadia-20260731T150000Z.md");
-        assert_eq!(n.user.as_deref(), Some("nadia"));
+        assert_eq!(n.peer.as_deref(), Some("nadia"));
         assert_eq!(n.stem, "kael.conflict-jake-20260731T142211Z");
     }
 
@@ -267,7 +331,7 @@ mod tests {
         // split land in the wrong place. `slugify` lowercases and the format
         // matches `T`/`Z` literally, so it cannot.
         let n = parsed("kael.conflict-20260731t142211z-20260731T142211Z.md");
-        assert_eq!(n.user.as_deref(), Some("20260731t142211z"));
+        assert_eq!(n.peer.as_deref(), Some("20260731t142211z"));
     }
 
     #[test]

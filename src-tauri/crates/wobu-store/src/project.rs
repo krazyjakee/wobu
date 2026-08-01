@@ -84,7 +84,14 @@ pub struct Project {
     index: Index,
     on_network_share: bool,
     read_only: bool,
-    user: String,
+    /// Who we are, fixed at open. See [`crate::peer`] — it is a short alias for
+    /// this installation's ed25519 key, and it replaces the `$USER` that used to
+    /// make two collaborators on default installs into the same person.
+    ///
+    /// Held on the project rather than read at each use so that a session cannot
+    /// stamp two conflict siblings in one folder under two different names,
+    /// which is a folder nobody can read back.
+    peer: String,
     /// Every node, whole, for the influence engine. Empty until something asks —
     /// see [`world_nodes`](Project::world_nodes), which is also where the cost
     /// of holding this is argued.
@@ -132,7 +139,7 @@ impl Project {
             index,
             on_network_share: false,
             read_only: false,
-            user: current_user(),
+            peer: crate::peer::alias().to_owned(),
             world: Vec::new(),
         };
 
@@ -186,7 +193,7 @@ impl Project {
             index,
             on_network_share,
             read_only,
-            user: current_user(),
+            peer: crate::peer::alias().to_owned(),
             world: Vec::new(),
         };
 
@@ -578,7 +585,7 @@ impl Project {
             return Ok(SaveOutcome::Saved(Box::new(theirs)));
         }
 
-        match atomic::guarded_write(&self.root, &path, &text, expected, &self.user)? {
+        match atomic::guarded_write(&self.root, &path, &text, expected, &self.peer)? {
             WriteOutcome::Written(stamp) => {
                 self.index.upsert_node(node, &rel, &stamp)?;
                 Ok(SaveOutcome::Saved(Box::new(node.clone())))
@@ -904,12 +911,12 @@ impl Project {
             let node = self.index.node_at_rel_path(&target_rel)?;
 
             out.push(Conflict {
-                mine: name.user.as_deref() == Some(self.user.as_str()),
+                mine: name.peer.as_deref() == Some(self.peer.as_str()),
                 rel_path: rel,
                 node_rel_path: target_rel,
                 node_id: node.as_ref().map(|(id, _)| *id),
                 node_name: node.map(|(_, name)| name),
-                user: name.user,
+                user: name.peer,
                 saved_at: name.saved_at,
                 parked,
                 current,
@@ -1004,7 +1011,7 @@ impl Project {
                     &target,
                     &parked,
                     expected.as_ref(),
-                    &self.user,
+                    &self.peer,
                 )? {
                     WriteOutcome::Written(stamp) => {
                         match markdown::from_markdown(&parked, &target) {
@@ -1257,15 +1264,6 @@ impl Project {
 /// target, so that resolving the conflict could start a new one.
 fn is_conflict_path(path: &Path) -> bool {
     path.file_name().is_some_and(|n| conflict::is_sibling(&n.to_string_lossy()))
-}
-
-/// The name a conflict sibling is stamped with, and the name a collaborator
-/// sees in the presence list. Shared so the two cannot disagree about who a
-/// person is.
-pub(crate) fn current_user() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "user".to_string())
 }
 
 #[cfg(test)]

@@ -87,12 +87,17 @@ pub enum WriteOutcome {
 ///
 /// `expected` is the stamp from when we loaded the file, or `None` if we believe
 /// the file is new. A mismatch either way is a conflict.
+///
+/// `peer` is this installation's alias — [`crate::peer::alias`] — and it is what
+/// a losing write is stamped with. Taken as an argument rather than read here so
+/// that the whole of one session's siblings carry one name; `Project` reads it
+/// once at open and passes the same string every time.
 pub fn guarded_write(
     project_root: &Path,
     target: &Path,
     contents: &str,
     expected: Option<&Stamp>,
-    user: &str,
+    peer: &str,
 ) -> Result<WriteOutcome> {
     let bytes = contents.as_bytes();
 
@@ -117,7 +122,7 @@ pub fn guarded_write(
     };
 
     if clobbers_someone {
-        let conflict_path = reserve_conflict_sibling(target, user)?;
+        let conflict_path = reserve_conflict_sibling(target, peer)?;
         stage_and_rename(project_root, &conflict_path, bytes)?;
         let stamp = Stamp::of_bytes(bytes, now_ms());
         return Ok(WriteOutcome::Conflict { conflict_path, stamp });
@@ -132,19 +137,23 @@ fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
 }
 
-/// `kael-vantris.md` → `kael-vantris.conflict-jake-20260731T142211Z.md`
+/// `kael-vantris.md` → `kael-vantris.conflict-amber-heron-4f1a-20260731T142211Z.md`
 ///
 /// The Obsidian/Dropbox convention: predictable, sorts next to the original,
 /// and because it is Markdown a human — or git — can resolve it properly.
-fn conflict_sibling(target: &Path, user: &str, ts: &str, attempt: u32) -> PathBuf {
+fn conflict_sibling(target: &Path, peer: &str, ts: &str, attempt: u32) -> PathBuf {
     let stem = target.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let ext = target.extension().map(|s| s.to_string_lossy().into_owned());
-    let user = wobu_core::slugify(user).unwrap_or_else(|_| "unknown".to_string());
+    // A peer alias is already a slug, so this is a no-op on every name Wobu
+    // produces. Kept because the argument is a `&str` and a caller could hand
+    // over anything — and because a filename with a stray character in it is one
+    // an SMB share may refuse, which would lose the very text being rescued.
+    let peer = wobu_core::slugify(peer).unwrap_or_else(|_| "unknown".to_string());
     // The first one gets the clean name; only a collision pays for the suffix.
     let n = if attempt <= 1 { String::new() } else { format!("-{attempt}") };
     let name = match ext {
-        Some(ext) => format!("{stem}.conflict-{user}-{ts}{n}.{ext}"),
-        None => format!("{stem}.conflict-{user}-{ts}{n}"),
+        Some(ext) => format!("{stem}.conflict-{peer}-{ts}{n}.{ext}"),
+        None => format!("{stem}.conflict-{peer}-{ts}{n}"),
     };
     target.with_file_name(name)
 }
@@ -162,14 +171,14 @@ fn conflict_sibling(target: &Path, user: &str, ts: &str, attempt: u32) -> PathBu
 /// testing for existence first. Two Wobu processes on the same share race here
 /// for real, and an `exists()` check would let both decide the same name is
 /// free. `stage_and_rename` then renames over our own empty placeholder.
-fn reserve_conflict_sibling(target: &Path, user: &str) -> Result<PathBuf> {
+fn reserve_conflict_sibling(target: &Path, peer: &str) -> Result<PathBuf> {
     if let Some(parent) = target.parent() {
         crate::paths::ensure_dir(parent)?;
     }
     let ts = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
 
     for attempt in 1..=MAX_CONFLICT_ATTEMPTS {
-        let candidate = conflict_sibling(target, user, &ts, attempt);
+        let candidate = conflict_sibling(target, peer, &ts, attempt);
         match fs::OpenOptions::new().write(true).create_new(true).open(&candidate) {
             Ok(_) => return Ok(candidate),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,

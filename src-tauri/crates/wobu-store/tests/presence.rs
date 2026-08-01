@@ -228,3 +228,39 @@ fn files_that_are_not_ours_are_left_alone() {
     assert!(notes.is_file(), "deleted a file that was never a session");
     assert!(readme.is_file(), "deleted a file that was never a session");
 }
+
+/// The one name, in the two places it appears (#76).
+///
+/// Presence says who is *here* and a conflict sibling says who *wrote* the
+/// paragraph you are reading. If those disagree, a user looking at "Nadia is
+/// editing Kael Vantris" beside `kael-vantris.conflict-<somebody-else>-….md`
+/// cannot tell whether they are the same person, and the whole point of naming
+/// a peer is gone. They come from `wobu_store::peer::alias`, and this is the
+/// assertion that keeps them coming from the same call.
+#[test]
+fn presence_and_a_conflict_sibling_call_this_installation_the_same_thing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut project = Project::create(dir.path(), "Ashfall").unwrap();
+    let node = project.create_node(NodeKind::Character, "Kael Vantris", None).unwrap();
+
+    // Somebody else's Wobu saves over the file while we are holding it.
+    let rel = project.index().rel_path_of(node.id).unwrap().expect("indexed");
+    let path = wobu_store::paths::from_rel_string(project.root(), &rel);
+    let mut ours = project.get_node(node.id).unwrap();
+    let theirs = fs::read_to_string(&path).unwrap();
+    let (frontmatter, _) = theirs.split_once("\n---\n").unwrap();
+    fs::write(&path, format!("{frontmatter}\n---\n\n## Notes\n\nnadia got here first\n")).unwrap();
+    ours.notes_raw = "our only copy of this paragraph".into();
+    let SaveOutcome::Conflict { conflict_path } = project.save_node(ours).unwrap() else {
+        panic!("the fixture needs a conflict and did not get one")
+    };
+
+    let _presence = Presence::start(project.root());
+    let announced = peers_in(project.root());
+    assert_eq!(announced.len(), 1, "{announced:?}");
+
+    let sibling = conflict_path.rsplit('/').next().unwrap();
+    let wrote_it = wobu_store::conflict::parse(sibling).expect("a sibling").peer;
+    assert_eq!(wrote_it.as_deref(), Some(announced[0].user.as_str()), "{sibling}");
+    assert_eq!(wrote_it.as_deref(), Some(wobu_store::peer::alias()));
+}

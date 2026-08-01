@@ -54,6 +54,26 @@
 //! - [`Error::ProjectNotHeld`] carries nothing, so a caller cannot log or
 //!   surface something the wire did not say.
 //!
+//! ## Who a peer is
+//!
+//! [`Identity`] — an ed25519 keypair whose secret half lives in the OS keychain
+//! at `wobu/sync`, per installation, never in the project folder. The public
+//! half is the [`EndpointId`] above, so a peer's name and its TLS certificate
+//! are the same thirty-two bytes, which is why nothing in this crate has to
+//! check that they match.
+//!
+//! Two things follow, and both are easy to get subtly wrong later:
+//!
+//! - The identity is **not** a `SecretKey` field anybody can read. It is
+//!   `pub(crate)` behind [`Identity`], and [`Config::bind`] handing it to iroh's
+//!   builder is the only place in the workspace it is touched. The rule against
+//!   cryptographic primitives above is what makes that sufficient: the key is
+//!   used to *be* somebody, never to sign anything.
+//! - [`Identity::alias`] — `amber-heron-4f1a` — is for **display only**. It is
+//!   twenty-eight bits, which is a name and not a key, and a peer who wanted to
+//!   collide with somebody's alias could grind one out in seconds. Anything
+//!   deciding anything compares the full [`EndpointId`].
+//!
 //! ## Runtime
 //!
 //! No runtime is created here. iroh wants `tokio ^1.44` and the workspace is on
@@ -84,9 +104,13 @@
 //!
 //! ## Seams left for the rest of M3
 //!
-//! - **#76 peer identity** — [`Config::secret_key`]. Bound with `None` today,
-//!   which mints a new identity per bind. Note the type is `EndpointId`, not
-//!   `NodeId`; that name does not exist in iroh 1.0.
+//! - **#76 peer identity** — done; [`identity`] and [`Config::identity`]. What
+//!   is *not* done is the wiring: the Tauri shell does not depend on this crate
+//!   yet, so nothing calls [`Identity::load`] and nothing hands the alias to
+//!   `wobu_store::peer::install`. That belongs to whichever of #77 or #82 first
+//!   makes the app hold a `SyncEndpoint`. Until then a conflict sibling is named
+//!   from `wobu-store`'s unattributed fallback, which is per *process* rather
+//!   than per installation.
 //! - **#77 tickets** — [`SyncEndpoint::addr`] and [`SyncEndpoint::online`] are
 //!   what a ticket is minted from, in that order.
 //! - **#79 manifest exchange, #81 blob transfer** — [`Session::connection`] and
@@ -101,10 +125,12 @@
 
 pub mod endpoint;
 pub mod error;
+pub mod identity;
 mod opening;
 
 pub use endpoint::{Config, Projects, Reach, Session, SyncEndpoint, Sessions};
 pub use error::{Error, Result};
+pub use identity::{Identity, Origin};
 /// The project identifier, re-exported rather than aliased: the ULID on the wire
 /// is the same one the rest of Wobu calls a project, and a second name for it
 /// would be a second thing to keep in step.

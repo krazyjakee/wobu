@@ -7,10 +7,11 @@ use std::time::Duration;
 use async_trait::async_trait;
 use iroh::endpoint::{Connection, VarInt, presets};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey};
+use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
 use wobu_core::Id;
 
 use crate::error::{Error, Result};
+use crate::identity::Identity;
 use crate::{ALPN, opening};
 
 /// QUIC application close codes. They are what the *peer* is told; the reason
@@ -52,11 +53,20 @@ pub enum Reach {
 /// How a sync endpoint is set up.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// The identity this endpoint presents. `None` mints a fresh one on every
-    /// bind, which is right for a test and wrong for the app: an endpoint id is
-    /// a peer's name, and a name that changes on restart is not a name. #76 is
-    /// where the persisted key comes from.
-    pub secret_key: Option<SecretKey>,
+    /// The identity this endpoint presents.
+    ///
+    /// `None` leaves iroh to mint a fresh key on every bind, which is right for
+    /// a test that only cares that two endpoints can find each other and wrong
+    /// for the app: an endpoint id is a peer's *name*, and a name that changes
+    /// on restart is not a name. The app passes [`Identity::load`], which is
+    /// keychain-backed and per installation.
+    ///
+    /// An `Identity` rather than a bare `SecretKey`, and that is the point of
+    /// the type: the key is `pub(crate)` behind it, so the only thing in this
+    /// workspace that can reach an ed25519 secret is [`Config::bind`] below,
+    /// handing it to iroh. A `pub secret_key` field would put one in every
+    /// struct that ever holds a `Config`.
+    pub identity: Option<Identity>,
     pub reach: Reach,
     /// How long a peer gets to complete the opening exchange.
     ///
@@ -70,7 +80,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Config {
-        Config { secret_key: None, reach: Reach::Internet, open_timeout: Duration::from_secs(10) }
+        Config { identity: None, reach: Reach::Internet, open_timeout: Duration::from_secs(10) }
     }
 }
 
@@ -96,8 +106,11 @@ impl Config {
                 .bind_addr("127.0.0.1:0")
                 .expect("127.0.0.1:0 is a valid socket address"),
         };
-        let builder = match &self.secret_key {
-            Some(key) => builder.secret_key(key.clone()),
+        // The only place in the workspace an ed25519 secret is read out of an
+        // `Identity`, and it goes straight into iroh's builder without being
+        // stored, formatted or logged on the way.
+        let builder = match &self.identity {
+            Some(identity) => builder.secret_key(identity.secret_key().clone()),
             None => builder,
         };
         builder.bind().await.map_err(|source| Error::Bind { source })
@@ -231,6 +244,17 @@ impl SyncEndpoint {
     /// This endpoint's id — its public key, and its name to every peer.
     pub fn id(&self) -> EndpointId {
         self.router.endpoint().id()
+    }
+
+    /// The short name a person reads for this endpoint: `amber-heron-4f1a`.
+    ///
+    /// Taken from the bound endpoint rather than from [`Config::identity`] so
+    /// that it is right in the `None` case too — an endpoint whose key iroh
+    /// minted has an alias like any other, it just has a different one next
+    /// time. Anything *deciding* something still compares [`Self::id`]; see
+    /// [`wobu_core::peer`] for why an alias may only ever be displayed.
+    pub fn alias(&self) -> String {
+        wobu_core::peer::alias(self.id().as_bytes())
     }
 
     /// Where this endpoint can currently be reached.

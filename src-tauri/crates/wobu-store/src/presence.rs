@@ -150,7 +150,14 @@ impl Presence {
             root: root.to_path_buf(),
             path: sessions_dir(root).join(format!("{session_id}.json")),
             session_id,
-            user: crate::project::current_user(),
+            // The same name a conflict sibling in this folder is stamped with —
+            // see [`crate::peer`]. Shared so that a collaborator in the title bar
+            // and the writer of the file beside them cannot be labelled
+            // differently, which would leave a user unable to tell that the
+            // person who is here is the person whose paragraph they are looking
+            // at. The field is still `user` on disk and on the wire because the
+            // session file is a thing a human may open in an editor.
+            user: crate::peer::alias().to_owned(),
             host: current_host(),
             opened_at: Utc::now(),
             editing: Mutex::new(Vec::new()),

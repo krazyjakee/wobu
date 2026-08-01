@@ -388,3 +388,38 @@ fn resolving_while_the_share_is_away_is_refused_rather_than_half_done() {
     fs::rename(&stashed, project.root()).unwrap();
     assert!(sibling.is_file(), "the sibling did not survive the share going away");
 }
+
+/* ── who a sibling says wrote it (#76) ────────────────────────────────────── */
+
+#[test]
+fn a_sibling_is_stamped_with_this_installations_peer_alias_and_not_with_a_login() {
+    // The whole of #76 as it reaches a folder. The name used to come from
+    // `$USER` with a fallback to the literal string `user`, which made two
+    // collaborators on default installs into the same person and let anybody be
+    // anybody by exporting a variable. It now comes from an alias for this
+    // machine's ed25519 key, which nothing on another machine can produce.
+    let (_dir, project, _node, _path, sibling) = world_with_a_conflict();
+    let name = sibling.file_name().unwrap().to_string_lossy().into_owned();
+
+    let alias = wobu_store::peer::alias();
+    let parsed = wobu_store::conflict::parse(&name).expect("a sibling the app just wrote");
+    assert_eq!(parsed.peer.as_deref(), Some(alias), "{name}");
+    assert!(parsed.saved_at.is_some(), "{name}");
+
+    // And the card agrees with the filename, which is what makes "keep mine"
+    // the right words rather than a guess.
+    let listed = project.conflicts().unwrap();
+    let card = listed.iter().find(|c| c.rel_path.ends_with(&name)).expect("the sibling is listed");
+    assert_eq!(card.user.as_deref(), Some(alias));
+    assert!(card.mine, "we wrote it, so the card must offer to keep ours");
+
+    // The environment is no longer an input. Asserted rather than argued
+    // because the failure would be silent: a build that still read `$USER`
+    // would produce a name that parses, lists and looks entirely correct.
+    assert!(!name.contains(".conflict-user-"), "the `$USER` fallback is back: {name}");
+    if let Ok(login) = std::env::var("USER")
+        && login != alias
+    {
+        assert!(!name.contains(&format!(".conflict-{login}-")), "a login named the sibling: {name}");
+    }
+}

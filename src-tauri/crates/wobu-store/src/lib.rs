@@ -22,6 +22,7 @@ pub mod image;
 pub mod index;
 pub mod markdown;
 pub mod paths;
+pub mod peer;
 pub mod presence;
 pub mod project;
 pub mod recent;

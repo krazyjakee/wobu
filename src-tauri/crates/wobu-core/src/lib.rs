@@ -13,6 +13,7 @@ pub mod generation;
 pub mod kind;
 pub mod link;
 pub mod node;
+pub mod peer;
 pub mod preset;
 pub mod schema;
 pub mod slug;
