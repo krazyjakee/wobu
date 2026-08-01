@@ -141,6 +141,7 @@ struct Registry {
 struct Record {
     kind: JobKind,
     label: String,
+    subject_id: Option<String>,
     state: JobState,
     attempt: u32,
     started_at: Option<Instant>,
@@ -205,6 +206,7 @@ impl Queue {
                 Record {
                     kind: task.kind(),
                     label: task.label(),
+                    subject_id: task.subject_id(),
                     state: JobState::Queued,
                     attempt: 0,
                     started_at: None,
@@ -420,6 +422,7 @@ impl Registry {
                     id: *id,
                     kind: record.kind,
                     label: record.label.clone(),
+                    subject_id: record.subject_id.clone(),
                     state: record.state.clone(),
                     attempt: record.attempt,
                     elapsed_ms: if record.state.is_terminal() {

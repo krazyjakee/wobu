@@ -538,6 +538,10 @@ impl Task for EnhanceTask {
         JobKind::Enhance
     }
 
+    fn subject_id(&self) -> Option<String> {
+        Some(self.node_id.to_string())
+    }
+
     fn label(&self) -> String {
         self.label.clone()
     }

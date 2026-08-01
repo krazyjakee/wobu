@@ -5,6 +5,7 @@ mod commands;
 mod diag;
 mod enhance;
 mod error;
+mod generate;
 mod keys;
 mod redact;
 mod state;
@@ -78,6 +79,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::kind_registry,
+            commands::preset_list,
             commands::project_create,
             commands::project_open,
             commands::project_open_cancel,
@@ -102,6 +104,7 @@ pub fn run() {
             commands::asset_import,
             commands::asset_import_bytes,
             commands::asset_list,
+            commands::generation_list,
             commands::asset_thumb,
             commands::asset_original,
             commands::asset_thumbs_ensure,
@@ -112,6 +115,8 @@ pub fn run() {
             commands::asset_set_cover,
             commands::influence_resolve,
             commands::prompt_compile,
+            generate::generate_start,
+            generate::image_reference_report,
             enhance::enhance_start,
             enhance::enhance_accept,
             enhance::enhance_discard,

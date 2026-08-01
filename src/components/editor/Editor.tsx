@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { NodeSummary } from '../../lib/api'
+import type { NodeSummary, QueueSnapshot } from '../../lib/api'
 import { errorMessage } from '../../lib/api'
 import { useInfluenceStack, useNode } from '../../lib/queries'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../../lib/kinds'
@@ -8,8 +8,10 @@ import { Icon } from '../Icon'
 import { modKey } from '../TitleBar'
 import { NotesPane } from './NotesPane'
 import { RelationsPane } from './RelationsPane'
+import { ConceptsPane } from './ConceptsPane'
 import { TabEmpty } from './TabEmpty'
 import { useAutosaveNode, saveLabel } from '../../hooks/useAutosaveNode'
+import { useEnhanceSession } from './useEnhanceSession'
 
 const TAB_LABEL: Record<EditorTab, string> = {
   notes: 'Notes',
@@ -26,6 +28,7 @@ export function Editor({
   onJump,
   hasNodes,
   loading,
+  queue = EMPTY_QUEUE,
 }: {
   selected: NodeSummary | null
   kinds: KindIndex
@@ -33,6 +36,7 @@ export function Editor({
   onJump: (id: string) => void
   hasNodes: boolean
   loading: boolean
+  queue?: QueueSnapshot
 }) {
   const tab = useUI((s) => s.tab)
   const setTab = useUI((s) => s.setTab)
@@ -40,6 +44,7 @@ export function Editor({
   const influenceQ = useInfluenceStack(selected?.id ?? null)
   const node = nodeQ.data
   const autosave = useAutosaveNode(node, { readOnly })
+  const enhance = useEnhanceSession(node?.id ?? selected?.id ?? null, queue)
   // The two project roots influence everything, but do not locate an entity in
   // the world's hierarchy. The breadcrumb is the ancestry/culture/place spine
   // of the resolved stack; using the resolver (rather than reading only the
@@ -132,24 +137,33 @@ export function Editor({
 
         <div className="ed-actions">
           <span className="col-tag-save">{saveLabel(autosave.status)}</span>
-          {/* Enhance is M4 and Generate is M5, and neither is wired up — the
-              button is disabled for that reason first. Both write to the node
-              like any other edit (docs/07-file-shares.md), so when they land
-              they stay disabled on a read-only folder: keep `readOnly` in the
-              condition below and add Generate's button beside this one with the
-              same test. The banner is already on screen and explains it, so
-              nothing here needs its own sentence about the share. */}
           <button
             className="btn btn-ai"
-            disabled
+            disabled={!node || enhance.starting || (readOnly && !enhance.active)}
             title={
               readOnly
                 ? 'This share is read-only, and Enhance writes to the node'
-                : 'Enhance arrives in M4 — no LLM provider is wired up yet'
+                : enhance.complete
+                  ? 'Review the finished description before anything is written'
+                  : enhance.stopped
+                    ? 'Review the stopped local draft'
+                    : 'Turn notes and influences into reviewed canonical sections'
             }
+            onClick={() => {
+              setTab('notes')
+              if (!enhance.active) enhance.start()
+            }}
           >
             <Icon name="spark" size="sm" />
-            Enhance
+            {enhance.starting
+              ? 'Starting…'
+              : enhance.running
+                ? 'Enhancing…'
+                : enhance.complete
+                  ? 'Review Enhance'
+                  : enhance.stopped || enhance.failure || enhance.candidate
+                    ? 'Review draft'
+                    : 'Enhance'}
           </button>
         </div>
       </div>
@@ -178,7 +192,13 @@ export function Editor({
         {node && (
           <div className="pane">
             {tab === 'notes' && (
-              <NotesPane node={node} def={def} readOnly={readOnly} autosave={autosave} />
+              <NotesPane
+                node={node}
+                def={def}
+                readOnly={readOnly}
+                autosave={autosave}
+                enhance={enhance}
+              />
             )}
             {tab === 'refs' && (
               <TabEmpty
@@ -189,12 +209,7 @@ export function Editor({
               />
             )}
             {tab === 'concepts' && (
-              <TabEmpty
-                icon="spark"
-                title="Concepts"
-                milestone="M5 — Influence Engine + first images"
-                body="Generated art for this entity, with its prompt, seed and influence snapshot. It needs the compiler and an image backend, both of which arrive together."
-              />
+              <ConceptsPane node={node} queue={queue} />
             )}
             {tab === 'three' && (
               <TabEmpty
@@ -219,6 +234,8 @@ export function Editor({
     </main>
   )
 }
+
+const EMPTY_QUEUE: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
 
 function NameField({
   name,

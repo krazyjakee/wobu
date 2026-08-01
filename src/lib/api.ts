@@ -511,6 +511,53 @@ export const assetImportBytes = (bytes: Uint8Array, kind: AssetKind = 'reference
 /** Every blob in the open project, newest first. */
 export const assetList = () => call<Asset[]>('asset_list')
 
+/** Thumbnail path for grids; null when the asset is absent or cannot decode. */
+export const assetThumb = (assetId: string) => call<string | null>('asset_thumb', { assetId })
+
+/** Full-resolution path, fetched only when a viewer is opened. */
+export const assetOriginal = (assetId: string) =>
+  call<string | null>('asset_original', { assetId })
+
+export interface GenerationSnapshotFragment {
+  section: string
+  text: string | null
+  assetId: string | null
+  weight: number
+  target: FragmentTarget
+  dropped: boolean
+}
+
+export interface GenerationSnapshotLayer {
+  layer: InfluenceLayer
+  nodeId: string | null
+  nodeName: string
+  weight: number
+  muted: boolean
+  fragments: GenerationSnapshotFragment[]
+}
+
+/** Immutable generation receipt stored under `generations/YYYY-MM/`. */
+export interface Generation {
+  id: string
+  nodeId: string
+  createdAt: string
+  preset: string
+  viewType: string | null
+  userPrompt: string
+  compiledPrompt: string
+  negativePrompt: string
+  backend: string
+  model: string
+  seed: number
+  params: Record<string, unknown>
+  outputAssetIds: string[]
+  influenceSnapshot: { layers: GenerationSnapshotLayer[] }
+}
+
+/** One node's generation receipts, newest first. */
+export const generationList = (nodeId: string) =>
+  call<Generation[]>('generation_list', { nodeId })
+
 /**
  * Attach a reference image to a node in a role.
  *
@@ -631,6 +678,9 @@ export interface Preset {
   imageConstraints: ImageConstraints | null
 }
 
+/** Presets applicable to one kind, in registry order. */
+export const presetList = (kind: NodeKind) => call<Preset[]>('preset_list', { kind })
+
 /**
  * One thing one layer contributes.
  *
@@ -721,6 +771,8 @@ export interface SliderSetting {
   nodeId: string
   /** 0.0–1.0. Clamped on the far side rather than refused. */
   value: number
+  /** Removes the card for this run while preserving `value` for unmute. */
+  muted?: boolean
 }
 
 /** The Shot layer — layer 7, the one the Inspector's own controls own. */
@@ -728,6 +780,8 @@ export interface ShotControls {
   /** What the Shot card is titled. Defaults to the preset's label. */
   label?: string
   weight?: number
+  /** Extra framing typed for this run; unlike `label`, this is sent. */
+  prompt?: string
 }
 
 /**
@@ -788,6 +842,45 @@ export const promptCompile = (
     budget?: PromptBudget
   } = {},
 ) => call<CompiledPrompt>('prompt_compile', { subjectId, ...options })
+
+export interface GenerateOptions {
+  preset?: string
+  sliders?: SliderSetting[]
+  shot?: ShotControls
+  aspect?: string
+  model?: string
+  seed?: number
+}
+
+export interface ReferenceBucketReport {
+  bucket: 'objects' | 'characters' | 'style_refs'
+  label: string
+  kept: number
+  limit: number | null
+  dropped: number
+}
+
+export interface ReferenceLayerReport {
+  nodeId: string | null
+  layer: InfluenceLayer
+  kept: number
+  dropped: number
+  reasons: string[]
+}
+
+export interface ImageReferenceReport {
+  buckets: ReferenceBucketReport[]
+  layers: ReferenceLayerReport[]
+}
+
+export const imageReferenceReport = (
+  subjectId: string,
+  options: Pick<GenerateOptions, 'preset' | 'sliders' | 'shot' | 'model'> = {},
+) => call<ImageReferenceReport>('image_reference_report', { subjectId, ...options })
+
+/** Queue one negotiated image generation and return its job id. */
+export const generateStart = (subjectId: string, options: GenerateOptions = {}) =>
+  call<string>('generate_start', { subjectId, ...options })
 
 /* ── conflicts ────────────────────────────────────────────────────────────── */
 
@@ -1204,6 +1297,8 @@ export type JobSnapshot = {
   id: string
   kind: JobKind
   label: string
+  /** Domain subject, when the task has one. Generate jobs use their node id. */
+  subjectId: string | null
   /** Attempts started so far, from 1. Zero while queued. */
   attempt: number
   /** Backend-measured time since the first attempt, frozen at completion. */

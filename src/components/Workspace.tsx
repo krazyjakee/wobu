@@ -24,7 +24,6 @@ import { StatusBar } from './StatusBar'
 import { Navigator } from './navigator/Navigator'
 import { Editor } from './editor/Editor'
 import { Inspector } from './Inspector'
-import { PromptBox } from './inspector/PromptBox'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
@@ -315,18 +314,19 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 onJump={jumpTo}
                 hasNodes={nodes.length > 0}
                 loading={nodesQ.isPending}
+                queue={queue}
               />
             </div>
-            {/* The compiled prompt sits under the influence stack, in the
-                inspector's own column — the wrapper is what keeps the two in
-                one grid track, exactly as `.editor-region` does for the
-                conflict card. It is rendered from here rather than from inside
-                the Inspector only until the stack itself lands; see
-                `PromptBox`. */}
+            {/* Inspector returns the stack and its compiled prompt as siblings;
+                this wrapper keeps both in the inspector grid track. */}
             {!inspCollapsed && (
               <div className="insp-region">
-                <Inspector selected={selected} kinds={kindIndex} />
-                <PromptBox project={project} subject={selected} onJump={jumpTo} />
+                <Inspector
+                  project={project}
+                  selected={selected}
+                  kinds={kindIndex}
+                  onJump={jumpTo}
+                />
               </div>
             )}
           </>

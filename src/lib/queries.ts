@@ -43,6 +43,7 @@ import { report, toast, useUI } from '../store/ui'
 
 export const qk = {
   kinds: ['kind_registry'] as const,
+  presets: (kind: NodeKind) => ['preset_list', kind] as const,
   projectCurrent: ['project_current'] as const,
   projectRecent: ['project_recent'] as const,
   // Installation-wide catch-up for the two live sync event streams.
@@ -51,6 +52,8 @@ export const qk = {
   corrupt: ['corrupt_files'] as const,
   conflicts: ['conflicts'] as const,
   assets: ['asset_list'] as const,
+  generations: (nodeId: string) => ['generation_list', nodeId] as const,
+  assetThumb: (assetId: string) => ['asset_thumb', assetId] as const,
   node: (id: string) => ['node_get', id] as const,
   backlinks: (id: string) => ['node_backlinks', id] as const,
   search: (q: string) => ['node_search', q] as const,
@@ -68,6 +71,8 @@ export const qk = {
   // slider, are two different answers and neither invalidates the other.
   influence: (id: string, opts: InfluenceOptions) => ['influence_resolve', id, opts] as const,
   prompt: (id: string, opts: PromptOptions) => ['prompt_compile', id, opts] as const,
+  imageReferences: (id: string, opts: api.GenerateOptions) =>
+    ['image_reference_report', id, opts] as const,
   // Not part of `invalidateWorld`: a description waiting to be accepted is not
   // in the world yet, and a collaborator's edit does not change what a provider
   // already sent us.
@@ -96,12 +101,14 @@ export function invalidateWorld(qc: QueryClient) {
   // backend only learns about it by listing the folder, which it does as part
   // of the same reconcile that raised this.
   void qc.invalidateQueries({ queryKey: qk.assets })
+  void qc.invalidateQueries({ queryKey: ['generation_list'] })
   // A stack is built from other people's nodes as much as from the subject's:
   // an edit two layers out changes the compiled prompt without touching
   // anything the panel is pointing at, so these move with the world rather than
   // with the node in the Inspector.
   void qc.invalidateQueries({ queryKey: ['influence_resolve'] })
   void qc.invalidateQueries({ queryKey: ['prompt_compile'] })
+  void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */
@@ -110,6 +117,16 @@ export function useKinds(): UseQueryResult<KindDef[]> {
   return useQuery({
     queryKey: qk.kinds,
     queryFn: api.kindRegistry,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
+export function usePresets(kind: NodeKind | null): UseQueryResult<api.Preset[]> {
+  return useQuery({
+    queryKey: qk.presets(kind ?? 'character'),
+    queryFn: () => api.presetList(kind as NodeKind),
+    enabled: !!kind,
     staleTime: Infinity,
     retry: false,
   })
@@ -415,6 +432,21 @@ export function useCompiledPrompt(
   })
 }
 
+export function useImageReferenceReport(
+  subjectId: string | null,
+  options: Pick<api.GenerateOptions, 'preset' | 'sliders' | 'shot' | 'model'> = {},
+): UseQueryResult<api.ImageReferenceReport> {
+  return useQuery({
+    queryKey: qk.imageReferences(subjectId ?? '', options),
+    queryFn: () => api.imageReferenceReport(subjectId as string, options),
+    enabled: !!subjectId,
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    gcTime: 30_000,
+    retry: false,
+  })
+}
+
 /* ── project mutations ────────────────────────────────────────────────────── */
 
 export function useOpenProject() {
@@ -674,6 +706,64 @@ export function useAssets(enabled: boolean): UseQueryResult<Asset[]> {
   })
 }
 
+/** One node's immutable Concepts history, newest first. */
+export function useGenerations(nodeId: string): UseQueryResult<api.Generation[]> {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: qk.generations(nodeId),
+    queryFn: () => api.generationList(nodeId),
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (!api.isTauri()) return
+    let disposed = false
+    const unlisteners: Array<() => void> = []
+    void listen<api.JobDone>(api.JOB_EVENTS.done, (event) => {
+      if (event.payload.kind === 'generate') {
+        void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
+      }
+    })
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisteners.push(fn)
+      })
+      .catch(() => {
+        /* the folder watcher remains the slower catch-up path */
+      })
+    void listen<{ subjectId: string }>('generation:recorded', (event) => {
+      if (event.payload.subjectId === nodeId) {
+        void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
+        void qc.invalidateQueries({ queryKey: qk.assets })
+      }
+    })
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisteners.push(fn)
+      })
+      .catch(() => {
+        /* job:done and the folder watcher remain catch-up paths */
+      })
+    return () => {
+      disposed = true
+      for (const unlisten of unlisteners) unlisten()
+    }
+  }, [nodeId, qc])
+
+  return query
+}
+
+/** Lazily generated tile path; originals have a separate click-only command. */
+export function useAssetThumb(assetId: string | null): UseQueryResult<string | null> {
+  return useQuery({
+    queryKey: qk.assetThumb(assetId ?? ''),
+    queryFn: () => api.assetThumb(assetId as string),
+    enabled: !!assetId,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
 /**
  * Bring a picture into the project folder.
  *
@@ -906,6 +996,7 @@ export function useSelectProvider() {
     onSuccess: (selections) => {
       qc.setQueryData(qk.projectProviders, selections)
       void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })
+      void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
     },
     onError: (e: unknown) => report(e, 'Could not change the provider'),
   })

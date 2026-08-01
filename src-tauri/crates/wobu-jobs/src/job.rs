@@ -133,6 +133,9 @@ pub struct JobSnapshot {
     pub kind: JobKind,
     /// What to call it on screen — "Enhance Vashk", not "job 01J…".
     pub label: String,
+    /// Domain object this job belongs to, when it has one. Kept as a string so
+    /// the generic queue does not depend on Wobu's node-id crate.
+    pub subject_id: Option<String>,
     #[serde(flatten)]
     pub state: JobState,
     /// Attempts started so far, from 1. Zero while queued.
@@ -225,6 +228,12 @@ impl Outcome {
 #[async_trait]
 pub trait Task: Send + 'static {
     fn kind(&self) -> JobKind;
+
+    /// Lets a domain view associate live progress with its subject without
+    /// parsing the human-readable label. Most queue work has no subject.
+    fn subject_id(&self) -> Option<String> {
+        None
+    }
 
     /// One line, in the user's language, naming the thing being worked on.
     /// Built once at submission and never again, so it must not depend on
@@ -350,6 +359,7 @@ mod tests {
             id: JobId::new(),
             kind: JobKind::Enhance,
             label: "Enhance Vashk".into(),
+            subject_id: Some("node-1".into()),
             state: JobState::Retrying { in_ms: 4000, costs_money: true },
             attempt: 2,
             elapsed_ms: 1234,
@@ -359,6 +369,7 @@ mod tests {
         assert_eq!(json["costsMoney"], true);
         assert_eq!(json["inMs"], 4000);
         assert_eq!(json["kind"], "enhance");
+        assert_eq!(json["subjectId"], "node-1");
         assert_eq!(json["attempt"], 2);
         assert_eq!(json["elapsedMs"], 1234);
     }

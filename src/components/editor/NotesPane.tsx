@@ -3,6 +3,8 @@ import type { DescriptionState, KindDef, WobuNode } from '../../lib/api'
 import { saveLabel, type useAutosaveNode } from '../../hooks/useAutosaveNode'
 import { AttributesEditor } from './AttributesEditor'
 import { DescriptionEditor } from './DescriptionEditor'
+import { EnhanceReview } from './EnhanceReview'
+import type { EnhanceSession } from './useEnhanceSession'
 
 const STATE_LABEL: Record<DescriptionState, string> = {
   none: 'not generated',
@@ -17,11 +19,13 @@ export function NotesPane({
   def,
   readOnly,
   autosave,
+  enhance,
 }: {
   node: WobuNode
   def: KindDef | undefined
   readOnly: boolean
   autosave: ReturnType<typeof useAutosaveNode>
+  enhance?: EnhanceSession
 }) {
   const [descriptionEditedLocally, setDescriptionEditedLocally] = useState(false)
   const shownDescriptionState = descriptionEditedLocally ? 'edited' : node.descriptionState
@@ -54,18 +58,34 @@ export function NotesPane({
 
       <div className="col col-ai">
         <div className="col-head">
-          <h2>Enhanced description</h2>
+          <h2>{enhance?.active ? 'Enhance review' : 'Enhanced description'}</h2>
           <span className="col-tag col-tag-ai">machine side</span>
-          <span className="col-tag">{STATE_LABEL[shownDescriptionState]}</span>
+          <span className="col-tag">
+            {enhance?.active
+              ? enhance.complete
+                ? 'awaiting decision'
+                : enhance.running
+                  ? 'streaming'
+                  : 'local draft'
+              : STATE_LABEL[shownDescriptionState]}
+          </span>
         </div>
         <div className="desc">
-          <Description
-            node={node}
-            def={def}
-            readOnly={readOnly}
-            autosave={autosave}
-            onEdit={() => setDescriptionEditedLocally(true)}
-          />
+          {enhance?.active ? (
+            <EnhanceReview
+              current={node.description}
+              definitions={def?.sections ?? []}
+              session={enhance}
+            />
+          ) : (
+            <Description
+              node={node}
+              def={def}
+              readOnly={readOnly}
+              autosave={autosave}
+              onEdit={() => setDescriptionEditedLocally(true)}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -18,12 +18,12 @@ use tauri::{AppHandle, Emitter, Manager, State};
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
 use wobu_core::{
-    Asset, AssetKind, AssetRole, FragmentTarget, Id, KindDef, Layer, LinkEdge, LinkRole, Node,
-    NodeKind, NodeSummary, Preset, default_preset,
+    Asset, AssetKind, AssetRole, FragmentTarget, Generation, Id, KindDef, Layer, LinkEdge, LinkRole,
+    Node, NodeKind, NodeSummary, Preset, default_preset,
 };
 use wobu_influence::{
-    Budget, Chars, DropReason, Dropped, Fragment, Reached, ResolvedStack, Shot, Sliders, World,
-    compile, fragments, resolve,
+    Budget, Chars, DropReason, Dropped, Fragment, FragmentBody, Reached, ResolvedStack, Shot,
+    Sliders, World, compile, fragments, resolve,
 };
 use wobu_imagine::{comfy, gemini as image_gemini};
 use wobu_jobs::{JobId, QueueSnapshot};
@@ -48,6 +48,13 @@ use crate::state::{AppState, Jobs, WORLD_CHANGED};
 #[tauri::command]
 pub fn kind_registry() -> Vec<KindDef> {
     registry().to_vec()
+}
+
+/// Output presets offered for one kind. Static registry data, like kinds, but
+/// filtered here so the Inspector never has to reproduce applicability rules.
+#[tauri::command]
+pub fn preset_list(kind: NodeKind) -> Vec<&'static Preset> {
+    wobu_core::presets_for(kind)
 }
 
 /* ── project ──────────────────────────────────────────────────────────────── */
@@ -409,6 +416,16 @@ pub fn asset_list(state: State<'_, AppState>) -> CommandResult<Vec<Asset>> {
     state.with(|p| Ok(p.list_assets()?))
 }
 
+/// Immutable Concepts history for one node, already newest first in SQLite.
+/// Image bytes remain behind `asset_thumb`/`asset_original`.
+#[tauri::command]
+pub fn generation_list(
+    state: State<'_, AppState>,
+    node_id: Id,
+) -> CommandResult<Vec<Generation>> {
+    state.with(|p| Ok(p.list_generations(node_id)?))
+}
+
 /// Attach a reference image to a node in a role.
 ///
 /// The role is the whole payload here: it is what decides whether the image
@@ -646,6 +663,8 @@ fn saved(outcome: SaveOutcome) -> CommandResult<Node> {
 pub struct SliderSetting {
     node_id: Id,
     value: f32,
+    #[serde(default)]
+    muted: bool,
 }
 
 /// The Shot layer, as the Inspector's controls describe it.
@@ -659,6 +678,9 @@ pub struct SliderSetting {
 pub struct ShotControls {
     label: Option<String>,
     weight: Option<f32>,
+    /// Extra framing typed for this run. Separate from `label`, which only
+    /// names the card and is never sent to a provider.
+    prompt: Option<String>,
 }
 
 /// What one compilation may spend on text.
@@ -832,6 +854,7 @@ fn resolved<'a>(
     shot: Option<&'a ShotControls>,
 ) -> CommandResult<InfluenceStack> {
     let sheet = preset_for(nodes, subject_id, preset)?;
+    let user_prompt = shot.and_then(|controls| controls.prompt.as_deref());
     // No Shot layer unless the caller named one: resolving for display is not
     // resolving for a generation, and a card invented here would put framing on
     // screen for a shot nobody has set up (`wobu_influence::Shot`).
@@ -839,7 +862,8 @@ fn resolved<'a>(
         label: controls.label.as_deref().unwrap_or("Shot"),
         weight: controls.weight.unwrap_or(1.0),
     });
-    let (stack, extracted) = prepare(nodes, subject_id, sheet, sliders, shot)?;
+    let (stack, mut extracted) = prepare(nodes, subject_id, sheet, sliders, shot)?;
+    append_shot_prompt(&stack, &mut extracted, user_prompt);
     Ok(InfluenceStack {
         subject_id,
         preset: sheet,
@@ -857,6 +881,7 @@ fn compiled<'a>(
     budget: Budget,
 ) -> CommandResult<CompiledPrompt> {
     let sheet = preset_for(nodes, subject_id, preset)?;
+    let user_prompt = shot.and_then(|controls| controls.prompt.as_deref());
     // Always a shot, unlike `resolved`. The preset's framing text is the Shot
     // layer's whole contribution, so a prompt compiled without one would differ
     // from the prompt a generation actually sends — which is the single thing
@@ -865,7 +890,8 @@ fn compiled<'a>(
         label: shot.and_then(|c| c.label.as_deref()).unwrap_or(sheet.label),
         weight: shot.and_then(|c| c.weight).unwrap_or(1.0),
     };
-    let (_, extracted) = prepare(nodes, subject_id, sheet, sliders, Some(shot))?;
+    let (stack, mut extracted) = prepare(nodes, subject_id, sheet, sliders, Some(shot))?;
+    append_shot_prompt(&stack, &mut extracted, user_prompt);
 
     let compiled = compile(&extracted, budget);
     Ok(CompiledPrompt {
@@ -900,6 +926,25 @@ fn prepare<'a>(
     Ok((stack, extracted))
 }
 
+fn append_shot_prompt<'a>(
+    stack: &ResolvedStack<'a>,
+    extracted: &mut Vec<Fragment<'a>>,
+    prompt: Option<&'a str>,
+) {
+    let Some(prompt) = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()) else {
+        return;
+    };
+    if let Some(source) = stack.sources().iter().find(|source| source.layer == Layer::Shot) {
+        extracted.push(Fragment::new(
+            source,
+            "user_prompt",
+            FragmentBody::Text(prompt),
+            source.weight,
+            FragmentTarget::Prompt,
+        ));
+    }
+}
+
 /// The preset a compilation runs under, and the check that the subject exists.
 ///
 /// The two together because the default preset is a property of the subject's
@@ -930,7 +975,12 @@ fn no_such_subject(id: Id) -> WobuError {
 }
 
 fn sliders_from(settings: Option<Vec<SliderSetting>>) -> Sliders {
-    Sliders::from_pairs(settings.unwrap_or_default().into_iter().map(|s| (s.node_id, s.value)))
+    Sliders::from_pairs(
+        settings
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| (s.node_id, if s.muted { 0.0 } else { s.value })),
+    )
 }
 
 fn budget_from(budget: Option<PromptBudget>) -> Budget {
@@ -1998,6 +2048,7 @@ mod bridge {
                 id: wobu_jobs::JobId::new(),
                 kind: wobu_jobs::JobKind::Enhance,
                 label: "Enhance Vashk".into(),
+                subject_id: Some("01ARZ3NDEKTSV4RRFFQ69G5FAV".into()),
                 state: wobu_jobs::JobState::Running,
                 attempt: 1,
                 elapsed_ms: 4200,
@@ -2019,7 +2070,7 @@ mod bridge {
         assert_eq!(job["state"], "running");
         assert_eq!(job["kind"], "enhance");
         assert!(job["id"].is_string(), "a job id must cross as a string");
-        for key in ["id", "kind", "label", "attempt", "elapsedMs"] {
+        for key in ["id", "kind", "label", "subjectId", "attempt", "elapsedMs"] {
             assert!(job.get(key).is_some(), "`{key}` is missing from JobSnapshot");
         }
     }
@@ -2718,7 +2769,11 @@ mod influence {
         let world = ashfall();
         assert!(!stack(&world).layers.iter().any(|c| c.layer == Layer::Shot));
 
-        let controls = ShotControls { label: Some("Turnaround".into()), weight: Some(0.5) };
+        let controls = ShotControls {
+            label: Some("Turnaround".into()),
+            weight: Some(0.5),
+            prompt: Some("at dusk in falling ash".into()),
+        };
         let framed =
             resolved(&world.nodes, world.kael, None, &Sliders::neutral(), Some(&controls)).unwrap();
         let shot = framed.layers.last().unwrap();
@@ -2726,6 +2781,24 @@ mod influence {
         assert_eq!(shot.name, "Turnaround");
         assert_eq!(shot.node_id, None, "the shot is not a node");
         assert_eq!(shot.weight, 0.5);
+        assert!(
+            shot.fragments.iter().any(|fragment| {
+                fragment.section == "user_prompt"
+                    && fragment.text.as_deref() == Some("at dusk in falling ash")
+            }),
+            "the extra shot prompt must be an exact attributed contribution",
+        );
+
+        let custom = compiled(
+            &world.nodes,
+            world.kael,
+            None,
+            &Sliders::neutral(),
+            Some(&controls),
+            Budget::unlimited(),
+        )
+        .unwrap();
+        assert!(custom.prompt.ends_with("at dusk in falling ash"));
 
         // And the compiled prompt carries the preset's framing whether or not
         // anyone named the shot.
