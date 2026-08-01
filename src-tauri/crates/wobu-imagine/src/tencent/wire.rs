@@ -34,7 +34,7 @@ use wobu_core::TURNAROUND_IMAGE_CONSTRAINTS;
 
 use crate::dimensions;
 use crate::error::Error;
-use crate::mesh::{MeshCapabilities, MeshInput, MeshRequest, MeshView, View};
+use crate::mesh::{DEFAULT_FACE_COUNT, MeshCapabilities, MeshInput, MeshRequest, MeshView, View};
 
 use super::sign::{BACKEND, auth_failure};
 
@@ -89,8 +89,16 @@ pub(crate) fn submit_body(
         "Model": request.model,
         "GenerateType": request.generate_type.as_str(),
         "EnablePBR": request.enable_pbr,
-        "FaceCount": request.face_count,
     });
+
+    // Tencent documents `FaceCount` as optional with a default of 500,000, and
+    // describes its +10-credit add-on as generation with a *custom* face count.
+    // Do not turn the provider default into an explicitly requested add-on. A
+    // non-default value remains explicit, preserving the request exactly where
+    // omission would change the mesh.
+    if request.face_count != DEFAULT_FACE_COUNT {
+        body["FaceCount"] = json!(request.face_count);
+    }
 
     match &request.input {
         MeshInput::Prompt(prompt) => {
@@ -620,7 +628,7 @@ mod tests {
         assert_eq!(sent["Prompt"], "a wrought iron lantern");
         assert_eq!(sent["GenerateType"], "Normal");
         assert_eq!(sent["EnablePBR"], false);
-        assert_eq!(sent["FaceCount"], 500_000);
+        assert!(sent.get("FaceCount").is_none());
     }
 
     #[test]
@@ -678,7 +686,23 @@ mod tests {
             assert!(error.to_string().contains(&faces.to_string()), "{error}");
             assert_eq!(error.code(), "internal", "we built it, so it is our bug");
         }
-        for faces in [3_000, 500_000, 1_500_000] {
+        for faces in [3_000, 1_500_000] {
+            let request = MeshRequest::from_prompt("3.1", "p").with_face_count(faces);
+            assert_eq!(body(&request)["FaceCount"], faces);
+        }
+    }
+
+    #[test]
+    fn the_provider_default_face_count_is_omitted_but_custom_counts_are_sent() {
+        // Tencent's Submit documentation says the optional field defaults to
+        // 500,000; its billing table calls FaceCount a custom-face-count add-on.
+        // Omitting only that exact value preserves the documented geometry and
+        // cannot accidentally request the +10-credit feature by field presence.
+        let default = MeshRequest::from_prompt("3.1", "p");
+        assert_eq!(default.face_count, DEFAULT_FACE_COUNT);
+        assert!(body(&default).get("FaceCount").is_none());
+
+        for faces in [3_000, DEFAULT_FACE_COUNT - 1, DEFAULT_FACE_COUNT + 1, 1_500_000] {
             let request = MeshRequest::from_prompt("3.1", "p").with_face_count(faces);
             assert_eq!(body(&request)["FaceCount"], faces);
         }

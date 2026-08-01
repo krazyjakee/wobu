@@ -495,8 +495,10 @@ Also: the OBJ `Url` is a **`.zip`** (mesh + `.mtl` + texture maps), not a bare m
 downloader must unzip. And the international docs list `Type` values that contradict GLB being
 returned — treat `Type` as an open string and switch on it defensively rather than as an enum.
 
-Key parameters: `EnablePBR` (default false), `FaceCount` (default 500000, range 3000–1500000),
-`GenerateType` (`Normal` / `Geometry`; `LowPoly` and `Sketch` unavailable on 3.1).
+Key parameters: `EnablePBR` (default false), `FaceCount` (optional, default 500000, range
+3000–1500000), `GenerateType` (`Normal` / `Geometry`; `LowPoly` and `Sketch` unavailable on
+3.1). Tencent's billing table describes `FaceCount` as the +10-credit **custom face count**
+add-on, so the adapter omits it at exactly 500000 and sends every non-default value.
 
 Limits: **3 concurrent Pro jobs**, 20 requests/second. The queue must respect the concurrency
 cap or we'll generate our own rate-limit errors.

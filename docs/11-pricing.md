@@ -103,7 +103,7 @@ based on additional usage."*
 | --- | --- |
 | `MultiViewImages` | **+10** |
 | `EnablePBR` | **+10** |
-| `FaceCount` | **+10** |
+| custom `FaceCount` | **+10** |
 | `ResultFormat` | not billed internationally — the parameter does not exist there |
 
 **Model version is free.** Verbatim: *"Selecting version 3.0 or 3.1 from the [Model] parameter
@@ -132,49 +132,37 @@ Model 3.1 is our default, so `Sketch` and `LowPoly` are out of reach and the bas
 | `Normal`, single image | 25 |
 | `Geometry`, turnaround (multi-view) | 25 |
 | **`Normal`, turnaround — the Turnaround preset's job** | **35** |
-| `Normal`, turnaround, `FaceCount` sent | **45** 🚩 |
-| `Normal`, turnaround, `FaceCount`, `EnablePBR` | **55** 🚩 |
+| `Normal`, turnaround, custom `FaceCount` | **45** |
+| `Normal`, turnaround, custom `FaceCount`, `EnablePBR` | **55** |
 
 **A job is between 15 and 55 credits — a 3.7x spread.** Remember that number; section 7 turns on
 it.
 
 ---
 
-## 3. The thing we send on every request that may be costing 10 credits for nothing
+## 3. Default face count is omitted; custom face count costs 10 credits
 
-`tencent/wire.rs` builds the submit body with `FaceCount` **unconditionally**:
+Tencent's submit API documents `FaceCount` as **optional**, with a default of `500000`. Its
+billing table describes the add-on more precisely than the surrounding prose: **"Generate 3D
+models with custom face counts"** costs 10 additional credits.
+
+`tencent/wire.rs` therefore omits `FaceCount` at exactly the provider default:
 
 ```rust
 "GenerateType": request.generate_type.as_str(),
 "EnablePBR": request.enable_pbr,
-"FaceCount": request.face_count,
+// "FaceCount" is inserted only when request.face_count != 500_000.
 ```
 
-`MeshRequest`'s default `face_count` is `500_000`, which is also the provider's default. So on
-every job we send, we explicitly state the value the provider would have used anyway — and
-Tencent's billing table charges **+10 credits** for `FaceCount`.
+This does not require Wobu to guess how Tencent's billing implementation treats an explicitly
+sent default. Omission and `FaceCount: 500000` have the same documented mesh semantics, while
+omission is unambiguously the ordinary default request. Every value from 3000 through 1500000
+other than 500000 is still sent, so a caller asking for a custom triangle budget gets precisely
+that budget and the cost model includes the documented +10 credits.
 
-**Whether that +10 fires is genuinely undetermined.** The trigger wording is *"based on
-additional usage"*, which reads either way: it could mean "the parameter was present" or "a
-non-default face count was requested". There is no clarifying sentence on the page. The stakes
-are not small — 35 credits versus 45 is a **29% difference on every mesh wobu generates**,
-which is USD 0.14–0.20 per job, or USD 27–40 across a 200-mesh turnaround run.
-
-🚩 **This is the highest-value unknown in this document, and it is cheap to settle.** The
-experiment is two jobs and costs nothing:
-
-1. Activate the service on a fresh account and take the 200 free credits.
-2. Read the starting balance in the console under **Resource Package Management**.
-3. Submit one `Normal` single-image job **with** `FaceCount: 500000`. Read the balance.
-4. Submit the identical job **without** the `FaceCount` key at all. Read the balance.
-5. A 35/25 split means presence bills; a 25/25 split means only a non-default value bills.
-
-That is 50–60 of the 200 free credits and it converts the largest per-job uncertainty we have
-into a fact. **Until it is run, do not "fix" this by dropping the parameter** — omitting it
-relies on the provider's documented default being what it says, and trading a known cost for an
-unverified behaviour change in a freshly-landed adapter is the wrong trade. Model the
-conservative 45 and correct downward when the experiment says so; see section 8 on why the
-conservative direction is the safe one.
+A real-account A/B run could still reveal whether Tencent also waives the add-on when 500000 is
+sent explicitly, but it is no longer required for Wobu's behaviour or pricing: Wobu does not
+send that ambiguous request.
 
 ---
 
@@ -205,12 +193,11 @@ So the Turnaround preset's job:
 
 | | Credits | Postpaid | Cheapest prepaid | Band |
 | --- | --- | --- | --- | --- |
-| `Normal` + multi-view, `FaceCount` not billed | 35 | USD 0.70 | USD 0.47 | **0.47 – 0.70** |
-| `Normal` + multi-view, `FaceCount` billed | 45 | USD 0.90 | USD 0.61 | **0.61 – 0.90** |
-| Both unknowns open | 35–45 | — | — | **USD 0.47 – 0.90** |
+| `Normal` + multi-view, default face count | 35 | USD 0.70 | USD 0.47 | **0.47 – 0.70** |
+| `Normal` + multi-view, custom face count | 45 | USD 0.90 | USD 0.61 | **0.61 – 0.90** |
 
-For the scenario the ceiling exists for — 200 meshes unattended — that is **9,000 credits, USD
-122 to 180**, and the 200 free credits cover **four** of them.
+For the default scenario the ceiling exists for — 200 meshes unattended — that is **7,000
+credits, USD 95 to 140**, and the 200 free credits cover **five** complete jobs.
 
 ### Concurrency is where the money actually is
 
@@ -287,7 +274,7 @@ The scenario is a Turnaround loop left running against 200 entities overnight. T
 what unit stops it.
 
 **Not money.** A money ceiling is enforced against a number we derived; it inherits every
-uncertainty in section 4 plus the `FaceCount` question. It is the number the user *thinks* in,
+uncertainty in section 4. It is the number the user *thinks* in,
 so it must be shown — but a limit that halts real work should not be computed from a table
 nobody has confirmed against the account it is protecting.
 
@@ -311,7 +298,7 @@ So:
 - **Enforce on credits.** `MeshUsage` should carry `billed_credits` alongside `billed_jobs`,
   computed at submit time from the same `MeshRequest` that built the body. Keep `billed_jobs`:
   it is what the concurrency cap and the free-grant arithmetic are counted in, and it is the
-  honest denominator for "4 free meshes".
+  honest denominator for "5 free meshes".
 - **Display money**, as a range, always labelled, never as the thing that stopped the run.
 - **The stop message names the exact unit**: "stopped after 9,000 credits" is a sentence Tencent
   would agree with. "Stopped after USD 180" is one only we believe.
@@ -330,11 +317,11 @@ the ceiling in front of it, not a spike edit; see section 11.
 got free, wobu **over**-reports spend. An over-reporting ceiling trips early: the run stops
 before the user's real limit, they have spent less than we said, and the failure mode is an
 interruption rather than a bill. That is the direction to be wrong in, and it is an argument for
-**not** modelling the free grant at all — assume every job is paid, and let the first four be a
+**not** modelling the free grant at all — assume every job is paid, and let the first five be a
 pleasant surprise.
 
-**The trust cost is real and should be paid up front.** Those first four jobs are exactly when
-the user calibrates how much to believe our number. They see wobu claim USD 3.60 while the
+**The trust cost is real and should be paid up front.** Those first five jobs are exactly when
+the user calibrates how much to believe our number. They see wobu claim USD 3.50 while the
 console says zero, learn the figure is pessimistic, and then the grant runs out and the figure
 becomes accurate — right before the 200-mesh run. The fix is not to model the grant; it is to
 say so in onboarding: *the first 200 credits are free, and wobu counts them as if you paid.*
@@ -348,9 +335,9 @@ reinstall and wrong on a shared project folder.
 problem but a runtime one: mainland states that when free credits are exhausted, calls **error**
 rather than falling through to postpaid, unless postpaid has been explicitly enabled in the
 console. The international page describes automatic settlement order and no such requirement. If
-international behaves the same way, wobu's fifth mesh on a fresh account fails with a billing
+international behaves the same way, wobu's sixth mesh on a fresh account fails with a billing
 error, and that deserves a specific message and a console link — not a generic provider failure.
-This is worth checking with the same two-job experiment as section 3.
+This is worth checking on a real account.
 
 ---
 
@@ -386,24 +373,24 @@ money is ours and should say whose it is.
 
 **Inline, on the Generate button and in the queue row** — the compact form:
 
-> **45 credits · about USD 0.61–0.90**
+> **35 credits · about USD 0.47–0.70**
 
 **The sentence, wherever a run is authorised** — the ceiling dialog, and the confirmation before
 a batch:
 
-> **About USD 0.61–0.90 for this mesh.** The 45 credits are exact — that is what Tencent's
+> **About USD 0.47–0.70 for this mesh.** The 35 credits are exact — that is what Tencent's
 > published table charges for a textured multi-view job. The money is our own estimate from
 > prices we last checked on 1 August 2026, and the range is because we cannot see whether your
 > account is on pay-as-you-go or a prepaid credit pack. Wobu cannot read your Tencent bill.
 
 If only one line fits, it is this one:
 
-> About USD 0.61–0.90 — our own figure from prices we last checked on 1 August 2026. Wobu cannot
+> About USD 0.47–0.70 — our own figure from prices we last checked on 1 August 2026. Wobu cannot
 > confirm it against your Tencent account.
 
 Three deliberate choices in that wording:
 
-- **A range, not a midpoint.** "About USD 0.75" is a worse promise than "USD 0.61–0.90" and no
+- **A range, not a midpoint.** "About USD 0.59" is a worse promise than "USD 0.47–0.70" and no
   shorter. The range *is* the honesty; collapsing it to a point invents a precision we would
   then have to apologise for in the next sentence.
 - **"Our own figure" before "cannot confirm".** Ownership first, limitation second. The reverse
@@ -420,7 +407,7 @@ the user visits once.
 
 **Onboarding gets one extra sentence**, per section 8:
 
-> Your first 200 credits are free — about four meshes. Wobu counts them as if you paid, so the
+> Your first 200 credits are free — about five meshes. Wobu counts them as if you paid, so the
 > first few estimates will read high.
 
 ---
@@ -464,8 +451,6 @@ is checkable, rather than by everyone remembering, which is not.
 
 ## 12. What could not be established
 
-- 🚩 **Whether `FaceCount` bills +10 when sent at its default.** Section 3. The largest
-  per-job uncertainty, 29% of every mesh we generate, and settleable for free with two jobs.
 - 🚩 **Whether TokenHub migration reaches the international product**, and what it prices at.
   Section 5. The largest risk to this entire document, and the only one that could invalidate it
   wholesale rather than by a percentage.
@@ -485,8 +470,8 @@ is checkable, rather than by everyone remembering, which is not.
 
 ## 13. What this changes
 
-**Nothing in the adapter was edited.** No price table was added to
-`wobu-imagine/src/tencent/`, on purpose. A price is a fact about a vendor's commercial terms
+**Only default `FaceCount` wire presence was edited in the adapter.** No price table was added
+to `wobu-imagine/src/tencent/`, on purpose. A price is a fact about a vendor's commercial terms
 with a shelf life measured in months; the adapter is a fact about a wire protocol. Putting the
 table in `tencent/` would place the most volatile thing we know inside the code most protected
 by tests, and the tests would not be able to tell a stale price from a fresh one — the one
@@ -499,11 +484,11 @@ Consequences worth carrying forward:
 | --- | --- |
 | [09](09-roadmap.md) M6 — cost estimation and the spend ceiling | The ceiling's unit is **credits** (section 7). Money is displayed as a range, never enforced. |
 | `wobu-imagine/src/mesh.rs` — `MeshUsage` | Add `billed_credits` beside `billed_jobs`, computed at submit from the same `MeshRequest` that builds the body. The doc comment saying a per-call cost must be guessed is now half wrong: the credits are exact, only the rate is not. |
-| `wobu-imagine/src/tencent/wire.rs` | 🚩 `FaceCount` is sent unconditionally at its own default. Run section 3's experiment before changing it. |
+| `wobu-imagine/src/tencent/wire.rs` | `FaceCount` is omitted at Tencent's documented 500000 default and sent for every custom value. |
 | `wobu-imagine/src/tencent/mod.rs` | "an omitted `Model` is a silently older reconstruction at the same price" is ✅ confirmed verbatim by Tencent. No change needed — recorded so nobody re-verifies it. |
 | `wobu-jobs` retry policy | Failed Hunyuan3D jobs are explicitly **not** charged, so a `Status: FAIL` poll is a candidate for retry rather than a billed failure. This contradicts the general rule and needs an exception, or the queue will refuse to retry work that cost nothing. |
 | [08](08-providers.md) "Remaining unknowns" | The pricing 🚩 can be replaced with a pointer here. The `ResultCreditConsumed` finding it records is confirmed correct. |
-| Onboarding | Two sentences: the free grant is four meshes and we count it as paid; concurrency above 3 costs USD 5,000/month and is not a setting. |
+| Onboarding | Two sentences: the free grant is five default meshes and we count it as paid; concurrency above 3 costs USD 5,000/month and is not a setting. |
 
 ---
 
