@@ -9,6 +9,11 @@
 //! project folder: SQLite's POSIX advisory locking is unreliable-to-broken over
 //! SMB and NFS, and WAL mode does not work there at all. The documented failure
 //! mode is corruption, not an error message. See `docs/02-data-model.md`.
+//!
+//! One table — `sync_state` — is not a cache of the Markdown, because no folder
+//! can tell you what a peer once held. It is still safe to delete, which is the
+//! rule that actually matters here; losing it costs a re-compare on the next
+//! sync and nothing else. The argument is on the table itself.
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, VecDeque};
@@ -27,7 +32,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from Markdown, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 6;
+pub const INDEX_VERSION: u32 = 7;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -137,6 +142,39 @@ CREATE TABLE IF NOT EXISTS corrupt (
     node_id     TEXT,
     error       TEXT NOT NULL,
     detected_at TEXT NOT NULL
+);
+
+-- The last content hash this project and one peer agreed on for one node: the
+-- base of the three-way compare, and the whole of what M3 needs to tell "we
+-- both changed it" from "one of us did". Everything else the compare wants —
+-- our hash now, theirs now — is already known at the moment of comparing.
+--
+-- The alternative was a version vector in the frontmatter, and it is worth
+-- writing down why not. That would put sync bookkeeping inside files people
+-- open in Obsidian, where an external edit changes the bytes and silently fails
+-- to bump the vector, and a vector that lies is worse than no vector at all.
+-- Content hashes are already this codebase's answer to "did these bytes move",
+-- and no text editor can desynchronise one.
+--
+-- This is the only table here that is not derived from the folder: a rescan can
+-- rebuild every other row and cannot reconstruct what a peer once held. It is
+-- still safe to lose, which is the bar the module doc actually sets — with no
+-- base every node reads as concurrent, so the cost is a full re-compare and a
+-- run of conflict cards nobody needed, not a lost edit. That is why the version
+-- bump above is still allowed to drop it along with everything else, and why
+-- nothing here is ever written to the project folder.
+--
+-- `peer_id` is TEXT and stays TEXT. It is an iroh `EndpointId` (#76) rendered
+-- as hex; storing it as itself would make opening a project depend on the
+-- transport crate, and the index has to open on a machine that never syncs.
+--
+-- No separate index on `peer_id`: it is the leftmost column of the primary key,
+-- so the per-peer read that #79's manifest diff makes already has one.
+CREATE TABLE IF NOT EXISTS sync_state (
+    peer_id     TEXT NOT NULL,
+    node_id     TEXT NOT NULL,
+    base_hash   TEXT NOT NULL,
+    PRIMARY KEY (peer_id, node_id)
 );
 "#;
 
@@ -261,7 +299,8 @@ impl Index {
                  DROP TABLE IF EXISTS asset_links;
                  DROP TABLE IF EXISTS node_fts;
                  DROP TABLE IF EXISTS assets;
-                 DROP TABLE IF EXISTS corrupt;",
+                 DROP TABLE IF EXISTS corrupt;
+                 DROP TABLE IF EXISTS sync_state;",
             )?;
             self.conn.execute_batch(SCHEMA)?;
             self.conn.execute(
@@ -281,6 +320,16 @@ impl Index {
         Ok(n == 0)
     }
 
+    /// Empty every derived table, so the next scan can refill them from the
+    /// folder.
+    ///
+    /// `sync_state` is deliberately not in the list. This is "re-read the
+    /// Markdown", and re-reading the Markdown says nothing about what a peer
+    /// held — the ids and the hashes a base refers to come out of the rescan
+    /// unchanged, so a base that was true before it is still true after. A
+    /// rebuild triggered by a corrupt index or an impatient user would
+    /// otherwise silently reset agreement with every peer and turn the next
+    /// sync into a wall of conflicts.
     pub fn clear(&self) -> Result<()> {
         self.conn.execute_batch(
             "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
@@ -1037,6 +1086,137 @@ impl Index {
         )?;
         let rows = stmt.query_map(params![expr], |r| r.get::<_, String>(0))?;
         Ok(rows.filter_map(|r| r.ok().and_then(|s| Id::from_string(&s).ok())).collect())
+    }
+
+    /* ── sync state ──────────────────────────────────────────────────────
+     *
+     * One fact per (peer, node): the hash both sides last agreed on. The
+     * argument for the table is on the table; these are the four questions M3
+     * asks of it.
+     *
+     * A hash here is the same string `crate::atomic::Stamp` holds — full BLAKE3
+     * hex over the file's bytes — and *not* the truncated `source_version`
+     * further down this file. The two must not be confused: a version is
+     * deliberately blind to names, summaries and link weights, and a sync that
+     * ignored a rename would be a sync that loses one.
+     *
+     * Nothing here is keyed to a node existing. `Index::remove_node` does not
+     * clear bases and must not start: it runs during reconcile for files that
+     * have merely gone missing — a share half-mounted, a sync client mid-write
+     * — and a folder blinking must not be able to reset what a peer was known
+     * to hold. Ids are ULIDs and never reused, so a base left behind by a node
+     * that really was deleted can only ever be read back for the node it was
+     * written for.
+     */
+
+    /// What this project and `peer_id` last agreed the node's bytes were.
+    ///
+    /// `None` is not an error and is the normal state for a peer that has never
+    /// synced this node: it means "no base", which #80 reads as concurrent —
+    /// the safe answer, because it can only ever cost a comparison or a
+    /// conflict card, never an overwrite.
+    pub fn base_hash(&self, peer_id: &str, node_id: Id) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT base_hash FROM sync_state WHERE peer_id = ?1 AND node_id = ?2",
+                params![peer_id, node_id.to_string()],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Every base agreed with one peer, in one query.
+    ///
+    /// The shape #79's manifest diff wants. It compares a whole manifest at
+    /// once — a few hundred nodes — and asking [`base_hash`] per node would
+    /// turn one indexed scan into a few hundred round trips for a table small
+    /// enough to fit in a page or two.
+    ///
+    /// Rows whose `node_id` this build cannot parse are skipped, with the same
+    /// forgiveness [`list_nodes`] shows: one unreadable row must cost that node
+    /// a re-compare, not take the whole sync down.
+    ///
+    /// [`base_hash`]: Index::base_hash
+    /// [`list_nodes`]: Index::list_nodes
+    pub fn bases_for_peer(&self, peer_id: &str) -> Result<HashMap<Id, String>> {
+        let mut stmt =
+            self.conn.prepare("SELECT node_id, base_hash FROM sync_state WHERE peer_id = ?1")?;
+        let rows = stmt.query_map(params![peer_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        let mut out = HashMap::new();
+        for row in rows {
+            let (node_id, base) = row?;
+            let Ok(node_id) = Id::from_string(&node_id) else { continue };
+            out.insert(node_id, base);
+        }
+        Ok(out)
+    }
+
+    /// Move the base for a batch of nodes, all or nothing.
+    ///
+    /// A batch rather than a row at a time because that is how agreement
+    /// happens: #80 applies a work list and every node it settled — fast
+    /// forwarded, sent, or found to have converged on identical bytes — moves
+    /// its base at the same moment. Two things follow from doing it in one
+    /// transaction.
+    ///
+    /// **A crash leaves a base set from one moment rather than a mixture.** Not
+    /// because a partial set is unsafe — it is not; the un-moved rows simply
+    /// re-compare next time — but because "these are the bases as of the end of
+    /// that sync" is a sentence someone debugging a spurious conflict can
+    /// reason about, and "some prefix of them" is not.
+    ///
+    /// **And it is one commit rather than N.** Outside a transaction every
+    /// statement commits on its own, taking its own write lock and its own WAL
+    /// frame; a few hundred of those to record a sync that has already finished
+    /// is pure latency at the end of the operation the user is watching.
+    ///
+    /// Existing rows are overwritten. A base is the *last* thing agreed, not a
+    /// history, and keeping the old value would be keeping a fact that both
+    /// sides have already moved past.
+    pub fn record_bases(&self, peer_id: &str, bases: &[(Id, String)]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO sync_state (peer_id, node_id, base_hash) VALUES (?1,?2,?3)
+                 ON CONFLICT(peer_id, node_id) DO UPDATE SET base_hash = excluded.base_hash",
+            )?;
+            for (node_id, base_hash) in bases {
+                stmt.execute(params![peer_id, node_id.to_string(), base_hash])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The one-node case, for the paths that settle a single file — a conflict
+    /// the user resolved, a save pushed to a peer that acknowledged it.
+    ///
+    /// Deliberately the same statement as [`record_bases`], rather than a
+    /// second copy of the SQL that could drift from it.
+    ///
+    /// [`record_bases`]: Index::record_bases
+    pub fn record_base(&self, peer_id: &str, node_id: Id, base_hash: &str) -> Result<()> {
+        self.record_bases(peer_id, &[(node_id, base_hash.to_string())])
+    }
+
+    /// Forget everything agreed with a peer.
+    ///
+    /// For the moment the relationship ends rather than pauses: a share
+    /// revoked, a ticket rotated, an identity that will not be dialled again.
+    /// Keeping the rows would leave a base attributed to a peer that is not
+    /// coming back, and if that `EndpointId` ever *did* return it would be
+    /// trusted as a shared history neither side has any reason to still hold.
+    ///
+    /// The cost of being wrong about this is bounded and one-directional:
+    /// forgetting too much re-compares, forgetting too little trusts. So this
+    /// deletes rather than tombstones, and callers should reach for it whenever
+    /// they are unsure.
+    pub fn forget_peer(&self, peer_id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM sync_state WHERE peer_id = ?1", params![peer_id])?;
+        Ok(())
     }
 }
 
