@@ -23,7 +23,7 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Statement, params};
 use serde::{Deserialize, Serialize};
 use wobu_core::{
     Asset, AssetKind, AssetLink, AssetRole, DescriptionState, EnhanceStamp, Generation, Id,
@@ -245,6 +245,46 @@ CREATE TABLE IF NOT EXISTS sync_rejected (
 );
 "#;
 
+const UPSERT_NODE_SQL: &str = "INSERT INTO nodes
+       (id, kind, name, slug, summary, parent_id, description_state, cover_asset_id,
+        rel_path, mtime_ms, size, hash, created_at, updated_at, doc,
+        source_version, subject_version, enhanced_from)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
+     ON CONFLICT(id) DO UPDATE SET
+       kind=excluded.kind, name=excluded.name, slug=excluded.slug,
+       summary=excluded.summary, parent_id=excluded.parent_id,
+       description_state=excluded.description_state,
+       cover_asset_id=excluded.cover_asset_id, rel_path=excluded.rel_path,
+       mtime_ms=excluded.mtime_ms, size=excluded.size, hash=excluded.hash,
+       created_at=excluded.created_at, updated_at=excluded.updated_at,
+       doc=excluded.doc, source_version=excluded.source_version,
+       subject_version=excluded.subject_version,
+       enhanced_from=excluded.enhanced_from";
+
+const UPSERT_ASSET_SQL: &str = "INSERT OR REPLACE INTO assets
+       (id, hash, kind, rel_path, thumb_path, mime, width, height, bytes, created_at)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)";
+
+const UPSERT_GENERATION_SQL: &str = "INSERT INTO generations
+       (id, node_id, created_at, preset, view_type, backend, model,
+        rel_path, mtime_ms, size, hash, doc)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
+     ON CONFLICT(id) DO UPDATE SET
+       node_id=excluded.node_id, created_at=excluded.created_at,
+       preset=excluded.preset, view_type=excluded.view_type,
+       backend=excluded.backend, model=excluded.model,
+       rel_path=excluded.rel_path, mtime_ms=excluded.mtime_ms,
+       size=excluded.size, hash=excluded.hash, doc=excluded.doc";
+
+const CLEAR_DERIVED_SQL: &str = "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
+     DELETE FROM node_fts; DELETE FROM assets; DELETE FROM generations;
+     DELETE FROM corrupt;";
+
+#[cfg(test)]
+const NODE_WRITE_STATEMENT_COUNT: usize = 10;
+#[cfg(test)]
+const REBUILD_STATEMENT_COUNT: usize = NODE_WRITE_STATEMENT_COUNT + 4;
+
 /// A node file that is on disk and cannot be read.
 ///
 /// `node_id` is `Some` when the index still remembers the entity this file
@@ -282,12 +322,259 @@ pub(crate) enum Touched {
     These(BTreeSet<Id>),
 }
 
+struct NodeWriteStatements<'conn> {
+    displaced: Statement<'conn>,
+    upsert_node: Statement<'conn>,
+    delete_node: Statement<'conn>,
+    delete_links_from: Statement<'conn>,
+    delete_links_to: Statement<'conn>,
+    insert_link: Statement<'conn>,
+    delete_asset_links: Statement<'conn>,
+    insert_asset_link: Statement<'conn>,
+    delete_fts: Statement<'conn>,
+    insert_fts: Statement<'conn>,
+}
+
+impl<'conn> NodeWriteStatements<'conn> {
+    fn prepare(conn: &'conn Connection, metrics: &WriteMetrics) -> Result<Self> {
+        Ok(Self {
+            displaced: prepare_statement(
+                conn,
+                "SELECT id FROM nodes WHERE rel_path = ?1 AND id <> ?2",
+                metrics,
+            )?,
+            upsert_node: prepare_statement(conn, UPSERT_NODE_SQL, metrics)?,
+            delete_node: prepare_statement(conn, "DELETE FROM nodes WHERE id = ?1", metrics)?,
+            delete_links_from: prepare_statement(
+                conn,
+                "DELETE FROM links WHERE from_id = ?1",
+                metrics,
+            )?,
+            delete_links_to: prepare_statement(
+                conn,
+                "DELETE FROM links WHERE to_id = ?1",
+                metrics,
+            )?,
+            insert_link: prepare_statement(
+                conn,
+                "INSERT OR REPLACE INTO links (from_id, to_id, role, weight, enabled)
+                 VALUES (?1,?2,?3,?4,?5)",
+                metrics,
+            )?,
+            delete_asset_links: prepare_statement(
+                conn,
+                "DELETE FROM asset_links WHERE node_id = ?1",
+                metrics,
+            )?,
+            insert_asset_link: prepare_statement(
+                conn,
+                "INSERT OR REPLACE INTO asset_links (node_id, asset_id, role, weight, enabled)
+                 VALUES (?1,?2,?3,?4,?5)",
+                metrics,
+            )?,
+            delete_fts: prepare_statement(conn, "DELETE FROM node_fts WHERE id = ?1", metrics)?,
+            insert_fts: prepare_statement(
+                conn,
+                "INSERT INTO node_fts (id, name, summary, notes, description)
+                 VALUES (?1,?2,?3,?4,?5)",
+                metrics,
+            )?,
+        })
+    }
+
+    fn remove_node(&mut self, id: &str) -> Result<()> {
+        self.delete_node.execute(params![id])?;
+        self.delete_links_from.execute(params![id])?;
+        self.delete_links_to.execute(params![id])?;
+        self.delete_asset_links.execute(params![id])?;
+        self.delete_fts.execute(params![id])?;
+        Ok(())
+    }
+
+    fn upsert_node(&mut self, node: &Node, rel_path: &str, stamp: &Stamp) -> Result<Option<Id>> {
+        let id = node.id.to_string();
+        let displaced: Option<String> =
+            self.displaced.query_row(params![rel_path, id], |row| row.get(0)).optional()?;
+        let displaced = displaced.as_deref().and_then(|value| Id::from_string(value).ok());
+        if let Some(displaced) = displaced {
+            self.remove_node(&displaced.to_string())?;
+        }
+
+        let description_state =
+            serde_json::to_value(node.description_state)?.as_str().unwrap_or("none").to_string();
+        let doc = serde_json::to_string(node)?;
+        let enhanced_from = match &node.enhanced_from {
+            Some(stamp) => serde_json::to_string(stamp)?,
+            None => String::new(),
+        };
+        self.upsert_node.execute(params![
+            id,
+            node.kind.as_str(),
+            node.name,
+            node.slug,
+            node.summary,
+            node.parent_id.map(|parent| parent.to_string()),
+            description_state,
+            node.cover_asset_id.map(|asset| asset.to_string()),
+            rel_path,
+            stamp.mtime_ms,
+            stamp.size as i64,
+            stamp.hash,
+            node.created_at.to_rfc3339(),
+            node.updated_at.to_rfc3339(),
+            doc,
+            source_version(node),
+            subject_version(node),
+            enhanced_from,
+        ])?;
+
+        self.delete_links_from.execute(params![id])?;
+        for link in &node.links {
+            self.insert_link.execute(params![
+                id,
+                link.to_id.to_string(),
+                link.role.as_str(),
+                link.weight,
+                link.enabled as i32,
+            ])?;
+        }
+
+        self.delete_asset_links.execute(params![id])?;
+        for link in &node.asset_links {
+            self.insert_asset_link.execute(params![
+                id,
+                link.asset_id.to_string(),
+                link.role.as_str(),
+                link.weight,
+                link.enabled as i32,
+            ])?;
+        }
+
+        self.delete_fts.execute(params![id])?;
+        self.insert_fts.execute(params![
+            id,
+            node.name,
+            node.summary,
+            node.notes_raw,
+            description_text(node),
+        ])?;
+        Ok(displaced)
+    }
+}
+
+struct RebuildStatements<'conn> {
+    nodes: NodeWriteStatements<'conn>,
+    upsert_asset: Statement<'conn>,
+    upsert_generation: Statement<'conn>,
+    corrupt_node_id: Statement<'conn>,
+    upsert_corrupt: Statement<'conn>,
+}
+
+impl<'conn> RebuildStatements<'conn> {
+    fn prepare(conn: &'conn Connection, metrics: &WriteMetrics) -> Result<Self> {
+        Ok(Self {
+            nodes: NodeWriteStatements::prepare(conn, metrics)?,
+            upsert_asset: prepare_statement(conn, UPSERT_ASSET_SQL, metrics)?,
+            upsert_generation: prepare_statement(conn, UPSERT_GENERATION_SQL, metrics)?,
+            corrupt_node_id: prepare_statement(
+                conn,
+                "SELECT id FROM nodes WHERE rel_path = ?1",
+                metrics,
+            )?,
+            upsert_corrupt: prepare_statement(
+                conn,
+                "INSERT INTO corrupt (rel_path, node_id, error, detected_at)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(rel_path) DO UPDATE SET node_id = ?2, error = ?3",
+                metrics,
+            )?,
+        })
+    }
+
+    fn upsert_asset(&mut self, asset: &Asset) -> Result<()> {
+        self.upsert_asset.execute(params![
+            asset.id.to_string(),
+            asset.hash,
+            serde_json::to_value(asset.kind)?.as_str().unwrap_or("reference"),
+            asset.rel_path,
+            asset.thumb_path,
+            asset.mime,
+            asset.width,
+            asset.height,
+            asset.bytes as i64,
+            asset.created_at.to_rfc3339(),
+        ])?;
+        Ok(())
+    }
+
+    fn upsert_generation(
+        &mut self,
+        generation: &Generation,
+        rel_path: &str,
+        stamp: &Stamp,
+    ) -> Result<()> {
+        self.upsert_generation.execute(params![
+            generation.id.to_string(),
+            generation.node_id.to_string(),
+            generation.created_at.to_rfc3339(),
+            generation.preset,
+            generation.view_type,
+            generation.backend,
+            generation.model,
+            rel_path,
+            stamp.mtime_ms,
+            stamp.size as i64,
+            stamp.hash,
+            serde_json::to_string(generation)?,
+        ])?;
+        Ok(())
+    }
+
+    fn mark_corrupt(&mut self, rel_path: &str, error: &str) -> Result<()> {
+        let node_id: Option<String> =
+            self.corrupt_node_id.query_row(params![rel_path], |row| row.get(0)).optional()?;
+        self.upsert_corrupt.execute(params![rel_path, node_id, error, Utc::now().to_rfc3339(),])?;
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct WriteMetrics {
+    #[cfg(test)]
+    commits: std::cell::Cell<usize>,
+    #[cfg(test)]
+    preparations: std::cell::Cell<usize>,
+}
+
+impl WriteMetrics {
+    fn prepared(&self) {
+        #[cfg(test)]
+        self.preparations.set(self.preparations.get() + 1);
+    }
+
+    fn committed(&self) {
+        #[cfg(test)]
+        self.commits.set(self.commits.get() + 1);
+    }
+}
+
+fn prepare_statement<'conn>(
+    conn: &'conn Connection,
+    sql: &str,
+    metrics: &WriteMetrics,
+) -> Result<Statement<'conn>> {
+    let statement = conn.prepare(sql)?;
+    metrics.prepared();
+    Ok(statement)
+}
+
 pub struct Index {
     conn: Connection,
     /// Interior mutability because every writer here takes `&self` — the
     /// `Connection` does its own locking and the type is `!Sync`, so there is no
     /// thread for a `RefCell` to be contended from.
     touched: RefCell<Touched>,
+    write_metrics: WriteMetrics,
 }
 
 impl Index {
@@ -320,7 +607,11 @@ impl Index {
         // `Everything` from the start: a reader that has never looked is owed
         // every row, and starting at an empty change set would hand it a world
         // with no nodes in it.
-        let index = Index { conn, touched: RefCell::new(Touched::Everything) };
+        let index = Index {
+            conn,
+            touched: RefCell::new(Touched::Everything),
+            write_metrics: WriteMetrics::default(),
+        };
         index.migrate()?;
         Ok(index)
     }
@@ -338,6 +629,12 @@ impl Index {
 
     fn touch_everything(&self) {
         *self.touched.borrow_mut() = Touched::Everything;
+    }
+
+    #[cfg(test)]
+    fn reset_write_metrics(&self) {
+        self.write_metrics.commits.set(0);
+        self.write_metrics.preparations.set(0);
     }
 
     /// What has changed since this was last called, resetting the record.
@@ -412,11 +709,47 @@ impl Index {
     /// and dropping it would throw away a record of a human decision on the
     /// strength of an index repair the user asked for for unrelated reasons.
     pub fn clear(&self) -> Result<()> {
-        self.conn.execute_batch(
-            "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
-             DELETE FROM node_fts; DELETE FROM assets; DELETE FROM generations;
-             DELETE FROM corrupt;",
-        )?;
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute_batch(CLEAR_DERIVED_SQL)?;
+        tx.commit()?;
+        self.write_metrics.committed();
+        self.touch_everything();
+        Ok(())
+    }
+
+    /// Replace every derived row with one scan's already-read input.
+    ///
+    /// The caller deliberately finishes all folder IO before entering here.
+    /// Once it does, the clear and every refill share one transaction: readers
+    /// see either the previous complete index or the new complete index, and a
+    /// failed row restores the previous one. Statements are prepared once for
+    /// the batch rather than once per node, edge, asset, or generation.
+    pub(crate) fn rebuild_from_scan(
+        &self,
+        assets: &[Asset],
+        generations: &[(Generation, String, Stamp)],
+        nodes: &[(Node, String, Stamp)],
+        corrupt: &[(String, String)],
+    ) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute_batch(CLEAR_DERIVED_SQL)?;
+        {
+            let mut statements = RebuildStatements::prepare(&tx, &self.write_metrics)?;
+            for asset in assets {
+                statements.upsert_asset(asset)?;
+            }
+            for (generation, rel_path, stamp) in generations {
+                statements.upsert_generation(generation, rel_path, stamp)?;
+            }
+            for (node, rel_path, stamp) in nodes {
+                statements.nodes.upsert_node(node, rel_path, stamp)?;
+            }
+            for (rel_path, error) in corrupt {
+                statements.mark_corrupt(rel_path, error)?;
+            }
+        }
+        tx.commit()?;
+        self.write_metrics.committed();
         self.touch_everything();
         Ok(())
     }
@@ -440,115 +773,29 @@ impl Index {
         // reconcile runs during `open`, that turns a rename into a project that
         // will not open at all. Evict the stale row; if its file still exists,
         // the same scan re-adds it at whatever path it now occupies.
-        let displaced: Option<String> = self
-            .conn
-            .query_row(
-                "SELECT id FROM nodes WHERE rel_path = ?1 AND id <> ?2",
-                params![rel_path, node.id.to_string()],
-                |r| r.get(0),
-            )
-            .optional()?;
-        if let Some(displaced) = displaced.as_deref().and_then(|s| Id::from_string(s).ok()) {
-            self.remove_node(displaced)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let displaced = {
+            let mut statements = NodeWriteStatements::prepare(&tx, &self.write_metrics)?;
+            statements.upsert_node(node, rel_path, stamp)?
+        };
+        tx.commit()?;
+        self.write_metrics.committed();
+        if let Some(displaced) = displaced {
+            self.touch(displaced);
         }
-
-        self.conn.execute(
-            "INSERT INTO nodes
-               (id, kind, name, slug, summary, parent_id, description_state, cover_asset_id,
-                rel_path, mtime_ms, size, hash, created_at, updated_at, doc,
-                source_version, subject_version, enhanced_from)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
-             ON CONFLICT(id) DO UPDATE SET
-               kind=excluded.kind, name=excluded.name, slug=excluded.slug,
-               summary=excluded.summary, parent_id=excluded.parent_id,
-               description_state=excluded.description_state,
-               cover_asset_id=excluded.cover_asset_id, rel_path=excluded.rel_path,
-               mtime_ms=excluded.mtime_ms, size=excluded.size, hash=excluded.hash,
-               created_at=excluded.created_at, updated_at=excluded.updated_at,
-               doc=excluded.doc, source_version=excluded.source_version,
-               subject_version=excluded.subject_version,
-               enhanced_from=excluded.enhanced_from",
-            params![
-                node.id.to_string(),
-                node.kind.as_str(),
-                node.name,
-                node.slug,
-                node.summary,
-                node.parent_id.map(|p| p.to_string()),
-                serde_json::to_value(node.description_state)?.as_str().unwrap_or("none"),
-                node.cover_asset_id.map(|a| a.to_string()),
-                rel_path,
-                stamp.mtime_ms,
-                stamp.size as i64,
-                stamp.hash,
-                node.created_at.to_rfc3339(),
-                node.updated_at.to_rfc3339(),
-                serde_json::to_string(node)?,
-                source_version(node),
-                subject_version(node),
-                match &node.enhanced_from {
-                    Some(stamp) => serde_json::to_string(stamp)?,
-                    None => String::new(),
-                },
-            ],
-        )?;
-
-        let id = node.id.to_string();
-        self.conn.execute("DELETE FROM links WHERE from_id = ?1", params![id])?;
-        for link in &node.links {
-            self.conn.execute(
-                "INSERT OR REPLACE INTO links (from_id, to_id, role, weight, enabled)
-                 VALUES (?1,?2,?3,?4,?5)",
-                params![
-                    id,
-                    link.to_id.to_string(),
-                    link.role.as_str(),
-                    link.weight,
-                    link.enabled as i32
-                ],
-            )?;
-        }
-
-        // Replaced wholesale rather than merged, like the links above: the
-        // frontmatter is the whole truth about this node's references, so a row
-        // here that is not in the file is a row somebody deleted.
-        self.conn.execute("DELETE FROM asset_links WHERE node_id = ?1", params![id])?;
-        for link in &node.asset_links {
-            self.conn.execute(
-                "INSERT OR REPLACE INTO asset_links (node_id, asset_id, role, weight, enabled)
-                 VALUES (?1,?2,?3,?4,?5)",
-                params![
-                    id,
-                    link.asset_id.to_string(),
-                    link.role.as_str(),
-                    link.weight,
-                    link.enabled as i32
-                ],
-            )?;
-        }
-
-        self.conn.execute("DELETE FROM node_fts WHERE id = ?1", params![id])?;
-        self.conn.execute(
-            "INSERT INTO node_fts (id, name, summary, notes, description)
-             VALUES (?1,?2,?3,?4,?5)",
-            params![id, node.name, node.summary, node.notes_raw, description_text(node)],
-        )?;
         self.touch(node.id);
         Ok(())
     }
 
     pub fn remove_node(&self, id: Id) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut statements = NodeWriteStatements::prepare(&tx, &self.write_metrics)?;
+            statements.remove_node(&id.to_string())?;
+        }
+        tx.commit()?;
+        self.write_metrics.committed();
         self.touch(id);
-        let id = id.to_string();
-        self.conn.execute("DELETE FROM nodes    WHERE id      = ?1", params![id])?;
-        self.conn.execute("DELETE FROM links    WHERE from_id = ?1", params![id])?;
-        self.conn.execute("DELETE FROM links    WHERE to_id   = ?1", params![id])?;
-        // The node's own links go; nothing touches `assets`, because the blob
-        // outlives every node that pointed at it. Assets are content-addressed
-        // and shared, so the last link going away is not a reason to delete a
-        // file somebody else's node may be about to link.
-        self.conn.execute("DELETE FROM asset_links WHERE node_id = ?1", params![id])?;
-        self.conn.execute("DELETE FROM node_fts WHERE id      = ?1", params![id])?;
         Ok(())
     }
 
@@ -854,9 +1101,7 @@ impl Index {
     /// table references this one.
     pub fn upsert_asset(&self, asset: &Asset) -> Result<()> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO assets
-               (id, hash, kind, rel_path, thumb_path, mime, width, height, bytes, created_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            UPSERT_ASSET_SQL,
             params![
                 asset.id.to_string(),
                 asset.hash,
@@ -924,16 +1169,7 @@ impl Index {
         stamp: &Stamp,
     ) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO generations
-               (id, node_id, created_at, preset, view_type, backend, model,
-                rel_path, mtime_ms, size, hash, doc)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
-             ON CONFLICT(id) DO UPDATE SET
-               node_id=excluded.node_id, created_at=excluded.created_at,
-               preset=excluded.preset, view_type=excluded.view_type,
-               backend=excluded.backend, model=excluded.model,
-               rel_path=excluded.rel_path, mtime_ms=excluded.mtime_ms,
-               size=excluded.size, hash=excluded.hash, doc=excluded.doc",
+            UPSERT_GENERATION_SQL,
             params![
                 generation.id.to_string(),
                 generation.node_id.to_string(),
@@ -1856,6 +2092,106 @@ mod tests {
         let list = index.list_nodes().unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "Vashk (revised)");
+    }
+
+    #[test]
+    fn normal_node_save_is_one_atomic_transaction() {
+        let index = Index::in_memory().unwrap();
+        let mut node = Node::new(NodeKind::Character, "Before").unwrap();
+        indexed(&index, &node);
+        let _ = index.take_touched();
+        index.reset_write_metrics();
+
+        // Fail after the node row has been replaced. Without one transaction,
+        // the new name would survive even though its relationship did not.
+        index
+            .conn
+            .execute_batch(
+                "CREATE TRIGGER reject_test_link BEFORE INSERT ON links
+                 BEGIN SELECT RAISE(ABORT, 'injected link failure'); END;",
+            )
+            .unwrap();
+        node.name = "After".into();
+        node.links.push(Link::new(wobu_core::new_id(), LinkRole::MemberOf));
+
+        assert!(index.upsert_node(&node, "nodes/characters/before.md", &stamp()).is_err());
+        assert_eq!(index.node(node.id).unwrap().unwrap().name, "Before");
+        assert!(index.links().unwrap().is_empty());
+        assert_eq!(index.write_metrics.commits.get(), 0);
+        assert_eq!(index.write_metrics.preparations.get(), NODE_WRITE_STATEMENT_COUNT);
+        match index.take_touched() {
+            Touched::These(ids) => assert!(ids.is_empty(), "a rolled-back save was not touched"),
+            Touched::Everything => panic!("a rolled-back save marked the whole index"),
+        }
+
+        index.conn.execute_batch("DROP TRIGGER reject_test_link").unwrap();
+        index.reset_write_metrics();
+        index.upsert_node(&node, "nodes/characters/before.md", &stamp()).unwrap();
+        assert_eq!(index.write_metrics.commits.get(), 1);
+        assert_eq!(index.write_metrics.preparations.get(), NODE_WRITE_STATEMENT_COUNT);
+    }
+
+    #[test]
+    fn four_thousand_node_rebuild_has_constant_transaction_and_prepare_counts() {
+        let index = Index::in_memory().unwrap();
+        let asset_id = wobu_core::new_id();
+
+        let make_records = |count: usize| {
+            (0..count)
+                .map(|number| {
+                    let mut node =
+                        Node::new(NodeKind::Character, format!("Character {number:04}")).unwrap();
+                    node.links.push(Link::new(wobu_core::new_id(), LinkRole::MemberOf));
+                    node.asset_links.push(AssetRef::new(asset_id, AssetRole::Pose));
+                    (node, format!("nodes/characters/character-{number:04}.md"), stamp())
+                })
+                .collect::<Vec<_>>()
+        };
+
+        index.reset_write_metrics();
+        index.rebuild_from_scan(&[], &[], &make_records(1), &[]).unwrap();
+        let one = (index.write_metrics.commits.get(), index.write_metrics.preparations.get());
+
+        index.reset_write_metrics();
+        index.rebuild_from_scan(&[], &[], &make_records(4_000), &[]).unwrap();
+        let four_thousand =
+            (index.write_metrics.commits.get(), index.write_metrics.preparations.get());
+
+        assert_eq!(one, (1, REBUILD_STATEMENT_COUNT));
+        assert_eq!(four_thousand, one, "batch size must not add commits or prepares");
+        assert_eq!(index.list_nodes().unwrap().len(), 4_000);
+        assert_eq!(index.links().unwrap().len(), 4_000);
+        let asset_link_count: i64 =
+            index.conn.query_row("SELECT COUNT(*) FROM asset_links", [], |row| row.get(0)).unwrap();
+        assert_eq!(asset_link_count, 4_000);
+    }
+
+    #[test]
+    fn failed_bulk_rebuild_restores_the_previous_complete_index() {
+        let index = Index::in_memory().unwrap();
+        let original = Node::new(NodeKind::Setting, "Still Here").unwrap();
+        indexed(&index, &original);
+        let _ = index.take_touched();
+        index.reset_write_metrics();
+        index
+            .conn
+            .execute_batch(
+                "CREATE TRIGGER reject_test_node BEFORE INSERT ON nodes
+                 WHEN NEW.name = 'Break Rebuild'
+                 BEGIN SELECT RAISE(ABORT, 'injected rebuild failure'); END;",
+            )
+            .unwrap();
+
+        let broken = Node::new(NodeKind::Setting, "Break Rebuild").unwrap();
+        let records = vec![(broken, "nodes/settings/break-rebuild.md".into(), stamp())];
+        assert!(index.rebuild_from_scan(&[], &[], &records, &[]).is_err());
+
+        assert_eq!(index.list_nodes().unwrap()[0].id, original.id);
+        assert_eq!(index.write_metrics.commits.get(), 0);
+        match index.take_touched() {
+            Touched::These(ids) => assert!(ids.is_empty(), "a rolled-back rebuild was not touched"),
+            Touched::Everything => panic!("a rolled-back rebuild marked the whole index"),
+        }
     }
 
     #[test]

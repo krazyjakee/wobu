@@ -2154,24 +2154,11 @@ impl Project {
         let generation_records = generations::scan(&self.root);
 
         cancel.check()?;
-        self.index.clear()?;
-        for asset in &blobs {
-            self.index.upsert_asset(asset)?;
-        }
-        for (generation, rel, stamp) in &generation_records {
-            self.index.upsert_generation(generation, rel, stamp)?;
-        }
-        for (node, rel, stamp) in &fresh {
-            self.index.upsert_node(node, rel, stamp)?;
-            self.index.clear_corrupt(rel)?;
-        }
-        for (rel, why) in &broken {
-            // A file a sync client mangled is left on disk exactly as it is, and
-            // recorded so the navigator can say so. Skipping it silently —
-            // which is what this used to do — leaves the user with an entity
-            // that quietly stopped existing.
-            self.index.mark_corrupt(rel, why)?;
-        }
+        // A file a sync client mangled is left on disk exactly as it is, and
+        // recorded so the navigator can say so. The clear and every refill are
+        // one transaction, so a malformed row or SQLite failure restores the
+        // previous complete read model rather than exposing a partial rebuild.
+        self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken)?;
         on_progress(ScanProgress { done: total, total });
         Ok(())
     }
