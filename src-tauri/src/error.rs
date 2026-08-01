@@ -118,6 +118,18 @@ pub enum Code {
     #[serde(rename = "provider.bad_key")]
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
     ProviderBadKey,
+    /// The signature was rejected as expired: this machine's clock has drifted
+    /// more than the provider tolerates.
+    ///
+    /// Its own code rather than `provider.bad_key` even though both are
+    /// non-retryable auth failures, because the two send the user to opposite
+    /// places. Settings offers "re-enter your key" for a bad key, which is
+    /// actively wrong advice here — the key is fine and the fix is in the
+    /// operating system's date and time. Only signed-request providers can
+    /// raise it; a bearer token has no clock in it.
+    #[serde(rename = "provider.clock_skew")]
+    #[allow(dead_code)] // constructed once wobu-imagine's Tencent adapter lands
+    ProviderClockSkew,
     /// The account needs credit or a plan before the request will run.
     #[serde(rename = "provider.billing_required")]
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below

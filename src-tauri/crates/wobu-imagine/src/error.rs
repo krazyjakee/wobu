@@ -38,6 +38,31 @@ pub enum Error {
     #[error("{backend} rejected the API key")]
     BadKey { backend: &'static str },
 
+    /// The credential is fine and the *clock* is wrong.
+    ///
+    /// Its own variant rather than a [`Error::BadKey`] because Tencent's
+    /// TC3-HMAC-SHA256 signature is only valid for five minutes either side of
+    /// the timestamp it carries (`AuthFailure.SignatureExpire`), and a desktop
+    /// that has been asleep, or a VM restored from a snapshot, drifts past that
+    /// on its own. `docs/08-providers.md` names this mapping specifically: the
+    /// failure arrives as an ordinary auth error, and reporting it as one sends
+    /// somebody to regenerate an account-wide master credential that was never
+    /// the problem.
+    ///
+    /// The message is the whole of what the user is shown — `WobuError` in the
+    /// Tauri shell is built from a `Display` — so it has to name the fix rather
+    /// than the symptom. It lands on `provider.bad_key` because that is the
+    /// code for "the credential path refused this call and repeating it
+    /// unchanged will be refused identically", which is exactly true here; the
+    /// sentence is what tells the two apart, and a person reads it, not a
+    /// `match`.
+    #[error(
+        "{backend} rejected the request signature as expired — this computer's clock is more \
+         than five minutes away from real time. Check your system clock and turn on automatic \
+         time synchronisation, then try again."
+    )]
+    ClockSkew { backend: &'static str },
+
     /// `retry_after` is the backend's own hint in whatever form it gave it.
     /// Carried rather than slept on here because the queue owns backoff and has
     /// to weigh this against the rest of the queue.
@@ -129,6 +154,9 @@ impl Error {
         match self {
             Error::NoKey { .. }
             | Error::BadKey { .. }
+            // Retrying against the same wrong clock is refused identically, so
+            // the queue must not spend attempts on it.
+            | Error::ClockSkew { .. }
             | Error::BillingRequired { .. }
             | Error::Unsupported { .. }
             | Error::Cancelled => false,
@@ -159,6 +187,11 @@ impl Error {
         match self {
             Error::NoKey { .. } => "provider.no_key",
             Error::BadKey { .. } => "provider.bad_key",
+            // Its own code, not `provider.bad_key`: both are non-retryable auth
+            // failures, but Settings offers "re-enter your key" for a bad key
+            // and that is actively wrong here — the key is fine and the fix is
+            // in the operating system's clock.
+            Error::ClockSkew { .. } => "provider.clock_skew",
             Error::RateLimited { .. } => "provider.rate_limited",
             Error::BillingRequired { .. } => "provider.billing_required",
             Error::Unavailable { .. } => "provider.unavailable",
@@ -185,6 +218,7 @@ mod tests {
         vec![
             Error::NoKey { backend: "Gemini" },
             Error::BadKey { backend: "Gemini" },
+            Error::ClockSkew { backend: "Tencent Hunyuan3D" },
             Error::RateLimited { backend: "Gemini", retry_after: Some(Duration::from_secs(30)) },
             Error::BillingRequired { backend: "Gemini", detail: "enable billing".into() },
             Error::Unavailable { detail: "connection refused on 127.0.0.1:8188".into() },
@@ -205,6 +239,7 @@ mod tests {
     const KNOWN_CODES: &[(&str, bool)] = &[
         ("provider.no_key", false),
         ("provider.bad_key", false),
+        ("provider.clock_skew", false),
         ("provider.billing_required", false),
         ("provider.rate_limited", true),
         ("provider.unavailable", true),
@@ -267,6 +302,25 @@ mod tests {
             !Error::BillingRequired { backend: "Gemini", detail: "enable billing".into() }
                 .is_retryable()
         );
+    }
+
+    #[test]
+    fn a_drifted_clock_is_told_apart_from_a_bad_key_by_the_code_as_well_as_the_sentence() {
+        // These are both non-retryable auth failures and it is tempting to fold
+        // them together, but they send the user to opposite places: Settings
+        // offers "re-enter your key" for a bad key, which is actively wrong
+        // advice for a clock that is five minutes fast. The key is fine.
+        //
+        // So the code differs as well as the message. Relying on the sentence
+        // alone would mean every surface that branches on the code — the
+        // Settings pane most of all — quietly gives the wrong instruction.
+        let skew = Error::ClockSkew { backend: "Tencent Hunyuan3D" };
+        let key = Error::BadKey { backend: "Tencent Hunyuan3D" };
+        assert_ne!(skew.code(), key.code(), "one code cannot carry two instructions");
+        assert_eq!(skew.code(), "provider.clock_skew");
+        assert_eq!(skew.is_retryable(), key.is_retryable(), "both are still hopeless on a retry");
+        assert!(skew.to_string().contains("system clock"), "{skew}");
+        assert!(!key.to_string().contains("clock"), "{key}");
     }
 
     #[test]

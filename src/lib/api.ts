@@ -214,6 +214,7 @@ export type ErrorCode =
   | 'provider.no_key'
   | 'provider.keychain_unavailable'
   | 'provider.bad_key'
+  | 'provider.clock_skew'
   | 'provider.billing_required'
   | 'provider.rate_limited'
   | 'provider.unavailable'

@@ -16,6 +16,14 @@ base64 = "0.22"
 # `comfy/socket.rs`, which is generic over one so that the framing and the
 # cancellation can be driven from recorded frames without a server.
 futures-core = "0.3.33"
+# Tencent has no bearer key: every request carries a TC3-HMAC-SHA256 signature,
+# which is four chained HMACs over a hashed canonical request — `tencent/sign.rs`.
+# Both crates were **already in the workspace lock** by way of Tauri's own graph,
+# at `hmac` 0.12.1 and `sha2` 0.10.9, and these requirements are written loosely
+# enough to resolve to exactly those rather than adding a second copy of either.
+# They sit on the `digest` 0.10 line `sha2` already anchors; the 0.11 line
+# `tokio-tungstenite` brought in for `sha1` is untouched by this.
+hmac = "0.12"
 # Same version and the same argument as `wobu-llm`'s: already in the workspace
 # lock at 0.13.4 by way of Tauri, and pinned loosely enough to stay on that
 # resolution. Fewer features than the text adapters need — no `stream`, because
@@ -33,6 +41,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 # seen, and deserialising into a struct would mean dropping fields we cannot
 # name — see `comfy/workflow.rs`.
 serde_json = "1.0.151"
+# The hash half of the signing chain — see `hmac` above for the version argument.
+sha2 = "0.10"
 thiserror = "2.0.19"
 # The websocket, and the only genuinely new thing in the tree. Nothing outside
 # `comfy/socket.rs` reaches it, and no TLS features: ComfyUI serves plain HTTP,

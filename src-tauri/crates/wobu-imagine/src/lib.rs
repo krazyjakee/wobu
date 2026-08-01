@@ -138,6 +138,7 @@ mod dimensions;
 mod error;
 pub mod gemini;
 mod negotiate;
+pub mod tencent;
 
 pub use aspect::{AspectRatio, Resolution};
 pub use comfy::ComfyBackend;

@@ -5833,9 +5833,11 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "futures-core",
+ "hmac",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.19",
  "tokio",
  "tokio-tungstenite",
@@ -5851,6 +5853,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wobu-core",
+ "wobu-store",
 ]
 
 [[package]]
