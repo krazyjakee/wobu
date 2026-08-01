@@ -124,6 +124,27 @@ pub enum Error {
     #[error("that is not a Wobu project ticket")]
     NotATicket,
 
+    /// The blob store for a project could not be opened, or could not be shut
+    /// down.
+    ///
+    /// One variant covering the store's whole life, boxed, because the four ways
+    /// it fails — the project root is not a directory, the cache directory
+    /// cannot be created, the cache is inside the project folder, redb will not
+    /// open — arrive as four unrelated error types and read to a caller as one
+    /// sentence: **blob sync is not available for this project, and the rest of
+    /// sync still is.** Nothing above this has to branch on which.
+    ///
+    /// The cache-inside-the-project case is a programming error rather than a
+    /// runtime one and it is still an error here rather than a panic, because
+    /// the path comes from the app and an app that quits on a bad default is
+    /// worse than an app that syncs nodes and not files. See
+    /// [`crate::blobs::Blobs::open`] for why the arrangement is refused at all.
+    #[error("the blob store for this project is not usable")]
+    BlobStore {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
     /// The accept loop did not wind down cleanly, which in practice means a
     /// protocol handler panicked and the panic is being carried out here.
     #[error("the sync endpoint did not shut down cleanly")]

@@ -93,7 +93,19 @@
 //! handed to anybody, and that check is *not* sufficient on its own: #81 still
 //! has to validate on the near side of its own join, because a caller relying on
 //! a check performed in a different crate is a check that stops being performed
-//! the day somebody adds a second caller.
+//! the day somebody adds a second caller. [`crate::blobs::place`] is where that
+//! happened, and it turned up four rules this one does not have — none of which
+//! belongs here, because they are about what a *filesystem* will do with a
+//! string and this module does not have one.
+//!
+//! One more thing followed from the same asymmetry and is worth naming, because
+//! it is a hole this module cannot see: a `(rel_path, hash)` pair for an original
+//! is checkable *against itself*, since the path is made of the hash. A peer that
+//! sends a mismatched pair is announcing a file at a path where it does not
+//! belong, and the pair BLAKE3-of-nothing plus somebody's real asset path is a
+//! zero-byte file written exactly where that asset lives, forever. That check is
+//! [`crate::blobs::agrees`] and it is at the join rather than here, for the
+//! reason above.
 //!
 //! ## Framing: lines, not lengths
 //!
@@ -454,9 +466,19 @@ pub fn is_syncable_rel_path(rel_path: &str) -> bool {
 ///
 /// `nodes` is `Project::manifest()` and goes back into
 /// `Project::plan_against_peer` unchanged. `blobs` is the `assets/` and
-/// `generations/` half, which the shell assembles — this crate has no filesystem
-/// and must not gain one; `identity.rs` makes that argument at length and it does
-/// not get weaker for being about content instead of keys.
+/// `generations/` half, which the shell assembles: **this module** has no
+/// filesystem and must not gain one, and neither does anything else here except
+/// [`crate::blobs`], which #81 gave one for the single reason that received
+/// bytes have to land somewhere. `identity.rs` makes the argument at length and
+/// [`crate`]'s "Filesystem" section says where the line ended up. Nothing about
+/// that concession reaches back here — an [`exchange`] that read a directory to
+/// fill in what a caller left out would be this module deciding what a project
+/// contains, which is `wobu-store`'s to say.
+///
+/// [`crate::blobs::Blobs::describe`] is the near half of the same seam pointed
+/// the other way: it hashes one file and returns the [`Blob`] for it, so a caller
+/// assembling this argument for `generations/**` — which has no index row and
+/// therefore no hash anywhere — does not need a hash function of its own.
 ///
 /// Leaves the connection open and usable. Nothing here closes, resets or drains
 /// anything belonging to anybody else, because #81 has work to do on the same

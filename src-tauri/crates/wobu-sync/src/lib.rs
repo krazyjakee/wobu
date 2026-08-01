@@ -36,6 +36,16 @@
 //! If a change to this crate needs a cryptographic primitive, the change is
 //! wrong. That is the whole of the rule.
 //!
+//! [`blobs`] is where that rule did the most work, so it is worth reading as the
+//! case study rather than as an exception. Moving file content means finding out
+//! whether the bytes that arrived are the bytes that were asked for, which is a
+//! hash — and the rule said no. So the transfer is `iroh-blobs`, which verifies
+//! the BLAKE3 tree chunk by chunk as it arrives, and nothing in this crate
+//! computes, compares or stores a digest. What would have been two hundred lines
+//! of hand-rolled framing and one `blake3::hash` call is a dependency and no
+//! primitive. The rule picked the better design; that is generally what it is
+//! for.
+//!
 //! [`ticket::Grant`] is the thing most likely to be read as an exception, so it
 //! is worth naming here: it is thirty-two random bytes in a ticket, it is not a
 //! key, and nothing derives, signs, encrypts or challenges with it. It exists to
@@ -114,6 +124,32 @@
 //! the accept loop on threads the app cannot cancel, which is how a clean quit
 //! turns into a hang.
 //!
+//! **One qualification, and it is `iroh-blobs`' rather than ours.**
+//! `iroh_blobs::store::fs::FsStore::load` builds its own multi-threaded runtime
+//! for the store's actor, so a process holding a [`Blobs`] has threads this
+//! crate did not start and cannot see. That is not a licence to start more: no
+//! code here creates a runtime, and the paragraph above is the rule for anything
+//! added. It is a reason [`Blobs::shutdown`] is not optional housekeeping —
+//! it is the only thing that stops them, and the hang it prevents is exactly the
+//! one the rule was written about.
+//!
+//! ## Filesystem
+//!
+//! [`blobs`] touches one, and it is the only module that does. Everything else —
+//! the opening exchange, [`manifest`], [`ticket`] — moves lists and hands them back, and
+//! `identity.rs` argues at length that a transport crate which wrote files would
+//! be the wrong shape. That argument still stands for keys and for content, and
+//! #81 is not a counterexample to it: the bytes have to land somewhere, the only
+//! code that sees them is here, and the alternative is buffering a four-gigabyte
+//! asset in memory to hand to a caller that would write it to the same path.
+//!
+//! What follows from that concession is a boundary rather than a licence.
+//! [`Blobs`] is given a project root and writes underneath it; it creates
+//! nothing else, deletes nothing ever, and reads nothing it was not handed a
+//! path to. [`blobs::place`] is the one function in the workspace where a string
+//! a stranger wrote becomes a real path, and it is written as if nothing had
+//! checked it before.
+//!
 //! ## Lifetime and shutdown
 //!
 //! [`SyncEndpoint`] holds iroh's `Router`, which is `#[must_use]` and **aborts
@@ -163,19 +199,30 @@
 //!   What is *not* done is the wiring, for the same reason as #76: the shell does
 //!   not depend on this crate yet, so nothing assembles the blob half or feeds
 //!   the node half back into a `Project`.
-//! - **#81 blob transfer** — [`Session::connection`] and
-//!   [`SyncEndpoint::endpoint`]. The opening exchange finished its stream, so a
-//!   later protocol owns whatever streams it opens; blobs registers a second
-//!   ALPN on the same router. [`manifest::Blob`] is the list of what to fetch,
-//!   and its `rel_path` has been through [`manifest::is_syncable_rel_path`] —
-//!   which is a syntax check and not a permission, so the validation still has to
-//!   happen on the near side of whatever join places the file.
+//! - **#81 blob transfer** — done, in [`blobs`]: [`Config::blobs`] hands a
+//!   [`Blobs`] to [`SyncEndpoint::bind`], which registers `iroh-blobs`' ALPN as a
+//!   second protocol on the same router, the same key and the same socket.
+//!   [`Blobs::offer`] makes a list servable, [`Blobs::fetch`] pulls what is
+//!   missing from one peer over a connection of its own, and every path is put
+//!   through [`blobs::place`] one line before the `rename` that would use it.
+//!   Content is verified by `iroh-blobs` as it arrives and staged through
+//!   `.wobu/tmp`, so a reader never sees half a file and an interrupted transfer
+//!   leaves nothing at a real path.
+//!   What is *not* done is the wiring, for the same reason as #76 and #79, plus
+//!   two things that are somebody else's by construction: **the policy** — #81
+//!   wants `assets/thumbs/` eagerly and originals on demand, and [`Blobs::fetch`]
+//!   takes a list precisely so that the caller decides — and **the generations
+//!   half of the list**, because `wobu-store` has a lister for
+//!   `assets/originals` and nothing at all for `generations/<YYYY-MM>/<ULID>.json`.
+//!   [`Blobs::describe`] closes the hash half of that gap; the directory listing
+//!   is still owed.
 //! - **#82 `SyncManager`** — [`Sessions`] is the trait it implements, and the
 //!   `Router`'s abort-on-drop is why it must exist.
 //! - **#83 status and presence** — [`Session::is_relayed`] now,
 //!   `Connection::path_events` when a live badge is wanted.
 //! - **#90 authorisation, if it is ever wanted** — not here. See above.
 
+pub mod blobs;
 pub mod endpoint;
 pub mod error;
 pub mod identity;
@@ -183,6 +230,7 @@ pub mod manifest;
 mod opening;
 pub mod ticket;
 
+pub use blobs::{Blobs, Fetched, Offered, Unplaceable};
 pub use endpoint::{Config, Projects, Reach, Session, SyncEndpoint, Sessions};
 pub use error::{Error, Result};
 pub use identity::{Identity, Origin};

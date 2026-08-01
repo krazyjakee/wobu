@@ -10,6 +10,7 @@ use iroh::protocol::{AcceptError, ProtocolHandler, Router};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
 use wobu_core::Id;
 
+use crate::blobs::Blobs;
 use crate::error::{Error, Result};
 use crate::identity::Identity;
 use crate::ticket::{Grant, Ticket};
@@ -69,6 +70,23 @@ pub struct Config {
     /// struct that ever holds a `Config`.
     pub identity: Option<Identity>,
     pub reach: Reach,
+    /// The project's blob store, if this endpoint is to move file content.
+    ///
+    /// `None` binds `wobu/sync/1` alone: the opening exchange and the manifest
+    /// swap work, and a peer that tries to fetch a blob is refused by TLS for
+    /// speaking an ALPN this endpoint does not offer. That is the right shape
+    /// for a test of the node half and wrong for the app.
+    ///
+    /// It is here rather than a parameter of [`SyncEndpoint::bind`] because
+    /// iroh's `RouterBuilder` is consumed by `spawn`, so **every ALPN an endpoint
+    /// will ever speak has to be known at bind time**. A `SyncEndpoint::with_blobs`
+    /// added afterwards is not expressible, and an `Option` that has to be
+    /// supplied before the router exists is exactly what a config field is.
+    ///
+    /// One store per project, and the same one for the whole life of the
+    /// endpoint: it is what serves peers *and* what receives from them, and two
+    /// would be two answers to "do I have this hash".
+    pub blobs: Option<Blobs>,
     /// How long a peer gets to complete the opening exchange.
     ///
     /// Generous enough to survive a relayed round trip on a bad link — the spike
@@ -81,7 +99,12 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Config {
-        Config { identity: None, reach: Reach::Internet, open_timeout: Duration::from_secs(10) }
+        Config {
+            identity: None,
+            reach: Reach::Internet,
+            open_timeout: Duration::from_secs(10),
+            blobs: None,
+        }
     }
 }
 
@@ -181,10 +204,42 @@ impl Session {
     /// The live connection, for the protocols that come after this one.
     ///
     /// The opening exchange finished its stream, so every stream opened from
-    /// here belongs to whoever opens it — #79's manifest exchange, #81's blob
-    /// transfer — with no framing left over to trip on.
+    /// here belongs to whoever opens it, with no framing left over to trip on.
+    /// #79's manifest exchange is the caller today.
+    ///
+    /// #81's blob transfer is deliberately *not*, and the reason is TLS rather
+    /// than framing: a connection negotiates one ALPN, and blobs speak
+    /// `iroh-blobs`'. [`Session::addr`] is what a second connection to the same
+    /// peer is dialled at.
     pub fn connection(&self) -> &Connection {
         &self.connection
+    }
+
+    /// Where this peer is reachable *right now*, as an address that can be
+    /// dialled again.
+    ///
+    /// #81's blob transfer runs on a second ALPN, which means a second
+    /// connection, which means an [`EndpointAddr`] — and a bare [`EndpointId`]
+    /// is not one: it carries no network path and leaves the address-lookup
+    /// service to find one, which under [`Reach::Loopback`] does not exist and
+    /// on a bad network is a round trip we already have the answer to.
+    ///
+    /// Assembled from the connection's live paths, so it says where the peer is
+    /// as observed rather than where it said it was. Two things follow. It is a
+    /// **snapshot**: a connection that has since upgraded from relay to direct
+    /// has different paths, and one taken before holepunching finished may hold
+    /// only a relay. And it is only as good as the connection it came from — a
+    /// [`Session`] that has died yields an address that no longer resolves, which
+    /// is a dial failure and not a wrong answer.
+    ///
+    /// The id half is not a snapshot of anything: it is the peer's TLS identity,
+    /// so a second connection dialled at this address is the same peer or it is
+    /// no connection at all.
+    pub fn addr(&self) -> EndpointAddr {
+        EndpointAddr::from_parts(
+            self.peer(),
+            self.connection.paths().iter().map(|path| path.remote_addr().clone()),
+        )
     }
 
     /// Whether application data is currently travelling through a relay rather
@@ -216,6 +271,10 @@ impl Session {
 pub struct SyncEndpoint {
     router: Router,
     open_timeout: Duration,
+    /// Kept beside the router rather than only inside it, because the handler
+    /// iroh holds serves peers and the caller still needs the same store to
+    /// *fetch* with. One store, two directions.
+    blobs: Option<Blobs>,
 }
 
 impl SyncEndpoint {
@@ -234,12 +293,33 @@ impl SyncEndpoint {
         let endpoint = config.bind().await?;
         let open_timeout = config.open_timeout;
         // `spawn` sets the endpoint's ALPN list from the handlers registered
-        // here, which is why the builder is not also told about `ALPN`. #81 adds
-        // `iroh_blobs::ALPN` as a second `accept` on this same builder.
-        let router = Router::builder(endpoint)
-            .accept(ALPN, Inbound { projects, sessions, open_timeout })
-            .spawn();
-        Ok(SyncEndpoint { router, open_timeout })
+        // here, which is why the builder is not also told about `ALPN`.
+        let mut builder =
+            Router::builder(endpoint).accept(ALPN, Inbound { projects, sessions, open_timeout });
+        // #81's second ALPN, on the same router, the same endpoint, the same key
+        // and the same socket. It is a *separate connection* rather than a
+        // second protocol on the sync connection, because TLS negotiates one
+        // ALPN per connection — see [`crate::blobs`].
+        //
+        // Note what is not registered beside it: no gate, no authorisation hook,
+        // no per-peer filter. A peer that reaches this router has proved its key
+        // and nothing else, and deciding what it may read is #90's, which is why
+        // `Blobs::protocol` passes `None` for `iroh-blobs`' event sender rather
+        // than an empty one that looks like a place to put a rule.
+        if let Some(blobs) = &config.blobs {
+            builder = builder.accept(crate::blobs::ALPN, blobs.protocol());
+        }
+        let router = builder.spawn();
+        Ok(SyncEndpoint { router, open_timeout, blobs: config.blobs })
+    }
+
+    /// This project's blob store, if one was configured.
+    ///
+    /// The fetching half of #81. The serving half needs no method — it is inside
+    /// the router, answering peers, from the moment [`SyncEndpoint::bind`]
+    /// returns.
+    pub fn blobs(&self) -> Option<&Blobs> {
+        self.blobs.as_ref()
     }
 
     /// This endpoint's id — its public key, and its name to every peer.

@@ -16,6 +16,29 @@ async-trait = "0.1.91"
 # taken as-is because `tls-ring` is one of them and `endpoint::presets` does not
 # exist without a crypto provider feature.
 iroh = "1.0.3"
+# BLAKE3 verified streaming, and the reason `blobs.rs` can move file content
+# without this crate acquiring a hash function. The rule in `lib.rs` — if a
+# change here needs a cryptographic primitive, the change is wrong — is what
+# picked this crate rather than a hand-rolled `(rel_path, hash, bytes)` frame on
+# a third ALPN: a receiver that trusted a peer's bytes would have to hash them
+# itself to find out it had been lied to, and that is a primitive in this crate.
+# `iroh-blobs` verifies the bao tree *as the bytes arrive*, so a peer that serves
+# different content under a hash fails the transfer rather than completing it,
+# and nothing here computes, compares or stores a digest.
+#
+# `default-features = false` drops `rpc`, which exists to expose a blob store to
+# a *different process* over `noq`. Wobu's store is in-process and there is no
+# second process to expose it to, so taking it would add `noq` and `irpc/rpc` to
+# the binary for a feature nothing calls. `fs-store` is the one that is kept and
+# the one `Blobs` is built on; see `blobs.rs` for why an in-memory store is not
+# an option for a project with four gigabytes of assets in it.
+#
+# Version-locked to `iroh` above and not independently upgradable:
+# `docs/10-sync-spike.md` has the pairing table and the two resolver errors,
+# one of which names `ed25519-dalek` and never mentions iroh.
+iroh-blobs = { version = "0.103.0", default-features = false, features = [
+    "fs-store",
+] }
 # `Ticket` — the trait behind #77's pasteable string: a lowercase kind prefix
 # then unpadded base32, with the case folding and the wrong-prefix error already
 # written and already tested. Reused rather than hand-rolled so that a Wobu
