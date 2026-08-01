@@ -731,6 +731,15 @@ impl Project {
     /// Content addressing means this cannot conflict, so unlike `save_node`
     /// there is no outcome enum: it either lands or it fails. What it does
     /// report is whether the bytes were already there.
+    ///
+    /// **No thumbnail is made here**, and that is deliberate rather than an
+    /// omission. Nothing in this method decodes a pixel — that is the whole of
+    /// why an import can accept a file a sync client has not finished copying —
+    /// and a decode is both the expensive step and the one that can fail on a
+    /// blob that is otherwise perfectly storable. Folding it in would let a
+    /// half-copied file turn a successful import into a failed one. Callers
+    /// follow up with [`ensure_thumb`](Self::ensure_thumb), off whichever thread
+    /// they are not drawing the window with; see `crate::thumbs`.
     pub fn import_asset(&mut self, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsset> {
         self.import_asset_with(bytes, kind, &Cancel::new())
     }
@@ -941,6 +950,89 @@ impl Project {
             changed = true;
         }
         Ok(changed)
+    }
+
+    // ── thumbnails ───────────────────────────────────────────────────────
+    //
+    // The argument for all of it — why the files are in the project folder
+    // rather than in a local cache, and why two builds may disagree about their
+    // contents without anything being lost — is in `crate::thumbs`.
+
+    /// Every blob the index has no thumbnail recorded against.
+    ///
+    /// What a project that arrived over sync hands to
+    /// [`thumbs::ensure_all`](crate::thumbs::ensure_all). Read out in one go and
+    /// returned by value on purpose: the pass that follows takes seconds to
+    /// minutes and must run with nothing of this project's held, which is the
+    /// same rule the shell's project mutex is built on.
+    ///
+    /// Filtered from the index rather than from a directory listing, because
+    /// `assets::describe_at` already stats the thumbnail when it describes a
+    /// blob — so this costs one local SQLite read where the honest-looking
+    /// version costs one round trip per asset over SMB.
+    pub fn missing_thumbs(&self) -> Result<Vec<crate::thumbs::ThumbTarget>> {
+        Ok(self
+            .index
+            .list_assets()?
+            .into_iter()
+            .filter(|asset| asset.thumb_path.is_none())
+            .map(|asset| crate::thumbs::ThumbTarget {
+                asset_id: asset.id,
+                hash: asset.hash,
+                rel_path: asset.rel_path,
+            })
+            .collect())
+    }
+
+    /// Make one blob's thumbnail if the folder has not got one, and record it.
+    ///
+    /// The lazy half of #25, and the one a grid tile reaches for. `Ok(None)`
+    /// covers all three ways there is legitimately no thumbnail and never will
+    /// be one right now — no such asset, a folder nothing can be written into,
+    /// and a blob whose pixels will not decode — because each of those is a tile
+    /// that falls back to a placeholder rather than an error the user can act
+    /// on. Anything else is a real failure and is reported.
+    pub fn ensure_thumb(&mut self, id: Id, cancel: &Cancel) -> Result<Option<String>> {
+        let Some(asset) = self.index.asset(id)? else { return Ok(None) };
+
+        // Only when one has to be *made*. A read-only share that already holds
+        // thumbnails — the ordinary way a folder is published — still serves
+        // them, and refusing here would blank the grid on exactly that project.
+        if !crate::thumbs::exists(&self.root, &asset.hash) && self.ensure_writable().is_err() {
+            return Ok(None);
+        }
+
+        match crate::thumbs::ensure(&self.root, &asset.hash, &asset.rel_path, cancel) {
+            Ok(thumb) => {
+                self.record_thumbs(&[id])?;
+                Ok(Some(thumb.rel_path))
+            }
+            Err(Error::Undecodable { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Note that these blobs now have thumbnails in the folder.
+    ///
+    /// Every id is re-checked against the disk rather than trusted, because the
+    /// caller of the bulk pass is holding a list assembled before it ran and the
+    /// index is the thing the UI reads: a row claiming a thumbnail that is not
+    /// there is a broken image in the grid, which is worse than the null it
+    /// replaced.
+    pub fn record_thumbs(&mut self, ids: &[Id]) -> Result<()> {
+        for id in ids {
+            let Some(mut asset) = self.index.asset(*id)? else { continue };
+            let rel = crate::thumbs::rel_path(&asset.hash);
+            if !crate::thumbs::exists(&self.root, &asset.hash) {
+                continue;
+            }
+            if asset.thumb_path.as_deref() == Some(rel.as_str()) {
+                continue;
+            }
+            asset.thumb_path = Some(rel);
+            self.index.upsert_asset(&asset)?;
+        }
+        Ok(())
     }
 
     // ── replication ──────────────────────────────────────────────────────

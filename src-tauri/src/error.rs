@@ -292,6 +292,12 @@ impl From<StoreError> for WobuError {
             // is the wording, which travels in `message` and needs no new code
             // on the far side to be read.
             StoreError::NotAnImage | StoreError::AnimatedImage => Code::NotAnImage,
+            // A blob already in the library whose pixels will not come back
+            // out — almost always one a sync client has not finished copying.
+            // `Malformed` rather than `NotAnImage`, because nothing was dropped
+            // on a drop target and there is no import to put back: the file is
+            // in the folder and it is the *contents* that are wrong.
+            StoreError::Undecodable { .. } => Code::Malformed,
             StoreError::ReadOnly => Code::ReadOnly,
             StoreError::Disconnected => Code::ShareUnmounted,
             StoreError::Cancelled => Code::Cancelled,

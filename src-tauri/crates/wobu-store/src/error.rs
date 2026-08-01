@@ -87,6 +87,19 @@ pub enum Error {
     )]
     AnimatedImage,
 
+    /// A blob already in the library whose pixels will not come back out.
+    ///
+    /// Distinct from [`Error::NotAnImage`], which is a file refused at the
+    /// door, and the difference is what the caller does next. This one is
+    /// reached only by something that decodes — a thumbnail, and later a
+    /// provider payload — and the usual cause is a blob a sync client has not
+    /// finished copying: the header parsed, which is how it got indexed, and
+    /// the pixel data stops early. That is a *transient* state, so the answer
+    /// is to leave the thumbnail unmade and ask again later rather than to
+    /// write a broken one or drop the asset.
+    #[error("{path} could not be decoded: {reason}")]
+    Undecodable { path: PathBuf, reason: String },
+
     #[error("the project folder is read-only")]
     ReadOnly,
 

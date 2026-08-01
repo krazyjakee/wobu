@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
@@ -176,8 +176,43 @@ fn adopt(app: &AppHandle, state: &AppState, project: Project) -> ProjectSummary 
     // the world was on a share, and `redact::scrub` leaves it intact because a
     // filesystem path is not a credential.
     diag::info(format!("opened project {} at {}", summary.id, summary.path));
+    allow_assets(app, project.root());
     state.install(app, project);
     summary
+}
+
+/// Let the webview read this project's images off disk, and nothing else.
+///
+/// The asset protocol ships with an empty scope in `tauri.conf.json`; this is
+/// the only thing that ever widens it, and it widens it to one directory of one
+/// project the user has just picked. That is the whole security story for #25 —
+/// a grid of a thousand tiles must not base64 a thousand files through the IPC
+/// bridge, so the webview needs to load them by path, and the price of that is
+/// saying exactly which paths.
+///
+/// Scoped to `assets/` rather than to the project root, which is narrower than
+/// the issue asks for and deliberately so: the only things the webview ever
+/// loads as *files* are thumbnails and originals, and both are under there.
+/// Everything else in the folder — `nodes/**`, `project.json`, `.wobu/` —
+/// already reaches the frontend through commands that decide what it may see,
+/// and a scope covering the root would quietly also cover whatever lands in the
+/// folder next.
+///
+/// **The scope only ever grows, within one run.** Tauri's filesystem scope has
+/// no way to withdraw an allowance — `forbid_directory` is permanent, so using
+/// it on close would make reopening the same project impossible — which means a
+/// session that opens three worlds ends up able to read the assets of all three.
+/// That is worth stating rather than hiding, and it is a small thing: they are
+/// three folders this user opened themselves, in this session, and nothing
+/// survives the process exiting.
+fn allow_assets(app: &AppHandle, root: &Path) {
+    let assets = root.join("assets");
+    if let Err(e) = app.asset_protocol_scope().allow_directory(&assets, true) {
+        // Not fatal, and not silent. Everything else about the project works;
+        // what breaks is that the grid draws placeholders, and this line is the
+        // only thing that would ever explain why.
+        diag::error(format!("could not allow {}: {e}", assets.display()));
+    }
 }
 
 /* ── nodes ────────────────────────────────────────────────────────────────── */
@@ -267,24 +302,59 @@ pub fn node_move(
 /// No `world:changed` is emitted. The import writes a file inside the folder,
 /// so the watcher raises the event on its own, and firing a second one here
 /// would refetch the whole world twice for one drag.
+///
+/// `async` with the work on a blocking thread: reading a 300 MB scan off a
+/// share is minutes, drawing its thumbnail is a decode, and neither may run on
+/// the thread painting the window (#25).
 #[tauri::command]
-pub fn asset_import(
+pub async fn asset_import(
     state: State<'_, AppState>,
     path: String,
     kind: AssetKind,
 ) -> CommandResult<ImportedAsset> {
-    state.with(|p| Ok(p.import_asset_file(&PathBuf::from(path), kind)?))
+    let handle = state.handle();
+    blocking("The import thread stopped unexpectedly.", move || {
+        let imported = handle.with(|p| Ok(p.import_asset_file(&PathBuf::from(path), kind)?))?;
+        Ok(thumbnailed(&handle, imported))
+    })
+    .await?
 }
 
 /// The same, for bytes the webview already holds — a paste, or a drop the
 /// browser handed over as data rather than as a path.
 #[tauri::command]
-pub fn asset_import_bytes(
+pub async fn asset_import_bytes(
     state: State<'_, AppState>,
     bytes: Vec<u8>,
     kind: AssetKind,
 ) -> CommandResult<ImportedAsset> {
-    state.with(|p| Ok(p.import_asset(&bytes, kind)?))
+    let handle = state.handle();
+    blocking("The import thread stopped unexpectedly.", move || {
+        let imported = handle.with(|p| Ok(p.import_asset(&bytes, kind)?))?;
+        Ok(thumbnailed(&handle, imported))
+    })
+    .await?
+}
+
+/// Draw the thumbnail for a blob that has just landed, and fold it into what
+/// the import reports.
+///
+/// A second lock acquisition rather than one, deliberately: the import and the
+/// decode are separate pieces of work and the project mutex is given back
+/// between them, so a paste of twenty references does not lock every other
+/// command out for twenty decodes in a row.
+///
+/// A thumbnail that cannot be drawn is *not* an import failure and is swallowed
+/// here. The blob is in the folder, indexed, linkable and sendable; the picture
+/// beside it is a preview. `wobu_store::thumbs` is built so that the next thing
+/// to ask — a tile scrolling into view, `asset_thumbs_ensure` — tries again.
+fn thumbnailed(state: &AppState, mut imported: ImportedAsset) -> ImportedAsset {
+    let id = imported.asset.id;
+    match state.with(|p| Ok(p.ensure_thumb(id, &wobu_store::Cancel::new())?)) {
+        Ok(thumb) => imported.asset.thumb_path = thumb,
+        Err(e) => diag::error(format!("could not thumbnail {id}: {}", e.message)),
+    }
+    imported
 }
 
 /// Every blob in the open project, newest first.
@@ -353,6 +423,156 @@ pub fn asset_set_cover(
     asset_id: Option<Id>,
 ) -> CommandResult<Node> {
     state.with(|p| saved(p.set_cover_asset(node_id, asset_id)?))
+}
+
+/* ── thumbnails (#25) ─────────────────────────────────────────────────────── */
+
+/// Emitted while the library's missing thumbnails are being drawn. Payload is
+/// `ScanProgress`, the same shape `project:open-progress` carries.
+pub const THUMB_PROGRESS: &str = "assets:thumb-progress";
+
+/// The absolute path of one blob's thumbnail, drawing it if the folder has not
+/// got one.
+///
+/// **This is what a grid tile binds to, and it is the only thing it binds to.**
+/// The path comes back for `convertFileSrc`, so the webview loads a ~30 KB WebP
+/// over the asset protocol instead of being handed a base64 copy of a 40 MB
+/// scan for every tile on screen. Full-resolution originals are `asset_original`
+/// and are fetched one at a time, when an image is actually opened.
+///
+/// `async` with the work on a blocking thread, because drawing one is a decode
+/// and a resize: cheap for a screenshot, a few hundred milliseconds for a
+/// 6000px scan, and neither belongs on the thread painting the window.
+///
+/// `null` rather than an error for the three cases where there is legitimately
+/// no thumbnail — no such asset, a read-only or unreachable folder, a blob whose
+/// pixels will not decode. A tile draws a placeholder for all three; none of
+/// them is something the user can act on.
+#[tauri::command]
+pub async fn asset_thumb(
+    state: State<'_, AppState>,
+    asset_id: Id,
+) -> CommandResult<Option<String>> {
+    let handle = state.handle();
+    let rel = blocking("The thumbnail thread stopped unexpectedly.", move || {
+        handle.with(|p| Ok(p.ensure_thumb(asset_id, &wobu_store::Cancel::new())?))
+    })
+    .await??;
+
+    state.peek(|p| Ok(rel.and_then(|rel| absolute(p?, &rel))))
+}
+
+/// The absolute path of one blob itself, for the viewer.
+///
+/// Deliberately a separate command from `asset_thumb` rather than a flag on it:
+/// the grid must never be able to reach an original by accident, because a
+/// hundred tiles each pulling a 40 MB file off a share is the failure this whole
+/// issue is about. One call, one picture, when somebody opens it.
+#[tauri::command]
+pub fn asset_original(state: State<'_, AppState>, asset_id: Id) -> CommandResult<Option<String>> {
+    state.with(|p| {
+        let asset = p.get_asset(asset_id)?;
+        Ok(asset.and_then(|a| absolute(p, &a.rel_path)))
+    })
+}
+
+/// Draw every thumbnail the open project is missing.
+///
+/// The other half of "missing thumbs are regenerated lazily": a folder that
+/// arrived over sync, out of a zip or off a USB stick can have a full
+/// `assets/originals/` and no `assets/thumbs/` at all. `asset_thumb` covers one
+/// tile scrolling into view; this covers the case where the answer is "all of
+/// them", and it exists so that the grid is not drawing a thousand placeholders
+/// while a thousand separate commands queue up behind the project mutex.
+///
+/// Three steps for one reason, and it is the rule in `state.rs`: read the list
+/// under the lock, grind through it with *nothing* held, then record the results
+/// under the lock again. The middle step is minutes for a large library on a
+/// share, and holding the mutex across it would freeze every other command.
+///
+/// Returns how many blobs now have a thumbnail. Progress is emitted rather than
+/// returned, exactly as `project_open`'s is.
+#[tauri::command]
+pub async fn asset_thumbs_ensure(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<usize> {
+    let targets = state.with(|p| Ok(p.missing_thumbs()?))?;
+    let root = state.peek(|p| p.map(|p| p.root().to_path_buf()));
+    let (Some(root), false) = (root, targets.is_empty()) else { return Ok(0) };
+
+    let cancel = state.begin_thumbs();
+    let done = {
+        let emitter = app.clone();
+        blocking("The thumbnail thread stopped unexpectedly.", move || {
+            let mut last = 0u8;
+            wobu_store::thumbs::ensure_all(&root, &targets, &cancel, &mut |p| {
+                // Throttled to whole percentage points, for the reason
+                // `project_open` throttles: a thousand events through the
+                // bridge is work taken from the pass itself.
+                let pct = p.percent();
+                if pct != last {
+                    last = pct;
+                    let _ = emitter.emit(THUMB_PROGRESS, p);
+                }
+            })
+        })
+        .await?
+    };
+    state.finish_thumbs();
+
+    // Cancelling reports nothing and loses nothing. `Cancelled` is not a
+    // failure (see `wobu_store::Error`), and every thumbnail the pass did draw
+    // is on disk at a path only that picture can claim — so the next tile to ask
+    // for one, or the next run of this, finds it already there and free.
+    let made = match done {
+        Ok(made) => made,
+        Err(wobu_store::Error::Cancelled) => return Ok(0),
+        Err(e) => return Err(e.into()),
+    };
+    state.with(|p| Ok(p.record_thumbs(&made)?))?;
+    // The folder gained files, but under `assets/thumbs/` — which the watcher
+    // does not treat as a world change, and which nothing would otherwise
+    // invalidate. Without this the grid keeps its placeholders until something
+    // else happens to touch the project.
+    let _ = app.emit(WORLD_CHANGED, ());
+    Ok(made.len())
+}
+
+/// Stop a thumbnail pass in progress.
+///
+/// A no-op when there is none, for the same reason `project_open_cancel` is: the
+/// user can press it at the moment the pass finishes and that race must not be
+/// an error.
+#[tauri::command]
+pub fn asset_thumbs_cancel(state: State<'_, AppState>) {
+    state.cancel_thumbs();
+}
+
+/// A project-relative path as the absolute one `convertFileSrc` needs.
+///
+/// The join happens here rather than in the webview on purpose. Every path Wobu
+/// stores is `/`-separated and project-relative, because the same share is
+/// `/Volumes/art/…` on one machine and `Z:\art\…` on another — and a frontend
+/// doing that join would be a second place that has to know which. `None` when
+/// the path does not resolve to a file, so a tile is never pointed at a URL that
+/// will 404.
+fn absolute(project: &Project, rel: &str) -> Option<String> {
+    let path = wobu_store::paths::from_rel_string(project.root(), rel);
+    path.is_file().then(|| path.to_string_lossy().into_owned())
+}
+
+/// Run `f` on a blocking thread, turning a lost thread into a command error.
+///
+/// Shared by the thumbnail commands so that "the pool went away" reads the same
+/// from all of them; `project_open` predates it and spells its own out inline.
+async fn blocking<T: Send + 'static>(
+    lost: &'static str,
+    f: impl FnOnce() -> T + Send + 'static,
+) -> CommandResult<T> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| WobuError::new(Code::Internal, lost).with_detail(e.to_string()))
 }
 
 /// The node that was written, or the conflict that stopped it.

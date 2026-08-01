@@ -448,7 +448,12 @@ fn first_written(path: &Path) -> DateTime<Utc> {
 /// files and then rename onto the same target; whichever lands second replaces
 /// the first with identical bytes, and no reader ever observes a partial file,
 /// because a partially written file is never at the target path at all.
-fn stage_and_rename(root: &Path, target: &Path, bytes: &[u8]) -> Result<()> {
+///
+/// `pub(crate)` for [`crate::thumbs`], which writes into the same tree under
+/// the same rules and must not grow a second copy of this: the two-process case
+/// above is exactly what happens when two Wobus open a freshly synced folder
+/// and both start filling in its missing thumbnails.
+pub(crate) fn stage_and_rename(root: &Path, target: &Path, bytes: &[u8]) -> Result<()> {
     let tmp_dir = root.join(".wobu").join("tmp");
     paths::ensure_dir(&tmp_dir)?;
     if let Some(parent) = target.parent() {
