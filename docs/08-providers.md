@@ -457,15 +457,31 @@ Each adapter declares what it can do, and the UI adapts rather than failing late
 
 ```rust
 pub struct Capabilities {
-    pub max_resolution: (u32, u32),
+    pub max_resolution: Resolution,
     pub aspect_ratios: Vec<AspectRatio>,
     pub image_refs: ImageBudget,            // see below — not a per-role map
     pub controlnet: bool,
     pub loras: bool,
+    pub negative_prompt: bool,              // see below — Gemini image has none
     pub requires_billing: bool,
     pub streaming_preview: bool,
 }
 ```
+
+**Declared per model, not per backend** (#50). One `Capabilities` for "Gemini" would have to
+be the worst of the three image models — `gemini-3.1-flash-lite-image` is 1K only and counts
+fourteen undifferentiated references, `gemini-3-pro-image` goes to 4K and counts six, five and
+three — which would hide two thirds of the reference budget the user is paying for. So
+`capabilities()` takes the model id, and a model id nothing in the registry names still gets an
+answer: the adapter's most conservative *registered* budget, never `ImageBudget::unlimited`.
+
+`negative_prompt` is not in the original sketch and was added because without it the
+negotiation is not total. `never:` is the one section every kind is required to declare, it
+compiles to `FragmentTarget::Negative`, and the Gemini image API has no field to put it in —
+Imagen's `negativePrompt` went with Imagen. ComfyUI has one. Without the flag the only possible
+behaviour is to drop user-authored canon in silence; with it, the user is told the `never:`
+list is not enforced on this backend. It is *not* folded into the positive prompt as a
+"without X" clause, which reads to a text encoder as a request for X.
 
 `image_refs` is deliberately **not** a map keyed by our own `AssetRole`. The caps are declared
 in the backend's vocabulary — objects, characters, style refs — and `wobu-influence` owns the
