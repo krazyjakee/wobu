@@ -10,10 +10,14 @@
 //! keys `src/lib/api.ts` sends.
 
 use std::collections::{HashMap, HashSet};
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Emitter, Manager, State};
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
@@ -45,6 +49,56 @@ use crate::error::{Code, CommandResult, WobuError};
 use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 use crate::machine::MachineSettings;
 use crate::state::{AppState, Jobs, WORLD_CHANGED};
+
+const ASSET_TRANSFER_CHUNK_BYTES: usize = 1024 * 1024;
+const ASSET_TRANSFER_MAX_BYTES: u64 = 512 * 1024 * 1024;
+
+#[derive(Default)]
+pub struct AssetTransfers(Mutex<HashMap<String, AssetTransfer>>);
+
+struct AssetTransfer {
+    project_id: Id,
+    path: PathBuf,
+    file: File,
+    kind: AssetKind,
+    received_bytes: u64,
+    total_bytes: u64,
+}
+
+impl AssetTransfers {
+    fn take(&self, id: &str) -> Option<AssetTransfer> {
+        self.0.lock().remove(id)
+    }
+
+    fn cancel(&self, id: &str) -> bool {
+        self.take(id).is_some_and(|transfer| {
+            remove_asset_transfer(transfer);
+            true
+        })
+    }
+
+    pub fn clear(&self) {
+        for (_, transfer) in self.0.lock().drain() {
+            remove_asset_transfer(transfer);
+        }
+    }
+}
+
+impl Drop for AssetTransfers {
+    fn drop(&mut self) {
+        for (_, transfer) in self.0.get_mut().drain() {
+            remove_asset_transfer(transfer);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetTransferProgress {
+    transfer_id: String,
+    received_bytes: u64,
+    total_bytes: u64,
+}
 
 /* ── registry ─────────────────────────────────────────────────────────────── */
 
@@ -203,7 +257,12 @@ pub fn project_open_cancel(state: State<'_, AppState>) {
 /// world it came from — but a description of somebody's world should not still
 /// be sitting in this process after they have shut it.
 #[tauri::command]
-pub fn project_close(state: State<'_, AppState>, pending: State<'_, Pending>) -> CommandResult<()> {
+pub fn project_close(
+    state: State<'_, AppState>,
+    pending: State<'_, Pending>,
+    asset_transfers: State<'_, AssetTransfers>,
+) -> CommandResult<()> {
+    asset_transfers.clear();
     state.close();
     pending.clear();
     Ok(())
@@ -243,9 +302,14 @@ pub fn share_offline(state: State<'_, AppState>) -> bool {
 /// the only way past it, and it exists so that the refusal is a warning rather
 /// than a trap the user cannot get out of.
 #[tauri::command]
-pub fn force_quit(app: AppHandle, state: State<'_, AppState>) {
+pub fn force_quit(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    asset_transfers: State<'_, AssetTransfers>,
+) {
     // Drop the project first so the watcher and reconnect threads stop before
     // the process does, rather than being killed mid-reconcile.
+    asset_transfers.clear();
     state.close();
     app.exit(0);
 }
@@ -499,20 +563,186 @@ pub async fn asset_import(
     .await?
 }
 
-/// The same, for bytes the webview already holds — a paste, or a drop the
-/// browser handed over as data rather than as a path.
+/// Start a bounded raw-byte import for a paste or browser drop.
+///
+/// The body chunks arrive through [`InvokeBody::Raw`], never JSON. They are
+/// appended to a local temporary file with backpressure, so neither side owns
+/// the whole image as a second in-memory representation. The upper bound is a
+/// user-facing refusal before the webview reads even the first chunk.
 #[tauri::command]
-pub async fn asset_import_bytes(
+pub fn asset_import_transfer_begin(
     state: State<'_, AppState>,
-    bytes: Vec<u8>,
+    asset_transfers: State<'_, AssetTransfers>,
+    total_bytes: u64,
     kind: AssetKind,
+) -> CommandResult<AssetTransferProgress> {
+    if total_bytes == 0 || total_bytes > ASSET_TRANSFER_MAX_BYTES {
+        return Err(invalid_asset_transfer(format!(
+            "Pasted images must be between 1 byte and {} MiB.",
+            ASSET_TRANSFER_MAX_BYTES / 1024 / 1024
+        )));
+    }
+    let project_id = state.with(|project| Ok(project.id()))?;
+    let transfer_id = wobu_core::new_id().to_string();
+    let path = std::env::temp_dir().join(format!("wobu-asset-{transfer_id}.part"));
+    let file =
+        OpenOptions::new().write(true).create_new(true).open(&path).map_err(|error| {
+            asset_transfer_io("Could not start the pasted image transfer.", error)
+        })?;
+    asset_transfers.0.lock().insert(
+        transfer_id.clone(),
+        AssetTransfer { project_id, path, file, kind, received_bytes: 0, total_bytes },
+    );
+    Ok(AssetTransferProgress { transfer_id, received_bytes: 0, total_bytes })
+}
+
+/// Append one raw IPC body to a transfer.
+///
+/// One MiB is both the protocol limit and the frontend chunk size. A malformed
+/// offset, oversized body, or write failure destroys the session immediately;
+/// there is no abandoned partial file waiting for a later Cancel click.
+#[tauri::command]
+pub fn asset_import_transfer_chunk(
+    asset_transfers: State<'_, AssetTransfers>,
+    request: Request<'_>,
+) -> CommandResult<AssetTransferProgress> {
+    let transfer_id = transfer_header(&request, "x-wobu-transfer-id")?.to_owned();
+    let offset = match transfer_header(&request, "x-wobu-offset").and_then(|value| {
+        value
+            .parse::<u64>()
+            .map_err(|_| invalid_asset_transfer("The pasted image chunk offset was invalid."))
+    }) {
+        Ok(offset) => offset,
+        Err(error) => {
+            asset_transfers.cancel(&transfer_id);
+            return Err(error);
+        }
+    };
+    let InvokeBody::Raw(bytes) = request.body() else {
+        asset_transfers.cancel(&transfer_id);
+        return Err(invalid_asset_transfer("The pasted image chunk was not binary."));
+    };
+    append_asset_transfer_chunk(&asset_transfers, &transfer_id, offset, bytes)
+}
+
+fn append_asset_transfer_chunk(
+    asset_transfers: &AssetTransfers,
+    transfer_id: &str,
+    offset: u64,
+    bytes: &[u8],
+) -> CommandResult<AssetTransferProgress> {
+    if bytes.is_empty() || bytes.len() > ASSET_TRANSFER_CHUNK_BYTES {
+        asset_transfers.cancel(transfer_id);
+        return Err(invalid_asset_transfer(format!(
+            "Pasted image chunks must be between 1 byte and {ASSET_TRANSFER_CHUNK_BYTES} bytes."
+        )));
+    }
+
+    let result = {
+        let mut transfers = asset_transfers.0.lock();
+        let transfer = transfers
+            .get_mut(transfer_id)
+            .ok_or_else(|| invalid_asset_transfer("That pasted image transfer is not active."))?;
+        if offset != transfer.received_bytes
+            || transfer.received_bytes + bytes.len() as u64 > transfer.total_bytes
+        {
+            Err(invalid_asset_transfer(
+                "The pasted image chunks arrived out of order or exceeded the declared size.",
+            ))
+        } else {
+            match transfer.file.write_all(bytes) {
+                Ok(()) => {
+                    transfer.received_bytes += bytes.len() as u64;
+                    Ok(AssetTransferProgress {
+                        transfer_id: transfer_id.to_owned(),
+                        received_bytes: transfer.received_bytes,
+                        total_bytes: transfer.total_bytes,
+                    })
+                }
+                Err(error) => Err(asset_transfer_io("Could not buffer the pasted image.", error)),
+            }
+        }
+    };
+    if result.is_err() {
+        asset_transfers.cancel(transfer_id);
+    }
+    result
+}
+
+/// Finish a complete transfer against the same project that began it.
+#[tauri::command]
+pub async fn asset_import_transfer_finish(
+    state: State<'_, AppState>,
+    asset_transfers: State<'_, AssetTransfers>,
+    transfer_id: String,
 ) -> CommandResult<ImportedAsset> {
+    let Some(mut transfer) = asset_transfers.take(&transfer_id) else {
+        return Err(invalid_asset_transfer("That pasted image transfer is not active."));
+    };
+    if transfer.received_bytes != transfer.total_bytes {
+        remove_asset_transfer(transfer);
+        return Err(invalid_asset_transfer("The pasted image transfer is incomplete."));
+    }
+    let current_project = match state.with(|project| Ok(project.id())) {
+        Ok(project_id) => project_id,
+        Err(error) => {
+            remove_asset_transfer(transfer);
+            return Err(error);
+        }
+    };
+    if current_project != transfer.project_id {
+        remove_asset_transfer(transfer);
+        return Err(invalid_asset_transfer(
+            "The project changed before the pasted image finished transferring.",
+        ));
+    }
+    if let Err(error) = transfer.file.flush().and_then(|()| transfer.file.sync_all()) {
+        remove_asset_transfer(transfer);
+        return Err(asset_transfer_io("Could not finish buffering the pasted image.", error));
+    }
+
+    let AssetTransfer { project_id, path, file, kind, .. } = transfer;
+    drop(file);
     let handle = state.handle();
     blocking("The import thread stopped unexpectedly.", move || {
-        let imported = handle.with(|p| Ok(p.import_asset(&bytes, kind)?))?;
-        Ok(thumbnailed(&handle, imported))
+        let result = handle
+            .with_project(project_id, |project| Ok(project.import_asset_file(&path, kind)?))
+            .map(|imported| thumbnailed(&handle, imported));
+        let _ = fs::remove_file(path);
+        result
     })
     .await?
+}
+
+/// Cancel is idempotent so an AbortSignal may race a completed chunk safely.
+#[tauri::command]
+pub fn asset_import_transfer_cancel(
+    asset_transfers: State<'_, AssetTransfers>,
+    transfer_id: String,
+) {
+    asset_transfers.cancel(&transfer_id);
+}
+
+fn transfer_header<'a>(request: &'a Request<'_>, name: &str) -> CommandResult<&'a str> {
+    request
+        .headers()
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| invalid_asset_transfer(format!("The pasted image chunk omitted {name}.")))
+}
+
+fn invalid_asset_transfer(message: impl Into<String>) -> WobuError {
+    WobuError::new(Code::Invalid, message)
+}
+
+fn asset_transfer_io(message: &'static str, error: std::io::Error) -> WobuError {
+    WobuError::new(Code::Io, message).with_detail(error.to_string())
+}
+
+fn remove_asset_transfer(transfer: AssetTransfer) {
+    let AssetTransfer { path, file, .. } = transfer;
+    drop(file);
+    let _ = fs::remove_file(path);
 }
 
 /// Draw the thumbnail for a blob that has just landed, and fold it into what
@@ -2141,6 +2371,65 @@ mod bridge {
     use wobu_store::{AssetUsageRole, ImportWarning};
 
     use super::*;
+
+    fn staged_asset_transfer(total_bytes: u64) -> (AssetTransfers, String, PathBuf) {
+        let transfers = AssetTransfers::default();
+        let transfer_id = wobu_core::new_id().to_string();
+        let path = std::env::temp_dir().join(format!("wobu-transfer-test-{transfer_id}.part"));
+        let file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+        transfers.0.lock().insert(
+            transfer_id.clone(),
+            AssetTransfer {
+                project_id: wobu_core::new_id(),
+                path: path.clone(),
+                file,
+                kind: AssetKind::Reference,
+                received_bytes: 0,
+                total_bytes,
+            },
+        );
+        (transfers, transfer_id, path)
+    }
+
+    #[test]
+    fn raw_asset_chunks_are_bounded_ordered_and_never_retained_in_memory() {
+        let total = ASSET_TRANSFER_CHUNK_BYTES as u64 + 17;
+        let (transfers, transfer_id, path) = staged_asset_transfer(total);
+        let chunk = vec![7; ASSET_TRANSFER_CHUNK_BYTES];
+
+        let first = append_asset_transfer_chunk(&transfers, &transfer_id, 0, &chunk).unwrap();
+        assert_eq!(first.received_bytes, ASSET_TRANSFER_CHUNK_BYTES as u64);
+        assert_eq!(fs::metadata(&path).unwrap().len(), ASSET_TRANSFER_CHUNK_BYTES as u64);
+        assert!(
+            std::mem::size_of::<AssetTransfer>() < 256,
+            "a transfer session must hold file metadata, never a byte Vec"
+        );
+
+        let done = append_asset_transfer_chunk(
+            &transfers,
+            &transfer_id,
+            ASSET_TRANSFER_CHUNK_BYTES as u64,
+            &[9; 17],
+        )
+        .unwrap();
+        assert_eq!(done.received_bytes, total);
+        assert_eq!(fs::metadata(&path).unwrap().len(), total);
+        assert!(transfers.cancel(&transfer_id));
+        assert!(!path.exists(), "Cancel must remove the staged file");
+    }
+
+    #[test]
+    fn an_oversized_or_out_of_order_chunk_destroys_its_temp_session() {
+        let (oversized, oversized_id, oversized_path) =
+            staged_asset_transfer((ASSET_TRANSFER_CHUNK_BYTES + 1) as u64);
+        let too_large = vec![0; ASSET_TRANSFER_CHUNK_BYTES + 1];
+        assert!(append_asset_transfer_chunk(&oversized, &oversized_id, 0, &too_large).is_err());
+        assert!(!oversized_path.exists());
+
+        let (out_of_order, out_of_order_id, out_of_order_path) = staged_asset_transfer(8);
+        assert!(append_asset_transfer_chunk(&out_of_order, &out_of_order_id, 4, &[1; 4]).is_err());
+        assert!(!out_of_order_path.exists());
+    }
 
     /// Verbatim from the `WobuNode` interface in `src/lib/api.ts`, including
     /// the tagged `SectionValue` shape and a `null` description state.

@@ -34,6 +34,10 @@ pub fn run() {
         // has to be initialised on this side or every pick fails.
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        // Raw pasted-image chunks are staged outside the project until their
+        // declared length arrives. Separate managed state lets Cancel and
+        // project close tear down those files without involving the watcher.
+        .manage(commands::AssetTransfers::default())
         // Beside `AppState` rather than inside it, and that is the point: keys
         // belong to the installation, not to the open project. A type that could
         // reach a project folder is a type that could one day read a key out of
@@ -113,7 +117,10 @@ pub fn run() {
             commands::node_link_update,
             commands::node_backlinks,
             commands::asset_import,
-            commands::asset_import_bytes,
+            commands::asset_import_transfer_begin,
+            commands::asset_import_transfer_chunk,
+            commands::asset_import_transfer_finish,
+            commands::asset_import_transfer_cancel,
             commands::asset_list,
             commands::asset_usage_list,
             commands::asset_delete,

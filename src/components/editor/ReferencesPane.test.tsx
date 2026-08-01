@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, AssetLink, WobuNode } from '../../lib/api'
 import { node as buildNode } from '../../test/fixtures'
@@ -145,25 +145,52 @@ describe('ReferencesPane', () => {
     const good = imageFile('good.png', 1)
     const bad = imageFile('bad.png', 2)
 
-    h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
-      if (command === 'asset_list') return Promise.resolve([])
-      if (command === 'asset_thumb') return Promise.resolve(`/thumb/${String(args?.assetId)}.webp`)
-      if (command === 'asset_import_bytes') {
-        const bytes = args?.bytes as number[]
-        if (bytes[0] === 2) {
-          return Promise.reject({
-            code: 'asset.not_an_image',
-            message: 'The file is not a supported image.',
-            retryable: false,
+    let transferSequence = 0
+    const markers = new Map<string, number>()
+    h.invoke.mockImplementation(
+      (
+        command: string,
+        args?: Record<string, unknown> | ArrayBuffer,
+        options?: { headers?: Record<string, string> },
+      ) => {
+        if (command === 'asset_list') return Promise.resolve([])
+        if (command === 'asset_thumb')
+          return Promise.resolve(
+            `/thumb/${String((args as Record<string, unknown>)?.assetId)}.webp`,
+          )
+        if (command === 'asset_import_transfer_begin') {
+          const transferId = `transfer-${++transferSequence}`
+          return Promise.resolve({
+            transferId,
+            receivedBytes: 0,
+            totalBytes: Number((args as Record<string, unknown>).totalBytes),
           })
         }
-        return Promise.resolve({ asset: asset('pasted-good'), deduped: false })
-      }
-      if (command === 'asset_link') {
-        return Promise.resolve({ ...node, assetLinks: [link(String(args?.assetId))] })
-      }
-      return Promise.resolve(null)
-    })
+        if (command === 'asset_import_transfer_chunk') {
+          const transferId = String(options?.headers?.['x-wobu-transfer-id'])
+          markers.set(transferId, new Uint8Array(args as ArrayBuffer)[0] ?? 0)
+          return Promise.resolve({ transferId, receivedBytes: 1, totalBytes: 1 })
+        }
+        if (command === 'asset_import_transfer_finish') {
+          const transferId = String((args as Record<string, unknown>).transferId)
+          if (markers.get(transferId) === 2) {
+            return Promise.reject({
+              code: 'asset.not_an_image',
+              message: 'The file is not a supported image.',
+              retryable: false,
+            })
+          }
+          return Promise.resolve({ asset: asset('pasted-good'), deduped: false })
+        }
+        if (command === 'asset_link') {
+          return Promise.resolve({
+            ...node,
+            assetLinks: [link(String((args as Record<string, unknown>)?.assetId))],
+          })
+        }
+        return Promise.resolve(null)
+      },
+    )
 
     fireEvent.paste(screen.getByRole('region', { name: 'References for kael' }), {
       clipboardData: { files: [good, bad] },
@@ -180,6 +207,66 @@ describe('ReferencesPane', () => {
     )
   })
 
+  it('reports chunk progress and lets the user cancel an active paste', async () => {
+    const node = buildNode({ id: 'kael' })
+    renderPane(node, [])
+    const size = 2 * 1024 * 1024
+    const file = {
+      name: 'large.png',
+      type: 'image/png',
+      size,
+      slice: (start: number, end: number) => ({
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(end - start)),
+      }),
+    } as File
+    let chunks = 0
+    let finishSecondChunk: (() => void) | undefined
+
+    h.invoke.mockImplementation(
+      (
+        command: string,
+        _args?: Record<string, unknown> | ArrayBuffer,
+        options?: { headers?: Record<string, string> },
+      ) => {
+        if (command === 'asset_list') return Promise.resolve([])
+        if (command === 'asset_import_transfer_begin') {
+          return Promise.resolve({ transferId: 'large', receivedBytes: 0, totalBytes: size })
+        }
+        if (command === 'asset_import_transfer_chunk') {
+          chunks += 1
+          const progress = {
+            transferId: options?.headers?.['x-wobu-transfer-id'],
+            receivedBytes: chunks * 1024 * 1024,
+            totalBytes: size,
+          }
+          if (chunks === 1) return Promise.resolve(progress)
+          return new Promise((resolve) => {
+            finishSecondChunk = () => resolve(progress)
+          })
+        }
+        if (command === 'asset_import_transfer_cancel') return Promise.resolve(null)
+        if (command === 'asset_import_transfer_finish') {
+          return Promise.reject(new Error('cancelled imports must not finish'))
+        }
+        return Promise.resolve(null)
+      },
+    )
+
+    fireEvent.paste(screen.getByRole('region', { name: 'References for kael' }), {
+      clipboardData: { files: [file] },
+    })
+
+    expect(await screen.findByText(/Transferring · 50%/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel imports' }))
+    await act(async () => finishSecondChunk?.())
+
+    expect(await screen.findByText('Cancelled')).toBeInTheDocument()
+    expect(h.invoke).toHaveBeenCalledWith('asset_import_transfer_cancel', {
+      transferId: 'large',
+    })
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_import_transfer_finish', expect.anything())
+  })
+
   it('suppresses import controls and drop affordances when read-only', () => {
     const node = buildNode({ id: 'kael' })
     renderPane(node, [], true)
@@ -189,14 +276,17 @@ describe('ReferencesPane', () => {
     fireEvent.dragEnter(region, { dataTransfer: { types: ['Files'] } })
     expect(screen.queryByText('Drop images to import and attach')).not.toBeInTheDocument()
     fireEvent.paste(region, { clipboardData: { files: [imageFile('ignored.png', 1)] } })
-    expect(h.invoke).not.toHaveBeenCalledWith('asset_import_bytes', expect.anything())
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_import_transfer_begin', expect.anything())
   })
 })
 
 function imageFile(name: string, marker: number): File {
   const file = new File([new Uint8Array([marker])], name, { type: 'image/png' })
   Object.defineProperty(file, 'arrayBuffer', {
-    value: () => Promise.resolve(Uint8Array.from([marker]).buffer),
+    value: () => Promise.reject(new Error('whole-file reads are forbidden')),
+  })
+  Object.defineProperty(file, 'slice', {
+    value: () => ({ arrayBuffer: () => Promise.resolve(Uint8Array.of(marker).buffer) }),
   })
   return file
 }

@@ -8,13 +8,15 @@ import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
 import { useAssetThumb, useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
-type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed'
+type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed' | 'cancelled'
 type ImportItem = {
   id: number
   name: string
   state: ImportState
   error?: string
   deduped?: boolean
+  receivedBytes?: number
+  totalBytes?: number
 }
 type ImportInput =
   { source: 'path'; name: string; path: string } | { source: 'file'; name: string; file: File }
@@ -43,6 +45,7 @@ export function ReferencesPane({
   const [draggingFiles, setDraggingFiles] = useState(false)
   const importId = useRef(0)
   const importChain = useRef<Promise<void>>(Promise.resolve())
+  const importAborts = useRef(new Set<AbortController>())
   const saveStatus = useRef(autosave.status)
 
   useEffect(() => setLinks(node.assetLinks), [node.assetLinks])
@@ -52,6 +55,13 @@ export function ReferencesPane({
   useEffect(() => {
     saveStatus.current = autosave.status
   }, [autosave.status])
+  useEffect(
+    () => () => {
+      for (const controller of importAborts.current) controller.abort()
+      importAborts.current.clear()
+    },
+    [],
+  )
 
   const assetIndex = useMemo(() => {
     const index = new Map((assets.data ?? []).map((asset) => [asset.id, asset]))
@@ -74,9 +84,11 @@ export function ReferencesPane({
       input,
       item: { id: ++importId.current, name: input.name, state: 'queued' as const },
     }))
+    const controller = new AbortController()
+    importAborts.current.add(controller)
     setImports((current) => [...batch.map(({ item }) => item), ...current])
 
-    importChain.current = importChain.current
+    const run = importChain.current
       .catch(() => undefined)
       .then(async () => {
         try {
@@ -96,14 +108,22 @@ export function ReferencesPane({
         for (const { input, item } of batch) {
           let imported = false
           try {
-            updateImport(item.id, { state: 'importing' })
+            updateImport(item.id, {
+              state: 'importing',
+              receivedBytes: 0,
+              totalBytes: input.source === 'file' ? input.file.size : undefined,
+            })
             const result =
               input.source === 'path'
                 ? await api.assetImport(input.path, 'reference')
-                : await api.assetImportBytes(
-                    new Uint8Array(await input.file.arrayBuffer()),
-                    'reference',
-                  )
+                : await api.assetImportBytes(input.file, 'reference', {
+                    signal: controller.signal,
+                    onProgress: (progress) =>
+                      updateImport(item.id, {
+                        receivedBytes: progress.receivedBytes,
+                        totalBytes: progress.totalBytes,
+                      }),
+                  })
             imported = true
             setImportedAssets((current) => ({ ...current, [result.asset.id]: result.asset }))
             updateImport(item.id, { state: 'linking', deduped: result.deduped })
@@ -116,12 +136,15 @@ export function ReferencesPane({
             updateImport(item.id, { state: 'done' })
           } catch (error) {
             updateImport(item.id, {
-              state: 'failed',
-              error: `${imported ? 'Imported, but could not attach' : 'Import failed'}: ${api.errorMessage(error)}`,
+              state: controller.signal.aborted ? 'cancelled' : 'failed',
+              error: controller.signal.aborted
+                ? undefined
+                : `${imported ? 'Imported, but could not attach' : 'Import failed'}: ${api.errorMessage(error)}`,
             })
           }
         }
       })
+    importChain.current = run.finally(() => importAborts.current.delete(controller))
     await importChain.current
   }
 
@@ -248,7 +271,15 @@ export function ReferencesPane({
         </button>
       </header>
 
-      {imports.length > 0 && <ImportReport items={imports} onClear={() => setImports([])} />}
+      {imports.length > 0 && (
+        <ImportReport
+          items={imports}
+          onCancel={() => {
+            for (const controller of importAborts.current) controller.abort()
+          }}
+          onClear={() => setImports([])}
+        />
+      )}
 
       {assets.isError && (
         <p className="references-error">
@@ -272,15 +303,26 @@ export function ReferencesPane({
   )
 }
 
-function ImportReport({ items, onClear }: { items: ImportItem[]; onClear: () => void }) {
-  const active = items.filter((item) => item.state !== 'done' && item.state !== 'failed').length
+function ImportReport({
+  items,
+  onCancel,
+  onClear,
+}: {
+  items: ImportItem[]
+  onCancel: () => void
+  onClear: () => void
+}) {
+  const active = items.filter(
+    (item) => item.state !== 'done' && item.state !== 'failed' && item.state !== 'cancelled',
+  ).length
   const failed = items.filter((item) => item.state === 'failed').length
+  const cancelled = items.filter((item) => item.state === 'cancelled').length
   const done = items.filter((item) => item.state === 'done').length
   return (
     <details className="reference-imports" open={active > 0 || failed > 0}>
       <summary>
         Importing {items.length} {items.length === 1 ? 'file' : 'files'} · {done} done · {failed}{' '}
-        failed
+        failed · {cancelled} cancelled
       </summary>
       <div className="reference-import-list">
         {items.map((item) => (
@@ -291,6 +333,11 @@ function ImportReport({ items, onClear }: { items: ImportItem[]; onClear: () => 
           </div>
         ))}
       </div>
+      {active > 0 && (
+        <button type="button" onClick={onCancel}>
+          Cancel imports
+        </button>
+      )}
       {active === 0 && (
         <button type="button" onClick={onClear}>
           Clear report
@@ -543,9 +590,14 @@ function ReferenceTile({
 
 function importLabel(item: ImportItem): string {
   if (item.state === 'queued') return 'Waiting'
-  if (item.state === 'importing') return 'Importing…'
+  if (item.state === 'importing') {
+    if (!item.totalBytes) return 'Importing…'
+    if (item.receivedBytes === item.totalBytes) return 'Processing…'
+    return `Transferring · ${Math.floor(((item.receivedBytes ?? 0) / item.totalBytes) * 100)}%`
+  }
   if (item.state === 'linking') return 'Attaching…'
   if (item.state === 'failed') return 'Failed'
+  if (item.state === 'cancelled') return 'Cancelled'
   return item.deduped ? 'Already present · attached' : 'Imported · attached'
 }
 
