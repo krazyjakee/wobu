@@ -49,8 +49,16 @@ pub enum Error {
     /// there and images are not (`docs/08-providers.md`). Distinct from
     /// [`Capabilities::requires_billing`](crate::Capabilities::requires_billing),
     /// which says the call *costs* money; this says the account cannot pay.
-    #[error("{backend} needs billing enabled on the account before this model will run")]
-    BillingRequired { backend: &'static str },
+    ///
+    /// `detail` carries the *fix*, and it exists because this message is the
+    /// whole of what the user is shown: `WobuError` in the Tauri shell is built
+    /// from a `Display`, so a sentence that stops at "billing is not enabled"
+    /// leaves somebody looking at a working key with nowhere to go. It is also
+    /// the one sentence in this file that has to be told apart from
+    /// [`Error::BadKey`] by a person rather than by a `match`: the two arrive as
+    /// neighbouring status codes and send the user to two different websites.
+    #[error("{backend} image generation requires billing enabled on your account — {detail}")]
+    BillingRequired { backend: &'static str, detail: String },
 
     /// Unreachable, timed out, or a 5xx — and also the ComfyUI that is running
     /// happily and has never heard of the checkpoint the request names. Both
@@ -178,7 +186,7 @@ mod tests {
             Error::NoKey { backend: "Gemini" },
             Error::BadKey { backend: "Gemini" },
             Error::RateLimited { backend: "Gemini", retry_after: Some(Duration::from_secs(30)) },
-            Error::BillingRequired { backend: "Gemini" },
+            Error::BillingRequired { backend: "Gemini", detail: "enable billing".into() },
             Error::Unavailable { detail: "connection refused on 127.0.0.1:8188".into() },
             Error::Unsupported { detail: "21:9 is not in this backend's aspect ratios".into() },
             Error::Cancelled,
@@ -255,7 +263,10 @@ mod tests {
         // prompt that would pass on the next attempt, or a key being hammered.
         assert!(Error::Refused { detail: "safety".into() }.is_retryable());
         assert!(!Error::NoKey { backend: "Gemini" }.is_retryable());
-        assert!(!Error::BillingRequired { backend: "Gemini" }.is_retryable());
+        assert!(
+            !Error::BillingRequired { backend: "Gemini", detail: "enable billing".into() }
+                .is_retryable()
+        );
     }
 
     #[test]

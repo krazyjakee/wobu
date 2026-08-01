@@ -131,11 +131,18 @@ reads as stale. 🚩 Still unconfirmed by a live call — nobody on the project 
 adapter sends `/v1beta` and `wobu-llm::gemini` says in a comment that a 404 with nothing billed
 means try `/v1beta2`.
 
-**Pin the revision.** The API is versioned by date via an `Api-Revision` header. The current
-shape is `2026-05-20`: default since 2026-05-26, and the revision before it was *removed* on
-2026-06-08. That revision is what renamed `outputs` to `steps` and folded `response_mime_type`
-into `response_format`, so anything written against an older example is a 400. The adapter
-sends the header explicitly rather than riding the default.
+**Pin the revision — but it no longer does anything.** The API is versioned by date via an
+`Api-Revision` header. The current shape is `2026-05-20`: default since 2026-05-26, and the
+revision before it was *removed* on 2026-06-08. That revision is what renamed `outputs` to
+`steps` and folded `response_mime_type` into `response_format`, so anything written against an
+older example is a 400. Both adapters send the header explicitly.
+
+Corrected 2026-08-01 (#52): the [breaking-changes
+guide](https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026)'s own
+timeline says of 2026-06-08 — "Legacy schema removed for Interactions API. **`Api-Revision`
+header ignored.**" Neither the image-generation guide nor the API reference mentions the header
+at all. So sending it is a no-op, kept because it records in the request which shape the
+adapters were written against. Do not rely on it to hold a shape.
 
 ### Text — Enhance
 
@@ -270,10 +277,79 @@ larger payloads), which maps cleanly onto our AssetLink roles.
 Aspect ratios: use the intersection both Google docs agree on — `1:1 3:2 2:3 3:4 4:3 4:5 5:4
 9:16 16:9 21:9`. Sizes are `512px`, `1K`, `2K`, `4K`, uppercase K required.
 
-🚩 Two things to verify empirically: the legacy image config field moved between
-`generationConfig.imageConfig` and `response_format.image` and the docs disagree; and there
-are multiple credible reports of `imageSize` and `aspect_ratio` being **silently ignored**.
-The adapter should read back the actual returned dimensions and trust those, not the request.
+Re-checked 2026-08-01 (#52) and still the right list. The [API
+reference](https://ai.google.dev/api/interactions-api)'s `aspect_ratio` enum has **fourteen**
+values — those ten plus the extreme panoramas `1:4 4:1 1:8 8:1` — and the guide's table for
+`gemini-3-pro-image` lists exactly the ten above. The intersection is what we offer.
+
+### The image config field: settled, 2026-08-01
+
+The 🚩 below was **resolved by re-reading the live docs while building #52**. The pages no
+longer disagree, and neither candidate the doc recorded was quite right.
+
+The current shape is a **top-level `response_format` whose `type` is `"image"`** — not a nested
+`response_format.image`, and not `generationConfig.imageConfig`. Verbatim from
+[image-generation](https://ai.google.dev/gemini-api/docs/image-generation) (page last updated
+2026-07-30):
+
+```json
+{
+  "model": "gemini-3.1-flash-image",
+  "input": [
+    { "type": "text", "text": "..." },
+    { "type": "image", "mime_type": "image/png", "data": "<BASE64>" }
+  ],
+  "response_format": { "type": "image", "aspect_ratio": "16:9", "image_size": "2K" }
+}
+```
+
+The [API reference](https://ai.google.dev/api/interactions-api) (last updated 2026-07-31) names
+this variant `ImageResponseFormat`: `aspect_ratio`, `image_size` (`512` / `1K` / `2K` / `4K`),
+`mime_type`, and `delivery` (`inline` / `uri`). The
+[breaking-changes](https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026)
+page states it outright — "`image_config` moves from `generation_config` to `response_format`"
+and "the new schema removes `image_config` from `generation_config`" — and the legacy schema was
+removed on 2026-06-08. `imageConfig` in camelCase appears on none of the five pages checked; the
+disagreement the doc recorded was almost certainly the "Before (legacy)" half of that migration
+example.
+
+**Input and reference images** are one flat array of typed blocks — `{type: "text", text}` and
+`{type: "image", mime_type, data}`, base64 inline. There is **no `role` and no `parts`**; those
+strings appear nowhere in the reference. **Output** is the same block shape, on the `content` of
+the `model_output` step: `{type: "image", data: "<base64>", mime_type}`. Streaming carries it as
+an `ImageDelta` on `step.delta`.
+
+Consequence for [04](04-influence-engine.md) and #86: **the reference buckets have no
+corresponding request field.** Objects / characters / style refs are how Google *counts*
+references — the 14, 10+4, 6+5+3 table above is real and documented — but the request itself is
+an undifferentiated list. The buckets are a budget, not a routing table, and reading order is
+the only signal about a reference that survives.
+
+Still 🚩:
+
+- **The top-level envelope of a non-streaming response.** Every published example is SDK code
+  reading `interaction.steps`, and the reference notes `output_image` is "added by the SDK". So
+  whether the raw body *is* the interaction or wraps it under `interaction` is unconfirmed. The
+  adapter accepts both.
+- **The sub-1K token.** The reference enum says `512`; the guide's prose says `512px`. Unresolved,
+  and unreached — no ceiling the adapter declares produces a long side under 513, so it is never
+  sent. Also flash-only: pro does 1K/2K/4K, lite is 1K only.
+- **Output `mime_type`.** `ImageResponseFormat.mime_type` lists only `image/jpeg`, while every
+  input example uses `image/png`. The adapter omits the field and reads what arrives.
+- There remain multiple credible reports of `imageSize` and `aspect_ratio` being **silently
+  ignored**. This is a design instruction regardless: **read back the actual returned dimensions
+  and trust those, not the request.** The adapter does, off the image header, sharing
+  `wobu-imagine`'s `dimensions.rs` with the ComfyUI one.
+
+**SynthID** is confirmed, verbatim and twice on the image-generation page: "All generated images
+include a SynthID watermark." The adapter declares it unconditionally as data on the outcome
+(`GeneratedImage::watermark`) rather than as a log line, for #54's card and #59's export.
+
+**Image-specific error codes**, from [api-errors](https://ai.google.dev/gemini-api/docs/api-errors)
+on 2026-08-01, on top of the shared table above: `image_safety`, `image_prohibited_content`,
+`image_recitation`, `image_other` are blocked generations, and `no_image` is "the model was
+unable to generate an image" — which is not a refusal and needs its own answer, because a stated
+refusal is a prompt to edit and a silent empty result is a bug report.
 
 ### The thing that will generate support tickets
 
@@ -281,13 +357,43 @@ The adapter should read back the actual returned dimensions and trust those, not
 model is billing-only. A user who pastes a working key, successfully enhances a species, and
 then gets an error on Generate will reasonably conclude Wobu is broken.
 
+✅ Confirmed 2026-08-01 against [pricing](https://ai.google.dev/gemini-api/docs/pricing) (page
+last updated 2026-07-30): all three image models show Free Tier **"Not available"** for input
+and output, on both Standard and Batch. Per-image output cost at the sizes we send:
+
+| Model | 1K | 2K | 4K |
+| --- | --- | --- | --- |
+| `gemini-3.1-flash-lite-image` | $0.034 | – | – |
+| `gemini-3.1-flash-image` | $0.067 | $0.101 | $0.151 |
+| `gemini-3-pro-image` | $0.134 | $0.134 | $0.240 |
+
 So the adapter must detect this specific failure and say *"Gemini image generation requires
 billing enabled on your Google account"* with a link — not surface a raw 429/403. Ideally we
 probe capability at key-entry time and show it in Settings before the user ever hits Generate.
 
+**How the failure actually arrives** (#52, 2026-08-01). `FAILED_PRECONDITION` appears on *none*
+of the current pages — not image-generation, pricing, billing, rate-limits, troubleshooting or
+api-errors — and the Interactions API has moved to a flat `{"error": {"code": "<snake_case>",
+"message": "..."}}` envelope with no `google.rpc` status details. What an account without billing
+gets on an image model is therefore an ordinary **429 `quota_exceeded` / `rate_limit_exceeded`
+whose message names the free-tier metric and `limit: 0`**. That is not a wait: waiting out a
+limit of zero is waiting forever, and a queue that retries it hammers the key. The adapter
+matches on the message, maps it to `BillingRequired` rather than `RateLimited`, and keeps
+`FAILED_PRECONDITION` mapped too because the edge still speaks the old envelope. 🚩 The `limit: 0`
+message text is from community reports rather than from a Google page, and is the one part of
+this path that a live call should confirm.
+
 🚩 Concrete free-tier RPM/TPM/RPD numbers are deliberately unpublished and vary; do not
 hardcode them. Read limits from error responses and back off. Free-tier availability in the
 EEA/UK/CH could not be confirmed.
+
+Re-checked 2026-08-01: [rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits) now
+publishes *no* per-model RPM/TPM/RPD at all — "rate limits depend on a variety of factors (such
+as your usage tier) and can be viewed in Google AI Studio… Specified rate limits are not
+guaranteed". Only Batch enqueued-token figures and a rolling ten-minute spend cap are given. It
+also defines an image-specific dimension, **IPM** (images per minute). And note that the current
+error page documents **no `RetryInfo`** and asks for plain exponential backoff — so a `retryDelay`
+is a bonus to read where it appears, never something to require.
 
 ---
 

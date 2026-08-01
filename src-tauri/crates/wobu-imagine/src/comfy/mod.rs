@@ -34,7 +34,6 @@
 //! came from, which is the behaviour the crate exists to provide, and
 //! [`Installed::controlnets`] is public so the UI can say *why*.
 
-mod dimensions;
 mod probe;
 mod socket;
 mod wire;
@@ -56,6 +55,10 @@ use crate::backend::{
     GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
 };
 use crate::capability::Capabilities;
+// Crate-level rather than a module of this one: the Gemini adapter reads back
+// the size of what it was sent for the same reason, and a second header reader
+// is a second place to get a JPEG frame marker wrong.
+use crate::dimensions;
 use crate::error::{Error, Result};
 
 use socket::{Ended, until_cancelled};
@@ -379,6 +382,9 @@ impl ComfyBackend {
             // than a hope — which is what lets a render the user liked be
             // repeated.
             seed: Some(request.seed),
+            // No local checkpoint watermarks its own output, and claiming one
+            // would put a badge on a card for something that is not there.
+            watermark: None,
         })
     }
 

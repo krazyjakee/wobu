@@ -134,14 +134,17 @@ mod aspect;
 mod backend;
 mod capability;
 pub mod comfy;
+mod dimensions;
 mod error;
+pub mod gemini;
 mod negotiate;
 
 pub use aspect::{AspectRatio, Resolution};
 pub use comfy::ComfyBackend;
+pub use gemini::GeminiBackend;
 pub use backend::{
     Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
-    Reference,
+    Reference, Watermark,
 };
 pub use capability::Capabilities;
 pub use error::{Error, Result};

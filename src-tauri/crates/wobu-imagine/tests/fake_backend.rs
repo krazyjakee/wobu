@@ -127,6 +127,8 @@ impl ImageBackend for LocalComfy {
                 // back, which is the only way a render the user liked can be
                 // repeated.
                 seed: Some(request.seed),
+                // Nothing local marks its own output.
+                watermark: None,
             }),
         )
     }
@@ -202,7 +204,10 @@ impl ImageBackend for RemoteGemini {
         progress.step(0, 1, Some("waiting on the API"));
 
         match self.ending {
-            Ending::NoBilling => ImageOutcome::unbilled(Error::BillingRequired { backend: "Gemini" }),
+            Ending::NoBilling => ImageOutcome::unbilled(Error::BillingRequired {
+                backend: "Gemini",
+                detail: "enable billing on your Google account".into(),
+            }),
             // Billed, and the failure carries that: the provider generated
             // before it decided not to hand the result over.
             Ending::Refused => ImageOutcome::new(
@@ -220,6 +225,9 @@ impl ImageBackend for RemoteGemini {
                     width: 1024,
                     height: 1024,
                     seed: None,
+                    // Every Gemini image carries one and there is no field to
+                    // turn it off (`docs/08-providers.md`).
+                    watermark: Some(wobu_imagine::Watermark::SynthId),
                 }),
             ),
         }

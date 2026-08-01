@@ -361,11 +361,53 @@ pub struct GeneratedImage {
     /// nothing leaves `Generation.seed` as the one we asked for, which is the
     /// best claim anyone can make.
     pub seed: Option<u64>,
+    /// Whether the provider says these pixels carry an invisible watermark.
+    ///
+    /// `None` is "no watermark was declared", which is where a local render
+    /// lands. See [`Watermark`] for why this is on the image rather than in a
+    /// sentence somewhere.
+    pub watermark: Option<Watermark>,
 }
 
 impl GeneratedImage {
     pub fn resolution(&self) -> Resolution {
         Resolution::new(self.width, self.height)
+    }
+}
+
+/// An invisible watermark the provider says it embedded in the pixels.
+///
+/// Data on the outcome rather than a sentence an adapter logs, because the two
+/// places this has to reach are UI: the generation card
+/// ([#54](https://github.com/krazyjakee/wobu/issues/54)) and whatever exports or
+/// hands the file on ([#59](https://github.com/krazyjakee/wobu/issues/59)).
+/// `docs/08-providers.md` asks for it to be stated because this is concept art
+/// headed into a pipeline — a plate that carries a detectable mark downstream is
+/// a fact about the asset, and one nobody can discover by looking at it.
+///
+/// **A claim by the provider, not a measurement.** Nothing here inspects the
+/// pixels; this is what the vendor documents about its own output, which is the
+/// only source there is — the mark is designed not to be visible to us either.
+///
+/// An enum with one variant rather than a `bool`, because a `bool` on
+/// [`GeneratedImage`] could not say *which* scheme, and "watermarked" with no
+/// name is not something a person can go and read about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Watermark {
+    /// Google's scheme. Every image out of every Gemini image model carries one
+    /// (`docs/08-providers.md`); there is no request field that turns it off, so
+    /// the adapter declares it unconditionally rather than reading it back.
+    SynthId,
+}
+
+impl Watermark {
+    /// What the UI prints. Capitalised the way the vendor writes it, because it
+    /// is a proper noun the user may go and search for.
+    pub fn label(self) -> &'static str {
+        match self {
+            Watermark::SynthId => "SynthID",
+        }
     }
 }
 
@@ -431,6 +473,9 @@ pub trait ImageBackend: Send + Sync {
     ///    layout that shifts under the user mid-render.
     /// 5. **Read the dimensions back off the image**, rather than echoing the
     ///    ones that were requested (`docs/08-providers.md`).
+    /// 6. **Declare a [`Watermark`] where the provider says it embeds one.** It
+    ///    cannot be seen, so an image that arrives without the declaration is an
+    ///    image nobody downstream can know is marked.
     async fn generate(
         &self,
         request: &ImageRequest,
@@ -563,9 +608,19 @@ mod tests {
             width: 1024,
             height: 1024,
             seed: Some(7),
+            watermark: None,
         };
         assert_eq!(image.resolution(), Resolution::new(1024, 1024));
         assert_ne!(image.resolution(), Resolution::new(2048, 1152));
+    }
+
+    #[test]
+    fn a_watermark_is_carried_as_data_because_nobody_can_see_it() {
+        // `docs/08-providers.md` asks for SynthID to be stated in the UI, and
+        // the UI is #54's card and #59's export. A watermark mentioned only in a
+        // log line is a fact about a file that leaves this tool without it.
+        assert_eq!(Watermark::SynthId.label(), "SynthID");
+        assert_eq!(serde_json::to_value(Watermark::SynthId).unwrap(), "synth_id");
     }
 
     #[test]

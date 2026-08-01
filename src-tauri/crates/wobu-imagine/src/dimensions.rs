@@ -1,25 +1,34 @@
 //! The size an image actually is, read off its header.
 //!
 //! The trait's fifth contract point: "read the dimensions back off the image,
-//! rather than echoing the ones that were requested". It reads as belt and
-//! braces for a local backend that was handed explicit width and height — until
-//! a workflow with a hires-fix pass or a `ImageScaleBy` node returns something
-//! larger than the latent it started from, and `Asset.width`/`height` record a
-//! number that never existed. Every thumbnail generated from those is stretched,
+//! rather than echoing the ones that were requested". One reader for both
+//! adapters, because both need it and for different reasons:
+//!
+//! - **ComfyUI** was handed an explicit width and height, so this reads as belt
+//!   and braces — until a workflow with a hires-fix pass or an `ImageScaleBy`
+//!   node returns something larger than the latent it started from, and
+//!   `Asset.width`/`height` record a number that never existed.
+//! - **Gemini** is the case `docs/08-providers.md` flags in as many words: there
+//!   are credible reports of `imageSize` and `aspect_ratio` being silently
+//!   ignored, and the API takes a size *class* rather than the pixel dimensions
+//!   the request carries anyway. What we asked for is a hope by construction;
+//!   this is the fact.
+//!
+//! Either way, a thumbnail built against the requested dimensions is stretched
 //! and nothing fails.
 //!
 //! Headers rather than a decoder, and so no `image` or `png` dependency. The
 //! whole question is "what does the container say its size is", which lives in
-//! the first few dozen bytes of all three formats ComfyUI can write; decoding
-//! the pixels to find out would mean pulling megabytes of codec into a crate
-//! whose own documentation says it does no decoding.
+//! the first few dozen bytes of all three formats either backend returns;
+//! decoding the pixels to find out would mean pulling megabytes of codec into a
+//! crate whose own documentation says it does no decoding.
 
 /// Width and height, or `None` when the bytes are not a picture we recognise.
 ///
 /// `None` becomes [`Error::NotAnImage`](crate::Error::NotAnImage), which
 /// `error.rs` puts on the "the call succeeded and what came back is not
-/// something we can keep" side of the line — the right side, because a local
-/// render that produced bytes has already spent the GPU time.
+/// something we can keep" side of the line — the right side, because a backend
+/// that produced bytes has already spent the GPU time or the money.
 pub(crate) fn read(bytes: &[u8]) -> Option<(u32, u32)> {
     png(bytes).or_else(|| jpeg(bytes)).or_else(|| webp(bytes))
 }
