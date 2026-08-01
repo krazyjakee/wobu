@@ -15,6 +15,7 @@ use wobu_core::{
     NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def, kind_registry,
 };
 
+use crate::apply;
 use crate::assets::{self, ImportedAsset};
 use crate::atomic::{self, WriteOutcome};
 use crate::conflict::{self, Conflict, Keep, Resolved};
@@ -871,6 +872,114 @@ impl Project {
             changed = true;
         }
         Ok(changed)
+    }
+
+    // ── replication ──────────────────────────────────────────────────────
+    //
+    // The store's half of M3. Every method here is about one peer, named by the
+    // 64-hex `EndpointId` `wobu-sync` gets back from TLS — never by an alias,
+    // which is a display name and may not decide anything. Nothing below opens a
+    // socket, and `wobu-store` must never depend on `wobu-sync`: a project has to
+    // open on a machine that will never sync, and the index has to be readable by
+    // a build with no transport in it at all.
+    //
+    // The argument for all of it is in `crate::apply`.
+
+    /// Fold a peer's version of some nodes into the folder.
+    ///
+    /// The one entry point that lets a remote machine change this project, and
+    /// it is bounded: a node file is only ever *written* when our copy is
+    /// byte-identical to what the two of us last agreed on, so the write cannot
+    /// destroy anything that is not also on the peer's disk. Everything else
+    /// parks beside ours. See [`crate::apply`] for the table and the argument.
+    ///
+    /// Refuses while the folder is unreachable, through the same check every
+    /// other write takes. That is not a formality here: a write into an
+    /// unmounted share's leftover mountpoint succeeds, landing on the local disk
+    /// under the mount where nobody will ever see it — and a sync is the one
+    /// writer that runs without a person watching, so it is the one most likely
+    /// to do it a hundred times before anyone notices.
+    ///
+    /// The caller emits `world:changed` once per batch when
+    /// [`ApplyReport::changed_the_folder`] says so. This crate cannot emit and
+    /// must not learn how.
+    ///
+    /// [`ApplyReport::changed_the_folder`]: crate::apply::ApplyReport::changed_the_folder
+    pub fn apply_from_peer(
+        &mut self,
+        peer_id: &str,
+        incoming: &[apply::Incoming],
+    ) -> Result<apply::ApplyReport> {
+        self.ensure_writable()?;
+        apply::apply(&self.root, &self.index, peer_id, incoming)
+    }
+
+    /// What a peer's manifest implies, without touching anything.
+    ///
+    /// `&self` rather than `&mut self`, and that is load-bearing rather than
+    /// tidy: a plan is a proposal, and the folder is not entitled to change
+    /// because two machines exchanged a list of hashes.
+    pub fn plan_against_peer(&self, peer_id: &str, remote: &[(Id, String)]) -> Result<apply::Plan> {
+        apply::plan(&self.index, peer_id, remote)
+    }
+
+    /// This project's half of a manifest: every node it holds, and its hash.
+    ///
+    /// Sorted by id so two runs against an unchanged folder produce identical
+    /// bytes on the wire, which is what lets a peer skip a comparison it has
+    /// already made.
+    pub fn manifest(&self) -> Result<Vec<(Id, String)>> {
+        let mut out: Vec<(Id, String)> = self.index.node_hashes()?.into_iter().collect();
+        out.sort_unstable_by_key(|(id, _)| *id);
+        Ok(out)
+    }
+
+    /// One node packaged the way a peer will receive it, straight off the disk.
+    ///
+    /// The bytes are read from the file rather than re-rendered from the index,
+    /// so what a peer is sent is what a person would see if they opened the
+    /// folder. Re-rendering would be a second definition of the file's contents
+    /// and the two would eventually disagree — at which point the hash in the
+    /// manifest describes one of them and the payload is the other, and the
+    /// receiving end fast-forwards onto a version nobody has.
+    ///
+    /// `Ok(None)` means the index does not know the node, or its file is not
+    /// there. Neither is an error: a node deleted between a manifest and a
+    /// request is ordinary, and there is nothing to send.
+    pub fn outgoing(&self, id: Id) -> Result<Option<apply::Outgoing>> {
+        let Some(rel) = self.index.rel_path_of(id)? else { return Ok(None) };
+        let path = paths::from_rel_string(&self.root, &rel);
+        let Some((text, stamp)) = atomic::read_stamped(&path)? else { return Ok(None) };
+        let slug = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        Ok(Some(apply::Outgoing { node_id: id, slug, text, hash: stamp.hash }))
+    }
+
+    /// Record that this project and a peer now hold the same bytes for these
+    /// nodes.
+    ///
+    /// **Only ever called for an acknowledgement, never for a send.** A base is
+    /// a claim that a specific machine holds specific bytes, and the next sync
+    /// will fast-forward on that claim without asking anybody. Moving it when we
+    /// put a node on the wire, rather than when the peer said it landed, would
+    /// make a dropped connection into a base that describes a file the peer
+    /// never received — and the edit they make next would then read as a
+    /// one-sided change and overwrite ours.
+    ///
+    /// One transaction, so a crash leaves the bases as of the end of a sync
+    /// rather than some prefix of them.
+    pub fn record_agreed(&self, peer_id: &str, agreed: &[(Id, String)]) -> Result<()> {
+        self.index.record_bases(peer_id, agreed)
+    }
+
+    /// Forget everything agreed with a peer: a share revoked, a ticket rotated,
+    /// an identity that will not be dialled again.
+    ///
+    /// Cheap to be wrong about in one direction only. Forgetting too much costs
+    /// a re-compare and some conflict cards; forgetting too little leaves a base
+    /// attributed to a machine nobody has any reason to still trust. Reach for
+    /// it whenever unsure.
+    pub fn forget_peer(&self, peer_id: &str) -> Result<()> {
+        self.index.forget_peer(peer_id)
     }
 
     // ── conflicts ────────────────────────────────────────────────────────

@@ -122,9 +122,7 @@ pub fn guarded_write(
     };
 
     if clobbers_someone {
-        let conflict_path = reserve_conflict_sibling(target, peer)?;
-        stage_and_rename(project_root, &conflict_path, bytes)?;
-        let stamp = Stamp::of_bytes(bytes, now_ms());
+        let (conflict_path, stamp) = park_conflict(project_root, target, contents, peer)?;
         return Ok(WriteOutcome::Conflict { conflict_path, stamp });
     }
 
@@ -135,6 +133,41 @@ pub fn guarded_write(
 
 fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
+}
+
+/// Park `contents` beside `target` as a conflict sibling. **`target` is not
+/// read, not compared and not touched.**
+///
+/// [`guarded_write`]'s losing branch, made reachable on its own. The reason it
+/// has to be is [`crate::apply`]: a version arriving from a replicating peer can
+/// be a conflict *while the local file is byte-for-byte what we last saw*, which
+/// is a state `guarded_write` is structurally unable to represent. Its
+/// compare-and-swap answers "has this file moved since I read it", and on a
+/// replica the answer is no — both machines wrote successfully, to their own
+/// copy, and neither CAS ever failed. Handing that case to `guarded_write` would
+/// see an unchanged target, take the write, and overwrite one person's afternoon
+/// with another's. So the decision is made a layer up, out of three hashes, and
+/// this is the half of the machinery it needs once it has decided.
+///
+/// `peer` names whoever wrote `contents`, which for an incoming version is the
+/// *sender* and not this installation. Stamping it with our own alias would put
+/// somebody else's paragraph on a card under our name.
+///
+/// Nothing here is a shortcut around the guard: the target is untouched in every
+/// path, so the worst this can do is create a file. It is deliberately not
+/// `pub(crate)` — `wobu-sync` never calls it, but the same "park without
+/// comparing" is what any future replication path needs, and hiding it would
+/// invite that path to reach for a plain write instead.
+pub fn park_conflict(
+    project_root: &Path,
+    target: &Path,
+    contents: &str,
+    peer: &str,
+) -> Result<(PathBuf, Stamp)> {
+    let bytes = contents.as_bytes();
+    let conflict_path = reserve_conflict_sibling(target, peer)?;
+    stage_and_rename(project_root, &conflict_path, bytes)?;
+    Ok((conflict_path, Stamp::of_bytes(bytes, now_ms())))
 }
 
 /// `kael-vantris.md` → `kael-vantris.conflict-amber-heron-4f1a-20260731T142211Z.md`
@@ -382,6 +415,69 @@ mod tests {
         assert!(name.ends_with(".md"), "{name}");
         // `...-20260731T142211Z.md`, with no `-2` before the extension.
         assert!(!name.contains("-1.md"), "{name}");
+    }
+
+    #[test]
+    fn parking_a_conflict_leaves_the_target_exactly_as_it_was() {
+        // The case `guarded_write` cannot express: a genuine conflict where the
+        // file on disk is precisely what we last read. Its CAS would take the
+        // write. This must not, ever, under any circumstance, touch the target.
+        let dir = project();
+        let t = target(dir.path());
+        fs::write(&t, "ours, unchanged").unwrap();
+        let before = fs::metadata(&t).unwrap();
+
+        let (parked, stamp) =
+            park_conflict(dir.path(), &t, "theirs, from another machine", "amber-heron-4f1a")
+                .unwrap();
+
+        assert_eq!(fs::read_to_string(&t).unwrap(), "ours, unchanged", "the target was written to");
+        assert_eq!(fs::metadata(&t).unwrap().len(), before.len());
+        assert_eq!(fs::read_to_string(&parked).unwrap(), "theirs, from another machine");
+        assert_eq!(stamp.hash, hash_bytes(b"theirs, from another machine"));
+    }
+
+    #[test]
+    fn a_parked_conflict_carries_the_name_of_whoever_wrote_it() {
+        let dir = project();
+        let t = target(dir.path());
+        fs::write(&t, "ours").unwrap();
+        let (parked, _) = park_conflict(dir.path(), &t, "theirs", "silver-plover-00ff").unwrap();
+        let name = parked.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("kael-vantris.conflict-silver-plover-00ff-"), "{name}");
+        assert!(name.ends_with(".md"), "{name}");
+    }
+
+    #[test]
+    fn parking_twice_in_one_second_keeps_both_versions() {
+        // A replicating peer delivers a batch, and two versions of one file can
+        // land inside the same second the same way two saves can. The sibling
+        // name is stamped to the second, so without the reservation the second
+        // would rename straight over the first.
+        let dir = project();
+        let t = target(dir.path());
+        fs::write(&t, "ours").unwrap();
+
+        let (first, _) = park_conflict(dir.path(), &t, "theirs one", "amber-heron-4f1a").unwrap();
+        let (second, _) = park_conflict(dir.path(), &t, "theirs two", "amber-heron-4f1a").unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(fs::read_to_string(&first).unwrap(), "theirs one");
+        assert_eq!(fs::read_to_string(&second).unwrap(), "theirs two");
+        assert_eq!(fs::read_to_string(&t).unwrap(), "ours");
+    }
+
+    #[test]
+    fn parking_a_conflict_beside_a_file_that_is_not_there_still_keeps_the_text() {
+        // The node file deleted locally while a peer's version was in flight.
+        // There is nothing to park *beside*, and the incoming paragraph is now
+        // the only copy anywhere — dropping it would be the one unrecoverable
+        // outcome available here.
+        let dir = project();
+        let t = target(dir.path());
+        let (parked, _) = park_conflict(dir.path(), &t, "theirs", "amber-heron-4f1a").unwrap();
+        assert_eq!(fs::read_to_string(&parked).unwrap(), "theirs");
+        assert!(!t.exists(), "parking created the target");
     }
 
     #[test]

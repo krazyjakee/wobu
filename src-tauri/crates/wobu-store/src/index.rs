@@ -993,6 +993,36 @@ impl Index {
             .optional()?)
     }
 
+    /// `node_id -> content hash` for every indexed node: this project's half of
+    /// a manifest.
+    ///
+    /// Full BLAKE3 hex, the same string `sync_state` holds and the same one
+    /// [`stamp_of`] returns — so a manifest and a base are directly comparable,
+    /// which is the entire point of the column. Not `source_version`, which is
+    /// deliberately blind to names and summaries; see the note on `sync_state`.
+    ///
+    /// This reports what the *index* last read, which is one reconcile behind
+    /// the folder. That staleness is fine here and only here: a manifest is a
+    /// pre-filter that decides which bytes are worth asking for, and
+    /// [`crate::apply::apply`] re-reads the disk before it writes anything. The
+    /// alternative — hashing every node file over SMB to answer a poll — is the
+    /// cost this index exists to avoid.
+    ///
+    /// [`stamp_of`]: Index::stamp_of
+    pub fn node_hashes(&self) -> Result<HashMap<Id, String>> {
+        let mut stmt = self.conn.prepare("SELECT id, hash FROM nodes")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut out = HashMap::new();
+        for row in rows {
+            let (id, hash) = row?;
+            // One unreadable id costs that node a re-compare rather than taking
+            // the whole sync down, matching `bases_for_peer` and `list_nodes`.
+            let Ok(id) = Id::from_string(&id) else { continue };
+            out.insert(id, hash);
+        }
+        Ok(out)
+    }
+
     /// `rel_path -> (mtime, size)` for every indexed node. The reconciler
     /// compares a directory listing against this and only re-reads files whose
     /// stamp moved — the asymmetry the whole index exists for.
