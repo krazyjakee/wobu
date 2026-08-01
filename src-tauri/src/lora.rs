@@ -1,7 +1,7 @@
 //! Safe orchestration of the optional local per-entity LoRA trainer.
 
 use std::collections::{HashMap, HashSet};
-use std::io::Write as _;
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -14,6 +14,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use wobu_core::{Asset, AssetRole, Id, LoraPin, Node};
 use wobu_jobs::{Billed, Failure, JobContext, JobKind, Outcome, Progress, Task};
+use wobu_llm::Cancel;
 use wobu_store::{Project, SaveOutcome};
 
 use crate::error::{Code, CommandResult, WobuError};
@@ -22,6 +23,7 @@ use crate::state::{AppState, Jobs, WORLD_CHANGED};
 const TRAINER: &str = "wobu-lora-trainer";
 const PROTOCOL: u32 = 1;
 const REQUIRED_IMAGES: usize = 15;
+const STAGING_BUFFER_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,9 +62,12 @@ pub struct LoraStatus {
 
 #[derive(Debug, Clone)]
 struct TrainingInput {
+    // Deliberately only a manifest entry. Full-resolution bytes move directly
+    // from `source` to the private staging file and never live in this task.
     asset_id: Id,
     hash: String,
     source: PathBuf,
+    bytes: u64,
 }
 
 struct TrainingContext {
@@ -147,12 +152,6 @@ pub async fn lora_train_start(
     subject_id: Id,
 ) -> CommandResult<String> {
     let context = training_context(&state, subject_id)?;
-    let mut context = tauri::async_runtime::spawn_blocking(move || verify_training_inputs(context))
-        .await
-        .map_err(|error| {
-            WobuError::new(Code::Internal, "Pinned LoRA inputs could not be checked.")
-                .with_detail(error.to_string())
-        })??;
     if context.read_only {
         return Err(WobuError::new(
             Code::ReadOnly,
@@ -197,7 +196,6 @@ pub async fn lora_train_start(
             "The trainer's advertised input limit is below Wobu's safety minimum.",
         ));
     }
-    context.inputs.truncate(capabilities.max_inputs);
     let task = TrainLoraTask {
         root: context.root,
         project_id: context.project_id,
@@ -208,6 +206,7 @@ pub async fn lora_train_start(
         model_family: advertised.family.clone(),
         trainer: capabilities.trainer,
         inputs: context.inputs,
+        max_inputs: capabilities.max_inputs,
         app,
     };
     let id = jobs.queue().submit(task);
@@ -256,13 +255,12 @@ fn training_context(state: &State<'_, AppState>, subject_id: Id) -> CommandResul
             invalid_inputs += 1;
             continue;
         };
-        let source = root.join(&asset.rel_path);
-        let valid = regular_file(&source).is_ok_and(|metadata| metadata.len() == asset.bytes);
-        if !valid {
-            invalid_inputs += 1;
-            continue;
-        }
-        inputs.push(TrainingInput { asset_id: asset.id, hash: asset.hash.clone(), source });
+        inputs.push(TrainingInput {
+            asset_id: asset.id,
+            hash: asset.hash.clone(),
+            source: root.join(&asset.rel_path),
+            bytes: asset.bytes,
+        });
     }
     Ok(TrainingContext {
         root,
@@ -282,8 +280,7 @@ fn training_context(state: &State<'_, AppState>, subject_id: Id) -> CommandResul
 fn verify_training_inputs(mut context: TrainingContext) -> CommandResult<TrainingContext> {
     let mut invalid = context.invalid_inputs;
     context.inputs.retain(|input| {
-        let valid = std::fs::read(&input.source)
-            .is_ok_and(|bytes| wobu_store::atomic::hash_bytes(&bytes) == input.hash);
+        let valid = verify_training_input(input);
         invalid += usize::from(!valid);
         valid
     });
@@ -309,6 +306,17 @@ fn verify_training_inputs(mut context: TrainingContext) -> CommandResult<Trainin
         wobu_store::lora::validate(&bytes).map_err(|error| error.to_string())
     });
     Ok(context)
+}
+
+fn verify_training_input(input: &TrainingInput) -> bool {
+    if !regular_file(&input.source).is_ok_and(|metadata| metadata.len() == input.bytes) {
+        return false;
+    }
+    let Ok(mut source) = std::fs::File::open(&input.source) else {
+        return false;
+    };
+    let mut sink = io::sink();
+    copy_hashed(&mut source, &mut sink, &Cancel::new()).is_ok_and(|hash| hash == input.hash)
 }
 
 fn pin_application_status(
@@ -401,6 +409,32 @@ struct ManifestImage {
     path: String,
 }
 
+struct StageRequest {
+    subject_id: Id,
+    subject_name: String,
+    model: String,
+    model_family: String,
+    inputs: Vec<TrainingInput>,
+    max_inputs: usize,
+}
+
+struct StagedTraining {
+    manifest_path: PathBuf,
+    output_path: PathBuf,
+    input_hashes: Vec<String>,
+}
+
+enum StageError {
+    Cancelled,
+    Failed(WobuError),
+}
+
+impl From<WobuError> for StageError {
+    fn from(error: WobuError) -> Self {
+        StageError::Failed(error)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TrainerResult {
@@ -420,6 +454,7 @@ struct TrainLoraTask {
     model_family: String,
     trainer: String,
     inputs: Vec<TrainingInput>,
+    max_inputs: usize,
     app: AppHandle,
 }
 
@@ -440,17 +475,44 @@ impl Task for TrainLoraTask {
     async fn run(&mut self, ctx: &JobContext) -> Outcome {
         let stage = self.root.join(".wobu").join("tmp").join(format!("lora-{}", ctx.id()));
         let trigger = format!("wobu_{}", self.subject_id.to_string()[..8].to_ascii_lowercase());
-        let staged = stage_training(&stage, self, &trigger);
-        let (manifest_path, output_path) = match staged {
-            Ok(paths) => paths,
+        let request = StageRequest {
+            subject_id: self.subject_id,
+            subject_name: self.subject.name.clone(),
+            model: self.model.clone(),
+            model_family: self.model_family.clone(),
+            // Cheap metadata clone for the blocking worker; no image body is
+            // present in `TrainingInput` to duplicate.
+            inputs: self.inputs.clone(),
+            max_inputs: self.max_inputs,
+        };
+        let worker_stage = stage.clone();
+        let worker_trigger = trigger.clone();
+        let cancel = ctx.cancel().clone();
+        let staged = tauri::async_runtime::spawn_blocking(move || {
+            stage_training(&worker_stage, request, &worker_trigger, &cancel)
+        })
+        .await;
+        let staged = match staged {
+            Ok(Ok(staged)) => staged,
+            Ok(Err(StageError::Cancelled)) => return Outcome::Cancelled,
+            Ok(Err(StageError::Failed(error))) => return Outcome::failed(local_failure(error)),
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&stage);
-                return Outcome::failed(local_failure(error));
+                return Outcome::failed(
+                    Failure::new("internal", "The LoRA dataset could not be staged.")
+                        .with_detail(error.to_string()),
+                );
             }
         };
-        let result = self.run_trainer(ctx, &manifest_path, &output_path).await;
+        if ctx.is_cancelled() {
+            let _ = std::fs::remove_dir_all(&stage);
+            return Outcome::Cancelled;
+        }
+        let result = self.run_trainer(ctx, &staged.manifest_path, &staged.output_path).await;
         let outcome = match result {
-            Ok(result) => self.publish(result, &output_path, &trigger).await,
+            Ok(result) => {
+                self.publish(result, &staged.output_path, &trigger, staged.input_hashes).await
+            }
             Err(TrainRunError::Cancelled) => Outcome::Cancelled,
             Err(TrainRunError::Failed(detail)) => Outcome::failed(
                 Failure::new("lora.trainer_failed", "The local LoRA trainer failed.")
@@ -538,7 +600,13 @@ impl TrainLoraTask {
         result.ok_or_else(|| TrainRunError::Failed("trainer exited without a result".into()))
     }
 
-    async fn publish(&self, result: TrainerResult, output: &Path, trigger: &str) -> Outcome {
+    async fn publish(
+        &self,
+        result: TrainerResult,
+        output: &Path,
+        trigger: &str,
+        input_hashes: Vec<String>,
+    ) -> Outcome {
         if result.base_model != self.model
             || result.model_family != self.model_family
             || result.trigger_token != trigger
@@ -580,7 +648,6 @@ impl TrainLoraTask {
         let trainer = self.trainer.clone();
         let model = self.model.clone();
         let family = self.model_family.clone();
-        let inputs = self.inputs.clone();
         let output = output.to_path_buf();
         let app = self.app.clone();
         let saved = tauri::async_runtime::spawn_blocking(move || -> CommandResult<LoraPin> {
@@ -608,7 +675,7 @@ impl TrainLoraTask {
                 model_family: family,
                 provider_name: result.provider_name,
                 trigger_token: result.trigger_token,
-                input_asset_hashes: inputs.into_iter().map(|input| input.hash).collect(),
+                input_asset_hashes: input_hashes,
                 created_at: Utc::now(),
                 strength: 0.8,
             };
@@ -654,9 +721,39 @@ enum TrainRunError {
 
 fn stage_training(
     stage: &Path,
-    task: &TrainLoraTask,
+    request: StageRequest,
     trigger: &str,
-) -> CommandResult<(PathBuf, PathBuf)> {
+    cancel: &Cancel,
+) -> Result<StagedTraining, StageError> {
+    stage_training_with(stage, request, trigger, cancel, |input| {
+        std::fs::File::open(&input.source).map(|file| Box::new(file) as Box<dyn io::Read + Send>)
+    })
+}
+
+fn stage_training_with(
+    stage: &Path,
+    request: StageRequest,
+    trigger: &str,
+    cancel: &Cancel,
+    mut open_source: impl FnMut(&TrainingInput) -> io::Result<Box<dyn io::Read + Send>>,
+) -> Result<StagedTraining, StageError> {
+    let staged = stage_training_inner(stage, &request, trigger, cancel, &mut open_source);
+    if staged.is_err() {
+        let _ = std::fs::remove_dir_all(stage);
+    }
+    staged
+}
+
+fn stage_training_inner(
+    stage: &Path,
+    request: &StageRequest,
+    trigger: &str,
+    cancel: &Cancel,
+    open_source: &mut impl FnMut(&TrainingInput) -> io::Result<Box<dyn io::Read + Send>>,
+) -> Result<StagedTraining, StageError> {
+    if cancel.is_cancelled() {
+        return Err(StageError::Cancelled);
+    }
     std::fs::create_dir_all(stage).map_err(|error| {
         WobuError::new(Code::Io, "The LoRA staging folder could not be created.")
             .with_detail(error.to_string())
@@ -668,28 +765,22 @@ fn stage_training(
             .with_detail(error.to_string())
     })?;
     secure_dir(&input_dir)?;
-    let mut images = Vec::with_capacity(task.inputs.len());
-    for input in &task.inputs {
-        let metadata = regular_file(&input.source).map_err(|detail| {
-            WobuError::new(Code::Invalid, "A pinned training image is no longer a regular file.")
-                .with_detail(detail)
-        })?;
-        if metadata.len() == 0 {
-            return Err(WobuError::new(Code::Invalid, "A pinned training image is empty."));
+    let mut images = Vec::with_capacity(request.max_inputs.min(request.inputs.len()));
+    for input in &request.inputs {
+        if images.len() == request.max_inputs {
+            break;
         }
+        if cancel.is_cancelled() {
+            return Err(StageError::Cancelled);
+        }
+        let Ok(metadata) = regular_file(&input.source) else { continue };
+        if metadata.len() == 0 || metadata.len() != input.bytes {
+            continue;
+        }
+        let Ok(mut source) = open_source(input) else { continue };
         let extension =
             input.source.extension().and_then(|value| value.to_str()).unwrap_or("image");
         let staged = input_dir.join(format!("{}.{}", input.hash, extension));
-        let bytes = std::fs::read(&input.source).map_err(|error| {
-            WobuError::new(Code::Io, "A pinned image could not be read for staging.")
-                .with_detail(error.to_string())
-        })?;
-        if wobu_store::atomic::hash_bytes(&bytes) != input.hash {
-            return Err(WobuError::new(
-                Code::Invalid,
-                "A pinned training image failed its content hash check.",
-            ));
-        }
         let mut file =
             std::fs::OpenOptions::new().write(true).create_new(true).open(&staged).map_err(
                 |error| {
@@ -698,26 +789,56 @@ fn stage_training(
                 },
             )?;
         secure_file(&staged)?;
-        file.write_all(&bytes).map_err(|error| {
-            WobuError::new(Code::Io, "A private training copy could not be written.")
+        let hash = match copy_hashed(&mut source, &mut file, cancel) {
+            Ok(hash) => hash,
+            Err(CopyError::Cancelled) => return Err(StageError::Cancelled),
+            Err(CopyError::Read) => {
+                drop(file);
+                let _ = std::fs::remove_file(&staged);
+                continue;
+            }
+            Err(CopyError::Write(error)) => {
+                return Err(WobuError::new(
+                    Code::Io,
+                    "A private training copy could not be written.",
+                )
                 .with_detail(error.to_string())
-        })?;
+                .into());
+            }
+        };
+        if hash != input.hash {
+            drop(file);
+            let _ = std::fs::remove_file(&staged);
+            continue;
+        }
         file.sync_all().map_err(|error| {
             WobuError::new(Code::Io, "A private training copy could not be synced.")
                 .with_detail(error.to_string())
         })?;
+        drop(file);
         images.push(ManifestImage {
             asset_id: input.asset_id,
             hash: input.hash.clone(),
             path: staged.to_string_lossy().into_owned(),
         });
     }
+    if images.len() < REQUIRED_IMAGES {
+        return Err(WobuError::new(
+            Code::Invalid,
+            format!("Pin at least {REQUIRED_IMAGES} valid full references before training."),
+        )
+        .into());
+    }
+    if cancel.is_cancelled() {
+        return Err(StageError::Cancelled);
+    }
+    let input_hashes = images.iter().map(|image| image.hash.clone()).collect();
     let manifest = Manifest {
         protocol: PROTOCOL,
-        subject_id: task.subject_id,
-        subject_name: &task.subject.name,
-        base_model: &task.model,
-        model_family: &task.model_family,
+        subject_id: request.subject_id,
+        subject_name: &request.subject_name,
+        base_model: &request.model,
+        model_family: &request.model_family,
         trigger_token: trigger,
         images,
     };
@@ -742,7 +863,45 @@ fn stage_training(
         WobuError::new(Code::Io, "The LoRA manifest could not be synced.")
             .with_detail(error.to_string())
     })?;
-    Ok((manifest_path, stage.join("output.safetensors")))
+    if cancel.is_cancelled() {
+        return Err(StageError::Cancelled);
+    }
+    Ok(StagedTraining {
+        manifest_path,
+        output_path: stage.join("output.safetensors"),
+        input_hashes,
+    })
+}
+
+#[derive(Debug)]
+enum CopyError {
+    Cancelled,
+    Read,
+    Write(io::Error),
+}
+
+fn copy_hashed(
+    source: &mut impl io::Read,
+    destination: &mut impl io::Write,
+    cancel: &Cancel,
+) -> Result<String, CopyError> {
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0_u8; STAGING_BUFFER_BYTES];
+    loop {
+        if cancel.is_cancelled() {
+            return Err(CopyError::Cancelled);
+        }
+        let read = source.read(&mut buffer).map_err(|_| CopyError::Read)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        destination.write_all(&buffer[..read]).map_err(CopyError::Write)?;
+    }
+    if cancel.is_cancelled() {
+        return Err(CopyError::Cancelled);
+    }
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 async fn bounded_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Option<String>, String> {
@@ -829,4 +988,175 @@ fn local_failure(error: WobuError) -> Failure {
         failure = failure.with_detail(detail);
     }
     failure
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, mpsc};
+    use std::time::Instant;
+
+    const LARGE_IMAGE_BYTES: usize = 8 * 1024 * 1024;
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(label: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("wobu-{label}-{}", wobu_core::new_id()));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    struct RepeatedBytes {
+        byte: u8,
+        remaining: usize,
+        largest_request: Arc<AtomicUsize>,
+    }
+
+    impl io::Read for RepeatedBytes {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.largest_request.fetch_max(buffer.len(), Ordering::SeqCst);
+            let read = self.remaining.min(buffer.len());
+            buffer[..read].fill(self.byte);
+            self.remaining -= read;
+            Ok(read)
+        }
+    }
+
+    fn repeated_hash(byte: u8, len: usize) -> String {
+        let mut hasher = blake3::Hasher::new();
+        let block = [byte; STAGING_BUFFER_BYTES];
+        let mut remaining = len;
+        while remaining > 0 {
+            let take = remaining.min(block.len());
+            hasher.update(&block[..take]);
+            remaining -= take;
+        }
+        hasher.finalize().to_hex().to_string()
+    }
+
+    #[test]
+    fn large_dataset_is_opened_once_per_source_and_streamed_through_one_small_buffer() {
+        let root = TestDir::new("lora-large-dataset");
+        let stage = root.0.join("stage");
+        let mut bytes_by_id = HashMap::new();
+        let inputs = (0..REQUIRED_IMAGES)
+            .map(|index| {
+                let asset_id = wobu_core::new_id();
+                let byte = u8::try_from(index + 1).unwrap();
+                let source = root.0.join(format!("source-{index}.png"));
+                let file = std::fs::File::create(&source).unwrap();
+                file.set_len(LARGE_IMAGE_BYTES as u64).unwrap();
+                bytes_by_id.insert(asset_id, byte);
+                TrainingInput {
+                    asset_id,
+                    hash: repeated_hash(byte, LARGE_IMAGE_BYTES),
+                    source,
+                    bytes: LARGE_IMAGE_BYTES as u64,
+                }
+            })
+            .collect();
+        let request = StageRequest {
+            subject_id: wobu_core::new_id(),
+            subject_name: "Kael".into(),
+            model: "flux-dev".into(),
+            model_family: "flux".into(),
+            inputs,
+            max_inputs: REQUIRED_IMAGES,
+        };
+        let largest_request = Arc::new(AtomicUsize::new(0));
+        let mut opens = HashMap::<Id, usize>::new();
+
+        let staged = stage_training_with(&stage, request, "wobu_kael", &Cancel::new(), |input| {
+            *opens.entry(input.asset_id).or_default() += 1;
+            Ok(Box::new(RepeatedBytes {
+                byte: bytes_by_id[&input.asset_id],
+                remaining: LARGE_IMAGE_BYTES,
+                largest_request: Arc::clone(&largest_request),
+            }))
+        });
+        let staged = match staged {
+            Ok(staged) => staged,
+            Err(_) => panic!("the synthetic large dataset should stage"),
+        };
+
+        assert_eq!(opens.len(), REQUIRED_IMAGES);
+        assert!(opens.values().all(|count| *count == 1));
+        assert_eq!(staged.input_hashes.len(), REQUIRED_IMAGES);
+        assert_eq!(largest_request.load(Ordering::SeqCst), STAGING_BUFFER_BYTES);
+        let staged_bytes: u64 = std::fs::read_dir(stage.join("inputs"))
+            .unwrap()
+            .map(|entry| entry.unwrap().metadata().unwrap().len())
+            .sum();
+        assert_eq!(staged_bytes, (REQUIRED_IMAGES * LARGE_IMAGE_BYTES) as u64);
+    }
+
+    struct CancelledRead {
+        started: Option<mpsc::Sender<()>>,
+        cancel: Cancel,
+    }
+
+    impl io::Read for CancelledRead {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if let Some(started) = self.started.take() {
+                let _ = started.send(());
+            }
+            while !self.cancel.is_cancelled() {
+                std::thread::yield_now();
+            }
+            buffer[0] = 1;
+            Ok(1)
+        }
+    }
+
+    #[test]
+    fn cancellation_during_a_source_copy_removes_the_private_dataset() {
+        let root = TestDir::new("lora-cancel-stage");
+        let stage = root.0.join("stage");
+        let source = root.0.join("source.png");
+        std::fs::write(&source, [0]).unwrap();
+        let input = TrainingInput {
+            asset_id: wobu_core::new_id(),
+            hash: repeated_hash(1, 1),
+            source,
+            bytes: 1,
+        };
+        let request = StageRequest {
+            subject_id: wobu_core::new_id(),
+            subject_name: "Kael".into(),
+            model: "flux-dev".into(),
+            model_family: "flux".into(),
+            inputs: vec![input],
+            max_inputs: REQUIRED_IMAGES,
+        };
+        let cancel = Cancel::new();
+        let worker_cancel = cancel.clone();
+        let worker_stage = stage.clone();
+        let (started_tx, started_rx) = mpsc::channel();
+        let started_at = Instant::now();
+        let worker = std::thread::spawn(move || {
+            let reader_cancel = worker_cancel.clone();
+            let mut started_tx = Some(started_tx);
+            stage_training_with(&worker_stage, request, "wobu_kael", &worker_cancel, move |_| {
+                Ok(Box::new(CancelledRead {
+                    started: started_tx.take(),
+                    cancel: reader_cancel.clone(),
+                }))
+            })
+        });
+
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        cancel.cancel();
+        assert!(matches!(worker.join().unwrap(), Err(StageError::Cancelled)));
+        assert!(!stage.exists(), "a cancelled dataset must clean up its staging folder");
+        assert!(started_at.elapsed() < Duration::from_secs(5));
+    }
 }
