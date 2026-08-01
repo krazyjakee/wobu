@@ -4,6 +4,8 @@ import {
   arrangedBoardPoint,
   BOARD_TILE_HEIGHT,
   BOARD_TILE_WIDTH,
+  BOARD_LAYOUT_COLUMNS,
+  BOARD_TILE_GAP_Y,
   clampBoardZoom,
   DEFAULT_BOARD_VIEWPORT,
   type BoardPoint,
@@ -70,16 +72,68 @@ function updateProject(
   projectId: string,
   change: (layout: BoardProjectLayout) => BoardProjectLayout,
 ): Pick<BoardState, 'projects'> {
-  const current = cleanLayout(state.projects[projectId])
+  // Persisted layouts are sanitised by `merge`, and every mutation below
+  // writes clean values. Preserve the positions object across viewport-only
+  // changes so a camera persistence tick cannot rebuild the spatial index.
+  const current = state.projects[projectId] ?? EMPTY_BOARD_LAYOUT
   return { projects: { ...state.projects, [projectId]: change(current) } }
 }
 
-function occupied(candidate: BoardPoint, points: BoardPoint[]): boolean {
-  return points.some(
-    (point) =>
-      Math.abs(point.x - candidate.x) < BOARD_TILE_WIDTH &&
-      Math.abs(point.y - candidate.y) < BOARD_TILE_HEIGHT,
-  )
+export interface BoardSyncStats {
+  existingPoints: number
+  slotsExamined: number
+}
+
+function occupiedArrangementSlots(points: BoardPoint[]): Set<number> {
+  const occupied = new Set<number>()
+  const rowHeight = BOARD_TILE_HEIGHT + BOARD_TILE_GAP_Y
+  for (const point of points) {
+    // Arranged columns are fixed and a free-dragged point can overlap at most
+    // the three rows nearest its y coordinate. Fifteen checks per point is a
+    // constant, unlike comparing every new tile with every existing tile.
+    const nearestRow = Math.round(point.y / rowHeight)
+    for (let row = Math.max(0, nearestRow - 1); row <= nearestRow + 1; row += 1) {
+      for (let column = 0; column < BOARD_LAYOUT_COLUMNS; column += 1) {
+        const slot = row * BOARD_LAYOUT_COLUMNS + column
+        const candidate = arrangedBoardPoint(slot)
+        if (
+          Math.abs(point.x - candidate.x) < BOARD_TILE_WIDTH &&
+          Math.abs(point.y - candidate.y) < BOARD_TILE_HEIGHT
+        ) {
+          occupied.add(slot)
+        }
+      }
+    }
+  }
+  return occupied
+}
+
+export function syncBoardPositions(
+  existing: Record<string, BoardPoint>,
+  assetIds: string[],
+  stats?: BoardSyncStats,
+): Record<string, BoardPoint> {
+  const wanted = new Set(assetIds)
+  const positions: Record<string, BoardPoint> = {}
+  for (const [assetId, point] of Object.entries(existing)) {
+    if (wanted.has(assetId)) positions[assetId] = point
+  }
+
+  const occupied = occupiedArrangementSlots(Object.values(positions))
+  if (stats) stats.existingPoints += Object.keys(positions).length
+  let slot = 0
+  for (const assetId of assetIds) {
+    if (positions[assetId]) continue
+    while (occupied.has(slot)) {
+      if (stats) stats.slotsExamined += 1
+      slot += 1
+    }
+    if (stats) stats.slotsExamined += 1
+    positions[assetId] = arrangedBoardPoint(slot)
+    occupied.add(slot)
+    slot += 1
+  }
+  return positions
 }
 
 /**
@@ -97,21 +151,7 @@ export const useBoard = create<BoardState>()(
       syncAssets: (projectId, assetIds) =>
         set((state) =>
           updateProject(state, projectId, (layout) => {
-            const wanted = new Set(assetIds)
-            const positions: Record<string, BoardPoint> = {}
-            for (const [assetId, point] of Object.entries(layout.positions)) {
-              if (wanted.has(assetId)) positions[assetId] = point
-            }
-            const placed = Object.values(positions)
-            let slot = 0
-            for (const assetId of assetIds) {
-              if (positions[assetId]) continue
-              let point = arrangedBoardPoint(slot++)
-              while (occupied(point, placed)) point = arrangedBoardPoint(slot++)
-              positions[assetId] = point
-              placed.push(point)
-            }
-            return { ...layout, positions }
+            return { ...layout, positions: syncBoardPositions(layout.positions, assetIds) }
           }),
         ),
       setAssetPosition: (projectId, assetId, point) =>

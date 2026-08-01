@@ -22,6 +22,18 @@ export interface BoardSize {
   height: number
 }
 
+export interface BoardBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export interface BoardSpatialQueryStats {
+  buckets: number
+  candidates: number
+}
+
 export const DEFAULT_BOARD_VIEWPORT: BoardViewport = { x: 48, y: 72, zoom: 1 }
 
 export function arrangedBoardPoint(index: number): BoardPoint {
@@ -63,14 +75,78 @@ export function boardTileVisible(
   size: BoardSize,
   overscan = 260,
 ): boolean {
-  const left = (-viewport.x - overscan) / viewport.zoom
-  const top = (-viewport.y - overscan) / viewport.zoom
-  const right = (size.width - viewport.x + overscan) / viewport.zoom
-  const bottom = (size.height - viewport.y + overscan) / viewport.zoom
+  const { left, top, right, bottom } = boardViewportBounds(viewport, size, overscan)
   return (
     point.x + BOARD_TILE_WIDTH >= left &&
     point.x <= right &&
     point.y + BOARD_TILE_HEIGHT >= top &&
     point.y <= bottom
   )
+}
+
+export function boardViewportBounds(
+  viewport: BoardViewport,
+  size: BoardSize,
+  overscan = 260,
+): BoardBounds {
+  return {
+    left: (-viewport.x - overscan) / viewport.zoom,
+    top: (-viewport.y - overscan) / viewport.zoom,
+    right: (size.width - viewport.x + overscan) / viewport.zoom,
+    bottom: (size.height - viewport.y + overscan) / viewport.zoom,
+  }
+}
+
+const BOARD_SPATIAL_BUCKET = 512
+
+/**
+ * Immutable spatial index for a stable set of positioned board records.
+ *
+ * A tile is added to every bucket its rectangle touches, so querying only the
+ * viewport's buckets cannot miss a tile that starts just outside the viewport.
+ */
+export function createBoardSpatialIndex<T extends { point: BoardPoint }>(items: readonly T[]) {
+  const buckets = new Map<string, T[]>()
+  for (const item of items) {
+    const left = Math.floor(item.point.x / BOARD_SPATIAL_BUCKET)
+    const right = Math.floor((item.point.x + BOARD_TILE_WIDTH) / BOARD_SPATIAL_BUCKET)
+    const top = Math.floor(item.point.y / BOARD_SPATIAL_BUCKET)
+    const bottom = Math.floor((item.point.y + BOARD_TILE_HEIGHT) / BOARD_SPATIAL_BUCKET)
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = left; x <= right; x += 1) {
+        const key = `${x}:${y}`
+        const bucket = buckets.get(key)
+        if (bucket) bucket.push(item)
+        else buckets.set(key, [item])
+      }
+    }
+  }
+
+  return {
+    query(
+      viewport: BoardViewport,
+      size: BoardSize,
+      stats?: BoardSpatialQueryStats,
+      overscan = 260,
+    ): T[] {
+      const bounds = boardViewportBounds(viewport, size, overscan)
+      const left = Math.floor(bounds.left / BOARD_SPATIAL_BUCKET)
+      const right = Math.floor(bounds.right / BOARD_SPATIAL_BUCKET)
+      const top = Math.floor(bounds.top / BOARD_SPATIAL_BUCKET)
+      const bottom = Math.floor(bounds.bottom / BOARD_SPATIAL_BUCKET)
+      const candidates = new Set<T>()
+
+      for (let y = top; y <= bottom; y += 1) {
+        for (let x = left; x <= right; x += 1) {
+          if (stats) stats.buckets += 1
+          for (const item of buckets.get(`${x}:${y}`) ?? []) candidates.add(item)
+        }
+      }
+
+      if (stats) stats.candidates += candidates.size
+      return [...candidates].filter((item) =>
+        boardTileVisible(item.point, viewport, size, overscan),
+      )
+    },
+  }
 }

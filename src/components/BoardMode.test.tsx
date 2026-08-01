@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, NodeSummary, WobuNode } from '../lib/api'
 import { kindDef, kindIndex, node as buildNode, summary } from '../test/fixtures'
@@ -17,6 +17,16 @@ vi.mock('@tauri-apps/api/core', () => ({
 const nodes: NodeSummary[] = [summary({ id: 'kael', name: 'Kael', kind: 'character' })]
 const kinds = kindIndex([kindDef('character', { label: 'Character' })])
 let assets: Asset[] = []
+let nextFrame = 1
+let animationFrames: Map<number, FrameRequestCallback>
+
+function flushAnimationFrame() {
+  const entry = animationFrames.entries().next().value
+  if (!entry) throw new Error('No animation frame is scheduled')
+  const [id, callback] = entry
+  animationFrames.delete(id)
+  act(() => callback(performance.now()))
+}
 
 function asset(index: number): Asset {
   return {
@@ -73,6 +83,8 @@ function open(pendingAttach: BoardAttachRequest | null = null, readOnly = false)
 
 beforeEach(() => {
   assets = []
+  nextFrame = 1
+  animationFrames = new Map()
   localStorage.removeItem('wobu.board-layouts.v1')
   useBoard.setState({ projects: {} })
   useUI.setState({ selectedId: 'kael', toasts: [] })
@@ -110,6 +122,20 @@ beforeEach(() => {
   // jsdom does not provide DragEvent, so Testing Library otherwise creates a
   // plain Event whose client coordinates are always zero.
   vi.stubGlobal('DragEvent', MouseEvent)
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameRequestCallback) => {
+      const frame = nextFrame++
+      animationFrames.set(frame, callback)
+      return frame
+    }),
+  )
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((frame: number) => {
+      animationFrames.delete(frame)
+    }),
+  )
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 
@@ -119,12 +145,42 @@ describe('BoardMode', () => {
     await screen.findByText('No images yet')
     const viewport = view.container.querySelector('.board-viewport')!
     fireEvent.wheel(viewport, { deltaX: 30, deltaY: 20, clientX: 400, clientY: 300 })
+    flushAnimationFrame()
     expect(view.container.querySelector('.board-world')).toHaveStyle({
       transform: 'translate(18px, 52px) scale(1)',
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
     expect(screen.getByLabelText('Board zoom')).toHaveTextContent('125%')
+  })
+
+  it('coalesces bursty pan and wheel events into one camera frame each', async () => {
+    const view = open()
+    await screen.findByText('No images yet')
+    const viewport = view.container.querySelector('.board-viewport')!
+
+    fireEvent.pointerDown(viewport, { button: 0, pointerId: 7, clientX: 100, clientY: 100 })
+    for (let step = 1; step <= 100; step += 1) {
+      fireEvent.pointerMove(viewport, {
+        pointerId: 7,
+        clientX: 100 + step,
+        clientY: 100 + step * 2,
+      })
+    }
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(animationFrames.size).toBe(1)
+    flushAnimationFrame()
+    expect(view.container.querySelector('.board-world')).toHaveStyle({
+      transform: 'translate(148px, 272px) scale(1)',
+    })
+
+    fireEvent.pointerUp(viewport, { pointerId: 7 })
+    for (let step = 0; step < 100; step += 1) {
+      fireEvent.wheel(viewport, { deltaX: 1, deltaY: 2, clientX: 400, clientY: 300 })
+    }
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(2)
+    expect(animationFrames.size).toBe(1)
   })
 
   it('culls off-screen images and only asks for mounted thumbnails', async () => {

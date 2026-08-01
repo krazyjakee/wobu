@@ -8,7 +8,7 @@ import {
   BOARD_ASSET_MIME,
   BOARD_TILE_HEIGHT,
   BOARD_TILE_WIDTH,
-  boardTileVisible,
+  createBoardSpatialIndex,
   DEFAULT_BOARD_VIEWPORT,
   zoomBoardAt,
   type BoardPoint,
@@ -53,16 +53,23 @@ export function BoardMode({
   const persistViewport = useBoard((state) => state.setViewport)
   const arrange = useBoard((state) => state.arrange)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const cameraRef = useRef(layout.viewport)
+  const queuedCamera = useRef<BoardViewport | null>(null)
+  const cameraFrame = useRef<number | null>(null)
   const pan = useRef<{
     pointerId: number
     start: BoardPoint
     origin: BoardViewport
   } | null>(null)
   const [size, setSize] = useState<BoardSize>({ width: 1200, height: 700 })
-  const [camera, setCamera] = useState(layout.viewport)
+  const [cameraState, setCameraState] = useState(() => ({ projectId, viewport: layout.viewport }))
+  const camera = cameraState.projectId === projectId ? cameraState.viewport : layout.viewport
   const [isPanning, setIsPanning] = useState(false)
   const assetList = useMemo(() => assets.data ?? [], [assets.data])
   const selectedNode = nodes.find((node) => node.id === selectedId) ?? null
+  const layoutViewportX = layout.viewport.x
+  const layoutViewportY = layout.viewport.y
+  const layoutViewportZoom = layout.viewport.zoom
 
   useEffect(() => {
     if (assets.isSuccess)
@@ -73,8 +80,19 @@ export function BoardMode({
   }, [assetList, assets.isSuccess, projectId, syncAssets])
 
   useEffect(() => {
-    setCamera(layout.viewport)
-  }, [projectId, layout.viewport.x, layout.viewport.y, layout.viewport.zoom])
+    if (cameraFrame.current !== null) cancelAnimationFrame(cameraFrame.current)
+    cameraFrame.current = null
+    queuedCamera.current = null
+    const viewport = { x: layoutViewportX, y: layoutViewportY, zoom: layoutViewportZoom }
+    cameraRef.current = viewport
+  }, [projectId, layoutViewportX, layoutViewportY, layoutViewportZoom])
+
+  useEffect(
+    () => () => {
+      if (cameraFrame.current !== null) cancelAnimationFrame(cameraFrame.current)
+    },
+    [],
+  )
 
   // Camera changes are high-frequency while panning. Persist them after the
   // gesture pauses so localStorage is not rewritten for every pointer event.
@@ -102,10 +120,33 @@ export function BoardMode({
       })),
     [assetList, layout.positions],
   )
-  const visible = useMemo(
-    () => positioned.filter((item) => boardTileVisible(item.point, camera, size)),
-    [camera, positioned, size],
-  )
+  const spatialIndex = useMemo(() => createBoardSpatialIndex(positioned), [positioned])
+  const visible = useMemo(() => spatialIndex.query(camera, size), [camera, size, spatialIndex])
+
+  function currentCamera(): BoardViewport {
+    return queuedCamera.current ?? cameraRef.current
+  }
+
+  function commitCamera(next: BoardViewport) {
+    if (cameraFrame.current !== null) cancelAnimationFrame(cameraFrame.current)
+    cameraFrame.current = null
+    queuedCamera.current = null
+    cameraRef.current = next
+    setCameraState({ projectId, viewport: next })
+  }
+
+  function queueCamera(change: (current: BoardViewport) => BoardViewport) {
+    queuedCamera.current = change(currentCamera())
+    if (cameraFrame.current !== null) return
+    cameraFrame.current = requestAnimationFrame(() => {
+      cameraFrame.current = null
+      const next = queuedCamera.current
+      queuedCamera.current = null
+      if (!next) return
+      cameraRef.current = next
+      setCameraState({ projectId, viewport: next })
+    })
+  }
 
   function localPoint(clientX: number, clientY: number): BoardPoint {
     const rect = viewportRef.current?.getBoundingClientRect()
@@ -114,9 +155,10 @@ export function BoardMode({
 
   function moveAsset(assetId: string, clientX: number, clientY: number) {
     const local = localPoint(clientX, clientY)
+    const viewport = currentCamera()
     setAssetPosition(projectId, assetId, {
-      x: (local.x - camera.x) / camera.zoom - BOARD_TILE_WIDTH / 2,
-      y: (local.y - camera.y) / camera.zoom - BOARD_TILE_HEIGHT / 2,
+      x: (local.x - viewport.x) / viewport.zoom - BOARD_TILE_WIDTH / 2,
+      y: (local.y - viewport.y) / viewport.zoom - BOARD_TILE_HEIGHT / 2,
     })
   }
 
@@ -128,8 +170,12 @@ export function BoardMode({
   }
 
   function zoomBy(factor: number) {
-    setCamera((current) =>
-      zoomBoardAt(current, current.zoom * factor, { x: size.width / 2, y: size.height / 2 }),
+    const current = currentCamera()
+    commitCamera(
+      zoomBoardAt(current, current.zoom * factor, {
+        x: size.width / 2,
+        y: size.height / 2,
+      }),
     )
   }
 
@@ -150,12 +196,13 @@ export function BoardMode({
           <button
             className="btn"
             type="button"
-            onClick={() =>
+            onClick={() => {
               arrange(
                 projectId,
                 assetList.map((asset) => asset.id),
               )
-            }
+              commitCamera(DEFAULT_BOARD_VIEWPORT)
+            }}
           >
             Arrange
           </button>
@@ -166,7 +213,11 @@ export function BoardMode({
           <button className="btn" type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)}>
             +
           </button>
-          <button className="btn" type="button" onClick={() => setCamera(DEFAULT_BOARD_VIEWPORT)}>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => commitCamera(DEFAULT_BOARD_VIEWPORT)}
+          >
             Reset view
           </button>
           <button className="btn" type="button" onClick={() => setMode('library')}>
@@ -187,14 +238,14 @@ export function BoardMode({
         onWheel={(event) => {
           event.preventDefault()
           const anchor = localPoint(event.clientX, event.clientY)
-          setCamera((current) => wheelCamera(current, event, anchor))
+          queueCamera((current) => wheelCamera(current, event, anchor))
         }}
         onPointerDown={(event) => {
           if (event.button !== 0 || interactiveTarget(event.target)) return
           pan.current = {
             pointerId: event.pointerId,
             start: { x: event.clientX, y: event.clientY },
-            origin: camera,
+            origin: currentCamera(),
           }
           setIsPanning(true)
           event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -202,20 +253,22 @@ export function BoardMode({
         onPointerMove={(event) => {
           const gesture = pan.current
           if (!gesture || gesture.pointerId !== event.pointerId) return
-          setCamera({
+          queueCamera(() => ({
             ...gesture.origin,
             x: gesture.origin.x + event.clientX - gesture.start.x,
             y: gesture.origin.y + event.clientY - gesture.start.y,
-          })
+          }))
         }}
         onPointerUp={(event) => {
           if (pan.current?.pointerId !== event.pointerId) return
           pan.current = null
+          if (queuedCamera.current) commitCamera(queuedCamera.current)
           setIsPanning(false)
           event.currentTarget.releasePointerCapture?.(event.pointerId)
         }}
         onPointerCancel={() => {
           pan.current = null
+          if (queuedCamera.current) commitCamera(queuedCamera.current)
           setIsPanning(false)
         }}
       >
