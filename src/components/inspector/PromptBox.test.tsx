@@ -69,6 +69,7 @@ function compiled(over: Partial<CompiledPrompt> = {}): CompiledPrompt {
       aspect: '3:4',
       images: 4,
       views: [],
+      imageConstraints: null,
     },
     prompt: '',
     negative: '',

@@ -518,6 +518,21 @@ export interface SectionPriority {
   weight: number
 }
 
+export interface PresetView {
+  /** Provider-ready tag recorded on the generation and sent with the mesh input. */
+  viewType: string
+  /** Camera instruction appended to this generation's Shot fragments. */
+  framing: string
+}
+
+export interface ImageConstraints {
+  mimeTypes: string[]
+  minSide: number
+  maxSide: number
+  /** Whole named-view batch, before base64 encoding. */
+  maxBatchBytes: number
+}
+
 /**
  * The recipe that turns one description into a particular kind of sheet.
  *
@@ -535,8 +550,9 @@ export interface Preset {
   framing: string
   aspect: string
   images: number
-  /** Named views in emission order, empty for presets whose batch just varies. */
-  views: string[]
+  /** Tagged, framed views in emission order; empty when the batch just varies. */
+  views: PresetView[]
+  imageConstraints: ImageConstraints | null
 }
 
 /**

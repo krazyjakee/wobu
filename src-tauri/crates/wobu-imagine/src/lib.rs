@@ -171,7 +171,8 @@ pub use error::{Error, Result};
 pub use gemini::GeminiBackend;
 pub use mesh::{
     DEFAULT_FACE_COUNT, FACE_COUNT, GenerateType, GeneratedMesh, MeshBackend, MeshCapabilities,
-    MeshFile, MeshFormat, MeshInput, MeshOutcome, MeshRequest, MeshUsage, MeshView, View,
+    MeshFile, MeshFormat, MeshInput, MeshOutcome, MeshRequest, MeshUsage, MeshView, Turnaround,
+    View,
 };
 pub use negotiate::{Downgrade, Downgraded, Negotiated, negotiate};
 pub use tencent::HunyuanBackend;

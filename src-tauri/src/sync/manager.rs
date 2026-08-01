@@ -169,6 +169,10 @@ enum Held {
 pub struct Replica {
     project: Id,
     root: PathBuf,
+    /// A caller-chosen local index, used by the two-peer integration harness so
+    /// two replicas of one project do not meet in the app's ULID-keyed index.
+    /// `None` is the app path and remains the production default.
+    index_path: Option<PathBuf>,
     state: AppState,
     held: Mutex<Held>,
     /// Held for a whole round. See the module documentation.
@@ -179,10 +183,17 @@ pub struct Replica {
 }
 
 impl Replica {
-    fn new(project: Id, root: PathBuf, state: AppState, open: bool) -> Replica {
+    fn new(
+        project: Id,
+        root: PathBuf,
+        index_path: Option<PathBuf>,
+        state: AppState,
+        open: bool,
+    ) -> Replica {
         Replica {
             project,
             root,
+            index_path,
             state,
             held: Mutex::new(if open { Held::Open } else { Held::Detached(None) }),
             round: tokio::sync::Mutex::new(()),
@@ -216,7 +227,10 @@ impl Replica {
 
         // Outside the lock, because this rescans the folder. See the module
         // documentation; the round gate is what stops two of these racing.
-        let opened = Project::open(&self.root)?;
+        let opened = match &self.index_path {
+            Some(index_path) => Project::open_at_index(&self.root, index_path)?,
+            None => Project::open(&self.root)?,
+        };
 
         let mut held = self.held.lock();
         match &mut *held {
@@ -230,6 +244,11 @@ impl Replica {
     /// Whether the window is currently holding this project.
     pub fn is_open(&self) -> bool {
         matches!(*self.held.lock(), Held::Open)
+    }
+
+    #[cfg(test)]
+    pub(super) fn release_for_test(&self) {
+        *self.held.lock() = Held::Detached(None);
     }
 
     /// Hand the folder to the window. Blocks until sync has let go.
@@ -265,6 +284,8 @@ pub struct SyncManager {
     endpoint: OnceLock<SyncEndpoint>,
     shares: Mutex<Shares>,
     replicas: Mutex<BTreeMap<Id, Arc<Replica>>>,
+    index_dir: Option<PathBuf>,
+    poll: bool,
     /// Read on every poll tick and before every round step. Set once, never
     /// cleared: a manager that has been shut down stays shut down, because the
     /// endpoint it would need is closed.
@@ -286,6 +307,10 @@ pub struct Setup {
     /// dialling a ticket nobody minted is noise in the log and a task to shut
     /// down for no reason.
     pub poll: bool,
+    /// Override local index placement. The app passes `None`; integration tests
+    /// use one directory per simulated machine so replicas of one ULID remain
+    /// genuinely independent.
+    pub index_dir: Option<PathBuf>,
 }
 
 impl SyncManager {
@@ -300,6 +325,12 @@ impl SyncManager {
         wake: Arc<dyn Wake>,
         setup: Setup,
     ) -> CommandResult<Arc<SyncManager>> {
+        if let Some(index_dir) = &setup.index_dir {
+            std::fs::create_dir_all(index_dir).map_err(|error| {
+                WobuError::new(Code::Io, "Could not create the local sync index directory.")
+                    .with_detail(error.to_string())
+            })?;
+        }
         let manager = Arc::new(SyncManager {
             state,
             wake,
@@ -307,6 +338,8 @@ impl SyncManager {
             endpoint: OnceLock::new(),
             shares: Mutex::new(setup.shares),
             replicas: Mutex::new(BTreeMap::new()),
+            index_dir: setup.index_dir,
+            poll: setup.poll,
             stopping: AtomicBool::new(false),
             pollers: Mutex::new(Vec::new()),
         });
@@ -381,7 +414,9 @@ impl SyncManager {
             grant
         };
         self.register(project, root, self.state.open_id() == Some(project));
-        self.spawn_poller(project);
+        if self.poll {
+            self.spawn_poller(project);
+        }
         self.endpoint().ticket(project, grant)
     }
 
@@ -414,7 +449,9 @@ impl SyncManager {
         drop(shares);
 
         self.register(project, &root, self.state.open_id() == Some(project));
-        self.spawn_poller(project);
+        if self.poll {
+            self.spawn_poller(project);
+        }
         Disposition::Join
     }
 
@@ -477,12 +514,12 @@ impl SyncManager {
 
     /// Every world on this machine, shared or merely open. See [`Present`].
     ///
-    /// Deliberately a wider set than [`Self::holds`], and the gap between them is
+    /// Deliberately a wider set than [`Self::admits`], and the gap between them is
     /// the point. "Do I have this world anywhere" is the question a pasted ticket
     /// asks, and the open project counts — a friend sending a ticket for the
     /// world already on screen is joining it, not cloning a second copy of it
     /// next to itself. "May a stranger who dialled me sync this" is a different
-    /// question and its answer is [`Self::holds`], which is shares only, because
+    /// question and its answer is [`Self::admits`], which is shares only, because
     /// merely opening a folder is not consent to serve it to anybody who can
     /// guess its ULID off a `project.json` on a NAS.
     fn present(&self) -> Present {
@@ -507,9 +544,34 @@ impl SyncManager {
     /// and would reset the handover state to whatever this caller guessed. A
     /// share that is already registered is already correct.
     fn register(&self, project: Id, root: &Path, open: bool) {
+        let index_path = self.index_dir.as_ref().map(|dir| dir.join(format!("{project}.sqlite")));
         self.replicas.lock().entry(project).or_insert_with(|| {
-            Arc::new(Replica::new(project, root.to_path_buf(), self.state.handle(), open))
+            Arc::new(Replica::new(
+                project,
+                root.to_path_buf(),
+                index_path,
+                self.state.handle(),
+                open,
+            ))
         });
+    }
+
+    /// One explicit outbound round, with no timer. The integration harness uses
+    /// this to make every network step deterministic and observable.
+    #[cfg(test)]
+    pub(super) async fn run_once(self: &Arc<SyncManager>, project: Id) -> bool {
+        self.dial_round(project).await
+    }
+
+    #[cfg(test)]
+    pub(super) async fn run_ticket(self: &Arc<SyncManager>, project: Id, ticket: &Ticket) -> bool {
+        let Some(replica) = self.replica(project) else { return false };
+        let Ok(session) = self.endpoint().connect_ticket(ticket).await else { return false };
+        let gate = replica.round.lock().await;
+        let outcome = round::run(self, &replica, &session).await;
+        drop(gate);
+        session.close();
+        outcome.is_ok_and(|outcome| outcome.did_something())
     }
 
     /// One outbound round against every peer a share names.

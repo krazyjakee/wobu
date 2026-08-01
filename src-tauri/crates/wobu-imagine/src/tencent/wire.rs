@@ -30,23 +30,13 @@
 
 use base64::Engine;
 use serde_json::{Value, json};
+use wobu_core::TURNAROUND_IMAGE_CONSTRAINTS;
 
+use crate::dimensions;
 use crate::error::Error;
 use crate::mesh::{MeshCapabilities, MeshInput, MeshRequest, MeshView, View};
 
 use super::sign::{BACKEND, auth_failure};
-
-/// The largest total the provider takes, measured **before** base64 encoding.
-///
-/// `docs/08-providers.md` gives 6 MB for `ImageBase64` and 6 MB for a whole
-/// multi-view set, and notes that base64 inflates by about 30%. Checked here
-/// rather than left to the provider because the alternative is a request that
-/// carries several megabytes across the world to be refused.
-const MAX_IMAGE_BYTES: usize = 6 * 1024 * 1024;
-
-/// What multi-view input accepts, and it is narrower than single-image input —
-/// which takes webp as well.
-const MULTI_VIEW_MIMES: [&str; 2] = ["image/jpeg", "image/png"];
 
 /* ── what we send ─────────────────────────────────────────────────────────── */
 
@@ -184,13 +174,46 @@ fn check_views(views: &[MeshView], capabilities: &MeshCapabilities) -> Result<()
             });
         }
         seen.push(view.view);
+
+        let Some((width, height)) = dimensions::read(&view.bytes) else {
+            return Err(Error::Unsupported {
+                detail: format!("the `{}` view is not a recognised image", view.view),
+            });
+        };
+        let actual_mime = dimensions::mime(&view.bytes);
+        if !view.mime.eq_ignore_ascii_case(actual_mime) {
+            return Err(Error::Unsupported {
+                detail: format!(
+                    "the `{}` view is labelled {} but its bytes are {actual_mime}",
+                    view.view, view.mime,
+                ),
+            });
+        }
+        let shortest = width.min(height);
+        let longest = width.max(height);
+        if shortest < TURNAROUND_IMAGE_CONSTRAINTS.min_side
+            || longest > TURNAROUND_IMAGE_CONSTRAINTS.max_side
+        {
+            return Err(Error::Unsupported {
+                detail: format!(
+                    "the `{}` view is {width}×{height}; {BACKEND} requires every side between {} \
+                     and {} pixels",
+                    view.view,
+                    TURNAROUND_IMAGE_CONSTRAINTS.min_side,
+                    TURNAROUND_IMAGE_CONSTRAINTS.max_side,
+                ),
+            });
+        }
     }
 
     // Multi-view is narrower than single-image, which also takes webp. Sending a
     // webp in a multi-view set is a rejection after the upload.
     if views.len() > 1 {
         for view in views {
-            if !MULTI_VIEW_MIMES.contains(&view.mime.to_ascii_lowercase().as_str()) {
+            if !TURNAROUND_IMAGE_CONSTRAINTS
+                .mime_types
+                .contains(&view.mime.to_ascii_lowercase().as_str())
+            {
                 return Err(Error::Unsupported {
                     detail: format!(
                         "the `{}` view is {} and multi-view input takes only JPEG and PNG",
@@ -202,13 +225,13 @@ fn check_views(views: &[MeshView], capabilities: &MeshCapabilities) -> Result<()
     }
 
     let total: usize = views.iter().map(|view| view.bytes.len()).sum();
-    if total > MAX_IMAGE_BYTES {
+    if total > TURNAROUND_IMAGE_CONSTRAINTS.max_batch_bytes {
         return Err(Error::Unsupported {
             detail: format!(
                 "these {} views are {:.1} MB together and {BACKEND} takes {} MB",
                 views.len(),
                 total as f64 / (1024.0 * 1024.0),
-                MAX_IMAGE_BYTES / (1024 * 1024),
+                TURNAROUND_IMAGE_CONSTRAINTS.max_batch_bytes / (1024 * 1024),
             ),
         });
     }
@@ -555,7 +578,27 @@ mod tests {
     }
 
     fn view(view: View) -> MeshView {
-        MeshView::new(view, vec![0x89, b'P', b'N', b'G'], "image/png")
+        png(view, 1024, 1024)
+    }
+
+    fn png(view: View, width: u32, height: u32) -> MeshView {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.extend_from_slice(&13u32.to_be_bytes());
+        bytes.extend_from_slice(b"IHDR");
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+        MeshView::new(view, bytes, "image/png")
+    }
+
+    fn webp(view: View, width: u32, height: u32) -> MeshView {
+        let mut bytes = vec![0u8; 30];
+        bytes[0..4].copy_from_slice(b"RIFF");
+        bytes[8..12].copy_from_slice(b"WEBP");
+        bytes[12..16].copy_from_slice(b"VP8X");
+        bytes[24..27].copy_from_slice(&(width - 1).to_le_bytes()[..3]);
+        bytes[27..30].copy_from_slice(&(height - 1).to_le_bytes()[..3]);
+        MeshView::new(view, bytes, "image/webp")
     }
 
     fn body(request: &MeshRequest) -> Value {
@@ -660,13 +703,8 @@ mod tests {
         // Single-image input takes webp and multi-view does not. The narrower of
         // the two limits is the one that applies, and the provider's rejection
         // arrives after the upload.
-        let request = MeshRequest::from_views(
-            "3.1",
-            vec![
-                view(View::Front),
-                MeshView::new(View::Left, vec![b'R', b'I', b'F', b'F'], "image/webp"),
-            ],
-        );
+        let request =
+            MeshRequest::from_views("3.1", vec![view(View::Front), webp(View::Left, 1024, 1024)]);
         let error = submit_body(&request, &caps()).unwrap_err();
         assert!(error.to_string().contains("image/webp"), "{error}");
         assert!(error.to_string().contains("JPEG and PNG"), "{error}");
@@ -677,7 +715,11 @@ mod tests {
         // Six megabytes measured before base64, which inflates by about 30%.
         // Checked here because the alternative is carrying seven megabytes across
         // the world to be told no.
-        let heavy = |v| MeshView::new(v, vec![0u8; 4 * 1024 * 1024], "image/png");
+        let heavy = |v| {
+            let mut image = png(v, 1024, 1024);
+            image.bytes.resize(4 * 1024 * 1024, 0);
+            image
+        };
         let request = MeshRequest::from_views("3.1", vec![heavy(View::Front), heavy(View::Left)]);
         let error = submit_body(&request, &caps()).unwrap_err();
         assert!(error.to_string().contains("8.0 MB"), "{error}");

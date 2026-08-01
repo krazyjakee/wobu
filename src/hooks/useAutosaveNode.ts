@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import type { WobuNode } from '../lib/api'
-import { isRetryable, isTauri } from '../lib/api'
+import { errorCode, isRetryable, isTauri } from '../lib/api'
 import { useUpsertNode } from '../lib/queries'
 import { useSettings } from '../store/settings'
 import { report } from '../store/ui'
@@ -17,14 +17,20 @@ export interface AutosaveOptions {
 
 /**
  * Debounced writes through `node_upsert`. The queued patch is merged onto the
- * freshest node we hold, so a `world:changed` refetch mid-typing cannot resurrect
- * older text. Pending edits are flushed when the node changes or the pane unmounts.
+ * freshest node we hold. A `world:changed` refetch of the node being edited
+ * becomes the new base even while a patch is queued: the remote edit wins every
+ * field the user did not touch, and the queued fields are rebased onto it when
+ * the debounce closes. The editor's controlled fields keep the local value
+ * under an active cursor; adopting the base here never rewrites the input.
+ * Pending edits are flushed when the selected node changes or the pane unmounts.
  *
  * A failure that could still succeed later — the share went away — puts the
  * patch *back* on the queue rather than dropping it, and the edit is resent
  * when `share:online` says the folder is reachable again. Anything else is a
  * genuine rejection, and holding onto it would only resend something the
- * backend has already refused.
+ * backend has already refused. `write.conflict` is different: the conflict
+ * card owns the decision, so the patch is retained until the user acts rather
+ * than disappearing from the only writer that still knows it is unsaved.
  *
  * A read-only folder is the one case where nothing is queued in the first
  * place: there is no later in which that write could succeed.
@@ -41,13 +47,27 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
   const [status, setStatus] = useState<SaveStatus>('idle')
 
   const latest = useRef<WobuNode | undefined>(node)
+  const nextSelection = useRef<{ node: WobuNode | undefined } | null>(null)
   const patch = useRef<Partial<WobuNode> | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const mutate = useRef(upsert.mutate)
 
-  mutate.current = upsert.mutate
-  // Only adopt server state we are not currently overwriting.
-  if (!patch.current) latest.current = node
+  // A refetch of this same node is the remote half of a rebase. Adopting it
+  // while `patch` is pending is safe because the patch contains only fields the
+  // active control changed, and it is essential because `node_upsert` guards
+  // against the index's *current* stamp rather than carrying a client version.
+  //
+  // A different id is a selection change, not a rebase. Keep the old base until
+  // the id effect below flushes it, or A's last sentence would be merged onto B.
+  useEffect(() => {
+    const base = latest.current
+    if (!patch.current || !base || (node && base.id === node.id)) latest.current = node
+    else nextSelection.current = { node }
+  }, [node])
+
+  useEffect(() => {
+    mutate.current = upsert.mutate
+  }, [upsert.mutate])
 
   const send = useCallback(() => {
     const base = latest.current
@@ -63,11 +83,13 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
         setStatus('saved')
       },
       onError: (e) => {
-        if (isRetryable(e)) {
+        const retryable = isRetryable(e)
+        const conflict = errorCode(e) === 'write.conflict'
+        if (retryable || conflict) {
           // Put it back, behind anything typed since — newer keystrokes win,
           // but the text that failed to save is not lost.
           patch.current = { ...p, ...(patch.current ?? {}) }
-          setStatus('held')
+          setStatus(retryable ? 'held' : 'error')
         } else {
           setStatus('error')
         }
@@ -126,6 +148,13 @@ export function useAutosaveNode(node: WobuNode | undefined, options: AutosaveOpt
   // Flush on unmount and whenever the edited node is swapped out.
   const id = node?.id
   useEffect(() => {
+    // React runs the previous id effect's cleanup before creating this one.
+    // That cleanup flushes A against A; only then is it safe to make B the
+    // base for the next edit.
+    if (nextSelection.current) {
+      latest.current = nextSelection.current.node
+      nextSelection.current = null
+    }
     return () => {
       if (timer.current !== undefined) {
         window.clearTimeout(timer.current)

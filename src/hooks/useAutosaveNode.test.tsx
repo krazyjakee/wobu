@@ -176,6 +176,19 @@ describe('flushing', () => {
     expect(sent()[0]!.notesRaw).toBe('about a')
   })
 
+  it('uses the newly selected node as the base after flushing the old one', async () => {
+    const { result, rerender } = await render(node({ id: 'a', name: 'A' }))
+    act(() => result.current.queue({ notesRaw: 'last edit on A' }))
+    act(() => rerender({ node: node({ id: 'b', name: 'B' }) }))
+
+    act(() => result.current.queue({ notesRaw: 'first edit on B' }))
+    act(() => void vi.advanceTimersByTime(500))
+
+    expect(sent()).toHaveLength(2)
+    expect(sent()[0]).toMatchObject({ id: 'a', name: 'A', notesRaw: 'last edit on A' })
+    expect(sent()[1]).toMatchObject({ id: 'b', name: 'B', notesRaw: 'first edit on B' })
+  })
+
   it('does not write on unmount when there was nothing pending', async () => {
     const { unmount } = await render(node({ id: 'a' }))
     unmount()
@@ -184,17 +197,28 @@ describe('flushing', () => {
 })
 
 describe('which node the patch is merged onto', () => {
-  it('ignores a server refetch that arrives while an edit is pending', async () => {
-    // `world:changed` fires on our own writes too, so a refetch landing
-    // mid-typing is routine. Adopting it would send the server's older text
-    // back as if the user had typed it.
+  it('rebases a pending edit onto a server refetch of the same node', async () => {
+    // `world:changed` invalidates `node_get`, so this rerender is how an edit
+    // applied by a peer reaches the hook. The remote field must survive and the
+    // field under the local cursor must remain queued.
     const { result, rerender } = await render(node({ id: 'a', summary: 'original' }))
     act(() => result.current.queue({ notesRaw: 'typing' }))
-    act(() => rerender({ node: node({ id: 'a', summary: 'from the watcher' }) }))
+    act(() => rerender({ node: node({ id: 'a', summary: 'from Nadia' }) }))
     act(() => void vi.advanceTimersByTime(500))
 
-    expect(sent()[0]!.summary).toBe('original')
+    expect(sent()[0]!.summary).toBe('from Nadia')
     expect(sent()[0]!.notesRaw).toBe('typing')
+  })
+
+  it('keeps the queued local field when the remote edit touched that field too', async () => {
+    // The textarea keeps showing this complete local value while focused. The
+    // hook must neither replace it from props nor lose it during the rebase.
+    const { result, rerender } = await render(node({ id: 'a', notesRaw: 'before' }))
+    act(() => result.current.queue({ notesRaw: 'my unfinished paragraph' }))
+    act(() => rerender({ node: node({ id: 'a', notesRaw: "Nadia's paragraph" }) }))
+    act(() => void vi.advanceTimersByTime(500))
+
+    expect(sent()[0]!.notesRaw).toBe('my unfinished paragraph')
   })
 
   it('adopts a server refetch when nothing is pending', async () => {
@@ -254,6 +278,7 @@ describe('which node the patch is merged onto', () => {
 describe('a save that fails', () => {
   const unreachable = { code: 'share.unmounted', message: 'the share is away', retryable: true }
   const rejected = { code: 'node.invalid', message: 'a name is required', retryable: false }
+  const conflict = { code: 'write.conflict', message: 'someone else saved', retryable: false }
 
   it('holds a retryable failure and resends the same text later', async () => {
     h.mutate.mockImplementation((_n: WobuNode, o: MutateOpts) => o.onError(unreachable))
@@ -277,6 +302,41 @@ describe('a save that fails', () => {
     act(() => result.current.queue({ notesRaw: 'second' }))
     act(() => void vi.advanceTimersByTime(500))
     expect(sent()[1]!.notesRaw).toBe('second')
+  })
+
+  it('retains a conflicted patch and rebases it onto the incoming winner', async () => {
+    h.mutate.mockImplementation((_n: WobuNode, o: MutateOpts) => o.onError(conflict))
+    const { result, rerender } = await render(node({ id: 'a', summary: 'before' }))
+    act(() => result.current.queue({ notesRaw: 'my unsaved paragraph' }))
+    act(() => void vi.advanceTimersByTime(500))
+    expect(result.current.status).toBe('error')
+
+    // The conflict invalidates the node query. Its canonical winner becomes the
+    // base, but the patch remains recoverable until the conflict card is dealt
+    // with or the editor explicitly flushes again.
+    act(() => rerender({ node: node({ id: 'a', summary: "Nadia's winner" }) }))
+    h.mutate.mockImplementation(() => {})
+    act(() => result.current.flush())
+
+    expect(sent()).toHaveLength(2)
+    expect(sent()[1]).toMatchObject({
+      summary: "Nadia's winner",
+      notesRaw: 'my unsaved paragraph',
+    })
+  })
+
+  it('lets text typed after a conflict win over the retained patch', async () => {
+    h.mutate.mockImplementation((_n: WobuNode, o: MutateOpts) => o.onError(conflict))
+    const { result, rerender } = await render(node({ id: 'a' }))
+    act(() => result.current.queue({ notesRaw: 'first attempt' }))
+    act(() => void vi.advanceTimersByTime(500))
+
+    act(() => rerender({ node: node({ id: 'a', summary: 'remote winner' }) }))
+    h.mutate.mockImplementation(() => {})
+    act(() => result.current.queue({ notesRaw: 'kept typing' }))
+    act(() => void vi.advanceTimersByTime(500))
+
+    expect(sent()[1]).toMatchObject({ summary: 'remote winner', notesRaw: 'kept typing' })
   })
 
   it('drops a patch the backend genuinely refused', async () => {

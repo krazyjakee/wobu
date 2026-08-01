@@ -1,6 +1,6 @@
 //! Turning the resolved stack into fragments.
 
-use wobu_core::{FragmentTarget, Node, Preset, SectionValue, kind_def};
+use wobu_core::{FragmentTarget, Node, Preset, PresetView, SectionValue, kind_def};
 
 use crate::fragment::{Fragment, FragmentBody, Sliders, section_target};
 use crate::stack::{Origin, ResolvedSource, ResolvedStack};
@@ -13,6 +13,7 @@ use crate::stack::{Origin, ResolvedSource, ResolvedStack};
 /// under every preset, which is the right answer — a preset must not be able to
 /// reweight its own framing relative to another preset's.
 const FRAMING: &str = "framing";
+const VIEW_FRAMING: &str = "view_framing";
 
 /// Extract everything a resolved stack contributes.
 ///
@@ -45,6 +46,30 @@ pub fn fragments<'a>(
     preset: &Preset,
     sliders: &Sliders,
 ) -> Vec<Fragment<'a>> {
+    fragments_with_view(stack, preset, sliders, None)
+}
+
+/// Extract one named view generation.
+///
+/// The returned fragments append the view's own camera instruction after the
+/// preset framing. The caller keeps `view.view_type` beside them for
+/// `Generation.view_type`; taking one `PresetView` for both facts prevents a
+/// left-view prompt from being labelled as a right-view mesh input.
+pub fn fragments_for_view<'a>(
+    stack: &ResolvedStack<'a>,
+    preset: &Preset,
+    sliders: &Sliders,
+    view: PresetView,
+) -> Vec<Fragment<'a>> {
+    fragments_with_view(stack, preset, sliders, Some(view))
+}
+
+fn fragments_with_view<'a>(
+    stack: &ResolvedStack<'a>,
+    preset: &Preset,
+    sliders: &Sliders,
+    view: Option<PresetView>,
+) -> Vec<Fragment<'a>> {
     let mut out: Vec<Fragment<'a>> = Vec::new();
     for source in stack.sources() {
         let slider = sliders.for_source(source);
@@ -53,7 +78,7 @@ pub fn fragments<'a>(
                 text_fragments(&mut out, source, node, preset, slider);
                 asset_fragments(&mut out, source, node, preset, slider);
             }
-            Origin::Shot(_) => framing_fragment(&mut out, source, preset, slider),
+            Origin::Shot(_) => framing_fragments(&mut out, source, preset, view, slider),
         }
     }
     out
@@ -190,12 +215,16 @@ fn asset_fragments<'a>(
 /// A stack resolved without a shot — `influence_resolve`, before any generation
 /// is set up — has no Shot source and so gets no framing text, which is right:
 /// nothing has been framed yet.
-fn framing_fragment<'a>(
+fn framing_fragments<'a>(
     out: &mut Vec<Fragment<'a>>,
     source: &ResolvedSource<'a>,
     preset: &Preset,
+    view: Option<PresetView>,
     slider: f32,
 ) {
     let weight = source.weight * preset.section_priority(FRAMING) * slider;
     push_text(out, source, FRAMING, preset.framing, weight, FragmentTarget::Prompt);
+    if let Some(view) = view {
+        push_text(out, source, VIEW_FRAMING, view.framing, weight, FragmentTarget::Prompt);
+    }
 }

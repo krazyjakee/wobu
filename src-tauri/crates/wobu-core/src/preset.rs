@@ -40,6 +40,51 @@ pub struct SectionPriority {
     pub weight: f32,
 }
 
+/// One named image in a preset batch.
+///
+/// The tag is the value recorded in `Generation.view_type` and sent to the mesh
+/// backend; the framing is a separate Shot fragment appended only for this
+/// generation. Keeping the two together makes it impossible to ask for a left
+/// view and accidentally label it `right` later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetView {
+    pub view_type: &'static str,
+    pub framing: &'static str,
+}
+
+const fn view(view_type: &'static str, framing: &'static str) -> PresetView {
+    PresetView { view_type, framing }
+}
+
+/// Output bounds a named-view batch must satisfy before a downstream stage may
+/// accept it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageConstraints {
+    pub mime_types: &'static [&'static str],
+    pub min_side: u32,
+    pub max_side: u32,
+    /// Across the whole batch, before base64 encoding.
+    pub max_batch_bytes: usize,
+}
+
+/// Hunyuan3D 3.1's multi-view input constraints, inherited by Turnaround.
+pub const TURNAROUND_IMAGE_CONSTRAINTS: ImageConstraints = ImageConstraints {
+    mime_types: &["image/jpeg", "image/png"],
+    min_side: 128,
+    max_side: 5000,
+    max_batch_bytes: 6 * 1024 * 1024,
+};
+
+/// One image job in a preset batch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PresetGeneration {
+    pub index: u8,
+    pub seed: u64,
+    pub view: Option<PresetView>,
+}
+
 const fn priority(section: &'static str, weight: f32) -> SectionPriority {
     SectionPriority { section, weight }
 }
@@ -89,7 +134,10 @@ pub struct Preset {
     /// Generating these is out of scope here — turnaround's view set is dictated
     /// by the 3D backend and gets its own issue in M7 (`docs/08-providers.md`).
     /// The names are declared now because they are what fixes `images`.
-    pub views: &'static [&'static str],
+    pub views: &'static [PresetView],
+    /// `None` for ordinary image batches. Named views that feed a downstream
+    /// backend carry that backend's accepted output envelope here.
+    pub image_constraints: Option<ImageConstraints>,
 }
 
 impl Preset {
@@ -116,13 +164,45 @@ impl Preset {
     pub fn locks_seed(&self) -> bool {
         !self.views.is_empty()
     }
+
+    /// The image jobs one run emits.
+    ///
+    /// Named views all receive the caller's one seed. Ordinary variation batches
+    /// receive stable adjacent seeds, so the caller cannot accidentally apply
+    /// turnaround locking to every ×4 preset or forget it on the one that needs
+    /// it.
+    pub fn generations(&self, seed: u64) -> Vec<PresetGeneration> {
+        if self.views.is_empty() {
+            return (0..self.images)
+                .map(|index| PresetGeneration {
+                    index,
+                    seed: seed.wrapping_add(u64::from(index)),
+                    view: None,
+                })
+                .collect();
+        }
+        self.views
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, view)| PresetGeneration { index: index as u8, seed, view: Some(view) })
+            .collect()
+    }
 }
 
 /// The eight views Hunyuan3D 3.1 reconstructs from, in the order and spelling
 /// that backend names them (`docs/08-providers.md`), so the mesh adapter can pass
 /// them straight through with no intermediate mapping.
-const TURNAROUND_VIEWS: &[&str] =
-    &["front", "left", "right", "back", "top", "bottom", "left_front", "right_front"];
+const TURNAROUND_VIEWS: &[PresetView] = &[
+    view("front", "front view"),
+    view("left", "left profile view"),
+    view("right", "right profile view"),
+    view("back", "back view"),
+    view("top", "top-down view"),
+    view("bottom", "bottom-up view"),
+    view("left_front", "left-front three-quarter view"),
+    view("right_front", "right-front three-quarter view"),
+];
 
 const REGISTRY: &[Preset] = &[
     Preset {
@@ -142,6 +222,7 @@ const REGISTRY: &[Preset] = &[
         aspect: "3:4",
         images: 4,
         views: &[],
+        image_constraints: None,
     },
     Preset {
         id: "turnaround",
@@ -160,10 +241,11 @@ const REGISTRY: &[Preset] = &[
         // filling over half the frame — is baked in here so a turnaround cannot
         // be generated in a form the 3D stage would reject.
         framing: "single subject centred on a plain background, filling more than half the frame, \
-                  flat even light, no props, no cast shadows",
+                  flat even light, no text, no props, no cast shadows",
         aspect: "1:1",
         images: 8,
         views: TURNAROUND_VIEWS,
+        image_constraints: Some(TURNAROUND_IMAGE_CONSTRAINTS),
     },
     Preset {
         id: "portrait_study",
@@ -183,6 +265,7 @@ const REGISTRY: &[Preset] = &[
         aspect: "4:5",
         images: 4,
         views: &[],
+        image_constraints: None,
     },
     Preset {
         id: "costume_plate",
@@ -203,6 +286,7 @@ const REGISTRY: &[Preset] = &[
         aspect: "3:4",
         images: 2,
         views: &[],
+        image_constraints: None,
     },
     Preset {
         id: "prop_orthographic",
@@ -222,7 +306,12 @@ const REGISTRY: &[Preset] = &[
         // Three separate generations rather than one image divided in three: a
         // single frame asked for three elevations reliably comes back with three
         // subtly different objects.
-        views: &["front", "side", "top"],
+        views: &[
+            view("front", "front orthographic elevation"),
+            view("side", "side orthographic elevation"),
+            view("top", "top orthographic elevation"),
+        ],
+        image_constraints: None,
     },
     Preset {
         id: "material_study",
@@ -244,6 +333,7 @@ const REGISTRY: &[Preset] = &[
         aspect: "1:1",
         images: 6,
         views: &[],
+        image_constraints: None,
     },
     Preset {
         id: "environment_matte",
@@ -260,6 +350,7 @@ const REGISTRY: &[Preset] = &[
         aspect: "21:9",
         images: 3,
         views: &[],
+        image_constraints: None,
     },
     Preset {
         id: "interior",
@@ -280,6 +371,7 @@ const REGISTRY: &[Preset] = &[
         aspect: "16:9",
         images: 3,
         views: &[],
+        image_constraints: None,
     },
 ];
 
@@ -323,6 +415,7 @@ mod tests {
         // A `const` because `&[priority(..)]` only reaches `'static` in a const
         // context — the same reason `REGISTRY` is one.
         const PRIORITIES: &[SectionPriority] = &[priority("silhouette", 3.0)];
+        const VIEWS: &[PresetView] = &[view("front", "front view"), view("back", "back view")];
         let ninth = Preset {
             id: "silhouette_study",
             label: "Silhouette study",
@@ -332,7 +425,8 @@ mod tests {
             framing: "black shape on white ground",
             aspect: "1:1",
             images: 2,
-            views: &["front", "back"],
+            views: VIEWS,
+            image_constraints: None,
         };
 
         assert!(preset(ninth.id).is_none(), "the point is that it is not registered");
@@ -463,9 +557,47 @@ mod tests {
             assert!(p.locks_seed(), "{} is views of one object", p.id);
             let mut seen = std::collections::HashSet::new();
             for view in p.views {
-                assert!(seen.insert(view), "{} names view `{view}` twice", p.id);
+                assert!(
+                    seen.insert(view.view_type),
+                    "{} names view `{}` twice",
+                    p.id,
+                    view.view_type,
+                );
+                assert!(!view.framing.trim().is_empty(), "{} has an unframed view", p.id);
             }
         }
+    }
+
+    #[test]
+    fn turnaround_plans_exactly_eight_tagged_generations_with_one_seed() {
+        let turnaround = preset("turnaround").unwrap();
+        let planned = turnaround.generations(0xffff_ffff_ffff_fffe);
+        let tags: Vec<&str> =
+            planned.iter().map(|generation| generation.view.unwrap().view_type).collect();
+        assert_eq!(
+            tags,
+            ["front", "left", "right", "back", "top", "bottom", "left_front", "right_front"],
+        );
+        assert!(planned.iter().all(|generation| generation.seed == 0xffff_ffff_ffff_fffe));
+        assert_eq!(planned.len(), 8);
+
+        let variations = preset("character_sheet").unwrap().generations(u64::MAX);
+        assert_eq!(variations.iter().map(|g| g.seed).collect::<Vec<_>>(), [u64::MAX, 0, 1, 2]);
+        assert!(variations.iter().all(|generation| generation.view.is_none()));
+    }
+
+    #[test]
+    fn turnaround_inherits_the_mesh_input_envelope() {
+        let turnaround = preset("turnaround").unwrap();
+        assert_eq!(turnaround.image_constraints, Some(TURNAROUND_IMAGE_CONSTRAINTS));
+        let constraints = turnaround.image_constraints.unwrap();
+        assert_eq!(constraints.mime_types, ["image/jpeg", "image/png"]);
+        assert_eq!((constraints.min_side, constraints.max_side), (128, 5000));
+        assert_eq!(constraints.max_batch_bytes, 6 * 1024 * 1024);
+        assert!(turnaround.framing.contains("plain background"));
+        assert!(turnaround.framing.contains("no text"));
+        assert!(turnaround.framing.contains("single subject"));
+        assert!(turnaround.framing.contains("more than half"));
     }
 
     #[test]

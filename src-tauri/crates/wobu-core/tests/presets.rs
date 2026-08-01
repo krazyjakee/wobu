@@ -106,6 +106,7 @@ fn presets_cross_the_bridge_as_camel_case_json() {
             "defaultFor",
             "framing",
             "id",
+            "imageConstraints",
             "images",
             "kinds",
             "label",
@@ -114,6 +115,14 @@ fn presets_cross_the_bridge_as_camel_case_json() {
         ]
     );
     assert_eq!(value["kinds"], serde_json::json!(["prop", "vehicle"]));
-    assert_eq!(value["views"], serde_json::json!(["front", "side", "top"]));
+    assert_eq!(
+        value["views"],
+        serde_json::json!([
+            {"viewType": "front", "framing": "front orthographic elevation"},
+            {"viewType": "side", "framing": "side orthographic elevation"},
+            {"viewType": "top", "framing": "top orthographic elevation"},
+        ])
+    );
+    assert_eq!(value["imageConstraints"], serde_json::Value::Null);
     assert_eq!(value["priorities"][0], serde_json::json!({"section": "silhouette", "weight": 1.5}));
 }

@@ -176,7 +176,7 @@ mod world;
 pub use budget::{Budget, Chars, CompiledPrompt, DropReason, Dropped};
 pub use capability::{ImageBudget, ModelRefs, RefBucket, Refs, image_budget, model_refs_registry};
 pub use compile::compile;
-pub use extract::fragments;
+pub use extract::{fragments, fragments_for_view};
 pub use fragment::{Fragment, FragmentBody, Sliders, section_target};
 pub use images::{Bucket, CompiledImages, compile_images};
 pub use resolve::resolve;

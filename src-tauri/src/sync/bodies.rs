@@ -366,6 +366,21 @@ fn finish(send: &mut SendStream) -> CommandResult<()> {
     send.finish().map_err(|e| transport(&e.to_string()))
 }
 
+/// Write only the first half of one pushed node, then sever the connection.
+/// #85 uses this fault injector to prove a body is not visible to `apply` until
+/// its complete line and the batch's `Sent` marker have both arrived.
+#[cfg(test)]
+pub(super) async fn cut_push(connection: &Connection, node: &Outgoing) -> CommandResult<()> {
+    let (mut send, _recv) = open(connection).await?;
+    let line = serde_json::to_vec(&Ask::Give { node: Box::new(node.clone()) })
+        .expect("an outgoing node always serialises");
+    let cut = line.len() / 2;
+    within(async { send.write_all(&line[..cut]).await.map_err(|e| transport(&e.to_string())) })
+        .await?;
+    connection.close(iroh::endpoint::VarInt::from_u32(99), b"test cut mid-body");
+    Ok(())
+}
+
 /// Newline-delimited messages off a stream a stranger is writing.
 struct Lines<'a> {
     recv: &'a mut RecvStream,

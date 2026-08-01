@@ -45,6 +45,7 @@ const stack: InfluenceStack = {
     aspect: '1:1',
     images: 1,
     views: [],
+    imageConstraints: null,
   },
   layers: [
     card({ layer: 'style', nodeId: 'style', name: 'Ashfall style', kind: 'style_guide' }),

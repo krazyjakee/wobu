@@ -51,7 +51,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Asset, AssetKind, Id};
+use wobu_core::{Asset, AssetKind, Id, TURNAROUND_IMAGE_CONSTRAINTS};
 
 use crate::atomic;
 use crate::error::{Error, Result};
@@ -67,19 +67,16 @@ const HASH_LEN: usize = 64;
 
 /// The shortest side Hunyuan3D accepts, from the input-constraints table in
 /// `docs/08-providers.md`.
-pub const MESH_MIN_SIDE: u32 = 128;
+pub const MESH_MIN_SIDE: u32 = TURNAROUND_IMAGE_CONSTRAINTS.min_side;
 
 /// The longest side it accepts, from the same table.
-pub const MESH_MAX_SIDE: u32 = 5000;
+pub const MESH_MAX_SIDE: u32 = TURNAROUND_IMAGE_CONSTRAINTS.max_side;
 
 /// The ceiling on what can be sent as base64, from the same table: 6 MB before
 /// encoding, and the *whole multi-view sheet* has to fit in it. A single image
 /// over the limit therefore cannot be part of any sheet at all, which is what
 /// makes this worth saying at import rather than at submit.
-pub const MESH_MAX_BYTES: u64 = 6 * 1024 * 1024;
-
-/// The two formats Hunyuan3D's multi-view input takes, per `docs/08-providers.md`.
-const MESH_MIME_TYPES: [&str; 2] = ["image/png", "image/jpeg"];
+pub const MESH_MAX_BYTES: u64 = TURNAROUND_IMAGE_CONSTRAINTS.max_batch_bytes as u64;
 
 /// Something a later stage will object to about an image Wobu has accepted.
 ///
@@ -144,7 +141,7 @@ impl ImportWarning {
 /// `docs/08-providers.md`.
 pub fn mesh_warnings(info: &image::ImageInfo, bytes: u64) -> Vec<ImportWarning> {
     let mut out = Vec::new();
-    if !MESH_MIME_TYPES.contains(&info.mime) {
+    if !TURNAROUND_IMAGE_CONSTRAINTS.mime_types.contains(&info.mime) {
         out.push(ImportWarning::MeshFormat);
     }
     if info.width.min(info.height) < MESH_MIN_SIDE {

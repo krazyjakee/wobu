@@ -90,13 +90,19 @@ backend names ([08](08-providers.md)):
 front · left · right · back · top · bottom · left_front · right_front
 ```
 
-Each view is one generation with a locked seed and a framing fragment appended, tagged with
-its `view_type` so the mesh adapter can hand them straight to `MultiViewImages` with no
-intermediate mapping step. The preset also inherits the backend's input constraints — PNG/JPEG
-only, min side ≥128, and a combined payload under 6 MB pre-encode — so a turnaround can never
-be generated in a form the 3D stage would reject.
+Each view is a first-class `{ view_type, framing }` entry and one generation. `Preset::generations`
+tags every entry and assigns the same caller-chosen seed to all eight; extraction appends that
+entry's camera framing as a second Shot fragment. The mesh adapter can therefore hand the tags
+straight to `MultiViewImages` with no application-side renaming step.
 
-Tencent's input guidance (plain background, single object, subject filling >50% of frame) is
+The preset also inherits the backend's input constraints — PNG/JPEG only, every side from 128 to
+5000 pixels, and a combined payload under 6 MB pre-encode. A completed batch must pass through
+the validated `Turnaround` type before it can become a turnaround mesh request. That constructor
+sniffs the actual bytes and dimensions, checks the MIME label, requires the eight provider tags
+once each in emission order, and measures the combined raw payload, so declaring these bounds is
+not merely advisory.
+
+Tencent's input guidance (plain background, no text, single object, subject filling >50% of frame) is
 baked into the preset's framing fragments for the same reason.
 
 ## The Enhance pipeline

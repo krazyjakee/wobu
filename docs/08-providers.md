@@ -495,8 +495,9 @@ cap or we'll generate our own rate-limit errors.
 
 ### Input constraints
 
-These bound what the Turnaround preset is allowed to emit, so they belong in the preset
-definition rather than being discovered at submit time:
+These bound what the Turnaround preset is allowed to emit, so they live in its
+`image_constraints` and are enforced again by the validated `Turnaround` batch constructor and
+the wire adapter rather than being discovered at submit time:
 
 | | |
 | --- | --- |
@@ -509,6 +510,13 @@ definition rather than being discovered at submit time:
 
 Tencent's own input guidance — plain background, no text, single object, subject filling >50%
 of frame — is precisely what our Turnaround preset should be tuned to produce anyway.
+
+`Turnaround::new` accepts only the eight `View::ALL` tags in preset order, one each. It reads the
+real MIME and dimensions from each header rather than trusting metadata, rejects a mismatched
+label, and sums the unencoded bytes across the batch. `MeshRequest::from_turnaround` takes that
+validated value, so the named preset path cannot construct a request the 3D stage would reject;
+the lower-level single/partial-view path remains available for Hunyuan's ordinary image-to-mesh
+mode and receives the same per-image wire checks.
 
 ### BYOK is genuinely harder here, and users must be told
 

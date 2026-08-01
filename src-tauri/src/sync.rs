@@ -69,6 +69,9 @@ pub mod manager;
 pub mod round;
 pub mod shares;
 
+#[cfg(test)]
+mod integration;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -146,8 +149,13 @@ impl SyncState {
         let slot = Arc::clone(&self.manager);
         let wake: Arc<dyn Wake> = Arc::new(Window { app: app.clone(), state: state.handle() });
         tauri::async_runtime::spawn(async move {
-            let setup =
-                Setup { identity, reach: Reach::Internet, shares: Shares::load(), poll: true };
+            let setup = Setup {
+                identity,
+                reach: Reach::Internet,
+                shares: Shares::load(),
+                poll: true,
+                index_dir: None,
+            };
             match SyncManager::start(state, wake, setup).await {
                 Ok(manager) => {
                     diag::info(format!(
@@ -431,6 +439,7 @@ pub mod tests {
                 // reaching for a ticket nobody minted is a task to shut down for
                 // no reason and noise in the log.
                 poll: false,
+                index_dir: Some(dir.join("index")),
             },
         )
         .await

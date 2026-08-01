@@ -74,9 +74,11 @@ use std::fmt;
 use std::ops::RangeInclusive;
 
 use async_trait::async_trait;
+use wobu_core::TURNAROUND_IMAGE_CONSTRAINTS;
 use wobu_llm::Cancel;
 
 use crate::backend::ProgressSink;
+use crate::dimensions;
 use crate::error::{Error, Result};
 
 /// One of the eight camera positions Hunyuan3D 3.1 reconstructs from.
@@ -160,6 +162,100 @@ impl MeshView {
     pub fn new(view: View, bytes: Vec<u8>, mime: impl Into<String>) -> MeshView {
         MeshView { view, bytes, mime: mime.into() }
     }
+}
+
+/// A complete, provider-ready Turnaround batch.
+///
+/// The preset tells an image scheduler what to produce; this type proves the
+/// eight results actually satisfy the downstream contract before a mesh request
+/// can call them a turnaround.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Turnaround {
+    views: Vec<MeshView>,
+}
+
+impl Turnaround {
+    pub fn new(views: Vec<MeshView>) -> Result<Turnaround> {
+        if views.len() != View::ALL.len() {
+            return Err(Error::Unsupported {
+                detail: format!(
+                    "a Turnaround requires exactly {} views and this batch has {}",
+                    View::ALL.len(),
+                    views.len(),
+                ),
+            });
+        }
+        for (position, (view, expected)) in views.iter().zip(View::ALL).enumerate() {
+            if view.view != expected {
+                return Err(Error::Unsupported {
+                    detail: format!(
+                        "Turnaround view {} must be tagged `{expected}` and is tagged `{}`",
+                        position + 1,
+                        view.view,
+                    ),
+                });
+            }
+            validate_turnaround_image(view)?;
+        }
+        let bytes: usize = views.iter().map(|view| view.bytes.len()).sum();
+        if bytes > TURNAROUND_IMAGE_CONSTRAINTS.max_batch_bytes {
+            return Err(Error::Unsupported {
+                detail: format!(
+                    "the Turnaround is {:.1} MB before encoding and must fit in {} MB",
+                    bytes as f64 / (1024.0 * 1024.0),
+                    TURNAROUND_IMAGE_CONSTRAINTS.max_batch_bytes / (1024 * 1024),
+                ),
+            });
+        }
+        Ok(Turnaround { views })
+    }
+
+    pub fn views(&self) -> &[MeshView] {
+        &self.views
+    }
+
+    fn into_views(self) -> Vec<MeshView> {
+        self.views
+    }
+}
+
+fn validate_turnaround_image(view: &MeshView) -> Result<()> {
+    let Some((width, height)) = dimensions::read(&view.bytes) else {
+        return Err(Error::Unsupported {
+            detail: format!("the `{}` Turnaround view is not a recognised image", view.view),
+        });
+    };
+    let actual_mime = dimensions::mime(&view.bytes);
+    if !view.mime.eq_ignore_ascii_case(actual_mime) {
+        return Err(Error::Unsupported {
+            detail: format!(
+                "the `{}` Turnaround view is labelled {} but its bytes are {actual_mime}",
+                view.view, view.mime,
+            ),
+        });
+    }
+    if !TURNAROUND_IMAGE_CONSTRAINTS.mime_types.contains(&actual_mime) {
+        return Err(Error::Unsupported {
+            detail: format!(
+                "the `{}` Turnaround view is {actual_mime}; only JPEG and PNG are accepted",
+                view.view,
+            ),
+        });
+    }
+    if width.min(height) < TURNAROUND_IMAGE_CONSTRAINTS.min_side
+        || width.max(height) > TURNAROUND_IMAGE_CONSTRAINTS.max_side
+    {
+        return Err(Error::Unsupported {
+            detail: format!(
+                "the `{}` Turnaround view is {width}×{height}; every side must be between {} and \
+                 {} pixels",
+                view.view,
+                TURNAROUND_IMAGE_CONSTRAINTS.min_side,
+                TURNAROUND_IMAGE_CONSTRAINTS.max_side,
+            ),
+        });
+    }
+    Ok(())
 }
 
 /// What the mesh is reconstructed from — and never both.
@@ -251,6 +347,12 @@ impl MeshRequest {
     /// Image-to-mesh, which is the path the Turnaround preset feeds.
     pub fn from_views(model: impl Into<String>, views: Vec<MeshView>) -> MeshRequest {
         MeshRequest::new(model, MeshInput::Views(views))
+    }
+
+    /// A complete eight-view Turnaround. Construction of [`Turnaround`] has
+    /// already proved its tags, formats, dimensions and raw payload.
+    pub fn from_turnaround(model: impl Into<String>, turnaround: Turnaround) -> MeshRequest {
+        MeshRequest::from_views(model, turnaround.into_views())
     }
 
     /// Text-to-mesh. Mutually exclusive with views by construction.
@@ -566,6 +668,32 @@ pub trait MeshBackend: Send + Sync {
 mod tests {
     use super::*;
 
+    fn png(view: View, width: u32, height: u32) -> MeshView {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.extend_from_slice(&13u32.to_be_bytes());
+        bytes.extend_from_slice(b"IHDR");
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+        MeshView::new(view, bytes, "image/png")
+    }
+
+    fn turnaround() -> Vec<MeshView> {
+        View::ALL.into_iter().map(|view| png(view, 1024, 1024)).collect()
+    }
+
+    fn webp(view: View, width: u32, height: u32) -> MeshView {
+        let mut bytes = vec![0u8; 30];
+        bytes[0..4].copy_from_slice(b"RIFF");
+        bytes[8..12].copy_from_slice(b"WEBP");
+        bytes[12..16].copy_from_slice(b"VP8X");
+        let width = width - 1;
+        let height = height - 1;
+        bytes[24..27].copy_from_slice(&width.to_le_bytes()[..3]);
+        bytes[27..30].copy_from_slice(&height.to_le_bytes()[..3]);
+        MeshView::new(view, bytes, "image/webp")
+    }
+
     #[test]
     fn the_view_names_are_the_ones_the_turnaround_preset_emits() {
         // `wobu_core::preset` spells these so "the mesh adapter can pass them
@@ -574,7 +702,8 @@ mod tests {
         // worse and nothing reports an error.
         let turnaround = wobu_core::preset("turnaround").expect("the Turnaround preset exists");
         let ours: Vec<&str> = View::ALL.iter().map(|view| view.as_str()).collect();
-        assert_eq!(ours, turnaround.views, "same names, same order");
+        let preset: Vec<&str> = turnaround.views.iter().map(|view| view.view_type).collect();
+        assert_eq!(ours, preset, "same names, same order");
         assert_eq!(ours.len(), 8);
     }
 
@@ -586,6 +715,52 @@ mod tests {
         assert_eq!(View::parse("left_front"), Some(View::LeftFront));
         assert_eq!(View::parse("three_quarter"), None);
         assert_eq!(View::parse("Front"), None, "the wire spelling is lowercase");
+    }
+
+    #[test]
+    fn only_a_complete_ordered_validated_batch_becomes_a_turnaround() {
+        let valid = Turnaround::new(turnaround()).unwrap();
+        assert_eq!(valid.views().len(), 8);
+        assert_eq!(MeshRequest::from_turnaround("3.1", valid).views().len(), 8);
+
+        let mut duplicate = turnaround();
+        duplicate[2].view = View::Left;
+        let error = Turnaround::new(duplicate).unwrap_err().to_string();
+        assert!(error.contains("must be tagged `right`"), "{error}");
+
+        let error =
+            Turnaround::new(turnaround().into_iter().take(7).collect()).unwrap_err().to_string();
+        assert!(error.contains("exactly 8"), "{error}");
+    }
+
+    #[test]
+    fn turnaround_validation_checks_bytes_format_dimensions_and_combined_payload() {
+        let mut too_small = turnaround();
+        too_small[0] = png(View::Front, 127, 1024);
+        assert!(Turnaround::new(too_small).unwrap_err().to_string().contains("127×1024"));
+
+        let mut too_large = turnaround();
+        too_large[0] = png(View::Front, 5001, 1024);
+        assert!(Turnaround::new(too_large).unwrap_err().to_string().contains("5001×1024"));
+
+        let mut mislabeled = turnaround();
+        mislabeled[0].mime = "image/jpeg".into();
+        assert!(Turnaround::new(mislabeled).unwrap_err().to_string().contains("labelled"));
+
+        let mut wrong_format = turnaround();
+        wrong_format[0] = webp(View::Front, 1024, 1024);
+        assert!(Turnaround::new(wrong_format).unwrap_err().to_string().contains("only JPEG"));
+
+        let mut not_an_image = turnaround();
+        not_an_image[0].bytes = b"not an image".to_vec();
+        assert!(Turnaround::new(not_an_image).unwrap_err().to_string().contains("recognised"));
+
+        let mut heavy = turnaround();
+        for view in &mut heavy {
+            view.bytes.resize(1024 * 1024, 0);
+        }
+        let error = Turnaround::new(heavy).unwrap_err().to_string();
+        assert!(error.contains("8.0 MB"), "{error}");
     }
 
     #[test]

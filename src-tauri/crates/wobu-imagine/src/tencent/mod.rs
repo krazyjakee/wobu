@@ -768,7 +768,17 @@ mod tests {
     use std::time::Instant;
 
     use crate::backend::Discard;
-    use crate::mesh::{MeshView, View};
+    use crate::mesh::{MeshView, Turnaround, View};
+
+    fn png(view: View) -> MeshView {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.extend_from_slice(&13u32.to_be_bytes());
+        bytes.extend_from_slice(b"IHDR");
+        bytes.extend_from_slice(&1024u32.to_be_bytes());
+        bytes.extend_from_slice(&1024u32.to_be_bytes());
+        bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+        MeshView::new(view, bytes, "image/png")
+    }
 
     fn block_on<F: Future>(future: F) -> F::Output {
         struct Unparker(std::thread::Thread);
@@ -1200,11 +1210,8 @@ mod tests {
         // feature is multi-view input and the Turnaround preset is a multi-view
         // generator. If the default model ever stopped accepting eight views this
         // is the pairing that would break, silently, into a worse mesh.
-        let views: Vec<MeshView> = View::ALL
-            .into_iter()
-            .map(|view| MeshView::new(view, vec![0x89, b'P', b'N', b'G'], "image/png"))
-            .collect();
-        let request = MeshRequest::from_views(DEFAULT_MODEL, views);
+        let turnaround = Turnaround::new(View::ALL.into_iter().map(png).collect()).unwrap();
+        let request = MeshRequest::from_turnaround(DEFAULT_MODEL, turnaround);
         let caps = backend().capabilities(&request.model);
         assert_eq!(caps.max_views, 8);
         assert!(wire::submit_body(&request, &caps).is_ok());

@@ -309,6 +309,19 @@ async fn answer(
     }
 }
 
+/// Drive the production receiving half until a deliberately broken peer makes
+/// it fail. #85 uses this wrapper so the cut-transfer test exercises the exact
+/// `answer`/`apply_from_peer` path without exposing private counters.
+#[cfg(test)]
+pub(super) async fn answer_until_cut(
+    manager: &SyncManager,
+    replica: &Replica,
+    peer: &str,
+    connection: &iroh::endpoint::Connection,
+) -> CommandResult<()> {
+    answer(manager, replica, peer, connection).await.map(|_| ())
+}
+
 /// The round was told to stop.
 ///
 /// Returned rather than broken out of, and that is the whole of it: `try_join!`

@@ -108,3 +108,9 @@ wobu-jobs = { workspace = true }
 wobu-llm = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
+
+[dev-dependencies]
+# #85 deliberately drops one simulated peer's sync-state table between rounds.
+# Match wobu-store's exact SQLite binding so the workspace still links one
+# bundled SQLite and the test opens the same on-disk format as the app.
+rusqlite = { version = "0.40.1", features = ["bundled"] }

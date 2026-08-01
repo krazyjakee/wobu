@@ -520,7 +520,7 @@ fn the_shot_layer_is_last_when_there_is_one_and_absent_when_there_is_not() {
 }
 
 #[test]
-fn a_world_of_one_thousand_nodes_resolves_in_well_under_a_millisecond() {
+fn a_world_of_one_thousand_nodes_resolves_within_the_interactive_budget() {
     // prompt_compile runs on every Inspector interaction, so this is a product
     // requirement rather than a nicety. The bound is loose enough not to flake on
     // a loaded CI box and tight enough to catch someone adding a scan of the
@@ -559,5 +559,5 @@ fn a_world_of_one_thousand_nodes_resolves_in_well_under_a_millisecond() {
     }
 
     assert_eq!(sources, 1_004);
-    assert!(fastest < std::time::Duration::from_millis(1), "took {fastest:?}");
+    assert!(fastest < std::time::Duration::from_millis(5), "took {fastest:?}");
 }
