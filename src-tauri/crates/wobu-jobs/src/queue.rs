@@ -48,7 +48,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tokio::runtime::Handle;
@@ -143,6 +143,8 @@ struct Record {
     label: String,
     state: JobState,
     attempt: u32,
+    started_at: Option<Instant>,
+    elapsed_ms: u64,
     cancel: Cancel,
 }
 
@@ -205,6 +207,8 @@ impl Queue {
                     label: task.label(),
                     state: JobState::Queued,
                     attempt: 0,
+                    started_at: None,
+                    elapsed_ms: 0,
                     cancel: cancel.clone(),
                 },
             );
@@ -308,6 +312,12 @@ impl Inner {
             let terminal = state.is_terminal();
             match registry.jobs.get_mut(&id) {
                 Some(record) => {
+                    if matches!(&state, JobState::Running) && record.started_at.is_none() {
+                        record.started_at = Some(Instant::now());
+                    }
+                    if terminal {
+                        record.elapsed_ms = elapsed_ms(record.started_at);
+                    }
                     record.state = state;
                     if let Some(attempt) = attempt {
                         record.attempt = attempt;
@@ -412,6 +422,11 @@ impl Registry {
                     label: record.label.clone(),
                     state: record.state.clone(),
                     attempt: record.attempt,
+                    elapsed_ms: if record.state.is_terminal() {
+                        record.elapsed_ms
+                    } else {
+                        elapsed_ms(record.started_at)
+                    },
                 }
             })
             .collect();
@@ -437,6 +452,12 @@ impl Registry {
             finished -= 1;
         }
     }
+}
+
+fn elapsed_ms(started_at: Option<Instant>) -> u64 {
+    started_at
+        .map(|started| started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
 }
 
 /// One job, start to finish, including every attempt it makes.

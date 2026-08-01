@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DescriptionState, KindDef, SectionValue, WobuNode } from '../../lib/api'
+import type { DescriptionState, KindDef, WobuNode } from '../../lib/api'
 import { saveLabel, type useAutosaveNode } from '../../hooks/useAutosaveNode'
 import { AttributesEditor } from './AttributesEditor'
+import { DescriptionEditor } from './DescriptionEditor'
 
 const STATE_LABEL: Record<DescriptionState, string> = {
   none: 'not generated',
@@ -22,6 +23,18 @@ export function NotesPane({
   readOnly: boolean
   autosave: ReturnType<typeof useAutosaveNode>
 }) {
+  const [descriptionEditedLocally, setDescriptionEditedLocally] = useState(false)
+  const shownDescriptionState = descriptionEditedLocally ? 'edited' : node.descriptionState
+
+  useEffect(() => {
+    setDescriptionEditedLocally(false)
+  }, [node.id])
+  useEffect(() => {
+    if (node.descriptionState === 'enhancing' || node.descriptionState === 'fresh') {
+      setDescriptionEditedLocally(false)
+    }
+  }, [node.descriptionState])
+
   return (
     <div className="split">
       <div className="col">
@@ -42,10 +55,17 @@ export function NotesPane({
       <div className="col col-ai">
         <div className="col-head">
           <h2>Enhanced description</h2>
-          <span className="col-tag col-tag-ai">{STATE_LABEL[node.descriptionState]}</span>
+          <span className="col-tag col-tag-ai">machine side</span>
+          <span className="col-tag">{STATE_LABEL[shownDescriptionState]}</span>
         </div>
         <div className="desc">
-          <Description node={node} def={def} />
+          <Description
+            node={node}
+            def={def}
+            readOnly={readOnly}
+            autosave={autosave}
+            onEdit={() => setDescriptionEditedLocally(true)}
+          />
         </div>
       </div>
     </div>
@@ -98,7 +118,19 @@ function NotesField({
   )
 }
 
-function Description({ node, def }: { node: WobuNode; def: KindDef | undefined }) {
+function Description({
+  node,
+  def,
+  readOnly,
+  autosave,
+  onEdit,
+}: {
+  node: WobuNode
+  def: KindDef | undefined
+  readOnly: boolean
+  autosave: ReturnType<typeof useAutosaveNode>
+  onEdit: () => void
+}) {
   const sections = node.description?.sections
   if (!sections || Object.keys(sections).length === 0) {
     return (
@@ -114,36 +146,13 @@ function Description({ node, def }: { node: WobuNode; def: KindDef | undefined }
     )
   }
 
-  // Registry order first, then anything extra the file happens to carry.
-  const ordered: { key: string; label: string; value: SectionValue }[] = []
-  const seen = new Set<string>()
-  for (const s of def?.sections ?? []) {
-    const v = sections[s.key]
-    if (v) {
-      ordered.push({ key: s.key, label: s.label, value: v })
-      seen.add(s.key)
-    }
-  }
-  for (const [key, value] of Object.entries(sections)) {
-    if (!seen.has(key)) ordered.push({ key, label: key.replace(/_/g, ' '), value })
-  }
-
   return (
-    <>
-      {ordered.map((s) => (
-        <section key={s.key} className={s.key === 'never' ? 'sec never' : 'sec'}>
-          <h3>{s.label}</h3>
-          {s.value.type === 'list' ? (
-            <ul>
-              {s.value.value.map((item, i) => (
-                <li key={`${s.key}-${i}`}>{item}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>{s.value.value}</p>
-          )}
-        </section>
-      ))}
-    </>
+    <DescriptionEditor
+      node={node}
+      definitions={def?.sections ?? []}
+      readOnly={readOnly}
+      autosave={autosave}
+      onEdit={onEdit}
+    />
   )
 }

@@ -1,4 +1,6 @@
 import type { Mode } from '../store/ui'
+import type { QueueSnapshot } from '../lib/api'
+import { elapsedText } from '../lib/jobs'
 import { useUI } from '../store/ui'
 import { Icon } from './Icon'
 
@@ -32,9 +34,16 @@ const COPY: Record<
   },
 }
 
-export function MilestoneMode({ mode }: { mode: Exclude<Mode, 'library'> | Mode }) {
+export function MilestoneMode({
+  mode,
+  queue,
+}: {
+  mode: Exclude<Mode, 'library'> | Mode
+  queue: QueueSnapshot
+}) {
   const setMode = useUI((s) => s.setMode)
   if (mode === 'library') return null
+  if (mode === 'forge') return <QueueView queue={queue} onBack={() => setMode('library')} />
   const c = COPY[mode]
   return (
     <div className="mode-empty">
@@ -47,6 +56,35 @@ export function MilestoneMode({ mode }: { mode: Exclude<Mode, 'library'> | Mode 
           <Icon name="library" size="sm" />
           Back to Library
         </button>
+      </div>
+    </div>
+  )
+}
+
+function QueueView({ queue, onBack }: { queue: QueueSnapshot; onBack: () => void }) {
+  return (
+    <div className="mode-empty queue-view">
+      <div className="queue-panel">
+        <div className="queue-head">
+          <div>
+            <h3>Job queue</h3>
+            <p>Live backend work and the recent outcomes retained by Wobu.</p>
+          </div>
+          <button className="btn" onClick={onBack}>Back to Library</button>
+        </div>
+        {queue.jobs.length === 0 ? (
+          <p className="queue-empty">Queue 0 · no recent jobs</p>
+        ) : (
+          <ol className="queue-jobs">
+            {queue.jobs.map((job) => (
+              <li key={job.id}>
+                <span>{job.label}</span>
+                <code>{job.state}</code>
+                <span>{job.elapsedMs > 0 ? elapsedText(job.elapsedMs) : 'not started'}</span>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import { useUI, EDITOR_TABS, type EditorTab } from '../../store/ui'
 import { Icon } from '../Icon'
 import { modKey } from '../TitleBar'
 import { NotesPane } from './NotesPane'
+import { RelationsPane } from './RelationsPane'
 import { TabEmpty } from './TabEmpty'
 import { useAutosaveNode, saveLabel } from '../../hooks/useAutosaveNode'
 
@@ -204,11 +205,12 @@ export function Editor({
               />
             )}
             {tab === 'relations' && (
-              <TabEmpty
-                icon="link"
-                title="Relations"
-                milestone="M5 — Influence Engine + first images"
-                body="Outgoing links and backlinks — “3 characters inherit from this”. Link editing lands with the engine that walks them."
+              <RelationsPane
+                node={node}
+                def={def}
+                kinds={kinds}
+                readOnly={readOnly}
+                onJump={onJump}
               />
             )}
           </div>

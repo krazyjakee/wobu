@@ -6,10 +6,12 @@ import {
   useConflicts,
   useCorruptFiles,
   useKinds,
+  useJobQueue,
   useNodes,
   usePresence,
   useProjectSync,
   useReportEditing,
+  useStatusBarBackend,
 } from '../lib/queries'
 import { indexKinds } from '../lib/kinds'
 import { PRESENCE_BANNER, editingText, editorsByNode, editorsOf, openedText } from '../lib/presence'
@@ -41,6 +43,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const conflictsQ = useConflicts(true)
   const { peers, ready: presenceReady } = usePresence(true)
   const sync = useProjectSync(project.id)
+  const backend = useStatusBarBackend(project.id).data ?? null
+  const queue = useJobQueue()
 
   const mode = useUI((s) => s.mode)
   const navWidth = useUI((s) => s.navWidth)
@@ -329,7 +333,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
         ) : mode === 'settings' ? (
           <Settings />
         ) : (
-          <MilestoneMode mode={mode} />
+          <MilestoneMode mode={mode} queue={queue} />
         )}
       </div>
 
@@ -339,6 +343,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
         loading={nodesQ.isPending}
         peers={peers}
         sync={sync}
+        backend={backend}
+        queue={queue}
       />
 
       <CommandPalette

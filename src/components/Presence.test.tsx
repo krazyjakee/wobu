@@ -56,6 +56,8 @@ function backend(cmd: string): unknown {
       return kaelNode
     case 'presence_peers':
       return present
+    case 'job_list':
+      return { jobs: [], queued: 0, running: 0, retrying: 0 }
     case 'corrupt_files':
     case 'conflicts':
       return []

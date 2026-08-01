@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use wobu_core::asset::AssetRef;
 use wobu_core::{
     Asset, AssetKind, AssetRole, Description, DescriptionState, EnhanceStamp, Generation, Id, Node,
-    NodeKind, NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def, kind_registry,
+    Link, LinkEdge, LinkRole, NodeKind, NodeSummary, SCHEMA_VERSION, SourceStamp, kind_def,
+    kind_registry,
 };
 
 use crate::apply;
@@ -553,6 +554,111 @@ impl Project {
                 Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
             }
         }
+    }
+
+    // ── node links ───────────────────────────────────────────────────────
+
+    /// Add an explicit influence edge, or replace the same `(target, role)`.
+    ///
+    /// The registry is checked here as well as in the picker. A webview can be
+    /// stale after an app update, and an edge the current kind does not declare
+    /// would otherwise be writable but impossible to add again after removal.
+    pub fn add_node_link(
+        &mut self,
+        node_id: Id,
+        to_id: Id,
+        role: LinkRole,
+        weight: Option<f32>,
+        enabled: Option<bool>,
+    ) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        if self.index.node(to_id)?.is_none() {
+            return Err(Error::NoSuchNode(to_id.to_string()));
+        }
+
+        let mut node = self.get_node(node_id)?;
+        self.require_link_role(&node, role)?;
+        let mut link = Link::new(to_id, role);
+        if let Some(weight) = weight {
+            link.weight = weight;
+        }
+        if let Some(enabled) = enabled {
+            link.enabled = enabled;
+        }
+        let link = link.clamped();
+
+        match node.links.iter_mut().find(|item| item.to_id == to_id && item.role == role) {
+            Some(existing) => *existing = link,
+            None => node.links.push(link),
+        }
+        self.save_node(node)
+    }
+
+    /// Remove exactly one explicit edge. `parent_id` is deliberately not
+    /// reachable here: it is an implicit relationship edited by `move_node`.
+    pub fn remove_node_link(
+        &mut self,
+        node_id: Id,
+        to_id: Id,
+        role: LinkRole,
+    ) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        let mut node = self.get_node(node_id)?;
+        let before = node.links.len();
+        node.links.retain(|item| item.to_id != to_id || item.role != role);
+        if node.links.len() == before {
+            return Err(Error::NoSuchNodeLink {
+                target: to_id.to_string(),
+                role: role.as_str().to_string(),
+            });
+        }
+        self.save_node(node)
+    }
+
+    /// Re-weight or mute one explicit edge without replacing its other state.
+    pub fn update_node_link(
+        &mut self,
+        node_id: Id,
+        to_id: Id,
+        role: LinkRole,
+        weight: Option<f32>,
+        enabled: Option<bool>,
+    ) -> Result<SaveOutcome> {
+        self.ensure_writable()?;
+        let mut node = self.get_node(node_id)?;
+        let Some(link) =
+            node.links.iter_mut().find(|item| item.to_id == to_id && item.role == role)
+        else {
+            return Err(Error::NoSuchNodeLink {
+                target: to_id.to_string(),
+                role: role.as_str().to_string(),
+            });
+        };
+        if let Some(weight) = weight {
+            link.weight = weight.clamp(0.0, 1.0);
+        }
+        if let Some(enabled) = enabled {
+            link.enabled = enabled;
+        }
+        self.save_node(node)
+    }
+
+    /// Everything explicitly pointing at this node, from the local index.
+    pub fn node_backlinks(&self, id: Id) -> Result<Vec<LinkEdge>> {
+        if self.index.node(id)?.is_none() {
+            return Err(Error::NoSuchNode(id.to_string()));
+        }
+        self.index.backlinks(id)
+    }
+
+    fn require_link_role(&self, node: &Node, role: LinkRole) -> Result<()> {
+        if !kind_def(node.kind).default_link_roles.contains(&role) {
+            return Err(Error::InvalidNodeLinkRole {
+                kind: node.kind.as_str().to_string(),
+                role: role.as_str().to_string(),
+            });
+        }
+        Ok(())
     }
 
     /// Delete a node, promoting any children to its parent and stripping the
@@ -1876,6 +1982,78 @@ mod tests {
         let survivor = project.get_node(city.id).unwrap();
         assert_eq!(survivor.parent_id, None, "the city must not vanish with the region");
         assert!(project.get_node(region.id).is_err());
+    }
+
+    #[test]
+    fn explicit_node_links_add_update_remove_and_answer_backlinks() {
+        let (_dir, mut project) = new_project();
+        let guild = project.create_node(NodeKind::Culture, "Ember Guild", None).unwrap();
+        let kael = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+
+        let SaveOutcome::Saved(saved) = project
+            .add_node_link(
+                kael.id,
+                guild.id,
+                wobu_core::LinkRole::MemberOf,
+                Some(2.0),
+                Some(false),
+            )
+            .unwrap()
+        else {
+            panic!("expected a clean add")
+        };
+        assert_eq!(saved.links.len(), 1);
+        assert_eq!(saved.links[0].weight, 1.0, "command weights are clamped");
+        assert!(!saved.links[0].enabled);
+        let incoming = project.node_backlinks(guild.id).unwrap();
+        assert_eq!(incoming.len(), 1);
+        assert_eq!(incoming[0].from_id, kael.id);
+
+        let SaveOutcome::Saved(saved) = project
+            .update_node_link(
+                kael.id,
+                guild.id,
+                wobu_core::LinkRole::MemberOf,
+                Some(0.4),
+                Some(true),
+            )
+            .unwrap()
+        else {
+            panic!("expected a clean update")
+        };
+        assert_eq!(saved.links[0].weight, 0.4);
+        assert!(saved.links[0].enabled);
+
+        let SaveOutcome::Saved(saved) = project
+            .remove_node_link(kael.id, guild.id, wobu_core::LinkRole::MemberOf)
+            .unwrap()
+        else {
+            panic!("expected a clean removal")
+        };
+        assert!(saved.links.is_empty());
+        assert!(project.node_backlinks(guild.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn node_link_add_obeys_the_source_kinds_registry_roles() {
+        let (_dir, mut project) = new_project();
+        let style = project
+            .list_nodes()
+            .unwrap()
+            .into_iter()
+            .find(|node| node.kind == NodeKind::StyleGuide)
+            .unwrap();
+        let kael = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+
+        let result = project.add_node_link(
+            kael.id,
+            style.id,
+            wobu_core::LinkRole::StyledBy,
+            None,
+            None,
+        );
+        assert!(matches!(result, Err(Error::InvalidNodeLinkRole { .. })));
+        assert!(project.get_node(kael.id).unwrap().links.is_empty());
     }
 
     #[test]

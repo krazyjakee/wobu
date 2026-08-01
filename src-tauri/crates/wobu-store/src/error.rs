@@ -27,6 +27,16 @@ pub enum Error {
     #[error("no node with id {0}")]
     NoSuchNode(String),
 
+    /// An update or removal named an influence edge the node no longer has.
+    #[error("no {role} link from that node to node {target}")]
+    NoSuchNodeLink { target: String, role: String },
+
+    /// The kind registry is the vocabulary for the Relations picker. Keeping
+    /// the same guard at the store boundary prevents a stale or hand-written
+    /// command from adding an edge the UI could never subsequently offer.
+    #[error("{kind} nodes do not support {role} links")]
+    InvalidNodeLinkRole { kind: String, role: String },
+
     /// A link named an asset the project does not have.
     ///
     /// Refused rather than stored, because the id in a link is derived from a

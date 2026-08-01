@@ -279,6 +279,9 @@ impl From<StoreError> for WobuError {
             StoreError::SchemaTooNew { .. } => Code::SchemaTooNew,
             StoreError::NoProjectOpen => Code::NoProjectOpen,
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
+            StoreError::NoSuchNodeLink { .. } | StoreError::InvalidNodeLinkRole { .. } => {
+                Code::Invalid
+            }
             StoreError::NoSuchAsset(_) | StoreError::NoSuchAssetLink { .. } => Code::NoSuchAsset,
             // A resolution that named something other than a conflict sibling
             // is a bug on the calling side, not a decision the user got wrong,

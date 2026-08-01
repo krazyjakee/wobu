@@ -57,6 +57,8 @@ small dot.
   - **Notes** is the centre of gravity: a two-column split, raw notes on the left,
     enhanced structured description on the right, with the **Enhance** button between them.
     Left is yours, right is the machine's — the spatial split teaches the model of the app.
+    The right side remains visibly labelled as the machine side after hand edits; its section
+    editors come from the kind registry, with swatches for palette and row editors for lists.
     Kind-specific attributes are generated from the kind registry in an initially open,
     collapsible section below Raw notes. They are human-authored Enhance inputs, so they belong
     beside notes; a permanent editor sidebar would compete with the Influence Inspector.

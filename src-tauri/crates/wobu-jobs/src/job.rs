@@ -137,6 +137,10 @@ pub struct JobSnapshot {
     pub state: JobState,
     /// Attempts started so far, from 1. Zero while queued.
     pub attempt: u32,
+    /// Milliseconds since the first attempt started. Frozen when the job
+    /// becomes terminal, so the last-generation stopwatch survives a webview
+    /// reload and does not depend on two frontend events arriving.
+    pub elapsed_ms: u64,
 }
 
 /// The whole queue in one message: what is in it, and how deep it is.
@@ -348,6 +352,7 @@ mod tests {
             label: "Enhance Vashk".into(),
             state: JobState::Retrying { in_ms: 4000, costs_money: true },
             attempt: 2,
+            elapsed_ms: 1234,
         };
         let json = serde_json::to_value(&snapshot).unwrap();
         assert_eq!(json["state"], "retrying");
@@ -355,6 +360,7 @@ mod tests {
         assert_eq!(json["inMs"], 4000);
         assert_eq!(json["kind"], "enhance");
         assert_eq!(json["attempt"], 2);
+        assert_eq!(json["elapsedMs"], 1234);
     }
 
     #[test]

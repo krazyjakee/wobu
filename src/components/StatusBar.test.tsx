@@ -1,7 +1,13 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StatusBar, relativeTime } from './StatusBar'
-import type { ProjectSummary, ProjectSyncStatus } from '../lib/api'
+import type {
+  ProjectSummary,
+  ProjectSyncStatus,
+  QueueSnapshot,
+  StatusBarBackend,
+} from '../lib/api'
+import { useUI } from '../store/ui'
 
 const project: ProjectSummary = {
   id: 'p1',
@@ -21,8 +27,24 @@ function status(over: Partial<ProjectSyncStatus> = {}): ProjectSyncStatus {
   }
 }
 
-function open(sync: ProjectSyncStatus | null) {
-  render(<StatusBar project={project} nodeCount={4} loading={false} peers={[]} sync={sync} />)
+const emptyQueue: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
+
+function open(
+  sync: ProjectSyncStatus | null,
+  backend: StatusBarBackend | null = null,
+  queue: QueueSnapshot = emptyQueue,
+) {
+  render(
+    <StatusBar
+      project={project}
+      nodeCount={4}
+      loading={false}
+      peers={[]}
+      sync={sync}
+      backend={backend}
+      queue={queue}
+    />,
+  )
 }
 
 afterEach(() => vi.useRealTimers())
@@ -80,5 +102,63 @@ describe('relative sync time', () => {
   it('does not render future clock skew as a negative duration', () => {
     expect(relativeTime(Date.parse('2026-08-01T12:01:00Z'), Date.parse('2026-08-01T12:00:00Z')))
       .toBe('just now')
+  })
+})
+
+describe('backend and queue facts', () => {
+  const backend: StatusBarBackend = {
+    image: { provider: 'comfyui', label: 'ComfyUI', model: 'flux-dev', contextTokens: null },
+    text: {
+      provider: 'anthropic',
+      label: 'Anthropic',
+      model: 'claude-sonnet-5',
+      contextTokens: 1_000_000,
+    },
+    health: { state: 'connected', externalQueue: 2 },
+  }
+
+  it('shows probed health, both active models, live depth, and the last successful generation', () => {
+    open(null, backend, {
+      queued: 1,
+      running: 1,
+      retrying: 0,
+      jobs: [
+        {
+          id: 'g1',
+          kind: 'generate',
+          label: 'Generate Kael',
+          state: 'done',
+          attempt: 1,
+          elapsedMs: 4_200,
+        },
+        {
+          id: 'e1',
+          kind: 'enhance',
+          label: 'Enhance Kael',
+          state: 'running',
+          attempt: 1,
+          elapsedMs: 900,
+        },
+      ],
+    })
+
+    expect(screen.getByText('ComfyUI connected')).toBeTruthy()
+    expect(screen.getByText('· flux-dev')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open job queue, 2 jobs' })).toBeTruthy()
+    expect(screen.getByText(/claude-sonnet-5 · 1m ctx/)).toBeTruthy()
+    expect(screen.getByText('· ⏱ 4.2s')).toBeTruthy()
+  })
+
+  it('opens the real queue view instead of a dead status label', () => {
+    useUI.setState({ mode: 'library' })
+    open(null, backend)
+    fireEvent.click(screen.getByRole('button', { name: 'Open job queue, 0 jobs' }))
+    expect(useUI.getState().mode).toBe('forge')
+  })
+
+  it('does not call a configured address connected when its probe failed', () => {
+    open(null, { ...backend, health: { state: 'unavailable', detail: 'connection refused' } })
+    expect(screen.getByText('ComfyUI unavailable')).toHaveProperty('title', 'connection refused')
+    expect(screen.queryByText('ComfyUI connected')).toBeNull()
   })
 })

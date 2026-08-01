@@ -41,6 +41,8 @@ const kaelNode: WobuNode = buildNode({ id: 'kael', name: 'Kael', notesRaw: 'an a
 
 function backend(cmd: string): unknown {
   switch (cmd) {
+    case 'job_list':
+      return { jobs: [], queued: 0, running: 0, retrying: 0 }
     case 'kind_registry':
       return kinds
     case 'node_list':

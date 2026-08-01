@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Peer, ProjectSummary, ProjectSyncStatus, SyncPeerStatus } from '../lib/api'
+import { jobDepth } from '../lib/api'
+import type {
+  Peer,
+  ProjectSummary,
+  ProjectSyncStatus,
+  QueueSnapshot,
+  StatusBarBackend,
+  SyncPeerStatus,
+} from '../lib/api'
+import { elapsedText, lastGeneration } from '../lib/jobs'
 import { sessionsText, sessionsTitle } from '../lib/presence'
 import { useUI } from '../store/ui'
 
@@ -14,20 +23,26 @@ export function StatusBar({
   loading,
   peers,
   sync,
+  backend,
+  queue,
 }: {
   project: ProjectSummary
   nodeCount: number
   loading: boolean
   peers: Peer[]
   sync: ProjectSyncStatus | null
+  backend: StatusBarBackend | null
+  queue: QueueSnapshot
 }) {
   const navCollapsed = useUI((s) => s.navCollapsed)
   const inspCollapsed = useUI((s) => s.inspCollapsed)
+  const setMode = useUI((s) => s.setMode)
   // Absent rather than "1 session" when nobody else is here. A count that never
   // changes is a count nobody reads, and the point of this one is that it moved.
   const sessions = sessionsText(peers)
   const last = useMemo(() => lastConverged(sync?.peers ?? []), [sync])
   const now = useRelativeClock(last !== null)
+  const generation = lastGeneration(queue)
 
   return (
     <footer className="status">
@@ -80,9 +95,58 @@ export function StatusBar({
         {inspCollapsed ? 'inspector hidden ]' : 'inspector ]'}
       </span>
       <span className="sep" />
-      <span>M1 · no AI backends configured</span>
+      {backend ? (
+        <>
+          <span title={healthTitle(backend)}>{healthText(backend)}</span>
+          {backend.image && <span>· {backend.image.model}</span>}
+        </>
+      ) : (
+        <span>checking backend…</span>
+      )}
+      <button
+        className="status-link"
+        onClick={() => setMode('forge')}
+        aria-label={`Open job queue, ${jobDepth(queue)} jobs`}
+      >
+        · queue {jobDepth(queue)}
+      </button>
+      {backend && (
+        <span>
+          · {backend.text.model}
+          {backend.text.contextTokens && ` · ${contextText(backend.text.contextTokens)} ctx`}
+        </span>
+      )}
+      {generation && <span title={generation.label}>· ⏱ {elapsedText(generation.elapsedMs)}</span>}
     </footer>
   )
+}
+
+function healthText(status: StatusBarBackend): string {
+  if (!status.image) return 'image backend not selected'
+  switch (status.health.state) {
+    case 'connected':
+      return `${status.image.label} connected`
+    case 'unavailable':
+      return `${status.image.label} unavailable`
+    case 'unconfigured':
+      return `${status.image.label} not configured`
+    case 'unsupported':
+      return `${status.image.label} unsupported`
+  }
+}
+
+function healthTitle(status: StatusBarBackend): string {
+  if (status.health.state !== 'connected') return status.health.detail
+  if (status.health.externalQueue === null) return 'The selected image model answered its probe.'
+  return `The backend answered its health probe and reports ${status.health.externalQueue} external jobs.`
+}
+
+function contextText(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    const millions = tokens / 1_000_000
+    return `${millions.toFixed(millions < 1.1 ? 0 : 1)}m`
+  }
+  return `${Math.round(tokens / 1_000)}k`
 }
 
 function connectedText(peers: SyncPeerStatus[]): string | null {

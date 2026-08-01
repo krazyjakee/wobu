@@ -82,3 +82,50 @@ describe('kind attributes', () => {
     expect(screen.getByText('Attributes')).toBeInTheDocument()
   })
 })
+
+describe('editable structured description', () => {
+  it('keeps the machine side explicit and shows edited state immediately', () => {
+    const node = buildNode({
+      id: 'kael',
+      descriptionState: 'fresh',
+      notesRaw: 'rough source notes',
+      description: {
+        sections: { silhouette: { type: 'text', value: 'Enhanced canon' } },
+      },
+    })
+    render(
+      <NotesPane
+        node={node}
+        def={kindDef('character', {
+          sections: [{ key: 'silhouette', label: 'Silhouette', valueKind: 'text' }],
+        })}
+        readOnly={false}
+        autosave={autosave}
+      />,
+    )
+
+    const rawNotesColumn = screen.getByRole('heading', { name: 'Raw notes' }).closest('.col')
+    const machineColumn = screen
+      .getByRole('heading', { name: 'Enhanced description' })
+      .closest('.col')
+    expect(rawNotesColumn).not.toBe(machineColumn)
+    expect(rawNotesColumn).toHaveTextContent('yours')
+    expect(machineColumn).toHaveTextContent('machine side')
+    expect(machineColumn).toHaveTextContent('fresh')
+
+    fireEvent.change(screen.getByLabelText('Silhouette'), {
+      target: { value: 'Hand-polished canon' },
+    })
+
+    expect(machineColumn).toHaveTextContent('edited by you')
+    expect((rawNotesColumn?.querySelector('.notes') as HTMLTextAreaElement).value).toBe(
+      'rough source notes',
+    )
+    expect(autosave.queue).toHaveBeenLastCalledWith({
+      description: {
+        sections: { silhouette: { type: 'text', value: 'Hand-polished canon' } },
+      },
+      descriptionState: 'edited',
+    })
+  })
+})

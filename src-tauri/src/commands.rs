@@ -18,13 +18,14 @@ use tauri::{AppHandle, Emitter, Manager, State};
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::kind_registry as registry;
 use wobu_core::{
-    Asset, AssetKind, AssetRole, FragmentTarget, Id, KindDef, Layer, Node, NodeKind, NodeSummary,
-    Preset, default_preset,
+    Asset, AssetKind, AssetRole, FragmentTarget, Id, KindDef, Layer, LinkEdge, LinkRole, Node,
+    NodeKind, NodeSummary, Preset, default_preset,
 };
 use wobu_influence::{
     Budget, Chars, DropReason, Dropped, Fragment, Reached, ResolvedStack, Shot, Sliders, World,
     compile, fragments, resolve,
 };
+use wobu_imagine::{comfy, gemini as image_gemini};
 use wobu_jobs::{JobId, QueueSnapshot};
 use wobu_llm::{
     AnthropicProvider, Cancel, Discard, EnhanceOutcome, EnhanceRequest, GeminiProvider,
@@ -289,6 +290,51 @@ pub fn node_move(
     new_parent_id: Option<Id>,
 ) -> CommandResult<()> {
     state.with(|p| Ok(p.move_node(id, new_parent_id)?))
+}
+
+/// Add one explicit influence edge. Parent relationships are edited through
+/// `node_move`; they are implicit, fixed at weight 1, and never represented as
+/// an editable `Link`.
+#[tauri::command]
+pub fn node_link_add(
+    state: State<'_, AppState>,
+    node_id: Id,
+    to_id: Id,
+    role: LinkRole,
+    weight: Option<f32>,
+    enabled: Option<bool>,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.add_node_link(node_id, to_id, role, weight, enabled)?))
+}
+
+#[tauri::command]
+pub fn node_link_remove(
+    state: State<'_, AppState>,
+    node_id: Id,
+    to_id: Id,
+    role: LinkRole,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.remove_node_link(node_id, to_id, role)?))
+}
+
+/// Change either mutable property without posting a stale copy of the other.
+#[tauri::command]
+pub fn node_link_update(
+    state: State<'_, AppState>,
+    node_id: Id,
+    to_id: Id,
+    role: LinkRole,
+    weight: Option<f32>,
+    enabled: Option<bool>,
+) -> CommandResult<Node> {
+    state.with(|p| saved(p.update_node_link(node_id, to_id, role, weight, enabled)?))
+}
+
+/// Every explicit edge pointing at this node. Names and kind labels stay out
+/// of the payload because the webview already holds the node summaries.
+#[tauri::command]
+pub fn node_backlinks(state: State<'_, AppState>, id: Id) -> CommandResult<Vec<LinkEdge>> {
+    state.with(|p| Ok(p.node_backlinks(id)?))
 }
 
 /* ── assets ───────────────────────────────────────────────────────────────── */
@@ -1343,6 +1389,163 @@ fn selections(project: &Project) -> ProviderSelections {
     }
 }
 
+/* ── status-bar provider health ──────────────────────────────────────────── */
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveModel {
+    pub provider: String,
+    pub label: String,
+    pub model: String,
+    /// Known window for a shipped text model. Unknown custom model ids stay
+    /// `None`; guessing a context window would make the status bar dangerous.
+    pub context_tokens: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case", rename_all_fields = "camelCase")]
+pub enum BackendHealth {
+    Connected { external_queue: Option<u32> },
+    Unavailable { detail: String },
+    Unconfigured { detail: String },
+    Unsupported { detail: String },
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusBarBackend {
+    pub image: Option<ActiveModel>,
+    pub text: ActiveModel,
+    pub health: BackendHealth,
+}
+
+/// The provider facts the status bar can defend.
+///
+/// The project lock is released before the reachability request. Holding it
+/// across a network call would freeze every editor read behind a health check.
+#[tauri::command]
+pub async fn status_bar_backend(
+    state: State<'_, AppState>,
+    keys: State<'_, Keys>,
+) -> CommandResult<StatusBarBackend> {
+    let (image, text) = state.with(|project| {
+        Ok((selected_model(project, "image"), selected_model(project, "text")))
+    })?;
+
+    let text_provider = text.as_ref().map(|choice| choice.0.as_str()).unwrap_or(anthropic::ID);
+    let text_model = text
+        .as_ref()
+        .and_then(|choice| choice.1.clone())
+        .unwrap_or_else(|| text_default(text_provider).to_owned());
+    let text = ActiveModel {
+        provider: text_provider.to_owned(),
+        label: provider_label(text_provider).to_owned(),
+        context_tokens: context_window(text_provider, &text_model),
+        model: text_model,
+    };
+
+    let Some((image_provider, selected_model)) = image else {
+        return Ok(StatusBarBackend {
+            image: None,
+            text,
+            health: BackendHealth::Unconfigured {
+                detail: "No image backend is selected for this project.".into(),
+            },
+        });
+    };
+
+    let image_model = selected_model.unwrap_or_else(|| image_default(&image_provider).to_owned());
+    let image = ActiveModel {
+        provider: image_provider.clone(),
+        label: provider_label(&image_provider).to_owned(),
+        model: image_model.clone(),
+        context_tokens: None,
+    };
+
+    let health = match image_provider.as_str() {
+        comfy::ID => match comfy::ComfyBackend::new(comfy::DEFAULT_URL) {
+            Ok(backend) => match backend.health(&image_model).await {
+                comfy::Health::Connected { queue, .. } => {
+                    BackendHealth::Connected { external_queue: Some(queue) }
+                }
+                comfy::Health::Unreachable { detail } => BackendHealth::Unavailable { detail },
+            },
+            Err(error) => BackendHealth::Unavailable { detail: error.to_string() },
+        },
+        image_gemini::ID => match keys.secret(image_gemini::ID) {
+            None => BackendHealth::Unconfigured {
+                detail: "Gemini is selected for images, but this machine has no Gemini key.".into(),
+            },
+            Some(secret) => match image_gemini::GeminiBackend::new(secret.expose()) {
+                Ok(backend) => match backend.check_key(&image_model, &Cancel::new()).await {
+                    image_gemini::KeyCheck::Usable => {
+                        BackendHealth::Connected { external_queue: None }
+                    }
+                    check => BackendHealth::Unavailable { detail: check.message() },
+                },
+                Err(error) => BackendHealth::Unavailable { detail: error.to_string() },
+            },
+        },
+        other => BackendHealth::Unsupported {
+            detail: format!("This build has no image adapter for {other}."),
+        },
+    };
+
+    Ok(StatusBarBackend { image: Some(image), text, health })
+}
+
+fn selected_model(project: &Project, capability: &str) -> Option<(String, Option<String>)> {
+    let selected = project.meta().providers.get(capability)?.as_object()?;
+    let provider = selected.get("provider")?.as_str()?.trim();
+    if provider.is_empty() {
+        return None;
+    }
+    let model = selected
+        .get("model")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(str::to_owned);
+    Some((provider.to_owned(), model))
+}
+
+fn provider_label(provider: &str) -> &str {
+    match provider {
+        anthropic::ID => anthropic::LABEL,
+        gemini::ID => gemini::LABEL,
+        comfy::ID => comfy::LABEL,
+        _ => provider,
+    }
+}
+
+fn text_default(provider: &str) -> &str {
+    match provider {
+        anthropic::ID => anthropic::DEFAULT_MODEL,
+        gemini::ID => gemini::DEFAULT_MODEL,
+        _ => "unknown provider default",
+    }
+}
+
+fn image_default(provider: &str) -> &str {
+    match provider {
+        comfy::ID => comfy::DEFAULT_MODEL,
+        image_gemini::ID => image_gemini::DEFAULT_MODEL,
+        _ => "unknown provider default",
+    }
+}
+
+fn context_window(provider: &str, model: &str) -> Option<u64> {
+    match (provider, model) {
+        (anthropic::ID, "claude-haiku-4-5") => Some(200_000),
+        (anthropic::ID, "claude-opus-5" | "claude-sonnet-5" | "claude-fable-5") => {
+            Some(1_000_000)
+        }
+        (gemini::ID, "gemini-3.6-flash") => Some(1_048_576),
+        (gemini::ID, "gemini-3.5-flash" | "gemini-3.5-flash-lite") => Some(1_000_000),
+        _ => None,
+    }
+}
+
 /// Put `providers` into `project.json`, leaving every other byte of meaning
 /// alone.
 ///
@@ -1715,6 +1918,28 @@ mod bridge {
     }
 
     #[test]
+    fn node_link_roles_and_backlinks_match_the_relations_bridge() {
+        for role in LinkRole::ALL {
+            let json = serde_json::to_value(role).unwrap();
+            assert_eq!(json.as_str(), Some(role.as_str()));
+            assert_eq!(serde_json::from_value::<LinkRole>(json).unwrap(), role);
+        }
+
+        let edge = LinkEdge {
+            from_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap(),
+            to_id: "01ARZ3NDEKTSV4RRFFQ69G5FAW".parse().unwrap(),
+            role: LinkRole::MemberOf,
+            weight: 0.4,
+            enabled: true,
+        };
+        let json = serde_json::to_value(edge).unwrap();
+        for key in ["fromId", "toId", "role", "weight", "enabled"] {
+            assert!(json.get(key).is_some(), "`{key}` is missing from LinkEdge");
+        }
+        assert_eq!(json["role"], "member_of");
+    }
+
+    #[test]
     fn log_info_matches_the_loginfo_interface() {
         let json = serde_json::to_value(log_info()).unwrap();
         for key in ["path", "level", "exists", "sizeBytes"] {
@@ -1775,6 +2000,7 @@ mod bridge {
                 label: "Enhance Vashk".into(),
                 state: wobu_jobs::JobState::Running,
                 attempt: 1,
+                elapsed_ms: 4200,
             }],
             queued: 2,
             running: 1,
@@ -1793,7 +2019,7 @@ mod bridge {
         assert_eq!(job["state"], "running");
         assert_eq!(job["kind"], "enhance");
         assert!(job["id"].is_string(), "a job id must cross as a string");
-        for key in ["id", "kind", "label", "attempt"] {
+        for key in ["id", "kind", "label", "attempt", "elapsedMs"] {
             assert!(job.get(key).is_some(), "`{key}` is missing from JobSnapshot");
         }
     }
@@ -2026,6 +2252,40 @@ mod bridge {
             assert!(json["usage"].get(key).is_some(), "`{key}` is missing from the probe usage");
         }
         assert_eq!(json["code"], "provider.bad_key");
+    }
+
+    #[test]
+    fn status_bar_models_use_the_same_defaults_and_only_known_context_windows() {
+        assert_eq!(text_default(anthropic::ID), anthropic::DEFAULT_MODEL);
+        assert_eq!(text_default(gemini::ID), gemini::DEFAULT_MODEL);
+        assert_eq!(image_default(comfy::ID), comfy::DEFAULT_MODEL);
+        assert_eq!(image_default(image_gemini::ID), image_gemini::DEFAULT_MODEL);
+        assert_eq!(context_window(anthropic::ID, "claude-haiku-4-5"), Some(200_000));
+        assert_eq!(context_window(anthropic::ID, "future-model"), None);
+    }
+
+    #[test]
+    fn status_bar_health_matches_the_frontend_union() {
+        let status = StatusBarBackend {
+            image: Some(ActiveModel {
+                provider: comfy::ID.into(),
+                label: comfy::LABEL.into(),
+                model: "flux-dev".into(),
+                context_tokens: None,
+            }),
+            text: ActiveModel {
+                provider: anthropic::ID.into(),
+                label: anthropic::LABEL.into(),
+                model: anthropic::DEFAULT_MODEL.into(),
+                context_tokens: Some(1_000_000),
+            },
+            health: BackendHealth::Connected { external_queue: Some(2) },
+        };
+        let json = serde_json::to_value(status).unwrap();
+        assert_eq!(json["health"]["state"], "connected");
+        assert_eq!(json["health"]["externalQueue"], 2);
+        assert_eq!(json["text"]["contextTokens"], 1_000_000);
+        assert_eq!(json["image"]["model"], "flux-dev");
     }
 
     #[test]

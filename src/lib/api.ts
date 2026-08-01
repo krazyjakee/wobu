@@ -82,6 +82,11 @@ export interface Link {
   enabled: boolean
 }
 
+/** An indexed link with both endpoints, used by the Relations backlinks list. */
+export interface LinkEdge extends Link {
+  fromId: string
+}
+
 /**
  * What a reference image is *for*, and therefore where it is routed when a
  * generation is compiled — a `palette` reference goes to colour conditioning, a
@@ -447,6 +452,29 @@ export const nodeDelete = (id: string) => call<void>('node_delete', { id })
 
 export const nodeMove = (id: string, newParentId: string | null) =>
   call<void>('node_move', { id, newParentId })
+
+/** Add an explicit influence edge. The backend also enforces the kind registry's roles. */
+export const nodeLinkAdd = (
+  nodeId: string,
+  toId: string,
+  role: LinkRole,
+  options: { weight?: number; enabled?: boolean } = {},
+) => call<WobuNode>('node_link_add', { nodeId, toId, role, ...options })
+
+/** Remove one `(target, role)` edge; the target node itself is untouched. */
+export const nodeLinkRemove = (nodeId: string, toId: string, role: LinkRole) =>
+  call<WobuNode>('node_link_remove', { nodeId, toId, role })
+
+/** Re-weight or mute an edge while leaving omitted properties unchanged. */
+export const nodeLinkUpdate = (
+  nodeId: string,
+  toId: string,
+  role: LinkRole,
+  patch: { weight?: number; enabled?: boolean },
+) => call<WobuNode>('node_link_update', { nodeId, toId, role, ...patch })
+
+/** Every explicit link whose target is `id`. */
+export const nodeBacklinks = (id: string) => call<LinkEdge[]>('node_backlinks', { id })
 
 /* ── assets ───────────────────────────────────────────────────────────────── */
 
@@ -1045,6 +1073,29 @@ export const projectProviders = () => call<ProviderSelections>('project_provider
 export const projectProviderSelect = (capability: Capability, provider: string, model?: string) =>
   call<ProviderSelections>('project_provider_select', { capability, provider, model })
 
+/** A provider/model pair after backend defaults have been resolved. */
+export interface ActiveModel {
+  provider: string
+  label: string
+  model: string
+  contextTokens: number | null
+}
+
+export type BackendHealth =
+  | { state: 'connected'; externalQueue: number | null }
+  | { state: 'unavailable'; detail: string }
+  | { state: 'unconfigured'; detail: string }
+  | { state: 'unsupported'; detail: string }
+
+export interface StatusBarBackend {
+  image: ActiveModel | null
+  text: ActiveModel
+  health: BackendHealth
+}
+
+/** Selected models plus a non-generating reachability check of the image backend. */
+export const statusBarBackend = () => call<StatusBarBackend>('status_bar_backend')
+
 /* ── storage and about ────────────────────────────────────────────────────── */
 
 /** The local SQLite index for the open project. Disposable by design. */
@@ -1155,6 +1206,8 @@ export type JobSnapshot = {
   label: string
   /** Attempts started so far, from 1. Zero while queued. */
   attempt: number
+  /** Backend-measured time since the first attempt, frozen at completion. */
+  elapsedMs: number
 } & JobState
 
 /**

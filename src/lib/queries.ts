@@ -21,6 +21,8 @@ import type {
   InfluenceStack,
   KeyStatus,
   KindDef,
+  LinkEdge,
+  LinkRole,
   NodeKind,
   NodeSummary,
   Peer,
@@ -50,6 +52,7 @@ export const qk = {
   conflicts: ['conflicts'] as const,
   assets: ['asset_list'] as const,
   node: (id: string) => ['node_get', id] as const,
+  backlinks: (id: string) => ['node_backlinks', id] as const,
   search: (q: string) => ['node_search', q] as const,
   // Per installation, not per project — which is why nothing in
   // `invalidateWorld` touches it. Opening someone else's world does not change
@@ -59,6 +62,7 @@ export const qk = {
   // folder. The two are never merged into one key because they are never
   // invalidated by the same thing.
   projectProviders: ['project_providers'] as const,
+  statusBarBackend: (project: string) => ['status_bar_backend', project] as const,
   // The engine is a pure function of the world and these arguments, so the
   // arguments belong in the key: two presets, or two positions of the same
   // slider, are two different answers and neither invalidates the other.
@@ -77,6 +81,7 @@ export const qk = {
 export function invalidateWorld(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: qk.nodes })
   void qc.invalidateQueries({ queryKey: ['node_get'] })
+  void qc.invalidateQueries({ queryKey: ['node_backlinks'] })
   // A file breaking and a file being edited arrive as the same event, so the
   // corrupt list has to move with the node list or it goes stale the moment
   // someone repairs a file.
@@ -339,6 +344,16 @@ export function useNode(id: string | null): UseQueryResult<WobuNode> {
   })
 }
 
+/** Explicit links pointing at one node; display names come from `useNodes`. */
+export function useNodeBacklinks(id: string | null): UseQueryResult<LinkEdge[]> {
+  return useQuery({
+    queryKey: qk.backlinks(id ?? ''),
+    queryFn: () => api.nodeBacklinks(id as string),
+    enabled: !!id,
+    retry: false,
+  })
+}
+
 /* ── influence ────────────────────────────────────────────────────────────── */
 
 /** What `influenceResolve` varies on, and therefore what goes in its key. */
@@ -435,6 +450,7 @@ export function useCloseProject() {
       void qc.invalidateQueries({ queryKey: qk.projectRecent })
       qc.removeQueries({ queryKey: qk.nodes })
       qc.removeQueries({ queryKey: ['node_get'] })
+      qc.removeQueries({ queryKey: ['node_backlinks'] })
       qc.removeQueries({ queryKey: qk.corrupt })
       qc.removeQueries({ queryKey: qk.conflicts })
       qc.removeQueries({ queryKey: qk.assets })
@@ -582,6 +598,68 @@ export function useMoveNode() {
       invalidateWorld(qc)
     },
   })
+}
+
+/* ── node links ───────────────────────────────────────────────────────────── */
+
+function useNodeLinkMutation<V>(run: (value: V) => Promise<WobuNode>, whileDoing: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: run,
+    onSuccess: (node) => {
+      qc.setQueryData(qk.node(node.id), node)
+      void qc.invalidateQueries({ queryKey: qk.nodes })
+      void qc.invalidateQueries({ queryKey: ['node_backlinks'] })
+      void qc.invalidateQueries({ queryKey: ['influence_resolve'] })
+      void qc.invalidateQueries({ queryKey: ['prompt_compile'] })
+    },
+    onError: (error) => {
+      if (api.errorCode(error) === 'write.conflict') invalidateWorld(qc)
+      report(error, whileDoing)
+    },
+  })
+}
+
+export function useAddNodeLink() {
+  return useNodeLinkMutation(
+    (value: {
+      nodeId: string
+      toId: string
+      role: LinkRole
+      weight?: number
+      enabled?: boolean
+    }) =>
+      api.nodeLinkAdd(value.nodeId, value.toId, value.role, {
+        weight: value.weight,
+        enabled: value.enabled,
+      }),
+    'Could not add that relation',
+  )
+}
+
+export function useRemoveNodeLink() {
+  return useNodeLinkMutation(
+    (value: { nodeId: string; toId: string; role: LinkRole }) =>
+      api.nodeLinkRemove(value.nodeId, value.toId, value.role),
+    'Could not remove that relation',
+  )
+}
+
+export function useUpdateNodeLink() {
+  return useNodeLinkMutation(
+    (value: {
+      nodeId: string
+      toId: string
+      role: LinkRole
+      weight?: number
+      enabled?: boolean
+    }) =>
+      api.nodeLinkUpdate(value.nodeId, value.toId, value.role, {
+        weight: value.weight,
+        enabled: value.enabled,
+      }),
+    'Could not change that relation',
+  )
 }
 
 /* ── assets ───────────────────────────────────────────────────────────────── */
@@ -743,6 +821,7 @@ export function useSetProviderKey() {
       try {
         await api.providerKeySet(provider, key)
         void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
+        void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })
       } finally {
         setSaving(null)
       }
@@ -766,6 +845,7 @@ export function useDeleteProviderKey() {
     mutationFn: (provider: string) => api.providerKeyDelete(provider),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['provider_key_status'] })
+      void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })
     },
   })
 }
@@ -793,6 +873,21 @@ export function useProviderSelections(): UseQueryResult<ProviderSelections> {
 }
 
 /**
+ * Models resolved by the backend plus a real, non-generating health check.
+ * The project id belongs in the cache key even though the command needs no
+ * argument: the command reads the open project, while this cache can outlive a
+ * Workspace during a project switch.
+ */
+export function useStatusBarBackend(project: string): UseQueryResult<api.StatusBarBackend> {
+  return useQuery({
+    queryKey: qk.statusBarBackend(project),
+    queryFn: api.statusBarBackend,
+    refetchInterval: 30_000,
+    retry: false,
+  })
+}
+
+/**
  * Choose a provider for one capability.
  *
  * The result is the whole selection map, written into the cache rather than
@@ -810,6 +905,7 @@ export function useSelectProvider() {
       api.projectProviderSelect(v.capability, v.provider, v.model),
     onSuccess: (selections) => {
       qc.setQueryData(qk.projectProviders, selections)
+      void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })
     },
     onError: (e: unknown) => report(e, 'Could not change the provider'),
   })
