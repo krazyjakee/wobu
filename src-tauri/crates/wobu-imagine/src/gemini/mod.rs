@@ -53,6 +53,7 @@
 pub(crate) mod wire;
 
 use std::fmt;
+use std::sync::{Arc as Shared, LazyLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -126,6 +127,27 @@ const API_REVISION: &str = "2026-05-20";
 /// whole-request timeout would abandon it after it had been billed.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// One process-long transport for checks and paid jobs alike.
+///
+/// `reqwest::Client` owns the connection and TLS-session pools. Backends remain
+/// cheap per-key values, while cloning this `Arc` ensures a status check does
+/// not build a fresh TLS stack and a later generation can reuse its connection.
+static CLIENT: LazyLock<std::result::Result<Shared<reqwest::Client>, String>> =
+    LazyLock::new(|| {
+        reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .build()
+            .map(Shared::new)
+            .map_err(|error| error.to_string())
+    });
+
+fn shared_client() -> Result<Shared<reqwest::Client>> {
+    CLIENT
+        .as_ref()
+        .map(Shared::clone)
+        .map_err(|detail| Error::Unavailable { detail: detail.clone() })
+}
+
 /// Where a user turns billing on. Carried in the message rather than left to the
 /// UI: [`Error::BillingRequired`] reaches the webview as its `Display`, and a
 /// dead end with no link is what the support ticket is about.
@@ -139,7 +161,7 @@ const BILLING_URL: &str = "https://aistudio.google.com/apikey";
 pub struct GeminiBackend {
     api_key: String,
     base_url: String,
-    client: reqwest::Client,
+    client: Shared<reqwest::Client>,
 }
 
 impl fmt::Debug for GeminiBackend {
@@ -158,12 +180,7 @@ impl GeminiBackend {
     /// The key comes from the keychain (`docs/08-providers.md`); this crate
     /// neither resolves nor stores it.
     pub fn new(api_key: impl Into<String>) -> Result<GeminiBackend> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .build()
-            // A client that will not build is a machine problem — a TLS backend
-            // that would not start — and reads as one.
-            .map_err(|e| Error::Unavailable { detail: e.to_string() })?;
+        let client = shared_client()?;
         Ok(GeminiBackend { api_key: api_key.into(), base_url: API_ROOT.into(), client })
     }
 
@@ -688,6 +705,17 @@ mod tests {
             // `Unavailable` rather than as anything that could be mistaken for
             // success.
             .with_base_url("http://127.0.0.1:1/v1beta")
+    }
+
+    #[test]
+    fn health_checks_and_generation_backends_share_the_http_pool() {
+        // The command and job paths each construct a backend with their own
+        // key value. Pointer identity proves that those short-lived wrappers
+        // still use the same process-long reqwest connection/TLS pool.
+        let health = GeminiBackend::new("health-check-key").unwrap();
+        let job = GeminiBackend::new("generation-key").unwrap();
+        assert!(Arc::ptr_eq(&health.client, &job.client));
+        assert_ne!(health.api_key, job.api_key, "only the transport is shared");
     }
 
     fn request(model: &str, aspect: &str) -> ImageRequest {

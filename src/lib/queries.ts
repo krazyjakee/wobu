@@ -1172,6 +1172,154 @@ export function useProviderSelections(): UseQueryResult<ProviderSelections> {
   })
 }
 
+export const BACKEND_HEALTH_POLL_MS = 5_000
+export const BACKEND_HEALTH_MAX_BACKOFF_MS = 60_000
+
+interface BackendPollState {
+  project: string
+  /** A non-empty external queue is the only reason to keep probing. */
+  liveQueue: boolean
+  failures: number
+  dataUpdates: number
+  errorUpdates: number
+}
+
+function backendPollInterval(
+  query: {
+    state: {
+      data?: api.StatusBarBackend
+      dataUpdateCount: number
+      errorUpdateCount: number
+    }
+  },
+  poll: BackendPollState,
+): number | false {
+  const { state } = query
+
+  if (state.dataUpdateCount !== poll.dataUpdates) {
+    poll.dataUpdates = state.dataUpdateCount
+    const health = state.data?.health
+    if (health?.state === 'connected') {
+      poll.liveQueue = health.externalQueue !== null && health.externalQueue > 0
+      poll.failures = 0
+    } else if (health?.state === 'unavailable' && poll.liveQueue) {
+      poll.failures += 1
+    } else {
+      poll.liveQueue = false
+      poll.failures = 0
+    }
+  }
+
+  // A bridge/network rejection has no fresh health payload. If a queue was
+  // live immediately before it, retain that fact and back off until a check
+  // succeeds; otherwise an idle error must not start a polling loop.
+  if (state.errorUpdateCount !== poll.errorUpdates) {
+    poll.failures += poll.liveQueue ? 1 : 0
+    poll.errorUpdates = state.errorUpdateCount
+  }
+
+  if (!poll.liveQueue) return false
+  return Math.min(
+    BACKEND_HEALTH_POLL_MS * 2 ** Math.max(0, poll.failures - 1),
+    BACKEND_HEALTH_MAX_BACKOFF_MS,
+  )
+}
+
+interface BackendHealthSubscription {
+  references: number
+  dispose: () => void
+}
+
+const backendHealthSubscriptions = new WeakMap<QueryClient, BackendHealthSubscription>()
+
+/**
+ * One event bridge per QueryClient, even though both Workspace and Inspector
+ * observe the same health query. Job outcomes are meaningful health signals;
+ * they replace the old unconditional idle poll without doubling requests.
+ */
+function subscribeBackendHealth(qc: QueryClient): () => void {
+  const existing = backendHealthSubscriptions.get(qc)
+  if (existing) {
+    existing.references += 1
+    return () => {
+      existing.references -= 1
+      if (existing.references === 0) existing.dispose()
+    }
+  }
+
+  let disposed = false
+  let pendingWhileHidden = false
+  const unlisteners: Array<() => void> = []
+  const refresh = () => {
+    if (document.visibilityState === 'hidden') {
+      pendingWhileHidden = true
+      return
+    }
+    pendingWhileHidden = false
+    void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })
+  }
+  const onVisible = () => {
+    if (document.visibilityState === 'visible' && pendingWhileHidden) refresh()
+  }
+  window.addEventListener('online', refresh)
+  document.addEventListener('visibilitychange', onVisible)
+
+  const attach = <T>(name: string, handler: (payload: T) => void) => {
+    if (!api.isTauri()) return
+    void listen<T>(name, (event) => handler(event.payload))
+      .then((unlisten) => {
+        if (disposed) unlisten()
+        else unlisteners.push(unlisten)
+      })
+      .catch(() => {
+        /* explicit refresh and queue-aware polling remain available */
+      })
+  }
+
+  // A running transition is the actual provider attempt, rather than merely a
+  // button press or a queued local job. Track attempts so unrelated queue
+  // transitions do not repeatedly probe health.
+  const attempts = new Map<string, number>()
+  attach<QueueSnapshot>(api.JOB_EVENTS.state, (snapshot) => {
+    let attempted = false
+    const present = new Set<string>()
+    for (const job of snapshot.jobs) {
+      if (job.kind !== 'generate') continue
+      present.add(job.id)
+      if (job.state === 'running' && attempts.get(job.id) !== job.attempt) {
+        attempts.set(job.id, job.attempt)
+        attempted = true
+      }
+    }
+    for (const id of attempts.keys()) if (!present.has(id)) attempts.delete(id)
+    if (attempted) refresh()
+  })
+  attach<api.JobFailed>(api.JOB_EVENTS.error, (failure) => {
+    if (failure.kind === 'generate') refresh()
+  })
+  attach<api.JobDone>(api.JOB_EVENTS.done, (done) => {
+    if (done.kind === 'generate') refresh()
+  })
+
+  const subscription: BackendHealthSubscription = {
+    references: 1,
+    dispose: () => {
+      if (subscription.references !== 0) return
+      disposed = true
+      window.removeEventListener('online', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+      for (const unlisten of unlisteners) unlisten()
+      backendHealthSubscriptions.delete(qc)
+    },
+  }
+  backendHealthSubscriptions.set(qc, subscription)
+
+  return () => {
+    subscription.references -= 1
+    if (subscription.references === 0) subscription.dispose()
+  }
+}
+
 /**
  * Models resolved by the backend plus a real, non-generating health check.
  * The project id belongs in the cache key even though the command needs no
@@ -1179,12 +1327,24 @@ export function useProviderSelections(): UseQueryResult<ProviderSelections> {
  * Workspace during a project switch.
  */
 export function useStatusBarBackend(project: string): UseQueryResult<api.StatusBarBackend> {
-  return useQuery({
+  const qc = useQueryClient()
+  const poll = useMemo<BackendPollState>(
+    () => ({ project, liveQueue: false, failures: 0, dataUpdates: 0, errorUpdates: 0 }),
+    [project],
+  )
+  const query = useQuery({
     queryKey: qk.statusBarBackend(project),
     queryFn: api.statusBarBackend,
-    refetchInterval: 30_000,
+    // Gemini reports no external queue, and an idle ComfyUI reports zero: both
+    // stop here after the initial/event-driven check. Only a queue whose depth
+    // is visibly changing justifies polling the remote backend.
+    refetchInterval: (current) => backendPollInterval(current, poll),
+    refetchIntervalInBackground: false,
     retry: false,
   })
+
+  useEffect(() => subscribeBackendHealth(qc), [qc])
+  return query
 }
 
 /**

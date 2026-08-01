@@ -43,8 +43,8 @@ mod workflow;
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc as Shared, LazyLock, RwLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -98,6 +98,25 @@ pub const DEFAULT_MODEL: &str = "flux1-dev.safetensors";
 /// a whole-request timeout would abandon a render the user is still waiting for.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// One process-long HTTP transport for probes, queue checks and generations.
+/// Connections stay isolated by origin inside reqwest's pool, so custom ComfyUI
+/// addresses can safely share the transport without sharing server state.
+static CLIENT: LazyLock<std::result::Result<Shared<reqwest::Client>, String>> =
+    LazyLock::new(|| {
+        reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .build()
+            .map(Shared::new)
+            .map_err(|error| error.to_string())
+    });
+
+fn shared_client() -> Result<Shared<reqwest::Client>> {
+    CLIENT
+        .as_ref()
+        .map(Shared::clone)
+        .map_err(|detail| Error::Unavailable { detail: detail.clone() })
+}
+
 /// A ComfyUI server, and what it turned out to have.
 ///
 /// Constructing one does no IO — [`ComfyBackend::new`] cannot fail on a machine
@@ -106,7 +125,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// asks.
 pub struct ComfyBackend {
     base: String,
-    client: reqwest::Client,
+    client: Shared<reqwest::Client>,
     /// What ties a run to our websocket. One per backend rather than one per
     /// generation: ComfyUI keys previews to the client that queued the graph, so
     /// a client id minted per call would need a socket opened per call before
@@ -144,11 +163,7 @@ impl ComfyBackend {
     /// `http://192.168.1.4:8188/`, with or without a trailing slash — because it
     /// is a field somebody types into Settings and not a constant.
     pub fn new(base_url: impl AsRef<str>) -> Result<ComfyBackend> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .build()
-            // A client that will not build is a machine problem and reads as one.
-            .map_err(|e| Error::Unavailable { detail: e.to_string() })?;
+        let client = shared_client()?;
         Ok(ComfyBackend {
             base: normalise(base_url.as_ref()),
             client,
@@ -806,6 +821,16 @@ mod tests {
             "SaveImage": {},
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn health_checks_and_generation_backends_share_the_http_pool() {
+        // A status check and a generation construct separate backends, but the
+        // reqwest client beneath them must retain its connections and TLS state.
+        let health = ComfyBackend::new(DEFAULT_URL).unwrap();
+        let job = ComfyBackend::new("https://comfy.example").unwrap();
+        assert!(Arc::ptr_eq(&health.client, &job.client));
+        assert_ne!(health.client_id, job.client_id, "websocket routing stays per backend");
     }
 
     fn system_stats(vram: u64) -> Vec<u8> {
