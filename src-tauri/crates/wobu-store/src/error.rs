@@ -69,6 +69,24 @@ pub enum Error {
     #[error("that file is not an image Wobu can read (PNG, JPEG, GIF and WebP are supported)")]
     NotAnImage,
 
+    /// An import of an animation — an animated GIF, an APNG, an animated WebP.
+    ///
+    /// Its own variant rather than folding into [`Error::NotAnImage`], because
+    /// the two need opposite advice: that one means "convert it", and this one
+    /// means "export the frame you meant". Telling someone their animated GIF
+    /// is not an image Wobu can read would be both wrong and unactionable —
+    /// they can see it perfectly well in their file browser.
+    ///
+    /// Refusing rather than silently taking frame one is the deliberate half.
+    /// A reference image is one picture; picking a frame on the user's behalf
+    /// makes the asset depend on a choice nothing on screen records, and
+    /// re-encoding a single frame out would make the blob's hash depend on our
+    /// encoder rather than on their file. See `assets`' module docs.
+    #[error(
+        "that image holds more than one frame — export the single frame you want and import that"
+    )]
+    AnimatedImage,
+
     #[error("the project folder is read-only")]
     ReadOnly,
 

@@ -87,7 +87,12 @@ fn the_filename_comes_from_the_content_and_never_from_what_was_dropped() {
     let first = project.import_asset_file(&lower, AssetKind::Reference).unwrap();
     for path in [&shouty, &liar] {
         let again = project.import_asset_file(path, AssetKind::Reference).unwrap();
-        assert_eq!(again.asset.rel_path, first.asset.rel_path, "{} took its own path", path.display());
+        assert_eq!(
+            again.asset.rel_path,
+            first.asset.rel_path,
+            "{} took its own path",
+            path.display()
+        );
         assert_eq!(again.asset.id, first.asset.id);
         assert!(again.deduped);
     }

@@ -16,6 +16,34 @@
 //! - **A blob that is already there is left alone.** Not as an optimisation:
 //!   rewriting a file a collaborator is reading, to replace it with the bytes it
 //!   already contains, is pure risk for no gain.
+//!
+//! # What an import refuses, and what it merely warns about (#30)
+//!
+//! Two different questions, and answering them with one verb was the bug this
+//! section exists to prevent.
+//!
+//! **Refused** is "nothing in Wobu can hold this": bytes no header parser
+//! recognises ([`Error::NotAnImage`] — which is where a TIFF, a PSD and a PDF
+//! all land), and files holding more than one frame
+//! ([`Error::AnimatedImage`]). Both are decisions about *this* folder, they are
+//! true on every machine, and nothing later can rescue them.
+//!
+//! **Warned about** is "a later stage will object to this": an image outside
+//! the bounds Hunyuan3D states in `docs/08-providers.md`, or in a format its
+//! multi-view input does not take. Those are not facts about the folder at all
+//! — they are facts about one provider, the user may have imported the picture
+//! as a mood reference that will never go near a mesh, and M5 may add a backend
+//! with different rules. Refusing here would throw away a perfectly good
+//! reference on behalf of a decision the user has not made yet; accepting in
+//! silence would hand them a rejection at generate time, minutes and one paid
+//! call later, with nothing on screen connecting it to the drag they did on
+//! Tuesday. So the import lands and says what is wrong with it, in
+//! [`ImportedAsset::warnings`].
+//!
+//! Converting instead — down-scaling a 6000px scan, transcoding a WebP to PNG —
+//! is deliberately not done. The path is a pure function of the bytes, so a
+//! conversion makes the hash a function of our encoder too, and two people on
+//! two builds would get two files for one picture. See `image`'s module docs.
 
 use std::fs;
 use std::io::Write as _;
@@ -27,14 +55,109 @@ use wobu_core::{Asset, AssetKind, Id};
 
 use crate::atomic;
 use crate::error::{Error, Result};
-use crate::image;
+use crate::image::{self, Frames};
 use crate::paths;
+use crate::scan::Cancel;
 
 /// Where blobs live, relative to the project root.
 pub const ORIGINALS_DIR: &str = "assets/originals";
 
 /// A lowercase hex BLAKE3 digest, as it appears in a filename.
 const HASH_LEN: usize = 64;
+
+/// The shortest side Hunyuan3D accepts, from the input-constraints table in
+/// `docs/08-providers.md`.
+pub const MESH_MIN_SIDE: u32 = 128;
+
+/// The longest side it accepts, from the same table.
+pub const MESH_MAX_SIDE: u32 = 5000;
+
+/// The ceiling on what can be sent as base64, from the same table: 6 MB before
+/// encoding, and the *whole multi-view sheet* has to fit in it. A single image
+/// over the limit therefore cannot be part of any sheet at all, which is what
+/// makes this worth saying at import rather than at submit.
+pub const MESH_MAX_BYTES: u64 = 6 * 1024 * 1024;
+
+/// The two formats Hunyuan3D's multi-view input takes, per `docs/08-providers.md`.
+const MESH_MIME_TYPES: [&str; 2] = ["image/png", "image/jpeg"];
+
+/// Something a later stage will object to about an image Wobu has accepted.
+///
+/// The same shape as `wobu_imagine::Downgrade`, and for the same reasons: it is
+/// data rather than a string, because the wording of "this is too small to make
+/// a mesh from" is a product decision that will be rewritten and rewriting it
+/// should not be a change to a Rust crate; and each variant has exactly one
+/// cause, so [`label`](Self::label) can be one sentence per variant. A second
+/// cause for one of them means splitting the variant, because the sentence is
+/// what tells the user what to go and do.
+///
+/// Every variant today is about the 3D path, which is the one with hard input
+/// rules — Gemini's image models take what they are given and re-scale it. That
+/// is why the names say `Mesh`: a warning that is really about one capability
+/// should not be phrased as though it were about the picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportWarning {
+    /// A GIF or a WebP. Wobu stores it happily and Generate will use it, but
+    /// Hunyuan3D's multi-view input is JPG/PNG only, so it cannot be one of the
+    /// eight views a turnaround sheet is made of.
+    MeshFormat,
+    /// Shorter than [`MESH_MIN_SIDE`] on one side.
+    MeshTooSmall,
+    /// Longer than [`MESH_MAX_SIDE`] on one side.
+    MeshTooLarge,
+    /// Larger than [`MESH_MAX_BYTES`], so it will not fit in a request body.
+    MeshTooHeavy,
+}
+
+impl ImportWarning {
+    /// What the library says about it, in one clause.
+    pub fn label(self) -> &'static str {
+        match self {
+            ImportWarning::MeshFormat => {
+                "cannot be used for 3D — that backend takes only PNG and JPEG"
+            }
+            ImportWarning::MeshTooSmall => {
+                "too small for 3D — the shortest side must be at least 128px"
+            }
+            ImportWarning::MeshTooLarge => {
+                "too large for 3D — the longest side must be at most 5000px"
+            }
+            ImportWarning::MeshTooHeavy => {
+                "too heavy for 3D — a whole multi-view set has to fit in 6 MB"
+            }
+        }
+    }
+}
+
+/// Everything a 3D backend would object to about this image.
+///
+/// Measured against the *displayed* dimensions, which is what the provider will
+/// see once orientation is applied — a 4000×6000 photograph tagged "rotate 90°"
+/// is 6000 on its long side either way, but a 100×4000 one is out of bounds for
+/// a different reason depending on which pair you measure.
+///
+/// Deliberately a free function over an [`image::ImageInfo`]: the turnaround
+/// preset in M5 has to be able to ask the same question of an image it is about
+/// to *send*, not only of one somebody just dropped in, and a second copy of
+/// these four rules is a second chance to disagree with the table in
+/// `docs/08-providers.md`.
+pub fn mesh_warnings(info: &image::ImageInfo, bytes: u64) -> Vec<ImportWarning> {
+    let mut out = Vec::new();
+    if !MESH_MIME_TYPES.contains(&info.mime) {
+        out.push(ImportWarning::MeshFormat);
+    }
+    if info.width.min(info.height) < MESH_MIN_SIDE {
+        out.push(ImportWarning::MeshTooSmall);
+    }
+    if info.width.max(info.height) > MESH_MAX_SIDE {
+        out.push(ImportWarning::MeshTooLarge);
+    }
+    if bytes > MESH_MAX_BYTES {
+        out.push(ImportWarning::MeshTooHeavy);
+    }
+    out
+}
 
 /// What an import did, as opposed to what it produced.
 ///
@@ -47,6 +170,13 @@ pub struct ImportedAsset {
     pub asset: Asset,
     /// True when these bytes were already in the folder and no write happened.
     pub deduped: bool,
+    /// What a later stage will object to about this image, empty when nothing
+    /// will. Computed from the header, so it is the same list on a dedup as on
+    /// a first import — the picture has not changed, and a warning that
+    /// appeared only the first time would be a warning the second person on the
+    /// share never sees.
+    #[serde(default)]
+    pub warnings: Vec<ImportWarning>,
 }
 
 /// The id an asset with this hash has, on every machine, forever.
@@ -90,11 +220,44 @@ pub fn asset_id(hash: &str) -> Option<Id> {
 /// are unknown cannot be thumbnailed, cannot be routed to a conditioning
 /// adapter, and would sit in the library as a file nothing can open.
 pub fn import(root: &Path, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsset> {
+    import_with(root, bytes, kind, &Cancel::new())
+}
+
+/// `import`, stoppable.
+///
+/// The token is checked at the two points that matter and nowhere else. Hashing
+/// a 200 MB scan is the slow part in memory and staging it is the slow part on
+/// a share, so the checks sit either side of the hash: a cancel that arrives
+/// during the hash costs the rest of the hash, and one that arrives during the
+/// write is deliberately not honoured, because a half-written `.part` is worse
+/// than a finished blob and the finished blob is at a path only its own bytes
+/// can claim — nothing is left behind for a later import to trip over.
+///
+/// The same mechanism as [`crate::Project::open_with`], not a second one. A
+/// scan and an import are the same problem — an unbounded amount of somebody
+/// else's filesystem, on a mount that may have gone away — and a caller holding
+/// two kinds of cancel token for it would cancel the wrong half.
+pub fn import_with(
+    root: &Path,
+    bytes: &[u8],
+    kind: AssetKind,
+    cancel: &Cancel,
+) -> Result<ImportedAsset> {
     let Some(info) = image::probe(bytes) else {
         return Err(Error::NotAnImage);
     };
+    // Refused before anything is hashed or written, so an animation costs
+    // nothing and leaves nothing. See the module docs for why this is a refusal
+    // while the 3D bounds are a warning.
+    if info.frames == Frames::Multiple {
+        return Err(Error::AnimatedImage);
+    }
+    let warnings = mesh_warnings(&info, bytes.len() as u64);
 
+    cancel.check()?;
     let hash = atomic::hash_bytes(bytes);
+    cancel.check()?;
+
     let rel = wobu_core::asset::original_path(&hash, info.ext);
     let path = paths::from_rel_string(root, &rel);
 
@@ -116,7 +279,50 @@ pub fn import(root: &Path, bytes: &[u8], kind: AssetKind) -> Result<ImportedAsse
         Err(e) => return Err(Error::io(&path, e)),
     };
 
-    Ok(ImportedAsset { asset: describe(root, &hash, &rel, kind, info, bytes.len() as u64), deduped })
+    Ok(ImportedAsset {
+        asset: describe(root, &hash, &rel, kind, info, bytes.len() as u64),
+        deduped,
+        warnings,
+    })
+}
+
+/// How much of a large file to read between cancellation checks.
+///
+/// A megabyte: enough that the per-chunk syscall is noise next to the read
+/// itself, small enough that pressing Cancel on a 400 MB PSD-sized scan over
+/// SMB is answered in about one chunk's latency rather than at the end of the
+/// file. It is not a bound on the wait — a wedged mount blocks a single read
+/// for the mount's own timeout, and nothing in userspace shortens that — but it
+/// is the same honest best-effort `rescan_with` makes.
+const READ_CHUNK: usize = 1024 * 1024;
+
+/// Read a file into memory, checking `cancel` as it goes.
+///
+/// Chunked rather than `fs::read` because that is the whole difference between
+/// an import the user can get out of and one they cannot. Everything else about
+/// it is the same: the hash needs every byte, and the bytes have to be hashed
+/// before we know where the file goes, so there is no streaming version of this
+/// to reach for.
+pub fn read_cancellable(path: &Path, cancel: &Cancel) -> Result<Vec<u8>> {
+    use std::io::Read as _;
+
+    let mut file = fs::File::open(path).map_err(|e| Error::io(path, e))?;
+    // The length is a hint for the allocation and nothing more — it can be
+    // stale, and on a share it can be a lie, so the read loop is what decides
+    // when the file is over.
+    let hint = fs::metadata(path).map(|m| m.len() as usize).unwrap_or(0);
+    let mut out = Vec::with_capacity(hint.min(64 * 1024 * 1024));
+
+    loop {
+        cancel.check()?;
+        let start = out.len();
+        out.resize(start + READ_CHUNK, 0);
+        let read = file.read(&mut out[start..]).map_err(|e| Error::io(path, e))?;
+        out.truncate(start + read);
+        if read == 0 {
+            return Ok(out);
+        }
+    }
 }
 
 /// Every blob in the folder, described well enough to index.
@@ -161,6 +367,14 @@ pub fn describe_at(root: &Path, path: &Path) -> Option<Asset> {
     asset_id(&hash)?;
 
     let info = image::probe_file(path).ok().flatten()?;
+    // An animation is left out for the same reason [`import`] refuses one: the
+    // index has to describe the library an import would have produced. A blob
+    // Wobu wrote can never be one of these, so the only way to get here is by
+    // dropping a GIF into `assets/originals/` by hand — and indexing it would
+    // put a file in the library that re-importing would reject.
+    if info.frames == Frames::Multiple {
+        return None;
+    }
     // A blob whose extension disagrees with its header is not at the path
     // `original_path` would produce for it, so nothing else in Wobu could find
     // it by hash. Indexing it anyway would put a second row on the same id and
@@ -386,5 +600,74 @@ mod tests {
         fs::write(shard.join(format!("{}.png", "b".repeat(64))), b"not really a png").unwrap();
 
         assert_eq!(scan(dir.path()).len(), 1);
+    }
+
+    /* ── the 3D bounds (#30) ──────────────────────────────────────────── */
+
+    /// The four rules from `docs/08-providers.md`, checked against the table
+    /// rather than against the constants — a test that reads the same constant
+    /// the code does proves only that the constant exists.
+    #[test]
+    fn the_mesh_bounds_are_the_ones_the_provider_doc_states() {
+        let png = |w, h| image::probe(&png(w, h)).unwrap();
+
+        assert!(mesh_warnings(&png(1024, 1024), 1000).is_empty());
+        // The edges are inclusive on both ends, which is what "min side ≥ 128,
+        // max side ≤ 5000" says and what an off-by-one here would quietly
+        // change into a rejection at submit time.
+        assert!(mesh_warnings(&png(128, 5000), 1000).is_empty());
+        assert_eq!(mesh_warnings(&png(127, 900), 1000), [ImportWarning::MeshTooSmall]);
+        assert_eq!(mesh_warnings(&png(900, 5001), 1000), [ImportWarning::MeshTooLarge]);
+        assert_eq!(
+            mesh_warnings(&png(900, 900), MESH_MAX_BYTES + 1),
+            [ImportWarning::MeshTooHeavy]
+        );
+        assert!(mesh_warnings(&png(900, 900), MESH_MAX_BYTES).is_empty());
+    }
+
+    #[test]
+    fn the_shortest_and_longest_side_are_measured_whichever_way_up_the_image_is() {
+        // Both bounds are about *sides*, not about width or height, so a
+        // portrait and a landscape copy of the same shape have to warn alike.
+        // Reading `width` for one and `height` for the other is the classic
+        // way this rule half-works.
+        let probe = |w, h| image::probe(&png(w, h)).unwrap();
+        for (w, h) in [(100u32, 900u32), (900, 100)] {
+            assert_eq!(mesh_warnings(&probe(w, h), 1000), [ImportWarning::MeshTooSmall]);
+        }
+        for (w, h) in [(6000u32, 900u32), (900, 6000)] {
+            assert_eq!(mesh_warnings(&probe(w, h), 1000), [ImportWarning::MeshTooLarge]);
+        }
+    }
+
+    #[test]
+    fn only_the_two_formats_the_multi_view_input_takes_go_unremarked() {
+        // Hunyuan3D's multi-view input is JPG/PNG only. A GIF or a WebP is a
+        // perfectly good mood reference and Wobu stores it — it simply cannot
+        // be one of the eight views of a turnaround.
+        let mut png = image::probe(&png(1024, 1024)).unwrap();
+        assert!(mesh_warnings(&png, 1000).is_empty());
+
+        png.mime = "image/jpeg";
+        assert!(mesh_warnings(&png, 1000).is_empty());
+
+        for mime in ["image/gif", "image/webp"] {
+            png.mime = mime;
+            assert_eq!(mesh_warnings(&png, 1000), [ImportWarning::MeshFormat], "{mime}");
+        }
+    }
+
+    #[test]
+    fn several_things_wrong_with_one_picture_are_all_reported() {
+        // A 64x64 GIF is both the wrong format and too small. Reporting the
+        // first and stopping would send the user to fix one thing, re-import,
+        // and be told about the next — which is the shape of a UI people learn
+        // to distrust.
+        let mut info = image::probe(&png(64, 64)).unwrap();
+        info.mime = "image/gif";
+        assert_eq!(
+            mesh_warnings(&info, MESH_MAX_BYTES + 1),
+            [ImportWarning::MeshFormat, ImportWarning::MeshTooSmall, ImportWarning::MeshTooHeavy],
+        );
     }
 }
