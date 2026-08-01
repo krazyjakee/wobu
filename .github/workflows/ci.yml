@@ -1,12 +1,9 @@
 name: CI
 
-# Every push, on every branch, plus pull requests so that a PR from a fork is
-# covered too. A branch that also has a PR open is therefore built twice; that
-# is the price of a branch push being checked before anyone opens the PR, and
-# `concurrency` below keeps it to two runs rather than two per commit.
+# Automatic CI is disabled. Keep a manual trigger so the checks remain
+# available on demand without running for pushes or pull requests.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 # A second push to the same branch makes the first run's answer irrelevant, and
 # a Tauri bundle is far too slow to leave two of them queued.
