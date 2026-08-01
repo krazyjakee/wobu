@@ -45,12 +45,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use tauri::{AppHandle, Emitter};
 use wobu_core::Id;
 use wobu_jobs::{Config, Event, Failure, JobId, Notify, Queue, QueueSnapshot, events};
 use wobu_store::{
-    Cancel, Error as StoreError, Peer, Presence, PresenceHandle, Project, Watcher, paths,
+    Cancel, Error as StoreError, Peer, Presence, PresenceHandle, Project, ReconcileObservation,
+    ReconcilePlan, WatchChange, Watcher, paths,
 };
 
 use crate::diag;
@@ -126,6 +127,20 @@ pub struct AppState {
     /// outlives the process's willingness to shut it down. `None` after the
     /// manager is gone means "nobody is syncing", which is exactly right.
     handover: Arc<Mutex<Option<Weak<dyn Handover>>>>,
+    /// Serialises full folder observations without holding the project mutex.
+    /// A request arriving mid-walk becomes one pending refresh, regardless of
+    /// how many watcher/manual/sync nudges overlap it.
+    reconciling: Arc<Mutex<ReconcileGate>>,
+    reconcile_done: Arc<Condvar>,
+}
+
+#[derive(Default)]
+struct ReconcileGate {
+    running: bool,
+    pending: bool,
+    generation: u64,
+    last_changed: bool,
+    last_offline: bool,
 }
 
 /// Told, synchronously, which project the window is about to hold.
@@ -167,6 +182,33 @@ impl AppState {
         let mut guard = self.slot.lock();
         let open = guard.as_mut().ok_or_else(WobuError::no_project_open)?;
         f(&mut open.project)
+    }
+
+    /// Re-read the complete project folder without holding the project mutex
+    /// across filesystem work. Full requests already in flight are coalesced:
+    /// this joins that generation, queues one follow-up refresh, and waits for
+    /// it to finish without holding the project mutex.
+    pub fn reconcile_now(&self) -> CommandResult<bool> {
+        let project = self.open_id().ok_or_else(WobuError::no_project_open)?;
+        self.reconcile_project_now(project)
+    }
+
+    /// Identity-checked form used by sync, whose round was planned for one
+    /// project even if the window changes worlds before the observation starts.
+    pub fn reconcile_project_now(&self, project: Id) -> CommandResult<bool> {
+        let root = {
+            let guard = self.slot.lock();
+            let open = guard
+                .as_ref()
+                .filter(|open| open.project.id() == project)
+                .ok_or_else(WobuError::no_project_open)?;
+            open.project.root().to_path_buf()
+        };
+        let generation = self.generation.load(Ordering::SeqCst);
+        match self.reconcile_full_wait_with(&root, generation, false, ReconcilePlan::observe) {
+            Outcome::Reconciled(changed) => Ok(changed),
+            Outcome::WentOffline => Err(StoreError::Disconnected.into()),
+        }
     }
 
     /// Like [`with`](Self::with), but only if the open project is the one
@@ -354,7 +396,9 @@ impl AppState {
         let app = app.clone();
         let watched = root.to_path_buf();
 
-        let result = Watcher::start(root, move || this.on_folder_event(&app, &watched, generation));
+        let result = Watcher::start(root, move |change| {
+            this.on_folder_event(&app, &watched, generation, change)
+        });
 
         match result {
             Ok(w) => Some(w),
@@ -372,34 +416,41 @@ impl AppState {
     /// Returns whether anything actually moved. On a share that answer decides
     /// the next poll interval — the poller has no other way to tell whether
     /// somebody else is working in this world right now.
-    fn on_folder_event(&self, app: &AppHandle, root: &Path, generation: u64) -> bool {
+    fn on_folder_event(
+        &self,
+        app: &AppHandle,
+        root: &Path,
+        generation: u64,
+        change: WatchChange,
+    ) -> bool {
         if self.generation.load(Ordering::SeqCst) != generation {
             return false;
         }
 
-        // Reconcile under the lock; emit outside it.
-        let outcome = {
-            let mut guard = self.slot.lock();
-            let Some(open) = guard.as_mut() else { return false };
-            if open.offline {
-                // The reconnect loop owns recovery from here. A stray event
-                // for a dead mountpoint must not race it.
-                return false;
+        let outcome = match change {
+            WatchChange::Local(paths) if !paths.is_empty() => {
+                let mut guard = self.slot.lock();
+                let Some(open) = guard.as_mut() else { return false };
+                if open.offline || open.project.root() != root {
+                    return false;
+                }
+                match open.project.reconcile_paths(&paths) {
+                    Ok(changed) => Outcome::Reconciled(changed),
+                    Err(StoreError::Disconnected) => {
+                        open.offline = true;
+                        Outcome::WentOffline
+                    }
+                    Err(error) => {
+                        eprintln!("wobu: reconcile failed: {error}");
+                        Outcome::Reconciled(false)
+                    }
+                }
             }
-            match open.project.reconcile() {
-                // `reconcile` reports whether anything actually moved, and the
-                // frontend is only woken when it did — otherwise every save the
-                // app itself makes bounces straight back as an invalidation
-                // and a refetch.
-                Ok(changed) => Outcome::Reconciled(changed),
-                Err(StoreError::Disconnected) => {
-                    open.offline = true;
-                    Outcome::WentOffline
-                }
-                Err(e) => {
-                    eprintln!("wobu: reconcile failed: {e}");
-                    Outcome::Reconciled(false)
-                }
+            // A share has no paths, and a rare pathless local notification is
+            // safest treated the same way. All folder I/O happens outside the
+            // mutex in this branch.
+            WatchChange::Poll | WatchChange::Local(_) => {
+                self.reconcile_full_with(root, generation, false, ReconcilePlan::observe)
             }
         };
 
@@ -416,6 +467,180 @@ impl AppState {
                 // the fast poll so coming back is noticed quickly.
                 true
             }
+        }
+    }
+
+    /// Full observation in three phases: index plan under the mutex, filesystem
+    /// work without it, then a short index-only apply under the mutex.
+    fn reconcile_full_with(
+        &self,
+        root: &Path,
+        generation: u64,
+        allow_offline: bool,
+        observe: impl FnMut(ReconcilePlan) -> wobu_store::Result<ReconcileObservation>,
+    ) -> Outcome {
+        self.reconcile_full_inner(root, generation, allow_offline, false, observe)
+    }
+
+    fn reconcile_full_wait_with(
+        &self,
+        root: &Path,
+        generation: u64,
+        allow_offline: bool,
+        observe: impl FnMut(ReconcilePlan) -> wobu_store::Result<ReconcileObservation>,
+    ) -> Outcome {
+        self.reconcile_full_inner(root, generation, allow_offline, true, observe)
+    }
+
+    fn reconcile_full_inner(
+        &self,
+        root: &Path,
+        generation: u64,
+        allow_offline: bool,
+        wait_for_completion: bool,
+        mut observe: impl FnMut(ReconcilePlan) -> wobu_store::Result<ReconcileObservation>,
+    ) -> Outcome {
+        {
+            let mut gate = self.reconciling.lock();
+            if gate.running && gate.generation == generation {
+                gate.pending = true;
+                if !wait_for_completion {
+                    return Outcome::Reconciled(false);
+                }
+                while gate.running && gate.generation == generation {
+                    self.reconcile_done.wait(&mut gate);
+                }
+                if gate.generation != generation {
+                    return Outcome::Reconciled(false);
+                }
+                return if gate.last_offline {
+                    Outcome::WentOffline
+                } else {
+                    Outcome::Reconciled(gate.last_changed)
+                };
+            }
+            if gate.running {
+                // A project replacement may begin observing while the previous
+                // generation winds down. Wake its explicit waiters so they can
+                // notice that their identity is stale.
+                self.reconcile_done.notify_all();
+            }
+            gate.running = true;
+            gate.pending = false;
+            gate.generation = generation;
+        }
+
+        let mut changed = false;
+        loop {
+            let outcome =
+                self.reconcile_full_pass_with(root, generation, allow_offline, &mut observe);
+            match outcome {
+                Outcome::Reconciled(pass_changed) => changed |= pass_changed,
+                Outcome::WentOffline => {
+                    let mut gate = self.reconciling.lock();
+                    if gate.generation == generation {
+                        gate.running = false;
+                        gate.pending = false;
+                        gate.last_changed = changed;
+                        gate.last_offline = true;
+                        self.reconcile_done.notify_all();
+                    }
+                    return Outcome::WentOffline;
+                }
+            }
+
+            let mut gate = self.reconciling.lock();
+            if gate.generation != generation {
+                return Outcome::Reconciled(changed);
+            }
+            if gate.pending && self.generation.load(Ordering::SeqCst) == generation {
+                gate.pending = false;
+                drop(gate);
+                continue;
+            }
+            gate.running = false;
+            gate.pending = false;
+            gate.last_changed = changed;
+            gate.last_offline = false;
+            self.reconcile_done.notify_all();
+            return Outcome::Reconciled(changed);
+        }
+    }
+
+    fn reconcile_full_pass_with(
+        &self,
+        root: &Path,
+        generation: u64,
+        allow_offline: bool,
+        observe: &mut impl FnMut(ReconcilePlan) -> wobu_store::Result<ReconcileObservation>,
+    ) -> Outcome {
+        // A stale observation is normally caused by a save/reload overlapping
+        // the network listing. Coalesce that overlap into one fresh pass.
+        for _ in 0..3 {
+            if self.generation.load(Ordering::SeqCst) != generation {
+                return Outcome::Reconciled(false);
+            }
+            let plan = {
+                let guard = self.slot.lock();
+                let Some(open) = guard.as_ref() else { return Outcome::Reconciled(false) };
+                if open.project.root() != root || (open.offline && !allow_offline) {
+                    return Outcome::Reconciled(false);
+                }
+                match open.project.reconcile_plan() {
+                    Ok(plan) => plan,
+                    Err(error) => {
+                        eprintln!("wobu: reconcile planning failed: {error}");
+                        return Outcome::Reconciled(false);
+                    }
+                }
+            };
+
+            let observation = match observe(plan) {
+                Ok(observation) => observation,
+                Err(StoreError::Disconnected) => return self.mark_offline(root, generation),
+                Err(error) => {
+                    eprintln!("wobu: reconcile observation failed: {error}");
+                    return Outcome::Reconciled(false);
+                }
+            };
+            match observation.revalidate() {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(StoreError::Disconnected) => return self.mark_offline(root, generation),
+                Err(error) => {
+                    eprintln!("wobu: reconcile validation failed: {error}");
+                    return Outcome::Reconciled(false);
+                }
+            }
+
+            let mut guard = self.slot.lock();
+            let Some(open) = guard.as_mut() else { return Outcome::Reconciled(false) };
+            if self.generation.load(Ordering::SeqCst) != generation || open.project.root() != root {
+                return Outcome::Reconciled(false);
+            }
+            match open.project.apply_reconcile(observation) {
+                Ok(Some(changed)) => {
+                    open.offline = false;
+                    return Outcome::Reconciled(changed);
+                }
+                Ok(None) => continue,
+                Err(error) => {
+                    eprintln!("wobu: reconcile apply failed: {error}");
+                    return Outcome::Reconciled(false);
+                }
+            }
+        }
+        Outcome::Reconciled(false)
+    }
+
+    fn mark_offline(&self, root: &Path, generation: u64) -> Outcome {
+        let mut guard = self.slot.lock();
+        let Some(open) = guard.as_mut() else { return Outcome::Reconciled(false) };
+        if self.generation.load(Ordering::SeqCst) == generation && open.project.root() == root {
+            open.offline = true;
+            Outcome::WentOffline
+        } else {
+            Outcome::Reconciled(false)
         }
     }
 
@@ -446,18 +671,11 @@ impl AppState {
                     continue;
                 }
 
-                let recovered = {
-                    let mut guard = this.slot.lock();
-                    let Some(open) = guard.as_mut() else { return };
-                    match open.project.reconcile() {
-                        Ok(_) => {
-                            open.offline = false;
-                            true
-                        }
-                        // It went away again between the probe and the lock.
-                        Err(_) => false,
-                    }
-                };
+                let recovered = matches!(
+                    this.reconcile_full_with(&root, generation, true, ReconcilePlan::observe,),
+                    Outcome::Reconciled(_)
+                ) && this.generation.load(Ordering::SeqCst) == generation
+                    && !this.is_offline();
                 if recovered {
                     let _ = app.emit(SHARE_ONLINE, ());
                     let _ = app.emit(WORLD_CHANGED, ());
@@ -477,6 +695,8 @@ impl AppState {
             opening: Arc::clone(&self.opening),
             thumbing: Arc::clone(&self.thumbing),
             handover: Arc::clone(&self.handover),
+            reconciling: Arc::clone(&self.reconciling),
+            reconcile_done: Arc::clone(&self.reconcile_done),
         }
     }
 }
@@ -581,6 +801,110 @@ fn scrubbed(mut failure: Failure) -> Failure {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new() -> Self {
+            let path =
+                std::env::temp_dir().join(format!("wobu-state-test-{}", wobu_core::new_id()));
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn open_test_state(name: &str) -> (TestDir, PathBuf, AppState) {
+        let dir = TestDir::new();
+        let project = Project::create(&dir.0, name).unwrap();
+        let root = project.root().to_path_buf();
+        let state = AppState::default();
+        *state.slot.lock() =
+            Some(Open { project, watcher: None, presence: Presence::start(&root), offline: false });
+        (dir, root, state)
+    }
+
+    #[test]
+    fn a_delayed_full_observation_does_not_block_index_reads() {
+        let (_dir, root, state) = open_test_state("Latency");
+
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = state.handle();
+        let observed_root = root.clone();
+        let thread = std::thread::spawn(move || {
+            worker.reconcile_full_with(&observed_root, 0, false, move |plan| {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                plan.observe()
+            })
+        });
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+
+        let began = Instant::now();
+        let count = state.with(|project| Ok(project.list_nodes()?.len())).unwrap();
+        let elapsed = began.elapsed();
+        eprintln!("index read while full observation was blocked: {elapsed:?}");
+        assert_eq!(count, 2, "new projects contain the two singleton nodes");
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "an index-only read waited {elapsed:?} behind filesystem observation"
+        );
+
+        release_tx.send(()).unwrap();
+        assert!(matches!(thread.join().unwrap(), Outcome::Reconciled(false)));
+    }
+
+    #[test]
+    fn overlapping_full_requests_coalesce_into_one_followup_observation() {
+        let (_dir, root, state) = open_test_state("Coalescing");
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let worker_calls = Arc::clone(&calls);
+        let worker = state.handle();
+        let observed_root = root.clone();
+        let thread = std::thread::spawn(move || {
+            worker.reconcile_full_with(&observed_root, 0, false, move |plan| {
+                if worker_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                }
+                plan.observe()
+            })
+        });
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+
+        let waiting = state.handle();
+        let waiter = std::thread::spawn(move || waiting.reconcile_now());
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !state.reconciling.lock().pending {
+            assert!(Instant::now() < deadline, "explicit reconcile never joined the running pass");
+            std::thread::yield_now();
+        }
+        for _ in 0..4 {
+            assert!(matches!(
+                state.reconcile_full_with(&root, 0, false, ReconcilePlan::observe),
+                Outcome::Reconciled(false)
+            ));
+        }
+        release_tx.send(()).unwrap();
+        assert!(matches!(thread.join().unwrap(), Outcome::Reconciled(false)));
+        assert!(!waiter.join().unwrap().unwrap());
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "many overlapping requests should collapse to one followup"
+        );
+    }
 
     #[test]
     fn every_string_on_a_job_failure_is_scrubbed_before_it_leaves_the_process() {

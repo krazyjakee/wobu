@@ -396,10 +396,7 @@ pub fn corrupt_files(state: State<'_, AppState>) -> CommandResult<Vec<CorruptFil
 /// having to guess at the debounce.
 #[tauri::command]
 pub fn project_reload(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()> {
-    state.with(|p| {
-        p.reconcile()?;
-        Ok(())
-    })?;
+    state.reconcile_now()?;
     let _ = app.emit(WORLD_CHANGED, ());
     Ok(())
 }
@@ -419,10 +416,8 @@ pub async fn project_export_wiki(
     if destination.trim().is_empty() {
         return Err(wobu_store::Error::InvalidExportDestination(PathBuf::from(destination)).into());
     }
-    let (snapshot, changed) = state.with(|project| {
-        let changed = project.reconcile()?;
-        Ok((project.wiki_snapshot()?, changed))
-    })?;
+    let changed = state.reconcile_now()?;
+    let snapshot = state.with(|project| Ok(project.wiki_snapshot()?))?;
     if changed {
         let _ = app.emit(WORLD_CHANGED, ());
     }

@@ -5,7 +5,8 @@
 //! invisible until restart. The strategy is therefore picked from the project
 //! path. See `docs/07-file-shares.md`.
 
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -39,9 +40,18 @@ pub enum Strategy {
     Poll,
 }
 
-/// Signals that the project folder *may* have changed. The callback is a nudge,
-/// not a description — the receiver calls `Project::reconcile`, which does the
-/// cheap `(mtime, size)` comparison and decides whether anything really moved.
+/// Why the watcher is asking the store to reconcile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Change {
+    /// Paths reported by the local OS, collapsed across one save burst.
+    Local(Vec<PathBuf>),
+    /// A share poll has no event stream, so it must observe the whole project.
+    Poll,
+}
+
+/// Signals that the project folder *may* have changed. Local notifications
+/// carry their paths so the receiver can avoid walking unrelated files; a
+/// share poll necessarily asks for a full observation.
 pub struct Watcher {
     strategy: Strategy,
     stop: Arc<AtomicBool>,
@@ -54,13 +64,13 @@ impl Watcher {
     /// but the poller uses it to decide how hard to keep looking.
     pub fn start(
         root: &Path,
-        on_change: impl Fn() -> bool + Send + Sync + 'static,
+        on_change: impl Fn(Change) -> bool + Send + Sync + 'static,
     ) -> Result<Watcher> {
         let strategy =
             if crate::paths::is_network_path(root) { Strategy::Poll } else { Strategy::Local };
         match strategy {
             Strategy::Local => Watcher::start_local(root, on_change),
-            Strategy::Poll => Ok(Watcher::start_poll(on_change)),
+            Strategy::Poll => Ok(Watcher::start_poll(move || on_change(Change::Poll))),
         }
     }
 
@@ -70,15 +80,12 @@ impl Watcher {
 
     fn start_local(
         root: &Path,
-        on_change: impl Fn() -> bool + Send + Sync + 'static,
+        on_change: impl Fn(Change) -> bool + Send + Sync + 'static,
     ) -> Result<Watcher> {
         let (tx, rx) = mpsc::channel();
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            // The event is discarded deliberately: the receiver reconciles
-            // against the index rather than trusting a path out of the OS,
-            // which is the only thing that behaves the same on every platform.
-            if res.is_ok() {
-                let _ = tx.send(());
+            if let Ok(event) = res {
+                let _ = tx.send(event.paths);
             }
         })
         .map_err(|e| Error::io(root, std::io::Error::other(e)))?;
@@ -96,14 +103,15 @@ impl Watcher {
                 // Block until something happens, then swallow the burst: a
                 // single save produces several events, and reconciling once per
                 // event would re-scan the folder repeatedly.
-                if rx.recv_timeout(Duration::from_millis(500)).is_err() {
-                    continue;
+                let Ok(first) = rx.recv_timeout(Duration::from_millis(500)) else { continue };
+                let mut paths: HashSet<PathBuf> = first.into_iter().collect();
+                while let Ok(next) = rx.recv_timeout(LOCAL_DEBOUNCE) {
+                    paths.extend(next);
                 }
-                while rx.recv_timeout(LOCAL_DEBOUNCE).is_ok() {}
                 if thread_stop.load(Ordering::Relaxed) {
                     break;
                 }
-                let _ = on_change();
+                let _ = on_change(Change::Local(paths.into_iter().collect()));
             }
         });
 
@@ -179,7 +187,7 @@ mod tests {
     #[test]
     fn a_local_project_uses_the_event_watcher() {
         let dir = tempfile::tempdir().unwrap();
-        let watcher = Watcher::start(dir.path(), || false).unwrap();
+        let watcher = Watcher::start(dir.path(), |_| false).unwrap();
         assert_eq!(watcher.strategy(), Strategy::Local);
     }
 
@@ -191,7 +199,12 @@ mod tests {
 
         let hits = Arc::new(AtomicUsize::new(0));
         let counter = hits.clone();
-        let _watcher = Watcher::start(dir.path(), move || {
+        let observed_paths = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let callback_paths = Arc::clone(&observed_paths);
+        let _watcher = Watcher::start(dir.path(), move |change| {
+            if let Change::Local(paths) = change {
+                callback_paths.lock().unwrap().extend(paths);
+            }
             counter.fetch_add(1, Ordering::Relaxed);
             true
         })
@@ -207,6 +220,10 @@ mod tests {
         let observed = hits.load(Ordering::Relaxed);
         assert!(observed >= 1, "the edit should have been noticed");
         assert!(observed <= 3, "debounce should collapse the burst, saw {observed}");
+        assert!(
+            observed_paths.lock().unwrap().iter().any(|path| path.ends_with("vashk.md")),
+            "the debounced callback should retain the edited path"
+        );
     }
 
     #[test]
@@ -261,7 +278,7 @@ mod tests {
         let hits = Arc::new(AtomicUsize::new(0));
         let counter = hits.clone();
         {
-            let _watcher = Watcher::start(dir.path(), move || {
+            let _watcher = Watcher::start(dir.path(), move |_| {
                 counter.fetch_add(1, Ordering::Relaxed);
                 true
             })

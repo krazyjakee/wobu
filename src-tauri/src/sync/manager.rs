@@ -264,6 +264,43 @@ impl Replica {
         }
     }
 
+    /// Bring the canonical folder into the index without making an open
+    /// project's global mutex pay for a network walk.
+    pub fn reconcile(&self) -> CommandResult<()> {
+        {
+            let mut held = self.held.lock();
+            match &mut *held {
+                Held::Open => {}
+                Held::Detached(Some(project)) => {
+                    project.reconcile()?;
+                    return Ok(());
+                }
+                Held::Detached(None) => {
+                    drop(held);
+                    let opened = match &self.index_path {
+                        Some(index_path) => Project::open_at_index(&self.root, index_path)?,
+                        None => Project::open(&self.root)?,
+                    };
+                    let mut held = self.held.lock();
+                    match &mut *held {
+                        Held::Open => drop(opened),
+                        Held::Detached(slot) => {
+                            *slot = Some(opened);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+
+        // The handover state can move after `held` is released. AppState
+        // rechecks the project id and generation before applying, so a close or
+        // replacement turns this into no_project_open rather than touching the
+        // successor.
+        self.state.reconcile_project_now(self.project)?;
+        Ok(())
+    }
+
     /// Whether the window is currently holding this project.
     pub fn is_open(&self) -> bool {
         matches!(*self.held.lock(), Held::Open)

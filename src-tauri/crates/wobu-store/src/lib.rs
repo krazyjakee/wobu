@@ -42,11 +42,12 @@ pub use error::{Error, Result};
 pub use index::{CorruptFile, Index};
 pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{
-    AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary, SaveOutcome,
+    AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary,
+    ReconcileObservation, ReconcilePlan, SaveOutcome,
 };
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};
 pub use thumbs::{ThumbTarget, Thumbnail};
 pub use transfer::{TransferBundle, TransferCandidate, TransferOutcome, TransferPreview};
-pub use watcher::{Strategy, Watcher};
+pub use watcher::{Change as WatchChange, Strategy, Watcher};
 pub use wiki::{WikiExport, WikiSnapshot};

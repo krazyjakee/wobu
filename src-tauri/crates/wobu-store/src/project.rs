@@ -5,6 +5,7 @@
 //! somewhere else; delete the local index and nothing is lost. See
 //! `docs/02-data-model.md`.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
@@ -18,7 +19,7 @@ use wobu_core::{
 
 use crate::apply;
 use crate::assets::{self, ImportedAsset};
-use crate::atomic::{self, WriteOutcome};
+use crate::atomic::{self, Stamp, WriteOutcome};
 use crate::conflict::{self, Conflict, Keep, Resolved};
 use crate::error::{Error, Result};
 use crate::generations;
@@ -122,6 +123,186 @@ pub enum Enhanced {
     Conflict {
         conflict_path: String,
     },
+}
+
+/// The index-only half of a full reconciliation.
+///
+/// Capturing this is deliberately cheap and does not touch the project folder.
+/// A network watcher can therefore release the shell's project mutex before
+/// [`observe`](Self::observe) performs directory listings and file reads.
+pub struct ReconcilePlan {
+    root: PathBuf,
+    project_id: Id,
+    node_stamps: HashMap<String, (i64, u64)>,
+    corrupt: HashSet<String>,
+    assets: HashSet<String>,
+    generations: HashSet<String>,
+}
+
+enum ObservedNode {
+    Valid { rel: String, node: Box<Node>, stamp: Stamp },
+    Corrupt { rel: String, error: String, stamp: Stamp },
+}
+
+/// Filesystem evidence gathered without holding the shell's project mutex.
+pub struct ReconcileObservation {
+    plan: ReconcilePlan,
+    nodes: Vec<ObservedNode>,
+    seen_nodes: HashSet<String>,
+    seen_node_stamps: HashMap<String, (i64, u64)>,
+    assets: Vec<Asset>,
+    seen_assets: HashSet<String>,
+    generations: Vec<(Generation, String, Stamp)>,
+    seen_generations: HashSet<String>,
+    generation_ledger_changed: bool,
+}
+
+impl ReconcilePlan {
+    /// Perform every potentially slow directory listing, stat and read.
+    pub fn observe(self) -> Result<ReconcileObservation> {
+        if !paths::project_is_present(&self.root) {
+            return Err(Error::Disconnected);
+        }
+
+        // A remount can put a different project at the same path. Checking its
+        // canonical identity outside the mutex prevents an old observation
+        // from being applied to the newly mounted world.
+        let meta_path = self.root.join(PROJECT_FILE);
+        let raw = std::fs::read_to_string(&meta_path).map_err(|e| Error::io(&meta_path, e))?;
+        let meta: ProjectMeta = serde_json::from_str(&raw)?;
+        if meta.id != self.project_id {
+            return Err(Error::NotAProject(self.root.clone()));
+        }
+
+        let mut nodes = Vec::new();
+        let mut seen_nodes = HashSet::new();
+        let mut seen_node_stamps = HashMap::new();
+        for (rel, path) in
+            markdown_files_at(&self.root).into_iter().filter(|(_, path)| !is_conflict_path(path))
+        {
+            let Some((mtime, size)) = atomic::peek(&path)? else { continue };
+            seen_nodes.insert(rel.clone());
+            seen_node_stamps.insert(rel.clone(), (mtime, size));
+            if self.node_stamps.get(&rel) == Some(&(mtime, size)) {
+                continue;
+            }
+            let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
+            match markdown::from_markdown(&text, &path) {
+                Ok(node) => nodes.push(ObservedNode::Valid { rel, node: Box::new(node), stamp }),
+                Err(error) => nodes.push(ObservedNode::Corrupt {
+                    rel,
+                    error: relative_message_at(&self.root, &error.to_string()),
+                    stamp,
+                }),
+            }
+        }
+
+        let mut assets_seen = HashSet::new();
+        let mut asset_updates = Vec::new();
+        for (rel, path) in assets::list_paths(&self.root) {
+            assets_seen.insert(rel.clone());
+            if !self.assets.contains(&rel)
+                && let Some(asset) = assets::describe_at(&self.root, &path)
+            {
+                asset_updates.push(asset);
+            }
+        }
+
+        let mut generations_seen = HashSet::new();
+        let mut generation_updates = Vec::new();
+        let mut generation_ledger_changed = false;
+        for (rel, path) in generations::list_paths(&self.root) {
+            generations_seen.insert(rel.clone());
+            if self.generations.contains(&rel) {
+                continue;
+            }
+            generation_ledger_changed = true;
+            if let Ok(Some(record)) = generations::read_at(&self.root, &path) {
+                generation_updates.push(record);
+            }
+        }
+
+        // A share disappearing during a walk can look exactly like mass
+        // deletion. Recheck after all listings and discard that observation.
+        if !paths::project_is_present(&self.root) {
+            return Err(Error::Disconnected);
+        }
+
+        Ok(ReconcileObservation {
+            plan: self,
+            nodes,
+            seen_nodes,
+            seen_node_stamps,
+            assets: asset_updates,
+            seen_assets: assets_seen,
+            generations: generation_updates,
+            seen_generations: generations_seen,
+            generation_ledger_changed,
+        })
+    }
+}
+
+impl ReconcileObservation {
+    /// Recheck the evidence immediately before the shell acquires its mutex.
+    ///
+    /// This is intentionally filesystem-only. A mismatch means somebody wrote
+    /// between observation and apply; callers discard this snapshot and
+    /// coalesce a fresh pass rather than installing stale parsed content.
+    pub fn revalidate(&self) -> Result<bool> {
+        if !paths::project_is_present(&self.plan.root) {
+            return Err(Error::Disconnected);
+        }
+
+        let meta_path = self.plan.root.join(PROJECT_FILE);
+        let raw = std::fs::read_to_string(&meta_path).map_err(|e| Error::io(&meta_path, e))?;
+        let meta: ProjectMeta = serde_json::from_str(&raw)?;
+        if meta.id != self.plan.project_id {
+            return Ok(false);
+        }
+
+        let current_nodes: HashSet<_> = markdown_files_at(&self.plan.root)
+            .into_iter()
+            .filter(|(_, path)| !is_conflict_path(path))
+            .map(|(rel, _)| rel)
+            .collect();
+        if current_nodes != self.seen_nodes {
+            return Ok(false);
+        }
+        for (rel, observed_stamp) in &self.seen_node_stamps {
+            let path = paths::from_rel_string(&self.plan.root, rel);
+            if atomic::peek(&path)?.as_ref() != Some(observed_stamp) {
+                return Ok(false);
+            }
+        }
+        for observed in &self.nodes {
+            let (rel, stamp) = match observed {
+                ObservedNode::Valid { rel, stamp, .. }
+                | ObservedNode::Corrupt { rel, stamp, .. } => (rel, stamp),
+            };
+            let path = paths::from_rel_string(&self.plan.root, rel);
+            if atomic::read_stamped(&path)?.map(|(_, current)| current) != Some(stamp.clone()) {
+                return Ok(false);
+            }
+        }
+
+        let current_assets: HashSet<_> =
+            assets::list_paths(&self.plan.root).into_iter().map(|(rel, _)| rel).collect();
+        if current_assets != self.seen_assets {
+            return Ok(false);
+        }
+        let current_generations: HashSet<_> =
+            generations::list_paths(&self.plan.root).into_iter().map(|(rel, _)| rel).collect();
+        if current_generations != self.seen_generations {
+            return Ok(false);
+        }
+        for (_, rel, stamp) in &self.generations {
+            let path = paths::from_rel_string(&self.plan.root, rel);
+            if atomic::read_stamped(&path)?.map(|(_, current)| current) != Some(stamp.clone()) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
 }
 
 pub struct Project {
@@ -1553,79 +1734,6 @@ impl Project {
         Ok(())
     }
 
-    /// Fold blobs that appeared or vanished into the index.
-    ///
-    /// A collaborator importing a reference on the far side of a share produces
-    /// no event on this machine at all, so a directory listing is the only
-    /// signal there will ever be that their file exists.
-    fn reconcile_assets(&mut self) -> Result<bool> {
-        let known = self.index.asset_paths()?;
-        let mut seen = std::collections::HashSet::new();
-        let mut changed = false;
-
-        for (rel, path) in assets::list_paths(&self.root) {
-            seen.insert(rel.clone());
-            // Blobs are immutable — the path *is* the content — so a path we
-            // have already described can never need describing again. That is
-            // what keeps this cheap enough to run on every watcher tick.
-            if known.contains(&rel) {
-                continue;
-            }
-            if let Some(asset) = assets::describe_at(&self.root, &path) {
-                self.index.upsert_asset(&asset)?;
-                changed = true;
-            }
-        }
-
-        for rel in known.iter().filter(|rel| !seen.contains(*rel)) {
-            self.index.remove_asset_by_rel_path(rel)?;
-            changed = true;
-        }
-        Ok(changed)
-    }
-
-    /// Fold generation records created by collaborators into the local index.
-    ///
-    /// Paths already known are not reopened. A generation is immutable by
-    /// contract, so its directory entry is all the evidence needed; this keeps
-    /// a watcher tick to one month-sharded listing instead of one SMB read per
-    /// result. An incomplete sync copy fails validation and is retried on the
-    /// next reconcile because no index row was created for it.
-    fn reconcile_generations(&mut self) -> Result<bool> {
-        let known = self.index.generation_paths()?;
-        let mut seen = std::collections::HashSet::new();
-        let mut changed = false;
-        let mut ledger_changed = false;
-
-        for (rel, path) in generations::list_paths(&self.root) {
-            seen.insert(rel.clone());
-            if known.contains(&rel) {
-                continue;
-            }
-            // Even a malformed new receipt changes the canonical spend ledger:
-            // admission must fail closed on it and display must not keep an old
-            // aggregate that makes the broken file invisible.
-            ledger_changed = true;
-            if let Ok(Some((generation, rel, stamp))) = generations::read_at(&self.root, &path) {
-                self.index.upsert_generation(&generation, &rel, &stamp)?;
-                changed = true;
-            }
-        }
-
-        for rel in known.iter().filter(|rel| !seen.contains(*rel)) {
-            // Only the cache row disappears. There is no public deletion API
-            // for the canonical record; this merely reflects an external file
-            // removal without making SQLite authoritative.
-            self.index.remove_generation_by_rel_path(rel)?;
-            changed = true;
-            ledger_changed = true;
-        }
-        if ledger_changed {
-            generations::invalidate_spend_aggregate(&self.root);
-        }
-        Ok(changed)
-    }
-
     // ── thumbnails ───────────────────────────────────────────────────────
     //
     // The argument for all of it — why the files are in the project folder
@@ -2211,28 +2319,172 @@ impl Project {
     /// Only files whose `(mtime, size)` moved are re-read: listing a directory
     /// over SMB is cheap, re-reading hundreds of small files is not.
     pub fn reconcile(&mut self) -> Result<bool> {
-        // Nothing below can tell "the folder is empty" from "the folder is not
-        // there" — `node_files` walks a missing tree and yields zero entries
-        // either way, and the deletion sweep at the bottom then removes every
-        // node from the index. That index is the only copy of the world still
-        // readable while a share is away, so emptying it turns a recoverable
-        // disconnection into what looks to the user like total data loss.
+        for _ in 0..3 {
+            let observation = self.reconcile_plan()?.observe()?;
+            if !observation.revalidate()? {
+                continue;
+            }
+            // No other index writer can interleave with this synchronous API,
+            // so an index-stale baseline would be an internal invariant
+            // violation. Retrying is still safer than applying it.
+            if let Some(changed) = self.apply_reconcile(observation)? {
+                return Ok(changed);
+            }
+        }
+        // A continuously changing folder will be observed again on the next
+        // watcher tick. Do not let it monopolise a synchronous caller forever.
+        Ok(false)
+    }
+
+    /// Capture the index baseline for a full filesystem observation.
+    pub fn reconcile_plan(&self) -> Result<ReconcilePlan> {
+        Ok(ReconcilePlan {
+            root: self.root.clone(),
+            project_id: self.id(),
+            node_stamps: self.index.all_stamps()?,
+            corrupt: self.index.corrupt_paths()?.into_iter().collect(),
+            assets: self.index.asset_paths()?,
+            generations: self.index.generation_paths()?,
+        })
+    }
+
+    /// Apply a previously gathered observation using index operations only.
+    ///
+    /// `None` means another reconcile/save changed the index after the plan was
+    /// captured. Nothing from the stale observation is applied; the next poll
+    /// starts from the newer baseline.
+    pub fn apply_reconcile(&mut self, observation: ReconcileObservation) -> Result<Option<bool>> {
+        let ReconcileObservation {
+            plan,
+            nodes,
+            seen_nodes,
+            seen_node_stamps: _,
+            assets,
+            seen_assets,
+            generations,
+            seen_generations,
+            mut generation_ledger_changed,
+        } = observation;
+
+        if self.id() != plan.project_id
+            || self.root != plan.root
+            || self.index.all_stamps()? != plan.node_stamps
+            || self.index.corrupt_paths()?.into_iter().collect::<HashSet<_>>() != plan.corrupt
+            || self.index.asset_paths()? != plan.assets
+            || self.index.generation_paths()? != plan.generations
+        {
+            return Ok(None);
+        }
+
+        let mut changed = false;
+        for observed in nodes {
+            match observed {
+                ObservedNode::Valid { rel, node, stamp } => {
+                    self.index.upsert_node(&node, &rel, &stamp)?;
+                    if plan.corrupt.contains(&rel) {
+                        self.index.clear_corrupt(&rel)?;
+                    }
+                    changed = true;
+                }
+                ObservedNode::Corrupt { rel, error, .. } => {
+                    self.index.mark_corrupt(&rel, &error)?;
+                    if !plan.corrupt.contains(&rel) {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        for rel in plan.node_stamps.keys().filter(|rel| !seen_nodes.contains(*rel)) {
+            self.index.remove_by_rel_path(rel)?;
+            changed = true;
+        }
+        for rel in plan.corrupt.iter().filter(|rel| !seen_nodes.contains(*rel)) {
+            self.index.clear_corrupt(rel)?;
+            changed = true;
+        }
+
+        for asset in assets {
+            self.index.upsert_asset(&asset)?;
+            changed = true;
+        }
+        for rel in plan.assets.iter().filter(|rel| !seen_assets.contains(*rel)) {
+            self.index.remove_asset_by_rel_path(rel)?;
+            changed = true;
+        }
+
+        for (generation, rel, stamp) in generations {
+            self.index.upsert_generation(&generation, &rel, &stamp)?;
+            changed = true;
+        }
+        for rel in plan.generations.iter().filter(|rel| !seen_generations.contains(*rel)) {
+            self.index.remove_generation_by_rel_path(rel)?;
+            changed = true;
+            generation_ledger_changed = true;
+        }
+        if generation_ledger_changed {
+            generations::invalidate_spend_aggregate(&self.root);
+        }
+        Ok(Some(changed))
+    }
+
+    /// Reconcile only local node paths reported by the OS watcher.
+    pub fn reconcile_paths(&mut self, changed_paths: &[PathBuf]) -> Result<bool> {
         if !self.is_present() {
             return Err(Error::Disconnected);
         }
 
         let known = self.index.all_stamps()?;
-        // Captured up front so the loop below can tell a file that has just
-        // broken from one that was already broken — only the former is a
-        // change worth waking the UI for.
-        let was_corrupt: std::collections::HashSet<String> =
-            self.index.corrupt_paths()?.into_iter().collect();
-        let mut seen = std::collections::HashSet::new();
-        let mut changed = false;
+        let was_corrupt: HashSet<String> = self.index.corrupt_paths()?.into_iter().collect();
+        let mut targets = HashSet::new();
 
-        for (rel, path) in self.node_files() {
-            seen.insert(rel.clone());
-            let Some((mtime, size)) = atomic::peek(&path)? else { continue };
+        for changed in changed_paths {
+            let absolute =
+                if changed.is_absolute() { changed.clone() } else { self.root.join(changed) };
+            let Ok(relative) = absolute.strip_prefix(&self.root) else { continue };
+            let rel = paths::to_rel_string(relative);
+            if rel != NODES_DIR && !rel.starts_with(&format!("{NODES_DIR}/")) {
+                continue;
+            }
+
+            if absolute.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("md")) {
+                if !is_conflict_path(&absolute) {
+                    targets.insert(rel);
+                }
+                continue;
+            }
+
+            let prefix = format!("{}/", rel.trim_end_matches('/'));
+            targets.extend(
+                known
+                    .keys()
+                    .chain(was_corrupt.iter())
+                    .filter(|known_rel| known_rel.starts_with(&prefix))
+                    .cloned(),
+            );
+            if absolute.is_dir() {
+                targets.extend(
+                    markdown_files_under(&self.root, &absolute)
+                        .into_iter()
+                        .filter(|(_, path)| !is_conflict_path(path))
+                        .map(|(rel, _)| rel),
+                );
+            }
+        }
+
+        let mut changed = false;
+        for rel in targets {
+            let path = paths::from_rel_string(&self.root, &rel);
+            let Some((mtime, size)) = atomic::peek(&path)? else {
+                if known.contains_key(&rel) {
+                    self.index.remove_by_rel_path(&rel)?;
+                    changed = true;
+                }
+                if was_corrupt.contains(&rel) {
+                    self.index.clear_corrupt(&rel)?;
+                    changed = true;
+                }
+                continue;
+            };
             if known.get(&rel) == Some(&(mtime, size)) {
                 continue;
             }
@@ -2245,35 +2497,14 @@ impl Project {
                     }
                     changed = true;
                 }
-                Err(e) => {
-                    // Note what is *not* here: no `upsert_node`, so the row
-                    // this file used to have keeps its last good contents, and
-                    // no removal, so the entity stays in the navigator. A live
-                    // row beside a broken file is how the user finds their
-                    // data again.
-                    let why = self.relative_message(&e.to_string());
-                    self.index.mark_corrupt(&rel, &why)?;
+                Err(error) => {
+                    self.index.mark_corrupt(&rel, &self.relative_message(&error.to_string()))?;
                     if !was_corrupt.contains(&rel) {
                         changed = true;
                     }
                 }
             }
         }
-
-        for rel in known.keys().filter(|rel| !seen.contains(*rel)) {
-            self.index.remove_by_rel_path(rel)?;
-            changed = true;
-        }
-
-        // A corrupt file that has since been deleted or repaired-by-rename is
-        // no longer corrupt; without this the banner would never clear.
-        for rel in was_corrupt.iter().filter(|rel| !seen.contains(*rel)) {
-            self.index.clear_corrupt(rel)?;
-            changed = true;
-        }
-
-        changed |= self.reconcile_assets()?;
-        changed |= self.reconcile_generations()?;
         Ok(changed)
     }
 
@@ -2284,18 +2515,7 @@ impl Project {
     /// disagree about which files exist, which they would the moment somebody
     /// changed a depth limit in one of them.
     fn markdown_files(&self) -> Vec<(String, PathBuf)> {
-        let nodes_root = self.root.join(NODES_DIR);
-        walkdir::WalkDir::new(&nodes_root)
-            .max_depth(3)
-            .into_iter()
-            .filter_map(std::result::Result::ok)
-            .filter(|e| e.file_type().is_file())
-            .filter(|e| e.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("md")))
-            .filter_map(|e| {
-                let rel = e.path().strip_prefix(&self.root).ok()?;
-                Some((paths::to_rel_string(rel), e.path().to_path_buf()))
-            })
-            .collect()
+        markdown_files_at(&self.root)
     }
 
     /// Every node Markdown file, as `(relative path, absolute path)`.
@@ -2307,6 +2527,33 @@ impl Project {
     fn conflict_files(&self) -> Vec<(String, PathBuf)> {
         self.markdown_files().into_iter().filter(|(_, path)| is_conflict_path(path)).collect()
     }
+}
+
+fn markdown_files_at(root: &Path) -> Vec<(String, PathBuf)> {
+    markdown_files_under(root, &root.join(NODES_DIR))
+}
+
+fn markdown_files_under(root: &Path, start: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(start_relative) = start.strip_prefix(root) else { return Vec::new() };
+    let start_depth = start_relative.components().count();
+    let Some(remaining_depth) = 3usize.checked_sub(start_depth) else { return Vec::new() };
+    walkdir::WalkDir::new(start)
+        .max_depth(remaining_depth)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("md")))
+        .filter_map(|entry| {
+            let relative = entry.path().strip_prefix(root).ok()?;
+            Some((paths::to_rel_string(relative), entry.into_path()))
+        })
+        .collect()
+}
+
+fn relative_message_at(root: &Path, message: &str) -> String {
+    let root = root.to_string_lossy();
+    let stripped = message.replace(&format!("{root}/"), "");
+    stripped.replace(&format!("{}\\", root.replace('/', "\\")), "")
 }
 
 fn remove_asset_file(path: &Path) -> Result<()> {
@@ -2660,6 +2907,88 @@ mod tests {
         let names: Vec<_> = project.list_nodes().unwrap().into_iter().map(|n| n.name).collect();
         assert!(names.contains(&"Vashk-Prime".to_string()), "{names:?}");
         assert_eq!(project.get_node(node.id).unwrap().name, "Vashk-Prime");
+    }
+
+    #[test]
+    fn local_reconcile_only_reads_the_reported_node_path() {
+        let (_dir, mut project) = new_project();
+        let vashk = project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let sunborn = project.create_node(NodeKind::Species, "Sunborn", None).unwrap();
+        let vashk_path = project.root().join("nodes/species/vashk.md");
+        let sunborn_path = project.root().join("nodes/species/sunborn.md");
+
+        for (path, before, after) in [
+            (&vashk_path, "name: Vashk", "name: Vashk-Prime"),
+            (&sunborn_path, "name: Sunborn", "name: Sunborn-Prime"),
+        ] {
+            let text = std::fs::read_to_string(path).unwrap().replace(before, after);
+            std::fs::write(path, text).unwrap();
+            filetime_bump(path);
+        }
+
+        assert!(project.reconcile_paths(std::slice::from_ref(&vashk_path)).unwrap());
+        let indexed = project.list_nodes().unwrap();
+        assert_eq!(indexed.iter().find(|node| node.id == vashk.id).unwrap().name, "Vashk-Prime");
+        assert_eq!(
+            indexed.iter().find(|node| node.id == sunborn.id).unwrap().name,
+            "Sunborn",
+            "an unrelated external edit must wait for its own event"
+        );
+
+        assert!(project.reconcile().unwrap());
+        let indexed = project.list_nodes().unwrap();
+        assert_eq!(
+            indexed.iter().find(|node| node.id == sunborn.id).unwrap().name,
+            "Sunborn-Prime"
+        );
+    }
+
+    #[test]
+    fn a_full_observation_is_rejected_if_a_file_moves_before_apply() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+
+        let first = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: First");
+        std::fs::write(&path, first).unwrap();
+        filetime_bump(&path);
+        let observation = project.reconcile_plan().unwrap().observe().unwrap();
+
+        let second = std::fs::read_to_string(&path).unwrap().replace("name: First", "name: Second");
+        std::fs::write(&path, second).unwrap();
+        filetime_bump(&path);
+
+        assert!(!observation.revalidate().unwrap());
+        assert!(project.reconcile().unwrap());
+        assert!(project.list_nodes().unwrap().iter().any(|node| node.name == "Second"));
+    }
+
+    #[test]
+    fn revalidation_notices_a_file_that_was_unchanged_during_observation() {
+        let (_dir, mut project) = new_project();
+        project.create_node(NodeKind::Species, "Vashk", None).unwrap();
+        let path = project.root().join("nodes/species/vashk.md");
+        let observation = project.reconcile_plan().unwrap().observe().unwrap();
+
+        let edited =
+            std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Vashk-Prime");
+        std::fs::write(&path, edited).unwrap();
+        filetime_bump(&path);
+
+        assert!(!observation.revalidate().unwrap());
+        assert!(project.reconcile().unwrap());
+    }
+
+    #[test]
+    fn markdown_walk_does_not_descend_below_the_node_depth_limit() {
+        let (_dir, project) = new_project();
+        let deep = project.root().join("nodes/species/deep/deeper");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join("hidden.md"), "---\nname: Hidden\n---\n").unwrap();
+
+        assert!(
+            markdown_files_at(project.root()).iter().all(|(rel, _)| !rel.ends_with("hidden.md"))
+        );
     }
 
     #[test]

@@ -140,10 +140,7 @@ pub async fn run(
 
     // See the module documentation. This is not optional and not an
     // optimisation.
-    replica.with(|project| {
-        project.reconcile()?;
-        Ok(())
-    })?;
+    replica.reconcile()?;
 
     let nodes = replica.with(|project| Ok(project.manifest()?))?;
     let announce = blobs::announce();
