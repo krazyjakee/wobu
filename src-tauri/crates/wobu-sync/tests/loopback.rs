@@ -24,7 +24,7 @@ use wobu_sync::{ALPN, Config, Error, Identity, Projects, Session, Sessions, Sync
 struct Held(Vec<Id>);
 
 impl Projects for Held {
-    fn holds(&self, project: &Id) -> bool {
+    fn admits(&self, project: &Id, _grant: Option<&wobu_sync::Grant>) -> bool {
         self.0.contains(project)
     }
 }

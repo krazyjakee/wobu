@@ -39,7 +39,7 @@
 //!   per-image figure to report and no credit figure to read back either.
 //!
 //! `Capabilities` is the clearest case of all: every one of its eight fields —
-//! `max_resolution`, `aspect_ratios`, `image_refs`, `controlnet`, `loras`,
+//! `max_resolution`, `aspect_ratios`, `image_refs`, `reference_mechanisms`, `loras`,
 //! `negative_prompt`, `streaming_preview` — is a question about a picture, and
 //! [`negotiate`](crate::negotiate) is a total function over it. A mesh backend
 //! implementing `ImageBackend` would answer seven of them with a value chosen to

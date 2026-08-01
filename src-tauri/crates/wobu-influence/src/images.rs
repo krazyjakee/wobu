@@ -18,14 +18,13 @@ struct Candidate<'a> {
     weight: f32,
 }
 
-/// One of the backend's reference buckets: what will be sent in it, what was cut
+/// One of the provider's counting buckets: what survived in it, what was cut
 /// from it, and how many it takes.
 ///
-/// The kept images live here rather than in one flat list because the bucket is
-/// what an adapter has to build its request out of — these are the pictures that
-/// go in the provider's style-reference field, and those are the ones that go in
-/// its object field. A flat list would make every adapter re-derive the split,
-/// which is the second copy of the mapping this crate exists to not have.
+/// The kept images live here because the bucket is what the Inspector reports:
+/// `3/3 style refs` is a provider quota sentence. It is not adapter routing.
+/// Gemini's wire format is one undifferentiated list, and ComfyUI routes through
+/// mechanisms such as ControlNet that cut across these buckets (#86).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bucket<'a> {
     bucket: RefBucket,
@@ -92,10 +91,9 @@ impl<'a> CompiledImages<'a> {
     }
 
     /// Every reference that will be sent, bucket by bucket and in reading order
-    /// within each. Bucket order and not global reading order, because the only
-    /// callers that want them flat are counting them or writing an
-    /// `influence_snapshot`; anything building a request wants
-    /// [`buckets`](Self::buckets), which is where the routing lives.
+    /// within each. Bucket order is provider counting order, useful for the
+    /// Inspector and an `influence_snapshot`; routing is carried separately by
+    /// `wobu-imagine`'s `ReferenceMechanism`.
     pub fn kept(&self) -> impl Iterator<Item = Fragment<'a>> + '_ {
         self.buckets.iter().flat_map(|b| b.kept.iter().copied())
     }

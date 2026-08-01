@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NodeSummary } from '../../lib/api'
 import { errorMessage } from '../../lib/api'
-import { useNode } from '../../lib/queries'
+import { useInfluenceStack, useNode } from '../../lib/queries'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { useUI, EDITOR_TABS, type EditorTab } from '../../store/ui'
 import { Icon } from '../Icon'
@@ -20,7 +20,6 @@ const TAB_LABEL: Record<EditorTab, string> = {
 
 export function Editor({
   selected,
-  chain,
   kinds,
   readOnly,
   onJump,
@@ -28,7 +27,6 @@ export function Editor({
   loading,
 }: {
   selected: NodeSummary | null
-  chain: NodeSummary[]
   kinds: KindIndex
   readOnly: boolean
   onJump: (id: string) => void
@@ -38,8 +36,20 @@ export function Editor({
   const tab = useUI((s) => s.tab)
   const setTab = useUI((s) => s.setTab)
   const nodeQ = useNode(selected?.id ?? null)
+  const influenceQ = useInfluenceStack(selected?.id ?? null)
   const node = nodeQ.data
   const autosave = useAutosaveNode(node, { readOnly })
+  // The two project roots influence everything, but do not locate an entity in
+  // the world's hierarchy. The breadcrumb is the ancestry/culture/place spine
+  // of the resolved stack; using the resolver (rather than reading only the
+  // subject's direct links) also includes implicit parent chains in the order
+  // the compiler actually sees them.
+  const influenceChain =
+    influenceQ.data?.layers.filter(
+      (layer) =>
+        layer.nodeId !== null &&
+        (layer.layer === 'ancestry' || layer.layer === 'culture' || layer.layer === 'place'),
+    ) ?? []
 
   if (!selected) {
     return (
@@ -96,21 +106,22 @@ export function Editor({
         <div className="ed-sub">
           <span className="ed-inherit">inherits</span>
           <span className="chain">
-            {chain.length === 0 ? (
-              <span>nothing yet — links land with the Influence Engine in M5</span>
+            {influenceQ.isPending ? null : influenceChain.length === 0 ? (
+              <span>nothing</span>
             ) : (
-              chain.map((n) => {
-                const c = colorFor(kinds.get(n.kind), n.kind)
+              influenceChain.map((layer) => {
+                const kind = layer.kind
+                const c = kind ? colorFor(kinds.get(kind), kind) : 'var(--text-faint)'
                 return (
                   <button
-                    key={n.id}
+                    key={layer.nodeId}
                     className="chip"
                     style={{ color: c }}
-                    onClick={() => onJump(n.id)}
-                    title={n.summary || n.name}
+                    onClick={() => onJump(layer.nodeId as string)}
+                    title={`Open ${layer.name}`}
                   >
                     <i />
-                    <span style={{ color: 'var(--text-dim)' }}>{n.name}</span>
+                    <span style={{ color: 'var(--text-dim)' }}>{layer.name}</span>
                   </button>
                 )
               })

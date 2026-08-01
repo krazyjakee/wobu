@@ -28,8 +28,10 @@
 //! **Reference images.** Core ComfyUI has no image-prompt mechanism: style and
 //! object references need IPAdapter, which is a third-party pack, and structure
 //! references need a ControlNet model that most installs do not have. So the
-//! shipped workflows are text-to-image and this backend declares a reference
-//! budget of zero — see [`no_references`]. That is not the same as ignoring them:
+//! shipped workflows are text-to-image and this backend declares no reachable
+//! reference mechanisms — see [`no_reference_mechanisms`]. ComfyUI's counting
+//! budget stays unlimited, because a missing graph input is not a vendor quota.
+//! That is not the same as ignoring references:
 //! [`negotiate`](crate::negotiate) reports every withheld picture on the card it
 //! came from, which is the behaviour the crate exists to provide, and
 //! [`Installed::controlnets`] is public so the UI can say *why*.
@@ -47,14 +49,14 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde_json::Value;
-use wobu_influence::{ImageBudget, Refs};
+use wobu_influence::ImageBudget;
 
 use crate::Cancel;
 use crate::aspect::Resolution;
 use crate::backend::{
     GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
 };
-use crate::capability::Capabilities;
+use crate::capability::{Capabilities, ReferenceMechanisms};
 // Crate-level rather than a module of this one: the Gemini adapter reads back
 // the size of what it was sent for the same reason, and a second header reader
 // is a second place to get a JPEG frame marker wrong.
@@ -469,14 +471,13 @@ impl ImageBackend for ComfyBackend {
             // the parameter is not taken, which `capability.rs` is explicit is
             // not the same as every value being refused.
             aspect_ratios: vec![],
-            image_refs: no_references(),
-            // `false` on every install, including the ones that have ControlNet
-            // models — because no workflow shipped here carries one, and a
-            // backend that declares an adapter it cannot reach produces exactly
-            // the unactionable 400 this adapter exists to avoid. What the server
-            // does have is on `Installed::controlnets`, so the UI can explain the
-            // downgrade rather than leaving the user to guess.
-            controlnet: false,
+            // ComfyUI itself imposes no vendor counting quota. Whether an image
+            // can reach the graph is the independent mechanism axis below.
+            image_refs: ImageBudget::unlimited(),
+            // No shipped workflow has an image input yet, even on an install
+            // with ControlNet models. Declaring no reachable mechanism keeps
+            // that honest without pretending ComfyUI has 0/0/0 vendor buckets.
+            reference_mechanisms: no_reference_mechanisms(),
             // Nothing in the influence stack routes to a LoRA yet, so this
             // changes nothing about the request. It decides whether the UI shows
             // a LoRA picker, and a picker that silently did nothing would be the
@@ -543,7 +544,7 @@ impl fmt::Display for Health {
     }
 }
 
-/// No reference images at all.
+/// No reachable reference mechanism at all.
 ///
 /// The shipped workflows are text-to-image, and this is the declaration that
 /// makes that visible instead of silent. Core ComfyUI has no image-prompt
@@ -551,22 +552,12 @@ impl fmt::Display for Health {
 /// pack, and structure references need both a ControlNet model and a graph to
 /// apply it in.
 ///
-/// A zero is spelled out in all three buckets rather than left as `characters:
-/// None`, which `wobu_influence` defines as "metered as objects, not refused".
-/// The dash means the backend does not *separate* that bucket; a zero means it
-/// takes none, and the Inspector should print `0/0` three times rather than one
-/// dash that reads like a shrug.
-///
 /// The consequence is that [`negotiate`](crate::negotiate) reports every
-/// attached picture as dropped, on the card it came from. That is worse than
+/// attached picture as withheld, on the card it came from. That is worse than
 /// sending them and better than the two alternatives — silently leaving them out,
 /// or declaring a capability that produces a 400 the user cannot act on.
-fn no_references() -> ImageBudget {
-    ImageBudget {
-        objects: Refs::new(0),
-        characters: Some(Refs::new(0)),
-        style_refs: Some(Refs::new(0)),
-    }
+fn no_reference_mechanisms() -> ReferenceMechanisms {
+    ReferenceMechanisms::none()
 }
 
 /// The resolution ceiling a card this size can be asked for.
@@ -726,11 +717,10 @@ mod tests {
     use std::future::Future;
     use std::sync::Arc;
     use std::task::{Context, Poll, Wake, Waker};
-
-    use serde_json::json;
-    use wobu_influence::RefBucket;
+    use wobu_influence::Refs;
 
     use crate::aspect::AspectRatio;
+    use serde_json::json;
 
     fn block_on<F: Future>(future: F) -> F::Output {
         struct Unparker(std::thread::Thread);
@@ -897,7 +887,7 @@ mod tests {
         let backend = ComfyBackend::new("localhost:8188").unwrap();
         let caps = backend.capabilities("anything.safetensors");
         assert!(!caps.loras, "no probe means no LoRA picker");
-        assert!(!caps.controlnet);
+        assert_eq!(caps.reference_mechanisms, ReferenceMechanisms::none());
         assert_eq!(caps.max_resolution, Resolution::new(1024, 1024), "the smallest band");
         assert!(!caps.requires_billing, "and this one is known without asking");
         assert!(backend.installed().is_none());
@@ -905,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn controlnet_is_declared_false_even_where_the_models_are_installed() {
+    fn no_structure_mechanism_is_declared_even_where_the_models_are_installed() {
         // The discipline #51 asks for, applied against ourselves: this server
         // has `openpose.pth` and the loader to open it, and no workflow shipped
         // here can reach either. Declaring `true` would route a silhouette
@@ -914,9 +904,10 @@ mod tests {
         let backend = probed(24 * (1 << 30));
         let installed = backend.installed().unwrap();
         assert!(installed.has_controlnet(), "the server really does have one");
-        assert!(
-            !backend.capabilities("sd_xl_base_1.0.safetensors").controlnet,
-            "and wobu has no graph that uses it, so it must not claim one",
+        assert_eq!(
+            backend.capabilities("sd_xl_base_1.0.safetensors").reference_mechanisms.structure,
+            Refs::new(0),
+            "wobu has no graph that uses it, so it must not claim an input",
         );
         // Which is why the probe result is public: the Inspector can say why the
         // reference was downgraded rather than leaving the user to guess.
@@ -924,16 +915,10 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_image_is_reported_as_withheld_rather_than_left_out() {
-        // The consequence of a zero budget, seen from the outside. Nothing is
-        // dropped in silence: the counters the Inspector prints are `0/0`, and
-        // every attached picture appears in the report.
-        let budget = no_references();
-        for bucket in [RefBucket::Objects, RefBucket::Characters, RefBucket::StyleRefs] {
-            assert!(budget.declares(bucket), "{bucket:?} is a zero, not a dash");
-            assert_eq!(budget.meter(bucket).1.limit(), Some(0));
-        }
-        assert_ne!(budget, ImageBudget::unlimited());
+    fn unreachable_inputs_are_not_misrepresented_as_vendor_counting_caps() {
+        let caps = probed(24 * (1 << 30)).capabilities("sd_xl_base_1.0.safetensors");
+        assert_eq!(caps.reference_mechanisms, ReferenceMechanisms::none());
+        assert_eq!(caps.image_refs, ImageBudget::unlimited());
     }
 
     #[test]

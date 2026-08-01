@@ -48,7 +48,7 @@ impl Refs {
     }
 }
 
-/// One of the categories a backend counts reference images in.
+/// One of the categories a provider counts reference images in.
 ///
 /// **This is the backend's vocabulary and not ours.** Ours is [`AssetRole`] —
 /// `silhouette`, `palette`, `material`, `mood`, `pose`, `costume`, `full_ref` —
@@ -66,7 +66,7 @@ impl Refs {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RefBucket {
-    /// The general bucket: here is a thing, look at it. Every backend has one,
+    /// The general bucket: here is a thing, look at it. Every provider has one,
     /// and it is where the buckets a backend does not separate out end up — see
     /// [`ImageBudget::meter`].
     Objects,

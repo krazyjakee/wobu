@@ -28,19 +28,12 @@
 //!   established.
 //! - No signature verification. Nothing in this crate reads a `Signature`, and
 //!   `iroh::SecretKey` is used only to *be* an identity, never to sign anything.
-//! - No authorisation. Holding a project and being *allowed* to sync it are
-//!   different questions, and the second one is not answered here — #90 asked it
-//!   and closed `wontfix`; see [`ticket::Grant`]. `docs/10-sync-spike.md` flags
-//!   iroh's `EndpointHooks::after_handshake` as read-but-not-tried and as the
-//!   candidate seam. It is the wrong one, and that is worth writing down so it is
-//!   not tried twice: `after_handshake` runs before any application byte, so it
-//!   has no project id — the project is named in the opening message, which has
-//!   not been sent yet — and its rejection is a QUIC-level close carrying iroh's
-//!   own code rather than the `NOT_HELD` code and fixed reason [`endpoint`]
-//!   refuses with.
-//!   A peer turned away there is told something a peer turned away for
-//!   [`Error::ProjectNotHeld`] is not, which is the one disclosure this crate
-//!   exists to avoid making.
+//! - No authorisation field in the opening message. #90 carries the grant on a
+//!   second stream and gives it to [`Projects::admits`] beside the project id.
+//!   `EndpointHooks::after_handshake` cannot do that: it runs before any
+//!   application byte, so it has no project id, and its rejection would carry
+//!   iroh's own close code instead of the byte-identical `ProjectNotHeld`
+//!   refusal required here.
 //!
 //! If a change to this crate needs a cryptographic primitive, the change is
 //! wrong. That is the whole of the rule.
@@ -59,12 +52,10 @@
 //! is worth naming here: it is thirty-two random bytes in a ticket, it is not a
 //! key, and nothing derives, signs, encrypts or challenges with it. It exists to
 //! tell "I was invited" apart from "I read a project ULID off a shared folder",
-//! which is an *authorisation* input — and nothing on `wobu/sync/1` presents or
-//! checks one. #90 asked whether it should and closed `wontfix`; [`ticket::Grant`]
-//! carries that argument, and the short form is that a peer who could not produce
-//! the grant could not have dialled either. Asking the OS for random bytes and
-//! putting them in a token is not a primitive. Doing anything else with them
-//! would be.
+//! which is an *authorisation* input. `wobu/sync/1` presents it on a second QUIC
+//! stream, leaving the established opening message untouched. Asking the OS for
+//! random bytes, transporting them, and comparing them in constant time adds no
+//! key exchange, encryption, signature, or challenge-response.
 //!
 //! ## The refusal is the security-relevant path
 //!
@@ -76,8 +67,9 @@
 //!
 //! Three things enforce it, at three levels:
 //!
-//! - [`Projects::holds`] takes one project and returns a bool. An implementation
-//!   has no way to hand back a list, so the accept path never has one.
+//! - [`Projects::admits`] takes one project and one optional grant and returns a
+//!   bool. An implementation has no way to hand back a list or a refusal cause,
+//!   so the accept path never has one.
 //! - The refusal on the wire is a unit variant with no fields, byte-identical
 //!   whatever is held, and the QUIC close code and reason beside it are
 //!   constants.
@@ -231,9 +223,11 @@
 //!   `Router`'s abort-on-drop is why it must exist.
 //! - **#83 status and presence** — [`Session::is_relayed`] now,
 //!   `Connection::path_events` when a live badge is wanted.
-//! - **#90 authorisation** — closed `wontfix`, so this is not a seam and nothing
-//!   is owed against it. [`ticket::Grant`] is where the argument lives.
+//! - **#90 authorisation** — done: a ticket presents its grant on a second stream
+//!   and the app's [`Projects::admits`] implementation checks it without changing
+//!   the opening message or the `ProjectNotHeld` refusal.
 
+mod authorization;
 pub mod blobs;
 pub mod endpoint;
 pub mod error;

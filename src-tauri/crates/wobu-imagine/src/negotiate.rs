@@ -31,7 +31,7 @@ use wobu_influence::{CompiledImages, Fragment, compile_images};
 use serde::Serialize;
 
 use crate::aspect::{AspectRatio, Resolution};
-use crate::capability::Capabilities;
+use crate::capability::{Capabilities, ReferenceMechanism};
 
 /// Why something the stack offered is not in the request.
 ///
@@ -62,6 +62,15 @@ pub enum Downgrade {
     /// it as structure is a picture of a black shape on white, and the model
     /// draws one.
     MoodboardOnly,
+    /// An image reference on a backend with no mechanism that can apply it.
+    /// Unlike [`MoodboardOnly`](Self::MoodboardOnly), there is no weaker but
+    /// semantically safe interpretation: leaving an IPAdapter input out is not
+    /// image prompting, so the image is withheld and named.
+    ReferenceNotSent,
+    /// A reachable mechanism had fewer inputs than the stack offered. This is
+    /// distinct from the provider bucket budget: a one-input ControlNet graph
+    /// can fill up even when the provider has no image quota at all.
+    MechanismLimit,
     /// A negative-prompt fragment on a backend with no negative prompt. There is
     /// nothing it downgrades *to* — Gemini's image API has no field for it — so
     /// the honest answer is that the `never:` list is not being enforced on this
@@ -75,6 +84,10 @@ impl Downgrade {
     pub fn label(self) -> &'static str {
         match self {
             Downgrade::MoodboardOnly => "mood-board only — this backend cannot use it as structure",
+            Downgrade::ReferenceNotSent => {
+                "not sent — this backend has no mechanism for this reference"
+            }
+            Downgrade::MechanismLimit => "not sent — this backend's reference mechanism is full",
             Downgrade::NotSent => "not sent — this backend takes no negative prompt",
         }
     }
@@ -90,6 +103,9 @@ impl Downgrade {
 pub struct Downgraded<'a> {
     pub fragment: Fragment<'a>,
     pub reason: Downgrade,
+    /// The routing layer that lost this fragment. `None` for a non-reference
+    /// downgrade such as a negative prompt.
+    pub mechanism: Option<ReferenceMechanism>,
 }
 
 /// What one fragment's routing target becomes on a given backend.
@@ -127,27 +143,13 @@ fn route(target: FragmentTarget, caps: &Capabilities) -> Route {
                 Route::Withheld(Downgrade::NotSent)
             }
         }
-        // Style transfer is the one image channel every backend has in some
-        // form: it is "here is a picture, make it look like this", which is what
-        // a reference image *is* on a model with no adapters at all. There is no
-        // capability for it and there should not be one — a backend that could
-        // not take a reference image would have an empty `image_refs`, and the
-        // budget already answers that by keeping nothing.
-        FragmentTarget::StyleRef => Route::Send,
-        FragmentTarget::StructureRef => {
-            if caps.controlnet {
-                Route::Send
-            } else {
-                Route::Withheld(Downgrade::MoodboardOnly)
-            }
+        // References are routed and limited together in `negotiate`, after this
+        // exhaustive target pass. A provider bucket cannot answer whether a
+        // backend has an IPAdapter or ControlNet input: it only counts the image
+        // after a mechanism has accepted it.
+        FragmentTarget::StyleRef | FragmentTarget::StructureRef | FragmentTarget::Palette => {
+            Route::Send
         }
-        // Colour conditioning has no capability flag either, and that is #44's
-        // call rather than a gap here: `RefBucket::for_role` files a `palette`
-        // reference in the general object bucket, so on a backend with no colour
-        // pass it is sent as an ordinary picture of some colours. It is weaker
-        // than a palette adapter and it is not nothing, which is the difference
-        // between this and a structure reference.
-        FragmentTarget::Palette => Route::Send,
         FragmentTarget::MoodboardOnly => Route::Private,
     }
 }
@@ -267,15 +269,58 @@ pub fn negotiate<'a>(
     aspect: AspectRatio,
     caps: &Capabilities,
 ) -> Negotiated<'a> {
-    let mut kept: Vec<Fragment<'a>> = Vec::with_capacity(fragments.len());
-    let mut downgrades: Vec<Downgraded<'a>> = Vec::new();
+    let mut routed: Vec<(usize, Fragment<'a>)> = Vec::with_capacity(fragments.len());
+    let mut reported: Vec<(usize, Downgraded<'a>)> = Vec::new();
 
-    for fragment in fragments {
+    for (index, fragment) in fragments.iter().enumerate() {
         match route(fragment.target(), caps) {
-            Route::Send | Route::Private => kept.push(*fragment),
-            Route::Withheld(reason) => downgrades.push(Downgraded { fragment: *fragment, reason }),
+            Route::Send | Route::Private => routed.push((index, *fragment)),
+            Route::Withheld(reason) => {
+                reported.push((index, Downgraded { fragment: *fragment, reason, mechanism: None }))
+            }
         }
     }
+
+    // Mechanisms are independent pools, applied before the provider's counting
+    // buckets. That ordering is the answer to #86: a pose and silhouette can
+    // compete for one ControlNet input without being falsely reclassified into
+    // the same Gemini quota bucket. Only contributing images compete; a
+    // zero-weight image continues to `compile_images`, which reports it as
+    // `Silenced` rather than claiming a backend limit removed it.
+    let mut mechanism_dropped = vec![false; routed.len()];
+    for mechanism in ReferenceMechanism::ALL {
+        let cap = caps.reference_mechanisms.cap(mechanism);
+        let mut candidates: Vec<(f32, usize)> = routed
+            .iter()
+            .enumerate()
+            .filter_map(|(position, (_, fragment))| {
+                (fragment.contributes()
+                    && ReferenceMechanism::for_target(fragment.target()) == Some(mechanism))
+                .then_some((fragment.weight(), position))
+            })
+            .collect();
+        candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+
+        let drop_count = candidates.len().saturating_sub(cap.get());
+        for (_, position) in candidates.into_iter().take(drop_count) {
+            mechanism_dropped[position] = true;
+            let (index, fragment) = routed[position];
+            let reason = match (mechanism, cap.get()) {
+                (ReferenceMechanism::Structure, 0) => Downgrade::MoodboardOnly,
+                (_, 0) => Downgrade::ReferenceNotSent,
+                _ => Downgrade::MechanismLimit,
+            };
+            reported.push((index, Downgraded { fragment, reason, mechanism: Some(mechanism) }));
+        }
+    }
+
+    let kept: Vec<Fragment<'a>> = routed
+        .into_iter()
+        .zip(mechanism_dropped)
+        .filter_map(|((_, fragment), dropped)| (!dropped).then_some(fragment))
+        .collect();
+    reported.sort_unstable_by_key(|(index, _)| *index);
+    let downgrades = reported.into_iter().map(|(_, downgrade)| downgrade).collect();
 
     // After the withholding and never before it — see the module header. A
     // reference the backend is not going to receive must not be counted against
@@ -297,6 +342,7 @@ pub fn negotiate<'a>(
 mod tests {
     use super::*;
     use crate::aspect::Resolution;
+    use crate::capability::ReferenceMechanisms;
     use wobu_core::{AssetRole, Id, Layer};
     use wobu_influence::{
         FragmentBody, ImageBudget, Origin, Reached, RefBucket, ResolvedSource, image_budget,
@@ -335,7 +381,7 @@ mod tests {
             max_resolution: Resolution::new(4096, 4096),
             aspect_ratios: AspectRatio::ALL.to_vec(),
             image_refs: image_budget("gemini-3-pro-image").unwrap(),
-            controlnet: false,
+            reference_mechanisms: ReferenceMechanisms::image_prompt(),
             loras: false,
             negative_prompt: false,
             requires_billing: true,
@@ -348,7 +394,7 @@ mod tests {
             max_resolution: Resolution::new(2048, 2048),
             aspect_ratios: vec![],
             image_refs: ImageBudget::unlimited(),
-            controlnet: true,
+            reference_mechanisms: ReferenceMechanisms::unlimited(),
             loras: true,
             negative_prompt: true,
             requires_billing: false,
@@ -426,6 +472,44 @@ mod tests {
             "nothing this backend will not receive may hold a character slot",
         );
         assert_eq!(negotiated.images().dropped().count(), 1);
+    }
+
+    #[test]
+    fn a_controlnet_input_is_one_pool_across_gemini_counting_buckets() {
+        // The exact seam from #86. Pose is counted as `Characters` and
+        // silhouette as `Objects`, but a one-input ControlNet graph has one
+        // structure slot total. Image-prompt references are unavailable on this
+        // hypothetical graph rather than falsely competing in either bucket.
+        let controlnet = Capabilities {
+            image_refs: ImageBudget::unlimited(),
+            reference_mechanisms: ReferenceMechanisms {
+                image_prompt: wobu_influence::Refs::new(0),
+                structure: wobu_influence::Refs::new(1),
+            },
+            ..local()
+        };
+        let stack = [
+            reference(Layer::Subject, AssetRole::Pose, 0.8),
+            reference(Layer::Place, AssetRole::Silhouette, 0.4),
+            reference(Layer::Style, AssetRole::Material, 1.0),
+        ];
+
+        let negotiated = negotiate(&stack, aspect("3:4"), &controlnet);
+        let kept: Vec<_> = negotiated.images().kept().map(|f| f.section()).collect();
+        assert_eq!(kept, ["pose"]);
+        let withheld: Vec<_> = negotiated
+            .downgrades()
+            .iter()
+            .map(|d| (d.fragment.section(), d.reason, d.mechanism))
+            .collect();
+        assert_eq!(
+            withheld,
+            [
+                ("silhouette", Downgrade::MechanismLimit, Some(ReferenceMechanism::Structure),),
+                ("material", Downgrade::ReferenceNotSent, Some(ReferenceMechanism::ImagePrompt),),
+            ],
+        );
+        assert_eq!(negotiated.images().dropped().count(), 0, "no provider quota was hit");
     }
 
     #[test]
@@ -548,7 +632,7 @@ mod tests {
                 characters: None,
                 style_refs: None,
             },
-            controlnet: false,
+            reference_mechanisms: ReferenceMechanisms::none(),
             loras: false,
             negative_prompt: false,
             requires_billing: false,
@@ -569,10 +653,11 @@ mod tests {
         assert_eq!(negotiated.images().kept().count(), 0, "a zero budget keeps nothing");
 
         // Six fragments in, and every one of them accounted for exactly once:
-        // one prompt fragment sent, one mood reference doing its job, two
-        // withheld by the backend, two dropped by a budget of zero.
-        assert_eq!(negotiated.downgrades().len(), 2);
-        assert_eq!(negotiated.images().dropped().count(), 2);
+        // one prompt fragment sent, one mood reference doing its job, and four
+        // withheld by capability negotiation. The provider budget never sees a
+        // reference for which there was no mechanism.
+        assert_eq!(negotiated.downgrades().len(), 4);
+        assert_eq!(negotiated.images().dropped().count(), 0);
         let accounted = negotiated.downgrades().len()
             + negotiated.images().dropped().count()
             + negotiated.images().kept().count()

@@ -542,17 +542,11 @@ impl Blobs {
 
     /// The handler [`crate::SyncEndpoint::bind`] registers on [`ALPN`].
     ///
-    /// `None` for the event sender: `iroh-blobs`' events are a throttling and
-    /// authorisation seam, and authorisation is explicitly not this crate's — see
-    /// [`crate`]. A hook here that decided who may fetch what would be the crate's
-    /// one security rule broken in its newest module.
-    ///
-    /// #90 asked whether a ticket's grant should be checked before a project is
-    /// honoured, and closed `wontfix`. This handler is one of the reasons: it runs
-    /// on its own ALPN over a connection that never carries a project id, so a
-    /// grant enforced on `wobu/sync/1` would have gated the manifest and left the
-    /// bytes on the other side of a door with no lock in it. See
-    /// [`crate::ticket::Grant`].
+    /// `None` for the event sender: this ALPN carries neither a project id nor a
+    /// ticket grant, so it has no sound per-project admission decision to make.
+    /// #90 gates the sync session before a peer learns a project's manifest;
+    /// blob fetches are content-addressed by hashes obtained through that
+    /// admitted exchange.
     pub(crate) fn protocol(&self) -> BlobsProtocol {
         BlobsProtocol::new(&self.store, None)
     }

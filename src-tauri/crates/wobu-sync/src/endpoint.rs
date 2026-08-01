@@ -141,11 +141,12 @@ impl Config {
     }
 }
 
-/// Which projects this machine holds.
+/// Which project and ticket grant this machine will admit.
 ///
 /// The signature is the security boundary, so it is worth reading as one: it
-/// takes the project the peer asked about and returns a bool. An implementation
-/// is not given a way to return a list, a count, or a near miss, so the accept
+/// takes the one project the peer asked about, the optional grant it presented,
+/// and returns a bool. An implementation is not given a way to return a list,
+/// a count, a near miss, or which input failed, so the accept
 /// path physically cannot disclose one — the difference between "I do not have
 /// that" and "I do not have that, but I have three others" is not a discipline
 /// this crate has to keep, it is a sentence it cannot form.
@@ -156,7 +157,7 @@ impl Config {
 /// that needs to open a database to answer this is an implementation that has
 /// handed a stranger a disk seek per dial.
 pub trait Projects: Send + Sync + 'static {
-    fn holds(&self, project: &Id) -> bool;
+    fn admits(&self, project: &Id, grant: Option<&Grant>) -> bool;
 }
 
 /// Where accepted sessions go.
@@ -179,9 +180,9 @@ pub trait Sessions: Send + Sync + 'static {
 /// A connection that has said which project it is about.
 ///
 /// Holding one means two things and no more: the peer's endpoint id is
-/// cryptographically theirs (QUIC/TLS 1.3 did that, not us), and both sides hold
-/// the project named by [`Session::project`]. It does *not* mean the peer is
-/// allowed to read that project — see the crate documentation.
+/// cryptographically theirs (QUIC/TLS 1.3 did that, not us), and both sides
+/// admitted the project named by [`Session::project`] under their local
+/// [`Projects`] policy.
 #[derive(Debug)]
 pub struct Session {
     project: Id,
@@ -301,14 +302,9 @@ impl SyncEndpoint {
         // second protocol on the sync connection, because TLS negotiates one
         // ALPN per connection — see [`crate::blobs`].
         //
-        // Note what is not registered beside it: no gate, no authorisation hook,
-        // no per-peer filter. A peer that reaches this router has proved its key
-        // and nothing else, which is why `Blobs::protocol` passes `None` for
-        // `iroh-blobs`' event sender rather than an empty one that looks like a
-        // place to put a rule. #90 asked whether there should be a rule and closed
-        // `wontfix`; this ALPN is also half of why, because a gate on
-        // `wobu/sync/1` would never have covered the connection the bytes actually
-        // move on. See `ticket::Grant`.
+        // The grant gate belongs to the sync ALPN, where both project and grant
+        // are available. The blobs ALPN still carries neither; access to content
+        // is by hashes learned only after an admitted manifest exchange.
         if let Some(blobs) = &config.blobs {
             builder = builder.accept(crate::blobs::ALPN, blobs.protocol());
         }
@@ -386,7 +382,7 @@ impl SyncEndpoint {
             .await
             .map_err(|source| Error::Dial { peer: id, source })?;
 
-        match opening::within(self.open_timeout, opening::offer(&connection, project)).await {
+        match opening::within(self.open_timeout, opening::offer(&connection, project, None)).await {
             Ok(()) => Ok(Session { project, connection }),
             Err(error) => {
                 hang_up(&connection, &error);
@@ -417,21 +413,32 @@ impl SyncEndpoint {
 
     /// Accept a ticket: dial the peer it names about the project it names.
     ///
-    /// Exactly [`Self::connect`] with the ticket's two dialable fields pulled
-    /// out, and it is a method rather than a line at the call site so that the
-    /// next sentence has somewhere to live: **the grant is not sent.** Nothing in
-    /// `wobu/sync/1` presents or checks one, so accepting a ticket proves no more
-    /// to the other side than dialling with the peer's endpoint id and the project
-    /// ULID would. #90 asked whether it should and closed `wontfix` — the pair a
-    /// dialler needs is only ever handed out inside a ticket, so a grant check
-    /// would refuse nobody who could have got this far. [`crate::ticket::Grant`]
-    /// is where that is argued out.
+    /// Dials the ticket's address, sends the established opening message on its
+    /// original bidirectional stream, and presents the grant on a second,
+    /// unidirectional stream. The accepting [`Projects::admits`] policy sees the
+    /// project and grant together without changing one byte of the opening.
     ///
-    /// Fails with [`Error::ProjectNotHeld`] if the peer no longer has the project
-    /// — which, since there is no revocation, is the only way a share ever stops
-    /// working.
+    /// Fails with [`Error::ProjectNotHeld`] if the peer does not admit the pair.
+    /// A wrong grant and an unknown project are intentionally indistinguishable.
     pub async fn connect_ticket(&self, ticket: &Ticket) -> Result<Session> {
-        self.connect(ticket.addr().clone(), ticket.project()).await
+        let peer = ticket.addr().clone();
+        let id = peer.id;
+        let project = ticket.project();
+        let connection = self
+            .endpoint()
+            .connect(peer, ALPN)
+            .await
+            .map_err(|source| Error::Dial { peer: id, source })?;
+
+        let grant = ticket.grant();
+        let exchange = opening::offer(&connection, project, Some(&grant));
+        match opening::within(self.open_timeout, exchange).await {
+            Ok(()) => Ok(Session { project, connection }),
+            Err(error) => {
+                hang_up(&connection, &error);
+                Err(error)
+            }
+        }
     }
 
     /// Stop accepting, wind the handlers down, and close the endpoint.

@@ -23,13 +23,10 @@
 //! It is a *file* rather than a keychain entry, and that is a deliberate step
 //! down from where the ed25519 secret lives. The identity key is the thing that
 //! *is* this peer and its disclosure is unrecoverable; a grant is a bearer
-//! capability that grants exactly what knowing a project ULID and an address
-//! grants (nothing on `wobu/sync/1` checks one — see [`wobu_sync::Grant`], where
-//! #90 closed `wontfix` and said why). Putting a list that changes whenever a
-//! project is shared into a store that prompts on every read, on Linux, would be
-//! a dialog per sync poll. This paragraph is the record of that trade; #90
-//! closing is what makes it a settled one rather than a bet on a pending
-//! feature.
+//! capability checked by `wobu/sync/1` before a project is honoured. Putting a
+//! list that changes whenever a project is shared into a store that prompts on
+//! every read, on Linux, would be a dialog per sync poll. This paragraph is the
+//! record of that persistence trade.
 //!
 //! ## Why the whole ticket is kept and not just an address
 //!
@@ -37,9 +34,8 @@
 //! nobody has open. Keeping the canonical string rather than the parsed address
 //! means the entry in this file and the string in somebody's chat log are the
 //! same characters, which is what lets a support conversation say "paste what is
-//! in the file" — and it keeps the grant, which nothing presents today and which
-//! [`wobu_sync::Grant`] explains is kept so that a future decision to present one
-//! would not require re-issuing every share.
+//! in the file" — and it keeps the grant every outbound ticket connection must
+//! present.
 //!
 //! ## What this is not
 //!
@@ -71,8 +67,7 @@ pub struct Share {
     /// Minted once and kept, because a project shared a second time must be
     /// shared with the *same* grant or the ticket a collaborator pasted into
     /// their notes last month stops being one this machine would honour. That
-    /// nothing checks it — deliberately, see [`wobu_sync::Grant`] — is not a
-    /// reason to let it drift.
+    /// the accept path checks it is precisely why it must not drift.
     pub grant: Grant,
     /// Tickets accepted for this project: who to dial.
     ///

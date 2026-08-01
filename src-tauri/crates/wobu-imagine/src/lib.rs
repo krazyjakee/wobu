@@ -44,7 +44,9 @@
 //!
 //! ```
 //! use wobu_core::{AssetRef, AssetRole, Node, NodeKind, default_preset, new_id};
-//! use wobu_imagine::{AspectRatio, Capabilities, Resolution, negotiate};
+//! use wobu_imagine::{
+//!     AspectRatio, Capabilities, ReferenceMechanisms, Resolution, negotiate,
+//! };
 //! use wobu_influence::{ImageBudget, Sliders, World, fragments, image_budget, resolve};
 //!
 //! let mut kael = Node::new(NodeKind::Character, "Kael Vantris")?;
@@ -59,7 +61,7 @@
 //!     max_resolution: Resolution::new(2048, 2048),
 //!     aspect_ratios: vec![],
 //!     image_refs: ImageBudget::unlimited(),
-//!     controlnet: true,
+//!     reference_mechanisms: ReferenceMechanisms::unlimited(),
 //!     loras: true,
 //!     negative_prompt: true,
 //!     requires_billing: false,
@@ -69,7 +71,7 @@
 //!     max_resolution: Resolution::new(4096, 4096),
 //!     aspect_ratios: AspectRatio::ALL.to_vec(),
 //!     image_refs: image_budget("gemini-3-pro-image").unwrap(),
-//!     controlnet: false,
+//!     reference_mechanisms: ReferenceMechanisms::image_prompt(),
 //!     loras: false,
 //!     negative_prompt: false,
 //!     requires_billing: true,
@@ -103,7 +105,9 @@
 //! back square is a wrong picture nothing on screen explains.
 //!
 //! ```
-//! use wobu_imagine::{AspectRatio, Capabilities, Resolution, negotiate};
+//! use wobu_imagine::{
+//!     AspectRatio, Capabilities, ReferenceMechanisms, Resolution, negotiate,
+//! };
 //! use wobu_influence::ImageBudget;
 //!
 //! let backend = Capabilities {
@@ -113,7 +117,7 @@
 //!         AspectRatio::parse("16:9").unwrap(),
 //!     ],
 //!     image_refs: ImageBudget::unlimited(),
-//!     controlnet: false,
+//!     reference_mechanisms: ReferenceMechanisms::image_prompt(),
 //!     loras: false,
 //!     negative_prompt: false,
 //!     requires_billing: true,
@@ -133,7 +137,7 @@
 //! assert_eq!(matte.resolution(), Resolution::new(4096, 2304));
 //! ```
 //!
-//! **Per-role reference caps drive the image budget**, so the Inspector can say
+//! **Provider reference caps drive the counting budget**, so the Inspector can say
 //! `3/3 style refs`. The caps themselves are not restated here: they are
 //! `wobu_influence::ImageBudget`, read out of the registry #44 put behind
 //! `image_budget`, and [`Capabilities::image_refs`] carries that value
@@ -141,7 +145,9 @@
 //! sketch in [#50](https://github.com/krazyjakee/wobu/issues/50), which had a
 //! map keyed by our own `AssetRole` — keying it that way would push the
 //! role-to-bucket judgement into every adapter and let two of them disagree
-//! about which pool a `pose` reference competes in.
+//! about which pool a `pose` reference competes in. Routing is the separate
+//! [`ReferenceMechanisms`] axis: an adapter can expose one structure input and
+//! no image-prompt input without changing any provider bucket.
 
 mod aspect;
 mod backend;
@@ -159,7 +165,7 @@ pub use backend::{
     Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
     Reference, Watermark,
 };
-pub use capability::Capabilities;
+pub use capability::{Capabilities, ReferenceMechanism, ReferenceMechanisms};
 pub use comfy::ComfyBackend;
 pub use error::{Error, Result};
 pub use gemini::GeminiBackend;

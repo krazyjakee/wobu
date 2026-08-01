@@ -45,8 +45,9 @@ pub trait ImageBackend {
 - **Replicate / fal** — hosted fallback for machines without a GPU, same trait.
 - **Automatic1111** — optional, community request.
 
-Capabilities are surfaced in the UI: if a backend has no ControlNet, structure references are
-visibly downgraded to moodboard-only rather than silently ignored.
+Capabilities surface provider counting budgets separately from adapter mechanisms. If a backend
+has no structure mechanism, structure references are visibly downgraded to moodboard-only; if a
+one-input ControlNet graph is full, the extra reference is attributed to that mechanism limit.
 
 3D uses the same trait shape (`MeshBackend`): turnaround sheet → image-to-3D (TRELLIS /
 Hunyuan3D / InstantMesh via ComfyUI) → GLB, previewed in-app with three.js.

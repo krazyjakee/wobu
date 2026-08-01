@@ -63,7 +63,7 @@ use crate::aspect::{AspectRatio, Resolution};
 use crate::backend::{
     GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink, Watermark,
 };
-use crate::capability::Capabilities;
+use crate::capability::{Capabilities, ReferenceMechanisms};
 use crate::dimensions;
 use crate::error::{Error, Result};
 
@@ -350,11 +350,10 @@ impl ImageBackend for GeminiBackend {
             // list is what makes the returned dimensions checkable.
             aspect_ratios: AspectRatio::ALL.to_vec(),
             image_refs: budget(model),
-            // No structure adapter of any kind. A `pose` or `silhouette`
-            // reference is downgraded to mood-board-only and the user is told —
-            // sending it as an ordinary reference would have the model draw a
-            // silhouette rather than use one.
-            controlnet: false,
+            // Inline image blocks are ordinary image prompts. They have no
+            // second mechanism cap — `image_refs` is the documented provider
+            // quota — and there is no structure path of any kind.
+            reference_mechanisms: ReferenceMechanisms::image_prompt(),
             loras: false,
             // Imagen had `negativePrompt` and Imagen is deprecated; the image
             // models have no field for one. Every `never:` fragment is withheld
@@ -744,7 +743,11 @@ mod tests {
         // true routes user-authored canon into a field that does not exist.
         for model in ["gemini-3.1-flash-image", "gemini-3-pro-image", "unknown"] {
             let caps = backend().capabilities(model);
-            assert!(!caps.controlnet, "{model}: no structure adapter of any kind");
+            assert_eq!(
+                caps.reference_mechanisms.structure.get(),
+                0,
+                "{model}: no structure adapter of any kind",
+            );
             assert!(!caps.loras, "{model}");
             assert!(!caps.negative_prompt, "{model}: Imagen had one and Imagen is gone");
             assert!(!caps.streaming_preview, "{model}: one inline image and nothing before it");

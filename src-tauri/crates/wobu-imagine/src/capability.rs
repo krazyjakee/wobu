@@ -7,9 +7,93 @@
 //!
 //! See the capability-negotiation section of `docs/08-providers.md`.
 
-use wobu_influence::ImageBudget;
+use wobu_core::FragmentTarget;
+use wobu_influence::{ImageBudget, Refs};
 
 use crate::aspect::{AspectRatio, Resolution};
+
+/// How a backend applies a reference image.
+///
+/// Deliberately separate from [`wobu_influence::RefBucket`]. A bucket is how a
+/// provider *counts* an image; a mechanism is what the adapter *does* with it.
+/// Gemini counts poses in its character quota but has no structure mechanism,
+/// while a ComfyUI ControlNet graph can take a pose and a silhouette through the
+/// same mechanism even though they occupy different provider buckets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReferenceMechanism {
+    /// An ordinary image prompt: Gemini's inline image blocks or ComfyUI's
+    /// IPAdapter. The image contributes content or appearance rather than a
+    /// spatial constraint.
+    ImagePrompt,
+    /// A spatial constraint such as pose or silhouette, normally ControlNet in
+    /// ComfyUI.
+    Structure,
+}
+
+impl ReferenceMechanism {
+    pub const ALL: [ReferenceMechanism; 2] =
+        [ReferenceMechanism::ImagePrompt, ReferenceMechanism::Structure];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ReferenceMechanism::ImagePrompt => "image prompt",
+            ReferenceMechanism::Structure => "structure",
+        }
+    }
+
+    /// The mechanism a routed image target needs. Text and private mood-board
+    /// targets have none and therefore never consume a mechanism slot.
+    pub fn for_target(target: FragmentTarget) -> Option<ReferenceMechanism> {
+        match target {
+            FragmentTarget::StyleRef | FragmentTarget::Palette => {
+                Some(ReferenceMechanism::ImagePrompt)
+            }
+            FragmentTarget::StructureRef => Some(ReferenceMechanism::Structure),
+            FragmentTarget::Prompt | FragmentTarget::Negative | FragmentTarget::MoodboardOnly => {
+                None
+            }
+        }
+    }
+}
+
+/// How many references one backend can apply through each mechanism.
+///
+/// These are independent pools. They are not a replacement for
+/// [`ImageBudget`]: after a reference survives this mechanism budget it still
+/// has to fit the provider's counting buckets. Keeping both axes is what can
+/// express a ControlNet graph with one structure input and no image-prompt
+/// input without pretending that poses and silhouettes share a vendor bucket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReferenceMechanisms {
+    pub image_prompt: Refs,
+    pub structure: Refs,
+}
+
+impl ReferenceMechanisms {
+    /// The cap for one mechanism.
+    pub fn cap(self, mechanism: ReferenceMechanism) -> Refs {
+        match mechanism {
+            ReferenceMechanism::ImagePrompt => self.image_prompt,
+            ReferenceMechanism::Structure => self.structure,
+        }
+    }
+
+    /// No shipped graph can apply a reference image.
+    pub fn none() -> ReferenceMechanisms {
+        ReferenceMechanisms { image_prompt: Refs::new(0), structure: Refs::new(0) }
+    }
+
+    /// An ordinary multimodal model: references are capped by its provider
+    /// quota, not by a second mechanism limit, and structure is unavailable.
+    pub fn image_prompt() -> ReferenceMechanisms {
+        ReferenceMechanisms { image_prompt: Refs::UNLIMITED, structure: Refs::new(0) }
+    }
+
+    /// An unconstrained local test backend that implements both paths.
+    pub fn unlimited() -> ReferenceMechanisms {
+        ReferenceMechanisms { image_prompt: Refs::UNLIMITED, structure: Refs::UNLIMITED }
+    }
+}
 
 /// What one backend, running one model, is able to do.
 ///
@@ -49,7 +133,7 @@ pub struct Capabilities {
     /// refused every shape could produce no image and nobody would declare one.
     pub aspect_ratios: Vec<AspectRatio>,
 
-    /// How many reference images it takes, in the backend's own buckets.
+    /// How many reference images the provider counts in each of its buckets.
     ///
     /// Deliberately **not** a map keyed by `wobu_core::AssetRole`, which is what
     /// [#50](https://github.com/krazyjakee/wobu/issues/50) originally sketched.
@@ -71,19 +155,10 @@ pub struct Capabilities {
     /// and it is asked for by name.
     pub image_refs: ImageBudget,
 
-    /// Whether a picture can be used as *structure* — pose, silhouette, edges —
-    /// rather than as something to look at.
-    ///
-    /// Named for ComfyUI's mechanism because that is the name in the issue and
-    /// in `docs/08-providers.md`, but the question it asks is vendor-neutral and
-    /// that is the reading to implement: `false` means this backend has no way
-    /// to be told "make it this shape", whatever it calls the thing it does not
-    /// have. Gemini image has none. A `silhouette` or `pose` reference is then
-    /// downgraded to mood-board-only and the user is told
-    /// ([`Downgrade::MoodboardOnly`](crate::Downgrade::MoodboardOnly)) — sending
-    /// it as an ordinary reference instead would have the model draw a
-    /// silhouette rather than use one.
-    pub controlnet: bool,
+    /// Which reference paths this adapter can actually reach, and how many
+    /// inputs each path has. This is the routing axis; [`image_refs`](Self::image_refs)
+    /// remains the provider's independent counting axis.
+    pub reference_mechanisms: ReferenceMechanisms,
 
     /// Whether the backend takes named fine-tunes stacked on the checkpoint.
     ///
@@ -201,7 +276,7 @@ mod tests {
             max_resolution: Resolution::new(4096, 4096),
             aspect_ratios: AspectRatio::ALL.to_vec(),
             image_refs: image_budget("gemini-3-pro-image").unwrap(),
-            controlnet: false,
+            reference_mechanisms: ReferenceMechanisms::image_prompt(),
             loras: false,
             negative_prompt: false,
             requires_billing: true,
@@ -215,7 +290,7 @@ mod tests {
             max_resolution: Resolution::new(2048, 2048),
             aspect_ratios: vec![],
             image_refs: ImageBudget::unlimited(),
-            controlnet: true,
+            reference_mechanisms: ReferenceMechanisms::unlimited(),
             loras: true,
             negative_prompt: true,
             requires_billing: false,
@@ -308,6 +383,28 @@ mod tests {
         // it by accident from an unregistered model id.
         assert_eq!(local().image_refs, ImageBudget::unlimited());
         assert_eq!(local().image_refs.meter(RefBucket::StyleRefs).1.limit(), None);
+    }
+
+    #[test]
+    fn reference_mechanisms_route_targets_and_do_not_restate_provider_caps() {
+        assert_eq!(
+            ReferenceMechanism::for_target(FragmentTarget::StyleRef),
+            Some(ReferenceMechanism::ImagePrompt),
+        );
+        assert_eq!(
+            ReferenceMechanism::for_target(FragmentTarget::Palette),
+            Some(ReferenceMechanism::ImagePrompt),
+        );
+        assert_eq!(
+            ReferenceMechanism::for_target(FragmentTarget::StructureRef),
+            Some(ReferenceMechanism::Structure),
+        );
+        assert_eq!(ReferenceMechanism::for_target(FragmentTarget::MoodboardOnly), None);
+
+        let gemini = remote();
+        assert_eq!(gemini.reference_mechanisms.image_prompt.limit(), None);
+        assert_eq!(gemini.reference_mechanisms.structure, Refs::new(0));
+        assert_eq!(gemini.image_refs.style_refs, Some(Refs::new(3)));
     }
 
     #[test]

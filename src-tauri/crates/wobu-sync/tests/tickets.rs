@@ -27,8 +27,19 @@ use wobu_sync::{
 struct Held(Vec<Id>);
 
 impl Projects for Held {
-    fn holds(&self, project: &Id) -> bool {
+    fn admits(&self, project: &Id, _grant: Option<&Grant>) -> bool {
         self.0.contains(project)
+    }
+}
+
+struct Granted {
+    project: Id,
+    grant: Grant,
+}
+
+impl Projects for Granted {
+    fn admits(&self, project: &Id, grant: Option<&Grant>) -> bool {
+        *project == self.project && grant.is_some_and(|grant| grant == &self.grant)
     }
 }
 
@@ -42,9 +53,15 @@ impl Sessions for Sink {
 }
 
 async fn peer(held: Vec<Id>) -> (SyncEndpoint, mpsc::UnboundedReceiver<Session>) {
+    peer_with(Arc::new(Held(held))).await
+}
+
+async fn peer_with(
+    projects: Arc<dyn Projects>,
+) -> (SyncEndpoint, mpsc::UnboundedReceiver<Session>) {
     let (sessions, inbox) = mpsc::unbounded_channel();
     let config = Config { open_timeout: Duration::from_millis(500), ..Config::loopback() };
-    let endpoint = SyncEndpoint::bind(config, Arc::new(Held(held)), Arc::new(Sink(sessions)))
+    let endpoint = SyncEndpoint::bind(config, projects, Arc::new(Sink(sessions)))
         .await
         .expect("a loopback endpoint binds without a network");
     (endpoint, inbox)
@@ -133,58 +150,47 @@ async fn a_ticket_for_a_project_the_peer_has_dropped_is_refused_like_any_other_d
     assert!(inbox.try_recv().is_err(), "a refused ticket reached the application anyway");
 }
 
-/// **The grant is not checked, this is the test that says so out loud, and it is
-/// a decision rather than an unfinished job.**
-///
-/// Two peers reach a session while holding completely different grants for the
-/// same project. That is the truth and it must not be assumed away: nothing in
-/// `wobu/sync/1` presents a grant, because checking one is authorisation and
-/// `Projects::holds` takes one project and returns one bool, with nowhere to put
-/// a second input.
-///
-/// #90 asked whether that should change and closed `wontfix`, so this test is not
-/// a placeholder waiting for a feature to invert it. `wobu_sync::ticket::Grant`
-/// carries the whole argument; the part that matters when reading *this* file is
-/// that the forgery below is not an attack anybody could actually mount. It needs
-/// `issued.addr()` — the sharing peer's ed25519 endpoint id — and the project
-/// ULID, and the only artefact in the system that puts those two together is a
-/// ticket, which carries the real grant beside them. The test can forge one
-/// because it minted the endpoint in the line above; a stranger cannot.
-///
-/// So a ticket grants exactly what knowing a project ULID and a peer's endpoint
-/// id grants, the UI must not imply more, and a change that made this test fail
-/// would be reopening a closed question rather than finishing an open one.
+/// The grant is the difference between being handed a share and merely knowing
+/// the project and peer. A wrong grant, no grant, and an unknown project all
+/// collapse to `ProjectNotHeld`; the acceptor opens no session for any of them.
+/// The honest ticket still succeeds afterwards, proving the refusals were about
+/// admission rather than reachability.
 #[tokio::test]
-async fn a_grant_is_not_checked_and_that_is_deliberate() {
+async fn only_the_issued_grant_is_admitted() {
     let project = new_id();
-    let (sharing, _inbox) = peer(vec![project]).await;
+    let grant = Grant::generate();
+    let (sharing, mut inbox) = peer_with(Arc::new(Granted { project, grant })).await;
     let (accepting, _accepting_inbox) = peer(vec![project]).await;
-    let issued = sharing.ticket(project, Grant::generate());
+    let issued = sharing.ticket(project, grant);
 
-    // A ticket for the same peer and the same project, with a grant nobody ever
-    // issued. If a grant meant anything on the wire, this would be refused.
     let forged = Ticket::new(project, issued.addr().clone(), Grant::generate());
     assert_ne!(forged.grant(), issued.grant());
+    let wrong = accepting.connect_ticket(&pasted(&forged)).await;
+    assert!(matches!(wrong, Err(Error::ProjectNotHeld)), "{wrong:?}");
 
-    let session = accepting.connect_ticket(&pasted(&forged)).await;
+    let absent = accepting.connect(issued.addr().clone(), project).await;
+    assert!(matches!(absent, Err(Error::ProjectNotHeld)), "{absent:?}");
 
-    assert!(session.is_ok(), "{session:?}");
+    let unknown = Ticket::new(new_id(), issued.addr().clone(), grant);
+    let unknown = accepting.connect_ticket(&pasted(&unknown)).await;
+    assert!(matches!(unknown, Err(Error::ProjectNotHeld)), "{unknown:?}");
+    assert!(inbox.try_recv().is_err(), "a refused dial reached the application");
+
+    assert!(accepting.connect_ticket(&pasted(&issued)).await.is_ok());
+    assert_eq!(inbox.recv().await.unwrap().project(), project);
 }
 
-/// The other half of the same decision, and the reason the forgery above is not
-/// an attack: **a grant is not the unguessable thing in a ticket, the pair of the
-/// other two fields is.**
+/// The endpoint id is a separate gate from the ticket grant.
 ///
 /// A peer who reads a project ULID off a `project.json` on a NAS learns one of
 /// the two things a dial needs and not the other. Give them the *harder* half as
 /// well — the sharing machine's socket, which is what an address is — and the
 /// dial still fails, because iroh will not hand over a connection to a machine
-/// presenting a different key than the one asked for. It fails at TLS, before
-/// `wobu/sync/1` exists to have an opinion, which is where a grant check would
-/// have sat.
+/// presenting a different key than the one asked for. It fails at TLS before
+/// `wobu/sync/1` receives either the project or the grant.
 ///
-/// Pinned here because the argument in `ticket::Grant` rests on it, and prose is
-/// not a test.
+/// Pinned here because authorisation is layered: TLS authenticates the endpoint,
+/// then the sync opening admits the project/grant pair.
 #[tokio::test]
 async fn a_project_ulid_and_a_route_without_the_peers_endpoint_id_reach_nothing() {
     let project = new_id();

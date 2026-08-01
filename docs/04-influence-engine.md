@@ -43,13 +43,15 @@ per output preset — a *material study* boosts `materials` and drops `silhouett
    first. The Inspector reports what was dropped rather than truncating silently.
 
    There is a **second, tighter budget on images**, and it is the one that actually bites.
-   Backends cap how many reference images they accept, and they cap them *by role*: Gemini 3
+   Providers cap how many reference images they accept in vendor counting buckets: Gemini 3
    Pro Image, for example, allows 6 object references, 5 character references and 3 style
    references ([08](08-providers.md)). A five-layer stack can easily offer more style
-   references than that on its own. So image fragments are budgeted **per role bucket**
+   references than that on its own. So image fragments are budgeted **per provider bucket**
    against the backend's declared capability, highest weight first, and the Inspector shows
    `3/3 style refs · 2 dropped` on the layer that lost them. Silently discarding a reference
-   the user deliberately attached is the worst thing this engine could do.
+   the user deliberately attached is the worst thing this engine could do. This counting pass is
+   separate from the backend's mechanism budget: ControlNet structure inputs and IPAdapter image
+   prompts may have different caps and may cut across those provider buckets (#86).
 5. Emit:
    - positive prompt, fragments joined by layer with the subject last (recency bias helps),
    - negative prompt from every layer's `never` section,

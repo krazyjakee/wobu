@@ -1,8 +1,9 @@
 //! The opening exchange: which project is this connection about.
 //!
-//! One message each way, on one bidirectional stream, before anything else
-//! happens. The dialler states a project ULID; the accepting side answers
-//! whether it holds that project. That is the whole exchange.
+//! One message each way on the original bidirectional stream. The dialler states
+//! a project ULID; the accepting side answers whether it admits that project.
+//! #90 adds no field to either message: the optional ticket grant travels on a
+//! second, unidirectional stream between the offer and the answer.
 //!
 //! ## Why the stream is finished rather than framed
 //!
@@ -31,7 +32,9 @@ use serde::{Deserialize, Serialize};
 use wobu_core::Id;
 
 use crate::Projects;
+use crate::authorization;
 use crate::error::{Error, Result};
+use crate::ticket::Grant;
 
 /// The ceiling on either message of the opening exchange.
 ///
@@ -64,14 +67,24 @@ pub(crate) enum Answer {
     NotHeld,
 }
 
-/// The dialling half: state a project, and find out whether the peer has it.
-pub(crate) async fn offer(connection: &Connection, project: Id) -> Result<()> {
+/// The dialling half: state a project, present the optional grant separately,
+/// and find out whether the peer admits the pair.
+pub(crate) async fn offer(
+    connection: &Connection,
+    project: Id,
+    grant: Option<&Grant>,
+) -> Result<()> {
     let (mut send, mut recv) = connection.open_bi().await.map_err(Error::interrupted)?;
 
     let offer = serde_json::to_vec(&Offer { project })
         .expect("an Offer is one ULID and serde_json cannot fail on it");
     send.write_all(&offer).await.map_err(Error::interrupted)?;
     send.finish().map_err(Error::interrupted)?;
+
+    // A second stream, deliberately. The bytes above are the complete and
+    // unchanged `wobu/sync/1` opening message; a grant must never become a
+    // field an older peer would read as part of it.
+    authorization::present(connection, grant).await?;
 
     let answer = recv.read_to_end(MAX_OPENING_BYTES).await.map_err(Error::interrupted)?;
     match serde_json::from_slice::<Answer>(&answer) {
@@ -92,19 +105,20 @@ pub(crate) async fn answer(connection: &Connection, projects: &dyn Projects) -> 
 
     let offer = recv.read_to_end(MAX_OPENING_BYTES).await.map_err(Error::interrupted)?;
     let offer: Offer = serde_json::from_slice(&offer).map_err(|_| Error::Malformed)?;
+    let grant = authorization::receive(connection).await?;
 
-    // Asked once, for one project. `Projects::holds` cannot be handed the rest
-    // of the answer even by accident, because it is not given the chance to
-    // compute one.
-    let held = projects.holds(&offer.project);
+    // Asked once, for one project and the one optional grant presented beside
+    // it. Everything after this line sees only the bool, so an unknown project
+    // and a wrong grant necessarily take the same refusal path.
+    let admitted = projects.admits(&offer.project, grant.as_ref());
 
-    let answer = if held { Answer::Held } else { Answer::NotHeld };
+    let answer = if admitted { Answer::Held } else { Answer::NotHeld };
     let answer = serde_json::to_vec(&answer).expect("an Answer is a unit variant");
     send.write_all(&answer).await.map_err(Error::interrupted)?;
     send.finish().map_err(Error::interrupted)?;
     send.stopped().await.map_err(Error::interrupted)?;
 
-    if held { Ok(offer.project) } else { Err(Error::ProjectNotHeld) }
+    if admitted { Ok(offer.project) } else { Err(Error::ProjectNotHeld) }
 }
 
 /// Put a deadline on one half of the exchange.
@@ -144,6 +158,7 @@ mod tests {
     fn an_offer_round_trips_through_its_wire_form() {
         let project = Id::from_string("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
         let bytes = serde_json::to_vec(&Offer { project }).unwrap();
+        assert_eq!(bytes, br#"{"project":"01ARZ3NDEKTSV4RRFFQ69G5FAV"}"#);
         assert_eq!(serde_json::from_slice::<Offer>(&bytes).unwrap().project, project);
     }
 }

@@ -304,7 +304,6 @@ export function Workspace({ project }: { project: ProjectSummary }) {
               )}
               <Editor
                 selected={selected}
-                chain={chain}
                 kinds={kindIndex}
                 readOnly={readOnly}
                 onJump={jumpTo}

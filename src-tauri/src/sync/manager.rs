@@ -462,10 +462,17 @@ impl SyncManager {
         Ok(())
     }
 
-    /// Whether this machine holds a project, which is the only question the
-    /// accept path is allowed to ask.
-    fn holds(&self, project: &Id) -> bool {
-        self.replicas.lock().contains_key(project)
+    /// Whether this machine holds a project and the dialler presented the grant
+    /// this installation minted for it. Both failures deliberately collapse to
+    /// one bool before the transport constructs its refusal.
+    fn admits(&self, project: &Id, grant: Option<&wobu_sync::Grant>) -> bool {
+        if !self.replicas.lock().contains_key(project) {
+            return false;
+        }
+        self.shares
+            .lock()
+            .get(*project)
+            .is_some_and(|share| grant.is_some_and(|grant| grant == &share.grant))
     }
 
     /// Every world on this machine, shared or merely open. See [`Present`].
@@ -675,8 +682,8 @@ struct Accepts(Weak<SyncManager>);
 impl Projects for Accepts {
     /// Cheap, synchronous, and a bool. The signature is the security boundary:
     /// there is nowhere to put a list, so the accept path cannot disclose one.
-    fn holds(&self, project: &Id) -> bool {
-        self.0.upgrade().is_some_and(|m| !m.stopping() && m.holds(project))
+    fn admits(&self, project: &Id, grant: Option<&wobu_sync::Grant>) -> bool {
+        self.0.upgrade().is_some_and(|m| !m.stopping() && m.admits(project, grant))
     }
 }
 
@@ -729,7 +736,7 @@ impl Sessions for Accepts {
 struct Present(std::collections::BTreeSet<Id>);
 
 impl Projects for Present {
-    fn holds(&self, project: &Id) -> bool {
+    fn admits(&self, project: &Id, _grant: Option<&wobu_sync::Grant>) -> bool {
         self.0.contains(project)
     }
 }

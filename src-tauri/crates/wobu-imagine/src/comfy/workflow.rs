@@ -313,7 +313,7 @@ fn set(
 mod tests {
     use super::*;
     use crate::aspect::{AspectRatio, Resolution};
-    use crate::capability::Capabilities;
+    use crate::capability::{Capabilities, ReferenceMechanisms};
     use crate::negotiate::negotiate;
     use wobu_influence::{ImageBudget, Refs};
 
@@ -326,7 +326,7 @@ mod tests {
                 characters: Some(Refs::new(0)),
                 style_refs: Some(Refs::new(0)),
             },
-            controlnet: false,
+            reference_mechanisms: ReferenceMechanisms::none(),
             loras: false,
             negative_prompt: true,
             requires_billing: false,
@@ -485,6 +485,7 @@ mod tests {
             asset_id: wobu_core::Id::nil(),
             role: wobu_core::AssetRole::Costume,
             bucket: wobu_influence::RefBucket::StyleRefs,
+            mechanism: crate::ReferenceMechanism::ImagePrompt,
             weight: 1.0,
             bytes: vec![],
             mime: "image/png".into(),

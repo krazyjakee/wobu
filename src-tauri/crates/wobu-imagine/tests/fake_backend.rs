@@ -90,7 +90,7 @@ impl ImageBackend for LocalComfy {
             // By name, and not by asking the registry about a checkpoint
             // filename it has never heard of.
             image_refs: ImageBudget::unlimited(),
-            controlnet: true,
+            reference_mechanisms: wobu_imagine::ReferenceMechanisms::unlimited(),
             loras: true,
             negative_prompt: true,
             requires_billing: false,
@@ -180,7 +180,7 @@ impl ImageBackend for RemoteGemini {
             // request to a model that takes six is refused after payment.
             image_refs: image_budget(model)
                 .unwrap_or_else(|| image_budget("gemini-3-pro-image").unwrap()),
-            controlnet: false,
+            reference_mechanisms: wobu_imagine::ReferenceMechanisms::image_prompt(),
             loras: false,
             negative_prompt: false,
             requires_billing: true,
@@ -491,7 +491,7 @@ fn the_reference_budget_a_backend_declares_is_the_one_the_request_is_built_to() 
 
     let request = ImageRequest::new("gemini-3-pro-image", "p", 0, &negotiated)
         .with_references(references(&negotiated));
-    assert_eq!(request.in_bucket(RefBucket::StyleRefs).count(), 3);
+    assert_eq!(request.in_mechanism(wobu_imagine::ReferenceMechanism::ImagePrompt).count(), 3);
     assert_eq!(request.references.len(), 3, "and nothing else was invented on the way");
 
     // A local backend has no cap at all, so all five go, and the Inspector has

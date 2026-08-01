@@ -515,10 +515,9 @@ pub mod tests {
     async fn a_shared_project_is_admitted_and_one_this_machine_never_saw_is_refused() {
         // The accept path, which is the security-relevant one. A peer that dials
         // with a guessed ULID must learn whether that guess was right and
-        // nothing else — `Projects::holds` takes one project and returns a bool,
-        // so it has no way to form the other sentence, and this checks that the
-        // manager's implementation of it answers about the id it was handed and
-        // not about what else is in the registry.
+        // nothing else — `Projects::admits` takes one project and optional grant
+        // and returns one bool, so it has no way to form the other sentence.
+        // This checks the real manager policy rather than a crate-only fake.
         //
         // A shut-down manager refuses everything, and that is not belt and
         // braces: `Router::shutdown` winds the accept loop down, but admitting a
@@ -529,20 +528,28 @@ pub mod tests {
         let manager = manager(&state, &dir).await;
 
         let held = new_id();
-        manager.share(held, &dir.join("Ashfall.wobu"));
+        let ticket = manager.share(held, &dir.join("Ashfall.wobu"));
 
         let dialler =
             SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
                 .await
                 .unwrap();
 
-        let admitted = dialler.connect(manager.endpoint().addr(), held).await;
+        let admitted = dialler.connect_ticket(&ticket).await;
         assert!(admitted.is_ok(), "a shared project was refused: {admitted:?}");
         // Closed straight away: the round on the far side has nothing to talk
         // to, and this test is about who gets in rather than what they do.
         admitted.unwrap().close();
 
-        let refused = dialler.connect(manager.endpoint().addr(), new_id()).await;
+        let unknown = wobu_sync::Ticket::new(new_id(), ticket.addr().clone(), ticket.grant());
+        let refused = dialler.connect_ticket(&unknown).await;
+        assert!(matches!(refused, Err(wobu_sync::Error::ProjectNotHeld)), "{refused:?}");
+
+        let forged = wobu_sync::Ticket::new(held, ticket.addr().clone(), Grant::generate());
+        let refused = dialler.connect_ticket(&forged).await;
+        assert!(matches!(refused, Err(wobu_sync::Error::ProjectNotHeld)), "{refused:?}");
+
+        let refused = dialler.connect(ticket.addr().clone(), held).await;
         assert!(matches!(refused, Err(wobu_sync::Error::ProjectNotHeld)), "{refused:?}");
 
         manager.shutdown().await;
@@ -550,11 +557,8 @@ pub mod tests {
         // endpoint sits in iroh's own connect timeout, which is half a minute,
         // and "did not get in within three seconds" is the whole of what this
         // asserts. A timeout here is a pass — it is the peer not getting in.
-        let after = tokio::time::timeout(
-            Duration::from_secs(3),
-            dialler.connect(manager.endpoint().addr(), held),
-        )
-        .await;
+        let after =
+            tokio::time::timeout(Duration::from_secs(3), dialler.connect_ticket(&ticket)).await;
         assert!(!matches!(after, Ok(Ok(_))), "a shut-down manager admitted somebody: {after:?}");
 
         dialler.shutdown().await.unwrap();
@@ -632,13 +636,13 @@ pub mod tests {
             // the only one holding this index.
         };
         let (project, root, node_id) = node;
-        manager.share(project, &root);
+        let ticket = manager.share(project, &root);
 
         let peer =
             SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
                 .await
                 .unwrap();
-        let session = peer.connect(manager.endpoint().addr(), project).await.expect("admitted");
+        let session = peer.connect_ticket(&ticket).await.expect("admitted");
 
         // The peer's half of the manifest exchange: it holds nothing. Under the
         // rule `wobu-sync` states twice, that is "never had it" and not
@@ -711,7 +715,7 @@ pub mod tests {
     struct Nothing;
 
     impl Projects for Nothing {
-        fn holds(&self, _project: &Id) -> bool {
+        fn admits(&self, _project: &Id, _grant: Option<&wobu_sync::Grant>) -> bool {
             false
         }
     }

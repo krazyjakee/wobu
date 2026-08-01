@@ -565,8 +565,8 @@ Each adapter declares what it can do, and the UI adapts rather than failing late
 pub struct Capabilities {
     pub max_resolution: Resolution,
     pub aspect_ratios: Vec<AspectRatio>,
-    pub image_refs: ImageBudget,            // see below — not a per-role map
-    pub controlnet: bool,
+    pub image_refs: ImageBudget,            // provider counting axis
+    pub reference_mechanisms: ReferenceMechanisms, // adapter routing axis
     pub loras: bool,
     pub negative_prompt: bool,              // see below — Gemini image has none
     pub requires_billing: bool,
@@ -590,7 +590,7 @@ list is not enforced on this backend. It is *not* folded into the positive promp
 "without X" clause, which reads to a text encoder as a request for X.
 
 `image_refs` is deliberately **not** a map keyed by our own `AssetRole`. The caps are declared
-in the backend's vocabulary — objects, characters, style refs — and `wobu-influence` owns the
+in the provider's counting vocabulary — objects, characters, style refs — and `wobu-influence` owns the
 mapping from our seven roles onto those three buckets (`capability.rs`, #44). Keying the
 capability by `AssetRole` would push that judgement into every adapter and let two of them
 disagree about which bucket a `pose` reference competes in.
@@ -602,9 +602,30 @@ people — it has one undifferentiated pool, so those references are counted as 
 request for a model that takes 10, and the provider would be the one to point that out, after
 payment.
 
+Buckets are counting, not routing. Gemini's request contains one undifferentiated list of image
+blocks; there is no object field or style-reference field despite the separate documented quota
+columns. ComfyUI goes the other way: ControlNet and IPAdapter are graph mechanisms, and their
+inputs cut across the provider buckets. A pose (`Characters`) and silhouette (`Objects`) both use
+the structure mechanism, while silhouette and palette share `Objects` but need different
+mechanisms.
+
+`reference_mechanisms` is therefore a second, independent budget with `image_prompt` and
+`structure` pools. Negotiation applies it before `image_refs`. This can express a ControlNet graph
+with one structure input and no image-prompt input without lying about ComfyUI having `0/0/0`
+provider buckets. A reference rejected by either layer remains attributed in that layer's report:
+mechanism-unavailable and mechanism-full are capability downgrades; a provider quota overflow is
+an image-budget drop. Neither is silent.
+
+The chosen `ReferenceMechanism` travels on `ImageRequest::references` for adapter routing. The
+`RefBucket` travels beside it only so the Inspector and generation snapshot can say which provider
+quota it consumed. Gemini ignores both on the wire because its API accepts only the flat list;
+the original `AssetRole` is still retained in the request for attribution. Explaining those roles
+to a model whose wire format has no labels is prompt-attribution work, not a reason to overload
+quota buckets as fictional request fields.
+
 Consequences the user can actually see:
 
-- A backend with no ControlNet shows structure references as visibly **downgraded to
+- A backend with no structure mechanism shows structure references as visibly **downgraded to
   mood-board-only**, rather than silently ignoring them.
 - Aspect ratios the backend doesn't support don't appear in the dropdown.
 - Per-role reference caps drive the image budget, so the Inspector can say `3/3 style refs`.

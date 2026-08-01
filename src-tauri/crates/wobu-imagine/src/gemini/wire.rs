@@ -134,8 +134,9 @@ pub(crate) fn request_body(request: &ImageRequest, image_size: &str) -> Value {
 /// picture. So `RefBucket` fits this vendor as a *budget* — which is what
 /// `Capabilities::image_refs` uses it for, and the per-model caps of 6/5/3 are
 /// real and documented — and does not correspond to anything in the request. The
-/// consequence: `ImageRequest::in_bucket` is not reached here, and the order
-/// references arrive in is the only signal about them that survives.
+/// consequence: provider counting buckets do not select wire fields here. The
+/// role and mechanism remain on `Reference` for attribution and reporting, but
+/// Gemini receives one flat list and order is the only wire-level distinction.
 ///
 /// Text first, then pictures, which is the order every published example uses.
 fn input(request: &ImageRequest) -> Value {
@@ -479,6 +480,7 @@ mod tests {
     use wobu_core::{AssetRole, Id};
     use wobu_influence::RefBucket;
 
+    use crate::ReferenceMechanism;
     use crate::aspect::{AspectRatio, Resolution};
     use crate::backend::{ImageBackend, Reference};
     use crate::capability::Capabilities;
@@ -507,6 +509,7 @@ mod tests {
             asset_id: Id::nil(),
             role,
             bucket,
+            mechanism: ReferenceMechanism::for_target(role.target()).unwrap(),
             weight: 1.0,
             bytes: bytes.to_vec(),
             mime: "image/png".into(),

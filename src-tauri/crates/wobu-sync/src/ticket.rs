@@ -48,40 +48,24 @@
 //! grant is the only thing in here that is not otherwise obtainable, and
 //! therefore the only thing that makes the sentence true.
 //!
-//! **Nothing in `wobu/sync/1` presents or checks it.** That is not an oversight
-//! and it is no longer an open question: #90 asked whether the accept path should
-//! check a grant before honouring a project, and closed `wontfix`. [`Grant`]
-//! carries the argument — briefly, dialling needs a ticket's *other* two fields
-//! and nothing else in the system pairs them, so a check refuses nobody who could
-//! have reached it. The honest statement of the behaviour is therefore: **a
-//! ticket grants exactly what knowing the project ULID and the peer's endpoint id
-//! grants**, and [`crate::SyncEndpoint::connect_ticket`] sends no more than
-//! [`crate::SyncEndpoint::connect`] does. `a_grant_is_not_checked_by_wobu_sync_1`
-//! in `tests/tickets.rs` pins that, so it cannot be quietly assumed otherwise.
+//! `wobu/sync/1` presents the grant on a second QUIC stream. It is deliberately
+//! absent from the opening message: the ALPN *is* the version (see [`crate`]),
+//! and adding a field to that existing message would be a silent wire change an
+//! old peer reads as garbage. The acceptor hands the project and optional grant
+//! to [`crate::Projects::admits`] and keeps only its bool. Consequently a wrong
+//! grant and an unknown project produce the same `not_held` answer, QUIC close
+//! code, fixed reason, and fieldless [`crate::Error::ProjectNotHeld`].
 //!
-//! The grant is minted anyway, and the reason is that a ticket string is forever.
-//! It gets pasted into a Discord message, a Notion page and somebody's notes app,
-//! and it has to keep working. Adding a field to the format later would mean
-//! every ticket already in the wild lacks it and every one of those shares has to
-//! be re-issued by a person who has since moved on. Thirty-two bytes of OS
-//! randomness cost nothing, and having them is what keeps a future decision here
-//! a change to this crate rather than a re-issue of every share.
-//!
-//! If that decision is ever revisited, two things follow from the above and
-//! neither is optional. It must not add a field to the `wobu/sync/1` opening
-//! message: the ALPN *is* the version (see [`crate`]), so a new field is a silent
-//! wire change that an old peer reads as garbage — which means a new ALPN, and
-//! [`Grant`] explains why the migration that implies is most of the cost. And a
-//! mismatched grant must be refused with the same bytes as
-//! [`crate::Error::ProjectNotHeld`] — "wrong grant" and "never heard of it" are
-//! two disclosures and only one of them is ours to make.
+//! [`crate::SyncEndpoint::connect_ticket`] presents `Some(grant)`. A bare
+//! [`crate::SyncEndpoint::connect`] presents `None`, leaving the policy with the
+//! application: a permissive test implementation may admit it, while Wobu's
+//! sync manager requires the persisted project grant.
 //!
 //! ## Revocation does not exist
 //!
 //! There is no way to take a ticket back. No expiry, no serial number, no list to
-//! remove it from — and since nothing checks the grant yet, there is not even a
-//! thing to stop honouring. Anyone holding the string holds it until the project
-//! ULID changes, which is to say forever. The UI has to say that out loud rather
+//! remove it from. Anyone holding the string holds it until the whole project is
+//! unshared, which invalidates every ticket at once. The UI has to say that out loud rather
 //! than offering a "revoke" button that quietly does nothing; a control that
 //! implies a power the system does not have is worse than no control.
 //!
@@ -142,6 +126,7 @@ use iroh::{EndpointAddr, EndpointId, TransportAddr};
 use iroh_tickets::{ParseError, Ticket as IrohTicket};
 use rand::Rng as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use subtle::ConstantTimeEq as _;
 use wobu_core::Id;
 
 use crate::error::Error;
@@ -159,69 +144,35 @@ use crate::error::Error;
 /// `Copy`, because it is small and because the alternative is callers cloning a
 /// ticket to read one field of it.
 ///
-/// ## Nothing checks it, and that is the finished answer rather than a gap
+/// ## What checking it proves
 ///
-/// [#90](https://github.com/krazyjakee/wobu/issues/90) asked whether the accept
-/// path should check a grant before honouring a project, and closed `wontfix`.
-/// This is a **forward-compatibility field**: it is in the ticket format so that
-/// a later decision to check one would be a change to this crate rather than a
-/// re-issue of every ticket already pasted into somebody's chat log. It is not a
-/// control that was half-wired and then abandoned. The argument belongs here
-/// rather than only in the issue, because the next person to read `Grant` will
-/// reach for this doc comment before they reach for GitHub, and "unfinished" is
-/// the wrong conclusion to let them draw.
+/// [#90](https://github.com/krazyjakee/wobu/issues/90) made this an admission
+/// input. It distinguishes a peer who was given a ticket from one who assembled
+/// its public address and project fields elsewhere. It proves no identity — TLS
+/// already did that — and supplies no confidentiality.
 ///
-/// **There is no attacker it turns away.** Dialling a project needs two
-/// unguessable things: the peer's [`EndpointId`] — thirty-two bytes of ed25519
-/// public key, kept in the OS keychain, never written into a project folder —
-/// and the project ULID, which carries eighty bits of randomness. The only
-/// artefact in the system that carries both is a ticket, and a ticket carries
-/// the grant beside them. So the set of peers that can dial at all *is* the set
-/// that holds a ticket, and checking the third field of a string against people
-/// who hold that string refuses nobody. The "guessed a ULID" peer the check is
-/// aimed at cannot reach the accept path in the first place: reading
-/// `project.json` off a shared folder yields a ULID and no endpoint id, and
-/// seeing an endpoint id on a connection yields no ULID.
+/// The comparison is constant-time through this type's [`PartialEq`]
+/// implementation. That does not make the grant a cryptographic key; it keeps
+/// an ordinary comparison from leaking a bearer capability byte by byte.
 ///
-/// **And the peer it would turn away already has more than sync would give
-/// them.** `docs/07-file-shares.md` puts the project directory on an SMB or NFS
-/// share that a small team mounts. Everybody who can read a project ULID out of
-/// `project.json` can already read every node's Markdown and every asset beside
-/// it, and write to them. Sync is not the channel that discloses a project to
-/// that population — the folder is, and it discloses more.
-///
-/// **It could not be checked everywhere it would have to be.** File content
-/// moves on `iroh-blobs`' own ALPN, over a second connection that never carries
-/// a project id — `blobs::Blobs::protocol` declines that authorisation seam
-/// deliberately — so a grant enforced on `wobu/sync/1` would gate the
-/// manifest and not the bytes. "The transport checks authorisation" would be
-/// true of one of the two protocols an endpoint speaks, which is the kind of
-/// half-truth a security note should not contain.
-///
-/// **And enforcing it would break the compatibility this field exists to
-/// protect.** The ALPN *is* the version (see [`crate::ALPN`]), so presenting a
-/// grant means `wobu/sync/2`. An endpoint offering both is an endpoint where
-/// dialling v1 skips the check, so the check is worth something only once v1 is
-/// withdrawn — and withdrawing it severs every peer that has not updated. The
-/// field spares the *tickets*; it was never able to spare the *peers*, and that
-/// migration is most of the cost whenever it is paid.
-///
-/// What was on offer for that price is narrower than it sounds: the distinction
-/// between a peer who was *given* a share and a peer who was not, in a system
-/// with no revocation, where the shell mints one grant per project per machine
-/// and hands the same one to every collaborator. That is a shared bearer
-/// password, held for ever by everyone ever invited, unchangeable without
-/// invalidating every outstanding ticket. It can answer "was this peer ever
-/// invited"; it can never answer "may this peer sync now" — and the second is
-/// the question somebody clicking "stop sharing" is asking.
-///
-/// The field stays, and it is cheap. If revocation is ever designed — a grant
-/// the holder cannot replay, which #90 was explicit is a different design and
-/// not this one — these are the thirty-two bytes it would build on.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// It still does not provide revocation. One grant is minted per project per
+/// installation and copied into every ticket that installation hands out.
+/// Removing the share stops all of those tickets; one collaborator cannot be
+/// removed while another keeps the same grant.
+#[derive(Clone, Copy, Eq, Serialize, Deserialize)]
 pub struct Grant([u8; 32]);
 
+impl PartialEq for Grant {
+    fn eq(&self, other: &Grant) -> bool {
+        bool::from(self.0.ct_eq(&other.0))
+    }
+}
+
 impl Grant {
+    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Grant {
+        Grant(bytes)
+    }
+
     /// A fresh grant from the OS random number generator.
     ///
     /// `rand::rng()`, which is seeded from the platform's entropy source. This is
@@ -235,16 +186,7 @@ impl Grant {
         Grant(bytes)
     }
 
-    /// The raw bytes, for whoever eventually compares them.
-    ///
-    /// Nothing in this workspace does, and #90 closed having decided that nothing
-    /// should — see the type documentation for the argument. The accessor stays
-    /// because a ticket has to be able to hand its own field out and because the
-    /// bytes are what `the_grant_does_not_survive_a_debug_dump` looks for.
-    ///
-    /// If a comparison is ever written anyway, it wants to be constant-time: a
-    /// byte-at-a-time `==` against a value a stranger supplies is a timing oracle
-    /// for a credential that cannot be revoked.
+    /// The raw bytes used by the dedicated presentation stream.
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
@@ -348,7 +290,11 @@ impl Ticket {
     /// a path, because "already held" is a fact about the id and not about where
     /// somebody happened to put the folder.
     pub fn disposition(&self, projects: &dyn crate::Projects) -> Disposition {
-        if projects.holds(&self.project) { Disposition::Join } else { Disposition::Clone }
+        if projects.admits(&self.project, Some(&self.grant)) {
+            Disposition::Join
+        } else {
+            Disposition::Clone
+        }
     }
 }
 
@@ -671,7 +617,7 @@ mod tests {
         // each other on one disk.
         struct Held(Id);
         impl crate::Projects for Held {
-            fn holds(&self, project: &Id) -> bool {
+            fn admits(&self, project: &Id, _grant: Option<&Grant>) -> bool {
                 *project == self.0
             }
         }

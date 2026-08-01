@@ -56,7 +56,7 @@ use wobu_influence::{Fragment, RefBucket};
 use wobu_llm::Cancel;
 
 use crate::aspect::{AspectRatio, Resolution};
-use crate::capability::Capabilities;
+use crate::capability::{Capabilities, ReferenceMechanism};
 use crate::error::{Error, Result};
 use crate::negotiate::Negotiated;
 
@@ -68,11 +68,11 @@ use crate::negotiate::Negotiated;
 /// a path here would be a field one of them has to turn into bytes anyway — and
 /// this crate does no IO, so it could not be the one to do it.
 ///
-/// `bucket` is carried rather than re-derived from `role`, because deriving it
-/// again is exactly the second copy of #44's mapping that `wobu-influence`
-/// exists to prevent. The adapter switches on this to decide which of the
-/// provider's fields the picture goes in, and it is the same answer the budget
-/// counted the reference under.
+/// The counting bucket and routing mechanism are both carried rather than
+/// re-derived. They answer different questions: #44's bucket says which quota
+/// the picture consumed, while #86's mechanism says which adapter path must
+/// apply it. Keeping both prevents a ComfyUI adapter from mistaking Gemini's
+/// `Characters` counter for a ControlNet input.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Reference {
     /// For the generation record and for the log. The adapter never resolves it.
@@ -81,8 +81,10 @@ pub struct Reference {
     /// [`bucket`](Self::bucket) — and carried because it is what the Inspector
     /// labels the picture with.
     pub role: AssetRole,
-    /// Which of the backend's reference fields it goes in.
+    /// Which of the provider's counting buckets it consumed.
     pub bucket: RefBucket,
+    /// The adapter path that negotiation selected for this image.
+    pub mechanism: ReferenceMechanism,
     /// `link.weight × section_priority × user_slider`, already multiplied out.
     ///
     /// It has already done its main job by deciding which references survived
@@ -111,6 +113,7 @@ impl Reference {
             asset_id: fragment.asset_id()?,
             role: fragment.asset_role()?,
             bucket,
+            mechanism: ReferenceMechanism::for_target(fragment.target())?,
             weight: fragment.weight(),
             bytes,
             mime: mime.into(),
@@ -200,15 +203,13 @@ impl ImageRequest {
         self
     }
 
-    /// The references going in one of the backend's fields, in reading order.
+    /// The references using one adapter mechanism, in reading order.
     ///
-    /// The shape an adapter builds its request out of: these are the pictures
-    /// that go in the style-reference field, and those are the ones that go in
-    /// the object field. Flat storage with the bucket on each entry rather than
-    /// a map, because reading order across the whole set is what the Inspector
-    /// lists and a map would lose it.
-    pub fn in_bucket(&self, bucket: RefBucket) -> impl Iterator<Item = &Reference> {
-        self.references.iter().filter(move |r| r.bucket == bucket)
+    /// This is routing, unlike `Reference::bucket`, which remains attached for
+    /// quota reporting. Gemini emits every image into one flat block list; a
+    /// future ComfyUI workflow can select only its ControlNet inputs here.
+    pub fn in_mechanism(&self, mechanism: ReferenceMechanism) -> impl Iterator<Item = &Reference> {
+        self.references.iter().filter(move |r| r.mechanism == mechanism)
     }
 }
 
@@ -488,6 +489,7 @@ pub trait ImageBackend: Send + Sync {
 mod tests {
     use super::*;
     use crate::aspect::AspectRatio;
+    use crate::capability::ReferenceMechanisms;
     use crate::negotiate::negotiate;
     use wobu_influence::{ImageBudget, Refs};
 
@@ -500,7 +502,7 @@ mod tests {
                 characters: Some(Refs::new(5)),
                 style_refs: Some(Refs::new(3)),
             },
-            controlnet: false,
+            reference_mechanisms: ReferenceMechanisms::image_prompt(),
             loras: false,
             negative_prompt: false,
             requires_billing: true,
@@ -536,11 +538,7 @@ mod tests {
     }
 
     #[test]
-    fn references_come_back_grouped_by_the_field_the_adapter_sends_them_in() {
-        // An adapter builds one provider field per bucket. Re-deriving the
-        // bucket from the role here would be the second copy of #44's mapping,
-        // and the copy that is wrong is the one that puts a pose reference in a
-        // style slot.
+    fn references_come_back_grouped_by_the_mechanism_the_adapter_uses() {
         let request = ImageRequest {
             references: vec![
                 reference(AssetRole::Costume, RefBucket::StyleRefs),
@@ -554,11 +552,12 @@ mod tests {
                 &negotiate(&[], AspectRatio::parse("16:9").unwrap(), &caps()),
             )
         };
-        let style: Vec<_> =
-            request.in_bucket(RefBucket::StyleRefs).map(|r| r.role.as_str()).collect();
-        assert_eq!(style, ["costume", "material"], "and in reading order");
-        assert_eq!(request.in_bucket(RefBucket::Objects).count(), 1);
-        assert_eq!(request.in_bucket(RefBucket::Characters).count(), 0);
+        let image_prompts: Vec<_> = request
+            .in_mechanism(ReferenceMechanism::ImagePrompt)
+            .map(|r| r.role.as_str())
+            .collect();
+        assert_eq!(image_prompts, ["costume", "palette", "material"]);
+        assert_eq!(request.in_mechanism(ReferenceMechanism::Structure).count(), 0);
     }
 
     fn reference(role: AssetRole, bucket: RefBucket) -> Reference {
@@ -566,6 +565,7 @@ mod tests {
             asset_id: Id::nil(),
             role,
             bucket,
+            mechanism: ReferenceMechanism::for_target(role.target()).unwrap(),
             weight: 1.0,
             bytes: vec![0x89, b'P', b'N', b'G'],
             mime: "image/png".into(),

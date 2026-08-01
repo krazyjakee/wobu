@@ -30,7 +30,7 @@ use wobu_sync::{Config, Error, Projects, Session, Sessions, SyncEndpoint};
 struct Held(Id);
 
 impl Projects for Held {
-    fn holds(&self, project: &Id) -> bool {
+    fn admits(&self, project: &Id, _grant: Option<&wobu_sync::Grant>) -> bool {
         *project == self.0
     }
 }
