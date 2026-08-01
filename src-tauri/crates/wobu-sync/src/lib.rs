@@ -36,6 +36,15 @@
 //! If a change to this crate needs a cryptographic primitive, the change is
 //! wrong. That is the whole of the rule.
 //!
+//! [`ticket::Grant`] is the thing most likely to be read as an exception, so it
+//! is worth naming here: it is thirty-two random bytes in a ticket, it is not a
+//! key, and nothing derives, signs, encrypts or challenges with it. It exists to
+//! tell "I was invited" apart from "I read a project ULID off a shared folder",
+//! which is an *authorisation* input and therefore #84's business rather than
+//! this crate's — nothing on `wobu/sync/1` presents or checks one today. Asking
+//! the OS for random bytes and putting them in a token is not a primitive. Doing
+//! anything else with them would be.
+//!
 //! ## The refusal is the security-relevant path
 //!
 //! A dialler names a project. If we do not hold it, the connection is refused —
@@ -111,8 +120,14 @@
 //!   makes the app hold a `SyncEndpoint`. Until then a conflict sibling is named
 //!   from `wobu-store`'s unattributed fallback, which is per *process* rather
 //!   than per installation.
-//! - **#77 tickets** — [`SyncEndpoint::addr`] and [`SyncEndpoint::online`] are
-//!   what a ticket is minted from, in that order.
+//! - **#77 tickets** — done, in [`ticket`]: [`SyncEndpoint::ticket`] mints one
+//!   from [`SyncEndpoint::addr`] (await [`SyncEndpoint::online`] first, or the
+//!   address has no relay in it and the ticket is undialable off the LAN) and
+//!   [`SyncEndpoint::connect_ticket`] accepts one. What is *not* done, and is
+//!   the shell's: persisting a ticket in local app data beside the keychain
+//!   entry, and cloning a project a [`Disposition::Clone`] ticket names. Neither
+//!   belongs here — a transport crate that wrote files would be `identity.rs`'s
+//!   argument against a file fallback, lost.
 //! - **#79 manifest exchange, #81 blob transfer** — [`Session::connection`] and
 //!   [`SyncEndpoint::endpoint`]. The opening exchange finished its stream, so a
 //!   later protocol owns whatever streams it opens; blobs registers a second
@@ -127,10 +142,12 @@ pub mod endpoint;
 pub mod error;
 pub mod identity;
 mod opening;
+pub mod ticket;
 
 pub use endpoint::{Config, Projects, Reach, Session, SyncEndpoint, Sessions};
 pub use error::{Error, Result};
 pub use identity::{Identity, Origin};
+pub use ticket::{Disposition, Grant, Ticket};
 /// The project identifier, re-exported rather than aliased: the ULID on the wire
 /// is the same one the rest of Wobu calls a project, and a second name for it
 /// would be a second thing to keep in step.

@@ -12,6 +12,7 @@ use wobu_core::Id;
 
 use crate::error::{Error, Result};
 use crate::identity::Identity;
+use crate::ticket::{Grant, Ticket};
 use crate::{ALPN, opening};
 
 /// QUIC application close codes. They are what the *peer* is told; the reason
@@ -309,6 +310,42 @@ impl SyncEndpoint {
                 Err(error)
             }
         }
+    }
+
+    /// Mint a ticket for a project: the string "share this project" copies.
+    ///
+    /// **Await [`Self::online`] first** under [`Reach::Internet`], and the
+    /// ordering is the whole hazard. [`Self::addr`] before a relay has been
+    /// picked contains direct socket addresses and nothing else, so the ticket
+    /// works on the minting machine's LAN and nowhere on earth beyond it — and
+    /// fails as a dial timeout, which reads to a user as "the other person is
+    /// offline". [`Ticket::is_relayed`] is the check a share dialog should make
+    /// before it lets the string be copied.
+    ///
+    /// The grant is a parameter, not something minted here: a project shared a
+    /// second time must be shared with the *same* grant, or the ticket somebody
+    /// pasted into their notes last month is not the ticket this machine would
+    /// honour. Keep it with the share; [`Grant::generate`] is for the first time
+    /// only. See [`crate::ticket`] for what a grant is and, more importantly,
+    /// what it is not.
+    pub fn ticket(&self, project: Id, grant: Grant) -> Ticket {
+        Ticket::new(project, self.addr(), grant)
+    }
+
+    /// Accept a ticket: dial the peer it names about the project it names.
+    ///
+    /// Exactly [`Self::connect`] with the ticket's two dialable fields pulled
+    /// out, and it is a method rather than a line at the call site so that the
+    /// next sentence has somewhere to live: **the grant is not sent.** Nothing in
+    /// `wobu/sync/1` presents or checks one, so accepting a ticket proves no more
+    /// to the other side than dialling with a guessed ULID would. That is #84's
+    /// to change, and [`crate::ticket`] says why it is not this crate's.
+    ///
+    /// Fails with [`Error::ProjectNotHeld`] if the peer no longer has the project
+    /// — which, since there is no revocation, is the only way a share ever stops
+    /// working.
+    pub async fn connect_ticket(&self, ticket: &Ticket) -> Result<Session> {
+        self.connect(ticket.addr().clone(), ticket.project()).await
     }
 
     /// Stop accepting, wind the handlers down, and close the endpoint.

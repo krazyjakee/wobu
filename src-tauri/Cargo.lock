@@ -286,6 +286,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic-polyfill"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
+dependencies = [
+ "critical-section",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1557,7 +1566,7 @@ dependencies = [
  "diatomic-waker",
  "futures-core",
  "pin-project-lite",
- "spin",
+ "spin 0.10.1",
 ]
 
 [[package]]
@@ -1999,6 +2008,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2031,6 +2049,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32069d97bb81e38fa67eab65e3393bf804bb85969f2bc06bf13f64aef5aba248"
 dependencies = [
  "hashbrown 0.17.1",
+]
+
+[[package]]
+name = "heapless"
+version = "0.7.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdc6457c0eb62c71aac4bc17216026d8410337c4126773b9c5daba343f17964f"
+dependencies = [
+ "atomic-polyfill",
+ "hash32",
+ "rustc_version",
+ "serde",
+ "spin 0.9.9",
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -2695,6 +2727,20 @@ dependencies = [
  "url",
  "webpki-roots",
  "ws_stream_wasm",
+]
+
+[[package]]
+name = "iroh-tickets"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da53233419ca36bf521ed45683b7748366f9b233032891eefc2d70567a84ac54"
+dependencies = [
+ "data-encoding",
+ "derive_more",
+ "iroh-base",
+ "n0-error",
+ "postcard",
+ "serde",
 ]
 
 [[package]]
@@ -4160,6 +4206,7 @@ dependencies = [
  "cobs",
  "embedded-io 0.4.0",
  "embedded-io 0.6.1",
+ "heapless",
  "postcard-derive",
  "serde",
 ]
@@ -5238,6 +5285,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "spin"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
+dependencies = [
+ "lock_api",
 ]
 
 [[package]]
@@ -7281,7 +7337,7 @@ dependencies = [
  "log",
  "serde",
  "thiserror 2.0.19",
- "windows 0.61.3",
+ "windows 0.62.2",
  "windows-core 0.62.2",
 ]
 
@@ -7402,7 +7458,10 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "iroh",
+ "iroh-tickets",
  "keyring",
+ "postcard",
+ "rand",
  "serde",
  "serde_json",
  "thiserror 2.0.19",

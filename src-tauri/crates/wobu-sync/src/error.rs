@@ -80,6 +80,22 @@ pub enum Error {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
+    /// The string somebody pasted is not a Wobu project ticket.
+    ///
+    /// One variant for every way that can be true — the wrong clipboard entry,
+    /// an iroh `endpoint…` ticket, half a token because a line wrapped, a
+    /// character an email client turned into an en dash. iroh's decoder
+    /// distinguishes those and this deliberately does not, because the user's
+    /// next action is the same in every case: go back to whoever sent it and ask
+    /// for the string again. A "malformed base32 at offset 41" is a sentence
+    /// nobody accepting a share can act on.
+    ///
+    /// It carries no source for a second reason. The pasted string is a
+    /// credential, and an error that quoted what failed to parse would put most
+    /// of one into whatever log the message ends up in.
+    #[error("that is not a Wobu project ticket")]
+    NotATicket,
+
     /// The accept loop did not wind down cleanly, which in practice means a
     /// protocol handler panicked and the panic is being carried out here.
     #[error("the sync endpoint did not shut down cleanly")]
