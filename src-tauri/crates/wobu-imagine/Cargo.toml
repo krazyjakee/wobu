@@ -5,8 +5,49 @@ edition.workspace = true
 
 [dependencies]
 async-trait = "0.1.91"
+# Latent previews arrive as raw JPEG or PNG bytes on the websocket, and
+# `ProgressSink::preview` takes a string. A `data:` URL is the only encoding both
+# ends already agree on, and 0.22.1 is the version the workspace lock already
+# resolved for Tauri.
+base64 = "0.22"
+# The websocket is a stream, which is what changed since #50. That note said
+# "this crate has no stream" and it was true of the trait — progress is still a
+# sink, for the reasons in `backend.rs`. What needs `Stream` is the read loop in
+# `comfy/socket.rs`, which is generic over one so that the framing and the
+# cancellation can be driven from recorded frames without a server.
+futures-core = "0.3.33"
+# Same version and the same argument as `wobu-llm`'s: already in the workspace
+# lock at 0.13.4 by way of Tauri, and pinned loosely enough to stay on that
+# resolution. Fewer features than the text adapters need — no `stream`, because
+# every ComfyUI response is small and read in one piece; progress comes over the
+# websocket instead.
+reqwest = { version = "0.13", default-features = false, features = [
+    "default-tls",
+    "http2",
+    "system-proxy",
+] }
 serde = { version = "1.0.229", features = ["derive"] }
+# A workflow is a graph of nodes keyed by id, and this crate has to hold one and
+# patch inputs inside it. `Value` rather than a typed graph on purpose: a
+# template may contain nodes from a custom pack whose input shape we have never
+# seen, and deserialising into a struct would mean dropping fields we cannot
+# name — see `comfy/workflow.rs`.
+serde_json = "1.0.151"
 thiserror = "2.0.19"
+# The websocket, and the only genuinely new thing in the tree. Nothing outside
+# `comfy/socket.rs` reaches it, and no TLS features: ComfyUI serves plain HTTP,
+# and `wss://` is refused loudly by `connect_async` rather than working by
+# accident against a server with no certificate. The defaults are exactly
+# `connect` and `handshake`.
+#
+# **0.30 and not one of 0.26-0.29**, which were checked. There is no version that
+# adds nothing: the handshake needs a SHA-1 and a nonce, and the tree has neither
+# spare. 0.26-0.29 pull `rand` 0.8 for the nonce, which is a second copy of a
+# crate the tree already has at 0.10 plus four of its own dependencies; 0.30 uses
+# `getrandom`, which is already here, and pays instead with `sha1` 0.11 and its
+# `digest` 0.11 line alongside the 0.10 one `sha2` resolved. Fewer crates, and
+# the duplicated versions are the newer of the two rather than a dead one.
+tokio-tungstenite = "0.30"
 wobu-core.workspace = true
 # The reference budget and the role-to-bucket mapping, which #44 put there and
 # which `Capabilities` carries unmodified rather than restating.
@@ -20,11 +61,12 @@ wobu-influence.workspace = true
 # workspace lock.
 wobu-llm.workspace = true
 
-# No `futures-core`: #50 sketches `progress` as a `BoxStream`, and this crate has
-# no stream. Progress is a sink for the reasons in `backend.rs`, and an unused
-# dependency on a stream crate would read as one being planned.
-
 [dev-dependencies]
-# Only to assert the wire form of what the Generate panel and the spend meter
-# will read. Nothing in the crate itself has to serialise a request.
-serde_json = "1.0.151"
+# Only for `tests/comfy_live.rs`, which is `#[ignore]`d and needs a server to run
+# at all. Every other async test in this crate runs on the hand-written
+# `block_on` those files carry, which is what keeps "this crate names no runtime"
+# true of the crate and not only of its documentation. `reqwest` and
+# `tokio-tungstenite` both need a reactor, so a live test cannot avoid one — and
+# a dev-dependency is not in the shipped binary, at the version the workspace
+# lock had already resolved.
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "time"] }

@@ -133,10 +133,12 @@
 mod aspect;
 mod backend;
 mod capability;
+pub mod comfy;
 mod error;
 mod negotiate;
 
 pub use aspect::{AspectRatio, Resolution};
+pub use comfy::ComfyBackend;
 pub use backend::{
     Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, ProgressSink,
     Reference,

@@ -1,0 +1,69 @@
+{
+  "10": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "", "weight_dtype": "default" }
+  },
+  "11": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "t5xxl_fp16.safetensors",
+      "clip_name2": "clip_l.safetensors",
+      "type": "flux"
+    }
+  },
+  "12": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "ae.safetensors" }
+  },
+  "13": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "", "clip": ["11", 0] }
+  },
+  "14": {
+    "class_type": "FluxGuidance",
+    "inputs": { "guidance": 3.5, "conditioning": ["13", 0] }
+  },
+  "15": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 }
+  },
+  "16": {
+    "class_type": "RandomNoise",
+    "inputs": { "noise_seed": 0 }
+  },
+  "17": {
+    "class_type": "KSamplerSelect",
+    "inputs": { "sampler_name": "euler" }
+  },
+  "18": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 20,
+      "denoise": 1.0,
+      "model": ["10", 0]
+    }
+  },
+  "19": {
+    "class_type": "BasicGuider",
+    "inputs": { "model": ["10", 0], "conditioning": ["14", 0] }
+  },
+  "20": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["16", 0],
+      "guider": ["19", 0],
+      "sampler": ["17", 0],
+      "sigmas": ["18", 0],
+      "latent_image": ["15", 0]
+    }
+  },
+  "21": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["20", 0], "vae": ["12", 0] }
+  },
+  "22": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "wobu", "images": ["21", 0] }
+  }
+}
