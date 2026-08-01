@@ -4,6 +4,7 @@ import type { LinkEdge, LinkRole, NodeKind, NodeSummary } from '../../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { BOARD_ASSET_MIME } from '../../lib/board'
 import { Icon } from '../Icon'
+import { GRAPH_LINK_LIMIT, limitRelationshipGraph } from './relationshipGraphLimit'
 
 const CARD_W = 112
 const CARD_H = 46
@@ -145,7 +146,14 @@ export function RelationshipGraph({
   onAssetDrop?: (assetId: string, nodeId: string) => void
 }) {
   const [assetDropId, setAssetDropId] = useState<string | null>(null)
-  const layout = useMemo(() => layoutRelationships(nodes, links, kinds), [nodes, links, kinds])
+  const subset = useMemo(
+    () => limitRelationshipGraph(nodes, links, selectedId, filter),
+    [filter, links, nodes, selectedId],
+  )
+  const layout = useMemo(
+    () => layoutRelationships(subset.nodes, subset.links, kinds),
+    [kinds, subset.links, subset.nodes],
+  )
   const byId = useMemo(() => new Map(layout.nodes.map((node) => [node.id, node])), [layout.nodes])
   const connected = useMemo(() => {
     const ids = new Set<string>()
@@ -300,6 +308,14 @@ export function RelationshipGraph({
             })}
           </div>
         </div>
+      )}
+
+      {!loading && !error && subset.limited && (
+        <p className="graph-footnote" role="status">
+          Showing {layout.nodes.length.toLocaleString()} of {nodes.length.toLocaleString()} nodes
+          and up to {GRAPH_LINK_LIMIT.toLocaleString()} explicit relationships. Filter to bring
+          matching nodes into view; Tree remains complete.
+        </p>
       )}
 
       {!loading && !error && layout.edges.length === 0 && nodes.length > 0 && (

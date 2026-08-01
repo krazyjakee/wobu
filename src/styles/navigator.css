@@ -65,9 +65,33 @@
   border-bottom: 1px solid var(--border);
 }
 .nav-tree {
+  display: flex;
   flex: 1;
-  overflow-y: auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 8px;
+}
+.nav-tree-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.nav-virtual-space {
+  position: relative;
+}
+.nav-virtual-window {
+  position: absolute;
+  inset: 0 0 auto;
+}
+.nav-virtual-window .group,
+.nav-virtual-window .node {
+  box-sizing: border-box;
+  height: 28px;
+  margin: 0;
+}
+.nav-virtual-window .group-h {
+  height: 100%;
 }
 .group {
   margin-bottom: 2px;

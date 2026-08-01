@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { errorMessage, type CorruptFile, type NodeKind, type NodeSummary } from '../../lib/api'
 import { useDeleteNode, useDuplicateNode, useMoveNode, useNodeLinks } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
-import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
+import { descendantsOf, type KindGroup, type TreeNode } from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
 import { BOARD_ASSET_MIME } from '../../lib/board'
 import { editingTitle } from '../../lib/presence'
@@ -12,6 +12,7 @@ import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { BrokenFiles } from './BrokenFiles'
 import { RelationshipGraph } from './RelationshipGraph'
+import { buildNavigatorRows, groupDropId, type NavigatorListRow } from './navigatorRows'
 
 const DRAG_MIME = 'application/x-wobu-node'
 
@@ -37,6 +38,7 @@ export function Navigator({
   onNewNode,
   onStyleTransfer,
   onAssetDrop,
+  onRowRender,
 }: {
   nodes: NodeSummary[]
   byId: Map<string, NodeSummary>
@@ -54,6 +56,8 @@ export function Navigator({
   onStyleTransfer?: () => void
   /** Board-only drop path; absent in Library so node reparenting is unchanged. */
   onAssetDrop?: (assetId: string, nodeId: string) => void
+  /** Performance-test instrumentation; omitted by the application. */
+  onRowRender?: (nodeId: string) => void
 }) {
   const filter = useUI((s) => s.filter)
   const setFilter = useUI((s) => s.setFilter)
@@ -74,35 +78,71 @@ export function Navigator({
   const del = useDeleteNode()
   const dup = useDuplicateNode()
   const linksQ = useNodeLinks(view === 'graph')
+  const moveNode = move.mutate
+  const assetDropRef = useRef(onAssetDrop)
+  useEffect(() => {
+    assetDropRef.current = onAssetDrop
+  }, [onAssetDrop])
 
   const forbidden = useMemo(
     () => (dragId ? descendantsOf(dragId, nodes) : new Set<string>()),
     [dragId, nodes],
   )
 
-  /** The rules themselves live in lib/drop.ts, where they can be tested. */
-  function canDrop(targetId: string | null, targetKind: NodeKind): boolean {
-    return allow({ dragId, byId, forbidden, kinds, readOnly }, targetId, targetKind)
-  }
+  const list = useMemo(
+    () => buildNavigatorRows(groups, filter, closedGroups, collapsedNodes),
+    [closedGroups, collapsedNodes, filter, groups],
+  )
 
-  function doMove(targetId: string | null) {
-    if (!dragId) return
-    const src = byId.get(dragId)
-    move.mutate(
-      { id: dragId, newParentId: targetId },
-      {
-        onError: (e) => report(e),
-        onSuccess: () =>
-          toast(
-            targetId
-              ? `${src?.name ?? 'Node'} moved under ${byId.get(targetId)?.name ?? 'node'}`
-              : `${src?.name ?? 'Node'} moved to the top level`,
-          ),
-      },
-    )
+  /** The rules themselves live in lib/drop.ts, where they can be tested. */
+  const canDrop = useCallback(
+    (targetId: string | null, targetKind: NodeKind): boolean =>
+      allow({ dragId, byId, forbidden, kinds, readOnly }, targetId, targetKind),
+    [byId, dragId, forbidden, kinds, readOnly],
+  )
+
+  const doMove = useCallback(
+    (targetId: string | null) => {
+      if (!dragId) return
+      const src = byId.get(dragId)
+      moveNode(
+        { id: dragId, newParentId: targetId },
+        {
+          onError: (e) => report(e),
+          onSuccess: () =>
+            toast(
+              targetId
+                ? `${src?.name ?? 'Node'} moved under ${byId.get(targetId)?.name ?? 'node'}`
+                : `${src?.name ?? 'Node'} moved to the top level`,
+            ),
+        },
+      )
+      setDragId(null)
+      setDropId(null)
+    },
+    [byId, dragId, moveNode],
+  )
+
+  const handleContext = useCallback(
+    (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) =>
+      setCtx({ x, y, node, opener }),
+    [],
+  )
+  const handleDragEnd = useCallback(() => {
     setDragId(null)
     setDropId(null)
-  }
+  }, [])
+  const handleAssetDrop = useCallback(
+    (assetId: string, nodeId: string) => assetDropRef.current?.(assetId, nodeId),
+    [],
+  )
+  const handleGroupContext = useCallback(
+    (kind: NodeKind) => {
+      setCtx(null)
+      if (!readOnly) onNewNode(kind, null)
+    },
+    [onNewNode, readOnly],
+  )
 
   return (
     <aside className="nav">
@@ -200,76 +240,33 @@ export function Navigator({
           jobs, and the palette does the second one honestly, with a heading
           that says which half of the search found each row.
         */}
-          {filter && !groups.some((g) => filterTree(g.roots, filter).length > 0) && (
+          {filter && !list.hasMatches && (
             <p className="nav-note">
               Nothing here matches <b>{filter}</b>. This box filters names and summaries — press{' '}
               <kbd>Ctrl+K</kbd> to search inside notes and descriptions too.
             </p>
           )}
-
-          {groups.map((g) => {
-            const visible = filterTree(g.roots, filter)
-            if (filter && visible.length === 0) return null
-            const open = !closedGroups[g.kind] || !!filter
-            return (
-              <div key={g.kind} className={open ? 'group open' : 'group'}>
-                <button
-                  className={`group-h${dropId === `group:${g.kind}` ? ' drop-target' : ''}`}
-                  onClick={() => toggleGroup(g.kind)}
-                  onDragOver={(e) => {
-                    if (!canDrop(null, g.kind)) return
-                    e.preventDefault()
-                    setDropId(`group:${g.kind}`)
-                  }}
-                  onDragLeave={() => setDropId((d) => (d === `group:${g.kind}` ? null : d))}
-                  onDrop={(e) => {
-                    if (!canDrop(null, g.kind)) return
-                    e.preventDefault()
-                    doMove(null)
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setCtx(null)
-                    if (!readOnly) onNewNode(g.kind, null)
-                  }}
-                >
-                  <Icon name="chev" />
-                  {pluralFor(g.def, g.kind)}
-                  <span className="gcount">{g.count}</span>
-                </button>
-                {open && (
-                  <div className="group-items">
-                    {visible.map((t) => (
-                      <Row
-                        key={t.node.id}
-                        t={t}
-                        kinds={kinds}
-                        selectedId={selectedId}
-                        collapsed={collapsedNodes}
-                        forceOpen={!!filter}
-                        dragId={dragId}
-                        dropId={dropId}
-                        onSelect={select}
-                        onToggle={toggleNodeOpen}
-                        onContext={(x, y, node, opener) => setCtx({ x, y, node, opener })}
-                        onDragStart={(id) => setDragId(id)}
-                        onDragEnd={() => {
-                          setDragId(null)
-                          setDropId(null)
-                        }}
-                        canDrop={canDrop}
-                        onDropOn={(id) => doMove(id)}
-                        setDropId={setDropId}
-                        readOnly={readOnly}
-                        editedElsewhere={editedElsewhere}
-                        onAssetDrop={onAssetDrop}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          <VirtualNavigatorRows
+            rows={list.rows}
+            kinds={kinds}
+            selectedId={selectedId}
+            dragId={dragId}
+            dropId={dropId}
+            readOnly={readOnly}
+            editedElsewhere={editedElsewhere}
+            onSelect={select}
+            onToggle={toggleNodeOpen}
+            onToggleGroup={toggleGroup}
+            onGroupContext={handleGroupContext}
+            onContext={handleContext}
+            onDragStart={setDragId}
+            onDragEnd={handleDragEnd}
+            canDrop={canDrop}
+            onDropOn={doMove}
+            setDropId={setDropId}
+            onAssetDrop={onAssetDrop ? handleAssetDrop : undefined}
+            onRowRender={onRowRender}
+          />
         </div>
       ) : (
         <div className="nav-graph-shell">
@@ -479,14 +476,216 @@ function NodeMenu({
   )
 }
 
-function Row({
-  t,
+const NAVIGATOR_ROW_HEIGHT = 28
+const NAVIGATOR_OVERSCAN = 8
+const NAVIGATOR_FALLBACK_HEIGHT = 560
+
+interface NavigatorRowsProps {
+  rows: NavigatorListRow[]
+  kinds: KindIndex
+  selectedId: string | null
+  dragId: string | null
+  dropId: string | null
+  readOnly: boolean
+  editedElsewhere: Map<string, string>
+  onSelect: (id: string) => void
+  onToggle: (id: string) => void
+  onToggleGroup: (kind: NodeKind) => void
+  onGroupContext: (kind: NodeKind) => void
+  onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+  canDrop: (targetId: string | null, kind: NodeKind) => boolean
+  onDropOn: (id: string | null) => void
+  setDropId: (id: string | null) => void
+  onAssetDrop?: (assetId: string, nodeId: string) => void
+  onRowRender?: (nodeId: string) => void
+}
+
+function VirtualNavigatorRows(props: NavigatorRowsProps) {
+  const viewport = useRef<HTMLDivElement>(null)
+  const scrollFrame = useRef<number | null>(null)
+  const latestScrollTop = useRef(0)
+  const [windowState, setWindowState] = useState({
+    scrollTop: 0,
+    height: NAVIGATOR_FALLBACK_HEIGHT,
+  })
+
+  useEffect(() => {
+    const element = viewport.current
+    if (!element) return
+    const measure = () =>
+      setWindowState((current) => ({
+        ...current,
+        height: element.clientHeight || NAVIGATOR_FALLBACK_HEIGHT,
+      }))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (scrollFrame.current !== null) cancelAnimationFrame(scrollFrame.current)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (!props.selectedId) return
+    const index = props.rows.findIndex(
+      (row) => row.type === 'node' && row.tree.node.id === props.selectedId,
+    )
+    const element = viewport.current
+    if (index < 0 || !element) return
+    const top = index * NAVIGATOR_ROW_HEIGHT
+    const bottom = top + NAVIGATOR_ROW_HEIGHT
+    const visibleTop = element.scrollTop
+    const visibleBottom = visibleTop + (element.clientHeight || NAVIGATOR_FALLBACK_HEIGHT)
+    if (top >= visibleTop && bottom <= visibleBottom) return
+    const next = Math.max(0, top - NAVIGATOR_ROW_HEIGHT * 2)
+    element.scrollTop = next
+    latestScrollTop.current = next
+    setWindowState((current) => ({ ...current, scrollTop: next }))
+  }, [props.rows, props.selectedId])
+
+  const start = Math.max(
+    0,
+    Math.floor(windowState.scrollTop / NAVIGATOR_ROW_HEIGHT) - NAVIGATOR_OVERSCAN,
+  )
+  const end = Math.min(
+    props.rows.length,
+    Math.ceil((windowState.scrollTop + windowState.height) / NAVIGATOR_ROW_HEIGHT) +
+      NAVIGATOR_OVERSCAN,
+  )
+
+  return (
+    <div
+      className="nav-tree-scroll"
+      ref={viewport}
+      onScroll={(event) => {
+        latestScrollTop.current = event.currentTarget.scrollTop
+        if (scrollFrame.current !== null) return
+        scrollFrame.current = requestAnimationFrame(() => {
+          scrollFrame.current = null
+          setWindowState((current) => ({
+            ...current,
+            scrollTop: latestScrollTop.current,
+          }))
+        })
+      }}
+    >
+      <div
+        className="nav-virtual-space"
+        style={{ height: props.rows.length * NAVIGATOR_ROW_HEIGHT }}
+      >
+        <div
+          className="nav-virtual-window"
+          style={{ transform: `translateY(${start * NAVIGATOR_ROW_HEIGHT}px)` }}
+        >
+          {props.rows
+            .slice(start, end)
+            .map((row) =>
+              row.type === 'group' ? (
+                <NavigatorGroupRow
+                  key={row.key}
+                  row={row}
+                  dropTarget={props.dropId === groupDropId(row.group.kind)}
+                  canDrop={props.canDrop}
+                  onToggle={props.onToggleGroup}
+                  onContext={props.onGroupContext}
+                  onDropOn={props.onDropOn}
+                  setDropId={props.setDropId}
+                />
+              ) : (
+                <NavigatorNodeRow
+                  key={row.key}
+                  tree={row.tree}
+                  kinds={props.kinds}
+                  open={row.open}
+                  hasChildren={row.hasChildren}
+                  selected={props.selectedId === row.tree.node.id}
+                  dragging={props.dragId === row.tree.node.id}
+                  dropTarget={props.dropId === row.tree.node.id}
+                  onSelect={props.onSelect}
+                  onToggle={props.onToggle}
+                  onContext={props.onContext}
+                  onDragStart={props.onDragStart}
+                  onDragEnd={props.onDragEnd}
+                  canDrop={props.canDrop}
+                  onDropOn={props.onDropOn}
+                  setDropId={props.setDropId}
+                  readOnly={props.readOnly}
+                  who={props.editedElsewhere.get(row.tree.node.id)}
+                  onAssetDrop={props.onAssetDrop}
+                  onRender={props.onRowRender}
+                />
+              ),
+            )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const NavigatorGroupRow = memo(function NavigatorGroupRow({
+  row,
+  dropTarget,
+  canDrop,
+  onToggle,
+  onContext,
+  onDropOn,
+  setDropId,
+}: {
+  row: Extract<NavigatorListRow, { type: 'group' }>
+  dropTarget: boolean
+  canDrop: (targetId: string | null, kind: NodeKind) => boolean
+  onToggle: (kind: NodeKind) => void
+  onContext: (kind: NodeKind) => void
+  onDropOn: (id: string | null) => void
+  setDropId: (id: string | null) => void
+}) {
+  const group = row.group
+  const target = groupDropId(group.kind)
+  return (
+    <div className={row.open ? 'group open' : 'group'}>
+      <button
+        className={`group-h${dropTarget ? ' drop-target' : ''}`}
+        onClick={() => onToggle(group.kind)}
+        onDragOver={(event) => {
+          if (!canDrop(null, group.kind)) return
+          event.preventDefault()
+          setDropId(target)
+        }}
+        onDragLeave={() => setDropId(null)}
+        onDrop={(event) => {
+          if (!canDrop(null, group.kind)) return
+          event.preventDefault()
+          onDropOn(null)
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          onContext(group.kind)
+        }}
+      >
+        <Icon name="chev" />
+        {pluralFor(group.def, group.kind)}
+        <span className="gcount">{group.count}</span>
+      </button>
+    </div>
+  )
+})
+
+const NavigatorNodeRow = memo(function NavigatorNodeRow({
+  tree,
   kinds,
-  selectedId,
-  collapsed,
-  forceOpen,
-  dragId,
-  dropId,
+  open,
+  hasChildren,
+  selected,
+  dragging,
+  dropTarget,
   onSelect,
   onToggle,
   onContext,
@@ -496,134 +695,110 @@ function Row({
   onDropOn,
   setDropId,
   readOnly,
-  editedElsewhere,
+  who,
   onAssetDrop,
+  onRender,
 }: {
-  t: TreeNode
+  tree: TreeNode
   kinds: KindIndex
-  selectedId: string | null
-  collapsed: Record<string, true>
-  forceOpen: boolean
-  dragId: string | null
-  dropId: string | null
+  open: boolean
+  hasChildren: boolean
+  selected: boolean
+  dragging: boolean
+  dropTarget: boolean
   onSelect: (id: string) => void
   onToggle: (id: string) => void
   onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
   onDragStart: (id: string) => void
   onDragEnd: () => void
   canDrop: (targetId: string | null, kind: NodeKind) => boolean
-  onDropOn: (id: string) => void
+  onDropOn: (id: string | null) => void
   setDropId: (id: string | null) => void
   readOnly: boolean
-  editedElsewhere: Map<string, string>
+  who: string | undefined
   onAssetDrop?: (assetId: string, nodeId: string) => void
+  onRender?: (nodeId: string) => void
 }) {
-  const n = t.node
+  const n = tree.node
+  useEffect(() => {
+    onRender?.(n.id)
+  })
   const def = kinds.get(n.kind)
-  const hasKids = t.children.length > 0
-  const open = forceOpen || !collapsed[n.id]
   const cls = [
     'node',
-    selectedId === n.id ? 'is-sel' : '',
-    dragId === n.id ? 'is-dragging' : '',
-    dropId === n.id ? 'drop-target' : '',
+    selected ? 'is-sel' : '',
+    dragging ? 'is-dragging' : '',
+    dropTarget ? 'drop-target' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
   return (
-    <>
-      <button
-        className={cls}
-        aria-current={selectedId === n.id ? 'true' : undefined}
-        style={{ paddingLeft: 8 + t.depth * 14 }}
-        onClick={() => onSelect(n.id)}
-        onContextMenu={(e) => {
+    <button
+      className={cls}
+      aria-current={selected ? 'true' : undefined}
+      style={{ paddingLeft: 12 + tree.depth * 14 }}
+      onClick={() => onSelect(n.id)}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        e.currentTarget.focus()
+        onContext(e.clientX, e.clientY, n, e.currentTarget)
+      }}
+      draggable={!readOnly}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, n.id)
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart(n.id)
+      }}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => {
+        if (!readOnly && onAssetDrop && hasBoardAsset(e.dataTransfer)) {
           e.preventDefault()
-          e.currentTarget.focus()
-          onContext(e.clientX, e.clientY, n, e.currentTarget)
-        }}
-        draggable={!readOnly}
-        onDragStart={(e) => {
-          e.dataTransfer.setData(DRAG_MIME, n.id)
-          e.dataTransfer.effectAllowed = 'move'
-          onDragStart(n.id)
-        }}
-        onDragEnd={onDragEnd}
-        onDragOver={(e) => {
-          if (!readOnly && onAssetDrop && hasBoardAsset(e.dataTransfer)) {
-            e.preventDefault()
-            e.dataTransfer.dropEffect = 'link'
-            setDropId(n.id)
-            return
-          }
-          if (!canDrop(n.id, n.kind)) return
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'move'
+          e.dataTransfer.dropEffect = 'link'
           setDropId(n.id)
-        }}
-        onDragLeave={() => setDropId(null)}
-        onDrop={(e) => {
-          const assetId = boardAssetFrom(e.dataTransfer)
-          if (!readOnly && onAssetDrop && assetId) {
-            e.preventDefault()
-            onAssetDrop(assetId, n.id)
-            setDropId(null)
-            return
-          }
-          if (!canDrop(n.id, n.kind)) return
+          return
+        }
+        if (!canDrop(n.id, n.kind)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDropId(n.id)
+      }}
+      onDragLeave={() => setDropId(null)}
+      onDrop={(e) => {
+        const assetId = boardAssetFrom(e.dataTransfer)
+        if (!readOnly && onAssetDrop && assetId) {
           e.preventDefault()
-          onDropOn(n.id)
-        }}
-        title={n.summary || n.name}
-      >
-        {hasKids ? (
-          <span
-            className={open ? 'twist open' : 'twist'}
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggle(n.id)
-            }}
-            role="presentation"
-          >
-            <Icon name="chev" size="sm" style={{ width: 11, height: 11 }} />
-          </span>
-        ) : (
-          <span className="twist" />
-        )}
-        <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
-        <span className="nm">{n.name}</span>
-        <PeerDot who={editedElsewhere.get(n.id)} />
-        <StaleDot state={n.descriptionState} />
-      </button>
-      {hasKids &&
-        open &&
-        t.children.map((c) => (
-          <Row
-            key={c.node.id}
-            t={c}
-            kinds={kinds}
-            selectedId={selectedId}
-            collapsed={collapsed}
-            forceOpen={forceOpen}
-            dragId={dragId}
-            dropId={dropId}
-            onSelect={onSelect}
-            onToggle={onToggle}
-            onContext={onContext}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            canDrop={canDrop}
-            onDropOn={onDropOn}
-            setDropId={setDropId}
-            readOnly={readOnly}
-            editedElsewhere={editedElsewhere}
-            onAssetDrop={onAssetDrop}
-          />
-        ))}
-    </>
+          onAssetDrop(assetId, n.id)
+          setDropId(null)
+          return
+        }
+        if (!canDrop(n.id, n.kind)) return
+        e.preventDefault()
+        onDropOn(n.id)
+      }}
+      title={n.summary || n.name}
+    >
+      {hasChildren ? (
+        <span
+          className={open ? 'twist open' : 'twist'}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggle(n.id)
+          }}
+          role="presentation"
+        >
+          <Icon name="chev" size="sm" style={{ width: 11, height: 11 }} />
+        </span>
+      ) : (
+        <span className="twist" />
+      )}
+      <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
+      <span className="nm">{n.name}</span>
+      <PeerDot who={who} />
+      <StaleDot state={n.descriptionState} />
+    </button>
   )
-}
+})
 
 function hasBoardAsset(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes(BOARD_ASSET_MIME)

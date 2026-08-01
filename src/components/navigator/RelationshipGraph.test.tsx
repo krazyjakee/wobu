@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LinkEdge, NodeSummary } from '../../lib/api'
 import { kindDef, kindIndex, summary } from '../../test/fixtures'
 import { layoutRelationships, RelationshipGraph } from './RelationshipGraph'
+import { GRAPH_NODE_LIMIT } from './relationshipGraphLimit'
 
 const kinds = kindIndex([
   kindDef('species', { label: 'Species', plural: 'Species', layer: 'ancestry' }),
@@ -94,5 +95,33 @@ describe('read-only relationship graph', () => {
     expect(screen.getByRole('button', { name: 'Open Kael, Character' }).className).toContain(
       'is-dim',
     )
+  })
+
+  it('clearly bounds graph rendering for a 10,000-node world', () => {
+    const many = Array.from({ length: 10_000 }, (_, index) =>
+      summary({
+        id: `large-${index}`,
+        name: `Large ${index}`,
+        kind: 'character',
+      }),
+    )
+
+    const view = render(
+      <RelationshipGraph
+        nodes={many}
+        links={[]}
+        kinds={kinds}
+        selectedId="large-9999"
+        filter="9999"
+        loading={false}
+        error={null}
+        onSelect={() => {}}
+      />,
+    )
+
+    expect(view.container.querySelectorAll('.graph-node')).toHaveLength(GRAPH_NODE_LIMIT)
+    expect(screen.getByRole('button', { name: 'Open Large 9999, Character' })).toBeTruthy()
+    expect(screen.getByRole('status')).toHaveTextContent('Showing 500 of 10,000 nodes')
+    expect(screen.getByRole('status')).toHaveTextContent('Tree remains complete')
   })
 })
