@@ -499,6 +499,7 @@ function ReferenceTile({
             step="0.05"
             value={link.weight}
             disabled={readOnly}
+            aria-valuetext={`${Math.round(link.weight * 100)} percent`}
             onChange={(event) => onUpdate({ weight: Number(event.target.value) })}
           />
           <output>{link.weight.toFixed(2)}</output>

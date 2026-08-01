@@ -174,7 +174,12 @@ describe('AssetsMode', () => {
       usage('shared', 'vashk', [role('silhouette', 0.8)], { nodeTags: ['ancestry'] }),
     ]
     open()
-    fireEvent.click(await screen.findByRole('button', { name: 'Select reference asset shared' }))
+    const assetButton = await screen.findByRole('button', {
+      name: 'Select reference asset shared',
+    })
+    expect(assetButton).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(assetButton)
+    expect(assetButton).toHaveAttribute('aria-pressed', 'true')
     const details = screen.getByRole('complementary', { name: 'Details for asset shared' })
 
     expect(within(details).getByText('Used by 2 nodes')).toBeInTheDocument()

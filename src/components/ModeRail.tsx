@@ -14,7 +14,7 @@ export function ModeRail() {
   const setMode = useUI((s) => s.setMode)
 
   return (
-    <nav className="rail">
+    <nav className="rail" aria-label="Workspace modes">
       {MODES.map((m) => (
         <button
           key={m.mode}
@@ -22,6 +22,7 @@ export function ModeRail() {
           data-tip={m.tip}
           onClick={() => setMode(m.mode)}
           aria-label={m.tip}
+          aria-current={mode === m.mode ? 'page' : undefined}
         >
           <Icon name={m.icon} />
         </button>
@@ -32,6 +33,7 @@ export function ModeRail() {
         data-tip="Settings"
         onClick={() => setMode('settings')}
         aria-label="Settings"
+        aria-current={mode === 'settings' ? 'page' : undefined}
       >
         <Icon name="settings" />
       </button>

@@ -179,6 +179,7 @@ export function Editor({
           <button
             key={t}
             className={tab === t ? 'tab is-active' : 'tab'}
+            aria-pressed={tab === t}
             onClick={() => setTab(t)}
             title={`${modKey()}${i + 1}`}
           >

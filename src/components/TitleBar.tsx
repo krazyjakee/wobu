@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { NodeSummary, ProjectSummary } from '../lib/api'
 import { useCloseProject } from '../lib/queries'
 import { labelFor, type KindIndex } from '../lib/kinds'
 import { useUI, report } from '../store/ui'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
+import { ContextMenu } from './navigator/ContextMenu'
 
 export function TitleBar({
   project,
@@ -22,16 +23,7 @@ export function TitleBar({
   const setMode = useUI((s) => s.setMode)
   const [menu, setMenu] = useState(false)
   const closeProject = useCloseProject()
-  const wrap = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menu) return
-    const off = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setMenu(false)
-    }
-    window.addEventListener('mousedown', off)
-    return () => window.removeEventListener('mousedown', off)
-  }, [menu])
+  const projectMenuButton = useRef<HTMLButtonElement>(null)
 
   const kindLabel = selected ? labelFor(kinds.get(selected.kind), selected.kind) : null
 
@@ -42,16 +34,30 @@ export function TitleBar({
         wobu
       </div>
 
-      <div ref={wrap} style={{ position: 'relative' }}>
-        <button className="projpick" onClick={() => setMenu((v) => !v)}>
+      <div style={{ position: 'relative' }}>
+        <button
+          ref={projectMenuButton}
+          className="projpick"
+          aria-haspopup="menu"
+          aria-expanded={menu}
+          onClick={() => setMenu((v) => !v)}
+        >
           {project.name}
           <Icon name="chev" size="sm" />
         </button>
         {menu && (
-          <div className="ctx" style={{ position: 'absolute', top: 30, left: 0 }}>
-            <div className="ctx-label">{project.path}</div>
-            <div className="ctx-sep" />
+          <ContextMenu
+            className="title-project-menu"
+            label={`Project actions for ${project.name}`}
+            restoreFocusRef={projectMenuButton}
+            onClose={() => setMenu(false)}
+          >
+            <div className="ctx-label" role="presentation">
+              {project.path}
+            </div>
+            <div className="ctx-sep" role="separator" />
             <button
+              role="menuitem"
               onClick={() => {
                 setMenu(false)
                 closeProject.mutate(undefined, {
@@ -62,7 +68,7 @@ export function TitleBar({
               <Icon name="folder" size="sm" />
               Close project
             </button>
-          </div>
+          </ContextMenu>
         )}
       </div>
 

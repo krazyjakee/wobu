@@ -19,6 +19,7 @@ interface Ctx {
   x: number
   y: number
   node: NodeSummary
+  opener: HTMLButtonElement
 }
 
 export function Navigator({
@@ -137,10 +138,12 @@ export function Navigator({
               <button
                 key={n.id}
                 className={`node node-pin${selectedId === n.id ? ' is-sel' : ''}${dropId === n.id ? ' drop-target' : ''}`}
+                aria-current={selectedId === n.id ? 'true' : undefined}
                 onClick={() => select(n.id)}
                 onContextMenu={(e) => {
                   e.preventDefault()
-                  setCtx({ x: e.clientX, y: e.clientY, node: n })
+                  e.currentTarget.focus()
+                  setCtx({ x: e.clientX, y: e.clientY, node: n, opener: e.currentTarget })
                 }}
                 title={n.summary || labelFor(def, n.kind)}
                 onDragOver={(event) => {
@@ -248,7 +251,7 @@ export function Navigator({
                         dropId={dropId}
                         onSelect={select}
                         onToggle={toggleNodeOpen}
-                        onContext={(x, y, node) => setCtx({ x, y, node })}
+                        onContext={(x, y, node, opener) => setCtx({ x, y, node, opener })}
                         onDragStart={(id) => setDragId(id)}
                         onDragEnd={() => {
                           setDragId(null)
@@ -301,7 +304,13 @@ export function Navigator({
       )}
 
       {ctx && (
-        <ContextMenu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)}>
+        <ContextMenu
+          x={ctx.x}
+          y={ctx.y}
+          onClose={() => setCtx(null)}
+          restoreFocus={ctx.opener}
+          label={`Actions for ${ctx.node.name}`}
+        >
           <NodeMenu
             node={ctx.node}
             kinds={kinds}
@@ -427,23 +436,42 @@ function NodeMenu({
   }
   return (
     <>
-      <div className="ctx-label">{labelFor(def, node.kind)}</div>
-      <button disabled={readOnly} onClick={pick(() => onNewNode(node.kind, node.parentId))}>
+      <div className="ctx-label" role="presentation">
+        {labelFor(def, node.kind)}
+      </div>
+      <button
+        role="menuitem"
+        disabled={readOnly}
+        onClick={pick(() => onNewNode(node.kind, node.parentId))}
+      >
         <Icon name="plus" size="sm" />
         New {labelFor(def, node.kind).toLowerCase()}
       </button>
       {def?.nests && (
-        <button disabled={readOnly} onClick={pick(() => onNewNode(node.kind, node.id))}>
+        <button
+          role="menuitem"
+          disabled={readOnly}
+          onClick={pick(() => onNewNode(node.kind, node.id))}
+        >
           <Icon name="plus" size="sm" />
           New child of {node.name}
         </button>
       )}
-      <div className="ctx-sep" />
-      <button disabled={readOnly || def?.singleton || busy} onClick={pick(onDuplicate)}>
+      <div className="ctx-sep" role="separator" />
+      <button
+        role="menuitem"
+        disabled={readOnly || def?.singleton || busy}
+        onClick={pick(onDuplicate)}
+      >
         <Icon name="copy" size="sm" />
         Duplicate
       </button>
-      <button className="danger" disabled={readOnly || busy} onClick={pick(onDelete)}>
+      <button
+        role="menuitem"
+        className="danger"
+        disabled={readOnly || busy}
+        onClick={pick(onDelete)}
+      >
         <Icon name="trash" size="sm" />
         Delete
       </button>
@@ -480,7 +508,7 @@ function Row({
   dropId: string | null
   onSelect: (id: string) => void
   onToggle: (id: string) => void
-  onContext: (x: number, y: number, node: NodeSummary) => void
+  onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
   onDragStart: (id: string) => void
   onDragEnd: () => void
   canDrop: (targetId: string | null, kind: NodeKind) => boolean
@@ -507,11 +535,13 @@ function Row({
     <>
       <button
         className={cls}
+        aria-current={selectedId === n.id ? 'true' : undefined}
         style={{ paddingLeft: 8 + t.depth * 14 }}
         onClick={() => onSelect(n.id)}
         onContextMenu={(e) => {
           e.preventDefault()
-          onContext(e.clientX, e.clientY, n)
+          e.currentTarget.focus()
+          onContext(e.clientX, e.clientY, n, e.currentTarget)
         }}
         draggable={!readOnly}
         onDragStart={(e) => {

@@ -87,6 +87,7 @@ export function ThreePane({ node }: { node: WobuNode }) {
             <button
               key={concept.asset.id}
               className={concept.asset.id === selected.asset.id ? 'is-active' : ''}
+              aria-current={concept.asset.id === selected.asset.id ? 'true' : undefined}
               onClick={() => setSelectedId(concept.asset.id)}
             >
               <b>{new Date(concept.createdAt).toLocaleDateString()}</b>

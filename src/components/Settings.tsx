@@ -389,6 +389,7 @@ function CapabilityRow({
           <button
             key={p.id}
             className={p.id === selection.provider ? 'btn-mini is-on' : 'btn-mini'}
+            aria-pressed={p.id === selection.provider}
             disabled={readOnly || select.isPending}
             // The model is deliberately not carried across. Model ids belong to
             // one vendor — `claude-sonnet-5` handed to Gemini is a request that
@@ -961,14 +962,18 @@ function EditorPrefs() {
     <section className="set-sec">
       <h3>Editor</h3>
       <div className="set-row set-row-col">
-        <span className="set-label">Autosave after</span>
+        <label className="set-label" htmlFor="settings-autosave-delay">
+          Autosave after
+        </label>
         <div className="set-slider">
           <input
+            id="settings-autosave-delay"
             type="range"
             min={AUTOSAVE_MIN}
             max={AUTOSAVE_MAX}
             step={50}
             value={delay}
+            aria-valuetext={`${(delay / 1000).toFixed(2)} seconds`}
             onChange={(e) => setDelay(Number(e.target.value))}
           />
           <span className="set-value">{(delay / 1000).toFixed(2)}s</span>
@@ -1007,14 +1012,18 @@ function Appearance() {
     <section className="set-sec">
       <h3>Appearance</h3>
       <div className="set-row set-row-col">
-        <span className="set-label">Interface scale</span>
+        <label className="set-label" htmlFor="settings-interface-scale">
+          Interface scale
+        </label>
         <div className="set-slider">
           <input
+            id="settings-interface-scale"
             type="range"
             min={SCALE_MIN}
             max={SCALE_MAX}
             step={SCALE_STEP}
             value={scale}
+            aria-valuetext={`${pct} percent`}
             onChange={(e) => setScale(Number(e.target.value))}
           />
           <span className="set-value">{pct}%</span>
@@ -1180,6 +1189,7 @@ function Diagnostics() {
             <button
               key={l}
               className={l === info.level ? 'btn-mini is-on' : 'btn-mini'}
+              aria-pressed={l === info.level}
               onClick={() => void changeLevel(l)}
             >
               {l}

@@ -63,6 +63,26 @@ beforeEach(() => {
 })
 
 describe('launcher recent projects', () => {
+  it('focuses its menu item and restores the More actions button on Escape', async () => {
+    showLauncher()
+    const opener = await screen.findByRole('button', { name: 'More actions for Ashfall' })
+
+    fireEvent.click(opener)
+    let item = screen.getByRole('menuitem', { name: /Remove from Recent/ })
+    expect(item).toHaveFocus()
+    expect(item).toHaveAttribute('tabindex', '-1')
+
+    fireEvent.click(opener)
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(opener)
+    item = screen.getByRole('menuitem', { name: /Remove from Recent/ })
+
+    fireEvent.keyDown(item, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(opener).toHaveFocus()
+  })
+
   it('removes a card optimistically while making the launcher-only scope explicit', async () => {
     showLauncher()
     await screen.findByRole('button', { name: /^Ashfall/ })

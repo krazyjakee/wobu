@@ -112,6 +112,9 @@
   top: 38px;
   right: 7px;
 }
+.ctx.lch-card-menu {
+  position: absolute;
+}
 .lch-card-menu p {
   width: 210px;
   margin: 3px 9px 6px;
@@ -451,6 +454,11 @@
   border: 1px solid var(--border-str);
   border-radius: var(--r);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+.ctx.title-project-menu {
+  position: absolute;
+  top: 30px;
+  left: 0;
 }
 .ctx button {
   display: flex;

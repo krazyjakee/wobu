@@ -187,7 +187,7 @@ describe('the write controls, on a read-only folder', () => {
 
     const menu = within(screen.getByRole('menu'))
     for (const label of [/New character/, 'Duplicate', 'Delete']) {
-      expect((menu.getByRole('button', { name: label }) as HTMLButtonElement).disabled).toBe(true)
+      expect((menu.getByRole('menuitem', { name: label }) as HTMLButtonElement).disabled).toBe(true)
     }
   })
 

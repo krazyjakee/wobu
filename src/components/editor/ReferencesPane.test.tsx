@@ -108,6 +108,11 @@ describe('ReferencesPane', () => {
       assetLinks: [{ ...links[0], role: 'material' }, links[1]],
     })
 
+    expect(screen.getByRole('slider', { name: 'Weight for reference 1' })).toHaveAttribute(
+      'aria-valuetext',
+      '100 percent',
+    )
+
     fireEvent.change(screen.getByLabelText('Weight for reference 1'), {
       target: { value: '0.35' },
     })

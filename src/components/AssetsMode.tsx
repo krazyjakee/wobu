@@ -344,6 +344,7 @@ function AssetTile({
       style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
       type="button"
       aria-label={`Select ${kindLabel(asset.kind).toLocaleLowerCase()} asset ${asset.id}`}
+      aria-pressed={selected}
       onClick={onSelect}
     >
       <span className="asset-library-image">

@@ -689,10 +689,15 @@ function Layer({
             step={0.05}
             value={value}
             disabled={muted}
+            aria-valuetext={muted ? 'Muted' : `${Math.round(value * 100)} percent`}
             onChange={(event) => onWeight(Number(event.target.value))}
           />
         </label>
-        <button className={muted ? 'btn-mini is-on' : 'btn-mini'} onClick={onMute}>
+        <button
+          className={muted ? 'btn-mini is-on' : 'btn-mini'}
+          aria-pressed={muted}
+          onClick={onMute}
+        >
           {muted ? 'Unmute' : 'Mute'}
         </button>
       </div>

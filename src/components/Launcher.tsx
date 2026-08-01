@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { errorMessage, projectOpenCancel, type ProjectSummary, type ScanProgress } from '../lib/api'
 import {
@@ -12,6 +12,7 @@ import { report } from '../store/ui'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { WindowControls } from './WindowControls'
+import { ContextMenu } from './navigator/ContextMenu'
 
 /**
  * What a slow open looks like.
@@ -238,26 +239,11 @@ function RecentCard({
   onRemove: () => void
 }) {
   const [menu, setMenu] = useState(false)
-  const wrap = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!menu) return
-    const closeOutside = (event: MouseEvent) => {
-      if (!wrap.current?.contains(event.target as Node)) setMenu(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenu(false)
-    }
-    window.addEventListener('mousedown', closeOutside)
-    window.addEventListener('keydown', closeOnEscape)
-    return () => {
-      window.removeEventListener('mousedown', closeOutside)
-      window.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [menu])
+  const moreButton = useRef<HTMLButtonElement>(null)
+  const menuHelpId = `recent-project-menu-help-${project.id}`
 
   return (
-    <div className="lch-card" ref={wrap}>
+    <div className="lch-card">
       <button className="lch-card-open" onClick={onOpen} disabled={busy || removing}>
         <span className="nm">
           {project.name}
@@ -268,6 +254,7 @@ function RecentCard({
         <span className="when">{lastOpened(project.lastOpenedAt)}</span>
       </button>
       <button
+        ref={moreButton}
         className="lch-card-more"
         aria-label={`More actions for ${project.name}`}
         aria-haspopup="menu"
@@ -278,9 +265,15 @@ function RecentCard({
         ⋯
       </button>
       {menu && (
-        <div className="ctx lch-card-menu" role="menu">
+        <ContextMenu
+          className="lch-card-menu"
+          label={`Actions for ${project.name}`}
+          restoreFocusRef={moreButton}
+          onClose={() => setMenu(false)}
+        >
           <button
             role="menuitem"
+            aria-describedby={menuHelpId}
             onClick={() => {
               setMenu(false)
               onRemove()
@@ -288,8 +281,10 @@ function RecentCard({
           >
             Remove from Recent
           </button>
-          <p>Removes this launcher entry only. Project files stay on disk.</p>
-        </div>
+          <p id={menuHelpId} role="presentation">
+            Removes this launcher entry only. Project files stay on disk.
+          </p>
+        </ContextMenu>
       )}
       {failure && (
         <div className="lch-open-failure" role="alert">

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './Settings'
 import type { KeyStatus, ProviderSelections } from '../lib/api'
 import { useUI } from '../store/ui'
+import { useSettings } from '../store/settings'
 
 /*
  * The providers pane, which is the one surface in the app where a credential
@@ -118,6 +119,7 @@ beforeEach(() => {
   ]
   selections = { providers: {}, readOnly: false }
   useUI.setState({ toasts: [], banners: [] })
+  useSettings.getState().reset()
   // Without this `isTauri()` is false and every command rejects before it is
   // sent, which is right in a browser and useless here.
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
@@ -387,5 +389,33 @@ describe('checking a key', () => {
 
     expect(screen.getByText(/ComfyUI needs no key/)).toBeTruthy()
     expect(screen.queryAllByRole('button', { name: /Check this key/ })).toHaveLength(0)
+  })
+})
+
+describe('settings control accessibility', () => {
+  it('gives both sliders names and updates their human-readable values', async () => {
+    await open()
+
+    const autosave = screen.getByRole('slider', { name: 'Autosave after' })
+    const scale = screen.getByRole('slider', { name: 'Interface scale' })
+    expect(autosave).toHaveAttribute('aria-valuetext', '0.50 seconds')
+    expect(scale).toHaveAttribute('aria-valuetext', '100 percent')
+
+    fireEvent.change(autosave, { target: { value: '1250' } })
+    fireEvent.change(scale, { target: { value: '1.3' } })
+    expect(autosave).toHaveAttribute('aria-valuetext', '1.25 seconds')
+    expect(scale).toHaveAttribute('aria-valuetext', '130 percent')
+  })
+
+  it('exposes the chosen provider and diagnostic level as pressed states', async () => {
+    selections = { providers: { text: { provider: 'anthropic' } }, readOnly: false }
+    await open()
+
+    const text = within(screen.getByRole('group', { name: 'Text — Enhance' }))
+    expect(text.getByRole('button', { name: 'Anthropic' })).toHaveAttribute('aria-pressed', 'true')
+    expect(text.getByRole('button', { name: 'Gemini' })).toHaveAttribute('aria-pressed', 'false')
+
+    expect(screen.getByRole('button', { name: 'info' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'debug' })).toHaveAttribute('aria-pressed', 'false')
   })
 })
