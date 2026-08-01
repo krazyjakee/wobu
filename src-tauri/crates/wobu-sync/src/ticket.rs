@@ -52,7 +52,7 @@
 //! oversight, it is the crate's rule holding: checking a grant is *authorisation*
 //! — deciding whether a peer who holds a project may sync it — and
 //! [`crate::Projects::holds`] takes one project and returns one bool, with
-//! nowhere to put a second input. Authorisation is #84 and is deliberately not
+//! nowhere to put a second input. Authorisation is #90 and is deliberately not
 //! here. The honest statement of today's behaviour is therefore: **a ticket
 //! currently grants exactly what knowing the project ULID and an address grants**,
 //! and [`crate::SyncEndpoint::connect_ticket`] sends no more than
@@ -64,10 +64,10 @@
 //! notes app, and it has to keep working. Adding a field to the format later
 //! means every ticket already in the wild lacks it and every one of those shares
 //! has to be re-issued by a person who has since moved on. Thirty-two bytes of
-//! OS randomness cost nothing today and are the difference between #84 being a
-//! feature and #84 being a migration.
+//! OS randomness cost nothing today and are the difference between #90 being a
+//! feature and #90 being a migration.
 //!
-//! When #84 does arrive, two things follow from the above and neither is
+//! When #90 does arrive, two things follow from the above and neither is
 //! optional. It must not add a field to the `wobu/sync/1` opening message: the
 //! ALPN *is* the version (see [`crate`]), so a new field is a silent wire change
 //! that an old peer reads as garbage. And a mismatched grant must be refused with
@@ -175,7 +175,7 @@ impl Grant {
 
     /// The raw bytes, for whoever eventually compares them.
     ///
-    /// Nothing in this workspace does yet; #84 is the caller this exists for, and
+    /// Nothing in this workspace does yet; #90 is the caller this exists for, and
     /// when it arrives the comparison wants to be constant-time, because a
     /// byte-at-a-time `==` against a value a stranger supplies is a timing oracle
     /// for a credential that cannot be revoked.

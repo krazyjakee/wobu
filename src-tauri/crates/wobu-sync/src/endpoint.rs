@@ -338,7 +338,7 @@ impl SyncEndpoint {
     /// out, and it is a method rather than a line at the call site so that the
     /// next sentence has somewhere to live: **the grant is not sent.** Nothing in
     /// `wobu/sync/1` presents or checks one, so accepting a ticket proves no more
-    /// to the other side than dialling with a guessed ULID would. That is #84's
+    /// to the other side than dialling with a guessed ULID would. That is #90's
     /// to change, and [`crate::ticket`] says why it is not this crate's.
     ///
     /// Fails with [`Error::ProjectNotHeld`] if the peer no longer has the project

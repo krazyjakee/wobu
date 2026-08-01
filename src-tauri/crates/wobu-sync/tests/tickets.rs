@@ -137,10 +137,10 @@ async fn a_ticket_for_a_project_the_peer_has_dropped_is_refused_like_any_other_d
 /// Two peers reach a session while holding completely different grants for the
 /// same project. That is today's truth and it must not be assumed away: nothing
 /// in `wobu/sync/1` presents a grant, because checking one is authorisation and
-/// authorisation is #84 — `Projects::holds` takes one project and returns one
+/// authorisation is #90 — `Projects::holds` takes one project and returns one
 /// bool, with nowhere to put a second input.
 ///
-/// When #84 arrives this test is the one that changes, and changing it should
+/// When #90 arrives this test is the one that changes, and changing it should
 /// require reading the paragraph above. Until then, a ticket grants exactly what
 /// knowing a project ULID and an address grants, and the UI must not imply more.
 #[tokio::test]

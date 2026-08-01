@@ -40,7 +40,7 @@
 //! is worth naming here: it is thirty-two random bytes in a ticket, it is not a
 //! key, and nothing derives, signs, encrypts or challenges with it. It exists to
 //! tell "I was invited" apart from "I read a project ULID off a shared folder",
-//! which is an *authorisation* input and therefore #84's business rather than
+//! which is an *authorisation* input and therefore #90's business rather than
 //! this crate's — nothing on `wobu/sync/1` presents or checks one today. Asking
 //! the OS for random bytes and putting them in a token is not a primitive. Doing
 //! anything else with them would be.
@@ -136,7 +136,7 @@
 //!   `Router`'s abort-on-drop is why it must exist.
 //! - **#83 status and presence** — [`Session::is_relayed`] now,
 //!   `Connection::path_events` when a live badge is wanted.
-//! - **#84 authorisation, if it is ever wanted** — not here. See above.
+//! - **#90 authorisation, if it is ever wanted** — not here. See above.
 
 pub mod endpoint;
 pub mod error;
