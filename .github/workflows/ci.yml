@@ -1,0 +1,155 @@
+name: CI
+
+# Every push, on every branch, plus pull requests so that a PR from a fork is
+# covered too. A branch that also has a PR open is therefore built twice; that
+# is the price of a branch push being checked before anyone opens the PR, and
+# `concurrency` below keeps it to two runs rather than two per commit.
+on:
+  push:
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant, and
+# a Tauri bundle is far too slow to leave two of them queued.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # `npm run check` and nothing else, on purpose: the point of that script is
+  # that a developer can run the whole frontend gate locally, so anything CI
+  # does here that the script does not do is a way for the two to disagree.
+  frontend:
+    name: Frontend — typecheck, lint, format, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run check
+
+  rust:
+    name: Rust — fmt, clippy, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # The Rust workspace root is `src-tauri/`, and `rust-toolchain.toml`
+        # lives there too — rustup resolves it from the working directory, so
+        # every cargo invocation below has to start from here.
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v5
+
+      # The shell crate links against the system webview even for `cargo check`,
+      # because `tauri-build` and the `*-sys` crates run pkg-config at build
+      # time. Without these the workspace does not compile, let alone bundle.
+      - name: Install Tauri's system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            wget
+
+      # No version here: `src-tauri/rust-toolchain.toml` is the one place it is
+      # written down, and the no-argument form of this command is what reads it.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Formatting first: it is seconds, and a red format check is a rerun the
+      # author can fix before the ten-minute jobs have finished telling them so.
+      - run: cargo fmt --all --check
+
+      # `--all-targets` so tests, benches and examples are linted too — most of
+      # the workspace's code lives in `tests/`, and it is the half most likely
+      # to accumulate the lints `[workspace.lints]` exists to keep out.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - run: cargo test --workspace
+
+  # The expensive one, and the reason it is worth having: a `cargo test` that
+  # passes says nothing about whether the app still packages. Bundling breakage
+  # is otherwise found on release day.
+  bundle:
+    name: Bundle (${{ matrix.os }})
+    needs: [frontend, rust]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform's packaging failure is not a reason to stop finding out
+      # about the other two.
+      fail-fast: false
+      matrix:
+        # Linux on every push, because it is the platform the shell crate is
+        # developed on and the one most likely to break. macOS and Windows only
+        # on `main`, where a slow job costs nobody's iteration loop — three
+        # bundles per branch push would make people stop pushing branches.
+        os: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') &&
+          fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') ||
+          fromJSON('["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: runner.os == 'Linux'
+        name: Install Tauri's system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            wget
+
+      - name: Install the pinned Rust toolchain
+        working-directory: src-tauri
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          # Otherwise this job and `rust` fight over one key while compiling
+          # different profiles, and each run evicts the other's cache.
+          key: bundle
+
+      - run: npm ci
+
+      # `tauri.conf.json` points `beforeBuildCommand` at `npm run build`, so the
+      # frontend is typechecked and bundled as part of this. Nothing here signs
+      # or notarises: that needs secrets, and it belongs to a release workflow.
+      - run: npm run tauri build
