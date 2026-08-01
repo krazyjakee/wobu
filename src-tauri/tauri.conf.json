@@ -33,7 +33,7 @@
         "default-src": "'self'",
         "img-src": "'self' asset: http://asset.localhost data: blob:",
         "style-src": "'self' 'unsafe-inline'",
-        "connect-src": "'self' ipc: http://ipc.localhost"
+        "connect-src": "'self' ipc: http://ipc.localhost asset: http://asset.localhost"
       }
     }
   },

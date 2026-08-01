@@ -28,6 +28,8 @@ import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { MilestoneMode } from './MilestoneMode'
 import { AssetsMode } from './AssetsMode'
+import { BoardMode, type BoardAttachRequest } from './BoardMode'
+import { HistoryMode } from './HistoryMode'
 import { Settings } from './Settings'
 import { Banners } from './Banners'
 import { ConflictCard, ConflictsElsewhere } from './ConflictCard'
@@ -58,6 +60,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const [newNode, setNewNode] = useState<{ kind: NodeKind | null; parentId: string | null } | null>(
     null,
   )
+  const [boardAttach, setBoardAttach] = useState<BoardAttachRequest | null>(null)
 
   const kindIndex = useMemo(() => indexKinds(kindsQ.data), [kindsQ.data])
   const nodes = useMemo(() => nodesQ.data ?? [], [nodesQ.data])
@@ -191,6 +194,10 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
   }, [project.id, readOnly, clearBanners])
 
+  useEffect(() => {
+    setBoardAttach(null)
+  }, [project.id, mode])
+
   // Both presence effects below are declared *after* that one on purpose:
   // effects run in source order, so opening a project clears the banners first
   // and this raises against the clean slate rather than into one about to be
@@ -246,7 +253,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const style: CSSProperties = {
     gridTemplateColumns: [
       'var(--rail)',
-      navCollapsed || mode !== 'library' ? null : `${navWidth}px`,
+      navCollapsed || (mode !== 'library' && mode !== 'board') ? null : `${navWidth}px`,
       '1fr',
       inspCollapsed || mode !== 'library' ? null : 'var(--insp)',
     ]
@@ -331,6 +338,39 @@ export function Workspace({ project }: { project: ProjectSummary }) {
               </div>
             )}
           </>
+        ) : mode === 'board' ? (
+          <>
+            {!navCollapsed && (
+              <Navigator
+                nodes={nodes}
+                byId={byId}
+                pinned={pinned}
+                groups={groups}
+                kinds={kindIndex}
+                loading={nodesQ.isPending}
+                error={nodesQ.isError ? errorMessage(nodesQ.error) : null}
+                readOnly={readOnly}
+                corrupt={corruptQ.data ?? []}
+                editedElsewhere={peerEditors}
+                projectPath={project.path}
+                onNewNode={startNewNode}
+                onAssetDrop={
+                  readOnly
+                    ? undefined
+                    : (assetId, nodeId) => setBoardAttach({ assetId, nodeId })
+                }
+              />
+            )}
+            <BoardMode
+              projectId={project.id}
+              nodes={nodes}
+              kinds={kindIndex}
+              readOnly={readOnly}
+              navigatorVisible={!navCollapsed}
+              pendingAttach={boardAttach}
+              onPendingAttach={setBoardAttach}
+            />
+          </>
         ) : mode === 'assets' ? (
           <AssetsMode
             nodes={nodes}
@@ -338,6 +378,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
             readOnly={readOnly}
             onJump={jumpTo}
           />
+        ) : mode === 'history' ? (
+          <HistoryMode nodes={nodes} readOnly={readOnly} onJump={jumpTo} />
         ) : mode === 'settings' ? (
           <Settings />
         ) : (

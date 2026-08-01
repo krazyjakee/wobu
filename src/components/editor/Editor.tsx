@@ -10,7 +10,7 @@ import { NotesPane } from './NotesPane'
 import { RelationsPane } from './RelationsPane'
 import { ConceptsPane } from './ConceptsPane'
 import { ReferencesPane } from './ReferencesPane'
-import { TabEmpty } from './TabEmpty'
+import { ThreePane } from './ThreePane'
 import { useAutosaveNode, saveLabel } from '../../hooks/useAutosaveNode'
 import { useEnhanceSession } from './useEnhanceSession'
 
@@ -212,14 +212,7 @@ export function Editor({
             {tab === 'concepts' && (
               <ConceptsPane node={node} queue={queue} kinds={kinds} readOnly={readOnly} />
             )}
-            {tab === 'three' && (
-              <TabEmpty
-                icon="cube"
-                title="3D"
-                milestone="M7 — Concept 3D"
-                body="Turnaround sheets, image-to-mesh, and an inline three.js viewer. Deliberately last: it depends on consistent multi-view output."
-              />
-            )}
+            {tab === 'three' && <ThreePane node={node} />}
             {tab === 'relations' && (
               <RelationsPane
                 node={node}

@@ -21,6 +21,10 @@ export function IconSprite() {
           <circle cx="8.5" cy="9.5" r="1.6" />
           <path d="M21 16l-5-5-9 9" />
         </g>
+        <g id="i-history">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7v5l3.5 2M5.8 5.8L3.5 4.5 4.8 7" />
+        </g>
         <g id="i-settings">
           <circle cx="12" cy="12" r="3" />
           <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />

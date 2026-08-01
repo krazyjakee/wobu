@@ -5,15 +5,9 @@ import { useUI } from '../store/ui'
 import { Icon } from './Icon'
 
 const COPY: Record<
-  Exclude<Mode, 'library' | 'assets'>,
+  Exclude<Mode, 'library' | 'assets' | 'board' | 'history'>,
   { icon: string; title: string; ms: string; body: string }
 > = {
-  board: {
-    icon: 'board',
-    title: 'Board',
-    ms: 'M3 — References',
-    body: 'A freeform pan/zoom canvas holding every image in the project, where dragging a picture onto an entity turns loose inspiration into a weighted reference. It needs the asset pipeline, so it arrives with References.',
-  },
   forge: {
     icon: 'forge',
     title: 'Forge',
@@ -36,7 +30,7 @@ export function MilestoneMode({
   queue: QueueSnapshot
 }) {
   const setMode = useUI((s) => s.setMode)
-  if (mode === 'library' || mode === 'assets') return null
+  if (mode === 'library' || mode === 'assets' || mode === 'board' || mode === 'history') return null
   if (mode === 'forge') return <QueueView queue={queue} onBack={() => setMode('library')} />
   const c = COPY[mode]
   return (

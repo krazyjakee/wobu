@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { LinkEdge, LinkRole, NodeKind, NodeSummary } from '../../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../../lib/kinds'
+import { BOARD_ASSET_MIME } from '../../lib/board'
 import { Icon } from '../Icon'
 
 const CARD_W = 112
@@ -129,6 +130,8 @@ export function RelationshipGraph({
   loading,
   error,
   onSelect,
+  readOnly = false,
+  onAssetDrop,
 }: {
   nodes: NodeSummary[]
   links: LinkEdge[]
@@ -138,7 +141,10 @@ export function RelationshipGraph({
   loading: boolean
   error: string | null
   onSelect: (id: string) => void
+  readOnly?: boolean
+  onAssetDrop?: (assetId: string, nodeId: string) => void
 }) {
+  const [assetDropId, setAssetDropId] = useState<string | null>(null)
   const layout = useMemo(() => layoutRelationships(nodes, links, kinds), [nodes, links, kinds])
   const byId = useMemo(() => new Map(layout.nodes.map((node) => [node.id, node])), [layout.nodes])
   const connected = useMemo(() => {
@@ -156,8 +162,12 @@ export function RelationshipGraph({
   return (
     <section className="relationship-graph" aria-label="Relationship graph">
       <div className="graph-explainer">
-        <strong>Read-only map</strong>
-        <span>Select a node to open it. Edit links in Relations.</span>
+        <strong>{onAssetDrop ? 'Board targets' : 'Read-only map'}</strong>
+        <span>
+          {onAssetDrop
+            ? 'Select a node, or drop a board image on one to attach it.'
+            : 'Select a node to open it. Edit links in Relations.'}
+        </span>
       </div>
       <div className="graph-legend" aria-label="Relationship legend">
         <span><i className="is-parent" /> Parent</span>
@@ -230,7 +240,7 @@ export function RelationshipGraph({
               return (
                 <button
                   key={node.id}
-                  className={`graph-node${selectedId === node.id ? ' is-sel' : ''}${faded ? ' is-dim' : ''}`}
+                  className={`graph-node${selectedId === node.id ? ' is-sel' : ''}${faded ? ' is-dim' : ''}${assetDropId === node.id ? ' drop-target' : ''}`}
                   style={{
                     left: node.x,
                     top: node.y,
@@ -240,6 +250,25 @@ export function RelationshipGraph({
                   aria-current={selectedId === node.id ? 'true' : undefined}
                   title={node.summary || labelFor(def, node.kind)}
                   onClick={() => onSelect(node.id)}
+                  onDragOver={(event) => {
+                    if (
+                      readOnly ||
+                      !onAssetDrop ||
+                      !Array.from(event.dataTransfer.types).includes(BOARD_ASSET_MIME)
+                    ) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'link'
+                    setAssetDropId(node.id)
+                  }}
+                  onDragLeave={() => setAssetDropId((id) => (id === node.id ? null : id))}
+                  onDrop={(event) => {
+                    if (readOnly || !onAssetDrop) return
+                    const assetId = event.dataTransfer.getData(BOARD_ASSET_MIME)
+                    if (!assetId) return
+                    event.preventDefault()
+                    onAssetDrop(assetId, node.id)
+                    setAssetDropId(null)
+                  }}
                 >
                   <Icon name={spriteFor(def, node.kind)} size="sm" />
                   <span>

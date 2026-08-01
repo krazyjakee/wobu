@@ -90,6 +90,16 @@ beforeEach(() => {
 })
 
 describe('the editor influence breadcrumb', () => {
+  it('does not ask for mesh metadata until the 3D tab is opened', async () => {
+    renderEditor()
+    await screen.findByDisplayValue('Kael Vantris')
+    expect(h.invoke.mock.calls.some(([command]) => command === 'mesh_concepts')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: '3D' }))
+    await screen.findByText('No meshes yet')
+    expect(h.invoke).toHaveBeenCalledWith('mesh_concepts', { nodeId: selected.id })
+  })
+
   it('shows the resolved hierarchy in stack order and every chip jumps to its node', async () => {
     const onJump = renderEditor()
     await screen.findByRole('button', { name: 'Vashk' }, { timeout: 5_000 })

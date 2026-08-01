@@ -10,7 +10,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::Id;
+use crate::{AssetRole, Id};
 use crate::kind::Layer;
 
 /// Where a fragment was routed. See `docs/04-influence-engine.md`.
@@ -31,6 +31,11 @@ pub struct SnapshotFragment {
     pub section: String,
     pub text: Option<String>,
     pub asset_id: Option<Id>,
+    /// The role that routed a reference image. Older receipts predate this
+    /// field; replay can recover their coarse route from `target`, while new
+    /// receipts preserve the exact role (notably pose versus silhouette).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset_role: Option<AssetRole>,
     pub weight: f32,
     pub target: FragmentTarget,
     /// True when the budget dropped this fragment. Recorded rather than
@@ -98,6 +103,19 @@ pub struct GenerationVariation {
     pub value: VariationValue,
 }
 
+/// The typed seam between a mesh job receipt and the 3D gallery.
+///
+/// Stored under `Generation.params.meshOutput` for backwards compatibility:
+/// older readers already preserve unknown params, while image output ids keep
+/// their existing unambiguous meaning.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshOutput {
+    pub asset_id: Id,
+    #[serde(default)]
+    pub turnaround_generation_ids: Vec<Id>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "axis", rename_all = "snake_case")]
 pub enum VariationValue {
@@ -122,6 +140,13 @@ impl Generation {
     pub fn variation(&self) -> Option<GenerationVariation> {
         self.params
             .get("variation")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok())
+    }
+
+    pub fn mesh_output(&self) -> Option<MeshOutput> {
+        self.params
+            .get("meshOutput")
             .cloned()
             .and_then(|value| serde_json::from_value(value).ok())
     }
@@ -159,5 +184,13 @@ mod tests {
         };
         g.params.insert("variation".into(), serde_json::to_value(&variation).unwrap());
         assert_eq!(g.variation(), Some(variation));
+
+        let mesh = MeshOutput {
+            asset_id: crate::new_id(),
+            turnaround_generation_ids: vec![crate::new_id(), crate::new_id()],
+        };
+        g.params.insert("meshOutput".into(), serde_json::to_value(&mesh).unwrap());
+        assert_eq!(g.mesh_output(), Some(mesh));
+        assert!(g.output_asset_ids.is_empty(), "image outputs stay unambiguous");
     }
 }

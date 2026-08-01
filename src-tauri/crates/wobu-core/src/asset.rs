@@ -141,6 +141,21 @@ pub struct Asset {
     pub created_at: DateTime<Utc>,
 }
 
+/// A self-contained GLB in the content-addressed mesh store.
+///
+/// Separate from [`Asset`] because an image has dimensions, MIME and a derived
+/// thumbnail while a mesh has none of those things. Forcing zeroes and nulls
+/// into `Asset` would make every consumer guess which fields are real.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshAsset {
+    pub id: Id,
+    pub hash: String,
+    pub rel_path: String,
+    pub bytes: u64,
+    pub created_at: DateTime<Utc>,
+}
+
 /// An asset attached to a node with a role and a weight, stored in the owning
 /// node's frontmatter — which is why there is no `node_id` here, exactly as
 /// [`crate::Link`] carries no `from_id`. [`AssetLink`] adds it for the index.

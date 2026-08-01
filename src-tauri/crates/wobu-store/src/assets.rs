@@ -46,12 +46,12 @@
 //! two builds would get two files for one picture. See `image`'s module docs.
 
 use std::fs;
-use std::io::Write as _;
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Asset, AssetKind, Id, TURNAROUND_IMAGE_CONSTRAINTS};
+use wobu_core::{Asset, AssetKind, Id, MeshAsset, TURNAROUND_IMAGE_CONSTRAINTS};
 
 use crate::atomic;
 use crate::error::{Error, Result};
@@ -61,6 +61,10 @@ use crate::scan::Cancel;
 
 /// Where blobs live, relative to the project root.
 pub const ORIGINALS_DIR: &str = "assets/originals";
+
+/// Self-contained concept meshes. Kept out of the eager image index: listing
+/// and opening these files is work paid only when the 3D tab is opened.
+pub const MESHES_DIR: &str = "assets/meshes";
 
 /// A lowercase hex BLAKE3 digest, as it appears in a filename.
 const HASH_LEN: usize = 64;
@@ -174,6 +178,54 @@ pub struct ImportedAsset {
     /// share never sees.
     #[serde(default)]
     pub warnings: Vec<ImportWarning>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredMesh {
+    pub asset: MeshAsset,
+    pub deduped: bool,
+}
+
+/// Atomically publish one self-contained GLB at the path its bytes alone name.
+pub fn store_mesh_glb(root: &Path, bytes: &[u8]) -> Result<StoredMesh> {
+    if bytes.len() < 20
+        || &bytes[..4] != b"glTF"
+        || u32::from_le_bytes(bytes[4..8].try_into().unwrap_or_default()) != 2
+        || u32::from_le_bytes(bytes[8..12].try_into().unwrap_or_default()) as usize != bytes.len()
+    {
+        return Err(Error::NotAMesh);
+    }
+    let hash = atomic::hash_bytes(bytes);
+    let rel_path = wobu_core::asset::mesh_path(&hash);
+    let path = paths::from_rel_string(root, &rel_path);
+    let publish = || match stage_and_rename(root, &path, bytes) {
+        Ok(()) => Ok(false),
+        Err(_) if fs::metadata(&path).is_ok_and(|metadata| metadata.len() == bytes.len() as u64) => {
+            // Another process won the Windows create race with the same
+            // content-addressed bytes.
+            Ok(true)
+        }
+        Err(error) => Err(error),
+    };
+    let deduped = match fs::metadata(&path) {
+        Ok(metadata) if metadata.len() == bytes.len() as u64 => true,
+        Ok(_) => {
+            fs::remove_file(&path).map_err(|error| Error::io(&path, error))?;
+            publish()?
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => publish()?,
+        Err(error) => return Err(Error::io(&path, error)),
+    };
+    Ok(StoredMesh {
+        asset: MeshAsset {
+            id: asset_id(&hash).unwrap_or_default(),
+            hash,
+            rel_path,
+            bytes: bytes.len() as u64,
+            created_at: first_written(&path),
+        },
+        deduped,
+    })
 }
 
 /// The id an asset with this hash has, on every machine, forever.
@@ -356,6 +408,121 @@ pub fn list_paths(root: &Path) -> Vec<(String, PathBuf)> {
             Some((paths::to_rel_string(rel), e.path().to_path_buf()))
         })
         .collect()
+}
+
+/// Describe the content-addressed GLBs without pulling their bodies across a
+/// share. Each candidate costs one 12-byte header read and a metadata call.
+pub fn scan_meshes(root: &Path) -> Vec<MeshAsset> {
+    let meshes = paths::from_rel_string(root, MESHES_DIR);
+    let mut found: Vec<_> = walkdir::WalkDir::new(&meshes)
+        .max_depth(2)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .filter_map(|entry| describe_mesh_at(root, entry.path()))
+        .collect();
+    found.sort_by(|a, b| b.created_at.cmp(&a.created_at).then_with(|| b.hash.cmp(&a.hash)));
+    found
+}
+
+/// Resolve one mesh only after streaming its complete contents and proving the
+/// content-addressed filename. The same pass writes a disposable machine-local
+/// cache, so GLTFLoader does not pull the GLB across the project share again.
+pub fn cached_mesh(root: &Path, project_id: Id, id: Id) -> Result<Option<(MeshAsset, PathBuf)>> {
+    cached_mesh_at(root, &paths::app_data_dir(), project_id, id)
+}
+
+fn cached_mesh_at(
+    root: &Path,
+    cache_root: &Path,
+    project_id: Id,
+    id: Id,
+) -> Result<Option<(MeshAsset, PathBuf)>> {
+    let Some(mesh) = scan_meshes(root).into_iter().find(|mesh| mesh.id == id) else {
+        return Ok(None);
+    };
+    let cache_dir = cache_root.join("mesh-cache").join(project_id.to_string());
+    let cached = cache_dir.join(format!("{}.glb", mesh.hash));
+    if fs::metadata(&cached).is_ok_and(|metadata| metadata.len() == mesh.bytes) {
+        return Ok(Some((mesh, cached)));
+    }
+    // A disposable partial/old cache must never win the Windows rename race
+    // merely because a file exists at the destination.
+    if cached.exists() {
+        fs::remove_file(&cached).map_err(|error| Error::io(&cached, error))?;
+    }
+    paths::ensure_dir(&cache_dir)?;
+    let staged = cache_dir.join(format!("{}.{}.part", mesh.hash, wobu_core::new_id()));
+    let path = paths::from_rel_string(root, &mesh.rel_path);
+    let mut file = fs::File::open(&path).map_err(|error| Error::io(&path, error))?;
+    let mut output = fs::File::create(&staged).map_err(|error| Error::io(&staged, error))?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = vec![0u8; READ_CHUNK];
+    loop {
+        let read = file.read(&mut buffer).map_err(|error| Error::io(&path, error))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+        output.write_all(&buffer[..read]).map_err(|error| Error::io(&staged, error))?;
+    }
+    drop(output);
+    if hasher.finalize().to_hex().as_str() != mesh.hash {
+        let _ = fs::remove_file(&staged);
+        return Ok(None);
+    }
+    // Another viewer may have completed the same validated copy while this one
+    // streamed. A correctly sized destination can only come from this function;
+    // anything else is stale local cache and is removed before publication.
+    if fs::metadata(&cached).is_ok_and(|metadata| metadata.len() == mesh.bytes) {
+        let _ = fs::remove_file(&staged);
+        return Ok(Some((mesh, cached)));
+    }
+    if cached.exists() {
+        fs::remove_file(&cached).map_err(|error| Error::io(&cached, error))?;
+    }
+    match fs::rename(&staged, &cached) {
+        Ok(()) => {}
+        Err(_) if fs::metadata(&cached).is_ok_and(|metadata| metadata.len() == mesh.bytes) => {
+            let _ = fs::remove_file(&staged);
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&staged);
+            return Err(Error::io(&cached, error));
+        }
+    }
+    Ok(Some((mesh, cached)))
+}
+
+fn describe_mesh_at(root: &Path, path: &Path) -> Option<MeshAsset> {
+    if path.extension()?.to_str()? != "glb" {
+        return None;
+    }
+    let hash = path.file_stem()?.to_str()?.to_owned();
+    let id = asset_id(&hash)?;
+    let shard = path.parent()?.file_name()?.to_str()?;
+    if shard != &hash[..2] {
+        return None;
+    }
+
+    let metadata = fs::metadata(path).ok()?;
+    let mut header = [0u8; 12];
+    fs::File::open(path).ok()?.read_exact(&mut header).ok()?;
+    if &header[..4] != b"glTF" || u32::from_le_bytes(header[4..8].try_into().ok()?) != 2 {
+        return None;
+    }
+    let declared = u32::from_le_bytes(header[8..12].try_into().ok()?) as u64;
+    if declared != metadata.len() {
+        return None;
+    }
+
+    Some(MeshAsset {
+        id,
+        hash,
+        rel_path: paths::to_rel_string(path.strip_prefix(root).ok()?),
+        bytes: metadata.len(),
+        created_at: first_written(path),
+    })
 }
 
 /// Read one blob back off disk as an [`Asset`], or `None` if it is not one.
@@ -602,6 +769,56 @@ mod tests {
         fs::write(shard.join(format!("{}.png", "b".repeat(64))), b"not really a png").unwrap();
 
         assert_eq!(scan(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn mesh_metadata_is_cheap_but_lazy_load_proves_the_content_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut glb = Vec::from(&b"glTF"[..]);
+        glb.extend(2u32.to_le_bytes());
+        glb.extend(28u32.to_le_bytes());
+        glb.extend(8u32.to_le_bytes());
+        glb.extend(0x4e4f534au32.to_le_bytes());
+        glb.extend(b"{}      ");
+        let hash = atomic::hash_bytes(&glb);
+        let rel = wobu_core::asset::mesh_path(&hash);
+        let path = paths::from_rel_string(dir.path(), &rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, &glb).unwrap();
+
+        let metadata = scan_meshes(dir.path());
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata[0].rel_path, rel);
+        let project_id = wobu_core::new_id();
+        let cache = dir.path().join("local-data");
+        assert!(cached_mesh_at(dir.path(), &cache, project_id, metadata[0].id).unwrap().is_some());
+
+        // Same valid-looking header and length, different body. The cheap tab
+        // listing still sees it; the full read that exposes a viewer path does not.
+        glb[24] = b'[';
+        fs::write(&path, &glb).unwrap();
+        assert_eq!(scan_meshes(dir.path()).len(), 1);
+        // Remove the trusted local copy so this assertion exercises the share again.
+        fs::remove_dir_all(&cache).unwrap();
+        assert!(cached_mesh_at(dir.path(), &cache, project_id, metadata[0].id).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_glb_is_atomically_stored_at_its_content_address() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut glb = Vec::from(&b"glTF"[..]);
+        glb.extend(2u32.to_le_bytes());
+        glb.extend(28u32.to_le_bytes());
+        glb.extend(8u32.to_le_bytes());
+        glb.extend(0x4e4f534au32.to_le_bytes());
+        glb.extend(b"{}      ");
+
+        let stored = store_mesh_glb(dir.path(), &glb).unwrap();
+        assert!(!stored.deduped);
+        assert_eq!(stored.asset.rel_path, wobu_core::asset::mesh_path(&stored.asset.hash));
+        assert_eq!(fs::read(dir.path().join(&stored.asset.rel_path)).unwrap(), glb);
+        assert!(store_mesh_glb(dir.path(), &glb).unwrap().deduped);
+        assert!(matches!(store_mesh_glb(dir.path(), b"not a glb"), Err(Error::NotAMesh)));
     }
 
     /* ── the 3D bounds (#30) ──────────────────────────────────────────── */

@@ -7,4 +7,6 @@
 @import './prompt.css';
 @import './settings.css';
 @import './assets.css';
+@import './board.css';
+@import './history.css';
 @import './overlays.css';

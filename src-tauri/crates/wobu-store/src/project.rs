@@ -987,6 +987,19 @@ impl Project {
         self.index.list_assets()
     }
 
+    /// Mesh metadata is deliberately absent from the eager image index. This
+    /// listing is called only when the 3D tab opens and reads no mesh body.
+    pub fn list_meshes(&self) -> Vec<wobu_core::MeshAsset> {
+        assets::scan_meshes(&self.root)
+    }
+
+    /// Store the GLB half of a future mesh job without coupling persistence to
+    /// any provider adapter. The returned id is what `params.meshOutput` records.
+    pub fn store_mesh_glb(&mut self, bytes: &[u8]) -> Result<crate::StoredMesh> {
+        self.ensure_writable()?;
+        assets::store_mesh_glb(&self.root, bytes)
+    }
+
     /// Project-wide reference/cover usage for filtering and orphan discovery.
     ///
     /// The full nodes come from the local index-backed world cache, never from
@@ -1097,6 +1110,31 @@ impl Project {
         if self.index.node(generation.node_id)?.is_none() {
             return Err(Error::NoSuchNode(generation.node_id.to_string()));
         }
+        self.append_generation(generation)
+    }
+
+    /// Append a replay receipt even when its historical subject has since been
+    /// deleted. Ordinary generation still requires a live node; this archival
+    /// path is allowed only when `replayOf` names an immutable receipt already
+    /// in this project.
+    pub fn record_replay_generation(&mut self, generation: Generation) -> Result<Generation> {
+        self.ensure_writable()?;
+        let source = generation
+            .params
+            .get("replayOf")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| Id::from_string(value).ok())
+            .ok_or_else(|| Error::MalformedGeneration {
+                path: PathBuf::from(generation.rel_path()),
+                reason: "replay receipt has no valid replayOf id".to_string(),
+            })?;
+        if self.get_generation(source)?.is_none() {
+            return Err(Error::NoSuchNode(format!("replay source {source}")));
+        }
+        self.append_generation(generation)
+    }
+
+    fn append_generation(&mut self, generation: Generation) -> Result<Generation> {
         for asset_id in &generation.output_asset_ids {
             self.require_asset(*asset_id)?;
         }
@@ -1109,6 +1147,13 @@ impl Project {
     /// A node's generation history for the Concepts grid, newest first.
     pub fn list_generations(&self, node_id: Id) -> Result<Vec<Generation>> {
         self.index.generations_for_node(node_id)
+    }
+
+    /// Every immutable receipt for the project-wide History browser, newest
+    /// first. Unlike spend reconstruction this is a UI read and can use the
+    /// reconciled disposable index rather than reopening every month shard.
+    pub fn generation_history(&self) -> Result<Vec<Generation>> {
+        self.index.generations_all()
     }
 
     /// Every immutable receipt, for reconstructing project spend.
@@ -2139,6 +2184,35 @@ mod tests {
         assert!(project.list_generations(node.id).unwrap().is_empty());
         project.rescan().unwrap();
         assert_eq!(project.list_generations(node.id).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn replay_receipt_may_outlive_its_original_node() {
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let original = Generation {
+            id: new_id(),
+            node_id: node.id,
+            created_at: "2026-07-31T14:22:11Z".parse().unwrap(),
+            preset: "portrait".into(),
+            view_type: None,
+            user_prompt: String::new(),
+            compiled_prompt: "Kael".into(),
+            negative_prompt: String::new(),
+            backend: "comfyui".into(),
+            model: "local".into(),
+            seed: 42,
+            params: Default::default(),
+            output_asset_ids: vec![],
+            influence_snapshot: wobu_core::InfluenceSnapshot { layers: vec![] },
+        };
+        project.record_generation(original.clone()).unwrap();
+        project.delete_node(node.id).unwrap();
+        let mut replay = original.clone();
+        replay.id = new_id();
+        replay.params.insert("replayOf".into(), serde_json::json!(original.id));
+        project.record_replay_generation(replay.clone()).unwrap();
+        assert_eq!(project.get_generation(replay.id).unwrap(), Some(replay));
     }
 
     #[test]

@@ -87,6 +87,20 @@ model + params + seed, output asset ids, and an `influence_snapshot` — the exa
 stack, weights and all. That snapshot is what makes a result reproducible six months later
 after the world has moved on.
 
+The project-wide History view reads these append-only receipts from the disposable index; the
+same receipt remains visible under a node's Concepts tab. Opening one shows its stored prompts,
+request parameters and every snapshot fragment. Replay constructs the provider request directly
+from those immutable fields and reference asset bytes, without resolving today's nodes or presets.
+The replay receipt points back with `params.replayOf`; its current-price reservation is recorded
+separately from the source receipt's original estimate. A missing snapshot reference is a hard
+error, never an invitation to substitute a current node link.
+
+A mesh receipt uses the typed `params.meshOutput` object rather than putting a GLB in the image
+`outputAssetIds` list: `{ assetId, turnaroundGenerationIds }`. The source ids name the immutable
+eight-view receipts that actually fed the mesh job. If an older or externally written receipt
+does not carry the complete list, the 3D tab says the source sheet was not recorded; it never
+guesses from whichever Turnaround happens to be newest now.
+
 ## Node kinds (v1)
 
 | Kind | Nests | Typical influences |

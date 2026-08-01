@@ -120,6 +120,20 @@ under `Generation.params`: grid id, cell index/total, axis, and the axis-specifi
 enough to regroup and reconstruct the grid without parsing prompts. The full cell count and each
 cell's negotiated resolution feed the paid estimate and spend reservation before any job queues.
 
+### History, replay and drift
+
+Each completed request also records the transient sliders and Shot controls that produced its
+snapshot. History can therefore resolve today's world under the same controls and compare layers,
+weights, fragments, and compiled prompts. Older receipts that predate those controls are still
+diffable, but the UI labels that comparison as today's default controls rather than claiming every
+weight difference is a world edit.
+
+Replay is intentionally not another compilation. It sends the recorded positive and negative
+prompts, backend/model, seed, negotiated aspect and resolution, and the kept snapshot references in
+their recorded provider order. It works even after the subject node has been deleted because the
+receipt and content-addressed assets are the source of truth. If any reference asset is missing,
+replay stops explicitly; reading today's links would make a plausible new image, not a replay.
+
 ## The Enhance pipeline
 
 `⌘E` on any node:

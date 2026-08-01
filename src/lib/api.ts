@@ -557,6 +557,8 @@ export interface GenerationSnapshotFragment {
   section: string
   text: string | null
   assetId: string | null
+  /** Exact reference role when recorded; absent on older receipts. */
+  assetRole?: AssetRole | null
   weight: number
   target: FragmentTarget
   dropped: boolean
@@ -592,6 +594,52 @@ export interface Generation {
 /** One node's generation receipts, newest first. */
 export const generationList = (nodeId: string) =>
   call<Generation[]>('generation_list', { nodeId })
+
+export interface MeshAsset {
+  id: string
+  hash: string
+  bytes: number
+  createdAt: string
+}
+
+export interface TurnaroundView {
+  generationId: string
+  viewType: string
+  assetId: string
+}
+
+export interface MeshConcept {
+  generationId: string
+  createdAt: string
+  backend: string
+  model: string
+  asset: MeshAsset
+  /** Empty when the immutable source receipt was absent or incomplete. */
+  turnaround: TurnaroundView[]
+}
+
+/** Mesh metadata only. The GLB body remains untouched until `meshAssetPath`. */
+export const meshConcepts = (nodeId: string) =>
+  call<MeshConcept[]>('mesh_concepts', { nodeId })
+
+/** Full validation and absolute path for the one GLB the open viewer needs. */
+export const meshAssetPath = (assetId: string) =>
+  call<string | null>('mesh_asset_path', { assetId })
+
+/** Canonical project GLB path, requested only when the user chooses Reveal. */
+export const meshSourcePath = (assetId: string) =>
+  call<string | null>('mesh_source_path', { assetId })
+
+/** Copy a fully validated GLB to the modeller's chosen destination. */
+export const meshExport = (assetId: string, destination: string) =>
+  call<void>('mesh_export', { assetId, destination })
+
+/** Every generation receipt in the project, newest first. */
+export const generationListAll = () => call<Generation[]>('generation_list_all')
+
+/** Queue the immutable request captured by a past generation. */
+export const generationReplay = (generationId: string) =>
+  call<string>('generation_replay', { generationId })
 
 /**
  * Attach a reference image to a node in a role.

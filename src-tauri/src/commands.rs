@@ -9,6 +9,7 @@
 //! Argument names are snake_case; Tauri v2 matches them against the camelCase
 //! keys `src/lib/api.ts` sends.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -19,13 +20,15 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use wobu_core::kind_registry as registry;
 use wobu_core::{
     Asset, AssetKind, AssetRole, FragmentTarget, Generation, Id, KindDef, Layer, LinkEdge, LinkRole,
-    Node, NodeKind, NodeSummary, Preset, default_preset,
+    MeshAsset, Node, NodeKind, NodeSummary, Preset, default_preset,
 };
 use wobu_influence::{
     Budget, Chars, DropReason, Dropped, Fragment, FragmentBody, Reached, ResolvedStack, Shot,
     Sliders, World, compile, fragments, resolve,
 };
-use wobu_imagine::{comfy, gemini as image_gemini, tencent::Region as HunyuanRegion};
+use wobu_imagine::{
+    View as MeshView, comfy, gemini as image_gemini, tencent::Region as HunyuanRegion,
+};
 use wobu_jobs::{JobId, QueueSnapshot};
 use wobu_llm::{
     AnthropicProvider, Cancel, Discard, EnhanceOutcome, EnhanceRequest, GeminiProvider,
@@ -455,6 +458,141 @@ pub fn generation_list(
     node_id: Id,
 ) -> CommandResult<Vec<Generation>> {
     state.with(|p| Ok(p.list_generations(node_id)?))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnaroundView {
+    generation_id: Id,
+    view_type: String,
+    asset_id: Id,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshConcept {
+    generation_id: Id,
+    created_at: chrono::DateTime<chrono::Utc>,
+    backend: String,
+    model: String,
+    asset: MeshAsset,
+    turnaround: Vec<TurnaroundView>,
+}
+
+/// Lightweight 3D history. The directory scan reads fixed GLB headers only;
+/// the complete mesh is not read or hashed until `mesh_asset_path` below.
+#[tauri::command]
+pub fn mesh_concepts(state: State<'_, AppState>, node_id: Id) -> CommandResult<Vec<MeshConcept>> {
+    state.with(|project| {
+        let generations = project.list_generations(node_id)?;
+        let by_id: HashMap<_, _> = generations.iter().map(|item| (item.id, item)).collect();
+        let meshes: HashMap<_, _> =
+            project.list_meshes().into_iter().map(|mesh| (mesh.id, mesh)).collect();
+        Ok(generations
+            .iter()
+            .filter_map(|generation| {
+                let output = generation.mesh_output()?;
+                let asset = meshes.get(&output.asset_id)?.clone();
+                Some(MeshConcept {
+                    generation_id: generation.id,
+                    created_at: generation.created_at,
+                    backend: generation.backend.clone(),
+                    model: generation.model.clone(),
+                    asset,
+                    turnaround: turnaround_views(&output.turnaround_generation_ids, &by_id),
+                })
+            })
+            .collect())
+    })
+}
+
+fn turnaround_views(
+    ids: &[Id],
+    generations: &HashMap<Id, &Generation>,
+) -> Vec<TurnaroundView> {
+    if ids.len() != MeshView::ALL.len() {
+        return Vec::new();
+    }
+    let views: Option<Vec<_>> = ids
+        .iter()
+        .map(|id| {
+            let generation = generations.get(id)?;
+            Some(TurnaroundView {
+                generation_id: *id,
+                view_type: generation.view_type.clone()?,
+                asset_id: *generation.output_asset_ids.first()?,
+            })
+        })
+        .collect();
+    // A partial sheet is not "the sheet that produced this mesh". If even one
+    // immutable source receipt is missing, show the explicit unavailable state.
+    let views = views.unwrap_or_default();
+    let distinct: HashSet<_> = views.iter().filter_map(|view| MeshView::parse(&view.view_type)).collect();
+    if distinct.len() == MeshView::ALL.len() { views } else { Vec::new() }
+}
+
+/// Validate and expose one complete GLB. Async because this is the first full
+/// mesh read and it may cross a slow share.
+#[tauri::command]
+pub async fn mesh_asset_path(
+    state: State<'_, AppState>,
+    asset_id: Id,
+) -> CommandResult<Option<String>> {
+    let (project_id, root) = state.with(|project| Ok((project.id(), project.root().to_path_buf())))?;
+    let checked_root = root.clone();
+    let mesh = blocking("The mesh validation thread stopped unexpectedly.", move || {
+        wobu_store::assets::cached_mesh(&checked_root, project_id, asset_id)
+    })
+    .await??;
+    let Some((_mesh, cached)) = mesh else { return Ok(None) };
+    Ok(state
+        .peek(|project| project.is_some_and(|project| project.id() == project_id))
+        .then(|| cached.to_string_lossy().into_owned()))
+}
+
+/// Canonical project path for Finder/Explorer. Unlike the viewer path this is
+/// not a local cache, and unlike loading it does not read the GLB body.
+#[tauri::command]
+pub fn mesh_source_path(
+    state: State<'_, AppState>,
+    asset_id: Id,
+) -> CommandResult<Option<String>> {
+    state.with(|project| {
+        Ok(project
+            .list_meshes()
+            .into_iter()
+            .find(|mesh| mesh.id == asset_id)
+            .and_then(|mesh| absolute(project, &mesh.rel_path)))
+    })
+}
+
+/// Copy a validated GLB to the location chosen by the modeller.
+#[tauri::command]
+pub async fn mesh_export(
+    state: State<'_, AppState>,
+    asset_id: Id,
+    destination: String,
+) -> CommandResult<()> {
+    if destination.trim().is_empty() {
+        return Err(WobuError::new(Code::Invalid, "Choose where to export the GLB."));
+    }
+    let destination = PathBuf::from(destination);
+    let (project_id, root) = state.with(|project| Ok((project.id(), project.root().to_path_buf())))?;
+    blocking("The mesh export thread stopped unexpectedly.", move || {
+        let (_mesh, cached) = wobu_store::assets::cached_mesh(&root, project_id, asset_id)?
+            .ok_or_else(|| wobu_store::Error::NoSuchAsset(asset_id.to_string()))?;
+        std::fs::copy(&cached, &destination)
+            .map(|_| ())
+            .map_err(|error| wobu_store::Error::io(&destination, error))
+    })
+    .await??;
+    Ok(())
+}
+
+/// Immutable generation history across the open project, newest first.
+#[tauri::command]
+pub fn generation_list_all(state: State<'_, AppState>) -> CommandResult<Vec<Generation>> {
+    state.with(|p| Ok(p.generation_history()?))
 }
 
 /// Attach a reference image to a node in a role.

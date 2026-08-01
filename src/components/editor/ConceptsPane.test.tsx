@@ -103,6 +103,7 @@ beforeEach(() => {
       })
     }
     if (command === 'asset_unlink') return Promise.resolve({ ...node, assetLinks: [] })
+    if (command === 'generation_replay') return Promise.resolve('job-replay')
     if (command === 'job_cancel') return Promise.resolve(true)
     return Promise.resolve(null)
   })
@@ -127,9 +128,44 @@ describe('generation history', () => {
     expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
 
     fireEvent.click(tiles[0] as HTMLElement)
-    const dialog = await screen.findByRole('dialog', { name: 'Full-resolution concept' })
+    const dialog = await screen.findByRole('dialog', { name: 'Generation details' })
     expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'asset-1' })
     expect(within(dialog).getByRole('img').getAttribute('src')).toBe('asset:///original-asset-1')
+  })
+
+  it('opens the exact snapshot and replays its immutable receipt', async () => {
+    history = [
+      generation({
+        id: 'snapshot',
+        params: { aspect: '3:4', width: 768, height: 1024 },
+        influenceSnapshot: {
+          layers: [{
+            layer: 'subject',
+            nodeId: node.id,
+            nodeName: 'Kael then',
+            weight: 0.7,
+            muted: false,
+            fragments: [{
+              section: 'appearance',
+              text: 'ash-grey travelling coat',
+              assetId: null,
+              weight: 0.7,
+              target: 'prompt',
+              dropped: false,
+            }],
+          }],
+        },
+      }),
+    ]
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: /Open generation from/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Generation details' })
+    expect(within(dialog).getByText('Exact recorded stack')).toBeInTheDocument()
+    expect(within(dialog).getByText('ash-grey travelling coat')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Replay snapshot' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('generation_replay', { generationId: 'snapshot' }),
+    )
   })
 
   it('states whether each persisted result used the lock, its family, or an explicit re-roll', async () => {
@@ -138,6 +174,7 @@ describe('generation history', () => {
       generation({ id: 'family', params: { seedSource: 'locked_derived', usedLockedSeed: false } }),
       generation({ id: 'rerolled', params: { seedSource: 'rerolled' } }),
       generation({ id: 'grid', params: { seedSource: 'grid' } }),
+      generation({ id: 'replay', params: { seedSource: 'replay', usedLockedSeed: true } }),
     ]
     open()
 
@@ -145,6 +182,7 @@ describe('generation history', () => {
     expect(screen.getByText('used locked-seed family')).toBeTruthy()
     expect(screen.getByText('used explicit re-roll')).toBeTruthy()
     expect(screen.getByText('variant seed cell')).toBeTruthy()
+    expect(screen.getByText('replayed snapshot')).toBeTruthy()
   })
 
   it('pins with an explicit role through AssetLink without changing generation history', async () => {

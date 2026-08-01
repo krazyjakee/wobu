@@ -3,9 +3,10 @@ import { Icon } from './Icon'
 
 const MODES: { mode: Mode; icon: string; tip: string }[] = [
   { mode: 'library', icon: 'library', tip: 'Library' },
-  { mode: 'board', icon: 'board', tip: 'Board — M3' },
+  { mode: 'board', icon: 'board', tip: 'Board' },
   { mode: 'forge', icon: 'forge', tip: 'Forge — M6' },
   { mode: 'assets', icon: 'assets', tip: 'Assets' },
+  { mode: 'history', icon: 'history', tip: 'Generation history' },
 ]
 
 export function ModeRail() {

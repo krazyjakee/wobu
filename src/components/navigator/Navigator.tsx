@@ -4,6 +4,7 @@ import { useDeleteNode, useDuplicateNode, useMoveNode, useNodeLinks } from '../.
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, filterTree, type KindGroup, type TreeNode } from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
+import { BOARD_ASSET_MIME } from '../../lib/board'
 import { editingTitle } from '../../lib/presence'
 import { useUI, report, toast } from '../../store/ui'
 import { Icon } from '../Icon'
@@ -33,6 +34,7 @@ export function Navigator({
   editedElsewhere,
   projectPath,
   onNewNode,
+  onAssetDrop,
 }: {
   nodes: NodeSummary[]
   byId: Map<string, NodeSummary>
@@ -47,6 +49,8 @@ export function Navigator({
   editedElsewhere: Map<string, string>
   projectPath: string
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
+  /** Board-only drop path; absent in Library so node reparenting is unchanged. */
+  onAssetDrop?: (assetId: string, nodeId: string) => void
 }) {
   const filter = useUI((s) => s.filter)
   const setFilter = useUI((s) => s.setFilter)
@@ -130,13 +134,27 @@ export function Navigator({
             return (
               <button
                 key={n.id}
-                className={`node node-pin${selectedId === n.id ? ' is-sel' : ''}`}
+                className={`node node-pin${selectedId === n.id ? ' is-sel' : ''}${dropId === n.id ? ' drop-target' : ''}`}
                 onClick={() => select(n.id)}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   setCtx({ x: e.clientX, y: e.clientY, node: n })
                 }}
                 title={n.summary || labelFor(def, n.kind)}
+                onDragOver={(event) => {
+                  if (readOnly || !onAssetDrop || !hasBoardAsset(event.dataTransfer)) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'link'
+                  setDropId(n.id)
+                }}
+                onDragLeave={() => setDropId((id) => (id === n.id ? null : id))}
+                onDrop={(event) => {
+                  const assetId = boardAssetFrom(event.dataTransfer)
+                  if (readOnly || !onAssetDrop || !assetId) return
+                  event.preventDefault()
+                  onAssetDrop(assetId, n.id)
+                  setDropId(null)
+                }}
               >
                 <Icon
                   name={spriteFor(def, n.kind)}
@@ -239,6 +257,7 @@ export function Navigator({
                       setDropId={setDropId}
                       readOnly={readOnly}
                       editedElsewhere={editedElsewhere}
+                      onAssetDrop={onAssetDrop}
                     />
                   ))}
                 </div>
@@ -259,6 +278,8 @@ export function Navigator({
             loading={loading || linksQ.isPending}
             error={error ?? (linksQ.isError ? errorMessage(linksQ.error) : null)}
             onSelect={select}
+            readOnly={readOnly}
+            onAssetDrop={onAssetDrop}
           />
         </div>
       )}
@@ -439,6 +460,7 @@ function Row({
   setDropId,
   readOnly,
   editedElsewhere,
+  onAssetDrop,
 }: {
   t: TreeNode
   kinds: KindIndex
@@ -457,6 +479,7 @@ function Row({
   setDropId: (id: string | null) => void
   readOnly: boolean
   editedElsewhere: Map<string, string>
+  onAssetDrop?: (assetId: string, nodeId: string) => void
 }) {
   const n = t.node
   const def = kinds.get(n.kind)
@@ -489,6 +512,12 @@ function Row({
         }}
         onDragEnd={onDragEnd}
         onDragOver={(e) => {
+          if (!readOnly && onAssetDrop && hasBoardAsset(e.dataTransfer)) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'link'
+            setDropId(n.id)
+            return
+          }
           if (!canDrop(n.id, n.kind)) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'move'
@@ -496,6 +525,13 @@ function Row({
         }}
         onDragLeave={() => setDropId(null)}
         onDrop={(e) => {
+          const assetId = boardAssetFrom(e.dataTransfer)
+          if (!readOnly && onAssetDrop && assetId) {
+            e.preventDefault()
+            onAssetDrop(assetId, n.id)
+            setDropId(null)
+            return
+          }
           if (!canDrop(n.id, n.kind)) return
           e.preventDefault()
           onDropOn(n.id)
@@ -543,8 +579,18 @@ function Row({
             setDropId={setDropId}
             readOnly={readOnly}
             editedElsewhere={editedElsewhere}
+            onAssetDrop={onAssetDrop}
           />
         ))}
     </>
   )
+}
+
+function hasBoardAsset(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes(BOARD_ASSET_MIME)
+}
+
+function boardAssetFrom(dataTransfer: DataTransfer): string | null {
+  if (!hasBoardAsset(dataTransfer)) return null
+  return dataTransfer.getData(BOARD_ASSET_MIME) || null
 }

@@ -55,6 +55,9 @@ export const qk = {
   assets: ['asset_list'] as const,
   assetUsages: ['asset_usage_list'] as const,
   generations: (nodeId: string) => ['generation_list', nodeId] as const,
+  meshes: (nodeId: string) => ['mesh_concepts', nodeId] as const,
+  meshPath: (assetId: string) => ['mesh_asset_path', assetId] as const,
+  generationHistory: ['generation_list_all'] as const,
   assetThumb: (assetId: string) => ['asset_thumb', assetId] as const,
   node: (id: string) => ['node_get', id] as const,
   backlinks: (id: string) => ['node_backlinks', id] as const,
@@ -99,6 +102,7 @@ export function invalidateWorld(qc: QueryClient) {
   // this side ever gets that one appeared is the folder having changed.
   void qc.invalidateQueries({ queryKey: qk.conflicts })
   void qc.invalidateQueries({ queryKey: qk.assetUsages })
+  void qc.invalidateQueries({ queryKey: ['mesh_concepts'] })
   // Editing a node changes what it matches. Without this the palette keeps
   // offering a hit for a phrase the user just deleted.
   void qc.invalidateQueries({ queryKey: ['node_search'] })
@@ -107,6 +111,7 @@ export function invalidateWorld(qc: QueryClient) {
   // of the same reconcile that raised this.
   void qc.invalidateQueries({ queryKey: qk.assets })
   void qc.invalidateQueries({ queryKey: ['generation_list'] })
+  void qc.invalidateQueries({ queryKey: qk.generationHistory })
   // A stack is built from other people's nodes as much as from the subject's:
   // an edit two layers out changes the compiled prompt without touching
   // anything the panel is pointing at, so these move with the world rather than
@@ -833,6 +838,7 @@ export function useGenerations(nodeId: string): UseQueryResult<api.Generation[]>
       if (event.payload.subjectId === nodeId) {
         void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
         void qc.invalidateQueries({ queryKey: qk.assets })
+        void qc.invalidateQueries({ queryKey: qk.meshes(nodeId) })
       }
     })
       .then((fn) => {
@@ -849,6 +855,71 @@ export function useGenerations(nodeId: string): UseQueryResult<api.Generation[]>
   }, [nodeId, qc])
 
   return query
+}
+
+/** Mounted only by the active 3D tab; listing a share's mesh directory is lazy. */
+export function useMeshConcepts(nodeId: string): UseQueryResult<api.MeshConcept[]> {
+  return useQuery({
+    queryKey: qk.meshes(nodeId),
+    queryFn: () => api.meshConcepts(nodeId),
+    retry: false,
+  })
+}
+
+/** The only query that causes a complete GLB to cross a share. */
+export function useMeshAssetPath(assetId: string | null): UseQueryResult<string | null> {
+  return useQuery({
+    queryKey: qk.meshPath(assetId ?? ''),
+    queryFn: () => api.meshAssetPath(assetId as string),
+    enabled: !!assetId,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
+/** Project-wide immutable generation history, newest first. */
+export function useGenerationHistory(): UseQueryResult<api.Generation[]> {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: qk.generationHistory,
+    queryFn: api.generationListAll,
+    retry: false,
+  })
+
+  useEffect(() => {
+    if (!api.isTauri()) return
+    let disposed = false
+    const unlisteners: Array<() => void> = []
+    const refresh = () => void qc.invalidateQueries({ queryKey: qk.generationHistory })
+    void listen<api.JobDone>(api.JOB_EVENTS.done, (event) => {
+      if (event.payload.kind === 'generate') refresh()
+    })
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisteners.push(fn)
+      })
+      .catch(() => {})
+    void listen('generation:recorded', refresh)
+      .then((fn) => {
+        if (disposed) fn()
+        else unlisteners.push(fn)
+      })
+      .catch(() => {})
+    return () => {
+      disposed = true
+      for (const unlisten of unlisteners) unlisten()
+    }
+  }, [qc])
+
+  return query
+}
+
+export function useReplayGeneration() {
+  return useMutation({
+    mutationFn: api.generationReplay,
+    onSuccess: () => toast('Replay queued from the immutable snapshot'),
+    onError: (error) => report(error, 'Could not replay that generation'),
+  })
 }
 
 /** Lazily generated tile path; originals have a separate click-only command. */

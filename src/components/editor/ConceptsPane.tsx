@@ -21,6 +21,7 @@ import {
 } from '../../lib/queries'
 import { labelFor, pluralFor, type KindIndex } from '../../lib/kinds'
 import { influenceDependentsOf } from '../../lib/tree'
+import { GenerationDetail } from '../GenerationDetail'
 
 type Signal = { progress?: JobProgress; preview?: JobPreview }
 
@@ -39,7 +40,7 @@ export function ConceptsPane({
   const nodes = useNodes(true)
   const links = useNodeLinks(true)
   const signals = useGenerationSignals(node.id)
-  const [viewer, setViewer] = useState<{ src: string; label: string } | null>(null)
+  const [viewer, setViewer] = useState<{ src: string | null; generation: Generation } | null>(null)
   const dependents = useMemo(
     () => influenceDependentsOf(node.id, nodes.data ?? [], links.data ?? []),
     [links.data, node.id, nodes.data],
@@ -88,7 +89,15 @@ export function ConceptsPane({
           />
         ))}
       </div>
-      {viewer && <FullImage viewer={viewer} onClose={() => setViewer(null)} />}
+      {viewer && (
+        <GenerationDetail
+          generation={viewer.generation}
+          nodeName={node.name}
+          imageSrc={viewer.src}
+          readOnly={readOnly}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </section>
   )
 }
@@ -206,7 +215,7 @@ function GenerationTile({
   kinds: KindIndex
   scopeUnknown: boolean
   readOnly: boolean
-  onOpen: (viewer: { src: string; label: string }) => void
+  onOpen: (viewer: { src: string | null; generation: Generation }) => void
 }) {
   const assetId = generation.outputAssetIds[0] ?? null
   const thumb = useAssetThumb(assetId)
@@ -222,13 +231,18 @@ function GenerationTile({
   const changingPin = linkAsset.isPending || unlinkAsset.isPending
 
   async function open() {
-    if (!assetId) return
+    if (!assetId) {
+      onOpen({ src: null, generation })
+      return
+    }
     setOpening(true)
     setError(null)
     try {
       const path = await api.assetOriginal(assetId)
-      if (!path) setError('The full-resolution image is not available.')
-      else onOpen({ src: convertFileSrc(path), label: generation.compiledPrompt })
+      if (!path) {
+        setError('The full-resolution image is not available; the immutable receipt can still be inspected.')
+        onOpen({ src: null, generation })
+      } else onOpen({ src: convertFileSrc(path), generation })
     } catch (reason) {
       setError(api.errorMessage(reason))
     } finally {
@@ -252,7 +266,7 @@ function GenerationTile({
       <button
         className="concept-open"
         onClick={() => void open()}
-        disabled={!assetId || opening}
+        disabled={opening}
         aria-label={`Open generation from ${generation.createdAt}`}
       >
         <div className="concept-image">
@@ -367,6 +381,7 @@ function roleLabel(role: AssetRole): string {
 }
 
 function seedSourceLabel(generation: Generation): string {
+  if (generation.params.seedSource === 'replay') return 'replayed snapshot'
   if (generation.params.usedLockedSeed === true) return 'used locked seed'
   const source = generation.params.seedSource
   switch (source) {
@@ -387,27 +402,4 @@ function seedSourceLabel(generation: Generation): string {
     default:
       return 'used unlocked seed'
   }
-}
-
-function FullImage({
-  viewer,
-  onClose,
-}: {
-  viewer: { src: string; label: string }
-  onClose: () => void
-}) {
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', close)
-    return () => window.removeEventListener('keydown', close)
-  }, [onClose])
-
-  return (
-    <div className="scrim concept-viewer" role="dialog" aria-label="Full-resolution concept">
-      <button className="concept-viewer-close" onClick={onClose} aria-label="Close full-resolution concept">×</button>
-      <img src={viewer.src} alt={viewer.label} />
-    </div>
-  )
 }

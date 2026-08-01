@@ -19,13 +19,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Emitter, State};
 use wobu_core::{
-    Asset, AssetKind, FragmentTarget, Generation, GenerationVariation, Id, InfluenceSnapshot, Node,
-    Preset, PresetGeneration, SnapshotFragment, SnapshotLayer, VariationValue, default_preset,
-    new_id, preset,
+    Asset, AssetKind, AssetRole, FragmentTarget, Generation, GenerationVariation, Id,
+    InfluenceSnapshot, Node, Preset, PresetGeneration, SnapshotFragment, SnapshotLayer,
+    VariationValue, default_preset, new_id, preset,
 };
 use wobu_imagine::{
     AspectRatio, Capabilities, ComfyBackend, Error as ImageError, GeminiBackend, ImageBackend,
-    ImageRequest, ImageUsage, ProgressSink, Reference, Resolution, comfy, gemini, negotiate,
+    ImageRequest, ImageUsage, ProgressSink, Reference, ReferenceMechanism, Resolution, comfy,
+    gemini, negotiate,
 };
 use wobu_influence::{
     Budget, Fragment, FragmentBody, RefBucket, Shot, Sliders, World, compile, fragments,
@@ -239,6 +240,319 @@ pub fn generate_start(
     plan.reserve_spend()?;
     let id = jobs.queue().submit(plan);
     Ok(id.to_string())
+}
+
+/// Queue the exact provider request captured by an immutable generation.
+///
+/// This path deliberately never resolves today's world, selects today's
+/// preset, or negotiates against today's capabilities. Those are compilation
+/// steps and replay means compilation already happened. Current state is used
+/// only to locate the old receipt and its referenced immutable asset bytes.
+#[tauri::command]
+pub fn generation_replay(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, Jobs>,
+    keys: State<'_, Keys>,
+    generation_id: Id,
+) -> CommandResult<String> {
+    let (root, project_id, generation, assets) = state.with(|project| {
+        if project.is_read_only() {
+            return Err(WobuError::new(
+                Code::ReadOnly,
+                "This project is read-only, so a replayed image could not be saved.",
+            ));
+        }
+        let generation = project.get_generation(generation_id)?.ok_or_else(|| {
+            WobuError::new(Code::Invalid, "That generation is not in this project any more.")
+        })?;
+        Ok((
+            project.root().to_path_buf(),
+            project.id(),
+            generation,
+            project.list_assets()?,
+        ))
+    })?;
+    let subject_name = generation
+        .influence_snapshot
+        .layers
+        .iter()
+        .find(|layer| layer.node_id == Some(generation.node_id))
+        .map(|layer| layer.node_name.clone())
+        .unwrap_or_else(|| format!("generation {}", generation.id));
+
+    let backend: Arc<dyn ImageBackend> = match generation.backend.as_str() {
+        comfy::ID => Arc::new(ComfyBackend::new(comfy::DEFAULT_URL).map_err(|error| {
+            WobuError::new(Code::ProviderUnavailable, error.to_string())
+        })?),
+        gemini::ID => {
+            let secret = keys.secret(gemini::ID).ok_or_else(|| {
+                WobuError::new(
+                    Code::ProviderNoKey,
+                    "This replay used Gemini, but there is no Gemini key on this machine. Add one in Settings.",
+                )
+            })?;
+            Arc::new(GeminiBackend::new(secret.expose()).map_err(|error| {
+                WobuError::new(Code::ProviderUnavailable, error.to_string())
+            })?)
+        }
+        provider => {
+            return Err(WobuError::new(
+                Code::Invalid,
+                format!("This build has no image adapter for the recorded provider {provider}."),
+            ));
+        }
+    };
+    let capabilities = backend.capabilities(&generation.model);
+    let requires_billing = capabilities.requires_billing;
+    let plan = replay_plan(&root, &assets, generation, &capabilities)?;
+    if requires_billing && plan.cost_usd_micros == 0 {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "This paid historical model has no current safe price, so replay cannot reserve the spend ceiling.",
+        ));
+    }
+    let subject_id = plan.generation.node_id;
+    let mut task = GenerateTask {
+        label: format!("Replay {subject_name}"),
+        subject_id,
+        project_id,
+        root,
+        backend,
+        plans: vec![plan],
+        next: 0,
+        completed: Vec::new(),
+        app,
+        requires_billing,
+        reservation: None,
+        archival_replay: true,
+    };
+    task.reserve_spend()?;
+    let id = jobs.queue().submit(task);
+    Ok(id.to_string())
+}
+
+fn replay_plan(
+    root: &Path,
+    assets: &[Asset],
+    original: Generation,
+    capabilities: &Capabilities,
+) -> CommandResult<PlannedImage> {
+    let aspect_text = replay_param_str(&original, "aspect")?;
+    let aspect = AspectRatio::parse(aspect_text).ok_or_else(|| {
+        replay_metadata_error(&original, format!("recorded aspect {aspect_text:?} is invalid"))
+    })?;
+    let width = replay_param_u32(&original, "width")?;
+    let height = replay_param_u32(&original, "height")?;
+    let resolution = Resolution::new(width, height);
+    let by_id: HashMap<Id, &Asset> = assets.iter().map(|asset| (asset.id, asset)).collect();
+    let mut references = Vec::new();
+
+    for fragment in original
+        .influence_snapshot
+        .layers
+        .iter()
+        .flat_map(|layer| layer.fragments.iter())
+        .filter(|fragment| !fragment.dropped)
+    {
+        let Some(asset_id) = fragment.asset_id else { continue };
+        let Some(mechanism) = ReferenceMechanism::for_target(fragment.target) else {
+            continue;
+        };
+        let asset = by_id.get(&asset_id).ok_or_else(|| {
+            WobuError::new(
+                Code::NoSuchAsset,
+                "A reference captured by this generation snapshot is missing, so it cannot be replayed verbatim.",
+            )
+            .with_detail(asset_id.to_string())
+        })?;
+        let role = fragment
+            .asset_role
+            .or_else(|| snapshot_role(&fragment.section, fragment.target));
+        let role = role.ok_or_else(|| {
+            replay_metadata_error(
+                &original,
+                format!("reference {asset_id} has no reconstructable role"),
+            )
+        })?;
+        let requested_bucket = RefBucket::for_role(role).ok_or_else(|| {
+            replay_metadata_error(
+                &original,
+                format!("reference {asset_id} has a non-conditioning role"),
+            )
+        })?;
+        let bucket = capabilities.image_refs.meter(requested_bucket).0;
+        let bytes = std::fs::read(root.join(&asset.rel_path)).map_err(|error| {
+            WobuError::new(
+                Code::Io,
+                "A reference captured by this generation snapshot could not be read.",
+            )
+            .with_detail(error.to_string())
+        })?;
+        references.push(Reference {
+            asset_id,
+            role,
+            bucket,
+            mechanism,
+            weight: fragment.weight,
+            bytes,
+            mime: asset.mime.clone(),
+        });
+    }
+    restore_reference_order(&original, &mut references)?;
+
+    let request = ImageRequest {
+        model: original.model.clone(),
+        prompt: original.compiled_prompt.clone(),
+        negative: original.negative_prompt.clone(),
+        aspect,
+        resolution,
+        seed: original.seed,
+        references,
+    };
+    let current_price = image_price(&original.backend, &original.model, resolution);
+    let current_cost = current_price.map_or(0, |price| price.per_image_usd_micros);
+    let mut generation = original.clone();
+    generation.id = new_id();
+    generation.created_at = Utc::now();
+    generation.output_asset_ids.clear();
+    generation.params.remove("outcome");
+    generation.params.remove("errorCode");
+    if let Some(original_cost) = generation
+        .params
+        .get("estimatedCostUsdMicros")
+        .and_then(Value::as_u64)
+    {
+        generation
+            .params
+            .insert("replayOriginalEstimatedCostUsdMicros".into(), json!(original_cost));
+    }
+    generation.params.insert("replayOf".into(), json!(original.id));
+    generation.params.insert("replayPriceBasis".into(), json!("current"));
+    generation.params.insert("batchIndex".into(), json!(0));
+    generation.params.insert("batchSize".into(), json!(1));
+    generation.params.insert("seedSource".into(), json!("replay"));
+    generation
+        .params
+        .insert("estimatedCostUsdMicros".into(), json!(current_cost));
+    if current_cost > 0 {
+        generation.params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
+        generation.params.insert("pricingSource".into(), json!(PRICE_SOURCE));
+        generation.params.insert("pricingIndicative".into(), json!(true));
+        generation.params.insert(
+            "pricingConservativeFallback".into(),
+            json!(current_price.is_some_and(|price| price.conservative_fallback)),
+        );
+    } else {
+        generation.params.remove("pricingCheckedAt");
+        generation.params.remove("pricingSource");
+        generation.params.remove("pricingIndicative");
+        generation.params.remove("pricingConservativeFallback");
+    }
+
+    Ok(PlannedImage { request, cost_usd_micros: current_cost, generation })
+}
+
+fn replay_param_str<'a>(generation: &'a Generation, key: &str) -> CommandResult<&'a str> {
+    generation
+        .params
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| replay_metadata_error(generation, format!("missing {key}")))
+}
+
+fn replay_param_u32(generation: &Generation, key: &str) -> CommandResult<u32> {
+    generation
+        .params
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+        .filter(|value| *value > 0)
+        .ok_or_else(|| replay_metadata_error(generation, format!("missing or invalid {key}")))
+}
+
+fn replay_metadata_error(generation: &Generation, detail: String) -> WobuError {
+    WobuError::new(
+        Code::Invalid,
+        "This older generation does not contain enough immutable request metadata to replay verbatim.",
+    )
+    .with_detail(format!("generation {}: {detail}", generation.id))
+}
+
+fn snapshot_role(section: &str, target: FragmentTarget) -> Option<AssetRole> {
+    match section {
+        "silhouette" => Some(AssetRole::Silhouette),
+        "palette" => Some(AssetRole::Palette),
+        "material" => Some(AssetRole::Material),
+        "mood" => Some(AssetRole::Mood),
+        "pose" => Some(AssetRole::Pose),
+        "costume" => Some(AssetRole::Costume),
+        "full_ref" => Some(AssetRole::FullRef),
+        _ => match target {
+            FragmentTarget::StyleRef => Some(AssetRole::FullRef),
+            FragmentTarget::StructureRef => Some(AssetRole::Silhouette),
+            FragmentTarget::Palette => Some(AssetRole::Palette),
+            FragmentTarget::Prompt | FragmentTarget::Negative | FragmentTarget::MoodboardOnly => {
+                None
+            }
+        },
+    }
+}
+
+fn restore_reference_order(
+    generation: &Generation,
+    references: &mut Vec<Reference>,
+) -> CommandResult<()> {
+    let Some(order) = generation
+        .params
+        .get("referenceAssetIds")
+        .and_then(Value::as_array)
+    else {
+        // Before `referenceAssetIds` was recorded, prepare still emitted a
+        // deterministic order: all object-bucket references, then characters,
+        // then style refs, preserving extraction order inside each bucket.
+        // Recreate that stable grouping rather than sending snapshot layer
+        // order and calling it verbatim.
+        references.sort_by_key(|reference| match reference.bucket {
+            RefBucket::Objects => 0,
+            RefBucket::Characters => 1,
+            RefBucket::StyleRefs => 2,
+        });
+        return Ok(());
+    };
+    if order.len() != references.len() {
+        return Err(replay_metadata_error(
+            generation,
+            "recorded reference order does not match the snapshot".to_string(),
+        ));
+    }
+    let mut ordered = Vec::with_capacity(references.len());
+    for value in order {
+        let id = value
+            .as_str()
+            .and_then(|value| Id::from_string(value).ok())
+            .ok_or_else(|| {
+                replay_metadata_error(generation, "recorded reference order is invalid".to_string())
+            })?;
+        let index = references
+            .iter()
+            .position(|reference| reference.asset_id == id)
+            .ok_or_else(|| {
+                replay_metadata_error(
+                    generation,
+                    format!("recorded reference {id} is not in the snapshot"),
+                )
+            })?;
+        ordered.push(references.remove(index));
+    }
+    if !references.is_empty() {
+        return Err(replay_metadata_error(
+            generation,
+            "snapshot has references missing from the recorded order".to_string(),
+        ));
+    }
+    *references = ordered;
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -896,7 +1210,23 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         params.insert("aspect".into(), json!(negotiated.aspect().to_string()));
         params.insert("width".into(), json!(resolution.width));
         params.insert("height".into(), json!(resolution.height));
+        params.insert("negativePromptSupported".into(), json!(caps.negative_prompt));
         params.insert("seedSource".into(), json!(cell.seed_source));
+        params.insert(
+            "controls".into(),
+            json!({
+                "sliders": cell.slider_values.iter().map(|(node_id, value)| json!({
+                    "nodeId": node_id,
+                    "value": value,
+                    "muted": muted_nodes.contains(node_id),
+                })).collect::<Vec<_>>(),
+                "shot": {
+                    "label": shot_label,
+                    "weight": input.shot.weight.unwrap_or(1.0).clamp(0.0, 1.0),
+                    "prompt": user_prompt,
+                },
+            }),
+        );
         if let Some(locked_seed) = input.locked_seed {
             params.insert("lockedSeed".into(), json!(locked_seed));
             params.insert("usedLockedSeed".into(), json!(cell.item.seed == locked_seed));
@@ -910,6 +1240,10 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         let price = image_price(&input.provider, &input.model, resolution);
         let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
         params.insert("estimatedCostUsdMicros".into(), json!(cost_usd_micros));
+        params.insert(
+            "referenceAssetIds".into(),
+            json!(references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>()),
+        );
         if price.is_some() {
             params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
             params.insert("pricingSource".into(), json!(PRICE_SOURCE));
@@ -967,6 +1301,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         app: input.app,
         requires_billing: caps.requires_billing,
         reservation: None,
+        archival_replay: false,
     })
 }
 
@@ -1053,6 +1388,7 @@ fn snapshot(
                                 section: fragment.section().to_owned(),
                                 text: fragment.text().map(str::to_owned),
                                 asset_id: fragment.asset_id(),
+                                asset_role: fragment.asset_role(),
                                 weight: fragment.weight(),
                                 target: fragment.target(),
                                 dropped: reported || !fragment.contributes(),
@@ -1077,6 +1413,8 @@ struct GenerateTask {
     app: AppHandle,
     requires_billing: bool,
     reservation: Option<SpendReservation>,
+    /// Replay can legitimately outlive the node its immutable receipt names.
+    archival_replay: bool,
 }
 
 struct PlannedImage {
@@ -1154,6 +1492,7 @@ impl Task for GenerateTask {
             let batch_total = self.plans.len();
             let cost_usd_micros = self.plans[batch_index].cost_usd_micros;
             let base_generation = self.plans[batch_index].generation.clone();
+            let archival_replay = self.archival_replay;
             let mut progress = JobProgress { ctx: ctx.clone(), batch_index, batch_total };
             let outcome = self
                 .backend
@@ -1176,7 +1515,11 @@ impl Task for GenerateTask {
                                 "The project at this location changed while the image was generating.",
                             ));
                         }
-                        project.record_generation(generation).map_err(WobuError::from)
+                        if archival_replay {
+                            project.record_replay_generation(generation).map_err(WobuError::from)
+                        } else {
+                            project.record_generation(generation).map_err(WobuError::from)
+                        }
                     })
                     .await;
                     match recorded {
@@ -1263,7 +1606,11 @@ impl Task for GenerateTask {
                     }
                     let imported = project.import_asset(&bytes, AssetKind::Generated)?;
                     generation.output_asset_ids = vec![imported.asset.id];
-                    let generation = project.record_generation(generation)?;
+                    let generation = if archival_replay {
+                        project.record_replay_generation(generation)?
+                    } else {
+                        project.record_generation(generation)?
+                    };
                     Ok(GenerateReady { subject_id, generation, asset: imported.asset })
                 })
                 .await;
@@ -1784,6 +2131,7 @@ mod tests {
             model: model.into(),
             seed: 1,
             params: Map::from_iter([
+                ("aspect".into(), json!("1:1")),
                 ("width".into(), json!(width)),
                 ("height".into(), json!(height)),
             ]),
@@ -1842,6 +2190,70 @@ mod tests {
         let mut explicit = old;
         explicit.params.insert("estimatedCostUsdMicros".into(), json!(123_456));
         assert_eq!(receipt_cost(&explicit), 123_456);
+    }
+
+    #[test]
+    fn replay_plan_uses_recorded_request_and_current_price_without_compiling() {
+        let mut original = receipt(
+            new_id(),
+            gemini::ID,
+            "gemini-3.1-flash-image",
+            1_024,
+            1_024,
+        );
+        original.compiled_prompt = "the immutable positive".into();
+        original.negative_prompt = "the immutable negative".into();
+        original.seed = 77;
+        original.params.insert("estimatedCostUsdMicros".into(), json!(12_345));
+        let original_id = original.id;
+        let original_snapshot = original.influence_snapshot.clone();
+
+        let caps = GeminiBackend::new("test-key")
+            .unwrap()
+            .capabilities("gemini-3.1-flash-image");
+        let plan = replay_plan(Path::new("."), &[], original, &caps).unwrap();
+        assert_eq!(plan.request.prompt, "the immutable positive");
+        assert_eq!(plan.request.negative, "the immutable negative");
+        assert_eq!(plan.request.seed, 77);
+        assert_eq!(plan.request.resolution, Resolution::new(1_024, 1_024));
+        assert_eq!(plan.generation.influence_snapshot, original_snapshot);
+        assert_eq!(plan.generation.params.get("replayOf"), Some(&json!(original_id)));
+        assert_eq!(
+            plan.generation.params.get("replayOriginalEstimatedCostUsdMicros"),
+            Some(&json!(12_345))
+        );
+        assert_eq!(plan.cost_usd_micros, 67_000);
+        assert_eq!(plan.generation.params.get("estimatedCostUsdMicros"), Some(&json!(67_000)));
+    }
+
+    #[test]
+    fn replay_refuses_missing_snapshot_reference_instead_of_using_current_links() {
+        let missing = new_id();
+        let mut original = receipt(new_id(), comfy::ID, "local", 1_024, 1_024);
+        original.influence_snapshot.layers.push(SnapshotLayer {
+            layer: wobu_core::Layer::Subject,
+            node_id: Some(original.node_id),
+            node_name: "Kael".into(),
+            weight: 1.0,
+            muted: false,
+            fragments: vec![SnapshotFragment {
+                section: "pose".into(),
+                text: None,
+                asset_id: Some(missing),
+                asset_role: Some(AssetRole::Pose),
+                weight: 0.8,
+                target: FragmentTarget::StructureRef,
+                dropped: false,
+            }],
+        });
+        let caps = GeminiBackend::new("test-key")
+            .unwrap()
+            .capabilities("gemini-3.1-flash-image");
+        let Err(error) = replay_plan(Path::new("."), &[], original, &caps) else {
+            panic!("a missing immutable reference must refuse replay")
+        };
+        assert_eq!(error.code, Code::NoSuchAsset);
+        assert!(error.detail.is_some_and(|detail| detail.contains(&missing.to_string())));
     }
 
     #[test]

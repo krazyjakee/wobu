@@ -384,6 +384,12 @@
 .graph-node.is-dim {
   opacity: 0.26;
 }
+.graph-node.drop-target {
+  border-color: var(--accent);
+  border-left-color: var(--graph-kind);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
+  opacity: 1;
+}
 .graph-node > .ic {
   flex: none;
   color: var(--graph-kind);

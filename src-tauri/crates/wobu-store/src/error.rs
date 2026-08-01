@@ -108,6 +108,9 @@ pub enum Error {
     )]
     AnimatedImage,
 
+    #[error("that mesh is not a complete binary glTF 2.0 file")]
+    NotAMesh,
+
     /// A blob already in the library whose pixels will not come back out.
     ///
     /// Distinct from [`Error::NotAnImage`], which is a file refused at the

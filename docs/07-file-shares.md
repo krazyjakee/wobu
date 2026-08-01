@@ -92,7 +92,9 @@ most likely to make Wobu feel bad on a NAS. Mitigations:
   local app data.
 - **Grids bind to thumbs only.** Full-resolution originals are fetched on demand, one at a
   time, when an image is opened.
-- **Meshes are lazy.** A `.glb` is only pulled when the 3D tab is actually opened.
+- **Meshes are lazy.** The closed 3D tab asks for nothing. Opening it lists only fixed-size GLB
+  headers, then streams and hashes the selected file once into a disposable machine-local cache;
+  three.js reads that local copy, so one view does not pull the same large GLB over SMB twice.
 - Long share operations show progress and are cancellable. A stalled NAS must never present
   as a frozen app.
 

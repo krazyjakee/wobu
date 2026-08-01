@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { errorCode, errorMessage, errorSurface, isRetryable, isWobuError } from '../lib/api'
 import type { NodeKind } from '../lib/api'
 
-export type Mode = 'library' | 'board' | 'forge' | 'assets' | 'settings'
+export type Mode = 'library' | 'board' | 'forge' | 'assets' | 'history' | 'settings'
 export type EditorTab = 'notes' | 'refs' | 'concepts' | 'three' | 'relations'
 
 export const EDITOR_TABS: EditorTab[] = ['notes', 'refs', 'concepts', 'three', 'relations']

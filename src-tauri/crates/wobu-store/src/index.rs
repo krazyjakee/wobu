@@ -985,6 +985,21 @@ impl Index {
         Ok(out)
     }
 
+    /// Project-wide history, newest first, from the disposable read model.
+    pub fn generations_all(&self) -> Result<Vec<Generation>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT doc FROM generations ORDER BY created_at DESC, id DESC")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            if let Ok(generation) = serde_json::from_str::<Generation>(&row?) {
+                out.push(generation);
+            }
+        }
+        Ok(out)
+    }
+
     /// Every generation path held by the disposable index.
     pub fn generation_paths(&self) -> Result<HashSet<String>> {
         let mut stmt = self.conn.prepare("SELECT rel_path FROM generations")?;
