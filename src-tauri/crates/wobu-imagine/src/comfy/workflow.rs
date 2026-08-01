@@ -604,7 +604,7 @@ mod tests {
             bucket: wobu_influence::RefBucket::StyleRefs,
             mechanism: crate::ReferenceMechanism::ImagePrompt,
             weight: 1.0,
-            bytes: vec![],
+            bytes: std::sync::Arc::from([]),
             mime: "image/png".into(),
         }];
         let error = SD_CHECKPOINT.patch(&request).unwrap_err();

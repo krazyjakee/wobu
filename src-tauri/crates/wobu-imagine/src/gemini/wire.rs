@@ -149,7 +149,7 @@ fn input(request: &ImageRequest) -> Value {
             // which the docs offer for larger payloads — would mean an upload,
             // a handle to clean up, and a second thing to get wrong for a
             // reference image that is a few hundred kilobytes.
-            "data": base64::engine::general_purpose::STANDARD.encode(&reference.bytes),
+            "data": base64::engine::general_purpose::STANDARD.encode(reference.bytes.as_ref()),
         })
     }));
     Value::Array(blocks)
@@ -511,7 +511,7 @@ mod tests {
             bucket,
             mechanism: ReferenceMechanism::for_target(role.target()).unwrap(),
             weight: 1.0,
-            bytes: bytes.to_vec(),
+            bytes: std::sync::Arc::from(bytes),
             mime: "image/png".into(),
         }
     }

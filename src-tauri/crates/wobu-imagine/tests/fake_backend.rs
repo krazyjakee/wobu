@@ -310,7 +310,12 @@ fn references(negotiated: &Negotiated<'_>) -> Vec<Reference> {
         .iter()
         .flat_map(|bucket| {
             bucket.kept().iter().filter_map(move |fragment| {
-                Reference::from_fragment(*fragment, bucket.bucket(), b"PNG".to_vec(), "image/png")
+                Reference::from_fragment(
+                    *fragment,
+                    bucket.bucket(),
+                    std::sync::Arc::from(&b"PNG"[..]),
+                    "image/png",
+                )
             })
         })
         .collect()

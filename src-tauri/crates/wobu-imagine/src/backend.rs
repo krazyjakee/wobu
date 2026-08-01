@@ -51,6 +51,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use wobu_core::{AssetRole, Id};
 use wobu_influence::{Fragment, RefBucket};
 use wobu_llm::Cancel;
@@ -92,7 +93,9 @@ pub struct Reference {
     /// IP-Adapter has one — uses it; Gemini has nothing to put it in and ignores
     /// it, which is not a silent drop because the picture itself is still sent.
     pub weight: f32,
-    pub bytes: Vec<u8>,
+    /// Shared across every cell in one planned batch. Providers only borrow the
+    /// immutable slice while encoding or uploading it.
+    pub bytes: Arc<[u8]>,
     pub mime: String,
 }
 
@@ -116,7 +119,7 @@ impl Reference {
     pub fn from_fragment(
         fragment: Fragment<'_>,
         bucket: RefBucket,
-        bytes: Vec<u8>,
+        bytes: Arc<[u8]>,
         mime: impl Into<String>,
     ) -> Option<Reference> {
         Some(Reference {
@@ -590,7 +593,7 @@ mod tests {
             bucket,
             mechanism: ReferenceMechanism::for_target(role.target()).unwrap(),
             weight: 1.0,
-            bytes: vec![0x89, b'P', b'N', b'G'],
+            bytes: Arc::from([0x89, b'P', b'N', b'G']),
             mime: "image/png".into(),
         }
     }

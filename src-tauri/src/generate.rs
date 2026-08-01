@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
-use std::io::Write as _;
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
@@ -45,6 +45,53 @@ const PRICE_CHECKED_AT: &str = "2026-08-01";
 const SPEND_DIR: &str = ".wobu/spend";
 const LOCK_ATTEMPTS: usize = 200;
 const LORA_PROTOCOL: u32 = 1;
+
+/// Batch-local immutable reference data. The loader is deliberately
+/// single-threaded: it runs on Tauri's blocking pool, bounds filesystem
+/// concurrency at one, and retains at most one buffer for every asset id the
+/// batch actually keeps.
+struct ReferenceLoader<R = fn(&Path) -> io::Result<Vec<u8>>> {
+    read: R,
+    loaded: HashMap<Id, Arc<[u8]>>,
+}
+
+impl ReferenceLoader {
+    fn new() -> Self {
+        Self { read: read_reference, loaded: HashMap::new() }
+    }
+}
+
+fn read_reference(path: &Path) -> io::Result<Vec<u8>> {
+    std::fs::read(path)
+}
+
+impl<R> ReferenceLoader<R>
+where
+    R: FnMut(&Path) -> io::Result<Vec<u8>>,
+{
+    #[cfg(test)]
+    fn with_reader(read: R) -> Self {
+        Self { read, loaded: HashMap::new() }
+    }
+
+    fn load(&mut self, asset_id: Id, path: &Path) -> io::Result<Arc<[u8]>> {
+        if let Some(bytes) = self.loaded.get(&asset_id) {
+            return Ok(Arc::clone(bytes));
+        }
+        let bytes: Arc<[u8]> = (self.read)(path)?.into();
+        self.loaded.insert(asset_id, Arc::clone(&bytes));
+        Ok(bytes)
+    }
+}
+
+async fn prepare_blocking<T: Send + 'static>(
+    lost: &'static str,
+    prepare: impl FnOnce() -> CommandResult<T> + Send + 'static,
+) -> CommandResult<T> {
+    tauri::async_runtime::spawn_blocking(prepare)
+        .await
+        .map_err(|error| WobuError::new(Code::Internal, lost).with_detail(error.to_string()))?
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -265,25 +312,28 @@ pub async fn generate_start(
         (None, None) => (u128::from(new_id()) as u64, SeedSource::Random),
     };
 
-    let mut plan = prepare(Prepare {
-        root,
-        project_id,
-        nodes,
-        assets,
-        subject_id,
-        preset_id: preset,
-        sliders: sliders.unwrap_or_default(),
-        shot: shot.unwrap_or_default(),
-        aspect,
-        model,
-        seed,
-        seed_source,
-        locked_seed,
-        grid,
-        backend,
-        provider,
-        app,
-    })?;
+    let mut plan = prepare_blocking("Generation preparation stopped unexpectedly.", move || {
+        prepare(Prepare {
+            root,
+            project_id,
+            nodes,
+            assets,
+            subject_id,
+            preset_id: preset,
+            sliders: sliders.unwrap_or_default(),
+            shot: shot.unwrap_or_default(),
+            aspect,
+            model,
+            seed,
+            seed_source,
+            locked_seed,
+            grid,
+            backend,
+            provider,
+            app,
+        })
+    })
+    .await?;
     plan.reserve_spend()?;
     let id = jobs.queue().submit(plan);
     Ok(id.to_string())
@@ -393,21 +443,24 @@ pub async fn scene_generate_start(
         .unwrap_or_else(|| backend.default_model().to_owned());
     let seed_source = if seed.is_some() { SeedSource::Rerolled } else { SeedSource::Random };
     let seed = seed.unwrap_or_else(|| u128::from(new_id()) as u64);
-    let mut plan = prepare_scene(ScenePrepare {
-        root,
-        project_id,
-        nodes,
-        assets,
-        subject_ids,
-        prompt: prompt.unwrap_or_default(),
-        aspect,
-        model,
-        seed,
-        seed_source,
-        backend,
-        provider,
-        app,
-    })?;
+    let mut plan = prepare_blocking("Scene preparation stopped unexpectedly.", move || {
+        prepare_scene(ScenePrepare {
+            root,
+            project_id,
+            nodes,
+            assets,
+            subject_ids,
+            prompt: prompt.unwrap_or_default(),
+            aspect,
+            model,
+            seed,
+            seed_source,
+            backend,
+            provider,
+            app,
+        })
+    })
+    .await?;
     plan.reserve_spend()?;
     let id = jobs.queue().submit(plan);
     Ok(id.to_string())
@@ -475,7 +528,12 @@ pub async fn generation_replay(
     };
     let capabilities = backend.capabilities(&generation.model);
     let requires_billing = capabilities.requires_billing;
-    let plan = replay_plan(&root, &assets, generation, &capabilities, backend.as_ref())?;
+    let replay_root = root.clone();
+    let replay_backend = Arc::clone(&backend);
+    let plan = prepare_blocking("Replay preparation stopped unexpectedly.", move || {
+        replay_plan(&replay_root, &assets, generation, &capabilities, replay_backend.as_ref())
+    })
+    .await?;
     if requires_billing && plan.cost_usd_micros == 0 {
         return Err(WobuError::new(
             Code::Invalid,
@@ -518,6 +576,7 @@ fn replay_plan(
     let resolution = Resolution::new(width, height);
     let by_id: HashMap<Id, &Asset> = assets.iter().map(|asset| (asset.id, asset)).collect();
     let mut references = Vec::new();
+    let mut reference_loader = ReferenceLoader::new();
 
     for fragment in original
         .influence_snapshot
@@ -552,13 +611,14 @@ fn replay_plan(
             )
         })?;
         let bucket = capabilities.image_refs.meter(requested_bucket).0;
-        let bytes = std::fs::read(root.join(&asset.rel_path)).map_err(|error| {
-            WobuError::new(
-                Code::Io,
-                "A reference captured by this generation snapshot could not be read.",
-            )
-            .with_detail(error.to_string())
-        })?;
+        let bytes =
+            reference_loader.load(asset_id, &root.join(&asset.rel_path)).map_err(|error| {
+                WobuError::new(
+                    Code::Io,
+                    "A reference captured by this generation snapshot could not be read.",
+                )
+                .with_detail(error.to_string())
+            })?;
         references.push(Reference {
             asset_id,
             role,
@@ -1531,6 +1591,7 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
 
     let assets: HashMap<Id, &Asset> = input.assets.iter().map(|asset| (asset.id, asset)).collect();
     let mut references = Vec::new();
+    let mut reference_loader = ReferenceLoader::new();
     for bucket in negotiated.images().buckets() {
         for fragment in bucket.kept() {
             let asset_id = fragment.asset_id().expect("kept image fragments have asset ids");
@@ -1538,10 +1599,12 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
                 WobuError::new(Code::NoSuchAsset, "A scene reference is no longer in this project.")
                     .with_detail(asset_id.to_string())
             })?;
-            let bytes = std::fs::read(input.root.join(&asset.rel_path)).map_err(|error| {
-                WobuError::new(Code::Io, "A scene reference image could not be read.")
-                    .with_detail(error.to_string())
-            })?;
+            let bytes = reference_loader
+                .load(asset_id, &input.root.join(&asset.rel_path))
+                .map_err(|error| {
+                    WobuError::new(Code::Io, "A scene reference image could not be read.")
+                        .with_detail(error.to_string())
+                })?;
             if let Some(reference) =
                 Reference::from_fragment(*fragment, bucket.bucket(), bytes, asset.mime.clone())
             {
@@ -1836,6 +1899,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
     )?;
     let batch_size = cells.len();
     let mut plans = Vec::with_capacity(batch_size);
+    let mut reference_loader = ReferenceLoader::new();
     for (batch_index, cell) in cells.into_iter().enumerate() {
         let sliders = Sliders::from_pairs(cell.slider_values.iter().copied());
         let mut extracted = match cell.item.view {
@@ -1857,10 +1921,12 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
                     )
                     .with_detail(asset_id.to_string())
                 })?;
-                let bytes = std::fs::read(input.root.join(&asset.rel_path)).map_err(|error| {
-                    WobuError::new(Code::Io, "A reference image could not be read.")
-                        .with_detail(error.to_string())
-                })?;
+                let bytes = reference_loader
+                    .load(asset_id, &input.root.join(&asset.rel_path))
+                    .map_err(|error| {
+                        WobuError::new(Code::Io, "A reference image could not be read.")
+                            .with_detail(error.to_string())
+                    })?;
                 if let Some(reference) =
                     Reference::from_fragment(*fragment, bucket.bucket(), bytes, asset.mime.clone())
                 {
@@ -2780,6 +2846,35 @@ mod tests {
             output_asset_ids: Vec::new(),
             influence_snapshot: InfluenceSnapshot { layers: Vec::new() },
         }
+    }
+
+    #[test]
+    fn sixteen_cell_batch_reads_each_reference_once_and_shares_its_buffer() {
+        let reads = std::cell::Cell::new(0);
+        let mut loader = ReferenceLoader::with_reader(|path| {
+            reads.set(reads.get() + 1);
+            Ok(path.to_string_lossy().as_bytes().to_vec())
+        });
+        let costume = new_id();
+        let palette = new_id();
+
+        let cells: Vec<_> = (0..MAX_GRID_CELLS)
+            .map(|_| {
+                [
+                    loader.load(costume, Path::new("costume.png")).unwrap(),
+                    loader.load(palette, Path::new("palette.png")).unwrap(),
+                ]
+            })
+            .collect();
+
+        assert_eq!(reads.get(), 2, "one filesystem read per unique asset");
+        for cell in &cells[1..] {
+            assert!(Arc::ptr_eq(&cells[0][0], &cell[0]));
+            assert!(Arc::ptr_eq(&cells[0][1], &cell[1]));
+        }
+        assert!(!Arc::ptr_eq(&cells[0][0], &cells[0][1]));
+        assert_eq!(Arc::strong_count(&cells[0][0]), MAX_GRID_CELLS + 1);
+        assert_eq!(Arc::strong_count(&cells[0][1]), MAX_GRID_CELLS + 1);
     }
 
     #[test]
