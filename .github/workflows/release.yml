@@ -1,0 +1,97 @@
+name: Release bundles
+
+# A tag is the release request. The verification job rejects tags that are not
+# SemVer or whose version was not stamped into every application manifest.
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify-version:
+    name: Verify release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: node .github/scripts/verify-release-version.mjs "$GITHUB_REF_NAME"
+
+  bundle:
+    name: Bundle (${{ matrix.platform }})
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Report every platform-specific packaging problem in one run.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux x86_64
+            os: ubuntu-latest
+          - platform: macOS
+            os: macos-latest
+          - platform: Windows x86_64
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: runner.os == 'Linux'
+        name: Install Tauri's system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            wget
+
+      - name: Install the pinned Rust toolchain
+        working-directory: src-tauri
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-${{ matrix.os }}
+
+      - run: npm ci
+
+      # This intentionally has no Apple/Windows signing credentials and no
+      # TAURI_SIGNING_PRIVATE_KEY. See docs/12-releasing.md: beta releases are
+      # unsigned manual downloads, not updater payloads.
+      - name: Build and upload bundles to a draft GitHub release
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Wobu ${{ github.ref_name }}
+          releaseBody: |
+            Wobu beta bundles are currently unsigned and must be downloaded manually.
+            Read the platform install instructions and security warning in
+            [the release guide](https://github.com/${{ github.repository }}/blob/main/docs/12-releasing.md#installing-an-unsigned-beta).
+          generateReleaseNotes: true
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: false

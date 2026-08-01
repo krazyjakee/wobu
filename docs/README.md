@@ -15,6 +15,7 @@ that context automatically.
 | [07 — Projects on File Shares](07-file-shares.md) | Presence, conflicts, network-mount behaviour, performance |
 | [08 — Providers & BYOK](08-providers.md) | Key storage, Gemini, Hunyuan3D, capability negotiation, cost |
 | [09 — Roadmap](09-roadmap.md) | Milestones from prototype to 3D |
+| [12 — Packaging & Releases](12-releasing.md) | Tagged bundles, signing and updater policy, version stamping |
 
 Two constraints shape most of the above and are worth knowing up front:
 
