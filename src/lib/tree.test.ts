@@ -8,6 +8,7 @@ import {
   influenceDependentsOf,
 } from './tree'
 import type { TreeNode } from './tree'
+import type { LinkEdge } from './api'
 import { kindDef, kindIndex, summary } from '../test/fixtures'
 
 const defs = kindIndex([kindDef('species'), kindDef('character'), kindDef('setting')])
@@ -246,6 +247,190 @@ describe('influenceDependentsOf', () => {
       'kael',
       'friend',
     ])
+  })
+
+  it('walks children and enabled links transitively while ignoring muted and dangling edges', () => {
+    const source = summary({ id: 'source', kind: 'culture' })
+    const child = summary({ id: 'child', kind: 'culture', parentId: source.id })
+    const grandchild = summary({ id: 'grandchild', kind: 'culture', parentId: child.id })
+    const linked = summary({ id: 'linked', kind: 'character' })
+    const muted = summary({ id: 'muted', kind: 'character' })
+    const unrelated = summary({ id: 'unrelated', kind: 'character' })
+
+    expect(
+      influenceDependentsOf(
+        source.id,
+        [source, unrelated, grandchild, muted, child, linked],
+        [
+          {
+            fromId: linked.id,
+            toId: grandchild.id,
+            role: 'member_of',
+            weight: 1,
+            enabled: true,
+          },
+          {
+            fromId: muted.id,
+            toId: source.id,
+            role: 'member_of',
+            weight: 1,
+            enabled: false,
+          },
+          {
+            fromId: 'missing-subject',
+            toId: source.id,
+            role: 'member_of',
+            weight: 1,
+            enabled: true,
+          },
+          {
+            fromId: unrelated.id,
+            toId: 'missing-source',
+            role: 'member_of',
+            weight: 1,
+            enabled: true,
+          },
+        ],
+      ).map((node) => node.id),
+    ).toEqual(['grandchild', 'child', 'linked'])
+  })
+
+  it('allows related_to into the source but never uses it deeper in the reverse walk', () => {
+    const lateralSource = summary({ id: 'lateral-source', kind: 'culture' })
+    const direct = summary({ id: 'direct', kind: 'culture' })
+    const throughDirect = summary({ id: 'through-direct', kind: 'character' })
+    const normalMiddle = summary({ id: 'normal-middle', kind: 'culture' })
+    const stopped = summary({ id: 'stopped', kind: 'character' })
+    const lateral = (fromId: string, toId: string): LinkEdge => ({
+      fromId,
+      toId,
+      role: 'related_to',
+      weight: 1,
+      enabled: true,
+    })
+    const inherited = (fromId: string, toId: string): LinkEdge => ({
+      fromId,
+      toId,
+      role: 'member_of',
+      weight: 1,
+      enabled: true,
+    })
+
+    expect(
+      influenceDependentsOf(
+        lateralSource.id,
+        [lateralSource, stopped, throughDirect, normalMiddle, direct],
+        [
+          lateral(direct.id, lateralSource.id),
+          inherited(throughDirect.id, direct.id),
+          inherited(normalMiddle.id, lateralSource.id),
+          lateral(stopped.id, normalMiddle.id),
+        ],
+      ).map((node) => node.id),
+    ).toEqual(['through-direct', 'normal-middle', 'direct'])
+  })
+
+  it('makes each singleton root influence every other node', () => {
+    const ordinary = summary({ id: 'ordinary', kind: 'character' })
+    const world = summary({ id: 'world', kind: 'world_bible' })
+    const style = summary({ id: 'style', kind: 'style_guide' })
+    const all = [ordinary, world, style]
+
+    expect(influenceDependentsOf(style.id, all, []).map((node) => node.id)).toEqual([
+      'ordinary',
+      'world',
+    ])
+    expect(influenceDependentsOf(world.id, all, []).map((node) => node.id)).toEqual([
+      'ordinary',
+      'style',
+    ])
+  })
+
+  it('matches the indexed reverse rule when a root and lateral subject meet', () => {
+    const source = summary({ id: 'source', kind: 'culture' })
+    const middle = summary({ id: 'middle', kind: 'culture' })
+    const style = summary({ id: 'style', kind: 'style_guide' })
+    const lateral = summary({ id: 'lateral', kind: 'character' })
+    const ordinary = summary({ id: 'ordinary', kind: 'character' })
+    const links: LinkEdge[] = [
+      {
+        fromId: style.id,
+        toId: middle.id,
+        role: 'styled_by',
+        weight: 1,
+        enabled: true,
+      },
+      {
+        fromId: lateral.id,
+        toId: middle.id,
+        role: 'related_to',
+        weight: 1,
+        enabled: true,
+      },
+      {
+        fromId: middle.id,
+        toId: source.id,
+        role: 'member_of',
+        weight: 1,
+        enabled: true,
+      },
+    ]
+
+    // `Index::dependents_of` applies the singleton shortcut only when the
+    // singleton itself is the queried source. From any other source it admits
+    // related_to on the first reverse hop only, so neither `lateral` nor an
+    // unrelated subject is part of this downstream set.
+    expect(
+      influenceDependentsOf(source.id, [lateral, source, ordinary, style, middle], links).map(
+        (node) => node.id,
+      ),
+    ).toEqual(['style', 'middle'])
+  })
+
+  it('terminates on mixed parent and link cycles without including the source itself', () => {
+    const source = summary({ id: 'source', kind: 'culture', parentId: 'parent' })
+    const parent = summary({ id: 'parent', kind: 'culture', parentId: source.id })
+    const dependent = summary({ id: 'dependent', kind: 'character' })
+    const links: LinkEdge[] = [
+      {
+        fromId: dependent.id,
+        toId: parent.id,
+        role: 'member_of',
+        weight: 1,
+        enabled: true,
+      },
+      {
+        fromId: parent.id,
+        toId: dependent.id,
+        role: 'located_in',
+        weight: 1,
+        enabled: true,
+      },
+    ]
+
+    expect(
+      influenceDependentsOf(source.id, [dependent, source, parent], links).map((node) => node.id),
+    ).toEqual(['dependent', 'parent'])
+  })
+
+  it('returns an empty list for an unknown source', () => {
+    expect(influenceDependentsOf('missing', nodes, links)).toEqual([])
+  })
+
+  it('handles a few-thousand-node reverse traversal as one lookup', () => {
+    const count = 5_000
+    const large = Array.from({ length: count }, (_, index) =>
+      summary({
+        id: `node-${index}`,
+        kind: 'culture',
+        parentId: index === 0 ? null : `node-${index - 1}`,
+      }),
+    )
+
+    const result = influenceDependentsOf(large[0]!.id, large, [])
+    expect(result).toHaveLength(count - 1)
+    expect(result[0]!.id).toBe('node-1')
+    expect(result.at(-1)!.id).toBe(`node-${count - 1}`)
   })
 })
 

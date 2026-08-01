@@ -117,13 +117,12 @@ export function descendantsOf(id: string, nodes: NodeSummary[]): Set<string> {
 /**
  * Every other subject whose resolved influence stack can contain `sourceId`.
  *
- * This mirrors the backend walk closely enough to make a pin's reach visible
- * before it is committed: subject first, then the two project roots, implicit
- * parents before explicit links, enabled links only, first visit wins, and a
- * lateral `related_to` source does not expand into that source's own ancestry.
- * The generation compiler remains authoritative; this is the project-wide
- * inverse view it would be wasteful to request once per node just to show a
- * consequence sentence on a tile.
+ * This mirrors the backend's project-wide inverse walk: singleton sources
+ * influence the whole project, parent edges are implicit, disabled links are
+ * absent, and the first reverse hop may cross a lateral `related_to` edge while
+ * later hops may not. The generation compiler remains authoritative; it would
+ * be wasteful to resolve a stack once per node just to show a consequence
+ * sentence on a tile.
  */
 export function influenceDependentsOf(
   sourceId: string,
@@ -133,47 +132,56 @@ export function influenceDependentsOf(
   const byId = indexNodes(nodes)
   if (!byId.has(sourceId)) return []
 
-  const outgoing = new Map<string, LinkEdge[]>()
-  for (const edge of links) {
-    const edges = outgoing.get(edge.fromId)
-    if (edges) edges.push(edge)
-    else outgoing.set(edge.fromId, [edge])
-  }
   const roots = [
     nodes.find((node) => node.kind === 'style_guide'),
     nodes.find((node) => node.kind === 'world_bible'),
   ].filter((node): node is NodeSummary => node !== undefined)
 
-  const reachesSource = (subject: NodeSummary): boolean => {
-    const seen = new Set<string>()
-    const queue: Array<{ id: string; lateral: boolean }> = []
-    const enqueue = (id: string, lateral: boolean) => {
-      if (!seen.has(id) && byId.has(id)) {
-        seen.add(id)
-        queue.push({ id, lateral })
-      }
-    }
-
-    enqueue(subject.id, false)
-    for (const root of roots) enqueue(root.id, false)
-
-    for (let cursor = 0; cursor < queue.length; cursor += 1) {
-      const reached = queue[cursor]
-      if (!reached) continue
-      if (reached.id === sourceId) return true
-      if (reached.lateral) continue
-
-      const current = byId.get(reached.id)
-      if (!current) continue
-      if (current.parentId) enqueue(current.parentId, false)
-      for (const edge of outgoing.get(current.id) ?? []) {
-        if (edge.enabled) enqueue(edge.toId, edge.role === 'related_to')
-      }
-    }
-    return false
+  // A singleton is seeded into every subject's stack rather than reached by
+  // an edge, so its reverse adjacency is the whole project.
+  if (roots.some((root) => root.id === sourceId)) {
+    return nodes.filter((node) => node.id !== sourceId)
   }
 
-  return nodes.filter((node) => node.id !== sourceId && reachesSource(node))
+  type Referrer = { id: string; lateral: boolean }
+  const referrers = new Map<string, Referrer[]>()
+  const addReferrer = (toId: string, referrer: Referrer) => {
+    if (!byId.has(toId) || !byId.has(referrer.id)) return
+    const entries = referrers.get(toId)
+    if (entries) entries.push(referrer)
+    else referrers.set(toId, [referrer])
+  }
+
+  // parentId is an implicit, always-enabled influence edge from child to
+  // parent, so the child is a reverse referrer of its parent.
+  for (const node of nodes) {
+    if (node.parentId) addReferrer(node.parentId, { id: node.id, lateral: false })
+  }
+  for (const edge of links) {
+    if (!edge.enabled) continue
+    addReferrer(edge.toId, { id: edge.fromId, lateral: edge.role === 'related_to' })
+  }
+
+  const visited = new Set<string>([sourceId])
+  const queue = [sourceId]
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor]
+    if (!current) continue
+
+    for (const referrer of referrers.get(current) ?? []) {
+      // A lateral source is included in a subject's stack but never expanded.
+      // Reversed, that means any role may cross the first hop into sourceId,
+      // while subsequent hops must reject related_to.
+      if (cursor !== 0 && referrer.lateral) continue
+      if (visited.has(referrer.id)) continue
+      visited.add(referrer.id)
+      queue.push(referrer.id)
+    }
+  }
+
+  // Traversal order is an implementation detail; callers render in the stable
+  // order supplied by the node query, as the former per-subject filter did.
+  return nodes.filter((node) => node.id !== sourceId && visited.has(node.id))
 }
 
 export function indexNodes(nodes: NodeSummary[] | undefined): Map<string, NodeSummary> {
