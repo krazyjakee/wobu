@@ -41,8 +41,8 @@
 //! surprising one.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -108,6 +108,48 @@ pub struct AppState {
     /// every command needs for the whole duration of a scan that can take
     /// minutes on a NAS.
     opening: Arc<Mutex<Option<Cancel>>>,
+    /// Whoever needs to know which project is open — in practice `sync.rs`, and
+    /// nothing else. See [`Handover`].
+    ///
+    /// A `Weak` rather than an `Arc`, and that is not tidiness: the sync manager
+    /// holds an [`AppState`] clone so it can reach the open project, so an
+    /// `Arc` here would be a cycle that never drops and a `SyncEndpoint` that
+    /// outlives the process's willingness to shut it down. `None` after the
+    /// manager is gone means "nobody is syncing", which is exactly right.
+    handover: Arc<Mutex<Option<Weak<dyn Handover>>>>,
+}
+
+/// Told, synchronously, which project the window is about to hold.
+///
+/// The whole of the #82 race, in two calls. `Project` owns a `rusqlite`
+/// connection to an index keyed by project ULID in local app data, and sync
+/// opens projects nobody is looking at — so a project that is *both* open in the
+/// window and held by the sync manager would be two `Project` values writing to
+/// one index and one folder, each maintaining its own idea of what is on disk.
+/// The folder would still be canonical and the index would still rebuild, but
+/// `world:changed` would stop being true and a fast-forward could be decided
+/// against a row the other handle had already moved.
+///
+/// So there is exactly one holder at a time, and this is the handover. It is
+/// deliberately **not** a channel: an event queued for a background task leaves
+/// a window in which both halves believe they own the folder, and that window is
+/// the bug. Both methods block until sync has let go, which is at most one
+/// synchronous store step — a `reconcile`, an `apply` batch — because the rule
+/// in this module's header holds on the sync side too and no network I/O ever
+/// runs with a replica's lock held.
+///
+/// Implemented by `crate::sync::SyncManager` and by nothing else. It is a trait
+/// so that this module does not have to know what a `SyncEndpoint` is; a project
+/// opens on a machine that will never sync, and `state.rs` should keep compiling
+/// if the sync module is torn out.
+pub trait Handover: Send + Sync + 'static {
+    /// This project is about to become the open one. Give the folder back.
+    ///
+    /// Called with the project mutex *not* held and before the slot is filled,
+    /// so an implementation may block and may not call back into [`AppState`].
+    fn opening(&self, project: Id, root: &Path);
+    /// The open project is about to be dropped. Sync may take it again.
+    fn closing(&self, project: Id);
 }
 
 impl AppState {
@@ -118,11 +160,51 @@ impl AppState {
         f(&mut open.project)
     }
 
+    /// Like [`with`](Self::with), but only if the open project is the one
+    /// named — otherwise `no_project_open`.
+    ///
+    /// For sync, and the check is the point rather than a formality. A
+    /// background round decided which project it was about when the connection
+    /// opened; by the time it has bytes to write, the user may have closed that
+    /// world and opened another. Reaching for "the open project" at that moment
+    /// would fold one project's incoming nodes into a different one's folder,
+    /// and every hash involved would agree that it was fine.
+    pub fn with_project<T>(
+        &self,
+        project: Id,
+        f: impl FnOnce(&mut Project) -> CommandResult<T>,
+    ) -> CommandResult<T> {
+        let mut guard = self.slot.lock();
+        let open = guard.as_mut().filter(|o| o.project.id() == project);
+        let open = open.ok_or_else(WobuError::no_project_open)?;
+        f(&mut open.project)
+    }
+
     /// Like [`with`](Self::with), but for callers that are fine with there
     /// being nothing open.
     pub fn peek<T>(&self, f: impl FnOnce(Option<&Project>) -> T) -> T {
         let guard = self.slot.lock();
         f(guard.as_ref().map(|o| &o.project))
+    }
+
+    /// Which project is open, if any. One lock, one field, no borrow — the
+    /// shape a background task can use without holding anything.
+    pub fn open_id(&self) -> Option<Id> {
+        self.slot.lock().as_ref().map(|o| o.project.id())
+    }
+
+    /// Register the sync manager's interest in open/close. Idempotent by
+    /// replacement; there is only ever one.
+    pub fn observe(&self, handover: Weak<dyn Handover>) {
+        *self.handover.lock() = Some(handover);
+    }
+
+    /// The observer, if there still is one. Taken out from under the lock,
+    /// because calling it holds the *replica's* lock and a sync step inside that
+    /// lock reaches back for this one — the two-lock cycle this method exists to
+    /// keep impossible.
+    fn handover(&self) -> Option<Arc<dyn Handover>> {
+        self.handover.lock().as_ref().and_then(Weak::upgrade)
     }
 
     pub fn is_offline(&self) -> bool {
@@ -184,8 +266,17 @@ impl AppState {
     /// open before, then start watching its folder.
     pub fn install(&self, app: &AppHandle, project: Project) {
         let root = project.root().to_path_buf();
+        let id = project.id();
 
         self.close();
+        // Between here and the slot being filled, sync has already let go and
+        // the window does not hold it yet, so a round mid-flight finds nothing
+        // and gives up on this pass. That is the correct answer to "who owns the
+        // folder right now" — briefly, nobody — and it is a far better one than
+        // two handles both saying "me".
+        if let Some(handover) = self.handover() {
+            handover.opening(id, &root);
+        }
         let generation = self.generation.load(Ordering::SeqCst);
         // After `close`, deliberately: reopening the same folder must not leave
         // the previous session's file beside the new one, which would show the
@@ -205,6 +296,15 @@ impl AppState {
         // below sees a stale generation and bows out rather than reconciling a
         // project on its way out.
         self.generation.fetch_add(1, Ordering::SeqCst);
+
+        // Read the id and give the lock straight back before telling sync, so
+        // that a round which is inside `with_project` at this instant can finish
+        // and release it. The handover then blocks on the replica's lock, which
+        // is the *other* order — hence the two statements rather than one.
+        let closing = self.slot.lock().as_ref().map(|o| o.project.id());
+        if let (Some(id), Some(handover)) = (closing, self.handover()) {
+            handover.closing(id);
+        }
 
         // Written as take-then-drop rather than `*self.slot.lock() = None` so
         // that the `Project` — and with it the SQLite index handle — is dropped
@@ -338,13 +438,14 @@ impl AppState {
     }
 
     /// A detached clone sharing the same slot and generation, for the watcher
-    /// callback and the reconnect thread — neither of which can borrow from a
-    /// Tauri `State<'_, _>`.
-    fn handle(&self) -> AppState {
+    /// callback, the reconnect thread and the sync manager — none of which can
+    /// borrow from a Tauri `State<'_, _>`.
+    pub fn handle(&self) -> AppState {
         AppState {
             slot: Arc::clone(&self.slot),
             generation: Arc::clone(&self.generation),
             opening: Arc::clone(&self.opening),
+            handover: Arc::clone(&self.handover),
         }
     }
 }

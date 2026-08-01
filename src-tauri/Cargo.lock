@@ -7617,6 +7617,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "iroh",
  "keyring",
  "parking_lot",
  "serde",
@@ -7626,11 +7627,13 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "thiserror 2.0.19",
+ "tokio",
  "wobu-core",
  "wobu-influence",
  "wobu-jobs",
  "wobu-llm",
  "wobu-store",
+ "wobu-sync",
 ]
 
 [[package]]

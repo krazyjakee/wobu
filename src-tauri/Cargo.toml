@@ -13,6 +13,7 @@ wobu-influence = { path = "crates/wobu-influence" }
 wobu-llm = { path = "crates/wobu-llm" }
 wobu-imagine = { path = "crates/wobu-imagine" }
 wobu-jobs = { path = "crates/wobu-jobs" }
+wobu-sync = { path = "crates/wobu-sync" }
 
 [package]
 name = "wobu"
@@ -40,6 +41,13 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 async-trait = "0.1.91"
 chrono = "0.4.45"
+# Named directly because `sync/bodies.rs` speaks a protocol on the streams of a
+# `wobu_sync::Session`'s connection, and `Connection`, `SendStream` and
+# `RecvStream` are iroh's types. Exactly the version `wobu-sync` pins — the
+# spike found that anything else fails at resolve time, sometimes while blaming
+# `ed25519-dalek` rather than iroh — so the lock unifies and this adds no
+# package that was not already in the binary.
+iroh = "1.0.3"
 keyring = "4.1.5"
 parking_lot = "0.12.5"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -48,8 +56,21 @@ tauri = "2.11.5"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-opener = "2.5.4"
 thiserror = "2.0.19"
+# The runtime Tauri already started, named here so `sync.rs` can put a deadline
+# on a network step and a channel between the poller and the manager. The exact
+# version `wobu-sync` declares, so the lock unifies and there is one runtime in
+# the binary rather than two — a second one would put the sync accept loop on
+# threads the app cannot cancel, which is the shutdown hang #82 exists to avoid.
+tokio = { version = "1.53.1", features = [
+    "rt",
+    "rt-multi-thread",
+    "time",
+    "macros",
+    "sync",
+] }
 wobu-core = { workspace = true }
 wobu-influence = { workspace = true }
 wobu-jobs = { workspace = true }
 wobu-llm = { workspace = true }
 wobu-store = { workspace = true }
+wobu-sync = { workspace = true }

@@ -8,8 +8,9 @@ mod error;
 mod keys;
 mod redact;
 mod state;
+mod sync;
 
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 use state::AppState;
 
@@ -42,12 +43,24 @@ pub fn run() {
         // project it belongs to so an accept can never be answered against a
         // different world.
         .manage(enhance::Pending::default())
+        // Beside `AppState` rather than inside it, and that is #82's whole
+        // point: that slot holds exactly one project and only while somebody has
+        // it open, and syncing worlds nobody is looking at is the feature.
+        .manage(sync::SyncState::default())
         .setup(|app| {
             // Not another `.manage(Default::default())`: the queue reports
             // itself by emitting, and there is no `AppHandle` to emit through
             // until here. `state.rs` says why it sits beside `AppState` rather
             // than inside it.
             app.manage(state::Jobs::start(app.handle()));
+            // Loads the peer identity and names this installation *before*
+            // returning — a conflict sibling written before the alias is in
+            // place carries `wobu-store`'s per-process fallback name, and
+            // `peer::install` refuses a second value rather than replacing the
+            // first. Binding the endpoint is the slow half and happens on a
+            // task; every sync command answers "still starting" until it lands.
+            let state = app.state::<AppState>().handle();
+            app.state::<sync::SyncState>().start(app.handle(), state);
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -114,7 +127,27 @@ pub fn run() {
             commands::project_provider_select,
             commands::job_cancel,
             commands::job_list,
+            sync::sync_status,
+            sync::sync_share,
+            sync::sync_accept,
+            sync::sync_unshare,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // `build` + `run` rather than `run` alone, and the difference is one
+        // event. `SyncEndpoint` holds iroh's `Router`, which is `#[must_use]`
+        // and aborts its accept loop when dropped — so letting the process fall
+        // over the end of `main` would sever every inbound connection silently,
+        // at whatever point in a transfer it happened to be. `RunEvent::Exit` is
+        // the last moment there is still a runtime to wind it down on.
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, RunEvent::Exit) {
+                // On the main thread, with no locks held. Both halves matter: a
+                // hang here is a window that will not close, and a shutdown that
+                // ran while holding the project mutex would wait for a round
+                // that is waiting for the mutex. `SyncManager::shutdown` carries
+                // its own deadline for the case this reasoning is wrong.
+                app.state::<sync::SyncState>().stop();
+            }
+        });
 }
