@@ -174,6 +174,10 @@ These are constraints on the writer, and each one exists because something break
 - **No symlinks.** They don't survive SMB, zip, or most sync clients.
 - **Generation records are write-once**, named by ULID, never mutated. Append-only means no
   conflict surface.
+- **Deleting a node promotes its children to the deleted node's parent.** Only the selected
+  Markdown file is removed. Each child keeps its stable `nodes/<kind>/<slug>.md` path and has its
+  `parent` frontmatter rewritten; links pointing at the deleted id are removed. This avoids both
+  silently deleting a subtree and leaving dead influence edges behind.
 - **Secrets are never written to the project folder.** API keys live in the OS keychain;
   `project.json` records only *which* provider and model a project prefers. This matters
   enormously now that folders are shared — see [08 — Providers & BYOK](08-providers.md).

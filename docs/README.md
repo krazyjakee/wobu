@@ -16,6 +16,7 @@ that context automatically.
 | [08 — Providers & BYOK](08-providers.md) | Key storage, Gemini, Hunyuan3D, capability negotiation, cost |
 | [09 — Roadmap](09-roadmap.md) | Milestones from prototype to 3D |
 | [12 — Packaging & Releases](12-releasing.md) | Tagged bundles, signing and updater policy, version stamping |
+| [13 — Acceptance Evidence](13-acceptance-evidence.md) | Repeatable M1/M5 contracts and the live smoke checks they cannot replace |
 
 Two constraints shape most of the above and are worth knowing up front:
 
