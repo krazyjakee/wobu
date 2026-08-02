@@ -72,14 +72,16 @@ pub mod shares;
 #[cfg(test)]
 mod integration;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
-use wobu_core::Id;
+use tokio::sync::Notify;
+use wobu_core::{Id, SCHEMA_VERSION};
+use wobu_store::ProjectMeta;
 use wobu_sync::{Disposition, Identity, Origin, Reach, Ticket};
 
 use crate::diag;
@@ -122,6 +124,27 @@ const ONLINE_WAIT: Duration = Duration::from_secs(10);
 #[derive(Default)]
 pub struct SyncState {
     manager: Arc<Mutex<Option<Arc<SyncManager>>>>,
+    accepting: Arc<Mutex<Option<Arc<Notify>>>>,
+}
+
+struct AcceptLease {
+    slot: Arc<Mutex<Option<Arc<Notify>>>>,
+    cancel: Arc<Notify>,
+}
+
+impl AcceptLease {
+    fn cancelled(&self) -> tokio::sync::futures::Notified<'_> {
+        self.cancel.notified()
+    }
+}
+
+impl Drop for AcceptLease {
+    fn drop(&mut self) {
+        let mut active = self.slot.lock();
+        if active.as_ref().is_some_and(|current| Arc::ptr_eq(current, &self.cancel)) {
+            *active = None;
+        }
+    }
 }
 
 impl SyncState {
@@ -184,6 +207,28 @@ impl SyncState {
         self.get().ok_or_else(|| {
             WobuError::new(Code::Io, "Sync is still starting up. Try again in a moment.")
         })
+    }
+
+    fn begin_accept(&self) -> CommandResult<AcceptLease> {
+        let mut accepting = self.accepting.lock();
+        if accepting.is_some() {
+            return Err(WobuError::new(
+                Code::AlreadyExists,
+                "Another shared project is already being accepted.",
+            ));
+        }
+        let cancel = Arc::new(Notify::new());
+        *accepting = Some(Arc::clone(&cancel));
+        drop(accepting);
+        Ok(AcceptLease { slot: Arc::clone(&self.accepting), cancel })
+    }
+
+    fn cancel_accept(&self) {
+        if let Some(cancel) = self.accepting.lock().as_ref() {
+            // `notify_one` stores a permit if the accept task has not reached
+            // its select yet, closing the immediate Cancel race.
+            cancel.notify_one();
+        }
     }
 
     /// Wind sync down, from the synchronous world.
@@ -349,6 +394,9 @@ pub struct Accepted {
     /// does not do, because a background task must not choose where somebody's
     /// world lives. Cloning is #85's.
     pub joined: bool,
+    /// The local folder to open after a join or completed clone. Absent on the
+    /// first, destination-less probe for a project this machine does not hold.
+    pub root: Option<String>,
 }
 
 /* ── commands ─────────────────────────────────────────────────────────────── */
@@ -425,18 +473,191 @@ pub async fn sync_share(
 }
 
 /// Accept a ticket somebody pasted.
+///
+/// A destination-less call is a cheap, non-mutating probe for the launcher. If
+/// the project is already present it joins that replica immediately. Otherwise
+/// the launcher asks where to put a clone and calls again with that parent
+/// directory. `cancel` deliberately travels through this same registered
+/// command so a second invocation can stop the first while it is awaiting the
+/// peer.
 #[tauri::command]
-pub async fn sync_accept(token: String, sync: State<'_, SyncState>) -> CommandResult<Accepted> {
+pub async fn sync_accept(
+    token: Option<String>,
+    destination: Option<String>,
+    cancel: Option<bool>,
+    sync: State<'_, SyncState>,
+) -> CommandResult<Option<Accepted>> {
+    if cancel.unwrap_or(false) {
+        sync.cancel_accept();
+        return Ok(None);
+    }
     let manager = sync.manager()?;
+    let token = token.ok_or_else(|| WobuError::new(Code::Invalid, "Paste a Wobu share link."))?;
     let ticket: Ticket = token.parse().map_err(WobuError::from)?;
     let alias = ticket.alias();
     let project = ticket.project();
 
-    let joined = manager.accept(&ticket) == Disposition::Join;
-    if joined {
+    if manager.accept(&ticket) == Disposition::Join {
         diag::info(format!("sync: joined {project} with {alias}"));
+        let root = manager.root_of(project).map(|path| path.to_string_lossy().into_owned());
+        return Ok(Some(Accepted { project, alias, joined: true, root }));
     }
-    Ok(Accepted { project, alias, joined })
+
+    let Some(destination) = destination else {
+        return Ok(Some(Accepted { project, alias, joined: false, root: None }));
+    };
+    // The lease is RAII: every return path, including scaffold validation,
+    // releases the operation slot. A Cancel during this synchronous step is a
+    // stored Notify permit when the network wait starts.
+    let accept = sync.begin_accept()?;
+    let scaffold = create_clone_scaffold(Path::new(&destination), project)?;
+    let root = scaffold.root.clone();
+    manager.accept_clone(&ticket, &root);
+
+    let downloaded = tokio::select! {
+        result = manager.run_ticket(project, &ticket) => result,
+        () = accept.cancelled() => Err(WobuError::new(Code::Cancelled, "Accepting the shared project was cancelled.")),
+    };
+    match downloaded {
+        Ok(()) => {
+            scaffold.complete();
+            manager.start_poller(project);
+            Ok(Some(Accepted {
+                project,
+                alias,
+                joined: false,
+                root: Some(root.to_string_lossy().into_owned()),
+            }))
+        }
+        Err(error) => {
+            cleanup_clone(&manager, project, &root);
+            Err(error)
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CloneMarker {
+    project: Id,
+    nonce: Id,
+}
+
+struct CloneScaffold {
+    root: PathBuf,
+    marker: PathBuf,
+}
+
+impl CloneScaffold {
+    fn complete(self) {
+        if let Err(error) = std::fs::remove_file(&self.marker) {
+            diag::error(format!(
+                "sync: could not remove completed clone marker {}: {error}",
+                self.marker.display()
+            ));
+        }
+    }
+}
+
+fn create_clone_scaffold(parent: &Path, project: Id) -> CommandResult<CloneScaffold> {
+    if !parent.is_dir() {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Choose an existing destination folder for the shared project.",
+        ));
+    }
+    let short = project.to_string().chars().take(8).collect::<String>().to_lowercase();
+    let root = parent.join(format!("shared-{short}.wobu"));
+    let created_root = match std::fs::create_dir(&root) {
+        Ok(()) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
+        Err(error) => return Err(wobu_store::Error::io(&root, error).into()),
+    };
+    let metadata =
+        std::fs::symlink_metadata(&root).map_err(|error| wobu_store::Error::io(&root, error))?;
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "The clone destination is not a regular folder.",
+        ));
+    }
+    let marker = root.join(".wobu/accepting.json");
+    let created = (|| -> wobu_store::Result<()> {
+        let path = root.join("project.json");
+        if !created_root {
+            // Validate ownership before creating even one child. An unrelated
+            // collision, including one with hostile child symlinks, remains
+            // byte-for-byte untouched when refused.
+            let marker_bytes =
+                std::fs::read(&marker).map_err(|error| wobu_store::Error::io(&marker, error))?;
+            let clone_marker: CloneMarker = serde_json::from_slice(&marker_bytes)?;
+            if clone_marker.project != project {
+                return Err(wobu_store::Error::AlreadyExists(root.clone()));
+            }
+            let existing: ProjectMeta = serde_json::from_slice(
+                &std::fs::read(&path).map_err(|error| wobu_store::Error::io(&path, error))?,
+            )?;
+            if existing.id != project {
+                return Err(wobu_store::Error::AlreadyExists(root.clone()));
+            }
+        }
+        for rel in [
+            "nodes",
+            "assets/originals",
+            "assets/thumbs",
+            "generations",
+            ".wobu/tmp",
+            ".wobu/sessions",
+        ] {
+            wobu_store::paths::ensure_dir(&root.join(rel))?;
+        }
+        let meta = ProjectMeta {
+            id: project,
+            name: format!("Shared project {short}"),
+            schema_version: SCHEMA_VERSION,
+            created_at: chrono::Utc::now(),
+            providers: serde_json::Map::new(),
+            // Match the store's default for a newly created project. The
+            // canonical metadata is not part of the node-sync protocol yet.
+            spend_ceiling_usd_micros: Some(10_000_000),
+        };
+        if created_root {
+            use std::io::Write as _;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .map_err(|error| wobu_store::Error::io(&path, error))?;
+            file.write_all(&serde_json::to_vec_pretty(&meta)?)
+                .map_err(|error| wobu_store::Error::io(&path, error))?;
+            file.sync_all().map_err(|error| wobu_store::Error::io(&path, error))?;
+            let clone_marker = CloneMarker { project, nonce: wobu_core::new_id() };
+            std::fs::write(&marker, serde_json::to_vec_pretty(&clone_marker)?)
+                .map_err(|error| wobu_store::Error::io(&marker, error))?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = created {
+        // Never recursively delete here. A person, another process, or a
+        // completed atomic sync write may already have placed recoverable data
+        // in this path. Only a verified marker may resume it.
+        return Err(error.into());
+    }
+    Ok(CloneScaffold { root, marker })
+}
+
+fn cleanup_clone(manager: &SyncManager, project: Id, root: &Path) {
+    if let Err(error) = manager.unshare(project) {
+        diag::error(format!(
+            "sync: could not discard cancelled clone registration: {}",
+            error.message
+        ));
+    }
+    // Keep the marker and every downloaded file. Cancellation can land after
+    // an atomic node write; recursively deleting the directory would turn
+    // Cancel into data loss. Selecting the same parent later resumes only after
+    // marker and project-id validation.
+    diag::info(format!("sync: kept resumable partial clone at {}", root.display()));
 }
 
 /// Stop syncing a project, and forget everything ever agreed about it.
@@ -465,6 +686,63 @@ pub mod tests {
         let dir = std::env::temp_dir().join(format!("wobu-{name}-{}", new_id()));
         std::fs::create_dir_all(&dir).expect("a temp directory");
         dir
+    }
+
+    #[test]
+    fn a_scaffold_failure_does_not_poison_the_next_accept() {
+        let state = SyncState::default();
+        let missing = scratch("missing-accept-parent").join("not-there");
+        let active = state.begin_accept().expect("an accept starts");
+        assert!(create_clone_scaffold(&missing, new_id()).is_err());
+        drop(active);
+
+        assert!(state.begin_accept().is_ok(), "the accept slot stayed occupied");
+    }
+
+    #[tokio::test]
+    async fn cancel_before_the_accept_waits_is_not_lost() {
+        let state = SyncState::default();
+        let cancel = state.begin_accept().expect("an accept starts");
+        state.cancel_accept();
+        tokio::time::timeout(Duration::from_millis(50), cancel.cancelled())
+            .await
+            .expect("the stored cancellation permit was lost");
+    }
+
+    #[test]
+    fn an_unmarked_clone_collision_is_not_modified() {
+        let parent = scratch("clone-collision");
+        let project = new_id();
+        let short = project.to_string().chars().take(8).collect::<String>().to_lowercase();
+        let collision = parent.join(format!("shared-{short}.wobu"));
+        std::fs::create_dir(&collision).unwrap();
+        let sentinel = collision.join("belongs-to-someone-else.txt");
+        std::fs::write(&sentinel, b"untouched").unwrap();
+
+        assert!(create_clone_scaffold(&parent, project).is_err());
+        let entries: Vec<_> = std::fs::read_dir(&collision)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(entries, vec![sentinel.file_name().unwrap()]);
+        assert_eq!(std::fs::read(&sentinel).unwrap(), b"untouched");
+
+        let _ = std::fs::remove_dir_all(parent);
+    }
+
+    #[test]
+    fn a_verified_partial_clone_can_resume_without_deleting_downloaded_files() {
+        let parent = scratch("resume-clone");
+        let project = new_id();
+        let first = create_clone_scaffold(&parent, project).expect("initial scaffold");
+        let recovered = first.root.join("nodes/recovered.md");
+        std::fs::write(&recovered, "recoverable").unwrap();
+
+        let resumed = create_clone_scaffold(&parent, project).expect("verified resume");
+        assert_eq!(resumed.root, first.root);
+        assert_eq!(std::fs::read_to_string(recovered).unwrap(), "recoverable");
+
+        let _ = std::fs::remove_dir_all(parent);
     }
 
     /// Counts `world:changed` instead of emitting it, because an `AppHandle`

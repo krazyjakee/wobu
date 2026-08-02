@@ -13,6 +13,7 @@ import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { WindowControls } from './WindowControls'
 import { ContextMenu } from './navigator/ContextMenu'
+import { AcceptTicketSheet } from './AcceptTicketSheet'
 
 /**
  * What a slow open looks like.
@@ -75,6 +76,7 @@ export function Launcher({ error }: { error: string | null }) {
   const openProject = useOpenProject()
   const forgetRecent = useForgetRecentProject()
   const [newOpen, setNewOpen] = useState(false)
+  const [acceptOpen, setAcceptOpen] = useState(false)
   const [openFailure, setOpenFailure] = useState<{ id: string; message: string } | null>(null)
 
   const busy = openProject.isPending
@@ -132,6 +134,10 @@ export function Launcher({ error }: { error: string | null }) {
               <p>Author the hierarchy once. Every generation inherits it.</p>
             </div>
             <div className="lch-actions">
+              <button className="btn" onClick={() => setAcceptOpen(true)} disabled={busy}>
+                <Icon name="link" size="sm" />
+                Accept ticket…
+              </button>
               <button className="btn" onClick={pickFolder} disabled={busy}>
                 <Icon name="folder" size="sm" />
                 Open folder…
@@ -171,6 +177,12 @@ export function Launcher({ error }: { error: string | null }) {
       </div>
 
       {newOpen && <NewProjectSheet onClose={() => setNewOpen(false)} />}
+      {acceptOpen && (
+        <AcceptTicketSheet
+          onClose={() => setAcceptOpen(false)}
+          onOpen={(root) => openProject.mutateAsync(root)}
+        />
+      )}
     </div>
   )
 }

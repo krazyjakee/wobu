@@ -21,7 +21,7 @@ the initial plan.
 | [M0 — Foundations & project hygiene](https://github.com/krazyjakee/wobu/milestone/9) | **Implemented** | CI, tests, errors, undo, packaging, and release infrastructure ship; stale-document reconciliation was completed by [#116](https://github.com/krazyjakee/wobu/issues/116). |
 | [M1 — Shell and world tree](https://github.com/krazyjakee/wobu/milestone/1) | **Validated** | [M1 acceptance #15](https://github.com/krazyjakee/wobu/issues/15) and [acceptance evidence](13-acceptance-evidence.md#m1--structured-world-notes). |
 | [M2 — Shareable projects](https://github.com/krazyjakee/wobu/milestone/2) | **Implemented** | Heartbeats/presence ([#16](https://github.com/krazyjakee/wobu/issues/16), [#17](https://github.com/krazyjakee/wobu/issues/17)), conflict and degraded-share handling ([#18](https://github.com/krazyjakee/wobu/issues/18) through [#21](https://github.com/krazyjakee/wobu/issues/21)), and network/guarded-write coverage ([#22](https://github.com/krazyjakee/wobu/issues/22), [#23](https://github.com/krazyjakee/wobu/issues/23)) are closed. |
-| [M3 — Peer-to-peer sync](https://github.com/krazyjakee/wobu/milestone/10) | **Partial** | Endpoint through two-peer coverage is implemented by [#74](https://github.com/krazyjakee/wobu/issues/74) through [#85](https://github.com/krazyjakee/wobu/issues/85), with conflict and authorization follow-ups in [#89](https://github.com/krazyjakee/wobu/issues/89) and [#90](https://github.com/krazyjakee/wobu/issues/90). Share, Accept, and manage UI remains planned in [#109](https://github.com/krazyjakee/wobu/issues/109). |
+| [M3 — Peer-to-peer sync](https://github.com/krazyjakee/wobu/milestone/10) | **Implemented** | Endpoint through two-peer coverage is implemented by [#74](https://github.com/krazyjakee/wobu/issues/74) through [#85](https://github.com/krazyjakee/wobu/issues/85), with conflict and authorization follow-ups in [#89](https://github.com/krazyjakee/wobu/issues/89) and [#90](https://github.com/krazyjakee/wobu/issues/90). Share, Accept, reopen, and manage/unshare UI ships in [#109](https://github.com/krazyjakee/wobu/issues/109). |
 | [M4 — References](https://github.com/krazyjakee/wobu/milestone/3) | **Implemented** | Asset storage/import ([#24](https://github.com/krazyjakee/wobu/issues/24) through [#26](https://github.com/krazyjakee/wobu/issues/26)) and References/Assets/Board ([#27](https://github.com/krazyjakee/wobu/issues/27) through [#30](https://github.com/krazyjakee/wobu/issues/30)) are closed. |
 | [M5 — Enhance](https://github.com/krazyjakee/wobu/milestone/4) | **Implemented** | Keys/providers/schema/pipeline ([#31](https://github.com/krazyjakee/wobu/issues/31) through [#37](https://github.com/krazyjakee/wobu/issues/37)) and stale/edit/review behavior ([#38](https://github.com/krazyjakee/wobu/issues/38) through [#40](https://github.com/krazyjakee/wobu/issues/40)) are closed. |
 | [M6 — Influence Engine + first images](https://github.com/krazyjakee/wobu/milestone/5) | **Validated** | The core loop is validated by [#57](https://github.com/krazyjakee/wobu/issues/57) and [acceptance evidence](13-acceptance-evidence.md#m6--first-generation-loop); provider-owned aspect selection and dimension previews were completed by [#111](https://github.com/krazyjakee/wobu/issues/111). |
@@ -60,9 +60,7 @@ far harder than starting there. Every milestone after this gets the write path f
 ### M3 — Peer-to-peer sync
 
 Ticket-based direct sync, last-agreed-hash reconciliation, blob transfer, conflicts, background
-projects, status, and authorization are implemented. Until
-[#109](https://github.com/krazyjakee/wobu/issues/109) closes, normal users cannot create, accept, or
-manage a ticket from the app; the reachable collaboration workflow remains a shared folder.
+projects, status, authorization, and the Share/Accept/manage workflow are implemented.
 
 ### M4 — References
 

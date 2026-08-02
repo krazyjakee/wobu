@@ -196,22 +196,23 @@ nodes/character/kael-vantris.conflict-jake-20260731T142211Z.md</code></pre>
           as a frozen app.
         </p>
 
-        <h2>Copies, synced peer-to-peer (UI planned)</h2>
+        <h2>Copies, synced peer-to-peer</h2>
 
         <p>
-          The sync engine and ticket commands are implemented, but the app does not yet expose
-          Share, Accept, or manage/unshare controls. A normal user cannot initiate or join this mode
-          from the current UI. The retained user flow is tracked in
-          <a href="https://github.com/krazyjakee/wobu/issues/109">#109</a>; the details below
-          explain the implemented reconciliation foundation and the planned experience, not steps
-          you can perform today.
+          Open the project menu and choose <strong>Share this project</strong>. Wobu creates a
+          ticket, displays it, and copies it for you. The recipient chooses
+          <strong>Accept ticket</strong> in the launcher, pastes the complete ticket, and selects
+          where the local clone should live. Wobu shows transfer progress, lets the recipient
+          cancel, and opens the clone when it is ready.
         </p>
 
         <div class="warn">
-          <span class="note-label">Use a shared folder today</span>
+          <span class="note-label">A ticket is an access credential</span>
           <p>
-            For a reachable collaboration workflow, use the network/sync-folder model above. Do not
-            hunt for a Share button or paste a ticket into the launcher until #109 ships.
+            Send it privately. Tickets do not expire and cannot be revoked individually. The project
+            owner can use <strong>Stop sharing</strong> in the same project menu to revoke every
+            ticket this installation issued, but copies already downloaded remain with their
+            recipients.
           </p>
         </div>
 

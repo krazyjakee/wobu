@@ -8,6 +8,7 @@ import { modKey } from '../lib/platform'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
 import { ContextMenu } from './navigator/ContextMenu'
+import { SharingSheet } from './SharingSheet'
 
 export function TitleBar({
   project,
@@ -24,6 +25,7 @@ export function TitleBar({
   const select = useUI((s) => s.select)
   const setMode = useUI((s) => s.setMode)
   const [menu, setMenu] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const closeProject = useCloseProject()
   const projectMenuButton = useRef<HTMLButtonElement>(null)
 
@@ -63,6 +65,16 @@ export function TitleBar({
               {project.path}
             </div>
             <div className="ctx-sep" role="separator" />
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(false)
+                setSharing(true)
+              }}
+            >
+              <Icon name="share" size="sm" />
+              Share this project…
+            </button>
             <button
               role="menuitem"
               onClick={() => {
@@ -115,6 +127,8 @@ export function TitleBar({
       </button>
 
       <WindowControls />
+
+      {sharing && <SharingSheet project={project} onClose={() => setSharing(false)} />}
     </header>
   )
 }

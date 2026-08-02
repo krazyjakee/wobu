@@ -32,7 +32,7 @@ describe('TitleBar project menu accessibility', () => {
 
     expect(opener).toHaveAttribute('aria-expanded', 'true')
     const menu = screen.getByRole('menu', { name: 'Project actions for Ashfall' })
-    const item = screen.getByRole('menuitem', { name: 'Close project' })
+    const item = screen.getByRole('menuitem', { name: 'Share this project…' })
     expect(menu).toContainElement(item)
     expect(item).toHaveFocus()
 

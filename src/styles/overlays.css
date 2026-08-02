@@ -403,7 +403,8 @@
   color: var(--text-faint);
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   padding: 7px 9px;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -412,8 +413,15 @@
   outline: none;
 }
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: var(--border-str);
+}
+.field textarea {
+  resize: vertical;
+  min-height: 76px;
+  font: 11px/1.5 var(--mono);
+  overflow-wrap: anywhere;
 }
 .field .picker {
   display: flex;
@@ -442,6 +450,48 @@
   color: var(--text-dim);
   font-size: 11px;
   text-align: right;
+}
+
+.share-warning,
+.share-summary {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-str);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+}
+.share-warning strong {
+  color: var(--warn, #e2a44f);
+  font-size: 12px;
+}
+.share-warning p,
+.accept-progress p {
+  margin: 4px 0 0;
+}
+.share-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.share-summary code {
+  overflow-wrap: anywhere;
+  color: var(--text-faint);
+}
+.share-relay-warning {
+  color: var(--warn, #e2a44f);
+  line-height: 1.5;
+}
+.share-actions {
+  align-items: center;
+}
+.accept-progress {
+  margin: 4px 0 12px;
+}
+.accept-progress p {
+  color: var(--text-dim);
+  font-size: 11.5px;
 }
 
 /* ── context menu ────────────────────────────────────────────────────────── */

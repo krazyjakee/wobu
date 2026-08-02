@@ -121,6 +121,49 @@ describe('launcher recent projects', () => {
   })
 })
 
+describe('accepting a share ticket', () => {
+  it('chooses a destination, accepts the clone, and reopens it', async () => {
+    const clone = '/worlds/shared-ashfall.wobu'
+    h.openDialog.mockResolvedValue('/worlds')
+    h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
+      if (command === 'project_recent') return Promise.resolve(recent)
+      if (command === 'sync_accept' && args?.destination === null) {
+        return Promise.resolve({
+          project: 'shared-id',
+          alias: 'amber-heron',
+          joined: false,
+          root: null,
+        })
+      }
+      if (command === 'sync_accept' && args?.destination === '/worlds') {
+        return Promise.resolve({
+          project: 'shared-id',
+          alias: 'amber-heron',
+          joined: false,
+          root: clone,
+        })
+      }
+      if (command === 'project_open') return Promise.resolve({ ...ashfall, path: clone })
+      throw new Error(`unexpected command: ${command}`)
+    })
+
+    showLauncher()
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept ticket…' }))
+    fireEvent.change(screen.getByLabelText('Share ticket'), {
+      target: { value: 'wobuproject-secret' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Accept ticket' }))
+
+    await waitFor(() => expect(h.openDialog).toHaveBeenCalled())
+    await waitFor(() => expect(h.invoke).toHaveBeenCalledWith('project_open', { path: clone }))
+    expect(h.invoke).toHaveBeenCalledWith('sync_accept', {
+      token: 'wobuproject-secret',
+      destination: '/worlds',
+      cancel: false,
+    })
+  })
+})
+
 describe('new project sheet', () => {
   it('uses modal semantics, closes with Escape, and restores focus to its opener', async () => {
     showLauncher()

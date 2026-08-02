@@ -630,6 +630,19 @@ impl SyncManager {
         Disposition::Join
     }
 
+    /// Register the fresh folder the foreground Accept flow just created.
+    /// Polling begins only after its explicit first round succeeds, so that
+    /// round and a background dial cannot race to initialise the clone.
+    pub(super) fn accept_clone(self: &Arc<SyncManager>, ticket: &Ticket, root: &Path) {
+        let project = ticket.project();
+        let mut shares = self.shares.lock();
+        shares.invite(project, root, ticket.clone());
+        report(shares.save());
+        drop(shares);
+        self.register(project, root, false);
+        self.announce_project(project);
+    }
+
     /// Stop syncing a project, and forget everything agreed with everybody about
     /// it.
     ///
@@ -705,7 +718,7 @@ impl SyncManager {
         Present(ids)
     }
 
-    fn root_of(&self, project: Id) -> Option<PathBuf> {
+    pub(super) fn root_of(&self, project: Id) -> Option<PathBuf> {
         self.replicas.lock().get(&project).map(|r| r.root.clone())
     }
 
@@ -739,14 +752,19 @@ impl SyncManager {
         self.dial_round(project).await
     }
 
-    #[cfg(test)]
-    pub(super) async fn run_ticket(self: &Arc<SyncManager>, project: Id, ticket: &Ticket) -> bool {
-        let Some(replica) = self.replica(project) else { return false };
-        self.set_phase(project, SyncPhase::Connecting);
-        let Ok(session) = self.endpoint().connect_ticket(ticket).await else {
-            self.set_phase(project, SyncPhase::Offline);
-            return false;
+    pub(super) async fn run_ticket(
+        self: &Arc<SyncManager>,
+        project: Id,
+        ticket: &Ticket,
+    ) -> CommandResult<()> {
+        let Some(replica) = self.replica(project) else {
+            return Err(WobuError::new(Code::Internal, "The clone was not registered."));
         };
+        self.set_phase(project, SyncPhase::Connecting);
+        let session = self.endpoint().connect_ticket(ticket).await.map_err(|error| {
+            self.set_phase(project, SyncPhase::Offline);
+            WobuError::from(error)
+        })?;
         let gate = replica.round.lock().await;
         let endpoint_id = ticket.peer().to_string();
         let alias = ticket.alias();
@@ -756,7 +774,13 @@ impl SyncManager {
         session.close();
         let converged = outcome.as_ref().is_ok_and(|outcome| outcome.converged());
         self.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
-        outcome.is_ok_and(|outcome| outcome.did_something())
+        outcome.map(|_| ())
+    }
+
+    pub(super) fn start_poller(self: &Arc<SyncManager>, project: Id) {
+        if self.poll {
+            self.spawn_poller(project);
+        }
     }
 
     /// One outbound round against every peer a share names.
