@@ -113,6 +113,9 @@
   color: var(--text-faint);
   font-size: 9.5px;
 }
+.forge-scene-body > .forge-scene-aspect.is-substituted {
+  color: var(--warn, #e2a44f);
+}
 
 .forge-lora {
   display: grid;

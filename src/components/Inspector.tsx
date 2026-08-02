@@ -9,8 +9,10 @@ import type {
   SliderSetting,
 } from '../lib/api'
 import { layerColor, layerLabel, type KindIndex } from '../lib/kinds'
+import { negotiatedAspect } from '../lib/generationCapabilities'
 import {
   useCompiledPrompt,
+  useImageGenerationCapabilities,
   useImageReferenceReport,
   useInfluenceStack,
   usePresets,
@@ -22,6 +24,8 @@ import {
 } from '../lib/queries'
 import { report, toast } from '../store/ui'
 import { useActionShortcut } from '../hooks/useKeyboard'
+import { useDebounced } from '../hooks/useDebounced'
+import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Icon } from './Icon'
 import { PromptBox } from './inspector/PromptBox'
 
@@ -75,14 +79,45 @@ export function Inspector({
     presets.data?.find((preset) => preset.id === presetId) ??
     presets.data?.find((preset) => selected && preset.defaultFor.includes(selected.kind)) ??
     presets.data?.[0]
+  const chosenPresetId = chosenPreset?.id
+  const chosenPresetAspect = chosenPreset?.aspect
   useEffect(() => {
-    if (!chosenPreset) return
-    setPresetId(chosenPreset.id)
-    setAspect(chosenPreset.aspect)
-  }, [chosenPreset?.id])
+    if (!chosenPresetId || !chosenPresetAspect) return
+    setPresetId(chosenPresetId)
+    setAspect(chosenPresetAspect)
+  }, [chosenPresetAspect, chosenPresetId])
   useEffect(() => {
     if (backend.data?.image?.model) setModel(backend.data.image.model)
   }, [backend.data?.image?.model])
+  const debouncedModel = useDebounced(model.trim(), 350)
+  const capabilityModel =
+    model.trim() === backend.data?.image?.model ? model.trim() : debouncedModel
+  const generationCapabilities = useImageGenerationCapabilities(
+    project.id,
+    capabilityModel || undefined,
+    !!backend.data?.image && !!capabilityModel,
+  )
+  const aspectChoices = useMemo(
+    () => generationCapabilities.data?.aspectRatios ?? [],
+    [generationCapabilities.data?.aspectRatios],
+  )
+  const aspectNegotiation = useMemo(
+    () => negotiatedAspect(generationCapabilities.data, aspect),
+    [aspect, generationCapabilities.data],
+  )
+  const aspectAdjustment =
+    aspectNegotiation &&
+    chosenPresetId &&
+    aspect &&
+    !generationCapabilities.isPlaceholderData &&
+    aspectNegotiation.actualAspect !== aspect
+      ? {
+          requested: aspect,
+          actual: aspectNegotiation.actualAspect,
+          valid: aspectNegotiation.requestedValid,
+        }
+      : null
+  const normalizedAspect = aspectAdjustment?.actual ?? aspect
 
   const sliders = useMemo<SliderSetting[]>(
     () =>
@@ -108,12 +143,12 @@ export function Inspector({
   const stack = useInfluenceStack(selected?.id ?? null, options)
   const compiled = useCompiledPrompt(selected?.id ?? null, options)
   const grid = useMemo(
-    () => parseVariantGrid(gridAxis, gridValues, gridNodeId),
-    [gridAxis, gridNodeId, gridValues],
+    () => parseVariantGrid(gridAxis, gridValues, gridNodeId, aspectChoices),
+    [aspectChoices, gridAxis, gridNodeId, gridValues],
   )
   const imageReport = useImageReferenceReport(selected?.id ?? null, {
     ...options,
-    aspect,
+    aspect: normalizedAspect,
     model: model.trim() || undefined,
     grid: grid.value,
   })
@@ -173,7 +208,7 @@ export function Inspector({
         preset: chosenPreset.id,
         sliders,
         shot: options.shot,
-        aspect,
+        aspect: normalizedAspect,
         model: model.trim() || undefined,
         seed: seedOverride ? seed : undefined,
         grid: grid.value,
@@ -206,7 +241,7 @@ export function Inspector({
           .join(', '),
       )
     }
-    if (axis === 'aspect') setGridValues('1:1, 3:4, 4:3')
+    if (axis === 'aspect') setGridValues(aspectChoices.slice(0, 3).join(', '))
     if (axis === 'none') setGridValues('')
   }
 
@@ -271,6 +306,13 @@ export function Inspector({
       spend.remainingUsdMicros === null ||
       paidEstimate.batchUsdMicros > spend.remainingUsdMicros)
   const gridBlocked = gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
+  const aspectReady =
+    !!generationCapabilities.data &&
+    capabilityModel === model.trim() &&
+    !generationCapabilities.isFetching &&
+    !generationCapabilities.isPlaceholderData &&
+    !!aspectNegotiation &&
+    aspectChoices.includes(normalizedAspect)
   const generateDisabled =
     !selected ||
     !chosenPreset ||
@@ -278,6 +320,7 @@ export function Inspector({
     project.readOnly ||
     costBlocked ||
     gridBlocked ||
+    !aspectReady ||
     !imageReport.data ||
     imageReport.isPlaceholderData
   useActionShortcut('generate', !generateDisabled, () => void generate())
@@ -365,12 +408,39 @@ export function Inspector({
           </label>
           <label>
             <span>Aspect</span>
-            <input
-              value={aspect}
-              onChange={(event) => setAspect(event.target.value)}
-              placeholder="3:4"
+            <GenerationAspectSelect
+              label="Aspect"
+              value={normalizedAspect}
+              choices={aspectChoices}
+              onChange={setAspect}
             />
           </label>
+          {generationCapabilities.data &&
+            aspectNegotiation &&
+            !generationCapabilities.isPlaceholderData && (
+              <div className="aspect-preview" role="status">
+                <span>
+                  Actual output · {aspectNegotiation.actualAspect} · {aspectNegotiation.width}×
+                  {aspectNegotiation.height}px
+                </span>
+                {generationCapabilities.data.flexibleAspect && (
+                  <small>Flexible backend · using Wobu's curated, validated aspect choices.</small>
+                )}
+              </div>
+            )}
+          {aspectAdjustment && (
+            <div className="aspect-preview is-substituted" role="status">
+              <span>
+                {aspectAdjustment.valid ? 'Unsupported saved aspect' : 'Malformed saved aspect'}{' '}
+                {aspectAdjustment.requested} was replaced with {aspectAdjustment.actual}.
+              </span>
+              {aspectNegotiation && (
+                <small>
+                  Confirmed output · {aspectNegotiation.width}×{aspectNegotiation.height}px
+                </small>
+              )}
+            </div>
+          )}
           <label className="shot-model">
             <span>Model</span>
             <input
@@ -608,6 +678,7 @@ function parseVariantGrid(
   axis: 'none' | api.VariantGrid['axis'],
   source: string,
   nodeId: string,
+  aspectChoices: string[] = [],
 ): GridParse {
   if (axis === 'none') return {}
   const raw = source
@@ -633,6 +704,14 @@ function parseVariantGrid(
     return { value: { axis, nodeId, values } }
   }
   if (axis === 'preset') return { value: { axis, values: raw } }
+  const unsupported = raw.find((value) => !aspectChoices.includes(value))
+  if (unsupported) {
+    return {
+      error: aspectChoices.length
+        ? `${unsupported} is not supported by the selected image backend.`
+        : 'Aspect capabilities are not available yet.',
+    }
+  }
   return { value: { axis, values: raw } }
 }
 

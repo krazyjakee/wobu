@@ -29,6 +29,11 @@ let lora: LoraStatus
 let imageConfigured: boolean
 let paidGenerationBlocked: boolean
 let spendStatusState: 'ready' | 'pending' | 'failed'
+let aspectRatios: string[]
+let aspectFallback: string
+let aspectDimensions: [number, number]
+let flexibleAspect: boolean
+let presetAspect: string
 const preset = {
   id: 'portrait',
   label: 'Portrait',
@@ -105,6 +110,11 @@ beforeEach(() => {
   imageConfigured = true
   paidGenerationBlocked = false
   spendStatusState = 'ready'
+  aspectRatios = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+  aspectFallback = '1:1'
+  aspectDimensions = [2048, 2048]
+  flexibleAspect = true
+  presetAspect = '3:4'
   lora = {
     subjectId: 'kael',
     pinnedCount: 15,
@@ -119,7 +129,7 @@ beforeEach(() => {
     applicationDetail: 'No trained LoRA is attached to this entity.',
   }
   h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
-    if (command === 'preset_list') return Promise.resolve([preset])
+    if (command === 'preset_list') return Promise.resolve([{ ...preset, aspect: presetAspect }])
     if (command === 'status_bar_backend')
       return Promise.resolve({
         image: imageConfigured
@@ -131,7 +141,7 @@ beforeEach(() => {
     if (command === 'influence_resolve')
       return Promise.resolve({
         subjectId: args?.subjectId,
-        preset,
+        preset: { ...preset, aspect: presetAspect },
         layers: [
           {
             layer: 'subject',
@@ -161,7 +171,7 @@ beforeEach(() => {
     if (command === 'prompt_compile')
       return Promise.resolve({
         subjectId: args?.subjectId,
-        preset,
+        preset: { ...preset, aspect: presetAspect },
         prompt: 'ash-grey coat',
         negative: '',
         spans: [
@@ -196,6 +206,28 @@ beforeEach(() => {
             }
           : null,
         lockedSeed: null,
+      })
+    }
+    if (command === 'image_generation_capabilities') {
+      if (!imageConfigured) return Promise.reject(new Error('No image provider'))
+      const vocabulary = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+      return Promise.resolve({
+        provider: 'comfyui',
+        model: typeof args?.model === 'string' ? args.model : 'flux-dev',
+        aspectRatios,
+        flexibleAspect,
+        previews: vocabulary.map((requestedAspect) => {
+          const actualAspect = aspectRatios.includes(requestedAspect)
+            ? requestedAspect
+            : aspectFallback
+          return {
+            requestedAspect,
+            actualAspect,
+            width: aspectDimensions[0],
+            height: aspectDimensions[1],
+            substituted: requestedAspect !== actualAspect,
+          }
+        }),
       })
     }
     if (command === 'spend_status') {
@@ -386,6 +418,126 @@ describe('Forge mode', () => {
     expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
   })
 
+  it('repairs an unsupported saved aspect when provider capabilities switch before queueing', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>,
+    )
+    const aspect = await screen.findByRole('combobox', { name: /^Aspect$/ })
+    await waitFor(() => expect(aspect).toHaveValue('3:4'))
+
+    flexibleAspect = false
+    aspectRatios = ['1:1', '16:9']
+    aspectFallback = '1:1'
+    aspectDimensions = [1024, 1024]
+    await client.invalidateQueries({ queryKey: ['image_generation_capabilities'] })
+
+    expect(
+      await screen.findByText('Unsupported saved aspect 3:4 was replaced with 1:1.'),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(aspect).toHaveValue('1:1'))
+    expect(
+      within(aspect.closest('.shot-controls') as HTMLElement).getByText(
+        /Actual output · 1:1 · 1024×1024px/,
+      ),
+    ).toBeInTheDocument()
+    const generate = screen.getByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+    fireEvent.click(generate)
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'generate_start',
+        expect.objectContaining({ aspect: '1:1' }),
+      ),
+    )
+  })
+
+  it('invalidates saved aspect-grid cells when the provider no longer offers them', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>,
+    )
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Variant grid'), { target: { value: 'aspect' } })
+    expect(screen.getByLabelText('Cell values · comma separated')).toHaveValue('1:1, 3:2, 2:3')
+
+    flexibleAspect = false
+    aspectRatios = ['1:1']
+    aspectFallback = '1:1'
+    await client.invalidateQueries({ queryKey: ['image_generation_capabilities'] })
+
+    expect(
+      await screen.findByText('3:2 is not supported by the selected image backend.'),
+    ).toBeInTheDocument()
+    expect(generate).toBeDisabled()
+    fireEvent.click(generate)
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
+  })
+
+  it('labels the bounded validation strategy used for flexible image backends', async () => {
+    renderForge()
+    const aspect = await screen.findByRole('combobox', { name: /^Aspect$/ })
+    await waitFor(() =>
+      expect(aspect.closest('.shot-controls')).toHaveTextContent(
+        "Flexible backend · using Wobu's curated, validated aspect choices.",
+      ),
+    )
+    expect(aspect.querySelectorAll('option')).toHaveLength(10)
+  })
+
+  it('debounces custom model capability probes and keeps queueing disabled while they settle', async () => {
+    renderForge()
+    const generate = await screen.findByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+    h.invoke.mockClear()
+
+    const model = screen.getByLabelText('Model')
+    fireEvent.change(model, { target: { value: 'custom-a' } })
+    fireEvent.change(model, { target: { value: 'custom-ab' } })
+    fireEvent.change(model, { target: { value: 'custom-abc' } })
+    expect(generate).toBeDisabled()
+    expect(h.invoke).not.toHaveBeenCalledWith('image_generation_capabilities', expect.anything())
+
+    await waitFor(
+      () =>
+        expect(h.invoke).toHaveBeenCalledWith('image_generation_capabilities', {
+          model: 'custom-abc',
+        }),
+      { timeout: 1_000 },
+    )
+    expect(
+      h.invoke.mock.calls.filter(([command]) => command === 'image_generation_capabilities'),
+    ).toHaveLength(1)
+    await waitFor(() => expect(generate).toBeEnabled())
+  })
+
+  it('repairs a malformed saved aspect before the queue can receive it', async () => {
+    presetAspect = 'wide please'
+    renderForge()
+    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
+    expect(
+      await screen.findByText('Malformed saved aspect wide please was replaced with 1:1.'),
+    ).toBeInTheDocument()
+    const generate = screen.getByRole('button', { name: 'Generate' })
+    await waitFor(() => expect(generate).toBeEnabled())
+    fireEvent.click(generate)
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'generate_start',
+        expect.objectContaining({ aspect: '1:1' }),
+      ),
+    )
+    expect(h.invoke).not.toHaveBeenCalledWith(
+      'generate_start',
+      expect.objectContaining({ aspect: 'wide please' }),
+    )
+  })
+
   it('queues an ordered multi-entity scene from the selected Forge subject', async () => {
     render(
       <QueryClientProvider
@@ -400,8 +552,12 @@ describe('Forge mode', () => {
     fireEvent.change(screen.getByPlaceholderText('Crossing the flooded market at blue hour…'), {
       target: { value: 'Crossing the flooded market' },
     })
-    fireEvent.change(screen.getByLabelText('Scene aspect'), { target: { value: '3:2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Generate scene' }))
+    const sceneAspect = screen.getByLabelText('Scene aspect')
+    await waitFor(() => expect(sceneAspect).toBeEnabled())
+    fireEvent.change(sceneAspect, { target: { value: '3:2' } })
+    const generateScene = screen.getByRole('button', { name: 'Generate scene' })
+    await waitFor(() => expect(generateScene).toBeEnabled())
+    fireEvent.click(generateScene)
 
     await waitFor(() =>
       expect(h.invoke).toHaveBeenCalledWith('scene_generate_start', {
@@ -410,7 +566,35 @@ describe('Forge mode', () => {
         aspect: '3:2',
       }),
     )
-    expect(await screen.findByRole('status')).toHaveTextContent('Scene queued with 2 entities.')
+    expect(await screen.findByText('Scene queued with 2 entities.')).toBeInTheDocument()
+  })
+
+  it('uses provider negotiation for composition and shows substituted dimensions before queueing', async () => {
+    flexibleAspect = false
+    aspectRatios = ['1:1']
+    aspectFallback = '1:1'
+    aspectDimensions = [768, 768]
+    renderForge()
+
+    fireEvent.click(screen.getByText('Compose a multi-entity scene'))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mira' }))
+    expect(
+      await screen.findByText('Unsupported saved aspect 16:9 was replaced with 1:1.'),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Scene aspect').querySelectorAll('option')).toHaveLength(1)
+    expect(screen.getByText('Compose a multi-entity scene').closest('details')).toHaveTextContent(
+      'Actual output · 1:1 · 768×768px',
+    )
+    const generateScene = screen.getByRole('button', { name: 'Generate scene' })
+    await waitFor(() => expect(generateScene).toBeEnabled())
+    fireEvent.click(generateScene)
+
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'scene_generate_start',
+        expect.objectContaining({ aspect: '1:1' }),
+      ),
+    )
   })
 
   it('shows LoRA readiness and queues eligible local training', async () => {

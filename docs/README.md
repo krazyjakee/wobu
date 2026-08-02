@@ -14,9 +14,9 @@ that context automatically.
 | [05 — Technical Architecture](05-architecture.md) | Tauri/Rust structure, adapters, jobs, events |
 | [07 — Projects on File Shares](07-file-shares.md) | Presence, conflicts, network-mount behaviour, performance |
 | [08 — Providers & BYOK](08-providers.md) | Key storage, Gemini, Hunyuan3D, capability negotiation, cost |
-| [09 — Roadmap](09-roadmap.md) | Milestones from prototype to 3D |
+| [09 — Roadmap](09-roadmap.md) | Canonical milestone status from foundations to 3D |
 | [12 — Packaging & Releases](12-releasing.md) | Tagged bundles, signing and updater policy, version stamping |
-| [13 — Acceptance Evidence](13-acceptance-evidence.md) | Repeatable M1/M5 contracts and the live smoke checks they cannot replace |
+| [13 — Acceptance Evidence](13-acceptance-evidence.md) | Repeatable M1/M6 contracts and the live smoke checks they cannot replace |
 | [14 — Code-health Checks](14-code-health.md) | Dead-code, direct-dependency, public-surface, and duplication regression gates |
 
 Two constraints shape most of the above and are worth knowing up front:
@@ -25,6 +25,3 @@ Two constraints shape most of the above and are worth knowing up front:
   can open it. Nothing canonical is stored outside it.
 - **All inference is bring-your-own-key.** Wobu operates no proxy and no inference of its own;
   keys live in the OS keychain, never in the shared project folder.
-
-A clickable HTML/CSS prototype of the main workspace lives in [`/prototype`](../prototype).
-Run it with `npx serve prototype` and open the printed URL.

@@ -2,10 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { Generation, NodeSummary, ProjectSummary, QueueSnapshot } from '../lib/api'
+import { negotiatedAspect } from '../lib/generationCapabilities'
 import type { KindIndex } from '../lib/kinds'
-import { useGenerations, useLoraStatus, useTrainLora } from '../lib/queries'
+import {
+  useGenerations,
+  useImageGenerationCapabilities,
+  useLoraStatus,
+  useStatusBarBackend,
+  useTrainLora,
+} from '../lib/queries'
 import { report, useUI } from '../store/ui'
 import { LazyAssetThumbnail } from './AssetMedia'
+import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
 import { Inspector } from './Inspector'
 import { Modal } from './Modal'
@@ -34,6 +42,7 @@ export function ForgeMode({
 }) {
   const select = useUI((state) => state.select)
   const setMode = useUI((state) => state.setMode)
+  const backend = useStatusBarBackend(project.id)
   const sortedNodes = useMemo(
     () =>
       [...nodes].sort((left, right) =>
@@ -73,6 +82,8 @@ export function ForgeMode({
         primary={selected}
         nodes={sortedNodes}
         kinds={kinds}
+        projectId={project.id}
+        model={backend.data?.image?.model}
         readOnly={project.readOnly}
       />
 
@@ -209,11 +220,15 @@ function SceneComposer({
   primary,
   nodes,
   kinds,
+  projectId,
+  model,
   readOnly,
 }: {
   primary: NodeSummary | null
   nodes: NodeSummary[]
   kinds: KindIndex
+  projectId: string
+  model: string | undefined
   readOnly: boolean
 }) {
   const [additional, setAdditional] = useState<string[]>([])
@@ -225,6 +240,19 @@ function SceneComposer({
     (node) => node.id !== primary?.id && !kinds.get(node.kind)?.singleton,
   )
   const primaryAllowed = primary ? !kinds.get(primary.kind)?.singleton : false
+  const capabilities = useImageGenerationCapabilities(projectId, model, !!model)
+  const aspectChoices = capabilities.data?.aspectRatios ?? []
+  const aspectNegotiation = useMemo(
+    () => negotiatedAspect(capabilities.data, aspect),
+    [aspect, capabilities.data],
+  )
+  const aspectAdjustment =
+    aspectNegotiation &&
+    !capabilities.isPlaceholderData &&
+    aspectNegotiation.actualAspect !== aspect
+      ? `${aspectNegotiation.requestedValid ? 'Unsupported saved aspect' : 'Malformed saved aspect'} ${aspect} was replaced with ${aspectNegotiation.actualAspect}.`
+      : null
+  const normalizedAspect = aspectNegotiation?.actualAspect ?? aspect
 
   useEffect(() => {
     setAdditional([])
@@ -246,7 +274,7 @@ function SceneComposer({
     try {
       await api.sceneGenerateStart([primary.id, ...additional], {
         prompt: prompt.trim() || undefined,
-        aspect,
+        aspect: normalizedAspect,
       })
       setStatus(`Scene queued with ${1 + additional.length} entities.`)
     } catch (reason) {
@@ -293,21 +321,40 @@ function SceneComposer({
           </label>
           <label>
             <span>Aspect</span>
-            <select
-              aria-label="Scene aspect"
-              value={aspect}
-              onChange={(event) => setAspect(event.target.value)}
-            >
-              <option value="16:9">16:9 · wide</option>
-              <option value="3:2">3:2 · landscape</option>
-              <option value="1:1">1:1 · square</option>
-              <option value="9:16">9:16 · portrait</option>
-            </select>
+            <GenerationAspectSelect
+              label="Scene aspect"
+              value={normalizedAspect}
+              choices={aspectChoices}
+              onChange={setAspect}
+            />
           </label>
+          {capabilities.data && aspectNegotiation && !capabilities.isPlaceholderData && (
+            <p className="forge-scene-aspect" role="status">
+              Actual output · {aspectNegotiation.actualAspect} · {aspectNegotiation.width}×
+              {aspectNegotiation.height}px
+              {capabilities.data.flexibleAspect
+                ? " · flexible backend, using Wobu's curated validated choices"
+                : ''}
+            </p>
+          )}
+          {aspectAdjustment && (
+            <p className="forge-scene-aspect is-substituted" role="status">
+              {aspectAdjustment}
+            </p>
+          )}
           <button
             className="btn btn-primary"
             type="button"
-            disabled={readOnly || busy || additional.length === 0}
+            disabled={
+              readOnly ||
+              busy ||
+              additional.length === 0 ||
+              !capabilities.data ||
+              capabilities.isFetching ||
+              capabilities.isPlaceholderData ||
+              !aspectNegotiation ||
+              !aspectChoices.includes(normalizedAspect)
+            }
             onClick={() => void generate()}
           >
             {busy ? 'Queuing scene…' : 'Generate scene'}

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The workspace — Wobu Guide</title>
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><a href="index.html">wobu</a> <span>Guide</span></div>
+        <nav>
+          <div class="nav-group">Getting started</div>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Your first project</a>
+          <a href="workspace.html" aria-current="page">The workspace</a>
+          <div class="nav-group">Building the world</div>
+          <a href="world-model.html">Nodes &amp; hierarchy</a>
+          <a href="notes-and-enhance.html">Notes &amp; Enhance</a>
+          <a href="references.html">References &amp; the Board</a>
+          <div class="nav-group">Making images</div>
+          <a href="influence.html">The Influence Stack</a>
+          <a href="generating.html">Generating</a>
+          <a href="concept-3d.html">Concept 3D</a>
+          <div class="nav-group">Setup &amp; sharing</div>
+          <a href="providers.html">Providers &amp; keys</a>
+          <a href="collaboration.html">Sharing a project</a>
+          <div class="nav-group">Reference</div>
+          <a href="reference.html">Keyboard &amp; file format</a>
+        </nav>
+      </aside>
+
+      <main>
+        <p class="eyebrow">Getting started</p>
+        <h1>The workspace</h1>
+        <p class="lede">
+          One primary screen with three vertical regions and a mode rail. You will live here 95% of
+          the time — everything else is a mode swap in the centre or a modal.
+        </p>
+
+        <pre class="diagram">
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│  wobu   [ Ashfall ▾ ]   Species / Vashk / Kael Vantris        ⌘K search      ⚙︎     │ title bar
+├────┬────────────────────┬──────────────────────────────┬───────────────────────────┤
+│ ▤  │ ⌕ filter…          │  KAEL VANTRIS      ⋯  Enhance│  INFLUENCE STACK          │
+│ ▦  │                    │  character · Vashk · Ember G.│  ┌──────────────────────┐ │
+│ ✦  │ ★ Art Style        │ ─────────────────────────────│  │ ● Art Style          │ │
+│ ⬚  │ ★ World Canon      │  Notes │ Refs │ Concepts │ 3D│  │   Ashfall House  1.0 ▸│ │
+│    │                    │ ─────────────────────────────│  ├──────────────────────┤ │
+│ ⚙  │ ▾ Species          │  ┌───────────┬──────────────┐│  │ ● World Canon    0.8 ▸│ │
+│    │    Vashk           │  │ RAW NOTES │ DESCRIPTION  ││  ├──────────────────────┤ │
+│    │    Sunborn         │  │           │ Silhouette   ││  │ ● Species             │ │
+│    │ ▾ Cultures         │  │ scarred   │ Anatomy      ││  │   Vashk          1.0 ▸│ │
+│    │    Ember Guild     │  │ ex-guild  │ Materials    ││  ├──────────────────────┤ │
+│    │ ▾ Settings         │  │ …         │ Palette      ││  │ ● Culture             │ │
+│    │  ▾ Ember Coast     │  │           │ Signature    ││  │   Ember Guild    0.6 ▸│ │
+│    │     Cinder Bay     │  │           │ Never        ││  ├──────────────────────┤ │
+│    │ ▾ Characters       │  └───────────┴──────────────┘│  │ ● Place / Subject …  │ │
+│    │    Kael Vantris ◀  │                              │  ├──────────────────────┤ │
+│    │ ▾ Props            │                              │  │ COMPILED PROMPT      │ │
+│    │    Ashglass Lantern│                              │  │ ▓▓▓▓ tinted by layer │ │
+│    │                    │                              │  ├──────────────────────┤ │
+│    │ + New              │                              │  │ Preset ▾  Aspect ▾   │ │
+│    │                    │                              │  │   ✦ Generate  ×4     │ │
+├────┴────────────────────┴──────────────────────────────┴───────────────────────────┤
+│ ComfyUI connected · flux-dev · queue 0        claude-opus-4-8 · 12k ctx      ⏱ 4.2s │ status
+└────────────────────────────────────────────────────────────────────────────────────┘
+   52px          272px                  fluid                       352px</pre>
+
+        <h2>Mode rail</h2>
+
+        <p>
+          Icon-only, always visible on the far left. Five destinations, which keeps the top bar
+          clean and makes switching muscle memory:
+        </p>
+
+        <table>
+          <tr>
+            <td>Library</td>
+            <td>The world tree and the node editor — the screen above. Your default.</td>
+          </tr>
+          <tr>
+            <td>Board</td>
+            <td>
+              A freeform pan-and-zoom mood board. Drag an image onto a node to make it a reference.
+            </td>
+          </tr>
+          <tr>
+            <td>Forge</td>
+            <td>
+              Generation promoted to full width with a large result grid, for iterating hard on one
+              subject.
+            </td>
+          </tr>
+          <tr>
+            <td>Assets</td>
+            <td>
+              Every image in the project, filterable by node, role, and whether it was generated or
+              imported.
+            </td>
+          </tr>
+          <tr>
+            <td>Settings</td>
+            <td>Providers and models, storage, editor behaviour, appearance, diagnostics.</td>
+          </tr>
+        </table>
+
+        <h2>Title bar</h2>
+
+        <p>
+          A custom title bar, so the chrome matches on Linux, macOS and Windows. Left to right: the
+          <strong>wobu</strong> mark, the <strong>project picker</strong> (click the project name to
+          see its full path or close it), a <strong>read-only</strong> badge when the folder isn't
+          writable, and the <strong>influence breadcrumb</strong> for the selected node —
+          <code>Species / Vashk / Kael Vantris</code>. Every crumb is clickable and jumps to that
+          node. On the right, <kbd>⌘K</kbd> search and the settings gear.
+        </p>
+
+        <h2>Navigator</h2>
+
+        <p>272px, resizable, collapsible with <kbd>[</kbd>.</p>
+
+        <ul>
+          <li>
+            <strong>Filter box</strong> at the top matches node names and one-line summaries. For
+            searching inside notes and descriptions, use the command palette instead.
+          </li>
+          <li>
+            <strong>Two pinned singletons</strong> — Style Guide and World Canon — sit above the
+            rule, because they root every influence stack.
+          </li>
+          <li>
+            <strong>Collapsible groups per kind</strong>, each nesting by parent. Regions contain
+            cities contain districts.
+          </li>
+          <li>
+            <strong>Drag to re-parent.</strong> Dropping a node onto another moves it in the
+            hierarchy — and therefore changes what it inherits.
+          </li>
+          <li>
+            <strong>Right-click</strong> for New, New child, Duplicate and Delete. Singletons can't
+            be duplicated or deleted.
+          </li>
+          <li>
+            <strong>Status dots.</strong> A node whose description has gone stale gets a small dot;
+            a node someone else is editing gets a presence dot.
+          </li>
+        </ul>
+
+        <div class="note">
+          <span class="note-label">Broken files</span>
+          <p>
+            If a file in the project folder can't be parsed — a sync client mangled it, or a hand
+            edit broke the frontmatter — Wobu surfaces it in the navigator with the parse error, and
+            offers <strong>Reveal</strong> and <strong>Reload</strong>. It never silently skips a
+            file and it never overwrites one it couldn't read.
+          </p>
+        </div>
+
+        <h2>Editor</h2>
+
+        <p>The fluid centre column, and the place you actually author.</p>
+
+        <h3>Sticky header</h3>
+        <p>
+          Inline-editable name, a colour-coded kind badge, a <em>stale</em> badge when the
+          description has drifted from the notes, the influence breadcrumb, and the
+          <strong>Enhance</strong> button in the violet AI accent. An autosave indicator sits
+          alongside — Wobu saves as you type, on a delay you can tune in Settings.
+        </p>
+
+        <h3>Tabs</h3>
+        <p>Five tabs, reachable with <kbd>⌘1</kbd>–<kbd>⌘5</kbd>:</p>
+
+        <table>
+          <tr>
+            <td><kbd>⌘1</kbd> Notes</td>
+            <td>
+              The centre of gravity: raw notes on the left, enhanced structured description on the
+              right.
+            </td>
+          </tr>
+          <tr>
+            <td><kbd>⌘2</kbd> References</td>
+            <td>
+              Image grid; each tile carries a role chip and a weight. Drag-drop or paste to add.
+            </td>
+          </tr>
+          <tr>
+            <td><kbd>⌘3</kbd> Concepts</td>
+            <td>
+              Generated art for this entity. Hover for prompt and seed; pin to promote a result into
+              References.
+            </td>
+          </tr>
+          <tr>
+            <td><kbd>⌘4</kbd> 3D</td>
+            <td>Turnaround sheets and generated meshes, with an inline viewer.</td>
+          </tr>
+          <tr>
+            <td><kbd>⌘5</kbd> Relations</td>
+            <td>The links this node has, and its backlinks — "3 characters inherit from this".</td>
+          </tr>
+        </table>
+
+        <h3>The Notes split</h3>
+        <p>
+          Two columns with the Enhance button between them.
+          <strong>Left is yours, right is the machine's.</strong> That spatial split is the mental
+          model of the whole app: Wobu never writes into your column, and you can always edit its
+          column. Covered in <a href="notes-and-enhance.html">Notes &amp; Enhance</a>.
+        </p>
+
+        <h2>Inspector</h2>
+
+        <p>
+          352px on the right, collapsible with <kbd>]</kbd>. This is the differentiating panel — an
+          ordered list of influence layers from outermost to innermost, the compiled prompt beneath
+          it, and the shot controls beneath that.
+        </p>
+
+        <div class="chip-row">
+          <span class="chip style">style</span>
+          <span class="chip world">world</span>
+          <span class="chip species">species</span>
+          <span class="chip culture">culture</span>
+          <span class="chip place">place</span>
+          <span class="chip subject">subject</span>
+        </div>
+
+        <p>
+          Each layer card carries a colour dot, the source node, a fragment and reference count, a
+          weight slider, a mute toggle, and an expander showing the exact text and images it
+          contributes. The full explanation is in <a href="influence.html">The Influence Stack</a>.
+        </p>
+
+        <div class="warn">
+          <span class="note-label">The one rule worth internalising</span>
+          <p>
+            Muting or reweighting in the Inspector affects <strong>this generation only</strong>. It
+            never edits your world. Editing the world happens in the editor. If you find yourself
+            muting the same layer every time, that's a signal to go fix the node.
+          </p>
+        </div>
+
+        <h2>Status bar</h2>
+
+        <p>
+          26px along the bottom, all read-only: backend health, project name and path, active image
+          model, job queue depth, active LLM, and the last generation time. When the project sits on
+          a network share it says so and shows the poll interval; when the folder is read-only it
+          says that too.
+        </p>
+
+        <h2>Command palette</h2>
+
+        <p>
+          <kbd>⌘K</kbd> from anywhere. It searches in two phases — node names match instantly, then
+          full-text hits from inside notes and descriptions arrive a moment later, ranked. Results
+          are grouped:
+        </p>
+
+        <ul>
+          <li>
+            <strong>Nodes</strong> — jump straight to an entity, switching to Library mode if you
+            were somewhere else.
+          </li>
+          <li>
+            <strong>In notes and descriptions</strong> — full-text hits, for when you remember a
+            phrase but not which node it's on.
+          </li>
+          <li><strong>Commands</strong> — New node, toggle navigator, toggle inspector.</li>
+        </ul>
+
+        <p>Arrow keys cycle, <kbd>Enter</kbd> picks, <kbd>Esc</kbd> closes.</p>
+
+        <h2>Appearance</h2>
+
+        <p>
+          Dark-first, with neutral cool greys so that concept art — the actual content — carries all
+          the colour. There is one warm accent for things <em>you</em> do and one violet accent
+          reserved exclusively for things <em>the machine</em> does, so "an AI action is about to
+          happen" is always legible at a glance. Base font size is 13px because this is a dense tool
+          UI; if that's too tight, Settings has a UI scale slider from 80% to 150%.
+        </p>
+
+        <div class="pagenav">
+          <a href="getting-started.html"><span>Previous</span>← Your first project</a>
+          <a class="next" href="world-model.html"><span>Next</span>Nodes &amp; hierarchy →</a>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

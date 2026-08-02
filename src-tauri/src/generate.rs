@@ -237,6 +237,41 @@ pub struct GenerateShot {
     prompt: Option<String>,
 }
 
+fn selected_image_provider(project: &Project) -> CommandResult<(String, Option<String>)> {
+    let selected = project
+        .meta()
+        .providers
+        .get("image")
+        .and_then(Value::as_object)
+        .ok_or_else(no_image_provider)?;
+    let provider = selected
+        .get("provider")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(no_image_provider)?
+        .to_owned();
+    let model = selected
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    Ok((provider, model))
+}
+
+fn selected_image_model(
+    requested: Option<String>,
+    selected: Option<String>,
+    backend_default: &str,
+) -> String {
+    requested
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or(selected)
+        .unwrap_or_else(|| backend_default.to_owned())
+}
+
 /// Start one image and return the queue id immediately.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Tauri exposes these as named bridge arguments.
@@ -262,25 +297,7 @@ pub async fn generate_start(
                 "This project is read-only, so a generated image could not be saved.",
             ));
         }
-        let selected = project
-            .meta()
-            .providers
-            .get("image")
-            .and_then(Value::as_object)
-            .ok_or_else(no_image_provider)?;
-        let provider = selected
-            .get("provider")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(no_image_provider)?
-            .to_owned();
-        let selected_model = selected
-            .get("model")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned);
+        let (provider, selected_model) = selected_image_provider(project)?;
         Ok((
             project.root().to_path_buf(),
             project.id(),
@@ -318,11 +335,7 @@ pub async fn generate_start(
             ));
         }
     };
-    let model = model
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or(selected_model)
-        .unwrap_or_else(|| backend.default_model().to_owned());
+    let model = selected_image_model(model, selected_model, backend.default_model());
     let locked_seed =
         nodes.iter().find(|node| node.id == subject_id).and_then(|node| node.locked_seed);
     let (seed, seed_source) = match (seed, locked_seed) {
@@ -388,25 +401,7 @@ pub async fn scene_generate_start(
                 "This project is read-only, so a generated scene could not be saved.",
             ));
         }
-        let selected = project
-            .meta()
-            .providers
-            .get("image")
-            .and_then(Value::as_object)
-            .ok_or_else(no_image_provider)?;
-        let provider = selected
-            .get("provider")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(no_image_provider)?
-            .to_owned();
-        let selected_model = selected
-            .get("model")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned);
+        let (provider, selected_model) = selected_image_provider(project)?;
         Ok((
             project.root().to_path_buf(),
             project.id(),
@@ -457,11 +452,7 @@ pub async fn scene_generate_start(
             ));
         }
     };
-    let model = model
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or(selected_model)
-        .unwrap_or_else(|| backend.default_model().to_owned());
+    let model = selected_image_model(model, selected_model, backend.default_model());
     let seed_source = if seed.is_some() { SeedSource::Rerolled } else { SeedSource::Random };
     let seed = seed.unwrap_or_else(|| u128::from(new_id()) as u64);
     let mut plan = prepare_blocking("Scene preparation stopped unexpectedly.", move || {
@@ -1056,6 +1047,94 @@ pub struct ImageReferenceReport {
     locked_seed: Option<u64>,
 }
 
+/// The provider-owned aspect choices and the exact shape a generation would use.
+///
+/// ComfyUI deliberately reports an empty `Capabilities::aspect_ratios`: it can
+/// accept arbitrary dimensions. The UI still needs a bounded, validated
+/// vocabulary, so flexible backends offer `AspectRatio::ALL` while retaining a
+/// flag that explains the policy. This keeps arbitrary text out of generation
+/// requests without pretending a local backend has a vendor-enforced list.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageGenerationCapabilities {
+    provider: String,
+    model: String,
+    aspect_ratios: Vec<AspectRatio>,
+    flexible_aspect: bool,
+    previews: Vec<ImageAspectPreview>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageAspectPreview {
+    requested_aspect: AspectRatio,
+    actual_aspect: AspectRatio,
+    width: u32,
+    height: u32,
+    substituted: bool,
+}
+
+/// Preview the active image provider's negotiated aspect before anything is
+/// submitted to the job queue.
+#[tauri::command]
+pub async fn image_generation_capabilities(
+    state: State<'_, AppState>,
+    machine: State<'_, MachineSettings>,
+    model: Option<String>,
+) -> CommandResult<ImageGenerationCapabilities> {
+    let (provider, selected_model) = state.with(|project| selected_image_provider(project))?;
+    let backend: Box<dyn ImageBackend> = match provider.as_str() {
+        comfy::ID => Box::new(
+            machine
+                .connect_comfy_image()
+                .await
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
+        gemini::ID => Box::new(
+            GeminiBackend::new("capability-preview")
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        ),
+        other => {
+            return Err(WobuError::new(
+                Code::Invalid,
+                format!("This build has no image adapter for {other}."),
+            ));
+        }
+    };
+    let model = selected_image_model(model, selected_model, backend.default_model());
+    Ok(aspect_capability_view(provider, model.clone(), backend.capabilities(&model)))
+}
+
+fn aspect_capability_view(
+    provider: String,
+    model: String,
+    capabilities: Capabilities,
+) -> ImageGenerationCapabilities {
+    let flexible_aspect = capabilities.aspect_ratios.is_empty();
+    let aspect_ratios = if flexible_aspect {
+        AspectRatio::ALL.to_vec()
+    } else {
+        capabilities.aspect_ratios.clone()
+    };
+    let previews = AspectRatio::ALL
+        .into_iter()
+        .map(|requested_aspect| {
+            // These are the same helpers execution's `negotiate` path uses;
+            // the preview cannot grow a second nearest-ratio or fitting rule.
+            let actual_aspect = capabilities.nearest_aspect(requested_aspect);
+            let resolution = capabilities.resolution_for(requested_aspect);
+            ImageAspectPreview {
+                requested_aspect,
+                actual_aspect,
+                width: resolution.width,
+                height: resolution.height,
+                substituted: requested_aspect != actual_aspect,
+            }
+        })
+        .collect();
+    ImageGenerationCapabilities { provider, model, aspect_ratios, flexible_aspect, previews }
+}
+
 /// Reconstructed, never trusted from a mutable counter.
 #[tauri::command]
 pub fn spend_status(state: State<'_, AppState>) -> CommandResult<SpendStatus> {
@@ -1151,25 +1230,7 @@ pub fn image_reference_report(
     grid: Option<VariantGrid>,
 ) -> CommandResult<ImageReferenceReport> {
     let (nodes, provider, selected_model) = state.with(|project| {
-        let selected = project
-            .meta()
-            .providers
-            .get("image")
-            .and_then(Value::as_object)
-            .ok_or_else(no_image_provider)?;
-        let provider = selected
-            .get("provider")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(no_image_provider)?
-            .to_owned();
-        let selected_model = selected
-            .get("model")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned);
+        let (provider, selected_model) = selected_image_provider(project)?;
         Ok((project.world_nodes()?.to_vec(), provider, selected_model))
     })?;
     let backend: Box<dyn ImageBackend> = match provider.as_str() {
@@ -1189,11 +1250,7 @@ pub fn image_reference_report(
             ));
         }
     };
-    let model = model
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or(selected_model)
-        .unwrap_or_else(|| backend.default_model().to_owned());
+    let model = selected_image_model(model, selected_model, backend.default_model());
     let subject = nodes.iter().find(|node| node.id == subject_id).ok_or_else(|| {
         WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
     })?;
@@ -3000,6 +3057,47 @@ mod tests {
             image_price(gemini::ID, "gemini-future-image", Resolution::new(1_024, 1_024)).unwrap();
         assert_eq!(unknown.per_image_usd_micros, 240_000);
         assert!(unknown.conservative_fallback);
+    }
+
+    #[test]
+    fn aspect_preview_exposes_ordered_choices_and_the_negotiated_substitution() {
+        let mut caps =
+            GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
+        caps.max_resolution = Resolution::new(1_024, 1_024);
+        caps.aspect_ratios =
+            ["1:1", "2:3"].into_iter().map(|value| AspectRatio::parse(value).unwrap()).collect();
+
+        let preview = aspect_capability_view(gemini::ID.into(), "restricted".into(), caps);
+
+        assert_eq!(
+            preview.aspect_ratios,
+            [AspectRatio::parse("1:1").unwrap(), AspectRatio::parse("2:3").unwrap()]
+        );
+        let portrait = preview
+            .previews
+            .iter()
+            .find(|candidate| candidate.requested_aspect == AspectRatio::parse("3:4").unwrap())
+            .unwrap();
+        assert!(portrait.substituted);
+        assert_eq!(portrait.actual_aspect, AspectRatio::parse("2:3").unwrap());
+        assert_eq!((portrait.width, portrait.height), (682, 1_023));
+    }
+
+    #[test]
+    fn flexible_aspect_preview_uses_the_curated_validated_vocabulary() {
+        let mut caps =
+            GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
+        caps.max_resolution = Resolution::new(2_048, 2_048);
+        caps.aspect_ratios.clear();
+
+        let preview = aspect_capability_view(comfy::ID.into(), "local".into(), caps);
+
+        assert!(preview.flexible_aspect);
+        assert_eq!(preview.aspect_ratios, AspectRatio::ALL);
+        assert!(preview.previews.iter().all(|candidate| !candidate.substituted));
+        let square = &preview.previews[0];
+        assert_eq!(square.actual_aspect, AspectRatio::parse("1:1").unwrap());
+        assert_eq!((square.width, square.height), (2_048, 2_048));
     }
 
     #[test]

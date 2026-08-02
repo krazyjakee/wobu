@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Generating — Wobu Guide</title>
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><a href="index.html">wobu</a> <span>Guide</span></div>
+        <nav>
+          <div class="nav-group">Getting started</div>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Your first project</a>
+          <a href="workspace.html">The workspace</a>
+          <div class="nav-group">Building the world</div>
+          <a href="world-model.html">Nodes &amp; hierarchy</a>
+          <a href="notes-and-enhance.html">Notes &amp; Enhance</a>
+          <a href="references.html">References &amp; the Board</a>
+          <div class="nav-group">Making images</div>
+          <a href="influence.html">The Influence Stack</a>
+          <a href="generating.html" aria-current="page">Generating</a>
+          <a href="concept-3d.html">Concept 3D</a>
+          <div class="nav-group">Setup &amp; sharing</div>
+          <a href="providers.html">Providers &amp; keys</a>
+          <a href="collaboration.html">Sharing a project</a>
+          <div class="nav-group">Reference</div>
+          <a href="reference.html">Keyboard &amp; file format</a>
+        </nav>
+      </aside>
+
+      <main>
+        <p class="eyebrow">Making images</p>
+        <h1>Generating</h1>
+        <p class="lede">
+          Presets turn one description into the right <em>kind</em> of sheet. Generations are
+          disposable by default; pinning one is what changes the world.
+        </p>
+
+        <h2>The controls</h2>
+
+        <p>
+          At the base of the Inspector, under the compiled prompt: <strong>output preset</strong>,
+          <strong>aspect</strong>, <strong>model</strong>, <strong>seed</strong>, batch count, and
+          the Generate button. <kbd>⌘↵</kbd> fires it from anywhere.
+        </p>
+
+        <div class="note">
+          <span class="note-label">Aspect negotiation</span>
+          <p>
+            The dropdown comes from the selected image backend. Wobu repairs an unsupported saved
+            value before it can reach the queue and shows the negotiated ratio and pixel dimensions
+            beside the control. Flexible backends such as ComfyUI use Wobu's curated, validated
+            ratio vocabulary rather than accepting arbitrary text. Scene composition uses the same
+            source (<a href="https://github.com/krazyjakee/wobu/issues/111">#111</a>).
+          </p>
+        </div>
+
+        <h2>Output presets</h2>
+
+        <p>
+          A preset defines section priorities, framing text, aspect and image count. This is how the
+          same node produces a costume plate one minute and a material study the next.
+        </p>
+
+        <table>
+          <tr>
+            <th>Preset</th>
+            <th>For</th>
+            <th>Emits</th>
+          </tr>
+          <tr>
+            <td>Character sheet</td>
+            <td>character, creature</td>
+            <td>Full body, neutral pose, flat light, ×4</td>
+          </tr>
+          <tr>
+            <td>Turnaround</td>
+            <td>character, creature, prop</td>
+            <td>8 named views on a locked seed — see <a href="concept-3d.html">Concept 3D</a></td>
+          </tr>
+          <tr>
+            <td>Portrait study</td>
+            <td>character</td>
+            <td>Head and shoulders, dramatic key light, ×4</td>
+          </tr>
+          <tr>
+            <td>Costume plate</td>
+            <td>character, culture</td>
+            <td>Flat-laid garments and gear</td>
+          </tr>
+          <tr>
+            <td>Prop orthographic</td>
+            <td>prop, vehicle</td>
+            <td>Three views on neutral ground, with a scale figure</td>
+          </tr>
+          <tr>
+            <td>Material study</td>
+            <td>any</td>
+            <td>Close-up surface tiles, ×6</td>
+          </tr>
+          <tr>
+            <td>Environment matte</td>
+            <td>environment, setting</td>
+            <td>Wide establishing shot, atmospheric</td>
+          </tr>
+          <tr>
+            <td>Interior</td>
+            <td>environment</td>
+            <td>Eye-level, practical lighting</td>
+          </tr>
+        </table>
+
+        <p>
+          Presets reweight rather than replace. A material study still inherits your Style Guide and
+          World Canon — it just promotes <code>materials</code> to the front and pushes
+          <code>silhouette</code> down.
+        </p>
+
+        <h2>The job queue</h2>
+
+        <p>
+          Generations run through a queue with live previews. The status bar shows queue depth, the
+          active model and the last generation time. Jobs are cancellable — a stalled backend or a
+          slow NAS must never present as a frozen app.
+        </p>
+
+        <p>
+          The queue also respects each backend's concurrency limits, so Wobu doesn't manufacture its
+          own rate-limit errors.
+        </p>
+
+        <h2>The Concepts tab</h2>
+
+        <p>
+          Results land in <strong>Concepts</strong> (<kbd>⌘3</kbd>) on the node they were generated
+          for. Hover a tile for its prompt and seed. Every result carries its full influence
+          snapshot, so you can always see exactly what produced it.
+        </p>
+
+        <h3>Pinning</h3>
+
+        <p>
+          Pinning promotes a generated image to a <code>full_ref</code> reference on that entity.
+          From then on it feeds back as conditioning for the next generation — and, because
+          references inherit, for everything downstream of that node too.
+        </p>
+
+        <div class="note">
+          <span class="note-label">This is the flywheel</span>
+          <p>
+            Iterate cheaply, promote deliberately. Generations are disposable; pinning is a
+            decision. Pin a good Vashk and every Vashk character afterwards starts from a stronger
+            place. It is the main tool for locking a look, and it is why the hundredth character is
+            easier than the first.
+          </p>
+        </div>
+
+        <h2>Forge mode</h2>
+
+        <p>
+          Forge takes the Inspector's controls and promotes them to full width, with a large result
+          grid. It is for when you are iterating hard on one subject and want to compare twenty
+          variants at once rather than squinting at a 352px column.
+        </p>
+
+        <ul>
+          <li><strong>Variant grids</strong> — sweep a parameter across a batch and compare.</li>
+          <li>
+            <strong>Seed locking</strong> per entity, so re-rolls stay in family instead of
+            producing a different character each time.
+          </li>
+          <li>
+            <strong>Generation history</strong> with replayable snapshots — reload the exact stack
+            from any past result, including layers that have since been rewritten.
+          </li>
+        </ul>
+
+        <h2>Cost and consent</h2>
+
+        <p>
+          Bring-your-own-key means every call is billed to you, so Wobu is built not to surprise
+          you:
+        </p>
+
+        <ul>
+          <li>
+            The Generate button shows an <strong>estimated cost</strong> for the batch on paid
+            providers.
+          </li>
+          <li>
+            A local ComfyUI backend shows <strong>no cost at all</strong>. That asymmetry is the
+            point, and it's a good default.
+          </li>
+          <li>
+            A per-project <strong>spend ceiling</strong> with a hard stop, because a turnaround loop
+            is exactly the kind of thing that runs two hundred images unattended.
+          </li>
+          <li>
+            Every generation record stores its provider, model and params — so actual spend is
+            reconstructable from the project folder itself.
+          </li>
+        </ul>
+
+        <div class="warn">
+          <span class="note-label">Watermarking</span>
+          <p>
+            Images generated through Google's models carry <strong>SynthID</strong> watermarking.
+            Worth knowing, since this is concept art headed into a production pipeline.
+          </p>
+        </div>
+
+        <h2>Generation records</h2>
+
+        <p>
+          Each generation writes one JSON file into the project folder, named by ULID and never
+          modified:
+        </p>
+
+        <pre><code>generations/2026-07/01ARZ3NDEKTSV4RRFFQ69G5FAV.json</code></pre>
+
+        <p>
+          It holds the user prompt, the compiled prompt, the negative prompt, the model, params and
+          seed, the output asset IDs, and the influence snapshot. Because records are write-once and
+          ULID-named, two people generating at the same time on a shared folder can never collide —
+          they simply both appear.
+        </p>
+
+        <div class="pagenav">
+          <a href="influence.html"><span>Previous</span>← The Influence Stack</a>
+          <a class="next" href="concept-3d.html"><span>Next</span>Concept 3D →</a>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

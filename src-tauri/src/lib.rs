@@ -144,6 +144,7 @@ pub fn run() {
             generate::scene_generate_start,
             generate::generation_replay,
             generate::image_reference_report,
+            generate::image_generation_capabilities,
             generate::spend_status,
             generate::spend_ceiling_set,
             generate::spend_recovery_reset,

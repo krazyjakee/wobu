@@ -220,7 +220,7 @@ const CAPABILITIES: CapabilityDef[] = [
     providers: [HUNYUAN3D, COMFYUI_MESH],
     model: false,
     activeNote:
-      'Concept 3D uses this choice for mesh generation and keeps completed GLBs in the project asset library.',
+      'Concept 3D can view and export completed GLBs from the project asset library. Starting reconstruction from this UI is not available yet.',
   },
 ]
 
@@ -551,6 +551,7 @@ function ComfyEndpointSettings() {
       setDraft(settings.comfyuiEndpoint)
       void queryClient.invalidateQueries({ queryKey: ['status_bar_backend'] })
       void queryClient.invalidateQueries({ queryKey: ['image_reference_report'] })
+      void queryClient.invalidateQueries({ queryKey: ['image_generation_capabilities'] })
       setProbe(await comfyuiEndpointProbe(settings.comfyuiEndpoint))
     } catch (reason) {
       setError(errorMessage(reason))
@@ -614,9 +615,10 @@ function ComfyEndpointSettings() {
       <p className="set-note" id="comfyui-endpoint-boundary">
         Saved in Wobu&rsquo;s application data on this computer, never in <code>project.json</code>{' '}
         or the project folder. Image generation, scene composition, replay and local mesh requests
-        all use this route. A non-loopback server receives the prompts and reference images those
-        jobs need, so enter only a server you trust. URL credentials are rejected; an authenticating
-        proxy must be configured outside Wobu.
+        all use this route; the current Concept 3D UI can only view and export existing GLBs, so it
+        cannot start that local mesh request yet. A non-loopback server receives the prompts and
+        reference images those jobs need, so enter only a server you trust. URL credentials are
+        rejected; an authenticating proxy must be configured outside Wobu.
       </p>
       {probe && (
         <p className={probe.ok ? 'prov-probe is-ok' : 'prov-probe is-bad'} role="status">

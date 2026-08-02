@@ -116,6 +116,24 @@ fn a_thumbnail_lands_beside_its_original_under_the_same_sharding() {
 }
 
 #[test]
+fn an_immediate_import_thumbnail_uses_the_bytes_in_memory_without_reading_the_original() {
+    let (_dir, project) = new_project();
+    let bytes = png(320, 240);
+    let hash = "a3f9c1d2e4b5a6978081726354453627a3f9c1d2e4b5a6978081726354453627";
+    let original_rel = format!("assets/originals/a3/{hash}.png");
+    let original = project.root().join(original_rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+    assert!(!original.exists(), "the proof requires there to be nothing ensure could reread");
+
+    let thumbnail =
+        thumbs::ensure_with_bytes(project.root(), hash, &original_rel, &bytes, &Cancel::new())
+            .expect("the already-read import bytes should be sufficient");
+
+    assert!(thumbnail.generated);
+    assert!(project.root().join(thumbnail.rel_path).is_file());
+    assert!(!original.exists(), "thumbnailing must not manufacture or read an original here");
+}
+
+#[test]
 fn the_index_only_claims_a_thumbnail_once_there_is_one() {
     // `thumbPath: null` is what the grid reads as "draw a placeholder and go
     // and ask". A row claiming a file that is not there is a broken image, so

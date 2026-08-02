@@ -1201,6 +1201,32 @@ export const imageReferenceReport = (
   > = {},
 ) => call<ImageReferenceReport>('image_reference_report', { subjectId, ...options })
 
+/**
+ * The active image backend's ordered aspect vocabulary and the exact shape a
+ * request would negotiate to. Flexible backends expose the app's curated ratio
+ * vocabulary rather than accepting arbitrary Inspector text.
+ */
+export interface ImageGenerationCapabilities {
+  provider: string
+  model: string
+  aspectRatios: string[]
+  flexibleAspect: boolean
+  previews: ImageAspectPreview[]
+}
+
+export interface ImageAspectPreview {
+  requestedAspect: string
+  actualAspect: string
+  width: number
+  height: number
+  substituted: boolean
+}
+
+export const imageGenerationCapabilities = (model?: string) =>
+  call<ImageGenerationCapabilities>('image_generation_capabilities', {
+    ...(model === undefined ? {} : { model }),
+  })
+
 export const spendStatus = () => call<SpendStatus>('spend_status')
 
 /** Null disables paid generation for the project. Amounts are integer USD micros. */

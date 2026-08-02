@@ -100,8 +100,13 @@ Backend health, active image model, job queue depth, active LLM, last generation
   receipt details name every participant rather than presenting only the primary entity.
 - **Board** — freeform pan/zoom canvas for mood boarding; images can be dragged onto a node
   to become references.
-- **Settings** — providers (Anthropic key, ComfyUI URL, Replicate/fal tokens), model defaults,
-  storage location, appearance.
+- **Settings** — **implemented** provider selection and local credentials for the adapters Wobu
+  ships, a text-model override, the machine-local ComfyUI endpoint
+  ([#108](https://github.com/krazyjakee/wobu/issues/108)), local-index inspection/rebuild,
+  autosave delay, interface scale, diagnostics, version/schema information, and project wiki export.
+  The earlier sketch's Replicate/fal token fields and storage-location picker are **not current
+  requirements**; add a canonical issue before describing either as planned. Appearance currently
+  means interface scale and the intentional dark palette, not a retained theme-switch requirement.
 
 ## Design tokens
 

@@ -6,7 +6,7 @@
 - **Frontend**: React 19 + TypeScript + Vite. Chosen over Svelte for ecosystem depth in the
   things this app leans on hardest — virtualised image grids, drag-and-drop trees, and
   three.js integration. Styling is plain CSS with the design tokens from
-  [03](03-ui-layout.md); no framework, so the prototype's CSS ports over directly.
+  [03](03-ui-layout.md), keeping the implemented layout aligned with the design contract.
 - **State**: Zustand for UI state; TanStack Query over Tauri commands for world data.
 - **Rust**: workspace of small crates, so the domain logic is testable without a webview.
 

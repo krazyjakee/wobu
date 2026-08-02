@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nodes &amp; hierarchy — Wobu Guide</title>
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><a href="index.html">wobu</a> <span>Guide</span></div>
+        <nav>
+          <div class="nav-group">Getting started</div>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Your first project</a>
+          <a href="workspace.html">The workspace</a>
+          <div class="nav-group">Building the world</div>
+          <a href="world-model.html" aria-current="page">Nodes &amp; hierarchy</a>
+          <a href="notes-and-enhance.html">Notes &amp; Enhance</a>
+          <a href="references.html">References &amp; the Board</a>
+          <div class="nav-group">Making images</div>
+          <a href="influence.html">The Influence Stack</a>
+          <a href="generating.html">Generating</a>
+          <a href="concept-3d.html">Concept 3D</a>
+          <div class="nav-group">Setup &amp; sharing</div>
+          <a href="providers.html">Providers &amp; keys</a>
+          <a href="collaboration.html">Sharing a project</a>
+          <div class="nav-group">Reference</div>
+          <a href="reference.html">Keyboard &amp; file format</a>
+        </nav>
+      </aside>
+
+      <main>
+        <p class="eyebrow">Building the world</p>
+        <h1>Nodes &amp; hierarchy</h1>
+        <p class="lede">
+          Species, characters, settings, props, cultures, vehicles — and even the Style Guide and
+          World Canon — are all the same record type. They differ only in kind, which selects an
+          icon, a colour, a set of description sections, and some default relations.
+        </p>
+
+        <p>
+          This is why there is exactly one editor to learn. It is also why adding "Factions" or
+          "Technologies" later is a configuration change rather than a new feature.
+        </p>
+
+        <pre><code>Project
+├── Style Guide      (singleton, pinned)
+├── World Canon      (singleton, pinned)
+└── Nodes            (any kind, freely nestable within kind)</code></pre>
+
+        <h2>The ten kinds</h2>
+
+        <table>
+          <tr>
+            <th>Kind</th>
+            <th>Nests</th>
+            <th>Description sections</th>
+          </tr>
+          <tr>
+            <td><span class="chip style">Style Guide</span></td>
+            <td>singleton</td>
+            <td>Medium, Rendering, Line quality, Lighting, Palette, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip world">World Canon</span></td>
+            <td>singleton</td>
+            <td>Era, Tone, Tech level, Materials, Palette, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip species">Species</span></td>
+            <td>yes — sub-species</td>
+            <td>Silhouette, Anatomy, Materials, Palette, Signature, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip culture">Culture</span></td>
+            <td>yes</td>
+            <td>Costume, Ornament, Iconography, Weapons, Materials, Palette, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip place">Setting</span></td>
+            <td>yes — Region → City → District</td>
+            <td>Climate, Architecture, Light, Wear, Materials, Palette, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip subject">Character</span></td>
+            <td>no</td>
+            <td>Silhouette, Anatomy, Costume, Materials, Palette, Signature, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip subject">Creature</span></td>
+            <td>no</td>
+            <td>Silhouette, Anatomy, Materials, Palette, Signature, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip subject">Prop</span></td>
+            <td>yes — sets</td>
+            <td>Silhouette, Materials, Wear, Palette, Signature, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip subject">Environment</span></td>
+            <td>no</td>
+            <td>Architecture, Light, Climate, Materials, Palette, Signature, Never</td>
+          </tr>
+          <tr>
+            <td><span class="chip subject">Vehicle</span></td>
+            <td>yes</td>
+            <td>Silhouette, Materials, Wear, Palette, Signature, Never</td>
+          </tr>
+        </table>
+
+        <p>
+          The sections are what make Enhance useful. A structured description with a
+          <em>Silhouette</em> field and a <em>Materials</em> field lets the prompt compiler pick the
+          right fields for a full-body shot versus a material study. A blob of prose could not.
+        </p>
+
+        <h2>Two kinds of relationship</h2>
+
+        <p>
+          Wobu distinguishes <strong>nesting</strong> from <strong>linking</strong>, and the
+          difference matters.
+        </p>
+
+        <h3>Nesting — within a kind</h3>
+        <p>
+          A node's parent is always the same kind as itself. Ember Coast contains Cinder Bay
+          contains the Kiln Quarter. Vashk has a sub-species. A lantern belongs to a prop set.
+          Nesting is what the navigator tree draws, and you change it by dragging.
+        </p>
+        <p>
+          A parent is treated as an implicit influence of full weight. The Kiln Quarter inherits
+          everything Cinder Bay says, which inherits everything Ember Coast says.
+        </p>
+
+        <h3>Linking — across kinds</h3>
+        <p>
+          Links are the edges the influence engine actually walks. Each has a role and a weight, and
+          can be disabled for a single generation without touching the world.
+        </p>
+
+        <table>
+          <tr>
+            <td><code>styled_by</code></td>
+            <td>Rendered in this art style. Implicit from the Style Guide.</td>
+          </tr>
+          <tr>
+            <td><code>species_of</code></td>
+            <td>This character or creature is of that species.</td>
+          </tr>
+          <tr>
+            <td><code>member_of</code></td>
+            <td>Belongs to that culture, guild or faction.</td>
+          </tr>
+          <tr>
+            <td><code>located_in</code></td>
+            <td>Lives in, or is found in, that setting.</td>
+          </tr>
+          <tr>
+            <td><code>related_to</code></td>
+            <td>A general association — a rival, a matching prop, a sibling design.</td>
+          </tr>
+        </table>
+
+        <p>
+          You set links from the node itself or from the <strong>Relations</strong> tab, which also
+          shows backlinks: <em>"3 characters inherit from this"</em>. Backlinks are how you find out
+          what you're about to break before you edit a species.
+        </p>
+
+        <h2>What a node holds</h2>
+
+        <table>
+          <tr>
+            <td>Name &amp; summary</td>
+            <td>The summary is one line, shown in tree tooltips and on influence cards.</td>
+          </tr>
+          <tr>
+            <td>Raw notes</td>
+            <td>Your Markdown. Never machine-written.</td>
+          </tr>
+          <tr>
+            <td>Description</td>
+            <td>The structured, enhanced sections. Editable.</td>
+          </tr>
+          <tr>
+            <td>Description state</td>
+            <td><code>none · enhancing · fresh · edited · stale</code></td>
+          </tr>
+          <tr>
+            <td>Attributes</td>
+            <td>Kind-specific fields — scale, era, biome, material.</td>
+          </tr>
+          <tr>
+            <td>Tags</td>
+            <td>Free-form, for filtering.</td>
+          </tr>
+          <tr>
+            <td>Cover asset</td>
+            <td>The image shown on cards and in the tree.</td>
+          </tr>
+          <tr>
+            <td>Links</td>
+            <td>The influence edges above.</td>
+          </tr>
+        </table>
+
+        <h3>Description state, and staleness</h3>
+        <p>
+          A description goes <strong>stale</strong> when the raw notes changed, or when something
+          upstream changed, since the last Enhance. Wobu shows a quiet dot and a re-enhance
+          affordance — it never silently regenerates, because regenerating costs your money and
+          might undo an edit you made by hand.
+        </p>
+        <p>
+          <strong>Edited</strong> means you changed the machine's description yourself. That is
+          fully supported; Enhance offers a diff-and-accept rather than clobbering your edit.
+        </p>
+
+        <h2>Creating and organising</h2>
+
+        <ul>
+          <li>
+            <kbd>⌘N</kbd>, the <strong>+ New</strong> button at the bottom of the navigator, or
+            right-click → <strong>New</strong>. You pick a kind, a name, and — for nestable kinds —
+            an optional parent.
+          </li>
+          <li>
+            <strong>Duplicate</strong> copies notes, description and links. It is the fastest way to
+            make the second of anything.
+          </li>
+          <li>
+            <strong>Drag to re-parent.</strong> This changes what the node inherits, so it will
+            often mark descendants stale.
+          </li>
+          <li>
+            <strong>Delete</strong> asks for confirmation and removes the Markdown file. Generations
+            that referenced the node stay on disk — they are write-once history.
+          </li>
+        </ul>
+
+        <div class="note">
+          <span class="note-label">Getting the altitude right</span>
+          <p>
+            The single most common mistake is writing at the wrong level. If a detail is true of
+            every Vashk, it belongs on the species. If it is true only of guild members, it belongs
+            on the culture. If it is true only of Kael, it belongs on Kael.
+          </p>
+          <p>
+            Put it too low and you repeat yourself and drift. Put it too high and it contaminates
+            everything. When unsure, ask: <em>would this be wrong for a sibling node?</em> If yes,
+            it's too high.
+          </p>
+        </div>
+
+        <div class="pagenav">
+          <a href="workspace.html"><span>Previous</span>← The workspace</a>
+          <a class="next" href="notes-and-enhance.html"><span>Next</span>Notes &amp; Enhance →</a>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

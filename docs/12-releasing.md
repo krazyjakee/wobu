@@ -84,6 +84,25 @@ version. It creates a draft even after successful builds. Before publishing, con
 matrix jobs passed, the draft contains installers from all three operating systems, and its
 unsigned-install warning is intact.
 
+## Implementation and documentation close-out
+
+Before closing an implementation issue or including it in a release, use this lightweight checklist
+in the same change (write “not affected” explicitly rather than silently skipping an item):
+
+- [ ] Update the feature's status and canonical issue link in [the roadmap](09-roadmap.md). Use
+  **validated** only when an acceptance pass actually records evidence.
+- [ ] Walk the user-facing flow in [`docs/guide`](guide/). Describe only controls that are reachable
+  in the current UI; label retained future steps **planned** and link their open issue.
+- [ ] Add or update repeatable contracts and the honest manual smoke boundary in
+  [acceptance evidence](13-acceptance-evidence.md).
+- [ ] Check Settings, inline help, empty states, tooltips, and shortcut tables for stale capability
+  claims.
+- [ ] Put the issue link beside any retained requirement in planning documents. Closed/open issue
+  state is authoritative when prose and tracker disagree.
+
+The implementation issue should not close with contradictory public guidance merely because the
+binary is correct. Conversely, documentation alone is not acceptance evidence for a runtime flow.
+
 ## Version audit tooling
 
 [`release/versions.json`](../release/versions.json) is the release audit record:

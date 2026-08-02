@@ -146,7 +146,32 @@ pub fn ensure(root: &Path, hash: &str, original_rel: &str, cancel: &Cancel) -> R
     let bytes = assets::read_cancellable(&source, cancel)?;
     cancel.check()?;
 
-    let webp = render(&source, &bytes)?;
+    ensure_with_bytes(root, hash, original_rel, &bytes, cancel)
+}
+
+/// Make a thumbnail from bytes the caller already owns.
+///
+/// The import path uses this immediately after publishing the original. Its
+/// source file may be hundreds of megabytes away on a share, and reading it a
+/// second time merely to decode the same bytes doubles both the latency and the
+/// I/O. `original_rel` is retained for an honest decoder error path; it is not
+/// opened here.
+pub fn ensure_with_bytes(
+    root: &Path,
+    hash: &str,
+    original_rel: &str,
+    bytes: &[u8],
+    cancel: &Cancel,
+) -> Result<Thumbnail> {
+    let rel = rel_path(hash);
+    if exists(root, hash) {
+        return Ok(Thumbnail { rel_path: rel, generated: false });
+    }
+
+    cancel.check()?;
+    let source = paths::from_rel_string(root, original_rel);
+
+    let webp = render(&source, bytes)?;
     cancel.check()?;
 
     let path = paths::from_rel_string(root, &rel);

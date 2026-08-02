@@ -94,6 +94,26 @@ pub struct Open {
     pub offline: bool,
 }
 
+/// The identity of one installed project at one moment in time.
+///
+/// Long-running filesystem work takes this out of the slot, releases the
+/// project mutex, then presents it again for the local-index commit. The
+/// generation is necessary even though project ids and roots are stable: the
+/// user can close and reopen the same folder while the work is in flight, and
+/// that new session must not inherit a commit planned by the old one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTicket {
+    pub(crate) project: Id,
+    pub(crate) root: PathBuf,
+    pub(crate) generation: u64,
+}
+
+impl ProjectTicket {
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+}
+
 #[derive(Default)]
 pub struct AppState {
     slot: Arc<Mutex<Option<Open>>>,
@@ -231,6 +251,51 @@ impl AppState {
         f(&mut open.project)
     }
 
+    /// Snapshot an installed project and a small piece of its local state.
+    ///
+    /// `prepare` runs under the project mutex and must obey the same bounded
+    /// rule as [`with`](Self::with). The returned ticket is what lets a caller
+    /// do slow work with no lock held and commit only if this exact open
+    /// session is still installed.
+    pub fn ticket<T>(
+        &self,
+        prepare: impl FnOnce(&Project) -> CommandResult<T>,
+    ) -> CommandResult<(ProjectTicket, T)> {
+        let guard = self.slot.lock();
+        let open = guard.as_ref().ok_or_else(WobuError::no_project_open)?;
+        if open.offline {
+            return Err(StoreError::Disconnected.into());
+        }
+        let ticket = ProjectTicket {
+            project: open.project.id(),
+            root: open.project.root().to_path_buf(),
+            generation: self.generation.load(Ordering::SeqCst),
+        };
+        let prepared = prepare(&open.project)?;
+        Ok((ticket, prepared))
+    }
+
+    /// Commit work planned under [`ticket`](Self::ticket), if its exact open
+    /// session is still current.
+    pub fn with_ticket<T>(
+        &self,
+        ticket: &ProjectTicket,
+        f: impl FnOnce(&mut Project) -> CommandResult<T>,
+    ) -> CommandResult<T> {
+        let mut guard = self.slot.lock();
+        let current_generation = self.generation.load(Ordering::SeqCst);
+        let open = guard.as_mut().filter(|open| {
+            current_generation == ticket.generation
+                && open.project.id() == ticket.project
+                && open.project.root() == ticket.root
+        });
+        let open = open.ok_or_else(WobuError::no_project_open)?;
+        if open.offline {
+            return Err(StoreError::Disconnected.into());
+        }
+        f(&mut open.project)
+    }
+
     /// Like [`with`](Self::with), but for callers that are fine with there
     /// being nothing open.
     pub fn peek<T>(&self, f: impl FnOnce(Option<&Project>) -> T) -> T {
@@ -347,7 +412,11 @@ impl AppState {
         if let Some(handover) = self.handover() {
             handover.opening(id, &root);
         }
-        let generation = self.generation.load(Ordering::SeqCst);
+        // `close` invalidates the old session; this second bump identifies the
+        // new one. Without it, a ticket captured from the old slot after
+        // `close` bumped the counter but before it took the slot could match a
+        // reopen of the same folder.
+        let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         // After `close`, deliberately: reopening the same folder must not leave
         // the previous session's file beside the new one, which would show the
         // user to themselves as a second person in the world.
@@ -861,6 +930,92 @@ mod tests {
 
         release_tx.send(()).unwrap();
         assert!(matches!(thread.join().unwrap(), Outcome::Reconciled(false)));
+    }
+
+    #[test]
+    fn an_artificially_blocked_import_or_decode_does_not_delay_index_commands() {
+        let (_dir, _root, state) = open_test_state("Unlocked asset work");
+        let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+
+        // This is the exact shape used by import and lazy thumbnail commands:
+        // bounded preparation, arbitrary filesystem/pixel work, bounded index
+        // commit. Hold the middle phase open until the assertion has run.
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = state.handle();
+        let thread = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            worker.with_ticket(&ticket, |project| Ok(project.list_assets()?.len()))
+        });
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+
+        let began = Instant::now();
+        let count = state.with(|project| Ok(project.list_nodes()?.len())).unwrap();
+        let elapsed = began.elapsed();
+        assert_eq!(count, 2, "new projects contain the two singleton nodes");
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "node_list waited {elapsed:?} behind unlocked import/decode work"
+        );
+
+        release_tx.send(()).unwrap();
+        assert_eq!(thread.join().unwrap().unwrap(), 0);
+    }
+
+    #[test]
+    fn reopening_the_same_folder_invalidates_an_old_project_ticket() {
+        let (_dir, root, state) = open_test_state("Same folder");
+        let original_id = state.open_id().unwrap();
+        let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+
+        // Mirror close/install without needing a Tauri AppHandle: the old
+        // Project/index handle must be gone before the same folder is opened.
+        state.generation.fetch_add(1, Ordering::SeqCst);
+        drop(state.slot.lock().take());
+        let reopened = Project::open(&root).unwrap();
+        assert_eq!(reopened.id(), original_id);
+        state.generation.fetch_add(1, Ordering::SeqCst);
+        *state.slot.lock() = Some(Open {
+            project: reopened,
+            watcher: None,
+            presence: Presence::start(&root),
+            offline: false,
+        });
+
+        let error = state.with_ticket(&ticket, |_| Ok(())).unwrap_err();
+        assert_eq!(error.code, crate::error::Code::NoProjectOpen);
+    }
+
+    #[test]
+    fn switching_projects_rejects_the_old_projects_index_commit() {
+        let (dir, _root, state) = open_test_state("First world");
+        let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+
+        state.generation.fetch_add(1, Ordering::SeqCst);
+        drop(state.slot.lock().take());
+        let next = Project::create(&dir.0, "Second world").unwrap();
+        let next_root = next.root().to_path_buf();
+        state.generation.fetch_add(1, Ordering::SeqCst);
+        *state.slot.lock() = Some(Open {
+            project: next,
+            watcher: None,
+            presence: Presence::start(&next_root),
+            offline: false,
+        });
+
+        assert!(state.with_ticket(&ticket, |_| Ok(())).is_err());
+        assert_eq!(state.open_id(), state.peek(|project| project.map(Project::id)));
+    }
+
+    #[test]
+    fn going_offline_after_preparation_rejects_the_index_commit() {
+        let (_dir, _root, state) = open_test_state("Offline transition");
+        let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+        state.slot.lock().as_mut().unwrap().offline = true;
+
+        let error = state.with_ticket(&ticket, |_| Ok(())).unwrap_err();
+        assert_eq!(error.code, crate::error::Code::ShareUnmounted);
     }
 
     #[test]

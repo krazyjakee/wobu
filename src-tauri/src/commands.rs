@@ -48,7 +48,7 @@ use crate::enhance::Pending;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 use crate::machine::MachineSettings;
-use crate::state::{AppState, Jobs, WORLD_CHANGED};
+use crate::state::{AppState, Jobs, ProjectTicket, WORLD_CHANGED};
 
 const ASSET_TRANSFER_CHUNK_BYTES: usize = 1024 * 1024;
 const ASSET_TRANSFER_MAX_BYTES: u64 = 512 * 1024 * 1024;
@@ -57,7 +57,7 @@ const ASSET_TRANSFER_MAX_BYTES: u64 = 512 * 1024 * 1024;
 pub struct AssetTransfers(Mutex<HashMap<String, AssetTransfer>>);
 
 struct AssetTransfer {
-    project_id: Id,
+    project: ProjectTicket,
     path: PathBuf,
     file: File,
     kind: AssetKind,
@@ -551,9 +551,10 @@ pub async fn asset_import(
     kind: AssetKind,
 ) -> CommandResult<ImportedAsset> {
     let handle = state.handle();
+    let (project, root) = handle.ticket(|project| Ok(project.asset_import_root()?))?;
     blocking("The import thread stopped unexpectedly.", move || {
-        let imported = handle.with(|p| Ok(p.import_asset_file(&PathBuf::from(path), kind)?))?;
-        Ok(thumbnailed(&handle, imported))
+        let imported = import_file_unlocked(&root, &PathBuf::from(path), kind)?;
+        commit_import(&handle, &project, imported)
     })
     .await?
 }
@@ -577,7 +578,7 @@ pub fn asset_import_transfer_begin(
             ASSET_TRANSFER_MAX_BYTES / 1024 / 1024
         )));
     }
-    let project_id = state.with(|project| Ok(project.id()))?;
+    let (project, ()) = state.ticket(|_| Ok(()))?;
     let transfer_id = wobu_core::new_id().to_string();
     let path = std::env::temp_dir().join(format!("wobu-asset-{transfer_id}.part"));
     let file =
@@ -586,7 +587,7 @@ pub fn asset_import_transfer_begin(
         })?;
     asset_transfers.0.lock().insert(
         transfer_id.clone(),
-        AssetTransfer { project_id, path, file, kind, received_bytes: 0, total_bytes },
+        AssetTransfer { project, path, file, kind, received_bytes: 0, total_bytes },
     );
     Ok(AssetTransferProgress { transfer_id, received_bytes: 0, total_bytes })
 }
@@ -678,31 +679,26 @@ pub async fn asset_import_transfer_finish(
         remove_asset_transfer(transfer);
         return Err(invalid_asset_transfer("The pasted image transfer is incomplete."));
     }
-    let current_project = match state.with(|project| Ok(project.id())) {
-        Ok(project_id) => project_id,
-        Err(error) => {
-            remove_asset_transfer(transfer);
-            return Err(error);
-        }
-    };
-    if current_project != transfer.project_id {
-        remove_asset_transfer(transfer);
-        return Err(invalid_asset_transfer(
-            "The project changed before the pasted image finished transferring.",
-        ));
-    }
+    let root =
+        match state.with_ticket(&transfer.project, |project| Ok(project.asset_import_root()?)) {
+            Ok(root) => root,
+            Err(error) => {
+                remove_asset_transfer(transfer);
+                return Err(error);
+            }
+        };
     if let Err(error) = transfer.file.flush().and_then(|()| transfer.file.sync_all()) {
         remove_asset_transfer(transfer);
         return Err(asset_transfer_io("Could not finish buffering the pasted image.", error));
     }
 
-    let AssetTransfer { project_id, path, file, kind, .. } = transfer;
+    let AssetTransfer { project, path, file, kind, .. } = transfer;
     drop(file);
     let handle = state.handle();
     blocking("The import thread stopped unexpectedly.", move || {
-        let result = handle
-            .with_project(project_id, |project| Ok(project.import_asset_file(&path, kind)?))
-            .map(|imported| thumbnailed(&handle, imported));
+        let result = import_file_unlocked(&root, &path, kind)
+            .map_err(WobuError::from)
+            .and_then(|imported| commit_import(&handle, &project, imported));
         let _ = fs::remove_file(path);
         result
     })
@@ -740,25 +736,71 @@ fn remove_asset_transfer(transfer: AssetTransfer) {
     let _ = fs::remove_file(path);
 }
 
-/// Draw the thumbnail for a blob that has just landed, and fold it into what
-/// the import reports.
-///
-/// A second lock acquisition rather than one, deliberately: the import and the
-/// decode are separate pieces of work and the project mutex is given back
-/// between them, so a paste of twenty references does not lock every other
-/// command out for twenty decodes in a row.
-///
-/// A thumbnail that cannot be drawn is *not* an import failure and is swallowed
-/// here. The blob is in the folder, indexed, linkable and sendable; the picture
-/// beside it is a preview. `wobu_store::thumbs` is built so that the next thing
-/// to ask — a tile scrolling into view, `asset_thumbs_ensure` — tries again.
-fn thumbnailed(state: &AppState, mut imported: ImportedAsset) -> ImportedAsset {
+/// Read one source once, then publish its original and derive its thumbnail
+/// from those same bytes. Everything in this function may be slow and callers
+/// must run it without the project mutex held.
+fn import_file_unlocked(
+    root: &Path,
+    source: &Path,
+    kind: AssetKind,
+) -> wobu_store::Result<ImportedAsset> {
+    import_file_unlocked_with(root, source, kind, wobu_store::assets::read_cancellable)
+}
+
+fn import_file_unlocked_with(
+    root: &Path,
+    source: &Path,
+    kind: AssetKind,
+    read: impl FnOnce(&Path, &wobu_store::Cancel) -> wobu_store::Result<Vec<u8>>,
+) -> wobu_store::Result<ImportedAsset> {
+    let cancel = wobu_store::Cancel::new();
+    let bytes = read(source, &cancel)?;
+    let mut imported = wobu_store::assets::import_with(root, &bytes, kind, &cancel)?;
+
     let id = imported.asset.id;
-    match state.with(|p| Ok(p.ensure_thumb(id, &wobu_store::Cancel::new())?)) {
-        Ok(thumb) => imported.asset.thumb_path = thumb,
-        Err(e) => diag::error(format!("could not thumbnail {id}: {}", e.message)),
+    match wobu_store::thumbs::ensure_with_bytes(
+        root,
+        &imported.asset.hash,
+        &imported.asset.rel_path,
+        &bytes,
+        &cancel,
+    ) {
+        Ok(thumb) => imported.asset.thumb_path = Some(thumb.rel_path),
+        Err(error) => diag::error(format!("could not thumbnail {id}: {error}")),
     }
-    imported
+    Ok(imported)
+}
+
+/// The only mutex-held part of an import: install its already-published facts
+/// in the local index, after verifying the exact open session is unchanged.
+fn commit_import(
+    state: &AppState,
+    project: &ProjectTicket,
+    imported: ImportedAsset,
+) -> CommandResult<ImportedAsset> {
+    state.with_ticket(project, |project| Ok(project.record_import(&imported)?))?;
+    Ok(imported)
+}
+
+/// Filesystem and pixel half of one lazy thumbnail request.
+fn ensure_thumb_unlocked(
+    root: &Path,
+    target: &wobu_store::ThumbTarget,
+    can_write: bool,
+) -> wobu_store::Result<Option<wobu_store::Thumbnail>> {
+    if !wobu_store::thumbs::exists(root, &target.hash) && !can_write {
+        return Ok(None);
+    }
+    match wobu_store::thumbs::ensure(
+        root,
+        &target.hash,
+        &target.rel_path,
+        &wobu_store::Cancel::new(),
+    ) {
+        Ok(thumbnail) => Ok(Some(thumbnail)),
+        Err(wobu_store::Error::Undecodable { .. }) => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// Every blob in the open project, newest first.
@@ -1011,12 +1053,41 @@ pub async fn asset_thumb(
     asset_id: Id,
 ) -> CommandResult<Option<String>> {
     let handle = state.handle();
-    let rel = blocking("The thumbnail thread stopped unexpectedly.", move || {
-        handle.with(|p| Ok(p.ensure_thumb(asset_id, &wobu_store::Cancel::new())?))
+    let prepared =
+        handle.ticket(|project| Ok((project.thumb_target(asset_id)?, project.can_write_thumb())));
+    let (project, (target, can_write)) = match prepared {
+        Ok(prepared) => prepared,
+        Err(error) if error.code == Code::ShareUnmounted => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let Some(target) = target else { return Ok(None) };
+    let root = project.root().to_path_buf();
+    let work = target.clone();
+    let thumbnail = blocking("The thumbnail thread stopped unexpectedly.", move || {
+        ensure_thumb_unlocked(&root, &work, can_write)
     })
     .await??;
+    let Some(thumbnail) = thumbnail else { return Ok(None) };
 
-    state.peek(|p| Ok(rel.and_then(|rel| absolute(p?, &rel))))
+    // Pure local-index mutation under the mutex. The path was proved present
+    // by `ensure` above; joining it does not touch the filesystem.
+    let commit = handle.with_ticket(&project, |project| {
+        if thumbnail.generated {
+            project.verify_writable()?;
+        }
+        Ok(project.record_thumb_targets(std::slice::from_ref(&target))?)
+    });
+    if let Err(error) = commit {
+        if error.code == Code::ShareUnmounted || error.code == Code::ReadOnly {
+            return Ok(None);
+        }
+        return Err(error);
+    }
+    Ok(Some(
+        wobu_store::paths::from_rel_string(project.root(), &thumbnail.rel_path)
+            .to_string_lossy()
+            .into_owned(),
+    ))
 }
 
 /// The absolute path of one blob itself, for the viewer.
@@ -1054,16 +1125,32 @@ pub async fn asset_thumbs_ensure(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> CommandResult<usize> {
-    let targets = state.with(|p| Ok(p.missing_thumbs()?))?;
-    let root = state.peek(|p| p.map(|p| p.root().to_path_buf()));
-    let (Some(root), false) = (root, targets.is_empty()) else { return Ok(0) };
+    let prepared =
+        state.ticket(|project| Ok((project.missing_thumbs()?, project.can_write_thumb())));
+    let (project, (targets, can_write)) = match prepared {
+        Ok(prepared) => prepared,
+        Err(error) if error.code == Code::ShareUnmounted => return Ok(0),
+        Err(error) => return Err(error),
+    };
+    if targets.is_empty() {
+        return Ok(0);
+    }
+    let root = project.root().to_path_buf();
+    let work = targets.clone();
 
     let cancel = state.begin_thumbs();
     let done = {
         let emitter = app.clone();
         blocking("The thumbnail thread stopped unexpectedly.", move || {
             let mut last = 0u8;
-            wobu_store::thumbs::ensure_all(&root, &targets, &cancel, &mut |p| {
+            if !can_write {
+                return Ok(work
+                    .iter()
+                    .filter(|target| wobu_store::thumbs::exists(&root, &target.hash))
+                    .map(|target| target.asset_id)
+                    .collect());
+            }
+            wobu_store::thumbs::ensure_all(&root, &work, &cancel, &mut |p| {
                 // Throttled to whole percentage points, for the reason
                 // `project_open` throttles: a thousand events through the
                 // bridge is work taken from the pass itself.
@@ -1087,13 +1174,21 @@ pub async fn asset_thumbs_ensure(
         Err(wobu_store::Error::Cancelled) => return Ok(0),
         Err(e) => return Err(e.into()),
     };
-    state.with(|p| Ok(p.record_thumbs(&made)?))?;
+    let made: HashSet<_> = made.into_iter().collect();
+    let completed: Vec<_> =
+        targets.into_iter().filter(|target| made.contains(&target.asset_id)).collect();
+    state.with_ticket(&project, |project| {
+        if can_write {
+            project.verify_writable()?;
+        }
+        Ok(project.record_thumb_targets(&completed)?)
+    })?;
     // The folder gained files, but under `assets/thumbs/` — which the watcher
     // does not treat as a world change, and which nothing would otherwise
     // invalidate. Without this the grid keeps its placeholders until something
     // else happens to touch the project.
     let _ = app.emit(WORLD_CHANGED, ());
-    Ok(made.len())
+    Ok(completed.len())
 }
 
 /// Stop a thumbnail pass in progress.
@@ -2363,6 +2458,8 @@ pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
 /// round-trip would agree with itself no matter what the frontend believes.
 #[cfg(test)]
 mod bridge {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use wobu_store::{AssetUsageRole, ImportWarning};
 
     use super::*;
@@ -2375,7 +2472,11 @@ mod bridge {
         transfers.0.lock().insert(
             transfer_id.clone(),
             AssetTransfer {
-                project_id: wobu_core::new_id(),
+                project: ProjectTicket {
+                    project: wobu_core::new_id(),
+                    root: PathBuf::new(),
+                    generation: 0,
+                },
                 path: path.clone(),
                 file,
                 kind: AssetKind::Reference,
@@ -2411,6 +2512,59 @@ mod bridge {
         assert_eq!(fs::metadata(&path).unwrap().len(), total);
         assert!(transfers.cancel(&transfer_id));
         assert!(!path.exists(), "Cancel must remove the staged file");
+    }
+
+    #[test]
+    fn the_chunked_transfer_import_reads_its_staged_source_once_before_the_index_commit() {
+        let dir =
+            std::env::temp_dir().join(format!("wobu-transfer-import-{}", wobu_core::new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let mut project = Project::create(&dir, "Transfer target").unwrap();
+        let root = project.asset_import_root().unwrap();
+        let staged = dir.join("completed-transfer.part");
+        let reads = AtomicUsize::new(0);
+
+        let imported =
+            import_file_unlocked_with(&root, &staged, AssetKind::Reference, |path, _cancel| {
+                assert_eq!(path, staged);
+                reads.fetch_add(1, Ordering::SeqCst);
+                // Header-complete so import succeeds; deliberately pixel-
+                // incomplete so the best-effort immediate thumbnail is null.
+                let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+                png.extend_from_slice(&13u32.to_be_bytes());
+                png.extend_from_slice(b"IHDR");
+                png.extend_from_slice(&64u32.to_be_bytes());
+                png.extend_from_slice(&64u32.to_be_bytes());
+                png.extend_from_slice(&[8, 6, 0, 0, 0]);
+                Ok(png)
+            })
+            .unwrap();
+
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+        assert!(project.list_assets().unwrap().is_empty(), "slow work must not mutate the index");
+        project.record_import(&imported).unwrap();
+        assert_eq!(project.list_assets().unwrap(), [imported.asset]);
+        drop(project);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_read_only_thumbnail_snapshot_never_attempts_a_missing_file_write() {
+        let root =
+            std::env::temp_dir().join(format!("wobu-read-only-thumb-{}", wobu_core::new_id()));
+        fs::create_dir_all(&root).unwrap();
+        let target = wobu_store::ThumbTarget {
+            asset_id: wobu_core::new_id(),
+            hash: "a3f9c1d2e4b5a6978081726354453627a3f9c1d2e4b5a6978081726354453627".into(),
+            rel_path: "assets/originals/a3/missing.png".into(),
+        };
+
+        assert_eq!(ensure_thumb_unlocked(&root, &target, false).unwrap(), None);
+        assert!(
+            !root.join("assets").exists(),
+            "a read-only/missing thumbnail request must perform no write at all"
+        );
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

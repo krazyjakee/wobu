@@ -444,6 +444,8 @@ describe('settings control accessibility', () => {
 describe('the machine-local ComfyUI endpoint', () => {
   it('loads, persists, and probes one route without writing project provider data', async () => {
     await open()
+    const capabilityKey = ['image_generation_capabilities', 'world', 'flux-dev']
+    qc.setQueryData(capabilityKey, { width: 2048, height: 2048 })
     const field = await screen.findByLabelText('Server URL')
     expect(field).toHaveValue('http://127.0.0.1:8188')
 
@@ -457,6 +459,7 @@ describe('the machine-local ComfyUI endpoint', () => {
       expect(h.invoke).toHaveBeenCalledWith('comfyui_endpoint_probe', {
         endpoint: 'http://renderbox.local:9000/comfy',
       })
+      expect(qc.getQueryState(capabilityKey)?.isInvalidated).toBe(true)
     })
     expect(await screen.findByRole('status')).toHaveTextContent(/Connected to ComfyUI/)
     expect(h.invoke).not.toHaveBeenCalledWith(
@@ -484,12 +487,12 @@ describe('the machine-local ComfyUI endpoint', () => {
     )
   })
 
-  it('describes the image and Concept 3D surfaces that are actually present', async () => {
+  it('describes the image and Concept 3D surfaces that are actually reachable', async () => {
     await open()
 
     expect(screen.queryByText(/Nothing in this build generates images yet/)).toBeNull()
-    expect(screen.queryByText(/Concept 3D generation surface is not in this build yet/)).toBeNull()
     expect(screen.getByText(/Generate and Forge use this choice/)).toBeTruthy()
-    expect(screen.getByText(/Concept 3D uses this choice for mesh generation/)).toBeTruthy()
+    expect(screen.getByText(/Concept 3D can view and export completed GLBs/)).toBeTruthy()
+    expect(screen.getAllByText(/cannot start.*local mesh request yet/i)).not.toHaveLength(0)
   })
 })

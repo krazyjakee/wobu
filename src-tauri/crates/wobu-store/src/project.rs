@@ -1394,10 +1394,33 @@ impl Project {
         kind: AssetKind,
         cancel: &Cancel,
     ) -> Result<ImportedAsset> {
-        self.ensure_writable()?;
-        let imported = assets::import_with(&self.root, bytes, kind, cancel)?;
-        self.index.upsert_asset(&imported.asset)?;
+        let root = self.asset_import_root()?;
+        let imported = assets::import_with(&root, bytes, kind, cancel)?;
+        self.record_import(&imported)?;
         Ok(imported)
+    }
+
+    /// Validate an import while the shell holds its project mutex, then hand
+    /// the root out by value for the expensive read/hash/write phase.
+    pub fn asset_import_root(&self) -> Result<PathBuf> {
+        self.verify_writable()?;
+        Ok(self.root.clone())
+    }
+
+    /// Recheck the write preconditions immediately before a staged commit.
+    pub fn verify_writable(&self) -> Result<()> {
+        self.ensure_writable()
+    }
+
+    /// Commit an already-published import to the machine-local index.
+    ///
+    /// The import worker has just published the content-addressed blob and the
+    /// shell verifies its project ticket before calling this method. The one
+    /// bounded project-presence check here catches a share that disconnected
+    /// during that work; source/blob I/O remains outside the global mutex.
+    pub fn record_import(&mut self, imported: &ImportedAsset) -> Result<()> {
+        self.verify_writable()?;
+        self.index.upsert_asset(&imported.asset)
     }
 
     /// The same, for a file the user dropped or picked rather than bytes the
@@ -1764,6 +1787,49 @@ impl Project {
                 rel_path: asset.rel_path,
             })
             .collect())
+    }
+
+    /// The immutable facts needed to draw one asset's thumbnail.
+    ///
+    /// Returned by value so source I/O and pixel work can happen after the
+    /// project mutex has been released.
+    pub fn thumb_target(&self, id: Id) -> Result<Option<crate::thumbs::ThumbTarget>> {
+        Ok(self.index.asset(id)?.map(|asset| crate::thumbs::ThumbTarget {
+            asset_id: asset.id,
+            hash: asset.hash,
+            rel_path: asset.rel_path,
+        }))
+    }
+
+    /// Whether a thumbnail missing from disk may be written right now.
+    ///
+    /// Existing thumbnails remain usable in read-only projects, so callers
+    /// carry this answer beside the target rather than rejecting the request.
+    pub fn can_write_thumb(&self) -> bool {
+        self.ensure_writable().is_ok()
+    }
+
+    /// Record thumbnail results already proved present outside the shell lock.
+    ///
+    /// Asset identity is rechecked in the local index before mutation. There is
+    /// intentionally no filesystem access here: checking immediately before
+    /// this call offers no stronger guarantee against a collaborator deleting
+    /// a disposable thumbnail immediately after it, and would block every
+    /// index query on a share stat for each result.
+    pub fn record_thumb_targets(&mut self, targets: &[crate::thumbs::ThumbTarget]) -> Result<()> {
+        for target in targets {
+            let Some(mut asset) = self.index.asset(target.asset_id)? else { continue };
+            if asset.hash != target.hash || asset.rel_path != target.rel_path {
+                continue;
+            }
+            let rel = crate::thumbs::rel_path(&asset.hash);
+            if asset.thumb_path.as_deref() == Some(rel.as_str()) {
+                continue;
+            }
+            asset.thumb_path = Some(rel);
+            self.index.upsert_asset(&asset)?;
+        }
+        Ok(())
     }
 
     /// Make one blob's thumbnail if the folder has not got one, and record it.

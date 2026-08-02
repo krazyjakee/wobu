@@ -1,6 +1,6 @@
 # Acceptance evidence
 
-This page records what the repository can prove about the M1 and M5 acceptance
+This page records what the repository can prove about the M1 and M6 acceptance
 passes. It deliberately separates repeatable contract evidence from checks that
 need a running desktop app, a configured external application, or live provider
 credentials. Passing a unit test is not described as having clicked through a
@@ -25,7 +25,10 @@ the resulting `git diff`. It validates the desktop and third-party packaging on
 the current host; it is not a substitute for the contracts above and it should
 be repeated for a release candidate.
 
-## M5 — first generation loop
+## M6 — first generation loop
+
+The canonical GitHub milestone is M6. The closed acceptance tracker retains its original
+pre-sync-insertion title, [“M5 acceptance” #57](https://github.com/krazyjakee/wobu/issues/57).
 
 | Acceptance claim | Repeatable evidence |
 | --- | --- |

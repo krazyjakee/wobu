@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wobu — Product Guide</title>
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><a href="index.html">wobu</a> <span>Guide</span></div>
+        <nav>
+          <div class="nav-group">Getting started</div>
+          <a href="index.html" aria-current="page">Overview</a>
+          <a href="getting-started.html">Your first project</a>
+          <a href="workspace.html">The workspace</a>
+          <div class="nav-group">Building the world</div>
+          <a href="world-model.html">Nodes &amp; hierarchy</a>
+          <a href="notes-and-enhance.html">Notes &amp; Enhance</a>
+          <a href="references.html">References &amp; the Board</a>
+          <div class="nav-group">Making images</div>
+          <a href="influence.html">The Influence Stack</a>
+          <a href="generating.html">Generating</a>
+          <a href="concept-3d.html">Concept 3D</a>
+          <div class="nav-group">Setup &amp; sharing</div>
+          <a href="providers.html">Providers &amp; keys</a>
+          <a href="collaboration.html">Sharing a project</a>
+          <div class="nav-group">Reference</div>
+          <a href="reference.html">Keyboard &amp; file format</a>
+        </nav>
+      </aside>
+
+      <main>
+        <p class="eyebrow">Product guide</p>
+        <h1>Wobu</h1>
+        <p class="lede">
+          Wobu is a local-first world building tool for producing concept art and concept 3D art.
+          You author your world once — art style, lore, species, cultures, places — and every image
+          you generate inherits that context automatically.
+        </p>
+
+        <h2>The idea in one paragraph</h2>
+
+        <p>
+          Every image tool treats a prompt as a blank page. But world building is not a sequence of
+          unrelated prompts — it is a <strong>tree</strong>. A character belongs to a species, which
+          belongs to a world, which is rendered in a house art style. Today that context lives in
+          your head and gets retyped, badly and differently, into every prompt. That is exactly
+          where visual consistency dies.
+        </p>
+
+        <p>
+          Wobu asks you to write it down once, at the level where it belongs. Style at the project
+          level. Anatomy at the species level. Costume at the culture level. Personality at the
+          character level. When you hit <strong>Generate</strong> on a character, the prompt is
+          compiled from that whole chain — and you can see exactly which layer contributed which
+          words.
+        </p>
+
+        <div class="prompt">
+          <span class="f style">gritty painterly concept art, heavy rim light</span> ·
+          <span class="f world">ash-choked post-eruption coast, late iron age</span> ·
+          <span class="f species">tall narrow-shouldered digitigrade humanoid</span> ·
+          <span class="f culture">ember guild kiln-glaze plate, signet at the collarbone</span> ·
+          <span class="f place">cinder bay harbour light, salt-bleached timber</span> ·
+          <span class="f subject">Kael Vantris, scarred, ex-guild, full body</span>
+        </div>
+
+        <p>
+          Every fragment above is tinted in the colour of the layer that contributed it. That
+          attribution is always on screen, and any layer can be muted or reweighted for a single
+          generation without editing the world.
+        </p>
+
+        <h2>Start here</h2>
+
+        <div class="cards">
+          <a class="card" href="getting-started.html">
+            <h3>Your first project →</h3>
+            <p>
+              Create a project, write a style guide, and get a world tree standing in about fifteen
+              minutes.
+            </p>
+          </a>
+          <a class="card" href="workspace.html">
+            <h3>The workspace →</h3>
+            <p>
+              A tour of the mode rail, navigator, editor and inspector — where everything lives.
+            </p>
+          </a>
+          <a class="card" href="world-model.html">
+            <h3>Nodes &amp; hierarchy →</h3>
+            <p>The ten entity kinds, how they nest, and how influence flows between them.</p>
+          </a>
+          <a class="card" href="influence.html">
+            <h3>The Influence Stack →</h3>
+            <p>How your notes become a prompt, and how to steer it without rewriting the world.</p>
+          </a>
+        </div>
+
+        <h2>What makes Wobu different</h2>
+
+        <h3>The hierarchy is the product</h3>
+        <p>
+          Not the image grid. The value compounds as the tree grows — the hundredth character is
+          cheaper and more consistent than the first, because by then the world already knows what
+          your species look like, how your cultures dress, and what light your coast gets.
+        </p>
+
+        <h3>Notes in, canon out</h3>
+        <p>
+          You write rough, messy, half-sentence notes. <strong>Enhance</strong> turns them into a
+          structured canonical description. Your messy notes are never overwritten — they remain the
+          source, and the enhanced description is itself editable and version-tracked.
+        </p>
+
+        <h3>Nothing is hidden</h3>
+        <p>
+          The compiled prompt is always visible and always attributed. There is no invisible
+          prompt-magic, no secret quality suffix, no reordering you can't see. If an image came out
+          wrong, you can point at the layer that caused it.
+        </p>
+
+        <h3>Images are context, not decoration</h3>
+        <p>
+          A reference image carries a <strong>role</strong> — silhouette, palette, material, mood,
+          pose — so the compiler knows whether to route it to a style adapter, a structure adapter,
+          or just your mood board.
+        </p>
+
+        <h3>Local first, and yours</h3>
+        <p>
+          A project is a folder on disk. Notes are Markdown. Images are files. It works offline
+          against a local GPU, it opens in Obsidian, it versions in git, and it survives Wobu being
+          uninstalled.
+        </p>
+
+        <div class="note">
+          <span class="note-label">Bring your own key</span>
+          <p>
+            Wobu operates no inference of its own and no proxy. You supply credentials you obtained
+            yourself — Anthropic, Google, a local ComfyUI, Tencent — and Wobu talks to those
+            providers directly on your behalf. Keys live in your OS keychain and never enter the
+            project folder. See <a href="providers.html">Providers &amp; keys</a>.
+          </p>
+        </div>
+
+        <h2>What Wobu is not</h2>
+
+        <table>
+          <tr>
+            <td>Not a finishing pipeline</td>
+            <td>
+              Output is concept art. The current 3D tab views and exports existing blockout meshes;
+              creating them from turnarounds is
+              <a href="https://github.com/krazyjakee/wobu/issues/110">planned in #110</a>. Neither
+              is a production asset.
+            </td>
+          </tr>
+          <tr>
+            <td>Not a wiki or a novel-writing app</td>
+            <td>
+              Notes exist to drive images. If a fact can't shape a render, it doesn't need to live
+              here.
+            </td>
+          </tr>
+          <tr>
+            <td>Not a node-graph tool</td>
+            <td>
+              ComfyUI already exists, and Wobu can drive it. Wobu's surface is a document editor,
+              not a canvas of wires.
+            </td>
+          </tr>
+          <tr>
+            <td>Not real-time multiplayer</td>
+            <td>
+              Several people can share one project folder, and copies can sync peer-to-peer. But
+              there is no co-editing cursor and no server. See
+              <a href="collaboration.html">Sharing a project</a>.
+            </td>
+          </tr>
+        </table>
+
+        <div class="pagenav">
+          <span></span>
+          <a class="next" href="getting-started.html"><span>Next</span>Your first project →</a>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

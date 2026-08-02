@@ -79,6 +79,8 @@ export const qk = {
   prompt: (id: string, opts: PromptOptions) => ['prompt_compile', id, opts] as const,
   imageReferences: (id: string, opts: api.GenerateOptions) =>
     ['image_reference_report', id, opts] as const,
+  imageGenerationCapabilities: (project: string, model?: string) =>
+    ['image_generation_capabilities', project, model] as const,
   spendStatus: (project: string) => ['spend_status', project] as const,
   // Not part of `invalidateWorld`: a description waiting to be accepted is not
   // in the world yet, and a collaborator's edit does not change what a provider
@@ -470,6 +472,20 @@ export function useImageReferenceReport(
     placeholderData: keepPreviousData,
     staleTime: Infinity,
     gcTime: 30_000,
+    retry: false,
+  })
+}
+
+/** Provider-owned aspect choices and pre-queue negotiation for generation UIs. */
+export function useImageGenerationCapabilities(
+  project: string,
+  model?: string,
+  enabled = true,
+): UseQueryResult<api.ImageGenerationCapabilities> {
+  return useQuery({
+    queryKey: qk.imageGenerationCapabilities(project, model),
+    queryFn: () => api.imageGenerationCapabilities(model),
+    enabled,
     retry: false,
   })
 }
@@ -1353,6 +1369,7 @@ export function useSelectProvider() {
       qc.setQueryData(qk.projectProviders, selections)
       void qc.invalidateQueries({ queryKey: ['status_bar_backend'] })
       void qc.invalidateQueries({ queryKey: ['image_reference_report'] })
+      void qc.invalidateQueries({ queryKey: ['image_generation_capabilities'] })
     },
     onError: (e: unknown) => report(e, 'Could not change the provider'),
   })
