@@ -296,6 +296,7 @@ impl From<StoreError> for WobuError {
             StoreError::NoProjectOpen => Code::NoProjectOpen,
             StoreError::TransferSameProject => Code::TransferSameProject,
             StoreError::NoSuchNode(_) => Code::NoSuchNode,
+            StoreError::NoSuchGeneration(_) => Code::Invalid,
             StoreError::NoSuchNodeLink { .. } | StoreError::InvalidNodeLinkRole { .. } => {
                 Code::Invalid
             }

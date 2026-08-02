@@ -15,6 +15,7 @@ use crate::error::{Error, Result};
 use crate::paths;
 
 pub const GENERATIONS_DIR: &str = "generations";
+const ARCHIVE_DIR: &str = ".deleted";
 const SPEND_AGGREGATE: &str = ".wobu/spend/aggregate.json";
 
 /// The shell may keep a disposable aggregate of this canonical ledger for
@@ -34,6 +35,26 @@ pub fn write(root: &Path, generation: &Generation) -> Result<(String, Stamp)> {
     let stamp = atomic::write_once(root, &target, &bytes)?;
     invalidate_spend_aggregate(root);
     Ok((rel, stamp))
+}
+
+/// Remove a receipt from the visible ledger without erasing its accounting record.
+///
+/// Receipt bytes remain unchanged below `generations/.deleted/`; Concepts and
+/// History scan only the month shards, while strict spend reconstruction reads
+/// both locations. Generated assets have their own lifecycle and are untouched.
+pub fn archive(root: &Path, generation: &Generation) -> Result<String> {
+    let rel = generation.rel_path();
+    let source = paths::from_rel_string(root, &rel);
+    let month = generation.created_at.format("%Y-%m").to_string();
+    let archived_rel = format!("{GENERATIONS_DIR}/{ARCHIVE_DIR}/{month}/{}.json", generation.id);
+    let target = paths::from_rel_string(root, &archived_rel);
+    let parent = target.parent().expect("an archived generation path always has a parent");
+    std::fs::create_dir_all(parent).map_err(|error| Error::io(parent, error))?;
+    if target.exists() {
+        return Err(Error::AlreadyExists(target));
+    }
+    std::fs::rename(&source, &target).map_err(|error| Error::io(&source, error))?;
+    Ok(rel)
 }
 
 /// Read and validate one generation file.
@@ -80,6 +101,38 @@ pub(crate) fn list_paths(root: &Path) -> Vec<(String, PathBuf)> {
         .collect()
 }
 
+fn archived_paths(root: &Path) -> Vec<PathBuf> {
+    walkdir::WalkDir::new(root.join(GENERATIONS_DIR).join(ARCHIVE_DIR))
+        .min_depth(2)
+        .max_depth(2)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
+        .map(walkdir::DirEntry::into_path)
+        .collect()
+}
+
+fn read_archived(root: &Path, path: &Path) -> Result<Option<Generation>> {
+    let Some((text, _)) = atomic::read_stamped(path)? else { return Ok(None) };
+    let generation: Generation = serde_json::from_str(&text).map_err(|error| {
+        Error::MalformedGeneration { path: path.to_path_buf(), reason: error.to_string() }
+    })?;
+    let month = generation.created_at.format("%Y-%m").to_string();
+    let expected = root
+        .join(GENERATIONS_DIR)
+        .join(ARCHIVE_DIR)
+        .join(month)
+        .join(format!("{}.json", generation.id));
+    if path != expected {
+        return Err(Error::MalformedGeneration {
+            path: path.to_path_buf(),
+            reason: format!("archived generation belongs at {}", expected.display()),
+        });
+    }
+    Ok(Some(generation))
+}
+
 /// Rehydrate all valid generation records from the canonical folder.
 ///
 /// A sync client can expose an incomplete JSON file while copying. Like asset
@@ -101,6 +154,11 @@ pub(crate) fn read_all_strict(root: &Path) -> Result<Vec<Generation>> {
     let mut receipts = Vec::new();
     for (_, path) in list_paths(root) {
         if let Some((generation, _, _)) = read_at(root, &path)? {
+            receipts.push(generation);
+        }
+    }
+    for path in archived_paths(root) {
+        if let Some(generation) = read_archived(root, &path)? {
             receipts.push(generation);
         }
     }
@@ -160,5 +218,18 @@ mod tests {
         std::fs::write(&wrong, serde_json::to_vec(&generation).unwrap()).unwrap();
 
         assert!(matches!(read_at(dir.path(), &wrong), Err(Error::MalformedGeneration { .. })));
+    }
+
+    #[test]
+    fn archiving_removes_a_receipt_from_galleries_but_not_spend_history() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".wobu/tmp")).unwrap();
+        let generation = record("01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        write(dir.path(), &generation).unwrap();
+
+        archive(dir.path(), &generation).unwrap();
+
+        assert!(scan(dir.path()).is_empty());
+        assert_eq!(read_all_strict(dir.path()).unwrap(), vec![generation]);
     }
 }

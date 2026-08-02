@@ -14,6 +14,21 @@
 .insp-region > .insp {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The shot controls have grown taller than the Library column on compact
+   windows. Keep the whole inspector in one scroll flow instead of shrinking
+   the layer list to nothing and letting the controls overflow behind the
+   compiled prompt. Forge has its own grid and independent scroll containers. */
+.insp-region > .insp > .stack,
+.insp-region > .insp > .shot-controls {
+  flex: none;
+}
+.insp-region > .insp > .stack {
+  overflow: visible;
 }
 
 .prompt {

@@ -114,13 +114,10 @@ pub(crate) fn request_body(request: &ImageRequest, image_size: &str) -> Value {
             "type": "image",
             "aspect_ratio": request.aspect.to_string(),
             "image_size": image_size,
-            // Asked for explicitly rather than defaulted. `delivery` is an enum
-            // of `inline` and `uri`; this adapter reads base64 out of the
-            // response and has no fetcher, so a default that ever became `uri`
-            // would turn every generation into "the backend returned no image".
-            // 🚩 If a 400 ever names `delivery`, this is the field to drop —
-            // inline is what the documented examples return today.
-            "delivery": "inline",
+            // Do not send `delivery: "inline"`. Although the API reference
+            // lists that optional field, gemini-3.1-flash-image rejects it with
+            // "Image delivery mode is not supported". The image-generation
+            // guide omits it and returns inline data by default.
         },
     })
 }
@@ -188,17 +185,15 @@ pub(crate) fn image(body: &[u8]) -> Result<Returned, Error> {
     if let Some(block) = image_block(interaction) {
         let mime = block["mime_type"].as_str().unwrap_or_default().to_owned();
         let Some(data) = block["data"].as_str() else {
-            // `uri` is the other half of the `delivery` enum, and the request
-            // asks for `inline`. Reported rather than fetched: a URL we followed
-            // would be a second request against a link nothing in this crate can
-            // hold, and the field being populated at all means the request was
-            // not honoured.
+            // Report a URI rather than fetching it: that would be a second
+            // request against a link nothing in this crate can hold. The image
+            // generation guide returns inline data by default, so a URI still
+            // explains why this adapter cannot complete the generation.
             return Err(Error::NotAnImage {
                 detail: match block["uri"].as_str() {
-                    Some(_) => format!(
-                        "{LABEL} returned a link to the image rather than the image, despite \
-                         being asked for inline delivery"
-                    ),
+                    Some(_) => {
+                        format!("{LABEL} returned a link to the image rather than the image")
+                    }
                     None => format!("{LABEL} returned an image block with no data in it"),
                 },
             });
@@ -560,7 +555,10 @@ mod tests {
         assert_eq!(body["response_format"]["type"], "image");
         assert_eq!(body["response_format"]["aspect_ratio"], "16:9");
         assert_eq!(body["response_format"]["image_size"], "4K");
-        assert_eq!(body["response_format"]["delivery"], "inline");
+        assert!(
+            body["response_format"].get("delivery").is_none(),
+            "gemini-3.1-flash-image rejects an explicit image delivery mode",
+        );
         assert!(body.get("generation_config").is_none(), "the legacy home of image_config");
         assert!(body["response_format"].get("image").is_none(), "and not nested under `image`");
         assert!(body["response_format"].get("imageConfig").is_none());
@@ -722,10 +720,9 @@ mod tests {
 
     #[test]
     fn a_link_where_the_image_should_be_says_so_rather_than_reporting_nothing() {
-        // `delivery` is an enum of `inline` and `uri` and the request asks for
-        // the first. A `uri` coming back means it was not honoured — and this
-        // crate has no fetcher, so reporting "no image" would hide the one fact
-        // that explains it.
+        // The image-generation guide returns inline data by default. If a `uri`
+        // comes back anyway, this crate has no fetcher, so reporting "no image"
+        // would hide the one fact that explains it.
         let body = response(
             "completed",
             vec![json!({

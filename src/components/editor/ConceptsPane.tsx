@@ -5,6 +5,7 @@ import * as api from '../../lib/api'
 import type {
   AssetRole,
   Generation,
+  GenerationSummary,
   JobPreview,
   JobProgress,
   JobSnapshot,
@@ -12,7 +13,7 @@ import type {
   WobuNode,
 } from '../../lib/api'
 import {
-  useAssetThumb,
+  useDeleteGeneration,
   useGenerations,
   useLinkAsset,
   useNodeLinks,
@@ -22,8 +23,14 @@ import {
 import { labelFor, pluralFor, type KindIndex } from '../../lib/kinds'
 import { influenceDependentsOf } from '../../lib/tree'
 import { GenerationDetail } from '../GenerationDetail'
+import { ConfirmSheet } from '../ConfirmSheet'
+import { useVirtualCardWindow } from '../useVirtualCardWindow'
 
 type Signal = { progress?: JobProgress; preview?: JobPreview }
+const TILE_MIN = 190
+const TILE_HEIGHT = 430
+const GAP = 12
+const OVERSCAN = 2
 
 export function ConceptsPane({
   node,
@@ -76,19 +83,21 @@ export function ConceptsPane({
         {jobs.map((job) => (
           <LiveTile key={job.id} job={job} signal={signals[job.id]} />
         ))}
-        {(history.data ?? []).map((generation) => (
-          <GenerationTile
-            key={generation.id}
-            generation={generation}
-            node={node}
-            dependents={dependents}
-            kinds={kinds}
-            scopeUnknown={nodes.isPending || links.isPending || nodes.isError || links.isError}
-            readOnly={readOnly}
-            onOpen={setViewer}
-          />
-        ))}
       </div>
+      {(history.data?.length ?? 0) > 0 && (
+        <VirtualConceptGrid
+          generations={history.data ?? []}
+          node={node}
+          dependents={dependents}
+          kinds={kinds}
+          scopeUnknown={nodes.isPending || links.isPending || nodes.isError || links.isError}
+          readOnly={readOnly}
+          hasMore={history.hasNextPage}
+          loadingMore={history.isFetchingNextPage}
+          onLoadMore={() => void history.fetchNextPage()}
+          onOpen={setViewer}
+        />
+      )}
       {viewer && (
         <GenerationDetail
           generation={viewer.generation}
@@ -99,6 +108,70 @@ export function ConceptsPane({
         />
       )}
     </section>
+  )
+}
+
+function VirtualConceptGrid({
+  generations,
+  node,
+  dependents,
+  kinds,
+  scopeUnknown,
+  readOnly,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  onOpen,
+}: {
+  generations: GenerationSummary[]
+  node: WobuNode
+  dependents: ReturnType<typeof influenceDependentsOf>
+  kinds: KindIndex
+  scopeUnknown: boolean
+  readOnly: boolean
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
+  onOpen: (viewer: { src: string | null; generation: Generation }) => void
+}) {
+  const { viewportRef, start, end, tileWidth, totalHeight, onScroll, position } =
+    useVirtualCardWindow({
+      count: generations.length,
+      tileMin: TILE_MIN,
+      tileHeight: TILE_HEIGHT,
+      gap: GAP,
+      overscan: OVERSCAN,
+      initialWidth: 900,
+      initialHeight: 650,
+    })
+  return (
+    <div className="concept-grid-viewport" ref={viewportRef} onScroll={onScroll}>
+      <div className="concept-grid concept-grid-virtual" style={{ height: totalHeight }}>
+        {generations.slice(start, end).map((generation, offset) => {
+          const card = position(start + offset)
+          return (
+            <GenerationTile
+              key={generation.id}
+              generation={generation}
+              node={node}
+              dependents={dependents}
+              kinds={kinds}
+              scopeUnknown={scopeUnknown}
+              readOnly={readOnly}
+              width={tileWidth}
+              top={card.top}
+              left={card.left}
+              onOpen={onOpen}
+            />
+          )
+        })}
+      </div>
+      {hasMore && (
+        <button className="btn concept-more" type="button" disabled={loadingMore} onClick={onLoadMore}>
+          {loadingMore ? 'Loading more…' : 'Load more concepts'}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -214,21 +287,28 @@ function GenerationTile({
   kinds,
   scopeUnknown,
   readOnly,
+  width,
+  top,
+  left,
   onOpen,
 }: {
-  generation: Generation
+  generation: GenerationSummary
   node: WobuNode
   dependents: ReturnType<typeof influenceDependentsOf>
   kinds: KindIndex
   scopeUnknown: boolean
   readOnly: boolean
+  width: number
+  top: number
+  left: number
   onOpen: (viewer: { src: string | null; generation: Generation }) => void
 }) {
-  const assetId = generation.outputAssetIds[0] ?? null
-  const thumb = useAssetThumb(assetId)
+  const assetId = generation.firstAssetId
   const linkAsset = useLinkAsset()
   const unlinkAsset = useUnlinkAsset()
+  const deleteGeneration = useDeleteGeneration()
   const [opening, setOpening] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const pinnedRoles = assetId
     ? node.assetLinks.filter((link) => link.assetId === assetId).map((link) => link.role)
     : []
@@ -238,20 +318,21 @@ function GenerationTile({
   const changingPin = linkAsset.isPending || unlinkAsset.isPending
 
   async function open() {
-    if (!assetId) {
-      onOpen({ src: null, generation })
-      return
-    }
     setOpening(true)
     setError(null)
     try {
-      const path = await api.assetOriginal(assetId)
+      const receipt = await api.generationGet(generation.id)
+      if (!receipt) throw new Error('The immutable generation receipt is no longer indexed.')
+      const outputId = receipt.outputAssetIds[0] ?? null
+      const path = outputId ? await api.assetOriginal(outputId) : null
       if (!path) {
-        setError(
-          'The full-resolution image is not available; the immutable receipt can still be inspected.',
-        )
-        onOpen({ src: null, generation })
-      } else onOpen({ src: convertFileSrc(path), generation })
+        if (outputId) {
+          setError(
+            'The full-resolution image is not available; the immutable receipt can still be inspected.',
+          )
+        }
+        onOpen({ src: null, generation: receipt })
+      } else onOpen({ src: convertFileSrc(path), generation: receipt })
     } catch (reason) {
       setError(api.errorMessage(reason))
     } finally {
@@ -271,7 +352,10 @@ function GenerationTile({
   }
 
   return (
-    <article className="concept-tile historical">
+    <article
+      className="concept-tile historical"
+      style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
+    >
       <button
         className="concept-open"
         onClick={() => void open()}
@@ -279,19 +363,19 @@ function GenerationTile({
         aria-label={`Open generation from ${generation.createdAt}`}
       >
         <div className="concept-image">
-          {thumb.data ? (
-            <img src={convertFileSrc(thumb.data)} alt={generation.compiledPrompt} />
+          {generation.thumbnailPath ? (
+            <img src={convertFileSrc(generation.thumbnailPath)} alt={generation.promptExcerpt} />
           ) : (
             <span>{assetId ? 'Loading preview…' : 'No output image'}</span>
           )}
-          {generation.outputAssetIds.length > 1 && (
-            <b className="concept-count">+{generation.outputAssetIds.length - 1}</b>
+          {generation.outputCount > 1 && (
+            <b className="concept-count">+{generation.outputCount - 1}</b>
           )}
           {pinnedRoles.length > 0 && (
             <b className="concept-pinned">Pinned · {pinnedRoles.map(roleLabel).join(', ')}</b>
           )}
           <span className="concept-hover">
-            <span>{generation.compiledPrompt}</span>
+            <span>{generation.promptExcerpt}</span>
             <code>seed {generation.seed}</code>
           </span>
         </div>
@@ -337,7 +421,32 @@ function GenerationTile({
           </p>
         </div>
       )}
+      <button
+        className="btn-mini concept-delete"
+        type="button"
+        disabled={readOnly || deleteGeneration.isPending}
+        onClick={() => setConfirmDelete(true)}
+        aria-label={`Delete generation ${generation.id}`}
+      >
+        Delete concept…
+      </button>
       {error && <p className="concept-failure">{error}</p>}
+      {confirmDelete && (
+        <ConfirmSheet
+          title="Delete this concept?"
+          body="It will disappear from Concepts and History. Its output assets remain in the Asset Library, and its archived receipt remains in spend accounting."
+          confirmLabel="Delete concept"
+          danger
+          busy={deleteGeneration.isPending}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() =>
+            deleteGeneration.mutate(
+              { generationId: generation.id, nodeId: generation.nodeId },
+              { onSuccess: () => setConfirmDelete(false) },
+            )
+          }
+        />
+      )}
     </article>
   )
 }
@@ -389,13 +498,13 @@ function roleLabel(role: AssetRole): string {
   return role === 'full_ref' ? 'Full reference' : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
 }
 
-function seedSourceLabel(generation: Generation): string {
-  if (generation.params.seedSource === 'replay') return 'replayed snapshot'
-  if (generation.params.usedLockedSeed === true) return 'used locked seed'
-  const source = generation.params.seedSource
+function seedSourceLabel(generation: GenerationSummary): string {
+  if (generation.seedSource === 'replay') return 'replayed snapshot'
+  if (generation.usedLockedSeed === true) return 'used locked seed'
+  const source = generation.seedSource
   switch (source) {
     case 'locked':
-      return generation.params.usedLockedSeed === false
+      return generation.usedLockedSeed === false
         ? 'provider changed locked seed'
         : 'used locked seed'
     case 'locked_derived':

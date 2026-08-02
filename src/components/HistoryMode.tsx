@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
-import type { Generation, NodeSummary } from '../lib/api'
+import type { Generation, GenerationSummary, NodeSummary } from '../lib/api'
 import { useGenerationHistory } from '../lib/queries'
 import { report, useUI } from '../store/ui'
-import { LazyAssetThumbnail } from './AssetMedia'
 import { GenerationDetail } from './GenerationDetail'
-import { GenerationPresetModel, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
+import { useVirtualCardWindow } from './useVirtualCardWindow'
+
+const TILE_MIN = 250
+const TILE_HEIGHT = 330
+const GAP = 12
+const OVERSCAN = 2
 
 export function HistoryMode({
   nodes,
@@ -18,7 +22,6 @@ export function HistoryMode({
   onJump: (id: string) => void
 }) {
   const setMode = useUI((state) => state.setMode)
-  const history = useGenerationHistory()
   const [preset, setPreset] = useState('all')
   const [model, setModel] = useState('all')
   const [from, setFrom] = useState('')
@@ -27,39 +30,29 @@ export function HistoryMode({
   const [opened, setOpened] = useState<{ generation: Generation; imageSrc: string | null } | null>(
     null,
   )
+  const filters = useMemo<api.GenerationFilters>(
+    () => ({
+      preset: preset === 'all' ? undefined : preset,
+      model: model === 'all' ? undefined : model,
+      from: from || undefined,
+      to: to || undefined,
+      seed: seed ? Number(seed) : undefined,
+    }),
+    [from, model, preset, seed, to],
+  )
+  const history = useGenerationHistory(filters)
   const names = useMemo(() => new Map(nodes.map((node) => [node.id, node.name])), [nodes])
   const receipts = useMemo(() => history.data ?? [], [history.data])
-  const presets = useMemo(
-    () => [...new Set(receipts.map((item) => item.preset))].sort(),
-    [receipts],
-  )
-  const models = useMemo(() => [...new Set(receipts.map((item) => item.model))].sort(), [receipts])
-  const filtered = useMemo(
-    () =>
-      receipts.filter((item) => {
-        if (preset !== 'all' && item.preset !== preset) return false
-        if (model !== 'all' && item.model !== model) return false
-        const day = item.createdAt.slice(0, 10)
-        if (from && day < from) return false
-        if (to && day > to) return false
-        if (seed.trim() && String(item.seed) !== seed.trim()) return false
-        return true
-      }),
-    [from, model, preset, receipts, seed, to],
-  )
 
-  async function open(generation: Generation) {
-    const assetId = generation.outputAssetIds[0] ?? null
-    if (!assetId) {
-      setOpened({ generation, imageSrc: null })
-      return
-    }
+  async function open(summary: GenerationSummary) {
     try {
-      const path = await api.assetOriginal(assetId)
+      const generation = await api.generationGet(summary.id)
+      if (!generation) throw new Error('The immutable generation receipt is no longer indexed.')
+      const assetId = generation.outputAssetIds[0] ?? null
+      const path = assetId ? await api.assetOriginal(assetId) : null
       setOpened({ generation, imageSrc: path ? convertFileSrc(path) : null })
     } catch (error) {
       report(error, 'Could not open the recorded image')
-      setOpened({ generation, imageSrc: null })
     }
   }
 
@@ -68,7 +61,7 @@ export function HistoryMode({
       <header className="history-mode-head">
         <div>
           <h2>Generation history</h2>
-          <p>{receipts.length} immutable receipts across this project</p>
+          <p>{history.total} immutable receipts across this project</p>
         </div>
         <button className="btn" type="button" onClick={() => setMode('library')}>
           Back to Library
@@ -84,7 +77,7 @@ export function HistoryMode({
             onChange={(event) => setPreset(event.target.value)}
           >
             <option value="all">All presets</option>
-            {presets.map((value) => (
+            {history.presets.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
@@ -99,7 +92,7 @@ export function HistoryMode({
             onChange={(event) => setModel(event.target.value)}
           >
             <option value="all">All models</option>
-            {models.map((value) => (
+            {history.models.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
@@ -144,20 +137,20 @@ export function HistoryMode({
       {history.isPending && (
         <p className="history-empty empty-state">Reading generation history…</p>
       )}
-      {!history.isPending && !history.isError && filtered.length === 0 && (
+      {!history.isPending && !history.isError && receipts.length === 0 && (
         <p className="history-empty empty-state">No generations match these filters.</p>
       )}
-      <div className="history-grid">
-        {filtered.map((generation) => (
-          <HistoryTile
-            key={generation.id}
-            generation={generation}
-            nodeName={names.get(generation.nodeId) ?? 'Deleted entity'}
-            onOpen={() => void open(generation)}
-            onJump={names.has(generation.nodeId) ? () => onJump(generation.nodeId) : null}
-          />
-        ))}
-      </div>
+      {receipts.length > 0 && (
+        <VirtualHistoryGrid
+          generations={receipts}
+          names={names}
+          loadingMore={history.isFetchingNextPage}
+          hasMore={history.hasNextPage}
+          onLoadMore={() => void history.fetchNextPage()}
+          onOpen={(generation) => void open(generation)}
+          onJump={onJump}
+        />
+      )}
 
       {opened && (
         <GenerationDetail
@@ -172,20 +165,86 @@ export function HistoryMode({
   )
 }
 
-function HistoryTile({
-  generation,
-  nodeName,
+function VirtualHistoryGrid({
+  generations,
+  names,
+  loadingMore,
+  hasMore,
+  onLoadMore,
   onOpen,
   onJump,
 }: {
-  generation: Generation
+  generations: GenerationSummary[]
+  names: Map<string, string>
+  loadingMore: boolean
+  hasMore: boolean
+  onLoadMore: () => void
+  onOpen: (generation: GenerationSummary) => void
+  onJump: (id: string) => void
+}) {
+  const { viewportRef, start, end, tileWidth, totalHeight, onScroll, position } =
+    useVirtualCardWindow({
+      count: generations.length,
+      tileMin: TILE_MIN,
+      tileHeight: TILE_HEIGHT,
+      gap: GAP,
+      overscan: OVERSCAN,
+      initialWidth: 1100,
+      initialHeight: 650,
+    })
+  return (
+    <div className="history-grid-viewport" ref={viewportRef} onScroll={onScroll}>
+      <div className="history-grid" style={{ height: totalHeight }}>
+        {generations.slice(start, end).map((generation, offset) => {
+          const card = position(start + offset)
+          return (
+            <HistoryTile
+              key={generation.id}
+              generation={generation}
+              nodeName={names.get(generation.nodeId) ?? 'Deleted entity'}
+              width={tileWidth}
+              top={card.top}
+              left={card.left}
+              onOpen={() => onOpen(generation)}
+              onJump={names.has(generation.nodeId) ? () => onJump(generation.nodeId) : null}
+            />
+          )
+        })}
+      </div>
+      {hasMore && (
+        <button className="btn history-more" type="button" disabled={loadingMore} onClick={onLoadMore}>
+          {loadingMore ? 'Loading more…' : 'Load more receipts'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function HistoryTile({
+  generation,
+  nodeName,
+  width,
+  top,
+  left,
+  onOpen,
+  onJump,
+}: {
+  generation: GenerationSummary
   nodeName: string
+  width: number
+  top: number
+  left: number
   onOpen: () => void
   onJump: (() => void) | null
 }) {
-  const assetId = generation.outputAssetIds[0] ?? null
+  const subject = generation.sceneSubjectNames.length
+    ? `Scene · ${generation.sceneSubjectNames.join(' + ')}`
+    : nodeName
   return (
-    <article className="history-tile media-card">
+    <article
+      className="history-tile media-card"
+      style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
+    >
       <button
         type="button"
         className="history-open"
@@ -193,25 +252,29 @@ function HistoryTile({
         aria-label={`Open generation ${generation.id}`}
       >
         <div className="history-image asset-media-frame">
-          <LazyAssetThumbnail
-            assetId={assetId}
-            alt={generation.compiledPrompt}
-            loadingLabel="No preview"
-            missingLabel="No preview"
-            errorLabel="No preview"
-          />
+          {generation.thumbnailPath ? (
+            <img
+              src={convertFileSrc(generation.thumbnailPath)}
+              alt={generation.promptExcerpt}
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <span>No preview</span>
+          )}
         </div>
         <div className="history-tile-copy media-card-copy">
           <b>
-            <GenerationSubject generation={generation} fallback={nodeName} />
+            {subject}
           </b>
           <span>
-            <GenerationPresetModel generation={generation} />
+            {generation.sceneSubjectNames.length ? 'Multi-entity · ' : ''}
+            {generation.preset} · {generation.model}
           </span>
           <span>
-            seed {generation.seed} · <GenerationTimestamp generation={generation} />
+            seed {generation.seed} · {new Date(generation.createdAt).toLocaleString()}
           </span>
-          <p>{generation.compiledPrompt}</p>
+          <p>{generation.promptExcerpt}</p>
         </div>
       </button>
       {onJump && (

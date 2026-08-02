@@ -852,6 +852,28 @@
   align-items: start;
   gap: 12px;
 }
+.concept-grid-viewport {
+  position: relative;
+  height: min(650px, 70vh);
+  min-height: 320px;
+  margin-top: 12px;
+  overflow: auto;
+  padding: 12px;
+}
+.concept-grid-virtual {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.concept-grid-virtual .concept-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.concept-more {
+  display: block;
+  margin: 12px auto;
+}
 .concept-tile {
   min-width: 0;
   overflow: hidden;
@@ -997,6 +1019,10 @@
   color: var(--text-faint);
   font-size: 10px;
   line-height: 1.4;
+}
+.concept-delete {
+  margin: 0 10px 10px auto;
+  color: #f0b3bb;
 }
 .concept-progress {
   height: 3px;

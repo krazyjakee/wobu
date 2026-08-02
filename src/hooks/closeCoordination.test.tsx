@@ -17,6 +17,7 @@ interface CloseEvent {
 const h = vi.hoisted(() => ({
   invoke: vi.fn(),
   closeWindow: vi.fn(() => Promise.resolve()),
+  destroyWindow: vi.fn(() => Promise.resolve()),
   closeHandler: null as null | ((event: CloseEvent) => void | Promise<void>),
 }))
 
@@ -24,6 +25,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
 vi.mock('../lib/window', () => ({
   closeWindow: h.closeWindow,
+  destroyWindow: h.destroyWindow,
   onCloseRequested: (handler: (event: CloseEvent) => void | Promise<void>) => {
     h.closeHandler = handler
     return Promise.resolve(() => {
@@ -56,6 +58,7 @@ function useWindowCloseHarness() {
 beforeEach(() => {
   h.invoke.mockReset()
   h.closeWindow.mockClear()
+  h.destroyWindow.mockClear()
   h.closeHandler = null
   editorWrites.reset()
   useUI.setState({ banners: [], toasts: [] })
@@ -115,12 +118,12 @@ describe('closing with editor writes', () => {
     })
     expect(closeEvent.preventDefault).toHaveBeenCalledOnce()
     await waitFor(() => expect(commands).toEqual(['node_upsert']))
-    expect(h.closeWindow).not.toHaveBeenCalled()
+    expect(h.destroyWindow).not.toHaveBeenCalled()
 
     await act(async () => finishSave?.())
     await act(async () => closeRequest)
     expect(commands).toEqual(['node_upsert', 'project_close'])
-    expect(h.closeWindow).toHaveBeenCalledOnce()
+    expect(h.destroyWindow).toHaveBeenCalledOnce()
 
     const permittedEvent = { preventDefault: vi.fn() }
     await act(async () => h.closeHandler?.(permittedEvent))
@@ -146,7 +149,7 @@ describe('closing with editor writes', () => {
     const firstEvent = { preventDefault: vi.fn() }
     await act(async () => h.closeHandler?.(firstEvent))
     expect(commands).toEqual(['node_upsert'])
-    expect(h.closeWindow).not.toHaveBeenCalled()
+    expect(h.destroyWindow).not.toHaveBeenCalled()
     expect(editorWrites.snapshot()).toMatchObject([{ nodeId: 'kael', state: 'failed' }])
     const banner = useUI.getState().banners.find((item) => item.code === EDITOR_CLOSE_BLOCKED)
     expect(banner).toMatchObject({ sticky: true, action: { label: 'Retry save and close' } })
@@ -157,7 +160,7 @@ describe('closing with editor writes', () => {
     await act(async () => h.closeHandler?.({ preventDefault: vi.fn() }))
 
     expect(commands).toEqual(['node_upsert', 'node_upsert', 'project_close'])
-    expect(h.closeWindow).toHaveBeenCalledTimes(2)
+    expect(h.destroyWindow).toHaveBeenCalledOnce()
     expect(useUI.getState().banners.some((item) => item.code === EDITOR_CLOSE_BLOCKED)).toBe(false)
     view.unmount()
   })

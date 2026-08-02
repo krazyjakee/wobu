@@ -1637,16 +1637,17 @@ impl Project {
         Ok(generation)
     }
 
-    /// A node's generation history for the Concepts grid, newest first.
-    pub fn list_generations(&self, node_id: Id) -> Result<Vec<Generation>> {
-        self.index.generations_for_node(node_id)
+    /// A bounded lightweight generation page for Concepts or History.
+    pub fn generation_page(
+        &self,
+        request: &crate::GenerationPageRequest,
+    ) -> Result<crate::GenerationPage> {
+        self.index.generation_page(request)
     }
 
-    /// Every immutable receipt for the project-wide History browser, newest
-    /// first. Unlike spend reconstruction this is a UI read and can use the
-    /// reconciled disposable index rather than reopening every month shard.
-    pub fn generation_history(&self) -> Result<Vec<Generation>> {
-        self.index.generations_all()
+    /// Full node receipts for the mesh command's immutable turnaround join.
+    pub fn list_generations(&self, node_id: Id) -> Result<Vec<Generation>> {
+        self.index.generation_documents_for_node(node_id)
     }
 
     /// Every immutable receipt, for reconstructing project spend.
@@ -1657,6 +1658,18 @@ impl Project {
     /// One indexed generation, without reading across the project share.
     pub fn get_generation(&self, id: Id) -> Result<Option<Generation>> {
         self.index.generation(id)
+    }
+
+    /// Remove a receipt from user-facing history while retaining it for spend accounting.
+    pub fn delete_generation(&mut self, id: Id) -> Result<()> {
+        self.ensure_writable()?;
+        let generation = self
+            .index
+            .generation(id)?
+            .ok_or_else(|| Error::NoSuchGeneration(id.to_string()))?;
+        let rel = generations::archive(&self.root, &generation)?;
+        self.index.remove_generation_by_rel_path(&rel)?;
+        Ok(())
     }
 
     /// Attach an asset to a node in a role.
@@ -1831,6 +1844,21 @@ impl Project {
             hash: asset.hash,
             rel_path: asset.rel_path,
         }))
+    }
+
+    /// The bounded set of thumbnail inputs requested by one visible history page.
+    pub fn thumb_targets(&self, ids: &[Id]) -> Result<Vec<crate::thumbs::ThumbTarget>> {
+        let mut seen = HashSet::new();
+        let mut targets = Vec::new();
+        for id in ids {
+            if !seen.insert(*id) {
+                continue;
+            }
+            if let Some(target) = self.thumb_target(*id)? {
+                targets.push(target);
+            }
+        }
+        Ok(targets)
     }
 
     /// Whether a thumbnail missing from disk may be written right now.

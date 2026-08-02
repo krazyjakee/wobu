@@ -314,6 +314,10 @@
   position: relative;
   width: 100%;
 }
+.forge-more {
+  display: block;
+  margin: 12px auto;
+}
 .forge-result {
   --media-card-background: var(--bg);
   --media-card-active-border: color-mix(in srgb, var(--ai) 70%, var(--border));

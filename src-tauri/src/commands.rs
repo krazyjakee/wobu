@@ -40,7 +40,8 @@ use wobu_llm::{
 };
 use wobu_store::{
     AssetUsage, Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary,
-    Resolved, SaveOutcome, TransferOutcome, TransferPreview, WikiExport, recent, transfer,
+    GenerationPage, GenerationPageRequest, Resolved, SaveOutcome, TransferOutcome,
+    TransferPreview, WikiExport, recent, transfer,
 };
 
 use crate::diag;
@@ -823,11 +824,25 @@ pub fn asset_delete(state: State<'_, AppState>, asset_id: Id) -> CommandResult<(
     state.with(|p| Ok(p.delete_asset(asset_id)?))
 }
 
-/// Immutable Concepts history for one node, already newest first in SQLite.
-/// Image bytes remain behind `asset_thumb`/`asset_original`.
+/// One bounded page of lightweight Concepts history, newest first in SQLite.
 #[tauri::command]
-pub fn generation_list(state: State<'_, AppState>, node_id: Id) -> CommandResult<Vec<Generation>> {
-    state.with(|p| Ok(p.list_generations(node_id)?))
+pub fn generation_list(
+    state: State<'_, AppState>,
+    node_id: Id,
+    offset: u32,
+    limit: u32,
+) -> CommandResult<GenerationPage> {
+    state.with(|project| {
+        generation_page(
+            project,
+            GenerationPageRequest {
+                node_id: Some(node_id),
+                offset,
+                limit,
+                ..GenerationPageRequest::default()
+            },
+        )
+    })
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -956,10 +971,48 @@ pub async fn mesh_export(
     Ok(())
 }
 
-/// Immutable generation history across the open project, newest first.
+/// One filtered, bounded page of project generation history.
 #[tauri::command]
-pub fn generation_list_all(state: State<'_, AppState>) -> CommandResult<Vec<Generation>> {
-    state.with(|p| Ok(p.generation_history()?))
+pub fn generation_list_all(
+    state: State<'_, AppState>,
+    offset: u32,
+    limit: u32,
+    preset: Option<String>,
+    model: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    seed: Option<u64>,
+) -> CommandResult<GenerationPage> {
+    state.with(|project| {
+        generation_page(
+            project,
+            GenerationPageRequest {
+                node_id: None,
+                preset,
+                model,
+                from,
+                to,
+                seed,
+                offset,
+                limit,
+            },
+        )
+    })
+}
+
+/// The full immutable receipt for the one tile a person opened.
+#[tauri::command]
+pub fn generation_get(
+    state: State<'_, AppState>,
+    generation_id: Id,
+) -> CommandResult<Option<Generation>> {
+    state.with(|project| Ok(project.get_generation(generation_id)?))
+}
+
+/// Remove a generation from Concepts and History without erasing its spend record.
+#[tauri::command]
+pub fn generation_delete(state: State<'_, AppState>, generation_id: Id) -> CommandResult<()> {
+    state.with(|project| Ok(project.delete_generation(generation_id)?))
 }
 
 /// Attach a reference image to a node in a role.
@@ -1090,6 +1143,70 @@ pub async fn asset_thumb(
     ))
 }
 
+/// Resolve/generate the thumbnails for one bounded history page in one IPC.
+#[tauri::command]
+pub async fn asset_thumb_batch(
+    state: State<'_, AppState>,
+    asset_ids: Vec<Id>,
+) -> CommandResult<HashMap<String, String>> {
+    if asset_ids.len() > 100 {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "A thumbnail page may contain at most 100 assets.",
+        ));
+    }
+    let handle = state.handle();
+    let prepared = handle.ticket(|project| {
+        Ok((project.thumb_targets(&asset_ids)?, project.can_write_thumb()))
+    })?;
+    let (project, (targets, can_write)) = prepared;
+    if targets.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let root = project.root().to_path_buf();
+    let work = targets.clone();
+    let completed = blocking("The thumbnail batch thread stopped unexpectedly.", move || {
+        if !can_write {
+            return Ok(work
+                .iter()
+                .filter(|target| wobu_store::thumbs::exists(&root, &target.hash))
+                .map(|target| target.asset_id)
+                .collect());
+        }
+        wobu_store::thumbs::ensure_all(
+            &root,
+            &work,
+            &wobu_store::Cancel::new(),
+            &mut |_| {},
+        )
+    })
+    .await??;
+    let completed: HashSet<_> = completed.into_iter().collect();
+    let completed_targets: Vec<_> = targets
+        .iter()
+        .filter(|target| completed.contains(&target.asset_id))
+        .cloned()
+        .collect();
+    handle.with_ticket(&project, |project| {
+        if can_write {
+            project.verify_writable()?;
+        }
+        Ok(project.record_thumb_targets(&completed_targets)?)
+    })?;
+    Ok(completed_targets
+        .into_iter()
+        .map(|target| {
+            let path = wobu_store::paths::from_rel_string(
+                project.root(),
+                &wobu_store::thumbs::rel_path(&target.hash),
+            )
+            .to_string_lossy()
+            .into_owned();
+            (target.asset_id.to_string(), path)
+        })
+        .collect())
+}
+
 /// The absolute path of one blob itself, for the viewer.
 ///
 /// Deliberately a separate command from `asset_thumb` rather than a flag on it:
@@ -1199,6 +1316,23 @@ pub async fn asset_thumbs_ensure(
 #[tauri::command]
 pub fn asset_thumbs_cancel(state: State<'_, AppState>) {
     state.cancel_thumbs();
+}
+
+fn generation_page(
+    project: &Project,
+    request: GenerationPageRequest,
+) -> CommandResult<GenerationPage> {
+    let mut page = project.generation_page(&request)?;
+    for item in &mut page.items {
+        if let Some(relative) = item.thumbnail_path.as_deref() {
+            item.thumbnail_path = Some(
+                wobu_store::paths::from_rel_string(project.root(), relative)
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
+    }
+    Ok(page)
 }
 
 /// A project-relative path as the absolute one `convertFileSrc` needs.

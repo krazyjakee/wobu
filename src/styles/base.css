@@ -28,6 +28,14 @@ textarea {
   font: inherit;
   color: inherit;
 }
+select {
+  color-scheme: dark;
+}
+select option,
+select optgroup {
+  background: var(--bg-input);
+  color: var(--text);
+}
 button {
   background: none;
   border: 0;

@@ -39,11 +39,11 @@ pub use apply::{Applied, ApplyReport, Decision, Incoming, Outgoing, Plan, Refuse
 pub use assets::{ImportWarning, ImportedAsset, StoredMesh};
 pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
-pub use index::{CorruptFile, Index};
+pub use index::{CorruptFile, GenerationPage, GenerationPageRequest, GenerationSummary, Index};
 pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{
     AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary,
-    ReconcileObservation, ReconcilePlan, SaveOutcome,
+    ReconcileObservation, ReconcilePlan, SaveOutcome, DEFAULT_SPEND_CEILING_USD_MICROS,
 };
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};

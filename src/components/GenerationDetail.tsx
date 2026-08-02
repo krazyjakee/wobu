@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type {
   Generation,
   GenerationSnapshotFragment,
@@ -23,6 +24,7 @@ export function GenerationDetail({
   readOnly: boolean
   onClose: () => void
 }) {
+  const [imageOpen, setImageOpen] = useState(false)
   const scene = sceneComposition(generation)
   const shotName = generation.influenceSnapshot.layers.find(
     (layer) => layer.layer === 'shot',
@@ -81,7 +83,16 @@ export function GenerationDetail({
 
       <div className="generation-detail-body">
         <section className="generation-receipt" aria-label="Recorded request">
-          {imageSrc && <img src={imageSrc} alt={generation.compiledPrompt} />}
+          {imageSrc && (
+            <button
+              className="generation-receipt-image"
+              type="button"
+              onClick={() => setImageOpen(true)}
+              aria-label="View generated image full size"
+            >
+              <img src={imageSrc} alt={generation.compiledPrompt} />
+            </button>
+          )}
           <dl>
             <dt>User shot</dt>
             <dd>{generation.userPrompt || 'None'}</dd>
@@ -262,6 +273,32 @@ export function GenerationDetail({
           )}
         </section>
       </div>
+      {imageOpen && imageSrc && (
+        <Modal
+          className="generation-image-viewer"
+          scrimClassName="generation-image-viewer-scrim"
+          titleId="generation-image-viewer-title"
+          descriptionId="generation-image-viewer-description"
+          onClose={() => setImageOpen(false)}
+        >
+          <h2 id="generation-image-viewer-title" className="modal-sr-only">
+            Full-size generated image
+          </h2>
+          <p id="generation-image-viewer-description" className="modal-sr-only">
+            The original generated image. Press Escape or use Close to return to generation details.
+          </p>
+          <img src={imageSrc} alt={generation.compiledPrompt} />
+          <button
+            className="ibtn generation-image-viewer-close"
+            type="button"
+            onClick={() => setImageOpen(false)}
+            aria-label="Close full-size image"
+            data-modal-initial-focus
+          >
+            ×
+          </button>
+        </Modal>
+      )}
     </Modal>
   )
 }

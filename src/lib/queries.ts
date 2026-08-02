@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  type InfiniteData,
   keepPreviousData,
   useMutation,
+  useInfiniteQuery,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -58,7 +60,7 @@ export const qk = {
   loraStatus: (nodeId: string) => ['lora_status', nodeId] as const,
   meshes: (nodeId: string) => ['mesh_concepts', nodeId] as const,
   meshPath: (assetId: string) => ['mesh_asset_path', assetId] as const,
-  generationHistory: ['generation_list_all'] as const,
+  generationHistory: (filters: api.GenerationFilters) => ['generation_list_all', filters] as const,
   assetThumb: (assetId: string) => ['asset_thumb', assetId] as const,
   node: (id: string) => ['node_get', id] as const,
   backlinks: (id: string) => ['node_backlinks', id] as const,
@@ -114,7 +116,7 @@ export function invalidateWorld(qc: QueryClient) {
   // of the same reconcile that raised this.
   void qc.invalidateQueries({ queryKey: qk.assets })
   void qc.invalidateQueries({ queryKey: ['generation_list'] })
-  void qc.invalidateQueries({ queryKey: qk.generationHistory })
+  void qc.invalidateQueries({ queryKey: ['generation_list_all'] })
   // A stack is built from other people's nodes as much as from the subject's:
   // an edit two layers out changes the compiled prompt without touching
   // anything the panel is pointing at, so these move with the world rather than
@@ -843,52 +845,131 @@ export function useDeleteAsset() {
   })
 }
 
-/** One node's immutable Concepts history, newest first. */
-export function useGenerations(nodeId: string): UseQueryResult<api.Generation[]> {
+export const GENERATION_PAGE_SIZE = 60
+
+async function generationPageWithThumbnails(page: api.GenerationPage): Promise<api.GenerationPage> {
+  const missing = [
+    ...new Set(
+      page.items
+        .filter((item) => item.firstAssetId && !item.thumbnailPath)
+        .map((item) => item.firstAssetId as string),
+    ),
+  ]
+  if (missing.length === 0) return page
+  const paths = await api.assetThumbBatch(missing)
+  return {
+    ...page,
+    items: page.items.map((item) => ({
+      ...item,
+      thumbnailPath: item.firstAssetId ? (paths[item.firstAssetId] ?? item.thumbnailPath) : null,
+    })),
+  }
+}
+
+type GenerationPages = InfiniteData<api.GenerationPage, number>
+
+export function prependGeneration(
+  current: GenerationPages | undefined,
+  summary: api.GenerationSummary,
+): GenerationPages | undefined {
+  if (!current || current.pages.length === 0) return current
+  if (current.pages.some((page) => page.items.some((item) => item.id === summary.id))) return current
+  let carry: api.GenerationSummary | undefined = summary
+  const pages = current.pages.map((page) => {
+    const items = carry ? [carry, ...page.items] : [...page.items]
+    carry = items.length > GENERATION_PAGE_SIZE ? items.pop() : undefined
+    return { ...page, items, total: page.total + 1 }
+  })
+  return {
+    ...current,
+    pages,
+  }
+}
+
+async function recordedSummary(event: api.GenerationRecorded): Promise<api.GenerationSummary> {
+  const generation = event.generation
+  const firstAssetId = generation.outputAssetIds[0] ?? null
+  let thumbnailPath: string | null = null
+  if (firstAssetId) {
+    try {
+      thumbnailPath = (await api.assetThumbBatch([firstAssetId]))[firstAssetId] ?? null
+    } catch {
+      // The receipt is durable even when this machine cannot draw its preview.
+    }
+  }
+  const scene = api.sceneComposition(generation)
+  const source = generation.params.seedSource
+  return {
+    id: generation.id,
+    nodeId: generation.nodeId,
+    createdAt: generation.createdAt,
+    preset: generation.preset,
+    viewType: generation.viewType,
+    backend: generation.backend,
+    model: generation.model,
+    seed: generation.seed,
+    promptExcerpt: `${[...generation.compiledPrompt].slice(0, 240).join('')}${[
+      ...generation.compiledPrompt,
+    ].length > 240 ? '…' : ''}`,
+    firstAssetId,
+    outputCount: generation.outputAssetIds.length,
+    seedSource: typeof source === 'string' ? source : null,
+    usedLockedSeed:
+      typeof generation.params.usedLockedSeed === 'boolean'
+        ? generation.params.usedLockedSeed
+        : null,
+    sceneSubjectNames: scene?.subjectNames ?? [],
+    thumbnailPath,
+  }
+}
+
+/** One node's paginated immutable Concepts history, newest first. */
+export function useGenerations(nodeId: string) {
   const qc = useQueryClient()
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: qk.generations(nodeId),
-    queryFn: () => api.generationList(nodeId),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) =>
+      generationPageWithThumbnails(
+        await api.generationList(nodeId, pageParam, GENERATION_PAGE_SIZE),
+      ),
+    getNextPageParam: (last) => last.nextOffset ?? undefined,
     retry: false,
   })
 
   useEffect(() => {
     if (!api.isTauri()) return
     let disposed = false
-    const unlisteners: Array<() => void> = []
-    void listen<api.JobDone>(api.JOB_EVENTS.done, (event) => {
-      if (event.payload.kind === 'generate') {
-        void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
-      }
-    })
-      .then((fn) => {
-        if (disposed) fn()
-        else unlisteners.push(fn)
-      })
-      .catch(() => {
-        /* the folder watcher remains the slower catch-up path */
-      })
-    void listen<{ subjectId: string }>('generation:recorded', (event) => {
-      if (event.payload.subjectId === nodeId) {
-        void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
+    let unlisten: (() => void) | undefined
+    void listen<api.GenerationRecorded>('generation:recorded', (event) => {
+      if (event.payload.subjectId !== nodeId) return
+      void recordedSummary(event.payload).then((summary) => {
+        if (disposed) return
+        qc.setQueryData<GenerationPages>(qk.generations(nodeId), (current) =>
+          prependGeneration(current, summary),
+        )
         void qc.invalidateQueries({ queryKey: qk.assets })
         void qc.invalidateQueries({ queryKey: qk.meshes(nodeId) })
-      }
+      })
     })
       .then((fn) => {
         if (disposed) fn()
-        else unlisteners.push(fn)
+        else unlisten = fn
       })
       .catch(() => {
-        /* job:done and the folder watcher remain catch-up paths */
+        /* the folder watcher remains the catch-up path */
       })
     return () => {
       disposed = true
-      for (const unlisten of unlisteners) unlisten()
+      unlisten?.()
     }
   }, [nodeId, qc])
 
-  return query
+  return {
+    ...query,
+    data: query.data?.pages.flatMap((page) => page.items),
+    total: query.data?.pages[0]?.total ?? 0,
+  }
 }
 
 /** Local LoRA readiness for one Forge subject, refreshed after training settles. */
@@ -950,41 +1031,64 @@ export function useMeshAssetPath(assetId: string | null): UseQueryResult<string 
   })
 }
 
-/** Project-wide immutable generation history, newest first. */
-export function useGenerationHistory(): UseQueryResult<api.Generation[]> {
+function summaryMatches(summary: api.GenerationSummary, filters: api.GenerationFilters): boolean {
+  return (
+    (!filters.preset || summary.preset === filters.preset) &&
+    (!filters.model || summary.model === filters.model) &&
+    (!filters.from || summary.createdAt.slice(0, 10) >= filters.from) &&
+    (!filters.to || summary.createdAt.slice(0, 10) <= filters.to) &&
+    (filters.seed === undefined || summary.seed === filters.seed)
+  )
+}
+
+/** Project-wide filtered and paginated immutable generation history. */
+export function useGenerationHistory(filters: api.GenerationFilters) {
   const qc = useQueryClient()
-  const query = useQuery({
-    queryKey: qk.generationHistory,
-    queryFn: api.generationListAll,
+  const query = useInfiniteQuery({
+    queryKey: qk.generationHistory(filters),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) =>
+      generationPageWithThumbnails(
+        await api.generationListAll(pageParam, GENERATION_PAGE_SIZE, filters),
+      ),
+    getNextPageParam: (last) => last.nextOffset ?? undefined,
     retry: false,
   })
 
   useEffect(() => {
     if (!api.isTauri()) return
     let disposed = false
-    const unlisteners: Array<() => void> = []
-    const refresh = () => void qc.invalidateQueries({ queryKey: qk.generationHistory })
-    void listen<api.JobDone>(api.JOB_EVENTS.done, (event) => {
-      if (event.payload.kind === 'generate') refresh()
+    let unlisten: (() => void) | undefined
+    void listen<api.GenerationRecorded>('generation:recorded', (event) => {
+      void recordedSummary(event.payload).then((summary) => {
+        if (disposed) return
+        for (const cached of qc.getQueryCache().findAll({ queryKey: ['generation_list_all'] })) {
+          const cachedFilters = (cached.queryKey[1] ?? {}) as api.GenerationFilters
+          if (!summaryMatches(summary, cachedFilters)) continue
+          qc.setQueryData<GenerationPages>(cached.queryKey, (current) =>
+            prependGeneration(current, summary),
+          )
+        }
+      })
     })
       .then((fn) => {
         if (disposed) fn()
-        else unlisteners.push(fn)
-      })
-      .catch(() => {})
-    void listen('generation:recorded', refresh)
-      .then((fn) => {
-        if (disposed) fn()
-        else unlisteners.push(fn)
+        else unlisten = fn
       })
       .catch(() => {})
     return () => {
       disposed = true
-      for (const unlisten of unlisteners) unlisten()
+      unlisten?.()
     }
   }, [qc])
 
-  return query
+  return {
+    ...query,
+    data: query.data?.pages.flatMap((page) => page.items),
+    total: query.data?.pages[0]?.total ?? 0,
+    presets: query.data?.pages[0]?.presets ?? [],
+    models: query.data?.pages[0]?.models ?? [],
+  }
 }
 
 export function useReplayGeneration() {
@@ -992,6 +1096,21 @@ export function useReplayGeneration() {
     mutationFn: api.generationReplay,
     onSuccess: () => toast('Replay queued from the immutable snapshot'),
     onError: (error) => report(error, 'Could not replay that generation'),
+  })
+}
+
+export function useDeleteGeneration() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ generationId }: { generationId: string; nodeId: string }) =>
+      api.generationDelete(generationId),
+    onSuccess: (_result, { nodeId }) => {
+      void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
+      void qc.invalidateQueries({ queryKey: ['generation_list_all'] })
+      void qc.invalidateQueries({ queryKey: qk.meshes(nodeId) })
+      toast('Concept deleted')
+    },
+    onError: (error) => report(error, 'Could not delete that concept'),
   })
 }
 

@@ -324,9 +324,12 @@ The current shape is a **top-level `response_format` whose `type` is `"image"`**
 }
 ```
 
-The [API reference](https://ai.google.dev/api/interactions-api) (last updated 2026-07-31) names
+The [API reference](https://ai.google.dev/api/interactions-api) (last checked 2026-08-02) names
 this variant `ImageResponseFormat`: `aspect_ratio`, `image_size` (`512` / `1K` / `2K` / `4K`),
-`mime_type`, and `delivery` (`inline` / `uri`). The
+`mime_type`, and an optional `delivery` (`inline` / `uri`). Do not send `delivery`: despite the
+reference listing it, `gemini-3.1-flash-image` rejects an explicit value with "Image delivery
+mode is not supported". The image-generation guide omits the field and inline data remains the
+default. The
 [breaking-changes](https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026)
 page states it outright — "`image_config` moves from `generation_config` to `response_format`"
 and "the new schema removes `image_config` from `generation_config`" — and the legacy schema was

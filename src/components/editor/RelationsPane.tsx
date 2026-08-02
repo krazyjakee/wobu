@@ -1,5 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import type { KindDef, Link, LinkEdge, LinkRole, NodeSummary, WobuNode } from '../../lib/api'
+import type {
+  InfluenceLayer,
+  KindDef,
+  Link,
+  LinkEdge,
+  LinkRole,
+  NodeSummary,
+  WobuNode,
+} from '../../lib/api'
 import {
   useAddNodeLink,
   useNodeBacklinks,
@@ -77,6 +85,7 @@ function RelationsPaneSession({
     .filter(
       (candidate) =>
         candidate.id !== node.id &&
+        (!role || kinds.get(candidate.kind)?.layer === targetLayerForRole(role)) &&
         (!role || !node.links.some((link) => link.role === role && link.toId === candidate.id)),
     )
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -215,6 +224,22 @@ function RelationsPaneSession({
       </section>
     </div>
   )
+}
+
+/** A relation's route determines which kind of node can meaningfully supply it. */
+export function targetLayerForRole(role: LinkRole): InfluenceLayer {
+  switch (role) {
+    case 'styled_by':
+      return 'style'
+    case 'species_of':
+      return 'ancestry'
+    case 'member_of':
+      return 'culture'
+    case 'located_in':
+      return 'place'
+    case 'related_to':
+      return 'subject'
+  }
 }
 
 function RelationGroup({ title, children }: { title: string; children: ReactNode }) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
-import type { Generation, NodeSummary, ProjectSummary, QueueSnapshot } from '../lib/api'
+import type { GenerationSummary, NodeSummary, ProjectSummary, QueueSnapshot } from '../lib/api'
 import { negotiatedAspect } from '../lib/generationCapabilities'
 import type { KindIndex } from '../lib/kinds'
 import {
@@ -12,9 +12,7 @@ import {
   useTrainLora,
 } from '../lib/queries'
 import { report, useUI } from '../store/ui'
-import { LazyAssetThumbnail } from './AssetMedia'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
-import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
 import { Inspector } from './Inspector'
 import { Modal } from './Modal'
 import { useVirtualCardWindow } from './useVirtualCardWindow'
@@ -375,8 +373,8 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
     visibleSelectedIds.has(generation.id),
   )
 
-  const toggle = (generation: Generation) => {
-    if (generation.outputAssetIds.length === 0) return
+  const toggle = (generation: GenerationSummary) => {
+    if (generation.outputCount === 0) return
     setSelectedIds((current) => {
       const next = new Set(current)
       if (next.has(generation.id)) next.delete(generation.id)
@@ -391,7 +389,7 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
         <div>
           <h3>Results</h3>
           <span>
-            {history.data?.length ?? 0} receipts
+            {history.total} receipts
             {activeJobs.length ? ` · ${activeJobs.length} active` : ''}
           </span>
         </div>
@@ -429,6 +427,9 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
           generations={history.data ?? []}
           selectedIds={visibleSelectedIds}
           loading={history.isPending}
+          hasMore={history.hasNextPage}
+          loadingMore={history.isFetchingNextPage}
+          onLoadMore={() => void history.fetchNextPage()}
           onToggle={toggle}
         />
       )}
@@ -444,12 +445,18 @@ function VirtualResultGrid({
   generations,
   selectedIds,
   loading,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   onToggle,
 }: {
-  generations: Generation[]
+  generations: GenerationSummary[]
   selectedIds: Set<string>
   loading: boolean
-  onToggle: (generation: Generation) => void
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
+  onToggle: (generation: GenerationSummary) => void
 }) {
   const { viewportRef, start, end, tileWidth, totalHeight, onScroll, position } =
     useVirtualCardWindow({
@@ -494,6 +501,11 @@ function VirtualResultGrid({
           )
         })}
       </div>
+      {hasMore && (
+        <button className="btn forge-more" type="button" disabled={loadingMore} onClick={onLoadMore}>
+          {loadingMore ? 'Loading more…' : 'Load more results'}
+        </button>
+      )}
     </div>
   )
 }
@@ -506,15 +518,17 @@ function ForgeResultTile({
   left,
   onToggle,
 }: {
-  generation: Generation
+  generation: GenerationSummary
   selected: boolean
   width: number
   top: number
   left: number
   onToggle: () => void
 }) {
-  const assetId = generation.outputAssetIds[0] ?? null
-  const variation = variationLabel(generation)
+  const assetId = generation.firstAssetId
+  const subject = generation.sceneSubjectNames.length
+    ? `Scene · ${generation.sceneSubjectNames.join(' + ')}`
+    : generation.preset
   return (
     <button
       className={`forge-result media-card selectable-media-card${selected ? ' is-selected' : ''}`}
@@ -526,27 +540,24 @@ function ForgeResultTile({
       onClick={onToggle}
     >
       <span className="forge-result-image asset-media-frame">
-        <LazyAssetThumbnail
-          assetId={assetId}
-          alt=""
-          loadingLabel="Loading preview…"
-          missingLabel="No output"
-          errorLabel="Loading preview…"
-        />
+        {generation.thumbnailPath ? (
+          <img src={convertFileSrc(generation.thumbnailPath)} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span>{assetId ? 'Loading preview…' : 'No output'}</span>
+        )}
         <b>{selected ? 'Selected' : assetId ? 'Compare' : 'Receipt only'}</b>
       </span>
       <span className="forge-result-meta media-card-copy">
         <b>
-          <GenerationSubject generation={generation} fallback={generation.preset} />
-          {variation ? ` · ${variation}` : ''}
+          {subject}
         </b>
         <span>
-          <GenerationModelSeed generation={generation} />
+          {generation.model} · seed {generation.seed}
         </span>
         <small>
-          <GenerationTimestamp generation={generation} />
+          {new Date(generation.createdAt).toLocaleString()}
         </small>
-        <p>{generation.compiledPrompt}</p>
+        <p>{generation.promptExcerpt}</p>
       </span>
     </button>
   )
@@ -556,7 +567,7 @@ function CompareViewer({
   generations,
   onClose,
 }: {
-  generations: Generation[]
+  generations: GenerationSummary[]
   onClose: () => void
 }) {
   return (
@@ -587,7 +598,7 @@ function CompareViewer({
       <div className="forge-compare-images">
         {generations.map((generation) => (
           <CompareImage
-            key={`${generation.id}:${generation.outputAssetIds[0] ?? 'none'}`}
+            key={`${generation.id}:${generation.firstAssetId ?? 'none'}`}
             generation={generation}
           />
         ))}
@@ -596,10 +607,10 @@ function CompareViewer({
   )
 }
 
-function CompareImage({ generation }: { generation: Generation }) {
+function CompareImage({ generation }: { generation: GenerationSummary }) {
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const assetId = generation.outputAssetIds[0] ?? null
+  const assetId = generation.firstAssetId
   useEffect(() => {
     let disposed = false
     if (!assetId) return
@@ -625,28 +636,23 @@ function CompareImage({ generation }: { generation: Generation }) {
     <figure>
       <div>
         {src ? (
-          <img src={src} alt={generation.compiledPrompt} />
+          <img src={src} alt={generation.promptExcerpt} />
         ) : (
           <span>{error ?? 'Loading original…'}</span>
         )}
       </div>
       <figcaption>
         <b>
-          <GenerationSubject generation={generation} fallback={generation.preset} />
+          {generation.sceneSubjectNames.length
+            ? `Scene · ${generation.sceneSubjectNames.join(' + ')}`
+            : generation.preset}
         </b>
         <span>
-          <GenerationModelSeed generation={generation} />
+          {generation.model} · seed {generation.seed}
         </span>
       </figcaption>
     </figure>
   )
-}
-
-function variationLabel(generation: Generation): string | null {
-  const variation = generation.params.variation
-  if (!variation || typeof variation !== 'object' || Array.isArray(variation)) return null
-  const axis = (variation as Record<string, unknown>).axis
-  return typeof axis === 'string' ? axis.replaceAll('_', ' ') : null
 }
 
 function isTerminal(state: QueueSnapshot['jobs'][number]['state']): boolean {

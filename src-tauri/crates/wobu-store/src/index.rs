@@ -35,7 +35,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from the project folder, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 9;
+pub const INDEX_VERSION: u32 = 10;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -149,6 +149,13 @@ CREATE TABLE IF NOT EXISTS generations (
     view_type  TEXT,
     backend    TEXT NOT NULL,
     model      TEXT NOT NULL,
+    seed       INTEGER NOT NULL,
+    prompt_excerpt TEXT NOT NULL,
+    first_asset_id TEXT,
+    output_count INTEGER NOT NULL DEFAULT 0,
+    seed_source TEXT,
+    used_locked_seed INTEGER,
+    scene_subject_names TEXT NOT NULL DEFAULT '[]',
     rel_path   TEXT NOT NULL UNIQUE,
     mtime_ms   INTEGER NOT NULL DEFAULT 0,
     size       INTEGER NOT NULL DEFAULT 0,
@@ -266,13 +273,18 @@ const UPSERT_ASSET_SQL: &str = "INSERT OR REPLACE INTO assets
      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)";
 
 const UPSERT_GENERATION_SQL: &str = "INSERT INTO generations
-       (id, node_id, created_at, preset, view_type, backend, model,
-        rel_path, mtime_ms, size, hash, doc)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
+       (id, node_id, created_at, preset, view_type, backend, model, seed,
+        prompt_excerpt, first_asset_id, output_count, seed_source, used_locked_seed,
+        scene_subject_names, rel_path, mtime_ms, size, hash, doc)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
      ON CONFLICT(id) DO UPDATE SET
        node_id=excluded.node_id, created_at=excluded.created_at,
        preset=excluded.preset, view_type=excluded.view_type,
-       backend=excluded.backend, model=excluded.model,
+       backend=excluded.backend, model=excluded.model, seed=excluded.seed,
+       prompt_excerpt=excluded.prompt_excerpt, first_asset_id=excluded.first_asset_id,
+       output_count=excluded.output_count, seed_source=excluded.seed_source,
+       used_locked_seed=excluded.used_locked_seed,
+       scene_subject_names=excluded.scene_subject_names,
        rel_path=excluded.rel_path, mtime_ms=excluded.mtime_ms,
        size=excluded.size, hash=excluded.hash, doc=excluded.doc";
 
@@ -301,6 +313,51 @@ pub struct CorruptFile {
     pub error: String,
     /// When it was *first* seen broken, not when it was last scanned.
     pub detected_at: String,
+}
+
+/// The indexed fields a history tile needs. Full immutable receipts remain in
+/// `generations.doc` and cross the bridge only when one tile is opened.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationSummary {
+    pub id: Id,
+    pub node_id: Id,
+    pub created_at: DateTime<Utc>,
+    pub preset: String,
+    pub view_type: Option<String>,
+    pub backend: String,
+    pub model: String,
+    pub seed: u64,
+    pub prompt_excerpt: String,
+    pub first_asset_id: Option<Id>,
+    pub output_count: u32,
+    pub seed_source: Option<String>,
+    pub used_locked_seed: Option<bool>,
+    pub scene_subject_names: Vec<String>,
+    /// Project-relative in the store; the command layer makes it absolute.
+    pub thumbnail_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GenerationPageRequest {
+    pub node_id: Option<Id>,
+    pub preset: Option<String>,
+    pub model: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub seed: Option<u64>,
+    pub offset: u32,
+    pub limit: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationPage {
+    pub items: Vec<GenerationSummary>,
+    pub total: u64,
+    pub presets: Vec<String>,
+    pub models: Vec<String>,
+    pub next_offset: Option<u32>,
 }
 
 /// Which node rows have moved since a reader last asked.
@@ -513,6 +570,15 @@ impl<'conn> RebuildStatements<'conn> {
         rel_path: &str,
         stamp: &Stamp,
     ) -> Result<()> {
+        let excerpt = generation_prompt_excerpt(&generation.compiled_prompt);
+        let first_asset = generation.output_asset_ids.first().map(ToString::to_string);
+        let seed_source = generation.params.get("seedSource").and_then(serde_json::Value::as_str);
+        let used_locked_seed = generation
+            .params
+            .get("usedLockedSeed")
+            .and_then(serde_json::Value::as_bool)
+            .map(i32::from);
+        let scene_names = generation_scene_names(generation)?;
         self.upsert_generation.execute(params![
             generation.id.to_string(),
             generation.node_id.to_string(),
@@ -521,6 +587,13 @@ impl<'conn> RebuildStatements<'conn> {
             generation.view_type,
             generation.backend,
             generation.model,
+            generation.seed as i64,
+            excerpt,
+            first_asset,
+            generation.output_asset_ids.len() as i64,
+            seed_source,
+            used_locked_seed,
+            scene_names,
             rel_path,
             stamp.mtime_ms,
             stamp.size as i64,
@@ -1130,6 +1203,15 @@ impl Index {
         rel_path: &str,
         stamp: &Stamp,
     ) -> Result<()> {
+        let excerpt = generation_prompt_excerpt(&generation.compiled_prompt);
+        let first_asset = generation.output_asset_ids.first().map(ToString::to_string);
+        let seed_source = generation.params.get("seedSource").and_then(serde_json::Value::as_str);
+        let used_locked_seed = generation
+            .params
+            .get("usedLockedSeed")
+            .and_then(serde_json::Value::as_bool)
+            .map(i32::from);
+        let scene_names = generation_scene_names(generation)?;
         self.conn.execute(
             UPSERT_GENERATION_SQL,
             params![
@@ -1140,6 +1222,13 @@ impl Index {
                 generation.view_type,
                 generation.backend,
                 generation.model,
+                generation.seed as i64,
+                excerpt,
+                first_asset,
+                generation.output_asset_ids.len() as i64,
+                seed_source,
+                used_locked_seed,
+                scene_names,
                 rel_path,
                 stamp.mtime_ms,
                 stamp.size as i64,
@@ -1163,12 +1252,8 @@ impl Index {
         Ok(doc.and_then(|doc| serde_json::from_str(&doc).ok()))
     }
 
-    /// A node's Concepts tiles, newest first.
-    ///
-    /// ULID breaks equal timestamps deterministically. Two collaborators who
-    /// generate for the same node therefore get two rows and a stable order;
-    /// neither node id nor timestamp is treated as a uniqueness boundary.
-    pub fn generations_for_node(&self, node_id: Id) -> Result<Vec<Generation>> {
+    /// Full node receipts for the mesh adapter's immutable turnaround joins.
+    pub fn generation_documents_for_node(&self, node_id: Id) -> Result<Vec<Generation>> {
         let mut stmt = self.conn.prepare(
             "SELECT doc FROM generations
              WHERE node_id = ?1 ORDER BY created_at DESC, id DESC",
@@ -1176,11 +1261,85 @@ impl Index {
         collect_json_documents(stmt.query_map(params![node_id.to_string()], document_row)?)
     }
 
-    /// Project-wide history, newest first, from the disposable read model.
-    pub fn generations_all(&self) -> Result<Vec<Generation>> {
-        let mut stmt =
-            self.conn.prepare("SELECT doc FROM generations ORDER BY created_at DESC, id DESC")?;
-        collect_json_documents(stmt.query_map([], document_row)?)
+    /// A bounded page of lightweight receipt rows, newest first.
+    ///
+    /// Every predicate is answered by an indexed/scalar column. The large JSON
+    /// `doc` is deliberately absent from this query and is read only by
+    /// [`generation`](Self::generation) after a person opens one receipt.
+    pub fn generation_page(&self, request: &GenerationPageRequest) -> Result<GenerationPage> {
+        let node_id = request.node_id.map(|id| id.to_string());
+        let limit = request.limit.clamp(1, 100);
+        let seed = request.seed.map(|value| value as i64);
+        let predicates =
+            "(?1 IS NULL OR g.node_id = ?1)
+             AND (?2 IS NULL OR g.preset = ?2)
+             AND (?3 IS NULL OR g.model = ?3)
+             AND (?4 IS NULL OR substr(g.created_at, 1, 10) >= ?4)
+             AND (?5 IS NULL OR substr(g.created_at, 1, 10) <= ?5)
+             AND (?6 IS NULL OR g.seed = ?6)";
+        let sql = format!(
+            "SELECT g.id, g.node_id, g.created_at, g.preset, g.view_type,
+                    g.backend, g.model, g.seed, g.prompt_excerpt,
+                    g.first_asset_id, g.output_count, g.seed_source,
+                    g.used_locked_seed, g.scene_subject_names, a.thumb_path
+             FROM generations g
+             LEFT JOIN assets a ON a.id = g.first_asset_id
+             WHERE {predicates}
+             ORDER BY g.created_at DESC, g.id DESC LIMIT ?7 OFFSET ?8"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(
+            params![
+                node_id,
+                request.preset,
+                request.model,
+                request.from,
+                request.to,
+                seed,
+                limit,
+                request.offset,
+            ],
+            generation_summary_row,
+        )?;
+        let mut items = Vec::new();
+        for row in rows {
+            if let Some(summary) = row? {
+                items.push(summary);
+            }
+        }
+
+        let count_sql = format!("SELECT COUNT(*) FROM generations g WHERE {predicates}");
+        let total = self.conn.query_row(
+            &count_sql,
+            params![
+                node_id,
+                request.preset,
+                request.model,
+                request.from,
+                request.to,
+                seed,
+            ],
+            |row| row.get::<_, i64>(0),
+        )? as u64;
+        let consumed = request.offset.saturating_add(items.len() as u32);
+        Ok(GenerationPage {
+            items,
+            total,
+            presets: self.generation_values("preset", node_id.as_deref())?,
+            models: self.generation_values("model", node_id.as_deref())?,
+            next_offset: (u64::from(consumed) < total).then_some(consumed),
+        })
+    }
+
+    fn generation_values(&self, column: &str, node_id: Option<&str>) -> Result<Vec<String>> {
+        debug_assert!(matches!(column, "preset" | "model"));
+        let sql = format!(
+            "SELECT DISTINCT {column} FROM generations
+             WHERE (?1 IS NULL OR node_id = ?1) ORDER BY {column}"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![node_id], |row| row.get::<_, String>(0))?;
+        Ok(rows.filter_map(std::result::Result::ok).collect())
     }
 
     /// Every generation path held by the disposable index.
@@ -1860,6 +2019,69 @@ impl StalenessRow {
 
 fn document_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
     row.get(0)
+}
+
+fn generation_prompt_excerpt(prompt: &str) -> String {
+    const LIMIT: usize = 240;
+    let mut excerpt: String = prompt.chars().take(LIMIT).collect();
+    if prompt.chars().count() > LIMIT {
+        excerpt.push('…');
+    }
+    excerpt
+}
+
+fn generation_scene_names(generation: &Generation) -> Result<String> {
+    let names = generation
+        .params
+        .get("sceneComposition")
+        .and_then(|scene| scene.get("subjectNames"))
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok(serde_json::to_string(&names)?)
+}
+
+fn generation_summary_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<Option<GenerationSummary>> {
+    let id = row.get::<_, String>(0)?;
+    let node_id = row.get::<_, String>(1)?;
+    let created_at = row.get::<_, String>(2)?;
+    let (Ok(id), Ok(node_id), Ok(created_at)) = (
+        Id::from_string(&id),
+        Id::from_string(&node_id),
+        DateTime::parse_from_rfc3339(&created_at),
+    ) else {
+        return Ok(None);
+    };
+    let first_asset_id = row
+        .get::<_, Option<String>>(9)?
+        .and_then(|value| Id::from_string(&value).ok());
+    let scene_subject_names = serde_json::from_str(&row.get::<_, String>(13)?)
+        .unwrap_or_else(|_| Vec::new());
+    Ok(Some(GenerationSummary {
+        id,
+        node_id,
+        created_at: created_at.with_timezone(&Utc),
+        preset: row.get(3)?,
+        view_type: row.get(4)?,
+        backend: row.get(5)?,
+        model: row.get(6)?,
+        seed: row.get::<_, i64>(7)? as u64,
+        prompt_excerpt: row.get(8)?,
+        first_asset_id,
+        output_count: row.get::<_, i64>(10)? as u32,
+        seed_source: row.get(11)?,
+        used_locked_seed: row.get::<_, Option<i32>>(12)?.map(|value| value != 0),
+        scene_subject_names,
+        thumbnail_path: row.get(14)?,
+    }))
 }
 
 fn collect_json_documents<T, I>(rows: I) -> Result<Vec<T>>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { isTauri } from '../lib/api'
 import { closeProjectAfterEditorWrites, reportProjectCloseFailure } from '../lib/projectClose'
-import { closeWindow, onCloseRequested } from '../lib/window'
+import { closeWindow, destroyWindow, onCloseRequested } from '../lib/window'
 
 /**
  * A normal OS/titlebar close is asynchronous: refuse the first request, settle
@@ -32,7 +32,11 @@ export function useSafeWindowClose(projectOpen: boolean): void {
       try {
         await closeProjectAfterEditorWrites()
         permitClose = true
-        await closeWindow()
+        // We are already inside Tauri's async close-request callback. Calling
+        // `close()` here emits a second close request and can leave the first
+        // request waiting on itself on some webview/runtime combinations.
+        // `destroy()` is safe only after the editor and backend gates above.
+        await destroyWindow()
       } catch (error) {
         reportProjectCloseFailure(error, requestAgain)
       } finally {

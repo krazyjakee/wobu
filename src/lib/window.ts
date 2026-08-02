@@ -22,6 +22,12 @@ export async function closeWindow() {
   await getCurrentWindow().close()
 }
 
+/** Complete a close that has already passed Wobu's save/project-close gate. */
+export async function destroyWindow() {
+  if (!isTauri()) return
+  await getCurrentWindow().destroy()
+}
+
 export async function isMaximized(): Promise<boolean> {
   if (!isTauri()) return false
   return getCurrentWindow().isMaximized()

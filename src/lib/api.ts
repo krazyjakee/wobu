@@ -777,6 +777,46 @@ export interface Generation {
   influenceSnapshot: { layers: GenerationSnapshotLayer[] }
 }
 
+export interface GenerationSummary {
+  id: string
+  nodeId: string
+  createdAt: string
+  preset: string
+  viewType: string | null
+  backend: string
+  model: string
+  seed: number
+  promptExcerpt: string
+  firstAssetId: string | null
+  outputCount: number
+  seedSource: string | null
+  usedLockedSeed: boolean | null
+  sceneSubjectNames: string[]
+  thumbnailPath: string | null
+}
+
+export interface GenerationPage {
+  items: GenerationSummary[]
+  total: number
+  presets: string[]
+  models: string[]
+  nextOffset: number | null
+}
+
+export interface GenerationFilters {
+  preset?: string
+  model?: string
+  from?: string
+  to?: string
+  seed?: number
+}
+
+export interface GenerationRecorded {
+  subjectId: string
+  generation: Generation
+  asset: Asset | null
+}
+
 export interface AppliedLoraReceipt {
   nodeId: string
   contentHash: string
@@ -840,8 +880,9 @@ export function generationLoraReceipt(generation: Generation): {
   return { applied, downgrades }
 }
 
-/** One node's generation receipts, newest first. */
-export const generationList = (nodeId: string) => call<Generation[]>('generation_list', { nodeId })
+/** One bounded page of a node's lightweight generation receipts. */
+export const generationList = (nodeId: string, offset: number, limit: number) =>
+  call<GenerationPage>('generation_list', { nodeId, offset, limit })
 
 export interface MeshAsset {
   id: string
@@ -881,8 +922,21 @@ export const meshSourcePath = (assetId: string) =>
 export const meshExport = (assetId: string, destination: string) =>
   call<void>('mesh_export', { assetId, destination })
 
-/** Every generation receipt in the project, newest first. */
-export const generationListAll = () => call<Generation[]>('generation_list_all')
+/** One filtered, bounded page of project generation summaries. */
+export const generationListAll = (offset: number, limit: number, filters: GenerationFilters) =>
+  call<GenerationPage>('generation_list_all', { offset, limit, ...filters })
+
+/** Full immutable receipt for the one history tile being opened. */
+export const generationGet = (generationId: string) =>
+  call<Generation | null>('generation_get', { generationId })
+
+/** Remove one visible concept receipt while retaining its archived spend record. */
+export const generationDelete = (generationId: string) =>
+  call<void>('generation_delete', { generationId })
+
+/** Resolve one page of thumbnail paths in a single backend command. */
+export const assetThumbBatch = (assetIds: string[]) =>
+  call<Record<string, string>>('asset_thumb_batch', { assetIds })
 
 /** Queue the immutable request captured by a past generation. */
 export const generationReplay = (generationId: string) =>

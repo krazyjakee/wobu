@@ -139,6 +139,55 @@ struct Price {
     conservative_fallback: bool,
 }
 
+struct ReceiptPreparation<'a> {
+    batch_index: usize,
+    batch_size: usize,
+    requested_aspect: AspectRatio,
+    actual_aspect: AspectRatio,
+    resolution: Resolution,
+    negative_prompt_supported: bool,
+    seed_source: SeedSource,
+    cost_usd_micros: u64,
+    reference_asset_ids: &'a [Id],
+    loras: &'a [ReceiptLora],
+    lora_downgrades: &'a [LoraDowngrade],
+    price: Option<Price>,
+}
+
+impl ReceiptPreparation<'_> {
+    fn params(&self) -> Map<String, Value> {
+        let mut params = Map::new();
+        params.insert("batchIndex".into(), json!(self.batch_index));
+        params.insert("batchSize".into(), json!(self.batch_size));
+        params.insert("requestedAspect".into(), json!(self.requested_aspect.to_string()));
+        params.insert("aspect".into(), json!(self.actual_aspect.to_string()));
+        params.insert("width".into(), json!(self.resolution.width));
+        params.insert("height".into(), json!(self.resolution.height));
+        params.insert("negativePromptSupported".into(), json!(self.negative_prompt_supported));
+        params.insert("seedSource".into(), json!(self.seed_source));
+        params.insert("estimatedCostUsdMicros".into(), json!(self.cost_usd_micros));
+        params.insert("referenceAssetIds".into(), json!(self.reference_asset_ids));
+        params.insert("loras".into(), json!(self.loras));
+        params.insert("loraDowngrades".into(), json!(self.lora_downgrades));
+        apply_pricing_metadata(&mut params, self.price);
+        params
+    }
+}
+
+fn apply_pricing_metadata(params: &mut Map<String, Value>, price: Option<Price>) {
+    if let Some(price) = price {
+        params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
+        params.insert("pricingSource".into(), json!(PRICE_SOURCE));
+        params.insert("pricingIndicative".into(), json!(true));
+        params.insert("pricingConservativeFallback".into(), json!(price.conservative_fallback));
+    } else {
+        params.remove("pricingCheckedAt");
+        params.remove("pricingSource");
+        params.remove("pricingIndicative");
+        params.remove("pricingConservativeFallback");
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CostEstimate {
@@ -237,7 +286,23 @@ pub struct GenerateShot {
     prompt: Option<String>,
 }
 
-fn selected_image_provider(project: &Project) -> CommandResult<(String, Option<String>)> {
+#[derive(Debug, Clone)]
+struct ProviderSelection {
+    provider: String,
+    configured_model: Option<String>,
+}
+
+impl ProviderSelection {
+    fn model(&self, requested: Option<String>, backend_default: &str) -> String {
+        requested
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .or_else(|| self.configured_model.clone())
+            .unwrap_or_else(|| backend_default.to_owned())
+    }
+}
+
+fn selected_image_provider(project: &Project) -> CommandResult<ProviderSelection> {
     let selected = project
         .meta()
         .providers
@@ -257,19 +322,206 @@ fn selected_image_provider(project: &Project) -> CommandResult<(String, Option<S
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned);
-    Ok((provider, model))
+    Ok(ProviderSelection { provider, configured_model: model })
 }
 
-fn selected_image_model(
-    requested: Option<String>,
-    selected: Option<String>,
-    backend_default: &str,
-) -> String {
-    requested
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or(selected)
-        .unwrap_or_else(|| backend_default.to_owned())
+#[derive(Clone)]
+struct GenerationPlanRequest {
+    subject_id: Id,
+    preset_id: Option<String>,
+    sliders: Vec<GenerateSlider>,
+    shot: GenerateShot,
+    aspect: Option<String>,
+    seed: u64,
+    seed_source: SeedSource,
+    locked_seed: Option<u64>,
+    grid: Option<VariantGrid>,
+}
+
+#[derive(Debug, Clone)]
+struct NormalizedControls {
+    shot_label: String,
+    shot_weight: f32,
+    user_prompt: String,
+    slider_values: Vec<(Id, f32)>,
+    muted_nodes: HashSet<Id>,
+    requested_aspect: AspectRatio,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedGenerationPlan {
+    subject_id: Id,
+    subject_name: String,
+    chosen: Preset,
+    controls: NormalizedControls,
+    cells: Vec<VariantCell>,
+    locked_seed: Option<u64>,
+}
+
+fn normalize_prompt(prompt: Option<&str>) -> String {
+    prompt.map(str::trim).unwrap_or_default().to_owned()
+}
+
+fn normalize_aspect(requested: Option<&str>, fallback: &str) -> CommandResult<AspectRatio> {
+    let requested = requested.map(str::trim).filter(|value| !value.is_empty()).unwrap_or(fallback);
+    AspectRatio::parse(requested).ok_or_else(|| {
+        WobuError::new(Code::Invalid, "That is not a supported aspect ratio.")
+            .with_detail(requested.to_owned())
+    })
+}
+
+fn normalize_weight(weight: Option<f32>) -> f32 {
+    weight.unwrap_or(1.0).clamp(0.0, 1.0)
+}
+
+fn normalize_sliders(sliders: &[GenerateSlider]) -> (Vec<(Id, f32)>, HashSet<Id>) {
+    let values = sliders
+        .iter()
+        .map(|slider| (slider.node_id, if slider.muted { 0.0 } else { slider.value }))
+        .collect();
+    let muted = sliders.iter().filter(|slider| slider.muted).map(|slider| slider.node_id).collect();
+    (values, muted)
+}
+
+fn prepare_generation_plan(
+    nodes: &[Node],
+    request: GenerationPlanRequest,
+    caps: &Capabilities,
+) -> CommandResult<PreparedGenerationPlan> {
+    let subject = nodes.iter().find(|node| node.id == request.subject_id).ok_or_else(|| {
+        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
+    })?;
+    let chosen = request
+        .preset_id
+        .as_deref()
+        .and_then(preset)
+        .filter(|candidate| candidate.applies_to(subject.kind))
+        .copied()
+        .unwrap_or_else(|| *default_preset(subject.kind));
+    let shot_label = request
+        .shot
+        .label
+        .as_deref()
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .unwrap_or(chosen.label)
+        .to_owned();
+    let shot_weight = normalize_weight(request.shot.weight);
+    let user_prompt = normalize_prompt(request.shot.prompt.as_deref());
+    let requested_aspect = normalize_aspect(request.aspect.as_deref(), chosen.aspect)?;
+    let (slider_values, muted_nodes) = normalize_sliders(&request.sliders);
+    let world = World::new(nodes.iter());
+    let stack =
+        resolve(&world, request.subject_id, Some(Shot { label: &shot_label, weight: shot_weight }))
+            .ok_or_else(|| {
+                WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
+            })?;
+    let available_nodes = stack.sources().iter().filter_map(|source| source.node_id()).collect();
+    let cells = variant_cells(
+        subject,
+        chosen,
+        requested_aspect,
+        request.seed,
+        request.seed_source,
+        request.locked_seed,
+        &slider_values,
+        &available_nodes,
+        request.grid.as_ref(),
+        caps,
+    )?;
+    Ok(PreparedGenerationPlan {
+        subject_id: request.subject_id,
+        subject_name: subject.name.clone(),
+        chosen,
+        controls: NormalizedControls {
+            shot_label,
+            shot_weight,
+            user_prompt,
+            slider_values,
+            muted_nodes,
+            requested_aspect,
+        },
+        cells,
+        locked_seed: request.locked_seed,
+    })
+}
+
+fn resolve_generation_stack<'a>(
+    nodes: &'a [Node],
+    plan: &'a PreparedGenerationPlan,
+) -> CommandResult<wobu_influence::ResolvedStack<'a>> {
+    let world = World::new(nodes.iter());
+    resolve(
+        &world,
+        plan.subject_id,
+        Some(Shot { label: &plan.controls.shot_label, weight: plan.controls.shot_weight }),
+    )
+    .ok_or_else(|| WobuError::new(Code::NoSuchNode, "That entity is not in this project any more."))
+}
+
+fn fragments_for_cell<'a>(
+    stack: &wobu_influence::ResolvedStack<'a>,
+    cell: &VariantCell,
+    user_prompt: &'a str,
+) -> Vec<Fragment<'a>> {
+    let sliders = Sliders::from_pairs(cell.slider_values.iter().copied());
+    let mut extracted = match cell.item.view {
+        Some(view) => fragments_for_view(stack, &cell.preset, &sliders, view),
+        None => fragments(stack, &cell.preset, &sliders),
+    };
+    append_user_prompt(stack, &mut extracted, user_prompt);
+    extracted
+}
+
+#[derive(Clone, Copy)]
+enum BackendPurpose {
+    Generate,
+    Replay,
+}
+
+async fn execution_backend(
+    provider: &str,
+    keys: &Keys,
+    machine: &MachineSettings,
+    purpose: BackendPurpose,
+) -> CommandResult<Arc<dyn ImageBackend>> {
+    match provider {
+        comfy::ID => Ok(Arc::new(
+            machine
+                .connect_comfy_image()
+                .await
+                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
+        )),
+        gemini::ID => {
+            let missing = match purpose {
+                BackendPurpose::Generate => {
+                    "Gemini is selected for images, but there is no key on this machine. Add one in Settings."
+                }
+                BackendPurpose::Replay => {
+                    "This replay used Gemini, but there is no Gemini key on this machine. Add one in Settings."
+                }
+            };
+            let secret = keys
+                .secret(gemini::ID)
+                .ok_or_else(|| WobuError::new(Code::ProviderNoKey, missing))?;
+            Ok(Arc::new(
+                GeminiBackend::new(secret.expose()).map_err(|error| {
+                    WobuError::new(Code::ProviderUnavailable, error.to_string())
+                })?,
+            ))
+        }
+        other => {
+            let message = match purpose {
+                BackendPurpose::Generate => {
+                    format!("This build has no image adapter for {other}.")
+                }
+                BackendPurpose::Replay => {
+                    format!("This build has no image adapter for the recorded provider {other}.")
+                }
+            };
+            Err(WobuError::new(Code::Invalid, message))
+        }
+    }
 }
 
 /// Start one image and return the queue id immediately.
@@ -290,52 +542,26 @@ pub async fn generate_start(
     seed: Option<u64>,
     grid: Option<VariantGrid>,
 ) -> CommandResult<String> {
-    let (root, project_id, nodes, assets, provider, selected_model) = state.with(|project| {
+    let (root, project_id, nodes, assets, selection) = state.with(|project| {
         if project.is_read_only() {
             return Err(WobuError::new(
                 Code::ReadOnly,
                 "This project is read-only, so a generated image could not be saved.",
             ));
         }
-        let (provider, selected_model) = selected_image_provider(project)?;
+        let selection = selected_image_provider(project)?;
         Ok((
             project.root().to_path_buf(),
             project.id(),
             project.world_nodes()?.to_vec(),
             project.list_assets()?,
-            provider,
-            selected_model,
+            selection,
         ))
     })?;
 
-    let backend: Arc<dyn ImageBackend> = match provider.as_str() {
-        comfy::ID => Arc::new(
-            machine
-                .connect_comfy_image()
-                .await
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        gemini::ID => {
-            let secret = keys.secret(gemini::ID).ok_or_else(|| {
-                WobuError::new(
-                    Code::ProviderNoKey,
-                    "Gemini is selected for images, but there is no key on this machine. Add one in Settings.",
-                )
-            })?;
-            Arc::new(
-                GeminiBackend::new(secret.expose()).map_err(|error| {
-                    WobuError::new(Code::ProviderUnavailable, error.to_string())
-                })?,
-            )
-        }
-        other => {
-            return Err(WobuError::new(
-                Code::Invalid,
-                format!("This build has no image adapter for {other}."),
-            ));
-        }
-    };
-    let model = selected_image_model(model, selected_model, backend.default_model());
+    let backend =
+        execution_backend(&selection.provider, &keys, &machine, BackendPurpose::Generate).await?;
+    let model = selection.model(model, backend.default_model());
     let locked_seed =
         nodes.iter().find(|node| node.id == subject_id).and_then(|node| node.locked_seed);
     let (seed, seed_source) = match (seed, locked_seed) {
@@ -350,18 +576,20 @@ pub async fn generate_start(
             project_id,
             nodes,
             assets,
-            subject_id,
-            preset_id: preset,
-            sliders: sliders.unwrap_or_default(),
-            shot: shot.unwrap_or_default(),
-            aspect,
+            request: GenerationPlanRequest {
+                subject_id,
+                preset_id: preset,
+                sliders: sliders.unwrap_or_default(),
+                shot: shot.unwrap_or_default(),
+                aspect,
+                seed,
+                seed_source,
+                locked_seed,
+                grid,
+            },
             model,
-            seed,
-            seed_source,
-            locked_seed,
-            grid,
             backend,
-            provider,
+            provider: selection.provider,
             app,
         })
     })
@@ -394,21 +622,20 @@ pub async fn scene_generate_start(
         return Err(WobuError::new(Code::Invalid, "A scene cannot contain the same entity twice."));
     }
 
-    let (root, project_id, nodes, assets, provider, selected_model) = state.with(|project| {
+    let (root, project_id, nodes, assets, selection) = state.with(|project| {
         if project.is_read_only() {
             return Err(WobuError::new(
                 Code::ReadOnly,
                 "This project is read-only, so a generated scene could not be saved.",
             ));
         }
-        let (provider, selected_model) = selected_image_provider(project)?;
+        let selection = selected_image_provider(project)?;
         Ok((
             project.root().to_path_buf(),
             project.id(),
             project.world_nodes()?.to_vec(),
             project.list_assets()?,
-            provider,
-            selected_model,
+            selection,
         ))
     })?;
 
@@ -425,34 +652,9 @@ pub async fn scene_generate_start(
         }
     }
 
-    let backend: Arc<dyn ImageBackend> = match provider.as_str() {
-        comfy::ID => Arc::new(
-            machine
-                .connect_comfy_image()
-                .await
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        gemini::ID => {
-            let secret = keys.secret(gemini::ID).ok_or_else(|| {
-                WobuError::new(
-                    Code::ProviderNoKey,
-                    "Gemini is selected for images, but there is no key on this machine. Add one in Settings.",
-                )
-            })?;
-            Arc::new(
-                GeminiBackend::new(secret.expose()).map_err(|error| {
-                    WobuError::new(Code::ProviderUnavailable, error.to_string())
-                })?,
-            )
-        }
-        other => {
-            return Err(WobuError::new(
-                Code::Invalid,
-                format!("This build has no image adapter for {other}."),
-            ));
-        }
-    };
-    let model = selected_image_model(model, selected_model, backend.default_model());
+    let backend =
+        execution_backend(&selection.provider, &keys, &machine, BackendPurpose::Generate).await?;
+    let model = selection.model(model, backend.default_model());
     let seed_source = if seed.is_some() { SeedSource::Rerolled } else { SeedSource::Random };
     let seed = seed.unwrap_or_else(|| u128::from(new_id()) as u64);
     let mut plan = prepare_blocking("Scene preparation stopped unexpectedly.", move || {
@@ -468,7 +670,7 @@ pub async fn scene_generate_start(
             seed,
             seed_source,
             backend,
-            provider,
+            provider: selection.provider,
             app,
         })
     })
@@ -513,33 +715,8 @@ pub async fn generation_replay(
         .map(|layer| layer.node_name.clone())
         .unwrap_or_else(|| format!("generation {}", generation.id));
 
-    let backend: Arc<dyn ImageBackend> = match generation.backend.as_str() {
-        comfy::ID => Arc::new(
-            machine
-                .connect_comfy_image()
-                .await
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        gemini::ID => {
-            let secret = keys.secret(gemini::ID).ok_or_else(|| {
-                WobuError::new(
-                    Code::ProviderNoKey,
-                    "This replay used Gemini, but there is no Gemini key on this machine. Add one in Settings.",
-                )
-            })?;
-            Arc::new(
-                GeminiBackend::new(secret.expose()).map_err(|error| {
-                    WobuError::new(Code::ProviderUnavailable, error.to_string())
-                })?,
-            )
-        }
-        provider => {
-            return Err(WobuError::new(
-                Code::Invalid,
-                format!("This build has no image adapter for the recorded provider {provider}."),
-            ));
-        }
-    };
+    let backend =
+        execution_backend(&generation.backend, &keys, &machine, BackendPurpose::Replay).await?;
     let capabilities = backend.capabilities(&generation.model);
     let requires_billing = capabilities.requires_billing;
     let replay_root = root.clone();
@@ -694,20 +871,7 @@ fn replay_plan(
     generation.params.insert("batchSize".into(), json!(1));
     generation.params.insert("seedSource".into(), json!("replay"));
     generation.params.insert("estimatedCostUsdMicros".into(), json!(current_cost));
-    if current_cost > 0 {
-        generation.params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
-        generation.params.insert("pricingSource".into(), json!(PRICE_SOURCE));
-        generation.params.insert("pricingIndicative".into(), json!(true));
-        generation.params.insert(
-            "pricingConservativeFallback".into(),
-            json!(current_price.is_some_and(|price| price.conservative_fallback)),
-        );
-    } else {
-        generation.params.remove("pricingCheckedAt");
-        generation.params.remove("pricingSource");
-        generation.params.remove("pricingIndicative");
-        generation.params.remove("pricingConservativeFallback");
-    }
+    apply_pricing_metadata(&mut generation.params, current_price);
 
     Ok(PlannedImage { request, cost_usd_micros: current_cost, generation })
 }
@@ -1082,8 +1246,8 @@ pub async fn image_generation_capabilities(
     machine: State<'_, MachineSettings>,
     model: Option<String>,
 ) -> CommandResult<ImageGenerationCapabilities> {
-    let (provider, selected_model) = state.with(|project| selected_image_provider(project))?;
-    let backend: Box<dyn ImageBackend> = match provider.as_str() {
+    let selection = state.with(|project| selected_image_provider(project))?;
+    let backend: Box<dyn ImageBackend> = match selection.provider.as_str() {
         comfy::ID => Box::new(
             machine
                 .connect_comfy_image()
@@ -1101,8 +1265,8 @@ pub async fn image_generation_capabilities(
             ));
         }
     };
-    let model = selected_image_model(model, selected_model, backend.default_model());
-    Ok(aspect_capability_view(provider, model.clone(), backend.capabilities(&model)))
+    let model = selection.model(model, backend.default_model());
+    Ok(aspect_capability_view(selection.provider, model.clone(), backend.capabilities(&model)))
 }
 
 fn aspect_capability_view(
@@ -1229,11 +1393,11 @@ pub fn image_reference_report(
     seed: Option<u64>,
     grid: Option<VariantGrid>,
 ) -> CommandResult<ImageReferenceReport> {
-    let (nodes, provider, selected_model) = state.with(|project| {
-        let (provider, selected_model) = selected_image_provider(project)?;
-        Ok((project.world_nodes()?.to_vec(), provider, selected_model))
+    let (nodes, selection) = state.with(|project| {
+        let selection = selected_image_provider(project)?;
+        Ok((project.world_nodes()?.to_vec(), selection))
     })?;
-    let backend: Box<dyn ImageBackend> = match provider.as_str() {
+    let backend: Box<dyn ImageBackend> = match selection.provider.as_str() {
         comfy::ID => Box::new(
             machine
                 .comfy_image()
@@ -1250,66 +1414,56 @@ pub fn image_reference_report(
             ));
         }
     };
-    let model = selected_image_model(model, selected_model, backend.default_model());
+    let model = selection.model(model, backend.default_model());
     let subject = nodes.iter().find(|node| node.id == subject_id).ok_or_else(|| {
         WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
     })?;
     let locked_seed = subject.locked_seed;
-    let chosen = preset
-        .as_deref()
-        .and_then(wobu_core::preset)
-        .filter(|candidate| candidate.applies_to(subject.kind))
-        .unwrap_or_else(|| default_preset(subject.kind));
-    let controls = shot.unwrap_or_default();
-    let shot_label = controls.label.as_deref().unwrap_or(chosen.label);
-    let world = World::new(nodes.iter());
-    let stack = resolve(
-        &world,
-        subject_id,
-        Some(Shot { label: shot_label, weight: controls.weight.unwrap_or(1.0).clamp(0.0, 1.0) }),
-    )
-    .ok_or_else(|| {
-        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
-    })?;
-    let slider_values: Vec<(Id, f32)> = sliders
-        .unwrap_or_default()
-        .into_iter()
-        .map(|slider| (slider.node_id, if slider.muted { 0.0 } else { slider.value }))
-        .collect();
-    let sliders = Sliders::from_pairs(slider_values.iter().copied());
-    let mut extracted = fragments(&stack, chosen, &sliders);
-    append_user_prompt(
-        &stack,
-        &mut extracted,
-        controls.prompt.as_deref().map(str::trim).unwrap_or(""),
-    );
-    let requested_aspect = aspect.as_deref().unwrap_or(chosen.aspect);
-    let aspect = AspectRatio::parse(requested_aspect).ok_or_else(|| {
-        WobuError::new(Code::Invalid, "That is not a supported aspect ratio.")
-            .with_detail(requested_aspect.to_owned())
-    })?;
-    let negotiated = negotiate(&extracted, aspect, &backend.capabilities(&model));
     let estimate_seed = seed.or(locked_seed).unwrap_or(0);
-    let cells = variant_cells(
-        subject,
-        *chosen,
-        aspect,
-        estimate_seed,
-        SeedSource::Random,
-        locked_seed,
-        &slider_values,
-        &stack.sources().iter().filter_map(|source| source.node_id()).collect(),
-        grid.as_ref(),
-        &backend.capabilities(&model),
-    )?;
-    let prices: Vec<Price> = cells
+    reference_report_for_plan(
+        &nodes,
+        &selection.provider,
+        &model,
+        backend.as_ref(),
+        GenerationPlanRequest {
+            subject_id,
+            preset_id: preset,
+            sliders: sliders.unwrap_or_default(),
+            shot: shot.unwrap_or_default(),
+            aspect,
+            seed: estimate_seed,
+            seed_source: SeedSource::Random,
+            locked_seed,
+            grid,
+        },
+    )
+}
+
+fn reference_report_for_plan(
+    nodes: &[Node],
+    provider: &str,
+    model: &str,
+    backend: &dyn ImageBackend,
+    request: GenerationPlanRequest,
+) -> CommandResult<ImageReferenceReport> {
+    let locked_seed = request.locked_seed;
+    let caps = backend.capabilities(model);
+    let plan = prepare_generation_plan(nodes, request, &caps)?;
+    let stack = resolve_generation_stack(nodes, &plan)?;
+    let sliders = Sliders::from_pairs(plan.controls.slider_values.iter().copied());
+    let mut extracted = fragments(&stack, &plan.chosen, &sliders);
+    append_user_prompt(&stack, &mut extracted, &plan.controls.user_prompt);
+    let negotiated = negotiate(&extracted, plan.controls.requested_aspect, &caps);
+    let prices: Vec<Price> = plan
+        .cells
         .iter()
         .filter_map(|cell| {
-            let negotiated = negotiate(&extracted, cell.aspect, &backend.capabilities(&model));
-            image_price(&provider, &model, negotiated.resolution())
+            let fragments = fragments_for_cell(&stack, cell, &plan.controls.user_prompt);
+            let negotiated = negotiate(&fragments, cell.aspect, &caps);
+            image_price(provider, model, negotiated.resolution())
         })
         .collect();
-    let cost = cost_estimate_prices(prices, cells.len());
+    let cost = cost_estimate_prices(prices, plan.cells.len());
     let buckets = negotiated
         .images()
         .buckets()
@@ -1518,7 +1672,7 @@ fn variant_cells(
         VariantGrid::Aspect { values } => {
             let mut aspects = Vec::with_capacity(total);
             for value in values {
-                let parsed = AspectRatio::parse(value.trim()).ok_or_else(|| {
+                let parsed = normalize_aspect(Some(value), chosen.aspect).map_err(|_| {
                     WobuError::new(
                         Code::Invalid,
                         format!("{value} is not a supported aspect ratio."),
@@ -1614,7 +1768,26 @@ struct ScenePrepare {
     app: AppHandle,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct NormalizedSceneControls {
+    prompt: String,
+    aspect: AspectRatio,
+    shot_weight: f32,
+}
+
+fn normalize_scene_controls(
+    prompt: &str,
+    aspect: Option<&str>,
+) -> CommandResult<NormalizedSceneControls> {
+    Ok(NormalizedSceneControls {
+        prompt: normalize_prompt(Some(prompt)),
+        aspect: normalize_aspect(aspect, "16:9")?,
+        shot_weight: normalize_weight(None),
+    })
+}
+
 fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
+    let controls = normalize_scene_controls(&input.prompt, input.aspect.as_deref())?;
     let world = World::new(input.nodes.iter());
     let names: Vec<String> = input
         .subject_ids
@@ -1627,19 +1800,18 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
         })
         .collect::<Result<_, _>>()?;
     let scene_label = format!("Scene · {}", names.join(" + "));
-    let scene =
-        resolve_scene(&world, &input.subject_ids, Shot::new(&scene_label)).map_err(|error| {
-            WobuError::new(Code::Invalid, "The scene influence stacks could not be composed.")
-                .with_detail(format!("{error:?}"))
-        })?;
-    let mut extracted = scene_fragments(&world, &scene);
-    let user_prompt = input.prompt.trim();
-    append_scene_prompt(&scene, &mut extracted, user_prompt);
-    let requested_aspect = input.aspect.as_deref().unwrap_or("16:9");
-    let requested_aspect = AspectRatio::parse(requested_aspect).ok_or_else(|| {
-        WobuError::new(Code::Invalid, "That is not a supported aspect ratio.")
-            .with_detail(requested_aspect.to_owned())
+    let scene = resolve_scene(
+        &world,
+        &input.subject_ids,
+        Shot { label: &scene_label, weight: controls.shot_weight },
+    )
+    .map_err(|error| {
+        WobuError::new(Code::Invalid, "The scene influence stacks could not be composed.")
+            .with_detail(format!("{error:?}"))
     })?;
+    let mut extracted = scene_fragments(&world, &scene);
+    append_scene_prompt(&scene, &mut extracted, &controls.prompt);
+    let requested_aspect = controls.aspect;
     let caps = input.backend.capabilities(&input.model);
     let negotiated = negotiate_scene(&extracted, requested_aspect, &caps, &input.subject_ids);
     ensure_scene_reference_fairness(&input.subject_ids, &extracted, &negotiated)?;
@@ -1691,22 +1863,23 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
     let resolution = negotiated.resolution();
     let price = image_price(&input.provider, &input.model, resolution);
     let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
-    let mut params = Map::new();
-    params.insert("batchIndex".into(), json!(0));
-    params.insert("batchSize".into(), json!(1));
-    params.insert("requestedAspect".into(), json!(requested_aspect.to_string()));
-    params.insert("aspect".into(), json!(negotiated.aspect().to_string()));
-    params.insert("width".into(), json!(resolution.width));
-    params.insert("height".into(), json!(resolution.height));
-    params.insert("negativePromptSupported".into(), json!(caps.negative_prompt));
-    params.insert("seedSource".into(), json!(input.seed_source));
-    params.insert("estimatedCostUsdMicros".into(), json!(cost_usd_micros));
-    params.insert(
-        "referenceAssetIds".into(),
-        json!(references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>()),
-    );
-    params.insert("loras".into(), json!(&loras.receipts));
-    params.insert("loraDowngrades".into(), json!(&loras.downgrades));
+    let reference_asset_ids =
+        references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>();
+    let mut params = ReceiptPreparation {
+        batch_index: 0,
+        batch_size: 1,
+        requested_aspect,
+        actual_aspect: negotiated.aspect(),
+        resolution,
+        negative_prompt_supported: caps.negative_prompt,
+        seed_source: input.seed_source,
+        cost_usd_micros,
+        reference_asset_ids: &reference_asset_ids,
+        loras: &loras.receipts,
+        lora_downgrades: &loras.downgrades,
+        price,
+    }
+    .params();
     params.insert(
         "sceneComposition".into(),
         serde_json::to_value(SceneComposition {
@@ -1723,20 +1896,11 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
         "controls".into(),
         json!({
             "scene": {
-                "prompt": user_prompt,
+                "prompt": controls.prompt,
                 "aspect": requested_aspect.to_string(),
             },
         }),
     );
-    if price.is_some() {
-        params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
-        params.insert("pricingSource".into(), json!(PRICE_SOURCE));
-        params.insert("pricingIndicative".into(), json!(true));
-        params.insert(
-            "pricingConservativeFallback".into(),
-            json!(price.is_some_and(|price| price.conservative_fallback)),
-        );
-    }
     let request = ImageRequest::new(input.model.clone(), &prompt, input.seed, &negotiated)
         .with_negative(&negative)
         .with_references(references)
@@ -1752,7 +1916,7 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
         // make history and replay disagree about which framing was chosen.
         preset: "environment_matte".into(),
         view_type: None,
-        user_prompt: user_prompt.to_owned(),
+        user_prompt: controls.prompt.clone(),
         compiled_prompt: prompt,
         negative_prompt: negative,
         backend: input.provider,
@@ -1894,60 +2058,18 @@ struct Prepare {
     project_id: Id,
     nodes: Vec<Node>,
     assets: Vec<Asset>,
-    subject_id: Id,
-    preset_id: Option<String>,
-    sliders: Vec<GenerateSlider>,
-    shot: GenerateShot,
-    aspect: Option<String>,
+    request: GenerationPlanRequest,
     model: String,
-    seed: u64,
-    seed_source: SeedSource,
-    locked_seed: Option<u64>,
-    grid: Option<VariantGrid>,
     backend: Arc<dyn ImageBackend>,
     provider: String,
     app: AppHandle,
 }
 
 fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
-    let subject = input.nodes.iter().find(|node| node.id == input.subject_id).ok_or_else(|| {
-        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
-    })?;
-    let chosen = input
-        .preset_id
-        .as_deref()
-        .and_then(preset)
-        .filter(|candidate| candidate.applies_to(subject.kind))
-        .unwrap_or_else(|| default_preset(subject.kind));
-    let shot_label = input
-        .shot
-        .label
-        .as_deref()
-        .map(str::trim)
-        .filter(|label| !label.is_empty())
-        .unwrap_or(chosen.label);
-    let shot = Shot { label: shot_label, weight: input.shot.weight.unwrap_or(1.0).clamp(0.0, 1.0) };
-    let slider_values: Vec<(Id, f32)> = input
-        .sliders
-        .iter()
-        .map(|slider| (slider.node_id, if slider.muted { 0.0 } else { slider.value }))
-        .collect();
-    let muted_nodes: HashSet<Id> =
-        input.sliders.iter().filter(|slider| slider.muted).map(|slider| slider.node_id).collect();
-    let world = World::new(input.nodes.iter());
-    let stack = resolve(&world, input.subject_id, Some(shot)).ok_or_else(|| {
-        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
-    })?;
-    let requested_aspect = input.aspect.as_deref().unwrap_or(chosen.aspect);
-    let requested_aspect = AspectRatio::parse(requested_aspect).ok_or_else(|| {
-        WobuError::new(Code::Invalid, "That is not a supported aspect ratio.")
-            .with_detail(requested_aspect.to_owned())
-    })?;
     let caps = input.backend.capabilities(&input.model);
+    let plan = prepare_generation_plan(&input.nodes, input.request, &caps)?;
+    let stack = resolve_generation_stack(&input.nodes, &plan)?;
     let assets: HashMap<Id, &Asset> = input.assets.iter().map(|asset| (asset.id, asset)).collect();
-    let user_prompt = input.shot.prompt.as_deref().map(str::trim).unwrap_or("");
-    let available_nodes: HashSet<Id> =
-        stack.sources().iter().filter_map(|source| source.node_id()).collect();
     let loras = resolve_loras(
         &input.root,
         &input.nodes,
@@ -1955,28 +2077,11 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         &input.model,
         input.backend.as_ref(),
     );
-    let cells = variant_cells(
-        subject,
-        *chosen,
-        requested_aspect,
-        input.seed,
-        input.seed_source,
-        input.locked_seed,
-        &slider_values,
-        &available_nodes,
-        input.grid.as_ref(),
-        &caps,
-    )?;
-    let batch_size = cells.len();
+    let batch_size = plan.cells.len();
     let mut plans = Vec::with_capacity(batch_size);
     let mut reference_loader = ReferenceLoader::new();
-    for (batch_index, cell) in cells.into_iter().enumerate() {
-        let sliders = Sliders::from_pairs(cell.slider_values.iter().copied());
-        let mut extracted = match cell.item.view {
-            Some(view) => fragments_for_view(&stack, &cell.preset, &sliders, view),
-            None => fragments(&stack, &cell.preset, &sliders),
-        };
-        append_user_prompt(&stack, &mut extracted, user_prompt);
+    for (batch_index, cell) in plan.cells.iter().enumerate() {
+        let extracted = fragments_for_cell(&stack, cell, &plan.controls.user_prompt);
         let negotiated = negotiate(&extracted, cell.aspect, &caps);
         let compiled = compile(negotiated.fragments(), Budget::unlimited());
         let compiled_prompt = prompt_with_lora_triggers(compiled.prompt(), &loras.weights);
@@ -2012,31 +2117,41 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             .chain(negotiated.downgrades().iter().map(|drop| FragmentKey::of(drop.fragment)))
             .collect();
         let resolution = negotiated.resolution();
-        let mut params = Map::new();
-        params.insert("batchIndex".into(), json!(batch_index));
-        params.insert("batchSize".into(), json!(batch_size));
-        params.insert("requestedAspect".into(), json!(cell.aspect.to_string()));
-        params.insert("aspect".into(), json!(negotiated.aspect().to_string()));
-        params.insert("width".into(), json!(resolution.width));
-        params.insert("height".into(), json!(resolution.height));
-        params.insert("negativePromptSupported".into(), json!(caps.negative_prompt));
-        params.insert("seedSource".into(), json!(cell.seed_source));
+        let price = image_price(&input.provider, &input.model, resolution);
+        let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
+        let reference_asset_ids =
+            references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>();
+        let mut params = ReceiptPreparation {
+            batch_index,
+            batch_size,
+            requested_aspect: cell.aspect,
+            actual_aspect: negotiated.aspect(),
+            resolution,
+            negative_prompt_supported: caps.negative_prompt,
+            seed_source: cell.seed_source,
+            cost_usd_micros,
+            reference_asset_ids: &reference_asset_ids,
+            loras: &loras.receipts,
+            lora_downgrades: &loras.downgrades,
+            price,
+        }
+        .params();
         params.insert(
             "controls".into(),
             json!({
                 "sliders": cell.slider_values.iter().map(|(node_id, value)| json!({
                     "nodeId": node_id,
                     "value": value,
-                    "muted": muted_nodes.contains(node_id),
+                    "muted": plan.controls.muted_nodes.contains(node_id),
                 })).collect::<Vec<_>>(),
                 "shot": {
-                    "label": shot_label,
-                    "weight": input.shot.weight.unwrap_or(1.0).clamp(0.0, 1.0),
-                    "prompt": user_prompt,
+                    "label": plan.controls.shot_label,
+                    "weight": plan.controls.shot_weight,
+                    "prompt": plan.controls.user_prompt,
                 },
             }),
         );
-        if let Some(locked_seed) = input.locked_seed {
+        if let Some(locked_seed) = plan.locked_seed {
             params.insert("lockedSeed".into(), json!(locked_seed));
             params.insert("usedLockedSeed".into(), json!(cell.item.seed == locked_seed));
         }
@@ -2052,24 +2167,6 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
                 })?,
             );
         }
-        let price = image_price(&input.provider, &input.model, resolution);
-        let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
-        params.insert("estimatedCostUsdMicros".into(), json!(cost_usd_micros));
-        params.insert(
-            "referenceAssetIds".into(),
-            json!(references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>()),
-        );
-        params.insert("loras".into(), json!(&loras.receipts));
-        params.insert("loraDowngrades".into(), json!(&loras.downgrades));
-        if price.is_some() {
-            params.insert("pricingCheckedAt".into(), json!(PRICE_CHECKED_AT));
-            params.insert("pricingSource".into(), json!(PRICE_SOURCE));
-            params.insert("pricingIndicative".into(), json!(true));
-            params.insert(
-                "pricingConservativeFallback".into(),
-                json!(price.is_some_and(|price| price.conservative_fallback)),
-            );
-        }
         let request =
             ImageRequest::new(input.model.clone(), &compiled_prompt, cell.item.seed, &negotiated)
                 .with_negative(compiled.negative())
@@ -2080,11 +2177,11 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             cost_usd_micros,
             generation: Generation {
                 id: new_id(),
-                node_id: input.subject_id,
+                node_id: plan.subject_id,
                 created_at: Utc::now(),
                 preset: cell.preset.id.to_owned(),
                 view_type: cell.item.view.map(|view| view.view_type.to_owned()),
-                user_prompt: user_prompt.to_owned(),
+                user_prompt: plan.controls.user_prompt.clone(),
                 compiled_prompt,
                 negative_prompt: compiled.negative().to_owned(),
                 backend: input.provider.clone(),
@@ -2096,7 +2193,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
                     &stack,
                     &extracted,
                     &cell.slider_values,
-                    &muted_nodes,
+                    &plan.controls.muted_nodes,
                     &dropped,
                 ),
             },
@@ -2104,8 +2201,8 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
     }
 
     Ok(GenerateTask {
-        label: format!("Generate {} ×{}", subject.name, plans.len()),
-        subject_id: input.subject_id,
+        label: format!("Generate {} ×{}", plan.subject_name, plans.len()),
+        subject_id: plan.subject_id,
         project_id: input.project_id,
         root: input.root,
         backend: input.backend,
@@ -3265,6 +3362,88 @@ mod tests {
         .unwrap();
         assert_eq!(estimate.images, 5);
         assert_eq!(estimate.batch_usd_micros, 335_000);
+    }
+
+    #[test]
+    fn preview_and_execution_prepare_the_same_normalized_plan() {
+        let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
+        let subject_id = subject.id;
+        let nodes = vec![subject];
+        let backend = GeminiBackend::new("test-key").unwrap();
+        let model = "gemini-3.1-flash-image";
+        let caps = backend.capabilities(model);
+        let request = GenerationPlanRequest {
+            subject_id,
+            preset_id: Some("character_sheet".into()),
+            sliders: vec![GenerateSlider { node_id: subject_id, value: 0.75, muted: false }],
+            shot: GenerateShot {
+                label: Some("  low angle  ".into()),
+                weight: Some(1.5),
+                prompt: Some("  wind catches the cloak  ".into()),
+            },
+            aspect: Some(" 3:4 ".into()),
+            seed: 42,
+            seed_source: SeedSource::Locked,
+            locked_seed: Some(42),
+            grid: None,
+        };
+
+        let preview =
+            reference_report_for_plan(&nodes, gemini::ID, model, &backend, request.clone())
+                .unwrap();
+        let execution = prepare_generation_plan(&nodes, request, &caps).unwrap();
+        assert_eq!(execution.controls.shot_label, "low angle");
+        assert_eq!(execution.controls.shot_weight, 1.0);
+        assert_eq!(execution.controls.user_prompt, "wind catches the cloak");
+        assert_eq!(execution.controls.slider_values, [(subject_id, 0.75)]);
+        assert_eq!(execution.controls.requested_aspect, AspectRatio::parse("3:4").unwrap());
+
+        let execution_stack = resolve_generation_stack(&nodes, &execution).unwrap();
+        let execution_fragments = fragments_for_cell(
+            &execution_stack,
+            &execution.cells[0],
+            &execution.controls.user_prompt,
+        );
+        let negotiated = negotiate(&execution_fragments, execution.cells[0].aspect, &caps);
+        let execution_price = image_price(gemini::ID, model, negotiated.resolution()).unwrap();
+        let preview_cost = preview.cost.unwrap();
+        assert_eq!(preview_cost.images, execution.cells.len());
+        assert_eq!(preview_cost.per_image_usd_micros, execution_price.per_image_usd_micros);
+    }
+
+    #[test]
+    fn variant_grids_and_scene_composition_share_control_normalization() {
+        let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
+        let subject_id = subject.id;
+        let nodes = vec![subject];
+        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
+        let plan = prepare_generation_plan(
+            &nodes,
+            GenerationPlanRequest {
+                subject_id,
+                preset_id: Some("character_sheet".into()),
+                sliders: Vec::new(),
+                shot: GenerateShot {
+                    label: None,
+                    weight: None,
+                    prompt: Some("  hold the horizon  ".into()),
+                },
+                aspect: Some(" 16:9 ".into()),
+                seed: 9,
+                seed_source: SeedSource::Random,
+                locked_seed: None,
+                grid: Some(VariantGrid::Aspect { values: vec![" 16:9 ".into(), " 1:1 ".into()] }),
+            },
+            &caps,
+        )
+        .unwrap();
+        let scene = normalize_scene_controls("  hold the horizon  ", Some(" 16:9 ")).unwrap();
+
+        assert_eq!(plan.controls.user_prompt, scene.prompt);
+        assert_eq!(plan.controls.shot_weight, scene.shot_weight);
+        assert_eq!(plan.controls.requested_aspect, scene.aspect);
+        assert_eq!(plan.cells[0].aspect, scene.aspect);
+        assert_eq!(plan.cells[1].aspect, AspectRatio::parse("1:1").unwrap());
     }
 
     #[test]

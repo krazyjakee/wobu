@@ -36,6 +36,9 @@ pub enum Error {
     #[error("no node with id {0}")]
     NoSuchNode(String),
 
+    #[error("no generation with id {0}")]
+    NoSuchGeneration(String),
+
     /// An update or removal named an influence edge the node no longer has.
     #[error("no {role} link from that node to node {target}")]
     NoSuchNodeLink { target: String, role: String },
