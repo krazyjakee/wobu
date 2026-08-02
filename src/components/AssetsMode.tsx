@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import type { Asset, AssetKind, AssetRole, AssetUsage, NodeSummary } from '../lib/api'
 import type { KindIndex } from '../lib/kinds'
@@ -74,11 +74,8 @@ export function AssetsMode({
       }),
     [assets.data, kind, nodeId, orphansOnly, role, tag, usageByAsset, usageKnown],
   )
-  const selected = (assets.data ?? []).find((asset) => asset.id === selectedId) ?? null
-
-  useEffect(() => {
-    if (selectedId && !filtered.some((asset) => asset.id === selectedId)) setSelectedId(null)
-  }, [filtered, selectedId])
+  const visibleSelectedId = filtered.some((asset) => asset.id === selectedId) ? selectedId : null
+  const selected = filtered.find((asset) => asset.id === visibleSelectedId) ?? null
 
   async function removeConfirmed() {
     if (!confirmDelete || readOnly) return
@@ -198,11 +195,12 @@ export function AssetsMode({
           assets={filtered}
           usageByAsset={usageByAsset}
           usageKnown={usageKnown}
-          selectedId={selectedId}
+          selectedId={visibleSelectedId}
           loading={assets.isPending || usages.isPending}
           onSelect={setSelectedId}
         />
         <AssetDetails
+          key={selected?.id ?? 'none'}
           asset={selected}
           usages={selected ? (usageByAsset.get(selected.id) ?? []) : []}
           usageKnown={usageKnown}
@@ -365,17 +363,13 @@ function AssetDetails({
   onDelete: (asset: Asset) => void
 }) {
   const linkAsset = useLinkAsset()
-  const [nodeId, setNodeId] = useState(nodes[0]?.id ?? '')
+  const [selectedNodeId, setNodeId] = useState(nodes[0]?.id ?? '')
   const [role, setRole] = useState<AssetRole>('full_ref')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!nodes.some((node) => node.id === nodeId)) setNodeId(nodes[0]?.id ?? '')
-  }, [nodeId, nodes])
-  useEffect(() => {
-    setRole('full_ref')
-    setError(null)
-  }, [asset?.id])
+  const nodeId = nodes.some((node) => node.id === selectedNodeId)
+    ? selectedNodeId
+    : (nodes[0]?.id ?? '')
 
   if (!asset) {
     return (

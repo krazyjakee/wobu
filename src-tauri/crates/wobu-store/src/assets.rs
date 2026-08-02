@@ -188,36 +188,15 @@ pub struct StoredMesh {
 
 /// Atomically publish one self-contained GLB at the path its bytes alone name.
 pub fn store_mesh_glb(root: &Path, bytes: &[u8]) -> Result<StoredMesh> {
-    if bytes.len() < 20
-        || &bytes[..4] != b"glTF"
-        || u32::from_le_bytes(bytes[4..8].try_into().unwrap_or_default()) != 2
-        || u32::from_le_bytes(bytes[8..12].try_into().unwrap_or_default()) as usize != bytes.len()
-    {
-        return Err(Error::NotAMesh);
-    }
+    validate_mesh(bytes)?;
     let hash = atomic::hash_bytes(bytes);
     let rel_path = wobu_core::asset::mesh_path(&hash);
-    let path = paths::from_rel_string(root, &rel_path);
-    let publish = || match stage_and_rename(root, &path, bytes) {
-        Ok(()) => Ok(false),
-        Err(_)
-            if fs::metadata(&path).is_ok_and(|metadata| metadata.len() == bytes.len() as u64) =>
-        {
-            // Another process won the Windows create race with the same
-            // content-addressed bytes.
-            Ok(true)
-        }
-        Err(error) => Err(error),
-    };
-    let deduped = match fs::metadata(&path) {
-        Ok(metadata) if metadata.len() == bytes.len() as u64 => true,
-        Ok(_) => {
-            fs::remove_file(&path).map_err(|error| Error::io(&path, error))?;
-            publish()?
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => publish()?,
-        Err(error) => return Err(Error::io(&path, error)),
-    };
+    let relative = atomic::ProjectRelativePath::new(&rel_path)?;
+    let published =
+        atomic::publish_content_addressed(root, &relative, bytes, validate_mesh, |path| {
+            validate_regular_hash(path, bytes.len() as u64, &hash)
+        })?;
+    let path = relative.resolve(root);
     Ok(StoredMesh {
         asset: MeshAsset {
             id: asset_id(&hash).unwrap_or_default(),
@@ -226,8 +205,19 @@ pub fn store_mesh_glb(root: &Path, bytes: &[u8]) -> Result<StoredMesh> {
             bytes: bytes.len() as u64,
             created_at: first_written(&path),
         },
-        deduped,
+        deduped: published == atomic::ContentPublish::Existing,
     })
+}
+
+fn validate_mesh(bytes: &[u8]) -> Result<()> {
+    if bytes.len() < 20
+        || &bytes[..4] != b"glTF"
+        || u32::from_le_bytes(bytes[4..8].try_into().unwrap_or_default()) != 2
+        || u32::from_le_bytes(bytes[8..12].try_into().unwrap_or_default()) as usize != bytes.len()
+    {
+        return Err(Error::NotAMesh);
+    }
+    Ok(())
 }
 
 /// The id an asset with this hash has, on every machine, forever.
@@ -321,29 +311,15 @@ pub fn import_with(
     cancel.check()?;
 
     let rel = wobu_core::asset::original_path(&hash, info.ext);
-    let path = paths::from_rel_string(root, &rel);
-
-    // Size rather than a re-hash. The path already asserts the content, so the
-    // only thing left to check is whether the file is *whole* — and the one way
-    // a wrong-but-same-length file gets to this path is a BLAKE3 collision. A
-    // half-copied file, which is the failure that actually happens on a share,
-    // is caught by the length and repaired by the write below.
-    let deduped = match fs::metadata(&path) {
-        Ok(meta) if meta.len() == bytes.len() as u64 => true,
-        Ok(_) => {
-            stage_and_rename(root, &path, bytes)?;
-            false
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            stage_and_rename(root, &path, bytes)?;
-            false
-        }
-        Err(e) => return Err(Error::io(&path, e)),
-    };
+    let relative = atomic::ProjectRelativePath::new(&rel)?;
+    let published =
+        atomic::publish_content_addressed(root, &relative, bytes, validate_import, |path| {
+            validate_regular_hash(path, bytes.len() as u64, &hash)
+        })?;
 
     Ok(ImportedAsset {
         asset: describe(root, &hash, &rel, kind, info, bytes.len() as u64),
-        deduped,
+        deduped: published == atomic::ContentPublish::Existing,
         warnings,
     })
 }
@@ -610,47 +586,47 @@ fn first_written(path: &Path) -> DateTime<Utc> {
         .unwrap_or_else(|_| Utc::now())
 }
 
-/// Stage into `.wobu/tmp` — the same filesystem as the target, so `rename` is
-/// atomic — then rename into place.
-///
-/// The same shape as the staging in [`crate::atomic`], and pointedly not a call
-/// into it: `guarded_write` exists to detect a concurrent writer and park a
-/// conflict sibling, and both of those are wrong here. Creating over an
-/// existing file is a *conflict* there and is the ordinary, expected case here,
-/// so routing an asset through it would litter `assets/originals/` with
-/// `.conflict-` copies of files that are byte-for-byte identical.
-///
-/// What the rename does give us is the two-process case. Two Wobus importing
-/// the same reference at the same moment stage to separately-named `.part`
-/// files and then rename onto the same target; whichever lands second replaces
-/// the first with identical bytes, and no reader ever observes a partial file,
-/// because a partially written file is never at the target path at all.
-///
-/// `pub(crate)` for [`crate::thumbs`], which writes into the same tree under
-/// the same rules and must not grow a second copy of this: the two-process case
-/// above is exactly what happens when two Wobus open a freshly synced folder
-/// and both start filling in its missing thumbnails.
-pub(crate) fn stage_and_rename(root: &Path, target: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp_dir = root.join(".wobu").join("tmp");
-    paths::ensure_dir(&tmp_dir)?;
-    if let Some(parent) = target.parent() {
-        paths::ensure_dir(parent)?;
+/// Classify an existing hash-named blob without trusting its name. A short
+/// regular file is a resumable sync partial; a valid complete file is a dedupe;
+/// a same-size hash mismatch is corruption and must never be overwritten.
+fn validate_regular_hash(
+    path: &Path,
+    expected_size: u64,
+    expected_hash: &str,
+) -> Result<atomic::ExistingContent> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| Error::io(path, error))?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err(Error::io(
+            path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "content-addressed destination is not a regular file",
+            ),
+        ));
     }
-
-    let tmp = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
-    {
-        let mut f = fs::File::create(&tmp).map_err(|e| Error::io(&tmp, e))?;
-        f.write_all(bytes).map_err(|e| Error::io(&tmp, e))?;
-        // Without this, a crash between rename and flush can leave a
-        // correctly-named file full of zeroes.
-        f.sync_all().map_err(|e| Error::io(&tmp, e))?;
+    if metadata.len() < expected_size {
+        return Ok(atomic::ExistingContent::ReplaceablePartial);
     }
-
-    if let Err(e) = fs::rename(&tmp, target) {
-        let _ = fs::remove_file(&tmp);
-        return Err(Error::io(target, e));
+    if metadata.len() > expected_size {
+        return Err(Error::io(
+            path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "content-addressed destination is larger than the validated bytes",
+            ),
+        ));
     }
-    Ok(())
+    let bytes = fs::read(path).map_err(|error| Error::io(path, error))?;
+    if atomic::hash_bytes(&bytes) == expected_hash {
+        return Ok(atomic::ExistingContent::Valid);
+    }
+    Err(Error::io(
+        path,
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "content-addressed destination does not match the validated bytes",
+        ),
+    ))
 }
 
 #[cfg(test)]
@@ -750,6 +726,20 @@ mod tests {
         let again = import(dir.path(), &bytes, AssetKind::Reference).unwrap();
         assert!(!again.deduped);
         assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn a_larger_corrupt_blob_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = png(16, 16);
+        let out = import(dir.path(), &bytes, AssetKind::Reference).unwrap();
+        let path = dir.path().join(&out.asset.rel_path);
+        let mut corrupt = bytes.clone();
+        corrupt.extend_from_slice(b"unexpected trailing content");
+        fs::write(&path, &corrupt).unwrap();
+
+        assert!(import(dir.path(), &bytes, AssetKind::Reference).is_err());
+        assert_eq!(fs::read(&path).unwrap(), corrupt);
     }
 
     #[test]

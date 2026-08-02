@@ -1,19 +1,18 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { LinkEdge, LinkRole, NodeKind, NodeSummary } from '../../lib/api'
+import type { LinkEdge, LinkRole, NodeSummary } from '../../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { BOARD_ASSET_MIME } from '../../lib/board'
 import { Icon } from '../Icon'
 import { GRAPH_LINK_LIMIT, limitRelationshipGraph } from './relationshipGraphLimit'
-
-const CARD_W = 112
-const CARD_H = 46
-const COL_GAP = 14
-const ROW_GAP = 16
-const PAD_X = 10
-const GROUP_HEAD = 30
-const GROUP_GAP = 26
-const COLS = 2
+import {
+  CARD_H,
+  CARD_W,
+  PAD_X,
+  layoutRelationships,
+  type GraphEdge,
+  type GraphNode,
+} from './relationshipLayout'
 
 const ROLE_LABEL: Record<LinkRole, string> = {
   species_of: 'Species',
@@ -21,105 +20,6 @@ const ROLE_LABEL: Record<LinkRole, string> = {
   located_in: 'Located in',
   styled_by: 'Styled by',
   related_to: 'Related to',
-}
-
-export interface GraphNode extends NodeSummary {
-  x: number
-  y: number
-}
-
-export interface GraphEdge {
-  key: string
-  fromId: string
-  toId: string
-  kind: 'parent' | 'influence'
-  role: LinkRole | null
-  weight: number
-  enabled: boolean
-}
-
-export interface RelationshipLayout {
-  nodes: GraphNode[]
-  edges: GraphEdge[]
-  width: number
-  height: number
-  dangling: number
-  groups: Array<{ kind: NodeKind; label: string; y: number }>
-}
-
-/**
- * A deterministic, kind-banded layout. It intentionally has no drag state:
- * this map explains the document model but never becomes another editor for it.
- */
-export function layoutRelationships(
-  nodes: NodeSummary[],
-  explicit: LinkEdge[],
-  kinds: KindIndex,
-): RelationshipLayout {
-  const orderedKinds = [...kinds.keys()]
-  for (const node of nodes) if (!orderedKinds.includes(node.kind)) orderedKinds.push(node.kind)
-
-  const placed: GraphNode[] = []
-  const groups: RelationshipLayout['groups'] = []
-  let y = 14
-  for (const kind of orderedKinds) {
-    const members = nodes
-      .filter((node) => node.kind === kind)
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-    if (!members.length) continue
-    groups.push({ kind, label: kinds.get(kind)?.plural ?? kind.replaceAll('_', ' '), y })
-    members.forEach((node, index) => {
-      placed.push({
-        ...node,
-        x: PAD_X + (index % COLS) * (CARD_W + COL_GAP),
-        y: y + GROUP_HEAD + Math.floor(index / COLS) * (CARD_H + ROW_GAP),
-      })
-    })
-    y += GROUP_HEAD + Math.ceil(members.length / COLS) * (CARD_H + ROW_GAP) + GROUP_GAP
-  }
-
-  const ids = new Set(nodes.map((node) => node.id))
-  const parentEdges: GraphEdge[] = nodes.flatMap((node) =>
-    node.parentId && ids.has(node.parentId)
-      ? [
-          {
-            key: `parent:${node.id}:${node.parentId}`,
-            fromId: node.id,
-            toId: node.parentId,
-            kind: 'parent' as const,
-            role: null,
-            weight: 1,
-            enabled: true,
-          },
-        ]
-      : [],
-  )
-  let dangling = 0
-  const influenceEdges: GraphEdge[] = []
-  explicit.forEach((edge, index) => {
-    if (!ids.has(edge.fromId) || !ids.has(edge.toId)) {
-      dangling += 1
-      return
-    }
-    influenceEdges.push({
-      key: `link:${edge.fromId}:${edge.toId}:${edge.role}:${index}`,
-      fromId: edge.fromId,
-      toId: edge.toId,
-      kind: 'influence',
-      role: edge.role,
-      weight: edge.weight,
-      enabled: edge.enabled,
-    })
-  })
-
-  return {
-    nodes: placed,
-    edges: [...parentEdges, ...influenceEdges],
-    width: PAD_X * 2 + CARD_W * COLS + COL_GAP * (COLS - 1),
-    height: Math.max(180, y),
-    dangling,
-    groups,
-  }
 }
 
 export function RelationshipGraph({

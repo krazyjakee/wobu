@@ -11,14 +11,13 @@
 //! images: the `x-goog-api-key` header over the `?key=` query parameter, the
 //! `Api-Revision` pin, `/v1beta` over `/v1beta2`, `store: false`, and the error
 //! table. Those findings are reused rather than re-derived, and `wire.rs` says
-//! at each one where it came from. The code is *not* shared, and that is a
-//! decision rather than an oversight: `wobu_llm::gemini::wire` maps onto
+//! at each one where it came from. Provider-neutral HTTP mechanics are shared
+//! through `wobu_llm::transport`; the wire decoder and error mapping are not.
+//! That boundary is deliberate: `wobu_llm::gemini::wire` maps onto
 //! `wobu_llm::Error`, which has `Truncated`, `NotJson` and `ContextTooLong` and
-//! none of `Refused`, `NoImage` or `NotAnImage`. Sharing it would mean this
-//! crate depending on that crate's error type and translating a lossy enum into
-//! a lossy enum, where the edge to `wobu-llm` is deliberately one type wide
-//! (`Cancel`, see `lib.rs`). `error.rs` already keeps a hand-copy of the UI's
-//! code table for the same reason and says so.
+//! none of `Refused`, `NoImage` or `NotAnImage`. Sharing it would mean
+//! translating one lossy provider error enum into another. `error.rs` already
+//! keeps a hand-copy of the UI's code table for the same reason and says so.
 //!
 //! Four things this adapter does that a thinner one would not:
 //!
@@ -54,7 +53,6 @@ pub(crate) mod wire;
 
 use std::fmt;
 use std::sync::{Arc as Shared, LazyLock};
-use std::time::Duration;
 
 use async_trait::async_trait;
 use wobu_influence::{ImageBudget, image_budget};
@@ -67,6 +65,7 @@ use crate::backend::{
 use crate::capability::{Capabilities, ReferenceMechanisms};
 use crate::dimensions;
 use crate::error::{Error, Result};
+use wobu_llm::transport;
 
 /// The `backend` in `project.json`, the `backend` field of every `Generation`,
 /// and the `wobu/gemini` entry in the OS keychain.
@@ -121,25 +120,13 @@ const API_ROOT: &str = "https://generativelanguage.googleapis.com/v1beta";
 /// <https://ai.google.dev/gemini-api/docs/interactions-breaking-changes-may-2026>
 const API_REVISION: &str = "2026-05-20";
 
-/// Long enough for a slow network, short enough that a black hole is not
-/// mistaken for a slow model. Deliberately *only* a connect timeout: a 4K image
-/// is a long generation the user is paying for and has not asked to stop, and a
-/// whole-request timeout would abandon it after it had been billed.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
-
 /// One process-long transport for checks and paid jobs alike.
 ///
 /// `reqwest::Client` owns the connection and TLS-session pools. Backends remain
 /// cheap per-key values, while cloning this `Arc` ensures a status check does
 /// not build a fresh TLS stack and a later generation can reuse its connection.
 static CLIENT: LazyLock<std::result::Result<Shared<reqwest::Client>, String>> =
-    LazyLock::new(|| {
-        reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .build()
-            .map(Shared::new)
-            .map_err(|error| error.to_string())
-    });
+    LazyLock::new(|| transport::client().map(Shared::new));
 
 fn shared_client() -> Result<Shared<reqwest::Client>> {
     CLIENT
@@ -298,12 +285,12 @@ impl GeminiBackend {
             // logs and out of anything that prints a URL.
             .header("x-goog-api-key", &self.api_key)
             .header("api-revision", API_REVISION);
-        let response = match until_cancelled(request.send(), cancel).await {
-            None => return Err(Error::Cancelled),
+        let response = match transport::send(request, cancel).await {
+            Err(transport::Failure::Cancelled) => return Err(Error::Cancelled),
             // DNS, TLS, a refused connection, the connect timeout. Nothing
             // reached a model, so nothing was charged.
-            Some(Err(e)) => return Err(unreachable(&e)),
-            Some(Ok(response)) => response,
+            Err(transport::Failure::Unavailable(error)) => return Err(unreachable(&error)),
+            Ok(response) => response,
         };
 
         let status = response.status().as_u16();
@@ -311,16 +298,14 @@ impl GeminiBackend {
         // answer to "how long should I wait" is usually in the body instead as a
         // `RetryInfo` detail, which `wire::error_for_status` reads when this is
         // absent — and either beats a backoff we would invent.
-        let retry_after = response
-            .headers()
-            .get("retry-after")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.trim().parse::<u64>().ok())
-            .map(Duration::from_secs);
-        let body = match until_cancelled(response.bytes(), cancel).await {
-            None => return Err(Error::Cancelled),
-            // A body we could not read still leaves a status worth mapping.
-            Some(body) => body.map(|bytes| bytes.to_vec()).unwrap_or_default(),
+        let retry_after = transport::retry_after(&response);
+        let body = match transport::bytes_or_empty(response, cancel).await {
+            Err(transport::Failure::Cancelled) => return Err(Error::Cancelled),
+            // `bytes_or_empty` cannot produce this: the response already exists
+            // and body read failures deliberately become an empty body so the
+            // status remains mappable.
+            Err(transport::Failure::Unavailable(error)) => return Err(unreachable(&error)),
+            Ok(body) => body,
         };
         match status {
             200..=299 => Ok(body),
@@ -577,7 +562,7 @@ fn unreachable(error: &reqwest::Error) -> Error {
         detail: if error.is_timeout() {
             format!(
                 "{LABEL} did not answer within {} seconds — check the network and try again",
-                CONNECT_TIMEOUT.as_secs(),
+                transport::CONNECT_TIMEOUT.as_secs(),
             )
         } else if error.is_connect() {
             format!("could not reach {LABEL}: {error}. Check the network and any proxy")
@@ -585,28 +570,6 @@ fn unreachable(error: &reqwest::Error) -> Error {
             format!("could not reach {LABEL}: {error}")
         },
     }
-}
-
-/// Run a future, or give up on it the moment the token is set.
-///
-/// The same three lines `comfy/socket.rs` uses, and it polls the cancellation
-/// first so a token set while a response was already waiting still wins.
-///
-/// It is here rather than imported from there because `comfy::socket` is private
-/// to that adapter and a `pub(crate)` reach across two backends would tie the
-/// remote one's cancellation to the local one's websocket module. Moving it to a
-/// shared module is the right answer the day a third adapter needs it; two
-/// copies of six lines is cheaper than a module whose only content is those six.
-async fn until_cancelled<F: std::future::Future>(future: F, cancel: &Cancel) -> Option<F::Output> {
-    let mut future = std::pin::pin!(future);
-    let mut cancelled = std::pin::pin!(cancel.cancelled());
-    std::future::poll_fn(move |cx: &mut std::task::Context<'_>| {
-        if cancelled.as_mut().poll(cx).is_ready() {
-            return std::task::Poll::Ready(None);
-        }
-        future.as_mut().poll(cx).map(Some)
-    })
-    .await
 }
 
 /// What Settings can say about a pasted key before anything has been generated.

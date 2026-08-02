@@ -28,7 +28,7 @@ export function HistoryMode({
     null,
   )
   const names = useMemo(() => new Map(nodes.map((node) => [node.id, node.name])), [nodes])
-  const receipts = history.data ?? []
+  const receipts = useMemo(() => history.data ?? [], [history.data])
   const presets = useMemo(
     () => [...new Set(receipts.map((item) => item.preset))].sort(),
     [receipts],

@@ -103,10 +103,9 @@ export function ConceptsPane({
 }
 
 function useGenerationSignals(nodeId: string): Record<string, Signal> {
-  const [signals, setSignals] = useState<Record<string, Signal>>({})
+  const [signalsByNode, setSignalsByNode] = useState<Record<string, Record<string, Signal>>>({})
 
   useEffect(() => {
-    setSignals({})
     if (!api.isTauri()) return
     let disposed = false
     const unlisteners: Array<() => void> = []
@@ -123,16 +122,23 @@ function useGenerationSignals(nodeId: string): Record<string, Signal> {
     }
 
     attach<JobProgress>(api.JOB_EVENTS.progress, (progress) => {
-      setSignals((current) => ({
-        ...current,
-        [progress.id]: { ...current[progress.id], progress },
-      }))
+      setSignalsByNode((all) => {
+        const current = all[nodeId] ?? {}
+        return {
+          ...all,
+          [nodeId]: { ...current, [progress.id]: { ...current[progress.id], progress } },
+        }
+      })
     })
     attach<JobPreview>(api.JOB_EVENTS.preview, (preview) => {
-      setSignals((current) => {
+      setSignalsByNode((all) => {
+        const current = all[nodeId] ?? {}
         const previous = current[preview.id]?.preview
-        if ((preview.step ?? 0) < (previous?.step ?? 0)) return current
-        return { ...current, [preview.id]: { ...current[preview.id], preview } }
+        if ((preview.step ?? 0) < (previous?.step ?? 0)) return all
+        return {
+          ...all,
+          [nodeId]: { ...current, [preview.id]: { ...current[preview.id], preview } },
+        }
       })
     })
 
@@ -142,7 +148,7 @@ function useGenerationSignals(nodeId: string): Record<string, Signal> {
     }
   }, [nodeId])
 
-  return signals
+  return signalsByNode[nodeId] ?? {}
 }
 
 function LiveTile({ job, signal }: { job: JobSnapshot; signal: Signal | undefined }) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, DragEvent, WheelEvent } from 'react'
+import type { CSSProperties, DragEvent } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { Asset, AssetRole, NodeSummary } from '../lib/api'
@@ -10,6 +10,7 @@ import {
   BOARD_TILE_WIDTH,
   createBoardSpatialIndex,
   DEFAULT_BOARD_VIEWPORT,
+  wheelCamera,
   zoomBoardAt,
   type BoardPoint,
   type BoardSize,
@@ -314,6 +315,7 @@ export function BoardMode({
 
       {pendingAttach && (
         <AttachReferenceSheet
+          key={`${pendingAttach.assetId}:${pendingAttach.nodeId}`}
           request={pendingAttach}
           asset={assetList.find((asset) => asset.id === pendingAttach.assetId) ?? null}
           node={nodes.find((node) => node.id === pendingAttach.nodeId) ?? null}
@@ -397,7 +399,7 @@ function NodeDropChip({
 }
 
 function AttachReferenceSheet({
-  request,
+  request: _request,
   asset,
   node,
   readOnly,
@@ -412,11 +414,6 @@ function AttachReferenceSheet({
   const link = useLinkAsset()
   const [role, setRole] = useState<AssetRole>('mood')
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setRole('mood')
-    setError(null)
-  }, [request.assetId, request.nodeId])
 
   async function attach() {
     if (!asset || !node || readOnly) return
@@ -516,15 +513,4 @@ function kindLabel(kind: Asset['kind']): string {
 
 function assetLabel(asset: Asset): string {
   return `${kindLabel(asset.kind).toLocaleLowerCase()} image ${asset.id}`
-}
-
-export function wheelCamera(
-  camera: BoardViewport,
-  event: Pick<WheelEvent, 'ctrlKey' | 'metaKey' | 'deltaX' | 'deltaY'>,
-  anchor: BoardPoint,
-): BoardViewport {
-  if (event.ctrlKey || event.metaKey) {
-    return zoomBoardAt(camera, camera.zoom * Math.exp(-event.deltaY * 0.002), anchor)
-  }
-  return { ...camera, x: camera.x - event.deltaX, y: camera.y - event.deltaY }
 }

@@ -13,6 +13,7 @@ use wobu_core::NodeKind;
 
 use crate::error::Error;
 use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, Usage};
+use crate::stream::SseConsumer;
 use crate::validate::parse_description;
 
 use super::LABEL;
@@ -241,6 +242,16 @@ impl Incoming {
     }
 }
 
+impl SseConsumer for Incoming {
+    fn event(&mut self, payload: &str, deltas: &mut dyn DeltaSink) -> bool {
+        self.accept(payload, deltas) == Flow::Done
+    }
+
+    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome {
+        self.outcome(kind, aborted)
+    }
+}
+
 /// A non-2xx response, turned into something the UI has an answer for.
 ///
 /// The statuses are Anthropic's documented set (`docs.claude.com/en/api/errors`,
@@ -345,6 +356,7 @@ fn detail(status: u16, kind: &str, message: &str) -> String {
 mod tests {
     use super::*;
     use crate::provider::Discard;
+    use crate::stream::testing::document;
     use wobu_core::schema::description_schema;
 
     fn request() -> EnhanceRequest {
@@ -436,24 +448,6 @@ mod tests {
         );
         events.push(json!({"type": "message_stop"}).to_string());
         events
-    }
-
-    /// A description built from the schema rather than hand-written, so a
-    /// registry change that the validator would reject fails here.
-    fn document(kind: NodeKind) -> String {
-        let schema = description_schema(kind);
-        let mut object = serde_json::Map::new();
-        for (key, property) in schema["properties"].as_object().unwrap() {
-            let value = match property["type"].as_str().unwrap() {
-                "string" => json!("Ash-glazed plate over oiled leather."),
-                "array" if property["items"]["pattern"].is_string() => {
-                    json!(["#2b2118", "#c2703a"])
-                }
-                _ => json!(["Ember-lit throat vents"]),
-            };
-            object.insert(key.clone(), value);
-        }
-        serde_json::to_string(&Value::Object(object)).unwrap()
     }
 
     fn feed(events: &[String], deltas: &mut dyn DeltaSink) -> Incoming {

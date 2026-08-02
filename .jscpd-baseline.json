@@ -6,8 +6,8 @@
   },
   "formats": {
     "rust": {
-      "clones": 48,
-      "duplicatedLines": 845
+      "clones": 31,
+      "duplicatedLines": 449
     },
     "tsx": {
       "clones": 0,

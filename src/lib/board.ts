@@ -65,6 +65,17 @@ export function zoomBoardAt(
   }
 }
 
+export function wheelCamera(
+  camera: BoardViewport,
+  event: { ctrlKey: boolean; metaKey: boolean; deltaX: number; deltaY: number },
+  anchor: BoardPoint,
+): BoardViewport {
+  if (event.ctrlKey || event.metaKey) {
+    return zoomBoardAt(camera, camera.zoom * Math.exp(-event.deltaY * 0.002), anchor)
+  }
+  return { ...camera, x: camera.x - event.deltaX, y: camera.y - event.deltaY }
+}
+
 /**
  * The board's virtualization predicate. Coordinates are in board space; the
  * overscan is in screen pixels so it remains visually consistent at any zoom.

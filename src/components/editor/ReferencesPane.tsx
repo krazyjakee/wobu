@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
@@ -39,7 +39,11 @@ export function ReferencesPane({
   const assets = useAssets(true)
   const linkAsset = useLinkAsset()
   const setCover = useSetCoverAsset()
-  const [links, setLinks] = useState(node.assetLinks)
+  const [linksDraft, setLinksDraft] = useState<{
+    source: AssetLink[]
+    value: AssetLink[]
+  } | null>(null)
+  const links = linksDraft?.source === node.assetLinks ? linksDraft.value : node.assetLinks
   const [imports, setImports] = useState<ImportItem[]>([])
   const [importedAssets, setImportedAssets] = useState<Record<string, Asset>>({})
   const [draggingFiles, setDraggingFiles] = useState(false)
@@ -47,11 +51,8 @@ export function ReferencesPane({
   const importChain = useRef<Promise<void>>(Promise.resolve())
   const importAborts = useRef(new Set<AbortController>())
   const saveStatus = useRef(autosave.status)
+  const flushAutosave = autosave.flush
 
-  useEffect(() => setLinks(node.assetLinks), [node.assetLinks])
-  useEffect(() => {
-    if (readOnly) setDraggingFiles(false)
-  }, [readOnly])
   useEffect(() => {
     saveStatus.current = autosave.status
   }, [autosave.status])
@@ -70,93 +71,96 @@ export function ReferencesPane({
   }, [assets.data, importedAssets])
 
   const updateLinks = (next: AssetLink[]) => {
-    setLinks(next)
+    setLinksDraft({ source: node.assetLinks, value: next })
     autosave.queue({ assetLinks: next })
   }
 
-  const updateImport = (id: number, patch: Partial<ImportItem>) => {
+  const updateImport = useCallback((id: number, patch: Partial<ImportItem>) => {
     setImports((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
-  }
+  }, [])
 
-  const importInputs = async (inputs: ImportInput[]) => {
-    if (readOnly || inputs.length === 0) return
-    const batch = inputs.map((input) => ({
-      input,
-      item: { id: ++importId.current, name: input.name, state: 'queued' as const },
-    }))
-    const controller = new AbortController()
-    importAborts.current.add(controller)
-    setImports((current) => [...batch.map(({ item }) => item), ...current])
-
-    const run = importChain.current
-      .catch(() => undefined)
-      .then(async () => {
-        try {
-          await settleLinkAutosave()
-        } catch (error) {
-          for (const { item } of batch) {
-            updateImport(item.id, {
-              state: 'failed',
-              error: `Could not attach: ${api.errorMessage(error)}`,
-            })
-          }
-          return
-        }
-        // Sequential attachment is intentional. Each link is a guarded edit to
-        // the same Markdown file; concurrent saves would race one another and
-        // turn a successful forty-file drop into conflicts created by ourselves.
-        for (const { input, item } of batch) {
-          let imported = false
-          try {
-            updateImport(item.id, {
-              state: 'importing',
-              receivedBytes: 0,
-              totalBytes: input.source === 'file' ? input.file.size : undefined,
-            })
-            const result =
-              input.source === 'path'
-                ? await api.assetImport(input.path, 'reference')
-                : await api.assetImportBytes(input.file, 'reference', {
-                    signal: controller.signal,
-                    onProgress: (progress) =>
-                      updateImport(item.id, {
-                        receivedBytes: progress.receivedBytes,
-                        totalBytes: progress.totalBytes,
-                      }),
-                  })
-            imported = true
-            setImportedAssets((current) => ({ ...current, [result.asset.id]: result.asset }))
-            updateImport(item.id, { state: 'linking', deduped: result.deduped })
-            const saved = await linkAsset.mutateAsync({
-              nodeId: node.id,
-              assetId: result.asset.id,
-              role: DEFAULT_ROLE,
-            })
-            setLinks(saved.assetLinks)
-            updateImport(item.id, { state: 'done' })
-          } catch (error) {
-            updateImport(item.id, {
-              state: controller.signal.aborted ? 'cancelled' : 'failed',
-              error: controller.signal.aborted
-                ? undefined
-                : `${imported ? 'Imported, but could not attach' : 'Import failed'}: ${api.errorMessage(error)}`,
-            })
-          }
-        }
-      })
-    importChain.current = run.finally(() => importAborts.current.delete(controller))
-    await importChain.current
-  }
-
-  const settleLinkAutosave = async () => {
-    if (saveStatus.current === 'dirty') autosave.flush()
+  const settleLinkAutosave = useCallback(async () => {
+    if (saveStatus.current === 'dirty') flushAutosave()
     while (saveStatus.current === 'dirty' || saveStatus.current === 'saving') {
       await new Promise<void>((resolve) => window.setTimeout(resolve, 25))
     }
     if (saveStatus.current === 'error' || saveStatus.current === 'held') {
       throw new Error('The pending reference edit must save before more images can be attached.')
     }
-  }
+  }, [flushAutosave])
+
+  const importInputs = useCallback(
+    async (inputs: ImportInput[]) => {
+      if (readOnly || inputs.length === 0) return
+      const batch = inputs.map((input) => ({
+        input,
+        item: { id: ++importId.current, name: input.name, state: 'queued' as const },
+      }))
+      const controller = new AbortController()
+      importAborts.current.add(controller)
+      setImports((current) => [...batch.map(({ item }) => item), ...current])
+
+      const run = importChain.current
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await settleLinkAutosave()
+          } catch (error) {
+            for (const { item } of batch) {
+              updateImport(item.id, {
+                state: 'failed',
+                error: `Could not attach: ${api.errorMessage(error)}`,
+              })
+            }
+            return
+          }
+          // Sequential attachment is intentional. Each link is a guarded edit to
+          // the same Markdown file; concurrent saves would race one another and
+          // turn a successful forty-file drop into conflicts created by ourselves.
+          for (const { input, item } of batch) {
+            let imported = false
+            try {
+              updateImport(item.id, {
+                state: 'importing',
+                receivedBytes: 0,
+                totalBytes: input.source === 'file' ? input.file.size : undefined,
+              })
+              const result =
+                input.source === 'path'
+                  ? await api.assetImport(input.path, 'reference')
+                  : await api.assetImportBytes(input.file, 'reference', {
+                      signal: controller.signal,
+                      onProgress: (progress) =>
+                        updateImport(item.id, {
+                          receivedBytes: progress.receivedBytes,
+                          totalBytes: progress.totalBytes,
+                        }),
+                    })
+              imported = true
+              setImportedAssets((current) => ({ ...current, [result.asset.id]: result.asset }))
+              updateImport(item.id, { state: 'linking', deduped: result.deduped })
+              const saved = await linkAsset.mutateAsync({
+                nodeId: node.id,
+                assetId: result.asset.id,
+                role: DEFAULT_ROLE,
+              })
+              setLinksDraft({ source: node.assetLinks, value: saved.assetLinks })
+              updateImport(item.id, { state: 'done' })
+            } catch (error) {
+              updateImport(item.id, {
+                state: controller.signal.aborted ? 'cancelled' : 'failed',
+                error: controller.signal.aborted
+                  ? undefined
+                  : `${imported ? 'Imported, but could not attach' : 'Import failed'}: ${api.errorMessage(error)}`,
+              })
+            }
+          }
+        })
+      importChain.current = run.finally(() => importAborts.current.delete(controller))
+      await importChain.current
+    },
+    [linkAsset, node.assetLinks, node.id, readOnly, settleLinkAutosave, updateImport],
+  )
 
   useEffect(() => {
     if (!api.isTauri() || readOnly) return
@@ -190,7 +194,7 @@ export function ReferencesPane({
       disposed = true
       unlisten?.()
     }
-  }, [node.id, readOnly])
+  }, [importInputs, readOnly])
 
   const chooseFiles = async () => {
     if (readOnly) return

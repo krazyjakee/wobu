@@ -26,8 +26,11 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures_core::Stream;
+use wobu_core::NodeKind;
 
 use crate::cancel::Cancel;
+use crate::error::Error;
+use crate::provider::{DeltaSink, EnhanceOutcome};
 
 /// Accumulates bytes and hands back complete `data:` payloads.
 #[derive(Debug, Default)]
@@ -130,6 +133,267 @@ pub(crate) async fn until_cancelled<F: Future>(future: F, cancel: &Cancel) -> Op
         future.as_mut().poll(cx).map(Some)
     })
     .await
+}
+
+/// The provider-owned state machine consumed by the shared SSE lifecycle.
+/// Implementations decide what an event means and how accumulated bytes, usage,
+/// and provider status become an Enhance outcome.
+pub(crate) trait SseConsumer {
+    fn event(&mut self, payload: &str, deltas: &mut dyn DeltaSink) -> bool;
+    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome;
+}
+
+/// Read an SSE response until its provider state machine is done, the socket
+/// ends, transport fails, or cancellation wins.
+pub(crate) async fn read_sse<S, B, E, C>(
+    kind: NodeKind,
+    body: S,
+    deltas: &mut dyn DeltaSink,
+    cancel: &Cancel,
+    mut consumer: C,
+) -> EnhanceOutcome
+where
+    S: Stream<Item = std::result::Result<B, E>>,
+    B: AsRef<[u8]>,
+    E: std::fmt::Display,
+    C: SseConsumer,
+{
+    let mut body = std::pin::pin!(body);
+    let mut sse = Sse::new();
+
+    loop {
+        match next_chunk(body.as_mut(), cancel).await {
+            Read::Chunk(Ok(bytes)) => {
+                sse.push(bytes.as_ref());
+                while let Some(event) = sse.next_event() {
+                    if consumer.event(&event, deltas) {
+                        return consumer.finish(kind, None);
+                    }
+                }
+            }
+            Read::Chunk(Err(error)) => {
+                return consumer
+                    .finish(kind, Some(Error::Unavailable { detail: error.to_string() }));
+            }
+            Read::End => return consumer.finish(kind, None),
+            Read::Cancelled => return consumer.finish(kind, Some(Error::Cancelled)),
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use std::collections::VecDeque;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::task::{Context, Poll, Wake, Waker};
+
+    use futures_core::Stream;
+    use serde_json::json;
+    use wobu_core::NodeKind;
+    use wobu_core::schema::description_schema;
+
+    use super::{SseConsumer, read_sse};
+    use crate::cancel::Cancel;
+    use crate::error::Error;
+    use crate::provider::Discard;
+
+    pub(crate) fn block_on<F: Future>(future: F) -> F::Output {
+        struct Unparker(std::thread::Thread);
+        impl Wake for Unparker {
+            fn wake(self: Arc<Self>) {
+                self.0.unpark();
+            }
+        }
+
+        let waker = Waker::from(Arc::new(Unparker(std::thread::current())));
+        let mut cx = Context::from_waker(&waker);
+        let mut future = Box::pin(future);
+        loop {
+            if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
+                return value;
+            }
+            std::thread::park();
+        }
+    }
+
+    pub(crate) struct Body {
+        pub(crate) chunks: VecDeque<std::result::Result<Vec<u8>, String>>,
+        pub(crate) polls: Arc<AtomicUsize>,
+        quiet: bool,
+    }
+
+    impl Body {
+        pub(crate) fn new(chunks: Vec<std::result::Result<Vec<u8>, String>>) -> Body {
+            Body { chunks: chunks.into(), polls: Arc::new(AtomicUsize::new(0)), quiet: false }
+        }
+
+        pub(crate) fn quiet_after(mut self) -> Body {
+            self.quiet = true;
+            self
+        }
+    }
+
+    impl Stream for Body {
+        type Item = std::result::Result<Vec<u8>, String>;
+
+        fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let this = self.get_mut();
+            this.polls.fetch_add(1, Ordering::SeqCst);
+            match this.chunks.pop_front() {
+                Some(chunk) => Poll::Ready(Some(chunk)),
+                None if this.quiet => Poll::Pending,
+                None => Poll::Ready(None),
+            }
+        }
+    }
+
+    /// A description built from the registry schema, shared by each adapter's
+    /// contract suite so their wire fixtures exercise identical application
+    /// data.
+    pub(crate) fn document(kind: NodeKind) -> String {
+        let schema = description_schema(kind);
+        let mut object = serde_json::Map::new();
+        for (key, property) in schema["properties"].as_object().unwrap() {
+            let value = match property["type"].as_str().unwrap() {
+                "string" => json!("A scout in ash-glazed plate, shoulders canted forward."),
+                "array" if property["items"]["pattern"].is_string() => {
+                    json!(["#2b2118", "#c2703a"])
+                }
+                _ => json!(["Ember-lit throat vents"]),
+            };
+            object.insert(key.clone(), value);
+        }
+        serde_json::to_string(&serde_json::Value::Object(object)).unwrap()
+    }
+
+    /// Split independently of SSE frame boundaries, as a socket is free to do.
+    pub(crate) fn split(bytes: &[u8], size: usize) -> Vec<Result<Vec<u8>, String>> {
+        bytes.chunks(size).map(|chunk| Ok(chunk.to_vec())).collect()
+    }
+
+    pub(crate) fn assert_complete<C: SseConsumer>(bytes: Vec<u8>, consumer: C) {
+        let expected = document(NodeKind::Character);
+        let mut streamed = String::new();
+        let mut sink = |json: &str| streamed.push_str(json);
+        let outcome = block_on(read_sse(
+            NodeKind::Character,
+            Body::new(split(&bytes, 37)),
+            &mut sink,
+            &Cancel::new(),
+            consumer,
+        ));
+
+        let validated = outcome.result.expect("a whole provider response should validate");
+        assert_eq!(streamed, expected);
+        assert_eq!(crate::parse_description(NodeKind::Character, &streamed).unwrap(), validated);
+        assert_eq!(outcome.usage.input_tokens, 812);
+        assert_eq!(outcome.usage.output_tokens, 289);
+    }
+
+    pub(crate) fn assert_every_kind<C, F, W>(provider: &str, consumer: F, wire: W)
+    where
+        C: SseConsumer,
+        F: Fn() -> C,
+        W: Fn(&str) -> Vec<u8>,
+    {
+        for def in wobu_core::kind::kind_registry() {
+            let outcome = block_on(read_sse(
+                def.kind,
+                Body::new(split(&wire(&document(def.kind)), 64)),
+                &mut Discard,
+                &Cancel::new(),
+                consumer(),
+            ));
+            outcome.result.unwrap_or_else(|error| {
+                panic!(
+                    "{} could not round-trip its own schema through {provider}: {error}",
+                    def.kind
+                )
+            });
+        }
+    }
+
+    pub(crate) fn assert_billed_disconnect<C: SseConsumer>(bytes: &[u8], consumer: C) {
+        let mut chunks = split(&bytes[..bytes.len() / 2], 37);
+        chunks.push(Err("connection reset by peer".to_string()));
+        let outcome = block_on(read_sse(
+            NodeKind::Character,
+            Body::new(chunks),
+            &mut Discard,
+            &Cancel::new(),
+            consumer,
+        ));
+
+        assert!(matches!(outcome.result, Err(Error::Unavailable { .. })));
+        assert_eq!(outcome.usage.input_tokens, 812);
+    }
+
+    pub(crate) fn assert_truncated<C: SseConsumer>(bytes: &[u8], consumer: C) {
+        let outcome = block_on(read_sse(
+            NodeKind::Character,
+            Body::new(split(bytes, 37)),
+            &mut Discard,
+            &Cancel::new(),
+            consumer,
+        ));
+        assert!(matches!(outcome.result, Err(Error::Truncated)));
+    }
+
+    pub(crate) fn assert_mid_stream_cancel<C: SseConsumer>(bytes: &[u8], consumer: C) {
+        let body = Body::new(split(bytes, 24));
+        let polls = Arc::clone(&body.polls);
+        let total = body.chunks.len();
+        let cancel = Cancel::new();
+        let mut seen = 0usize;
+        let mut sink = |_: &str| {
+            seen += 1;
+            if seen == 2 {
+                cancel.cancel();
+            }
+        };
+        let outcome = block_on(read_sse(NodeKind::Character, body, &mut sink, &cancel, consumer));
+
+        assert!(matches!(outcome.result, Err(Error::Cancelled)));
+        assert!(
+            polls.load(Ordering::SeqCst) < total,
+            "the loop read {} of {total} chunks after Stop",
+            polls.load(Ordering::SeqCst),
+        );
+        assert_eq!(outcome.usage.input_tokens, 812, "the prompt was billed before Stop");
+    }
+
+    pub(crate) fn assert_quiet_cancel<C: SseConsumer>(billed: &[u8], consumer: C) {
+        let body = Body::new(split(billed, 64)).quiet_after();
+        let cancel = Cancel::new();
+        let stop = cancel.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            stop.cancel();
+        });
+        let outcome =
+            block_on(read_sse(NodeKind::Character, body, &mut Discard, &cancel, consumer));
+
+        assert!(matches!(outcome.result, Err(Error::Cancelled)));
+        assert_eq!(outcome.usage.input_tokens, 812);
+    }
+
+    pub(crate) fn assert_pre_cancel<C: SseConsumer>(bytes: &[u8], consumer: C) {
+        let cancel = Cancel::new();
+        cancel.cancel();
+        let outcome = block_on(read_sse(
+            NodeKind::Character,
+            Body::new(split(bytes, 24)),
+            &mut Discard,
+            &cancel,
+            consumer,
+        ));
+        let error = outcome.result.expect_err("a cancelled call has no description");
+        assert!(!error.is_retryable());
+        assert_eq!(error.code(), "cancelled");
+    }
 }
 
 #[cfg(test)]

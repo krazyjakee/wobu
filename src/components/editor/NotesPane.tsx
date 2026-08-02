@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { DescriptionState, KindDef, WobuNode } from '../../lib/api'
 import { saveLabel, type useAutosaveNode } from '../../hooks/useAutosaveNode'
 import { AttributesEditor } from './AttributesEditor'
@@ -27,17 +27,39 @@ export function NotesPane({
   autosave: ReturnType<typeof useAutosaveNode>
   enhance?: EnhanceSession
 }) {
-  const [descriptionEditedLocally, setDescriptionEditedLocally] = useState(false)
-  const shownDescriptionState = descriptionEditedLocally ? 'edited' : node.descriptionState
+  return (
+    <NotesPaneSession
+      key={node.id}
+      node={node}
+      def={def}
+      readOnly={readOnly}
+      autosave={autosave}
+      enhance={enhance}
+    />
+  )
+}
 
-  useEffect(() => {
-    setDescriptionEditedLocally(false)
-  }, [node.id])
-  useEffect(() => {
-    if (node.descriptionState === 'enhancing' || node.descriptionState === 'fresh') {
-      setDescriptionEditedLocally(false)
-    }
-  }, [node.descriptionState])
+function NotesPaneSession({
+  node,
+  def,
+  readOnly,
+  autosave,
+  enhance,
+}: {
+  node: WobuNode
+  def: KindDef | undefined
+  readOnly: boolean
+  autosave: ReturnType<typeof useAutosaveNode>
+  enhance?: EnhanceSession
+}) {
+  const [descriptionEdit, setDescriptionEdit] = useState<{
+    description: WobuNode['description']
+    state: DescriptionState
+  } | null>(null)
+  const localDescriptionApplies =
+    descriptionEdit?.description === node.description &&
+    descriptionEdit.state === node.descriptionState
+  const shownDescriptionState = localDescriptionApplies ? 'edited' : node.descriptionState
 
   return (
     <div className="split">
@@ -83,7 +105,12 @@ export function NotesPane({
               def={def}
               readOnly={readOnly}
               autosave={autosave}
-              onEdit={() => setDescriptionEditedLocally(true)}
+              onEdit={() =>
+                setDescriptionEdit({
+                  description: node.description,
+                  state: node.descriptionState,
+                })
+              }
             />
           )}
         </div>
@@ -101,18 +128,13 @@ function NotesField({
   readOnly: boolean
   autosave: ReturnType<typeof useAutosaveNode>
 }) {
-  const [text, setText] = useState(node.notesRaw)
-  const typing = useRef(false)
-
-  // A fresh node always wins; an incoming refetch only wins when we are idle,
-  // so an external edit never eats what is being typed.
-  useEffect(() => {
-    typing.current = false
-    setText(node.notesRaw)
-  }, [node.id])
-  useEffect(() => {
-    if (!typing.current) setText(node.notesRaw)
-  }, [node.notesRaw])
+  const [draft, setDraft] = useState<{
+    source: string
+    value: string
+    editing: boolean
+  } | null>(null)
+  const text =
+    draft && (draft.editing || draft.source === node.notesRaw) ? draft.value : node.notesRaw
 
   return (
     <textarea
@@ -126,12 +148,13 @@ function NotesField({
           : 'Messy is fine. This half is yours and nothing ever writes over it.'
       }
       onChange={(e) => {
-        typing.current = true
-        setText(e.target.value)
+        setDraft({ source: node.notesRaw, value: e.target.value, editing: true })
         autosave.queue({ notesRaw: e.target.value })
       }}
       onBlur={() => {
-        typing.current = false
+        setDraft((current) =>
+          current ? { ...current, source: node.notesRaw, editing: false } : current,
+        )
         autosave.flush()
       }}
     />

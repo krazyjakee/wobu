@@ -24,7 +24,7 @@ import { ContextMenu } from './navigator/ContextMenu'
  * user which it is, and Cancel gives them a way out that is not `kill`.
  */
 function Scanning() {
-  const progress = useOpenProgress(true)
+  const progress = useOpenProgress()
   const [cancelling, setCancelling] = useState(false)
 
   async function cancel() {

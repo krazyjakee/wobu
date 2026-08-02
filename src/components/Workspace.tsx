@@ -63,7 +63,10 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const [newNode, setNewNode] = useState<{ kind: NodeKind | null; parentId: string | null } | null>(
     null,
   )
-  const [boardAttach, setBoardAttach] = useState<BoardAttachRequest | null>(null)
+  const [boardAttach, setBoardAttach] = useState<{
+    projectId: string
+    request: BoardAttachRequest
+  } | null>(null)
   const [transferSource, setTransferSource] = useState<string | null>(null)
 
   const kindIndex = useMemo(() => indexKinds(kindsQ.data), [kindsQ.data])
@@ -212,9 +215,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
   }, [project.id, readOnly, clearBanners])
 
-  useEffect(() => {
-    setBoardAttach(null)
-  }, [project.id, mode])
+  const pendingBoardAttach =
+    mode === 'board' && boardAttach?.projectId === project.id ? boardAttach.request : null
 
   // Both presence effects below are declared *after* that one on purpose:
   // effects run in source order, so opening a project clears the banners first
@@ -362,7 +364,10 @@ export function Workspace({ project }: { project: ProjectSummary }) {
               <Navigator
                 {...navigatorProps}
                 onAssetDrop={
-                  readOnly ? undefined : (assetId, nodeId) => setBoardAttach({ assetId, nodeId })
+                  readOnly
+                    ? undefined
+                    : (assetId, nodeId) =>
+                        setBoardAttach({ projectId: project.id, request: { assetId, nodeId } })
                 }
               />
             )}
@@ -372,8 +377,10 @@ export function Workspace({ project }: { project: ProjectSummary }) {
               kinds={kindIndex}
               readOnly={readOnly}
               navigatorVisible={!navCollapsed}
-              pendingAttach={boardAttach}
-              onPendingAttach={setBoardAttach}
+              pendingAttach={pendingBoardAttach}
+              onPendingAttach={(request) =>
+                setBoardAttach(request ? { projectId: project.id, request } : null)
+              }
             />
           </>
         ) : mode === 'assets' ? (

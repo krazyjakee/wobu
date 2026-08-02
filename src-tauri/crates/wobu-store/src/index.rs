@@ -845,40 +845,17 @@ impl Index {
             "SELECT id, kind, name, slug, summary, parent_id, description_state
              FROM nodes ORDER BY name COLLATE NOCASE",
         )?;
-        let rows = stmt.query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-                r.get::<_, Option<String>>(5)?,
-                r.get::<_, String>(6)?,
-            ))
-        })?;
+        let rows = stmt.query_map([], NodeSummaryRow::decode)?;
 
         let mut out = Vec::new();
         for row in rows {
-            let (id, kind, name, slug, summary, parent, state) = row?;
-            let (Ok(id), Ok(kind)) = (Id::from_string(&id), kind.parse::<NodeKind>()) else {
+            let row = row?;
+            let Some(summary) = row.into_summary(&stale) else {
                 // A row we cannot parse means the index is out of step with the
                 // build; skipping it keeps the tree usable until the rebuild.
                 continue;
             };
-            let description_state = if stale.contains(&id) {
-                DescriptionState::Stale
-            } else {
-                serde_json::from_value(serde_json::Value::String(state)).unwrap_or_default()
-            };
-            out.push(NodeSummary {
-                id,
-                kind,
-                name,
-                slug,
-                summary,
-                parent_id: parent.and_then(|p| Id::from_string(&p).ok()),
-                description_state,
-            });
+            out.push(summary);
         }
 
         let order = |k: NodeKind| {
@@ -904,14 +881,7 @@ impl Index {
     /// missing from a stack is survivable, a panel that will not open is not.
     pub fn nodes(&self) -> Result<Vec<Node>> {
         let mut stmt = self.conn.prepare("SELECT doc FROM nodes ORDER BY id")?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for row in rows {
-            if let Ok(node) = serde_json::from_str::<Node>(&row?) {
-                out.push(node);
-            }
-        }
-        Ok(out)
+        collect_json_documents(stmt.query_map([], document_row)?)
     }
 
     /// One node, whole, without opening its file.
@@ -963,15 +933,7 @@ impl Index {
             "SELECT id, description_state, subject_version, source_version, enhanced_from
              FROM nodes",
         )?;
-        let rows = stmt.query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        })?;
+        let rows = stmt.query_map([], StalenessRow::decode)?;
 
         // Collected whole first, because a node's answer depends on other
         // rows' `source_version` and a streaming pass would have to re-query
@@ -979,10 +941,10 @@ impl Index {
         let mut current: HashMap<Id, String> = HashMap::new();
         let mut candidates = Vec::new();
         for row in rows {
-            let (id, state, subject, source, stamp) = row?;
-            let Ok(id) = Id::from_string(&id) else { continue };
-            current.insert(id, source);
-            candidates.push((id, state, subject, stamp));
+            let row = row?;
+            let Ok(id) = Id::from_string(&row.id) else { continue };
+            current.insert(id, row.source);
+            candidates.push((id, row.state, row.subject, row.stamp));
         }
 
         let mut stale = BTreeSet::new();
@@ -1211,28 +1173,14 @@ impl Index {
             "SELECT doc FROM generations
              WHERE node_id = ?1 ORDER BY created_at DESC, id DESC",
         )?;
-        let rows = stmt.query_map(params![node_id.to_string()], |row| row.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for row in rows {
-            if let Ok(generation) = serde_json::from_str::<Generation>(&row?) {
-                out.push(generation);
-            }
-        }
-        Ok(out)
+        collect_json_documents(stmt.query_map(params![node_id.to_string()], document_row)?)
     }
 
     /// Project-wide history, newest first, from the disposable read model.
     pub fn generations_all(&self) -> Result<Vec<Generation>> {
         let mut stmt =
             self.conn.prepare("SELECT doc FROM generations ORDER BY created_at DESC, id DESC")?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-        let mut out = Vec::new();
-        for row in rows {
-            if let Ok(generation) = serde_json::from_str::<Generation>(&row?) {
-                out.push(generation);
-            }
-        }
-        Ok(out)
+        collect_json_documents(stmt.query_map([], document_row)?)
     }
 
     /// Every generation path held by the disposable index.
@@ -1509,28 +1457,7 @@ impl Index {
         let mut stmt = self
             .conn
             .prepare("SELECT from_id, to_id, role, weight, enabled FROM links WHERE to_id = ?1")?;
-        let rows = stmt.query_map(params![id.to_string()], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, f32>(3)?,
-                r.get::<_, i32>(4)?,
-            ))
-        })?;
-
-        let mut out = Vec::new();
-        for row in rows {
-            let (from, to, role, weight, enabled) = row?;
-            let (Ok(from_id), Ok(to_id)) = (Id::from_string(&from), Id::from_string(&to)) else {
-                continue;
-            };
-            let Ok(role) = serde_json::from_value(serde_json::Value::String(role)) else {
-                continue;
-            };
-            out.push(LinkEdge { from_id, to_id, role, weight, enabled: enabled != 0 });
-        }
-        Ok(out)
+        collect_links(stmt.query_map(params![id.to_string()], LinkRow::decode)?)
     }
 
     /// Every explicit influence edge in the world.
@@ -1543,28 +1470,7 @@ impl Index {
             "SELECT from_id, to_id, role, weight, enabled
              FROM links ORDER BY from_id, to_id, role",
         )?;
-        let rows = stmt.query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, f32>(3)?,
-                r.get::<_, i32>(4)?,
-            ))
-        })?;
-
-        let mut out = Vec::new();
-        for row in rows {
-            let (from, to, role, weight, enabled) = row?;
-            let (Ok(from_id), Ok(to_id)) = (Id::from_string(&from), Id::from_string(&to)) else {
-                continue;
-            };
-            let Ok(role) = serde_json::from_value(serde_json::Value::String(role)) else {
-                continue;
-            };
-            out.push(LinkEdge { from_id, to_id, role, weight, enabled: enabled != 0 });
-        }
-        Ok(out)
+        collect_links(stmt.query_map([], LinkRow::decode)?)
     }
 
     /// Full-text search over names, summaries, notes and descriptions.
@@ -1884,6 +1790,130 @@ fn fts_match_expr(query: &str) -> Option<String> {
         .map(|t| format!("\"{}\"*", t.replace('"', "\"\"")))
         .collect();
     if terms.is_empty() { None } else { Some(terms.join(" AND ")) }
+}
+
+/// Raw navigator columns, decoded once and converted separately so a row from
+/// a newer build can be skipped without turning a disposable-index mismatch
+/// into a query failure.
+struct NodeSummaryRow {
+    id: String,
+    kind: String,
+    name: String,
+    slug: String,
+    summary: String,
+    parent: Option<String>,
+    state: String,
+}
+
+impl NodeSummaryRow {
+    fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            kind: row.get(1)?,
+            name: row.get(2)?,
+            slug: row.get(3)?,
+            summary: row.get(4)?,
+            parent: row.get(5)?,
+            state: row.get(6)?,
+        })
+    }
+
+    fn into_summary(self, stale: &BTreeSet<Id>) -> Option<NodeSummary> {
+        let id = Id::from_string(&self.id).ok()?;
+        let kind = self.kind.parse::<NodeKind>().ok()?;
+        let description_state = if stale.contains(&id) {
+            DescriptionState::Stale
+        } else {
+            serde_json::from_value(serde_json::Value::String(self.state)).unwrap_or_default()
+        };
+        Some(NodeSummary {
+            id,
+            kind,
+            name: self.name,
+            slug: self.slug,
+            summary: self.summary,
+            parent_id: self.parent.and_then(|parent| Id::from_string(&parent).ok()),
+            description_state,
+        })
+    }
+}
+
+struct StalenessRow {
+    id: String,
+    state: String,
+    subject: String,
+    source: String,
+    stamp: String,
+}
+
+impl StalenessRow {
+    fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            state: row.get(1)?,
+            subject: row.get(2)?,
+            source: row.get(3)?,
+            stamp: row.get(4)?,
+        })
+    }
+}
+
+fn document_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
+    row.get(0)
+}
+
+fn collect_json_documents<T, I>(rows: I) -> Result<Vec<T>>
+where
+    T: serde::de::DeserializeOwned,
+    I: Iterator<Item = rusqlite::Result<String>>,
+{
+    let mut out = Vec::new();
+    for row in rows {
+        if let Ok(document) = serde_json::from_str::<T>(&row?) {
+            out.push(document);
+        }
+    }
+    Ok(out)
+}
+
+struct LinkRow {
+    from: String,
+    to: String,
+    role: String,
+    weight: f32,
+    enabled: i32,
+}
+
+impl LinkRow {
+    fn decode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            from: row.get(0)?,
+            to: row.get(1)?,
+            role: row.get(2)?,
+            weight: row.get(3)?,
+            enabled: row.get(4)?,
+        })
+    }
+
+    fn into_edge(self) -> Option<LinkEdge> {
+        let from_id = Id::from_string(&self.from).ok()?;
+        let to_id = Id::from_string(&self.to).ok()?;
+        let role = serde_json::from_value(serde_json::Value::String(self.role)).ok()?;
+        Some(LinkEdge { from_id, to_id, role, weight: self.weight, enabled: self.enabled != 0 })
+    }
+}
+
+fn collect_links<I>(rows: I) -> Result<Vec<LinkEdge>>
+where
+    I: Iterator<Item = rusqlite::Result<LinkRow>>,
+{
+    let mut out = Vec::new();
+    for row in rows {
+        if let Some(edge) = row?.into_edge() {
+            out.push(edge);
+        }
+    }
+    Ok(out)
 }
 
 const ASSET_COLUMNS: &str = "SELECT id, hash, kind, rel_path, thumb_path, mime, width, height,

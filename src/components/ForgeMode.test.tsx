@@ -683,7 +683,7 @@ describe('Forge mode', () => {
       name: 'Select generation one for comparison',
     })
     expect(first).toHaveAttribute('aria-pressed', 'false')
-    expect(first.querySelector('img')).toHaveAttribute('loading', 'lazy')
+    await waitFor(() => expect(first.querySelector('img')).toHaveAttribute('loading', 'lazy'))
     expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
     fireEvent.click(first)
     fireEvent.click(screen.getByRole('button', { name: 'Select generation two for comparison' }))

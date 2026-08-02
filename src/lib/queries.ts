@@ -1701,10 +1701,9 @@ export function useEnhancePending(enabled: boolean): UseQueryResult<api.EnhanceR
  * `useAcceptEnhanced` runs.
  */
 export function useEnhanceStream(jobId: string | null): api.EnhanceDelta | null {
-  const [delta, setDelta] = useState<api.EnhanceDelta | null>(null)
+  const [stream, setStream] = useState<{ jobId: string; delta: api.EnhanceDelta } | null>(null)
 
   useEffect(() => {
-    setDelta(null)
     if (!jobId || !api.isTauri()) return
     let disposed = false
     let unlisten: (() => void) | undefined
@@ -1713,7 +1712,7 @@ export function useEnhanceStream(jobId: string | null): api.EnhanceDelta | null 
       // Filtered here rather than by subscribing per job: one listener per
       // mounted pane is cheap, and two enhances can be in flight at once —
       // which is exactly when showing the wrong one would be hardest to spot.
-      if (event.payload.jobId === jobId) setDelta(event.payload)
+      if (event.payload.jobId === jobId) setStream({ jobId, delta: event.payload })
     })
       .then((fn) => {
         if (disposed) fn()
@@ -1729,5 +1728,5 @@ export function useEnhanceStream(jobId: string | null): api.EnhanceDelta | null 
     }
   }, [jobId])
 
-  return delta
+  return stream?.jobId === jobId ? stream.delta : null
 }

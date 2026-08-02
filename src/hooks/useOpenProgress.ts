@@ -10,20 +10,13 @@ import { isTauri, type ScanProgress } from '../lib/api'
  * whose stamp moved, which is fast enough that a progress bar would flash and
  * vanish.
  *
- * `busy` is passed in rather than inferred from the events, because the gap
- * between the command being invoked and the first event arriving is exactly
- * when a stalled mount produces nothing at all — and that is the case the
- * progress display exists for. Clearing on `busy` going false, rather than on a
- * "done" event, means a scan that dies without a final event still clears.
+ * This hook is mounted only by the in-flight scanning surface, so unmounting
+ * that surface clears both its progress and its backend listener.
  */
-export function useOpenProgress(busy: boolean): ScanProgress | null {
+export function useOpenProgress(): ScanProgress | null {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
 
   useEffect(() => {
-    if (!busy) {
-      setProgress(null)
-      return
-    }
     if (!isTauri()) return
 
     let disposed = false
@@ -43,7 +36,7 @@ export function useOpenProgress(busy: boolean): ScanProgress | null {
       disposed = true
       unlisten?.()
     }
-  }, [busy])
+  }, [])
 
   return progress
 }

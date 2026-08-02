@@ -41,27 +41,6 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-
-      // The three below ship as errors in `recommended-latest` and every one of
-      // them already fires on code that works. They are demoted rather than
-      // switched off, because each is worth reading before adding a new one —
-      // but a lint gate that is red on arrival is a gate people learn to skip,
-      // and this config exists to be adopted, not argued with.
-
-      // Nine sites, all the same shape: an effect that clears derived state when
-      // the thing it derives from changes. That is the documented React idiom
-      // for it; the compiler-aware rule prefers a `key` or a render-time reset,
-      // which is a refactor per call site rather than a lint fix.
-      'react-hooks/set-state-in-effect': 'warn',
-      // `useAutosaveNode` keeps a "latest value" ref so the debounce timer sends
-      // what the user last typed rather than what was on screen when the timer
-      // started. Reading and writing that ref during render is exactly what the
-      // rule objects to and exactly what makes the hook correct.
-      'react-hooks/refs': 'warn',
-      // One site: `TitleBar.tsx` exports `modKey()` beside the component, which
-      // costs that module a Fast Refresh partial update. Worth fixing when the
-      // file is next opened, not worth blocking a push over.
-      'react-refresh/only-export-components': 'warn',
     },
   },
 

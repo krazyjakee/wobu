@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use crate::atomic;
 use crate::error::{Error, Result};
-use crate::{atomic, paths};
 
 const MAX_HEADER_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_WEIGHT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -67,45 +67,39 @@ pub fn validate(bytes: &[u8]) -> Result<()> {
 /// Publish validated bytes at their hash-derived path. Existing identical
 /// bytes are a dedupe; an existing mismatched path is corruption.
 pub fn publish(root: &Path, hash: &str, bytes: &[u8]) -> Result<(PathBuf, bool)> {
-    validate(bytes)?;
-    if atomic::hash_bytes(bytes) != hash {
-        return Err(Error::InvalidLora("the declared content hash does not match".into()));
-    }
     let rel = wobu_core::asset::lora_path(hash).ok_or_else(|| {
         Error::InvalidLora("the content hash is not 64 lowercase hex characters".into())
     })?;
-    let target = paths::from_rel_string(root, &rel);
-    if let Ok(metadata) = std::fs::symlink_metadata(&target) {
-        if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
-            return Err(Error::InvalidLora(
-                "the content-addressed destination is not a regular file".into(),
-            ));
-        }
-        let existing = std::fs::read(&target).map_err(|error| Error::io(&target, error))?;
-        if atomic::hash_bytes(&existing) != hash {
-            return Err(Error::InvalidLora("the content-addressed destination is corrupt".into()));
-        }
-        return Ok((target, true));
-    }
-    match atomic::write_once(root, &target, bytes) {
-        Ok(_) => Ok((target, false)),
-        Err(Error::AlreadyExists(_)) => {
+    let relative = atomic::ProjectRelativePath::new(&rel)?;
+    let published = atomic::publish_content_addressed(
+        root,
+        &relative,
+        bytes,
+        |candidate| {
+            validate(candidate)?;
+            if atomic::hash_bytes(candidate) != hash {
+                return Err(Error::InvalidLora("the declared content hash does not match".into()));
+            }
+            Ok(())
+        },
+        |target| {
             let metadata =
-                std::fs::symlink_metadata(&target).map_err(|error| Error::io(&target, error))?;
+                std::fs::symlink_metadata(target).map_err(|error| Error::io(target, error))?;
             if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
                 return Err(Error::InvalidLora(
                     "the content-addressed destination is not a regular file".into(),
                 ));
             }
-            let existing = std::fs::read(&target).map_err(|error| Error::io(&target, error))?;
-            if atomic::hash_bytes(&existing) == hash {
-                Ok((target, true))
-            } else {
-                Err(Error::InvalidLora("the content-addressed destination is corrupt".into()))
+            let existing = std::fs::read(target).map_err(|error| Error::io(target, error))?;
+            if atomic::hash_bytes(&existing) != hash {
+                return Err(Error::InvalidLora(
+                    "the content-addressed destination is corrupt".into(),
+                ));
             }
-        }
-        Err(error) => Err(error),
-    }
+            Ok(atomic::ExistingContent::Valid)
+        },
+    )?;
+    Ok((relative.resolve(root), published == atomic::ContentPublish::Existing))
 }
 
 #[cfg(test)]

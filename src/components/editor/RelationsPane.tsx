@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { KindDef, Link, LinkEdge, LinkRole, NodeSummary, WobuNode } from '../../lib/api'
 import {
   useAddNodeLink,
@@ -30,21 +30,41 @@ export function RelationsPane({
   readOnly: boolean
   onJump: (id: string) => void
 }) {
+  return (
+    <RelationsPaneSession
+      key={node.id}
+      node={node}
+      def={def}
+      kinds={kinds}
+      readOnly={readOnly}
+      onJump={onJump}
+    />
+  )
+}
+
+function RelationsPaneSession({
+  node,
+  def,
+  kinds,
+  readOnly,
+  onJump,
+}: {
+  node: WobuNode
+  def: KindDef | undefined
+  kinds: KindIndex
+  readOnly: boolean
+  onJump: (id: string) => void
+}) {
   const nodesQ = useNodes(true)
   const backlinksQ = useNodeBacklinks(node.id)
   const add = useAddNodeLink()
   const remove = useRemoveNodeLink()
   const update = useUpdateNodeLink()
-  const nodes = nodesQ.data ?? []
+  const nodes = useMemo(() => nodesQ.data ?? [], [nodesQ.data])
   const byId = useMemo(() => new Map(nodes.map((item) => [item.id, item])), [nodes])
   const allowedRoles = useMemo(() => def?.defaultLinkRoles ?? [], [def])
   const [role, setRole] = useState<LinkRole | ''>(allowedRoles[0] ?? '')
   const [target, setTarget] = useState('')
-
-  useEffect(() => {
-    setRole(allowedRoles[0] ?? '')
-    setTarget('')
-  }, [node.id, allowedRoles])
 
   const outgoingRoles = useMemo(() => {
     const roles = [...allowedRoles]
@@ -90,7 +110,7 @@ export function RelationsPane({
             <RelationGroup key={groupRole} title={ROLE_LABEL[groupRole]}>
               {links.map((link) => (
                 <OutgoingRow
-                  key={`${link.role}:${link.toId}`}
+                  key={`${link.role}:${link.toId}:${link.weight}`}
                   nodeId={node.id}
                   link={link}
                   target={byId.get(link.toId)}
@@ -224,7 +244,7 @@ function RelationTarget({
 }
 
 function OutgoingRow({
-  nodeId,
+  nodeId: _nodeId,
   link,
   target,
   readOnly,
@@ -243,8 +263,6 @@ function OutgoingRow({
   onUpdate: (patch: { weight?: number; enabled?: boolean }) => void
 }) {
   const [weight, setWeight] = useState(String(link.weight))
-  useEffect(() => setWeight(String(link.weight)), [link.weight, nodeId, link.toId, link.role])
-
   const commitWeight = () => {
     const parsed = Number(weight)
     if (!Number.isFinite(parsed)) {

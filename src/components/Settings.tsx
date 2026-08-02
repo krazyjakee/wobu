@@ -876,22 +876,17 @@ function CredentialRow({
   const field = useRef<HTMLInputElement>(null)
   const { save, saving } = useSetProviderKey()
   const remove = useDeleteProviderKey()
-  const [editing, setEditing] = useState(false)
+  const [editingByChoice, setEditing] = useState(false)
 
   const source = status?.source ?? null
   const wanted = focus === credential.id
+  const editing = editingByChoice || wanted
 
+  // The externally requested row derives its open state from `focus`. The
+  // request stays active until this field closes, so no reset render is needed.
   useEffect(() => {
-    if (!wanted) return
-    setEditing(true)
-    onFocused()
-  }, [wanted, onFocused])
-
-  // Deliberately after the state above rather than inside the click handler: the
-  // field does not exist until `editing` is true, so focusing it has to wait for
-  // the render that creates it.
-  useEffect(() => {
-    if (editing) field.current?.focus()
+    if (!editing) return
+    field.current?.focus()
   }, [editing])
 
   async function submit() {
@@ -923,6 +918,7 @@ function CredentialRow({
   function close() {
     if (field.current) field.current.value = ''
     setEditing(false)
+    if (wanted) onFocused()
   }
 
   async function discard() {
@@ -1027,8 +1023,17 @@ function Storage() {
   }, [])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    let disposed = false
+    void indexInfo().then(
+      (value) => {
+        if (!disposed) setInfo(value)
+      },
+      (error) => report(error, 'Could not read the index'),
+    )
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   async function rebuild() {
     setConfirming(false)
@@ -1238,8 +1243,17 @@ function Diagnostics() {
   }, [])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    let disposed = false
+    void logInfo().then(
+      (value) => {
+        if (!disposed) setInfo(value)
+      },
+      (error) => report(error, 'Could not read the log settings'),
+    )
+    return () => {
+      disposed = true
+    }
+  }, [])
 
   // While the contents are on screen they are kept current. A snapshot would be
   // the wrong default for a pane whose whole job is "this is what you are about

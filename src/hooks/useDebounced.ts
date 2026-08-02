@@ -9,19 +9,28 @@ import { useEffect, useState } from 'react'
  * gains the notes matches a moment later.
  */
 export function useDebounced<T>(value: T, delay: number): T {
-  const [settled, setSettled] = useState(value)
+  const [state, setState] = useState({ input: value, settled: value })
+
+  if (!Object.is(state.input, value)) {
+    setState((current) => ({
+      input: value,
+      settled: value === ('' as unknown as T) ? value : current.settled,
+    }))
+  }
 
   useEffect(() => {
     // An immediate reset to an empty value rather than a delayed one: clearing
     // the box should clear the results now, not after the debounce. Waiting
     // leaves stale hits on screen for a query the user has already abandoned.
-    if (value === ('' as unknown as T)) {
-      setSettled(value)
-      return
-    }
-    const id = window.setTimeout(() => setSettled(value), delay)
+    const id = window.setTimeout(
+      () =>
+        setState((current) =>
+          Object.is(current.input, value) ? { ...current, settled: value } : current,
+        ),
+      delay,
+    )
     return () => window.clearTimeout(id)
   }, [value, delay])
 
-  return settled
+  return value === ('' as unknown as T) ? value : state.settled
 }

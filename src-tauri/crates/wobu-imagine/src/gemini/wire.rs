@@ -314,10 +314,14 @@ pub(crate) fn error_for_status(status: u16, body: &[u8], retry_after: Option<Dur
             // adapter built wrong, a value the API stopped accepting. Retrying
             // spends money to fail identically, and `Unsupported` is this crate's
             // word for a refusal that is ours to fix.
-            400..=499 => Error::Unsupported { detail: detail(status, code, message) },
+            400..=499 => Error::Unsupported {
+                detail: wobu_llm::transport::status_detail(status, code, message),
+            },
             // 500, 503, 504, and anything unrecognised. Waiting is the right
             // answer to all of them.
-            _ => Error::Unavailable { detail: detail(status, code, message) },
+            _ => Error::Unavailable {
+                detail: wobu_llm::transport::status_detail(status, code, message),
+            },
         },
     }
 }
@@ -378,15 +382,6 @@ fn known_error(code: &str, message: &str, retry_after: Option<Duration>) -> Opti
         _ => return None,
     };
     Some(error)
-}
-
-/// Never includes anything from the request, because this string reaches a log.
-fn detail(status: u16, code: &str, message: &str) -> String {
-    match (code.is_empty(), message.is_empty()) {
-        (true, true) => format!("HTTP {status}"),
-        (true, false) => format!("HTTP {status}: {message}"),
-        (false, _) => format!("HTTP {status} {code}: {message}"),
-    }
 }
 
 /// The codes for a picture the model would not produce, as opposed to a call that

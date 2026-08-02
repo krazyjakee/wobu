@@ -4,6 +4,7 @@ import { useCloseProject } from '../lib/queries'
 import { labelFor, type KindIndex } from '../lib/kinds'
 import { useUI } from '../store/ui'
 import { reportProjectCloseFailure } from '../lib/projectClose'
+import { modKey } from '../lib/platform'
 import { Icon } from './Icon'
 import { WindowControls } from './WindowControls'
 import { ContextMenu } from './navigator/ContextMenu'
@@ -116,9 +117,4 @@ export function TitleBar({
       <WindowControls />
     </header>
   )
-}
-
-export function modKey(): string {
-  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
-  return mac ? '⌘' : 'Ctrl+'
 }

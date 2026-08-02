@@ -79,6 +79,7 @@ export function ForgeMode({
       </header>
 
       <SceneComposer
+        key={`scene:${selected?.id ?? 'none'}`}
         primary={selected}
         nodes={sortedNodes}
         kinds={kinds}
@@ -98,7 +99,7 @@ export function ForgeMode({
       />
 
       {selected ? (
-        <ForgeResults subject={selected} queue={queue} />
+        <ForgeResults key={`results:${selected.id}`} subject={selected} queue={queue} />
       ) : (
         <section className="forge-no-subject empty-state">
           <h3>Choose a subject</h3>
@@ -254,11 +255,6 @@ function SceneComposer({
       : null
   const normalizedAspect = aspectNegotiation?.actualAspect ?? aspect
 
-  useEffect(() => {
-    setAdditional([])
-    setStatus(null)
-  }, [primary?.id])
-
   function toggle(id: string) {
     setAdditional((current) => {
       if (current.includes(id)) return current.filter((value) => value !== id)
@@ -373,19 +369,11 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
   const activeJobs = queue.jobs.filter(
     (job) => job.kind === 'generate' && job.subjectId === subject.id && !isTerminal(job.state),
   )
-  const selected = (history.data ?? []).filter((generation) => selectedIds.has(generation.id))
-
-  useEffect(() => {
-    setSelectedIds(new Set())
-    setComparing(false)
-  }, [subject.id])
-  useEffect(() => {
-    const available = new Set((history.data ?? []).map((generation) => generation.id))
-    setSelectedIds((current) => {
-      if ([...current].every((id) => available.has(id))) return current
-      return new Set([...current].filter((id) => available.has(id)))
-    })
-  }, [history.data])
+  const available = new Set((history.data ?? []).map((generation) => generation.id))
+  const visibleSelectedIds = new Set([...selectedIds].filter((id) => available.has(id)))
+  const selected = (history.data ?? []).filter((generation) =>
+    visibleSelectedIds.has(generation.id),
+  )
 
   const toggle = (generation: Generation) => {
     if (generation.outputAssetIds.length === 0) return
@@ -439,7 +427,7 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
       ) : (
         <VirtualResultGrid
           generations={history.data ?? []}
-          selectedIds={selectedIds}
+          selectedIds={visibleSelectedIds}
           loading={history.isPending}
           onToggle={toggle}
         />
@@ -598,7 +586,10 @@ function CompareViewer({
       </header>
       <div className="forge-compare-images">
         {generations.map((generation) => (
-          <CompareImage key={generation.id} generation={generation} />
+          <CompareImage
+            key={`${generation.id}:${generation.outputAssetIds[0] ?? 'none'}`}
+            generation={generation}
+          />
         ))}
       </div>
     </Modal>
@@ -611,8 +602,6 @@ function CompareImage({ generation }: { generation: Generation }) {
   const assetId = generation.outputAssetIds[0] ?? null
   useEffect(() => {
     let disposed = false
-    setSrc(null)
-    setError(null)
     if (!assetId) return
     void api
       .assetOriginal(assetId)

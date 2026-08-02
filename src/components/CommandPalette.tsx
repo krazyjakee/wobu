@@ -57,6 +57,31 @@ export function CommandPalette({
   readOnly: boolean
 }) {
   const open = useUI((s) => s.paletteOpen)
+  if (!open) return null
+  return (
+    <OpenCommandPalette
+      nodes={nodes}
+      kinds={kinds}
+      onJump={onJump}
+      onNewNode={onNewNode}
+      readOnly={readOnly}
+    />
+  )
+}
+
+function OpenCommandPalette({
+  nodes,
+  kinds,
+  onJump,
+  onNewNode,
+  readOnly,
+}: {
+  nodes: NodeSummary[]
+  kinds: KindIndex
+  onJump: (id: string) => void
+  onNewNode: () => void
+  readOnly: boolean
+}) {
   const setOpen = useUI((s) => s.setPaletteOpen)
   const toggleNav = useUI((s) => s.toggleNav)
   const toggleInsp = useUI((s) => s.toggleInsp)
@@ -66,13 +91,6 @@ export function CommandPalette({
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (open) {
-      setQ('')
-      setCursor(0)
-    }
-  }, [open])
 
   /*
    * Undo and redo appear only when there is something to undo, and say what
@@ -179,15 +197,11 @@ export function CommandPalette({
     [matchedNodes, matchedText, matchedCmds],
   )
 
-  useEffect(() => {
-    setCursor((c) => (rows.length === 0 ? 0 : Math.min(c, rows.length - 1)))
-  }, [rows.length])
+  const activeCursor = rows.length === 0 ? 0 : Math.min(cursor, rows.length - 1)
 
   useEffect(() => {
-    listRef.current?.querySelector('.is-on')?.scrollIntoView({ block: 'nearest' })
-  }, [cursor])
-
-  if (!open) return null
+    listRef.current?.querySelector('.is-on')?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeCursor])
 
   const pick = (i: number) => {
     const row = rows[i]
@@ -228,7 +242,7 @@ export function CommandPalette({
               setCursor((c) => (rows.length ? (c - 1 + rows.length) % rows.length : 0))
             } else if (e.key === 'Enter') {
               e.preventDefault()
-              pick(cursor)
+              pick(activeCursor)
             }
           }}
         />
@@ -252,7 +266,7 @@ export function CommandPalette({
             key={n.id}
             node={n}
             kinds={kinds}
-            on={cursor === i}
+            on={activeCursor === i}
             onHover={() => setCursor(i)}
             onPick={() => pick(i)}
           />
@@ -268,7 +282,7 @@ export function CommandPalette({
               key={n.id}
               node={n}
               kinds={kinds}
-              on={cursor === i}
+              on={activeCursor === i}
               onHover={() => setCursor(i)}
               onPick={() => pick(i)}
             />
@@ -281,7 +295,7 @@ export function CommandPalette({
           return (
             <button
               key={c.id}
-              className={cursor === i ? 'pal-row is-on' : 'pal-row'}
+              className={activeCursor === i ? 'pal-row is-on' : 'pal-row'}
               onMouseEnter={() => setCursor(i)}
               onClick={() => pick(i)}
             >

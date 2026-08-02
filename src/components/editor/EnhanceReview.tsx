@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { SectionDef, SectionValue, WobuDescription } from '../../lib/api'
 import type { EnhanceSession } from './useEnhanceSession'
 import {
@@ -16,13 +16,28 @@ export function EnhanceReview({
   definitions: SectionDef[]
   session: EnhanceSession
 }) {
+  return (
+    <EnhanceReviewSession
+      key={session.candidate?.jobId ?? 'none'}
+      current={current}
+      definitions={definitions}
+      session={session}
+    />
+  )
+}
+
+function EnhanceReviewSession({
+  current,
+  definitions,
+  session,
+}: {
+  current: WobuDescription | null
+  definitions: SectionDef[]
+  session: EnhanceSession
+}) {
   const candidate = session.candidate
   const effectiveCurrent = session.refusedNode?.description ?? current
   const [accepted, setAccepted] = useState<Set<string>>(() => new Set())
-
-  useEffect(() => {
-    setAccepted(new Set())
-  }, [candidate?.jobId])
 
   const sections = useMemo(
     () =>

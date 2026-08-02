@@ -24,6 +24,7 @@ use wobu_core::NodeKind;
 
 use crate::error::Error;
 use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, Usage};
+use crate::stream::SseConsumer;
 use crate::validate::parse_description;
 
 use super::LABEL;
@@ -289,6 +290,16 @@ impl Incoming {
     }
 }
 
+impl SseConsumer for Incoming {
+    fn event(&mut self, payload: &str, deltas: &mut dyn DeltaSink) -> bool {
+        self.accept(payload, deltas) == Flow::Done
+    }
+
+    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome {
+        self.outcome(kind, aborted)
+    }
+}
+
 /// A non-2xx response, turned into something the UI has an answer for.
 ///
 /// Two body shapes reach this and both are real. The Interactions API documents
@@ -325,10 +336,14 @@ pub(crate) fn error_for_status(status: u16, body: &str, retry_after: Option<Dura
             // `SchemaRejected` is this crate's word for a refusal that is ours
             // to fix — which is why it lands on `internal` rather than on a
             // provider code.
-            400..=499 => Error::SchemaRejected { detail: detail(status, code, message) },
+            400..=499 => Error::SchemaRejected {
+                detail: crate::transport::status_detail(status, code, message),
+            },
             // 500, 503, 504, and anything unrecognised. Waiting is the right
             // answer to all of them.
-            _ => Error::Unavailable { detail: detail(status, code, message) },
+            _ => Error::Unavailable {
+                detail: crate::transport::status_detail(status, code, message),
+            },
         },
     }
 }
@@ -467,19 +482,11 @@ fn mentions_billing(message: &str) -> bool {
         || message.contains("paid tier")
 }
 
-/// Never includes anything from the request, because this string reaches a log.
-fn detail(status: u16, code: &str, message: &str) -> String {
-    match (code.is_empty(), message.is_empty()) {
-        (true, true) => format!("HTTP {status}"),
-        (true, false) => format!("HTTP {status}: {message}"),
-        (false, _) => format!("HTTP {status} {code}: {message}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::provider::Discard;
+    use crate::stream::testing::document;
     use wobu_core::schema::description_schema;
 
     fn request() -> EnhanceRequest {
@@ -608,24 +615,6 @@ mod tests {
             events.push("[DONE]".to_string());
         }
         events
-    }
-
-    /// A description built from the schema rather than hand-written, so a
-    /// registry change that the validator would reject fails here.
-    fn document(kind: NodeKind) -> String {
-        let schema = description_schema(kind);
-        let mut object = serde_json::Map::new();
-        for (key, property) in schema["properties"].as_object().unwrap() {
-            let value = match property["type"].as_str().unwrap() {
-                "string" => json!("Ash-glazed plate over oiled leather."),
-                "array" if property["items"]["pattern"].is_string() => {
-                    json!(["#2b2118", "#c2703a"])
-                }
-                _ => json!(["Ember-lit throat vents"]),
-            };
-            object.insert(key.clone(), value);
-        }
-        serde_json::to_string(&Value::Object(object)).unwrap()
     }
 
     fn feed(events: &[String], deltas: &mut dyn DeltaSink) -> Incoming {

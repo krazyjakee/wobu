@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SectionDef, SectionValue, WobuNode } from '../../lib/api'
 import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
 import {
@@ -23,7 +23,7 @@ export function DescriptionEditor({
   onEdit?: () => void
 }) {
   const queue = autosave.queue
-  const incoming = node.description?.sections ?? {}
+  const incoming = useMemo(() => node.description?.sections ?? {}, [node.description?.sections])
   const [draft, setDraft] = useState<SectionMap>(incoming)
   const draftRef = useRef<SectionMap>(incoming)
   const storedRef = useRef<SectionMap>(incoming)
@@ -60,7 +60,7 @@ export function DescriptionEditor({
     if (pending.current.size > 0) {
       queue({ description: { sections: nextStored }, descriptionState: 'edited' })
     }
-  }, [node.id, node.description, queue])
+  }, [incoming, node.id, queue])
 
   const update = (key: string, value: SectionValue) => {
     const nextDraft = { ...draftRef.current, [key]: value }

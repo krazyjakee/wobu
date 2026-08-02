@@ -35,11 +35,10 @@ export function ConflictCard({
 }) {
   const [both, setBoth] = useState(false)
   const resolve = useResolveConflict()
+  const current = conflict.current
+  const parked = conflict.parked
 
-  const rows = useMemo(
-    () => diffLines(conflict.current, conflict.parked),
-    [conflict.current, conflict.parked],
-  )
+  const rows = useMemo(() => diffLines(current, parked), [current, parked])
   const shown = useMemo(() => (both ? rows : collapse(rows)), [both, rows])
   const differs = hasChanges(rows)
 

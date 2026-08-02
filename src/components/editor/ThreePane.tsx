@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
@@ -9,6 +9,10 @@ import { useAssetThumb, useMeshAssetPath, useMeshConcepts } from '../../lib/quer
 const MeshViewport = lazy(() => import('./MeshViewport'))
 
 export function ThreePane({ node }: { node: WobuNode }) {
+  return <ThreePaneSession key={node.id} node={node} />
+}
+
+function ThreePaneSession({ node }: { node: WobuNode }) {
   const concepts = useMeshConcepts(node.id)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected =
@@ -19,11 +23,6 @@ export function ThreePane({ node }: { node: WobuNode }) {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const onViewerError = useCallback((message: string) => setError(message), [])
-
-  useEffect(() => {
-    setSelectedId(null)
-    setError(null)
-  }, [node.id])
 
   const meshUrl = useMemo(() => (path.data ? convertFileSrc(path.data) : null), [path.data])
 

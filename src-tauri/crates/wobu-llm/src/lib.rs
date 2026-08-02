@@ -25,6 +25,7 @@ pub mod gemini;
 pub mod partial;
 pub mod provider;
 pub(crate) mod stream;
+pub mod transport;
 pub mod validate;
 
 pub use anthropic::AnthropicProvider;

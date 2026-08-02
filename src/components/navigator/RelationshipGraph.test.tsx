@@ -2,7 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { LinkEdge, NodeSummary } from '../../lib/api'
 import { kindDef, kindIndex, summary } from '../../test/fixtures'
-import { layoutRelationships, RelationshipGraph } from './RelationshipGraph'
+import { RelationshipGraph } from './RelationshipGraph'
+import { layoutRelationships } from './relationshipLayout'
 import { GRAPH_NODE_LIMIT } from './relationshipGraphLimit'
 
 const kinds = kindIndex([

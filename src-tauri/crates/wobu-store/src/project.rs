@@ -157,6 +157,26 @@ pub struct ReconcileObservation {
     generation_ledger_changed: bool,
 }
 
+struct TransferPublishFailure {
+    index: usize,
+    deduped: usize,
+    error: Error,
+}
+
+fn publish_transfer_items<T>(
+    items: &[T],
+    mut publish: impl FnMut(&T) -> Result<bool>,
+) -> std::result::Result<usize, TransferPublishFailure> {
+    let mut deduped = 0usize;
+    for (index, item) in items.iter().enumerate() {
+        match publish(item) {
+            Ok(was_deduped) => deduped += usize::from(was_deduped),
+            Err(error) => return Err(TransferPublishFailure { index, deduped, error }),
+        }
+    }
+    Ok(deduped)
+}
+
 impl ReconcilePlan {
     /// Perform every potentially slow directory listing, stat and read.
     pub fn observe(self) -> Result<ReconcileObservation> {
@@ -936,23 +956,35 @@ impl Project {
         // byte/path preflight but before the first guarded publication.
         after_preflight(self);
 
-        for asset in &bundle.assets {
-            match self.import_asset(&asset.bytes, asset.kind) {
-                Ok(imported) => outcome.deduped_reference_count += usize::from(imported.deduped),
-                Err(error) => {
-                    outcome.failure = Some(error.to_string());
-                    return Ok(outcome);
-                }
+        match publish_transfer_items(&bundle.assets, |asset| {
+            self.import_asset(&asset.bytes, asset.kind).map(|imported| imported.deduped)
+        }) {
+            Ok(deduped) => outcome.deduped_reference_count = deduped,
+            Err(failure) => {
+                outcome.deduped_reference_count = failure.deduped;
+                outcome.failure = Some(format!(
+                    "Reference {} of {} failed: {}",
+                    failure.index + 1,
+                    bundle.assets.len(),
+                    failure.error
+                ));
+                return Ok(outcome);
             }
         }
 
-        for lora in &bundle.loras {
-            match crate::lora::publish(&self.root, &lora.hash, &lora.bytes) {
-                Ok((_, deduped)) => outcome.deduped_lora_count += usize::from(deduped),
-                Err(error) => {
-                    outcome.failure = Some(error.to_string());
-                    return Ok(outcome);
-                }
+        match publish_transfer_items(&bundle.loras, |lora| {
+            crate::lora::publish(&self.root, &lora.hash, &lora.bytes).map(|(_, deduped)| deduped)
+        }) {
+            Ok(deduped) => outcome.deduped_lora_count = deduped,
+            Err(failure) => {
+                outcome.deduped_lora_count = failure.deduped;
+                outcome.failure = Some(format!(
+                    "LoRA {} of {} failed: {}",
+                    failure.index + 1,
+                    bundle.loras.len(),
+                    failure.error
+                ));
+                return Ok(outcome);
             }
         }
 

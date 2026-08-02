@@ -22,18 +22,16 @@
 pub(crate) mod wire;
 
 use std::fmt;
-use std::time::Duration;
 
 use async_trait::async_trait;
-use futures_core::Stream;
-use wobu_core::NodeKind;
 
 use crate::cancel::Cancel;
 use crate::error::{Error, Result};
 use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, TextProvider};
-use crate::stream::{Read, Sse, next_chunk, until_cancelled};
+use crate::stream::read_sse;
+use crate::transport;
 
-use wire::{Flow, Incoming};
+use wire::Incoming;
 
 /// The `provider` in `project.json` and the `wobu/<provider>` keychain entry.
 pub const ID: &str = "anthropic";
@@ -73,12 +71,6 @@ const MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 /// attached, not a version number to keep current.
 const API_VERSION: &str = "2023-06-01";
 
-/// Long enough for a slow network, short enough that a black hole is not
-/// mistaken for a thinking model. Deliberately *only* a connect timeout: a
-/// whole-request timeout would kill a long generation the user is paying for
-/// and has not asked to stop.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
-
 /// An Anthropic key and the client that uses it.
 pub struct AnthropicProvider {
     api_key: String,
@@ -102,12 +94,8 @@ impl AnthropicProvider {
     /// The key comes from the keychain (`docs/08-providers.md`); this crate
     /// neither resolves nor stores it.
     pub fn new(api_key: impl Into<String>) -> Result<AnthropicProvider> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .build()
-            // Building a client fails when the TLS backend will not start,
-            // which is a machine problem and reads as one.
-            .map_err(|e| Error::Unavailable { detail: e.to_string() })?;
+        let client =
+            transport::client().map_err(|e| Error::Unavailable { detail: e.to_string() })?;
         Ok(AnthropicProvider { api_key: api_key.into(), base_url: MESSAGES_URL.into(), client })
     }
 
@@ -146,13 +134,11 @@ impl TextProvider for AnthropicProvider {
             return EnhanceOutcome::unbilled(Error::Cancelled);
         }
 
-        let body = match serde_json::to_vec(&wire::request_body(request)) {
+        let body = match transport::json_body(&wire::request_body(request)) {
             Ok(body) => body,
             // Only reachable if the generated schema is not serialisable, which
             // is our bug in the same way a rejected schema is.
-            Err(e) => {
-                return EnhanceOutcome::unbilled(Error::SchemaRejected { detail: e.to_string() });
-            }
+            Err(error) => return EnhanceOutcome::unbilled(error),
         };
 
         let send = self
@@ -164,168 +150,29 @@ impl TextProvider for AnthropicProvider {
             // Streaming is asked for in the body; this only stops a proxy
             // deciding to buffer the response into one lump.
             .header("accept", "text/event-stream")
-            .body(body)
-            .send();
+            .body(body);
 
-        let response = match until_cancelled(send, cancel).await {
-            None => return EnhanceOutcome::unbilled(Error::Cancelled),
-            Some(Err(e)) => {
-                // DNS, TLS, refused connection, connect timeout. Nothing
-                // reached a model, so nothing was charged.
-                return EnhanceOutcome::unbilled(Error::Unavailable { detail: e.to_string() });
-            }
-            Some(Ok(response)) => response,
+        let response = match transport::text_stream(send, cancel, wire::error_for_status).await {
+            Ok(response) => response,
+            Err(error) => return EnhanceOutcome::unbilled(error),
         };
 
-        let status = response.status();
-        if !status.is_success() {
-            // Read before the body is consumed, and only the header — the
-            // provider's own hint about how long to wait beats any backoff we
-            // would invent (#49 weighs it against the rest of the queue).
-            let retry_after = response
-                .headers()
-                .get("retry-after")
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.trim().parse::<u64>().ok())
-                .map(Duration::from_secs);
-            let body = match until_cancelled(response.text(), cancel).await {
-                None => return EnhanceOutcome::unbilled(Error::Cancelled),
-                // A body we could not read still leaves a status worth mapping.
-                Some(body) => body.unwrap_or_default(),
-            };
-            // Unbilled: the request was refused before it generated anything.
-            return EnhanceOutcome::unbilled(wire::error_for_status(
-                status.as_u16(),
-                &body,
-                retry_after,
-            ));
-        }
-
-        read_body(request.kind, response.bytes_stream(), deltas, cancel).await
-    }
-}
-
-/// Read the SSE body to its end, to a failure, or to a cancellation.
-///
-/// Generic over the byte stream rather than taking a [`reqwest::Response`] so
-/// that the loop below — which is where cancellation either works or silently
-/// does not — can be driven from recorded chunks without a socket or a runtime.
-async fn read_body<S, B, E>(
-    kind: NodeKind,
-    body: S,
-    deltas: &mut dyn DeltaSink,
-    cancel: &Cancel,
-) -> EnhanceOutcome
-where
-    S: Stream<Item = std::result::Result<B, E>>,
-    B: AsRef<[u8]>,
-    E: fmt::Display,
-{
-    let mut body = std::pin::pin!(body);
-    let mut sse = Sse::new();
-    let mut incoming = Incoming::new();
-
-    loop {
-        // Every return below drops `body`, which drops the response, which
-        // closes the connection and stops the model generating. That is the
-        // whole mechanism: there is no "cancel" call to make, only a body to
-        // stop holding.
-        match next_chunk(body.as_mut(), cancel).await {
-            Read::Chunk(Ok(bytes)) => {
-                sse.push(bytes.as_ref());
-                while let Some(event) = sse.next_event() {
-                    if incoming.accept(&event, deltas) == Flow::Done {
-                        return incoming.outcome(kind, None);
-                    }
-                }
-            }
-            Read::Chunk(Err(e)) => {
-                let detail = e.to_string();
-                return incoming.outcome(kind, Some(Error::Unavailable { detail }));
-            }
-            // The body ended without a `message_stop`; `outcome` calls that a
-            // truncation rather than a description.
-            Read::End => return incoming.outcome(kind, None),
-            Read::Cancelled => return incoming.outcome(kind, Some(Error::Cancelled)),
-        }
+        read_sse(request.kind, response.bytes_stream(), deltas, cancel, Incoming::new()).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::VecDeque;
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::task::{Context, Poll, Wake, Waker};
 
     use serde_json::json;
-    use wobu_core::schema::description_schema;
+    use wobu_core::NodeKind;
 
     use crate::provider::Discard;
-
-    /// A one-thread executor, so the adapter's async surface is exercised
-    /// without a runtime. `wobu-llm` names none — it runs on Tauri's — and
-    /// pulling tokio in to prove that would undo the claim.
-    fn block_on<F: Future>(future: F) -> F::Output {
-        struct Unparker(std::thread::Thread);
-        impl Wake for Unparker {
-            fn wake(self: Arc<Self>) {
-                self.0.unpark();
-            }
-        }
-
-        let waker = Waker::from(Arc::new(Unparker(std::thread::current())));
-        let mut cx = Context::from_waker(&waker);
-        let mut future = Box::pin(future);
-        loop {
-            if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
-                return value;
-            }
-            std::thread::park();
-        }
-    }
-
-    /// Stands in for `Response::bytes_stream`. Counts its own polls, because
-    /// "the request stopped" and "the deltas stopped" are the difference
-    /// between cancellation working and cancellation being a lie.
-    struct Body {
-        chunks: VecDeque<std::result::Result<Vec<u8>, String>>,
-        polls: Arc<AtomicUsize>,
-        /// What happens once the chunks run out. `true` models a provider that
-        /// has gone quiet mid-response — the case a poll-only cancellation
-        /// leaves the user paying for.
-        quiet: bool,
-    }
-
-    impl Body {
-        fn new(chunks: Vec<std::result::Result<Vec<u8>, String>>) -> Body {
-            Body { chunks: chunks.into(), polls: Arc::new(AtomicUsize::new(0)), quiet: false }
-        }
-
-        fn quiet_after(mut self) -> Body {
-            self.quiet = true;
-            self
-        }
-    }
-
-    impl Stream for Body {
-        type Item = std::result::Result<Vec<u8>, String>;
-
-        fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            let this = self.get_mut();
-            this.polls.fetch_add(1, Ordering::SeqCst);
-            match this.chunks.pop_front() {
-                Some(chunk) => Poll::Ready(Some(chunk)),
-                // No waker registered on purpose: only the cancellation can
-                // wake this task, which is the situation being modelled.
-                None if this.quiet => Poll::Pending,
-                None => Poll::Ready(None),
-            }
-        }
-    }
+    use crate::stream::testing::{
+        assert_billed_disconnect, assert_complete, assert_every_kind, assert_mid_stream_cancel,
+        assert_pre_cancel, assert_quiet_cancel, assert_truncated, block_on, document,
+    };
 
     /// The documented SSE wire format, byte for byte, so the framing this
     /// adapter relies on is the framing Anthropic publishes.
@@ -368,166 +215,48 @@ mod tests {
         out.into_bytes()
     }
 
-    /// A description built from the schema, so a registry change the validator
-    /// would reject fails here rather than on a paid call.
-    fn document(kind: NodeKind) -> String {
-        let schema = description_schema(kind);
-        let mut object = serde_json::Map::new();
-        for (key, property) in schema["properties"].as_object().unwrap() {
-            let value = match property["type"].as_str().unwrap() {
-                "string" => json!("A scout in ash-glazed plate, shoulders canted forward."),
-                "array" if property["items"]["pattern"].is_string() => {
-                    json!(["#2b2118", "#c2703a"])
-                }
-                _ => json!(["Ember-lit throat vents"]),
-            };
-            object.insert(key.clone(), value);
-        }
-        serde_json::to_string(&serde_json::Value::Object(object)).unwrap()
-    }
-
-    /// Split at a size that has nothing to do with the frame boundaries — which
-    /// is the only realistic assumption about how a socket hands bytes over.
-    fn split(bytes: &[u8], size: usize) -> Vec<std::result::Result<Vec<u8>, String>> {
-        bytes.chunks(size).map(|chunk| Ok(chunk.to_vec())).collect()
-    }
-
     #[test]
     fn a_whole_response_streams_exactly_the_document_it_then_validates() {
-        // End to end over the real wire format: what the editor was shown and
-        // what the node will hold have to be the same text, or the typing
-        // effect is showing something that was never saved.
         let expected = document(NodeKind::Character);
-        let body = Body::new(split(&wire_bytes(&expected, "tool_use", true), 37));
-        let mut streamed = String::new();
-        let mut sink = |json: &str| streamed.push_str(json);
-
-        let outcome = block_on(read_body(NodeKind::Character, body, &mut sink, &Cancel::new()));
-
-        let validated = outcome.result.expect("a whole tool call should validate");
-        assert_eq!(streamed, expected);
-        assert_eq!(crate::parse_description(NodeKind::Character, &streamed).unwrap(), validated,);
-        assert_eq!(outcome.usage.input_tokens, 812);
-        assert_eq!(outcome.usage.output_tokens, 289);
+        assert_complete(wire_bytes(&expected, "tool_use", true), Incoming::new());
     }
 
     #[test]
     fn every_kind_round_trips_through_the_adapter() {
-        // The schema is generated per kind, so a kind added to the registry
-        // reaches this adapter with nobody wiring it up. This is where one
-        // whose schema Anthropic could honour but the validator would reject
-        // shows up.
-        for def in wobu_core::kind::kind_registry() {
-            let body = Body::new(split(&wire_bytes(&document(def.kind), "tool_use", true), 64));
-            let outcome = block_on(read_body(def.kind, body, &mut Discard, &Cancel::new()));
-            outcome.result.unwrap_or_else(|e| {
-                panic!("{} could not round-trip its own schema: {e}", def.kind)
-            });
-        }
+        assert_every_kind("Anthropic", Incoming::new, |document| {
+            wire_bytes(document, "tool_use", true)
+        });
     }
 
     #[test]
     fn a_connection_that_dies_mid_response_reports_what_the_prompt_cost() {
-        // The provider charged for the input the moment it read it. Reporting
-        // zero would let #55's ceiling drift low exactly when a flaky
-        // connection is making the user retry.
         let bytes = wire_bytes(&document(NodeKind::Character), "tool_use", true);
-        let mut chunks = split(&bytes[..bytes.len() / 2], 37);
-        chunks.push(Err("connection reset by peer".to_string()));
-        let outcome = block_on(read_body(
-            NodeKind::Character,
-            Body::new(chunks),
-            &mut Discard,
-            &Cancel::new(),
-        ));
-
-        assert!(matches!(outcome.result, Err(Error::Unavailable { .. })));
-        assert_eq!(outcome.usage.input_tokens, 812);
+        assert_billed_disconnect(&bytes, Incoming::new());
     }
 
     #[test]
     fn a_body_that_simply_stops_is_truncated_rather_than_parsed() {
-        // No error, no `message_stop` — just an end. Handing the accumulated
-        // text to the validator and hoping it notices is how half a description
-        // becomes canon.
         let bytes = wire_bytes(&document(NodeKind::Character), "tool_use", false);
-        let outcome = block_on(read_body(
-            NodeKind::Character,
-            Body::new(split(&bytes, 37)),
-            &mut Discard,
-            &Cancel::new(),
-        ));
-        assert!(matches!(outcome.result, Err(Error::Truncated)));
+        assert_truncated(&bytes, Incoming::new());
     }
 
     #[test]
     fn cancelling_mid_stream_stops_reading_rather_than_discarding_the_answer() {
-        // The expensive regression. A run that reads to the end and throws the
-        // result away costs exactly what an uncancelled one costs; the thing
-        // that stops the meter is nobody holding the body. Counted in polls
-        // because that is the observable difference.
         let bytes = wire_bytes(&document(NodeKind::Character), "tool_use", true);
-        let body = Body::new(split(&bytes, 24));
-        let polls = Arc::clone(&body.polls);
-        let total = body.chunks.len();
-        let cancel = Cancel::new();
-
-        let mut seen = 0usize;
-        let mut sink = |_: &str| {
-            seen += 1;
-            if seen == 2 {
-                cancel.cancel();
-            }
-        };
-        let outcome = block_on(read_body(NodeKind::Character, body, &mut sink, &cancel));
-
-        assert!(matches!(outcome.result, Err(Error::Cancelled)));
-        assert!(
-            polls.load(Ordering::SeqCst) < total,
-            "the loop read {} of {total} chunks after Stop",
-            polls.load(Ordering::SeqCst),
-        );
-        assert_eq!(outcome.usage.input_tokens, 812, "the prompt was billed before Stop");
+        assert_mid_stream_cancel(&bytes, Incoming::new());
     }
 
     #[test]
     fn a_call_waiting_on_a_quiet_provider_is_woken_by_the_cancellation() {
-        // Between two tokens a provider can be silent for tens of seconds while
-        // still generating billable output. Polling a flag between chunks would
-        // leave this parked until it spoke again — which is the case worth
-        // paying a `select` for.
         let bytes = wire_bytes(&document(NodeKind::Character), "tool_use", true);
-        // Everything up to the end of `message_start`, so the prompt has been
-        // billed and reported before the silence begins.
         let billed = bytes.windows(2).position(|pair| pair == b"\n\n").unwrap() + 2;
-        let body = Body::new(split(&bytes[..billed], 64)).quiet_after();
-        let cancel = Cancel::new();
-        let stop = cancel.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(50));
-            stop.cancel();
-        });
-
-        let outcome = block_on(read_body(NodeKind::Character, body, &mut Discard, &cancel));
-
-        assert!(matches!(outcome.result, Err(Error::Cancelled)));
-        assert_eq!(outcome.usage.input_tokens, 812);
+        assert_quiet_cancel(&bytes[..billed], Incoming::new());
     }
 
     #[test]
     fn a_cancelled_call_is_never_retried_by_the_queue_or_the_button() {
         let bytes = wire_bytes(&document(NodeKind::Character), "tool_use", true);
-        let cancel = Cancel::new();
-        cancel.cancel();
-        let outcome = block_on(read_body(
-            NodeKind::Character,
-            Body::new(split(&bytes, 24)),
-            &mut Discard,
-            &cancel,
-        ));
-        let error = outcome.result.expect_err("a cancelled call has no description");
-        assert!(!error.is_retryable());
-        assert_eq!(error.code(), "cancelled");
+        assert_pre_cancel(&bytes, Incoming::new());
     }
 
     #[test]

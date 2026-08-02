@@ -40,8 +40,9 @@ export function useEnhanceSession(nodeId: string | null, queue: api.QueueSnapsho
   const [hiddenJobs, setHiddenJobs] = useState<Set<string>>(() => new Set())
   const [stoppedJobs, setStoppedJobs] = useState<Set<string>>(() => new Set())
   const [startingNode, setStartingNode] = useState<string | null>(null)
-  const [refusedNode, setRefusedNode] = useState<api.WobuNode | null>(null)
+  const [refused, setRefused] = useState<{ nodeId: string; node: api.WobuNode } | null>(null)
   const [submitted, setSubmitted] = useState<{
+    nodeId: string
     jobId: string
     description: api.WobuDescription
   } | null>(null)
@@ -73,10 +74,8 @@ export function useEnhanceSession(nodeId: string | null, queue: api.QueueSnapsho
     }
   }, [])
 
-  useEffect(() => {
-    setRefusedNode(null)
-    setSubmitted(null)
-  }, [nodeId])
+  const refusedNode = refused?.nodeId === nodeId ? refused.node : null
+  const visibleSubmitted = submitted?.nodeId === nodeId ? submitted : null
 
   const liveReady = nodeId ? readyByNode[nodeId] : undefined
   const caughtUpReady = nodeId
@@ -101,14 +100,14 @@ export function useEnhanceSession(nodeId: string | null, queue: api.QueueSnapsho
 
   const hide = (id: string) => {
     setHiddenJobs((current) => new Set(current).add(id))
-    setRefusedNode(null)
+    setRefused(null)
     setSubmitted(null)
   }
 
   const start = () => {
     if (!nodeId || startMutation.isPending) return
     setStartingNode(nodeId)
-    setRefusedNode(null)
+    setRefused(null)
     setSubmitted(null)
     startMutation.mutate(nodeId, {
       onSuccess: (id) => {
@@ -130,13 +129,14 @@ export function useEnhanceSession(nodeId: string | null, queue: api.QueueSnapsho
 
   const submit = (description: api.WobuDescription, force: boolean) => {
     if (!ready) return
-    setSubmitted({ jobId: ready.jobId, description })
+    if (!nodeId) return
+    setSubmitted({ nodeId, jobId: ready.jobId, description })
     acceptMutation.mutate(
       { jobId: ready.jobId, description, force },
       {
         onSuccess: (accepted) => {
           if (accepted.outcome === 'refusedEdit') {
-            setRefusedNode(accepted.node)
+            setRefused({ nodeId, node: accepted.node })
           } else {
             hide(ready.jobId)
           }
@@ -176,7 +176,7 @@ export function useEnhanceSession(nodeId: string | null, queue: api.QueueSnapsho
     stop,
     accept: (description) => submit(description, false),
     forceAccept: () => {
-      if (submitted) submit(submitted.description, true)
+      if (visibleSubmitted) submit(visibleSubmitted.description, true)
     },
     reject,
   }

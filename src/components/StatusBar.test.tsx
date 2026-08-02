@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { StatusBar, relativeTime } from './StatusBar'
+import { StatusBar } from './StatusBar'
+import { relativeTime } from '../lib/time'
 import type { ProjectSummary, ProjectSyncStatus, QueueSnapshot, StatusBarBackend } from '../lib/api'
 import { useUI } from '../store/ui'
 

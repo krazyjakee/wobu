@@ -136,6 +136,52 @@ fn a_missing_source_blob_blocks_staging_before_the_destination_changes() {
 }
 
 #[test]
+fn a_partial_asset_transfer_resumes_without_overwriting_a_canonical_name() {
+    let source_dir = tempfile::tempdir().unwrap();
+    let mut source = Project::create(source_dir.path(), "Source").unwrap();
+    let style = source
+        .list_nodes()
+        .unwrap()
+        .into_iter()
+        .find(|node| node.kind == NodeKind::StyleGuide)
+        .unwrap();
+    let mut staged = Vec::new();
+    for (bytes, role) in [(png(31, 41), AssetRole::Palette), (png(32, 42), AssetRole::Material)] {
+        let asset = source.import_asset(&bytes, AssetKind::Reference).unwrap().asset;
+        source.link_asset(style.id, asset.id, role, None).unwrap();
+        staged.push((asset, bytes));
+    }
+    staged.sort_by_key(|(asset, _)| asset.id);
+    let source_root = source.root().to_path_buf();
+    drop(source);
+
+    let destination_dir = tempfile::tempdir().unwrap();
+    let mut destination = Project::create(destination_dir.path(), "Destination").unwrap();
+    assert!(!destination.import_asset(&staged[0].1, AssetKind::Reference).unwrap().deduped);
+    let corrupt_path = paths::from_rel_string(destination.root(), &staged[1].0.rel_path);
+    std::fs::create_dir_all(corrupt_path.parent().unwrap()).unwrap();
+    let corrupt = vec![b'x'; staged[1].1.len()];
+    std::fs::write(&corrupt_path, &corrupt).unwrap();
+
+    let first =
+        destination.apply_transfer(transfer::stage(&source_root, style.id).unwrap()).unwrap();
+    assert!(!first.completed);
+    assert_eq!(first.deduped_reference_count, 1);
+    assert!(first.failure.as_deref().unwrap().contains("Reference 2 of 2"));
+    let published_path = paths::from_rel_string(destination.root(), &staged[0].0.rel_path);
+    assert_eq!(std::fs::read(&published_path).unwrap(), staged[0].1);
+    assert_eq!(std::fs::read(&corrupt_path).unwrap(), corrupt, "canonical name was overwritten");
+
+    std::fs::remove_file(&corrupt_path).unwrap();
+    let resumed =
+        destination.apply_transfer(transfer::stage(&source_root, style.id).unwrap()).unwrap();
+    assert!(resumed.completed);
+    assert_eq!(resumed.deduped_reference_count, 1);
+    assert_eq!(std::fs::read(&published_path).unwrap(), staged[0].1);
+    assert_eq!(std::fs::read(&corrupt_path).unwrap(), staged[1].1);
+}
+
+#[test]
 fn a_project_cannot_import_from_itself_even_through_a_staged_bundle() {
     let dir = tempfile::tempdir().unwrap();
     let project = Project::create(dir.path(), "One World").unwrap();

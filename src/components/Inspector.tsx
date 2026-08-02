@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import * as api from '../lib/api'
 import type {
@@ -43,13 +43,41 @@ export function Inspector({
   onJump: (id: string) => void
   surface?: 'sidebar' | 'forge'
 }) {
+  return (
+    <InspectorSession
+      key={`${project.id}:${selected?.id ?? 'none'}`}
+      project={project}
+      selected={selected}
+      kinds={_kinds}
+      onJump={onJump}
+      surface={surface}
+    />
+  )
+}
+
+function InspectorSession({
+  project,
+  selected,
+  kinds: _kinds,
+  onJump,
+  surface = 'sidebar',
+}: {
+  project: ProjectSummary
+  selected: NodeSummary | null
+  kinds: KindIndex
+  onJump: (id: string) => void
+  surface?: 'sidebar' | 'forge'
+}) {
   const presets = usePresets(selected?.kind ?? null)
   const backend = useStatusBarBackend(project.id)
   const [presetId, setPresetId] = useState<string>()
-  const [aspect, setAspect] = useState('')
-  const [model, setModel] = useState('')
-  const [seed, setSeed] = useState(randomSeed)
-  const [seedOverride, setSeedOverride] = useState(false)
+  const [aspectDraft, setAspect] = useState<string>()
+  const backendModel = backend.data?.image?.model ?? ''
+  const backendSource = `${backend.data?.image?.provider ?? ''}:${backendModel}`
+  const [modelDraft, setModelDraft] = useState<{ source: string; value: string } | null>(null)
+  const model = modelDraft?.source === backendSource ? modelDraft.value : backendModel
+  const [seedDraft, setSeed] = useState(randomSeed)
+  const [seedOverrideDraft, setSeedOverride] = useState(false)
   const [gridAxis, setGridAxis] = useState<'none' | api.VariantGrid['axis']>('none')
   const [gridValues, setGridValues] = useState('')
   const [gridNodeId, setGridNodeId] = useState('')
@@ -59,36 +87,17 @@ export function Inspector({
   const [shotMuted, setShotMuted] = useState(false)
   const [shotPrompt, setShotPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [ceilingDollars, setCeilingDollars] = useState('')
-
-  useEffect(() => {
-    setPresetId(undefined)
-    setWeights({})
-    setMuted(new Set())
-    setShotWeight(1)
-    setShotMuted(false)
-    setShotPrompt('')
-    setSeed(randomSeed())
-    setSeedOverride(false)
-    setGridAxis('none')
-    setGridValues('')
-    setGridNodeId('')
-  }, [selected?.id])
+  const [ceilingDraft, setCeilingDraft] = useState<{
+    source: number | null | undefined
+    value: string
+  } | null>(null)
 
   const chosenPreset =
     presets.data?.find((preset) => preset.id === presetId) ??
     presets.data?.find((preset) => selected && preset.defaultFor.includes(selected.kind)) ??
     presets.data?.[0]
   const chosenPresetId = chosenPreset?.id
-  const chosenPresetAspect = chosenPreset?.aspect
-  useEffect(() => {
-    if (!chosenPresetId || !chosenPresetAspect) return
-    setPresetId(chosenPresetId)
-    setAspect(chosenPresetAspect)
-  }, [chosenPresetAspect, chosenPresetId])
-  useEffect(() => {
-    if (backend.data?.image?.model) setModel(backend.data.image.model)
-  }, [backend.data?.image?.model])
+  const aspect = aspectDraft ?? chosenPreset?.aspect ?? ''
   const debouncedModel = useDebounced(model.trim(), 350)
   const capabilityModel =
     model.trim() === backend.data?.image?.model ? model.trim() : debouncedModel
@@ -153,22 +162,23 @@ export function Inspector({
     grid: grid.value,
   })
   const lockedSeed = imageReport.isPlaceholderData ? null : (imageReport.data?.lockedSeed ?? null)
+  const reportReady = !!imageReport.data && !imageReport.isPlaceholderData
+  const seedOverride = seedOverrideDraft || (reportReady && lockedSeed === null)
+  const seed = lockedSeed !== null && !seedOverrideDraft ? lockedSeed : seedDraft
   const usesLockedSeed = lockedSeed !== null && !seedOverride && gridAxis !== 'seed'
-  useEffect(() => {
-    if (!imageReport.data || imageReport.isPlaceholderData || seedOverride) return
-    if (lockedSeed !== null) setSeed(lockedSeed)
-    else setSeedOverride(true)
-  }, [imageReport.data, imageReport.isPlaceholderData, lockedSeed, seedOverride])
   const paidEstimate = imageReport.data?.cost ?? null
   const spendQuery = useSpendStatus(project.id, paidEstimate !== null)
   const setSpendCeiling = useSetSpendCeiling(project.id)
   const recoverSpendLedger = useRecoverSpendLedger(project.id)
   const setLockedSeed = useSetLockedSeed()
   const spend = spendQuery.data
-  useEffect(() => {
-    const ceiling = spend?.ceilingUsdMicros
-    setCeilingDollars(ceiling === null || ceiling === undefined ? '' : microsAsInput(ceiling))
-  }, [spend?.ceilingUsdMicros])
+  const ceilingSource = spend?.ceilingUsdMicros
+  const ceilingDollars =
+    ceilingDraft && ceilingDraft.source === ceilingSource
+      ? ceilingDraft.value
+      : ceilingSource === null || ceilingSource === undefined
+        ? ''
+        : microsAsInput(ceilingSource)
   const dropped = useMemo(() => {
     const count = new Map<string, number>()
     for (const item of compiled.data?.dropped ?? []) {
@@ -396,7 +406,11 @@ export function Inspector({
             <span>Output preset</span>
             <select
               value={chosenPreset?.id ?? ''}
-              onChange={(event) => setPresetId(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value
+                setPresetId(next)
+                setAspect(presets.data?.find((preset) => preset.id === next)?.aspect)
+              }}
               disabled={!selected || !presets.data?.length}
             >
               {(presets.data ?? []).map((preset) => (
@@ -445,7 +459,9 @@ export function Inspector({
             <span>Model</span>
             <input
               value={model}
-              onChange={(event) => setModel(event.target.value)}
+              onChange={(event) =>
+                setModelDraft({ source: backendSource, value: event.target.value })
+              }
               placeholder="Selected model"
             />
           </label>
@@ -596,7 +612,9 @@ export function Inspector({
                     step={0.01}
                     value={ceilingDollars}
                     placeholder="Disabled"
-                    onChange={(event) => setCeilingDollars(event.target.value)}
+                    onChange={(event) =>
+                      setCeilingDraft({ source: ceilingSource, value: event.target.value })
+                    }
                     disabled={project.readOnly || setSpendCeiling.isPending}
                   />
                 </label>

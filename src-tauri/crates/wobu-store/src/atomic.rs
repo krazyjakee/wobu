@@ -22,6 +22,173 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
+/// A portable, project-relative path that has passed the storage boundary.
+///
+/// Content publishers accept this type rather than `Path`: an absolute path,
+/// `..`, or a platform-specific separator must not be able to redirect an
+/// immutable write outside the selected project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectRelativePath(PathBuf);
+
+impl ProjectRelativePath {
+    pub(crate) fn new(path: &str) -> Result<Self> {
+        let parsed = Path::new(path);
+        let valid = !path.is_empty()
+            && !path.contains('\\')
+            && !path.as_bytes().get(1).is_some_and(|byte| *byte == b':')
+            && !parsed.is_absolute()
+            && path
+                .split('/')
+                .all(|component| !component.is_empty() && component != "." && component != "..")
+            && parsed
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_)));
+        if !valid {
+            return Err(Error::io(
+                parsed,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "project path must be normalized and relative",
+                ),
+            ));
+        }
+        Ok(Self(parsed.to_path_buf()))
+    }
+
+    pub(crate) fn resolve(&self, project_root: &Path) -> PathBuf {
+        project_root.join(&self.0)
+    }
+}
+
+/// Result of publishing immutable, content-addressed bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContentPublish {
+    Published,
+    Existing,
+}
+
+/// What validation established about a name already present at a content
+/// address. Only a regular, visibly incomplete file may be removed; a valid
+/// winner is immutable and suspicious same-size content is an error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExistingContent {
+    Valid,
+    ReplaceablePartial,
+}
+
+struct StagedFile {
+    path: PathBuf,
+}
+
+impl StagedFile {
+    fn new(project_root: &Path, bytes: &[u8]) -> Result<Self> {
+        let tmp_dir = project_root.join(".wobu").join("tmp");
+        crate::paths::ensure_dir(&tmp_dir)?;
+        let path = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| Error::io(&path, error))?;
+        let staged = file
+            .write_all(bytes)
+            .and_then(|()| file.sync_all())
+            .map_err(|error| Error::io(&path, error));
+        drop(file);
+        if let Err(error) = staged {
+            let _ = fs::remove_file(&path);
+            return Err(error);
+        }
+        Ok(Self { path })
+    }
+
+    fn rename(mut self, target: &Path) -> Result<()> {
+        fs::rename(&self.path, target).map_err(|error| Error::io(target, error))?;
+        self.path = PathBuf::new();
+        Ok(())
+    }
+}
+
+impl Drop for StagedFile {
+    fn drop(&mut self) {
+        if !self.path.as_os_str().is_empty() {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
+/// Validate and publish immutable bytes without ever replacing a canonical
+/// file.
+///
+/// `validate_bytes` establishes the content/path relationship before staging;
+/// `validate_existing` proves an already-present winner is a real dedupe, or
+/// identifies a visibly incomplete regular file left by interrupted sync. The
+/// latter may be removed and retried; valid or suspicious complete content is
+/// never replaced. The
+/// hard link is the key operation: on Windows it closes the rename
+/// check-then-create race, and on Unix it avoids rename's overwrite semantics.
+/// On SMB/NFS it is attempted on the project filesystem itself; if that share
+/// cannot provide atomic hard links the operation fails and the synced staging
+/// file is removed, while any canonical winner remains untouched.
+pub(crate) fn publish_content_addressed(
+    project_root: &Path,
+    relative: &ProjectRelativePath,
+    bytes: &[u8],
+    validate_bytes: impl FnOnce(&[u8]) -> Result<()>,
+    validate_existing: impl Fn(&Path) -> Result<ExistingContent>,
+) -> Result<ContentPublish> {
+    publish_content_addressed_with_link(
+        project_root,
+        relative,
+        bytes,
+        validate_bytes,
+        validate_existing,
+        |source, target| fs::hard_link(source, target),
+    )
+}
+
+fn publish_content_addressed_with_link(
+    project_root: &Path,
+    relative: &ProjectRelativePath,
+    bytes: &[u8],
+    validate_bytes: impl FnOnce(&[u8]) -> Result<()>,
+    validate_existing: impl Fn(&Path) -> Result<ExistingContent>,
+    link: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<ContentPublish> {
+    validate_bytes(bytes)?;
+    let target = relative.resolve(project_root);
+    match fs::symlink_metadata(&target) {
+        Ok(_) => match validate_existing(&target)? {
+            ExistingContent::Valid => return Ok(ContentPublish::Existing),
+            ExistingContent::ReplaceablePartial => {
+                fs::remove_file(&target).map_err(|error| Error::io(&target, error))?;
+            }
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(Error::io(&target, error)),
+    }
+    if let Some(parent) = target.parent() {
+        crate::paths::ensure_dir(parent)?;
+    }
+    let staged = StagedFile::new(project_root, bytes)?;
+    match link(&staged.path, &target) {
+        Ok(()) => Ok(ContentPublish::Published),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            match validate_existing(&target)? {
+                ExistingContent::Valid => Ok(ContentPublish::Existing),
+                ExistingContent::ReplaceablePartial => Err(Error::io(
+                    &target,
+                    std::io::Error::new(
+                        std::io::ErrorKind::AlreadyExists,
+                        "a partial destination appeared during atomic publication",
+                    ),
+                )),
+            }
+        }
+        Err(error) => Err(Error::io(&target, error)),
+    }
+}
+
 /// What we believe about a file on disk. `hash` is authoritative; `mtime` and
 /// `size` are the cheap pre-filter that lets the watcher skip re-reading
 /// hundreds of unchanged files over SMB.
@@ -51,25 +218,11 @@ pub fn hash_bytes(bytes: &[u8]) -> String {
 /// staging inode in one filesystem operation and fails atomically when another
 /// process already owns `target`.
 pub fn write_once(project_root: &Path, target: &Path, bytes: &[u8]) -> Result<Stamp> {
-    let tmp_dir = project_root.join(".wobu").join("tmp");
-    crate::paths::ensure_dir(&tmp_dir)?;
     if let Some(parent) = target.parent() {
         crate::paths::ensure_dir(parent)?;
     }
-
-    let tmp = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
-    {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-            .map_err(|e| Error::io(&tmp, e))?;
-        file.write_all(bytes).map_err(|e| Error::io(&tmp, e))?;
-        file.sync_all().map_err(|e| Error::io(&tmp, e))?;
-    }
-
-    let published = fs::hard_link(&tmp, target);
-    let _ = fs::remove_file(&tmp);
+    let staged = StagedFile::new(project_root, bytes)?;
+    let published = fs::hard_link(&staged.path, target);
     match published {
         Ok(()) => {
             let mtime = fs::metadata(target).map(|m| mtime_ms(&m)).unwrap_or_else(|_| now_ms());
@@ -267,26 +420,10 @@ const MAX_CONFLICT_ATTEMPTS: u32 = 1000;
 /// Stage into `.wobu/tmp` — same filesystem as the target, so `rename` is
 /// atomic — then rename over the destination.
 fn stage_and_rename(project_root: &Path, target: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp_dir = project_root.join(".wobu").join("tmp");
-    crate::paths::ensure_dir(&tmp_dir)?;
     if let Some(parent) = target.parent() {
         crate::paths::ensure_dir(parent)?;
     }
-
-    let tmp = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
-    {
-        let mut f = fs::File::create(&tmp).map_err(|e| Error::io(&tmp, e))?;
-        f.write_all(bytes).map_err(|e| Error::io(&tmp, e))?;
-        // Without this, a crash between rename and flush can leave a
-        // correctly-named file full of zeroes.
-        f.sync_all().map_err(|e| Error::io(&tmp, e))?;
-    }
-
-    if let Err(e) = fs::rename(&tmp, target) {
-        let _ = fs::remove_file(&tmp);
-        return Err(Error::io(target, e));
-    }
-    Ok(())
+    StagedFile::new(project_root, bytes)?.rename(target)
 }
 
 /// Replace mutable project metadata without ever exposing partially written
@@ -302,21 +439,10 @@ pub fn replace_metadata(
 ) -> Result<()> {
     #[cfg(not(windows))]
     let _ = recovery_name;
-    let tmp_dir = project_root.join(".wobu").join("tmp");
-    crate::paths::ensure_dir(&tmp_dir)?;
-    let tmp = tmp_dir.join(format!("{}.part", wobu_core::new_id()));
-    {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-            .map_err(|error| Error::io(&tmp, error))?;
-        file.write_all(bytes).map_err(|error| Error::io(&tmp, error))?;
-        file.sync_all().map_err(|error| Error::io(&tmp, error))?;
-    }
+    let mut staged = StagedFile::new(project_root, bytes)?;
 
     #[cfg(not(windows))]
-    let published = fs::rename(&tmp, target).map_err(|error| Error::io(target, error));
+    let published = fs::rename(&staged.path, target).map_err(|error| Error::io(target, error));
 
     #[cfg(windows)]
     let published = {
@@ -329,7 +455,7 @@ pub fn replace_metadata(
             let _ = fs::remove_file(&recovery);
             return Err(Error::io(target, error));
         }
-        match fs::hard_link(&tmp, target) {
+        match fs::hard_link(&staged.path, target) {
             Ok(()) => {
                 let _ = fs::remove_file(&recovery);
                 Ok(())
@@ -341,7 +467,10 @@ pub fn replace_metadata(
         }
     };
 
-    let _ = fs::remove_file(&tmp);
+    #[cfg(not(windows))]
+    if published.is_ok() {
+        staged.path = PathBuf::new();
+    }
     published
 }
 
@@ -375,6 +504,124 @@ mod tests {
 
     fn target(root: &Path) -> PathBuf {
         root.join("nodes/character/kael-vantris.md")
+    }
+
+    fn exact_existing(path: &Path, expected: &[u8]) -> Result<ExistingContent> {
+        let actual = fs::read(path).map_err(|error| Error::io(path, error))?;
+        if actual == expected {
+            Ok(ExistingContent::Valid)
+        } else {
+            Err(Error::io(
+                path,
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "unexpected bytes"),
+            ))
+        }
+    }
+
+    #[test]
+    fn content_paths_cannot_escape_the_project() {
+        assert!(ProjectRelativePath::new("assets/originals/ab/abc.png").is_ok());
+        for invalid in [
+            "",
+            "/tmp/outside",
+            "../outside",
+            "assets/../outside",
+            "./assets/file",
+            "assets//file",
+            "assets/file/",
+            "assets\\file",
+            "C:/outside",
+        ] {
+            assert!(ProjectRelativePath::new(invalid).is_err(), "accepted {invalid:?}");
+        }
+    }
+
+    #[test]
+    fn failed_content_batch_is_resumable_and_leaves_no_partial_or_overwrite() {
+        let dir = project();
+        let first = ProjectRelativePath::new("assets/originals/aa/first.bin").unwrap();
+        let second = ProjectRelativePath::new("assets/originals/bb/second.bin").unwrap();
+        let first_bytes = b"first winner";
+        let second_bytes = b"second winner";
+
+        assert_eq!(
+            publish_content_addressed(
+                dir.path(),
+                &first,
+                first_bytes,
+                |_| Ok(()),
+                |path| exact_existing(path, first_bytes),
+            )
+            .unwrap(),
+            ContentPublish::Published
+        );
+        let failure = publish_content_addressed_with_link(
+            dir.path(),
+            &second,
+            second_bytes,
+            |_| Ok(()),
+            |path| exact_existing(path, second_bytes),
+            |_, _| Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "injected")),
+        );
+        assert!(failure.is_err());
+        assert_eq!(fs::read(first.resolve(dir.path())).unwrap(), first_bytes);
+        assert!(!second.resolve(dir.path()).exists());
+        assert!(fs::read_dir(dir.path().join(".wobu/tmp")).unwrap().next().is_none());
+
+        assert_eq!(
+            publish_content_addressed(
+                dir.path(),
+                &first,
+                first_bytes,
+                |_| Ok(()),
+                |path| exact_existing(path, first_bytes),
+            )
+            .unwrap(),
+            ContentPublish::Existing
+        );
+        assert_eq!(
+            publish_content_addressed(
+                dir.path(),
+                &second,
+                second_bytes,
+                |_| Ok(()),
+                |path| exact_existing(path, second_bytes),
+            )
+            .unwrap(),
+            ContentPublish::Published
+        );
+
+        let overwrite = publish_content_addressed(
+            dir.path(),
+            &first,
+            b"other content",
+            |_| Ok(()),
+            |path| exact_existing(path, b"other content"),
+        );
+        assert!(overwrite.is_err());
+        assert_eq!(fs::read(first.resolve(dir.path())).unwrap(), first_bytes);
+    }
+
+    #[test]
+    fn a_competing_content_winner_closes_the_windows_create_race() {
+        let dir = project();
+        let relative = ProjectRelativePath::new("assets/originals/aa/race.bin").unwrap();
+        let bytes = b"same winner";
+        let outcome = publish_content_addressed_with_link(
+            dir.path(),
+            &relative,
+            bytes,
+            |_| Ok(()),
+            |path| exact_existing(path, bytes),
+            |_, target| {
+                fs::write(target, bytes)?;
+                Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "race winner"))
+            },
+        )
+        .unwrap();
+        assert_eq!(outcome, ContentPublish::Existing);
+        assert_eq!(fs::read(relative.resolve(dir.path())).unwrap(), bytes);
+        assert!(fs::read_dir(dir.path().join(".wobu/tmp")).unwrap().next().is_none());
     }
 
     #[test]

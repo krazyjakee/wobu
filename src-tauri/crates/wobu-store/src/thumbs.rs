@@ -56,7 +56,7 @@ use image::{DynamicImage, ImageReader, Limits};
 use crate::error::{Error, Result};
 use crate::image::Orientation;
 use crate::scan::Cancel;
-use crate::{assets, paths};
+use crate::{assets, atomic, paths};
 
 /// Where thumbnails live, relative to the project root.
 pub const THUMBS_DIR: &str = "assets/thumbs";
@@ -174,9 +174,32 @@ pub fn ensure_with_bytes(
     let webp = render(&source, bytes)?;
     cancel.check()?;
 
-    let path = paths::from_rel_string(root, &rel);
-    assets::stage_and_rename(root, &path, &webp)?;
-    Ok(Thumbnail { rel_path: rel, generated: true })
+    let relative = atomic::ProjectRelativePath::new(&rel)?;
+    let published = atomic::publish_content_addressed(
+        root,
+        &relative,
+        &webp,
+        |_| Ok(()),
+        |path| {
+            let metadata =
+                std::fs::symlink_metadata(path).map_err(|error| Error::io(path, error))?;
+            if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+                return Err(Error::io(
+                    path,
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "thumbnail destination is not a regular file",
+                    ),
+                ));
+            }
+            Ok(if metadata.len() == 0 {
+                atomic::ExistingContent::ReplaceablePartial
+            } else {
+                atomic::ExistingContent::Valid
+            })
+        },
+    )?;
+    Ok(Thumbnail { rel_path: rel, generated: published == atomic::ContentPublish::Published })
 }
 
 /// A blob that may be missing its thumbnail: everything [`ensure`] needs, plus

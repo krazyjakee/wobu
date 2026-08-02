@@ -170,6 +170,7 @@ pub fn stage(source: &Path, root_id: Id) -> Result<TransferBundle> {
             crate::assets::validate_import(&bytes)?;
             assets.push(StagedAsset { id, kind: asset.kind, bytes });
         }
+        assets.sort_by_key(|asset| asset.id);
         let mut loras = Vec::new();
         let mut seen_loras = HashSet::new();
         for pin in nodes.iter().filter_map(|node| node.lora.as_ref()) {
