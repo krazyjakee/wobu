@@ -75,6 +75,22 @@ then unconfigured; `.env` support is compiled out of release builds. ComfyUI use
 `http://127.0.0.1:8188` by default and can be changed in Settings. See
 [Providers & BYOK](docs/08-providers.md) for capabilities and security details.
 
+## Privacy and legal
+
+Wobu operates no servers. There is no account, no inference proxy, no telemetry, no crash reporting
+and no update check; the application never contacts us, because there is nowhere for it to contact.
+Content leaves your machine only when you invoke a feature that uses a provider you configured, and
+then it goes directly to that provider under your own credentials.
+
+- [Privacy policy](docs/legal/privacy-policy.md) — every outbound destination and what is sent to
+  it, what stays on disk and where, and how credentials are held in the OS keychain.
+- [Terms of use and EULA](docs/legal/terms.md) — the MIT grant restated for a downloaded binary, the
+  absence of warranty, and how provider terms and generated-content ownership pass through to your
+  own agreement with each provider.
+
+Both documents are shown in the app under Settings › Legal and ship beside the binary in every
+installer, alongside `LICENSE` and `THIRD-PARTY-NOTICES.md`.
+
 ## Development
 
 ```sh

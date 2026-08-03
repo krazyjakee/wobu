@@ -48,6 +48,7 @@ import {
 import { report, toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { Icon } from './Icon'
+import { LegalSection } from './LegalSection'
 import { LicencesSection } from './LicencesSection'
 import { WikiExportSection } from './WikiExportSection'
 
@@ -65,6 +66,7 @@ export function Settings({ project }: { project?: ProjectSummary }) {
       <div className="settings">
         <h2>Settings</h2>
         <Providers />
+        <LegalSection />
         <Storage />
         <EditorPrefs />
         <Appearance />

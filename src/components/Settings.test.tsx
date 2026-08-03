@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import policy from '../../docs/legal/privacy-policy.md?raw'
 import { Settings } from './Settings'
 import type { ComfyEndpointProbe, KeyStatus, ProviderSelections } from '../lib/api'
 import { useUI } from '../store/ui'
@@ -560,5 +561,104 @@ describe('the licences pane', () => {
     expect(copied.startsWith('# Third-party notices')).toBe(true)
     expect(copied).toContain('## Licence texts')
     expect(copied.length).toBeGreaterThan(10_000)
+  })
+})
+
+/*
+ * The Legal pane, and the promise it makes.
+ *
+ * A privacy policy is only worth anything if it is the same document in the
+ * repository, in the installer and on screen, and if the list of destinations
+ * in it is the list of destinations in the code. The first is handled the same
+ * way the licences are — a build-time read of the real file, asserted against
+ * the real file. The second cannot be, so the last test here goes and reads the
+ * provider crates: it fails when someone adds a provider and does not say so.
+ */
+describe('the legal pane', () => {
+  function pane(): HTMLElement {
+    const section = screen.getByRole('heading', { name: 'Legal' }).closest('section')
+    if (!section) throw new Error('the Legal heading is not inside a section')
+    return section
+  }
+
+  it('states the facts that matter before either document is opened', async () => {
+    await open()
+
+    const summary = pane().textContent ?? ''
+    expect(summary).toContain('None. Nothing is reported back to us, ever.')
+    expect(summary).toContain('Stays in the project folder you chose.')
+    expect(summary).toContain("In this machine's keychain, never in a project.")
+    // Neither document is on screen until it is asked for.
+    expect(summary).not.toContain('Wobu Privacy Policy')
+    expect(summary).not.toContain('End User Licence Agreement')
+  })
+
+  it('shows the shipped privacy policy, one document at a time', async () => {
+    await open()
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Privacy policy' }))
+    let shown = pane().textContent ?? ''
+    expect(shown).toContain('# Wobu Privacy Policy')
+    expect(shown).toContain('There is no telemetry.')
+    expect(shown).not.toContain('End User Licence Agreement')
+
+    // Opening the terms replaces it rather than stacking a second wall of text.
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Terms of use' }))
+    shown = pane().textContent ?? ''
+    expect(shown).toContain('End User Licence Agreement')
+    expect(shown).toContain('provided "as is"')
+    expect(shown).not.toContain('# Wobu Privacy Policy')
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Hide terms of use' }))
+    expect(pane().textContent).not.toContain('End User Licence Agreement')
+  })
+
+  it('copies the whole document rather than what happens to be on screen', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    await open()
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Privacy policy' }))
+    fireEvent.click(await within(pane()).findByRole('button', { name: 'Copy' }))
+
+    await waitFor(() => expect(useUI.getState().toasts).toHaveLength(1))
+    const [copied] = writeText.mock.calls[0] as [string]
+    expect(copied.startsWith('# Wobu Privacy Policy')).toBe(true)
+    expect(copied).toContain('## 5. How API keys are stored')
+  })
+
+  it('opens the web copy in a browser rather than in the webview', async () => {
+    await open()
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Terms of use' }))
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Read on the web' }))
+
+    expect(h.openUrl).toHaveBeenCalledWith(
+      'https://github.com/krazyjakee/wobu/blob/main/docs/legal/terms.md',
+    )
+  })
+
+  it('discloses every address the provider crates are compiled with', () => {
+    const sources = Object.values(
+      import.meta.glob<string>('../../src-tauri/crates/wobu-{llm,imagine}/src/**/*.rs', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }),
+    ).join('\n')
+
+    // Assignments only. A line beginning with `//` is a doc comment, and the
+    // links in those point at a provider's documentation rather than at
+    // somewhere the binary opens a socket. `.example` hosts used as test
+    // fixtures fall outside the list of real top-level domains.
+    const assigned = /^[^/\n]*= *"((?:https?:\/\/)?[a-z0-9.-]+\.(?:com|link|ai|dev|net|io)[^"]*)"/gm
+    const found = new Set(Array.from(sources.matchAll(assigned), (m) => m[1] as string))
+
+    expect(found.size).toBeGreaterThan(4)
+    for (const address of found) {
+      expect(policy, `${address} is compiled in but is not in the privacy policy`).toContain(
+        address,
+      )
+    }
   })
 })

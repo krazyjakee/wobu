@@ -48,7 +48,9 @@
     "longDescription": "Author a world's hierarchy once — art style, lore, species, cultures, places — and every concept image you generate inherits that context automatically.",
     "resources": {
       "../LICENSE": "LICENSE",
-      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md"
+      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md",
+      "../docs/legal/privacy-policy.md": "PRIVACY-POLICY.md",
+      "../docs/legal/terms.md": "TERMS-OF-USE.md"
     },
     "icon": [
       "icons/32x32.png",
