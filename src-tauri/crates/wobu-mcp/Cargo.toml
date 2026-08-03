@@ -1,0 +1,72 @@
+[package]
+name = "wobu-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Model Context Protocol server and client for Wobu, both off until a person turns them on"
+
+[dependencies]
+# The body type hyper's `service_fn` returns. Already in the lock by way of
+# reqwest, so naming it here adds no package.
+bytes = "1.12.1"
+# Status codes, header names and the `Request`/`Response` shells. Same argument
+# as `bytes`: reqwest already put it in the graph.
+http = "1.5.0"
+http-body-util = "0.1.4"
+# The one deliberate decision in this manifest. Wobu already links hyper 1.x
+# through reqwest's client, so turning on the `server` and `http1` features
+# compiles more of a crate that is *already in the binary* rather than adding a
+# second HTTP stack — and hand-rolling HTTP/1.1 request framing for a listener
+# that a browser can reach is exactly the kind of parsing nobody should write
+# twice. No TLS: this listener never leaves loopback, where TLS would buy a
+# certificate-management problem and no confidentiality that the loopback
+# interface does not already provide.
+hyper = { version = "1.11.0", default-features = false, features = [
+    "server",
+    "http1",
+] }
+# `TokioIo`, the adapter between `tokio::net::TcpStream` and `hyper::rt`. Also
+# already in the lock via reqwest.
+hyper-util = { version = "0.1.20", default-features = false, features = [
+    "tokio",
+] }
+# Thirty-two bytes from the OS for the bearer token, and nothing else. The exact
+# version `wobu-sync` declares so the lock keeps one `rand` in the binary.
+rand = "0.10"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# Constant-time comparison of the bearer token. A loopback listener is still
+# reachable by every process on the machine, including a browser tab, so an
+# early-returning byte compare here would be a timing oracle for the one secret
+# that stands between a local process and the user's world.
+subtle = "2.6.1"
+thiserror = "2.0.19"
+# The runtime Tauri already started. `net` for the loopback listener, `process`
+# for the stdio clients the user configures, `io-util` for their line-delimited
+# framing, `sync`/`time` for the request map and its deadlines. The workspace's
+# exact version, for the reason `wobu-sync`'s manifest gives at length: a second
+# runtime in this binary would be an accept loop the app cannot cancel.
+tokio = { version = "1.53.1", features = [
+    "rt",
+    "net",
+    "process",
+    "io-util",
+    "sync",
+    "time",
+    "macros",
+] }
+
+[dev-dependencies]
+# `rt-multi-thread` because the app runs this on a multi-threaded runtime and a
+# listener only ever tested on one thread is not the listener that ships.
+tokio = { version = "1.53.1", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "io-util",
+    "time",
+    "sync",
+] }
+
+[lints]
+workspace = true

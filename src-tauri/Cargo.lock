@@ -7756,6 +7756,7 @@ dependencies = [
  "wobu-influence",
  "wobu-jobs",
  "wobu-llm",
+ "wobu-mcp",
  "wobu-store",
  "wobu-sync",
 ]
@@ -7826,6 +7827,23 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "wobu-core",
+]
+
+[[package]]
+name = "wobu-mcp"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "rand",
+ "serde",
+ "serde_json",
+ "subtle",
+ "thiserror 2.0.19",
+ "tokio",
 ]
 
 [[package]]

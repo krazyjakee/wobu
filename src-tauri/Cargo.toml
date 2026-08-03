@@ -43,6 +43,7 @@ wobu-influence = { path = "crates/wobu-influence" }
 wobu-llm = { path = "crates/wobu-llm" }
 wobu-imagine = { path = "crates/wobu-imagine" }
 wobu-jobs = { path = "crates/wobu-jobs" }
+wobu-mcp = { path = "crates/wobu-mcp" }
 wobu-sync = { path = "crates/wobu-sync" }
 
 [package]
@@ -120,6 +121,10 @@ wobu-influence = { workspace = true }
 wobu-imagine = { workspace = true }
 wobu-jobs = { workspace = true }
 wobu-llm = { workspace = true }
+# #140. Nothing in this crate opens a socket or spawns a process until the user
+# turns it on in Settings; `mcp.rs` is the only thing that can, and it is handed
+# an explicit flag to do it with.
+wobu-mcp = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
 

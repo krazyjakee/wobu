@@ -23,6 +23,10 @@ the repository, and every store named below corresponds to a path the applicatio
   yourself or to a peer you shared with yourself.
 - **API keys go to the operating-system keychain**, never into a project folder and never back out
   to the interface.
+- **Nothing listens for connections, and no other program is run, unless you switch it on.** Agent
+  access over MCP is off by default, binds only to your own machine when enabled, and needs a further
+  separate switch before an agent can change anything. See section 3.5 — and note that an MCP server
+  you configure yourself is a program of someone else's, which this policy cannot speak for.
 
 ## 1. Data controller and contact
 
@@ -143,7 +147,36 @@ Wobu also prints `https://aistudio.google.com/apikey` in the error it shows when
 billing problem with your key. That address is text on screen for you to follow if you want to; the
 application never requests it.
 
-### 3.5 Providers' own handling of what you send
+### 3.5 Agent access (MCP) — off unless you turn it on
+
+Wobu can expose your open project to an AI agent over the Model Context Protocol, and can run MCP
+servers you configure. **All of it is off by default**, and nothing here starts until you turn it on
+in Settings → Agent access. This is the only part of Wobu that listens for connections or launches
+another program, so it is described in full:
+
+- **A local listener.** When you enable the server, Wobu binds `127.0.0.1:9628` (the port is
+  configurable; the address is not). It accepts connections only from your own machine. Requests must
+  carry a bearer token that is generated the first time you enable it; any request arriving with an
+  `Origin` header is refused before authentication, and no CORS header is ever sent, so a web page you
+  visit cannot reach it. Nothing is sent anywhere by the server — it answers, it does not call out.
+- **What an agent can read.** Nine read-only tools covering your entities, search, links, the
+  resolved influence stack, compiled prompts and generation receipts. That is your project content,
+  disclosed to whichever agent you connected.
+- **What an agent can change** is a second, separate switch, also off by default. Until you grant it,
+  the write tools are not merely refused — they are not advertised at all.
+- **Programs Wobu runs.** If you configure MCP servers of your own, Wobu launches them directly (never
+  through a shell), talks to them over stdin/stdout, and stops them when you disable them or quit. A
+  newly added server is added switched off. What those programs do, and where they send anything, is
+  governed by whoever wrote them, not by this policy.
+- **What is stored.** `mcp.json` in the application data folder, readable only by your user account,
+  holds the bearer token and any environment overrides you set for a configured server.
+- **A record of use.** Every call, including refused ones, is timestamped into an in-app activity
+  list and the local diagnostic log. That record stays on your machine.
+
+Turning any switch off takes effect at once: the socket is dropped and configured servers are killed,
+rather than a flag being consulted on the next request.
+
+### 3.6 Providers' own handling of what you send
 
 Once your content reaches a provider, that provider's privacy policy and terms — not this one —
 govern what happens to it, including whether it may be retained, reviewed by humans, or used for

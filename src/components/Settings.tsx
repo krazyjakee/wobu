@@ -51,6 +51,7 @@ import { Icon } from './Icon'
 import { KeybindingsSection } from './KeybindingsSection'
 import { LegalSection } from './LegalSection'
 import { LicencesSection } from './LicencesSection'
+import McpSection from './McpSection'
 import { WikiExportSection } from './WikiExportSection'
 
 /**
@@ -68,6 +69,7 @@ export function Settings({ project }: { project?: ProjectSummary }) {
         <h2>Settings</h2>
         <Providers />
         <LegalSection />
+        <McpSection />
         <Storage />
         <EditorPrefs />
         <Appearance />

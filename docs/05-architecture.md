@@ -19,7 +19,8 @@ src-tauri/
     ├── wobu-influence/      stack resolution, fragment scoring, prompt compilation
     ├── wobu-llm/            Anthropic client, tool-use schemas, streaming Enhance
     ├── wobu-imagine/        image/3D backend adapters behind one trait
-    └── wobu-jobs/           queue, cancellation, progress events, retries
+    ├── wobu-jobs/           queue, cancellation, progress events, retries
+    └── wobu-mcp/            Model Context Protocol, both directions, off until enabled
 ```
 
 `wobu-influence` is pure — stack in, compiled prompt out, no IO. It gets snapshot tests over
@@ -73,6 +74,22 @@ Everything long-running returns a job id immediately and streams over Tauri even
 
 `prompt_compile` is called on every Inspector interaction, so it must stay sub-millisecond —
 another reason `wobu-influence` does no IO.
+
+## Agent access (MCP)
+
+`wobu-mcp` is the only crate that can open a listening socket or start another program, and it
+does neither unless a setting says a person asked for it. The server binds `127.0.0.1` — the
+port is configurable and the address is not — and refuses any request without its bearer token
+or with an `Origin` header. Read tools are available whenever it is on; the three write tools
+are a second, independent opt-in and are not even advertised until it is granted. The client
+half launches stdio MCP servers the user named, directly rather than through a shell, and only
+when both the master switch and that server's own switch are on.
+
+`src-tauri/src/mcp.rs` holds the settings (`mcp.json` in app data, `0600`, never in a project),
+the listener handle — dropping it is what "off" means — and the implementation of the crate's
+`World` trait against the open project. Every tool call is emitted as `mcp:activity` and
+written to the diagnostics log. Full detail, including what is deliberately not implemented,
+in [16 — Agent Access (MCP)](16-mcp.md).
 
 ## File watching and the index
 

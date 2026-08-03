@@ -9,6 +9,7 @@ mod generate;
 mod keys;
 mod lora;
 mod machine;
+mod mcp;
 mod redact;
 mod shutdown;
 mod state;
@@ -58,6 +59,14 @@ pub fn run() {
         // point: that slot holds exactly one project and only while somebody has
         // it open, and syncing worlds nobody is looking at is the feature.
         .manage(sync::SyncState::default())
+        // Constructing this reads `mcp.json` and nothing else — no socket is
+        // bound and no process is spawned here, because at this point nothing
+        // has consulted a setting. `mcp::init` in `setup` is the only thing that
+        // can start either, and only when the stored settings say a person
+        // turned it on. Beside `AppState` for the same reason a ComfyUI endpoint
+        // is: a port and a command line belong to this machine, not to a world
+        // that lives on a share.
+        .manage(mcp::McpState::default())
         .setup(|app| {
             // Not another `.manage(Default::default())`: the queue reports
             // itself by emitting, and there is no `AppHandle` to emit through
@@ -72,6 +81,11 @@ pub fn run() {
             // task; every sync command answers "still starting" until it lands.
             let state = app.state::<AppState>().handle();
             app.state::<sync::SyncState>().start(app.handle(), state);
+            // Hands the MCP module the project slot and the handle it emits
+            // through. Starts a loopback listener only if the settings file
+            // already said so — which it does not until somebody has ticked the
+            // box in Settings → Agent access. See `docs/16-mcp.md`.
+            mcp::init(app.handle(), app.state::<AppState>().handle());
             // A logout or a `systemctl stop` never reaches the window event
             // below, so without this the whole exit policy would apply to
             // exactly one of the ways this process can be asked to stop.
@@ -200,6 +214,16 @@ pub fn run() {
             sync::sync_share,
             sync::sync_accept,
             sync::sync_unshare,
+            mcp::mcp_settings,
+            mcp::mcp_server_set,
+            mcp::mcp_server_token,
+            mcp::mcp_server_token_rotate,
+            mcp::mcp_activity,
+            mcp::mcp_client_set,
+            mcp::mcp_client_server_upsert,
+            mcp::mcp_client_server_remove,
+            mcp::mcp_client_server_probe,
+            mcp::mcp_client_call,
         ])
         // `build` + `run` rather than `run` alone, and the difference is one
         // event. `SyncEndpoint` holds iroh's `Router`, which is `#[must_use]`
@@ -213,6 +237,12 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if matches!(event, RunEvent::Exit) {
+                // Before `wind_down`, and cheap: closing the MCP port and
+                // killing the stdio servers the user configured takes no
+                // network round trip and no lock this process holds. A Wobu
+                // that exited leaving four of somebody's language servers
+                // running would be a Wobu people stop enabling this for.
+                mcp::shut_down(app);
                 // On the main thread, with no locks held. Both halves matter: a
                 // hang here is a window that will not close, and a shutdown that
                 // ran while holding the project mutex would wait for a round
