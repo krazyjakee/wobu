@@ -105,12 +105,37 @@ not merely advisory.
 Tencent's input guidance (plain background, no text, single object, subject filling >50% of frame) is
 baked into the preset's framing fragments for the same reason.
 
+### One plan behind the estimate, the batch and the scene
+
+The live reference report in the Inspector, a batch, a variant grid and a scene composition are
+one planning path with four entry points, not four pipelines. A request is normalized once —
+provider and model, seed and its provenance, preset, Shot controls, sliders and aspect — and then
+expanded into one *cell* per image, each carrying its own preset, aspect, seed and slider values.
+Everything after that reads those cells: the compiled prompt, the reference budget, the price, the
+spend reservation and the receipt.
+
+The estimate is therefore not a second opinion. It negotiates the same first cell the batch would
+send first, so a grid that silences a reference in its opening cell reports that reference as
+withheld rather than counting one the image would not carry. Two things about it are deliberately
+different, because the panel is advisory and free: an unseeded estimate uses seed zero rather than
+minting a random one, so nudging a slider twice gives the same answer twice; and it reads a local
+ComfyUI's *declared* capabilities rather than probing the server, so a machine that is switched
+off leaves the panel optimistic instead of turning it into an error. Generation itself always
+probes.
+
+Replay joins this path only at its last step, the queue. It re-sends a recorded request rather
+than compiling a new one, which is what makes it a replay. Mesh reconstruction shares only the
+first step, provider selection: it consumes finished generations and has no stack, preset or
+aspect of its own.
+
 ### Locked seeds and variant grids
 
 An entity may persist one shared `locked_seed` in its Markdown frontmatter. Generate uses that
 seed whenever the Inspector has not explicitly re-rolled it; ordinary preset batches retain
 their deterministic adjacent-seed family, and each receipt records whether it used the exact
-lock, a derived member of that family, an explicit re-roll, or a seed-grid cell.
+lock, a derived member of that family, an explicit re-roll, or a seed-grid cell. A scene has no
+lock of its own — its participants may each have one and may disagree — so a composition is
+either explicitly re-rolled or random.
 
 A variant grid emits one image per explicit cell value. It either varies seed while holding the
 compiled inputs fixed, or holds one seed while varying exactly one of fragment weight, preset,

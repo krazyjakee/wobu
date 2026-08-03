@@ -57,6 +57,12 @@ use crate::state::{AppState, Jobs, ProjectTicket, WORLD_CHANGED};
 /// the reading half of it.
 pub mod mesh;
 
+/// The one reader of `project.json`'s `providers` map, shared by images, text,
+/// 3D and the status bar.
+pub mod providers;
+
+use providers::ProviderChoice;
+
 /// How many thumbnails one IPC may ask for, assets or nodes alike.
 ///
 /// A bound rather than a page size: the caller sends the window it is about to
@@ -2315,13 +2321,14 @@ pub async fn status_bar_backend(
     keys: State<'_, Keys>,
     machine: State<'_, MachineSettings>,
 ) -> CommandResult<StatusBarBackend> {
-    let (image, text) = state
-        .with(|project| Ok((selected_model(project, "image"), selected_model(project, "text"))))?;
+    let (image, text) = state.with(|project| {
+        Ok((ProviderChoice::of(project, "image"), ProviderChoice::of(project, "text")))
+    })?;
 
-    let text_provider = text.as_ref().map(|choice| choice.0.as_str()).unwrap_or(anthropic::ID);
+    let text_provider = text.as_ref().map_or(anthropic::ID, |choice| choice.provider.as_str());
     let text_model = text
         .as_ref()
-        .and_then(|choice| choice.1.clone())
+        .and_then(|choice| choice.configured_model.clone())
         .unwrap_or_else(|| text_default(text_provider).to_owned());
     let text = ActiveModel {
         provider: text_provider.to_owned(),
@@ -2330,7 +2337,7 @@ pub async fn status_bar_backend(
         model: text_model,
     };
 
-    let Some((image_provider, selected_model)) = image else {
+    let Some(image) = image else {
         return Ok(StatusBarBackend {
             image: None,
             text,
@@ -2340,7 +2347,8 @@ pub async fn status_bar_backend(
         });
     };
 
-    let image_model = selected_model.unwrap_or_else(|| image_default(&image_provider).to_owned());
+    let image_provider = image.provider.clone();
+    let image_model = image.model(None, image_default(&image_provider));
     let image = ActiveModel {
         provider: image_provider.clone(),
         label: provider_label(&image_provider).to_owned(),
@@ -2378,21 +2386,6 @@ pub async fn status_bar_backend(
     };
 
     Ok(StatusBarBackend { image: Some(image), text, health })
-}
-
-fn selected_model(project: &Project, capability: &str) -> Option<(String, Option<String>)> {
-    let selected = project.meta().providers.get(capability)?.as_object()?;
-    let provider = selected.get("provider")?.as_str()?.trim();
-    if provider.is_empty() {
-        return None;
-    }
-    let model = selected
-        .get("model")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|model| !model.is_empty())
-        .map(str::to_owned);
-    Some((provider.to_owned(), model))
 }
 
 fn provider_label(provider: &str) -> &str {

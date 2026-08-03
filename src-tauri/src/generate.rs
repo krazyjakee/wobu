@@ -4,6 +4,32 @@
 //! a missing provider, a missing key or an unreadable reference fails without
 //! starting a paid job. The task owns only an immutable request and a project
 //! path; it never holds the open-project mutex across a provider call.
+//!
+//! # One planning path
+//!
+//! Four surfaces ask "what would this generate?" — the Inspector's live
+//! reference report, a batch, a variant grid, and a scene composition — and
+//! they answer with one chain rather than four:
+//!
+//! 1. [`selected_image_provider`] and [`ProviderChoice::model`] decide the
+//!    provider and model. [`image_backend`] builds the adapter, or
+//!    [`unprobed_image_backend`] for the one caller that cannot await.
+//! 2. [`resolve_seed`] decides the seed and what the receipt may claim about
+//!    where it came from.
+//! 3. [`prepare_generation_plan`] normalizes the controls and expands the
+//!    request into [`VariantCell`]s — one per image, carrying its own preset,
+//!    aspect, seed and slider values.
+//! 4. [`plan_batch`], [`plan_scene`] and [`reference_report_for_plan`] all read
+//!    that plan. The first two produce a [`PlannedBatch`]; the report negotiates
+//!    the same first cell the batch would send first, so the numbers on screen
+//!    are the numbers that would be spent.
+//! 5. [`PlannedBatch::into_task`] is the only route to the queue, so spend
+//!    reservation and the billing flag are stated once.
+//!
+//! Replay deliberately joins at step 5 and nowhere earlier: it re-sends a
+//! recorded request rather than compiling a new one. Mesh reconstruction
+//! (`commands::mesh`) shares step 1 only — it consumes finished generations, so
+//! it has no influence stack, no preset and no aspect to negotiate.
 
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
@@ -35,6 +61,7 @@ use wobu_influence::{
 use wobu_jobs::{Billed, Failure, JobContext, JobKind, Outcome, Preview, Progress, Task};
 use wobu_store::Project;
 
+use crate::commands::providers::ProviderChoice;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::keys::Keys;
 use crate::machine::MachineSettings;
@@ -48,6 +75,9 @@ const SPEND_AGGREGATE: &str = "aggregate.json";
 const SPEND_AGGREGATE_VERSION: u32 = 1;
 const LOCK_ATTEMPTS: usize = 200;
 const LORA_PROTOCOL: u32 = 1;
+/// Composition has no preset of its own to take a default aspect from, and the
+/// `environment_matte` framing its receipt records is a wide establishing shot.
+const SCENE_ASPECT: &str = "16:9";
 
 /// Batch-local immutable reference data. The loader is deliberately
 /// single-threaded: it runs on Tauri's blocking pool, bounds filesystem
@@ -85,6 +115,64 @@ where
         self.loaded.insert(asset_id, Arc::clone(&bytes));
         Ok(bytes)
     }
+}
+
+/// What to call the images in an error, which is the only thing the two
+/// reference-loading callers disagree about.
+#[derive(Clone, Copy)]
+enum ReferenceScope {
+    Image,
+    Scene,
+}
+
+impl ReferenceScope {
+    fn missing(self, asset_id: Id) -> WobuError {
+        let message = match self {
+            ReferenceScope::Image => "A reference image is no longer in this project.",
+            ReferenceScope::Scene => "A scene reference is no longer in this project.",
+        };
+        WobuError::new(Code::NoSuchAsset, message).with_detail(asset_id.to_string())
+    }
+
+    fn unreadable(self, error: io::Error) -> WobuError {
+        let message = match self {
+            ReferenceScope::Image => "A reference image could not be read.",
+            ReferenceScope::Scene => "A scene reference image could not be read.",
+        };
+        WobuError::new(Code::Io, message).with_detail(error.to_string())
+    }
+}
+
+/// The bytes for every reference negotiation kept, in the order the provider
+/// will receive them.
+///
+/// One loader for batch generation and composition. That order is not
+/// incidental: it is what `referenceAssetIds` records and what replay later
+/// restores verbatim, so it cannot be allowed to differ between the two paths
+/// by accident.
+fn load_references(
+    negotiated: &wobu_imagine::Negotiated<'_>,
+    assets: &HashMap<Id, &Asset>,
+    root: &Path,
+    loader: &mut ReferenceLoader,
+    scope: ReferenceScope,
+) -> CommandResult<Vec<Reference>> {
+    let mut references = Vec::new();
+    for bucket in negotiated.images().buckets() {
+        for fragment in bucket.kept() {
+            let asset_id = fragment.asset_id().expect("kept image fragments have asset ids");
+            let asset = assets.get(&asset_id).ok_or_else(|| scope.missing(asset_id))?;
+            let bytes = loader
+                .load(asset_id, &root.join(&asset.rel_path))
+                .map_err(|error| scope.unreadable(error))?;
+            if let Some(reference) =
+                Reference::from_fragment(*fragment, bucket.bucket(), bytes, asset.mime.clone())
+            {
+                references.push(reference);
+            }
+        }
+    }
+    Ok(references)
 }
 
 async fn prepare_blocking<T: Send + 'static>(
@@ -152,6 +240,11 @@ struct ReceiptPreparation<'a> {
     loras: &'a [ReceiptLora],
     lora_downgrades: &'a [LoraDowngrade],
     price: Option<Price>,
+    /// The transient controls that produced this image, as History replays
+    /// them. Single-subject and scene shapes differ — a composition has no
+    /// per-layer sliders and no Shot label — so the shape is supplied by the
+    /// normalized controls rather than reconstructed here.
+    controls: Value,
 }
 
 impl ReceiptPreparation<'_> {
@@ -169,6 +262,7 @@ impl ReceiptPreparation<'_> {
         params.insert("referenceAssetIds".into(), json!(self.reference_asset_ids));
         params.insert("loras".into(), json!(self.loras));
         params.insert("loraDowngrades".into(), json!(self.lora_downgrades));
+        params.insert("controls".into(), self.controls.clone());
         apply_pricing_metadata(&mut params, self.price);
         params
     }
@@ -286,43 +380,8 @@ pub struct GenerateShot {
     prompt: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-struct ProviderSelection {
-    provider: String,
-    configured_model: Option<String>,
-}
-
-impl ProviderSelection {
-    fn model(&self, requested: Option<String>, backend_default: &str) -> String {
-        requested
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty())
-            .or_else(|| self.configured_model.clone())
-            .unwrap_or_else(|| backend_default.to_owned())
-    }
-}
-
-fn selected_image_provider(project: &Project) -> CommandResult<ProviderSelection> {
-    let selected = project
-        .meta()
-        .providers
-        .get("image")
-        .and_then(Value::as_object)
-        .ok_or_else(no_image_provider)?;
-    let provider = selected
-        .get("provider")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(no_image_provider)?
-        .to_owned();
-    let model = selected
-        .get("model")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned);
-    Ok(ProviderSelection { provider, configured_model: model })
+fn selected_image_provider(project: &Project) -> CommandResult<ProviderChoice> {
+    ProviderChoice::of(project, "image").ok_or_else(no_image_provider)
 }
 
 #[derive(Clone)]
@@ -338,24 +397,89 @@ struct GenerationPlanRequest {
     grid: Option<VariantGrid>,
 }
 
+/// The controls that are true of the whole batch, after normalization.
+///
+/// Deliberately *not* the aspect or the slider values: a variant grid varies
+/// one of those per cell, so the authoritative copy of each lives on the
+/// [`VariantCell`]. Recording a second batch-level copy here is how a report
+/// and a receipt end up disagreeing about the same generation.
 #[derive(Debug, Clone)]
 struct NormalizedControls {
     shot_label: String,
     shot_weight: f32,
     user_prompt: String,
-    slider_values: Vec<(Id, f32)>,
     muted_nodes: HashSet<Id>,
-    requested_aspect: AspectRatio,
 }
 
+impl NormalizedControls {
+    /// `params.controls` for one cell of a batch.
+    ///
+    /// The slider values are the *cell's*, not the request's: a fragment-weight
+    /// grid varies exactly one of them per cell, and a receipt that recorded the
+    /// request's would describe a generation that never happened.
+    fn receipt_controls(&self, cell_sliders: &[(Id, f32)]) -> Value {
+        json!({
+            "sliders": cell_sliders.iter().map(|(node_id, value)| json!({
+                "nodeId": node_id,
+                "value": value,
+                "muted": self.muted_nodes.contains(node_id),
+            })).collect::<Vec<_>>(),
+            "shot": {
+                "label": self.shot_label,
+                "weight": self.shot_weight,
+                "prompt": self.user_prompt,
+            },
+        })
+    }
+}
+
+/// One request, normalized and expanded into the exact images it means.
+///
+/// Preview, batch generation and composition all read this and nothing else
+/// about what to send; the cells carry everything that differs per image.
 #[derive(Debug, Clone)]
 struct PreparedGenerationPlan {
     subject_id: Id,
     subject_name: String,
-    chosen: Preset,
     controls: NormalizedControls,
     cells: Vec<VariantCell>,
     locked_seed: Option<u64>,
+}
+
+/// Whether the seed is about to produce images or only an estimate.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SeedIntent {
+    Execute,
+    /// The reference report. Every other input is the one execution would use,
+    /// but a *random* seed here would make two identical previews of the same
+    /// controls disagree, so the unseeded case is pinned to zero instead. Only
+    /// the seed differs, and nothing the report returns depends on it: the
+    /// budget and the price are decided by fragments, aspect and resolution.
+    Estimate,
+}
+
+/// The one place that decides which seed a request runs on, and what the
+/// receipt is allowed to claim about where it came from.
+fn resolve_seed(
+    requested: Option<u64>,
+    locked: Option<u64>,
+    intent: SeedIntent,
+) -> (u64, SeedSource) {
+    match (requested, locked) {
+        (Some(seed), _) => (seed, SeedSource::Rerolled),
+        (None, Some(seed)) => (seed, SeedSource::Locked),
+        (None, None) => match intent {
+            SeedIntent::Execute => (u128::from(new_id()) as u64, SeedSource::Random),
+            SeedIntent::Estimate => (0, SeedSource::Random),
+        },
+    }
+}
+
+/// The entity's shared identity seed, or `None` — including for an id that is
+/// not in this world any more, which planning reports by name rather than by
+/// this lookup failing quietly.
+fn locked_seed_of(nodes: &[Node], subject_id: Id) -> Option<u64> {
+    nodes.iter().find(|node| node.id == subject_id).and_then(|node| node.locked_seed)
 }
 
 fn normalize_prompt(prompt: Option<&str>) -> String {
@@ -423,7 +547,6 @@ fn prepare_generation_plan(
         requested_aspect,
         request.seed,
         request.seed_source,
-        request.locked_seed,
         &slider_values,
         &available_nodes,
         request.grid.as_ref(),
@@ -432,15 +555,7 @@ fn prepare_generation_plan(
     Ok(PreparedGenerationPlan {
         subject_id: request.subject_id,
         subject_name: subject.name.clone(),
-        chosen,
-        controls: NormalizedControls {
-            shot_label,
-            shot_weight,
-            user_prompt,
-            slider_values,
-            muted_nodes,
-            requested_aspect,
-        },
+        controls: NormalizedControls { shot_label, shot_weight, user_prompt, muted_nodes },
         cells,
         locked_seed: request.locked_seed,
     })
@@ -473,55 +588,144 @@ fn fragments_for_cell<'a>(
     extracted
 }
 
+/// What an image adapter is being built for.
+///
+/// Carries the credential because the two are the same decision: a call that
+/// will really be made needs this machine's key and has to say so by name when
+/// there isn't one, and a preview needs no key at all because `Capabilities`
+/// are a pure function of the model id.
 #[derive(Clone, Copy)]
-enum BackendPurpose {
-    Generate,
-    Replay,
+enum BackendPurpose<'a> {
+    Generate(&'a Keys),
+    Replay(&'a Keys),
+    /// Reading capabilities only. The adapter is built with a placeholder
+    /// credential and must never be used to send anything.
+    Preview,
 }
 
-async fn execution_backend(
-    provider: &str,
-    keys: &Keys,
-    machine: &MachineSettings,
-    purpose: BackendPurpose,
-) -> CommandResult<Arc<dyn ImageBackend>> {
-    match provider {
-        comfy::ID => Ok(Arc::new(
-            machine
-                .connect_comfy_image()
-                .await
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        )),
-        gemini::ID => {
-            let missing = match purpose {
-                BackendPurpose::Generate => {
-                    "Gemini is selected for images, but there is no key on this machine. Add one in Settings."
-                }
-                BackendPurpose::Replay => {
-                    "This replay used Gemini, but there is no Gemini key on this machine. Add one in Settings."
-                }
-            };
-            let secret = keys
-                .secret(gemini::ID)
-                .ok_or_else(|| WobuError::new(Code::ProviderNoKey, missing))?;
-            Ok(Arc::new(
-                GeminiBackend::new(secret.expose()).map_err(|error| {
-                    WobuError::new(Code::ProviderUnavailable, error.to_string())
-                })?,
-            ))
-        }
-        other => {
-            let message = match purpose {
-                BackendPurpose::Generate => {
-                    format!("This build has no image adapter for {other}.")
-                }
-                BackendPurpose::Replay => {
-                    format!("This build has no image adapter for the recorded provider {other}.")
-                }
-            };
-            Err(WobuError::new(Code::Invalid, message))
+impl<'a> BackendPurpose<'a> {
+    /// The keychain to read, and what to say when it holds nothing. `None` for
+    /// a preview, which needs no credential.
+    fn credential(self) -> Option<(&'a Keys, &'static str)> {
+        match self {
+            BackendPurpose::Generate(keys) => Some((
+                keys,
+                "Gemini is selected for images, but there is no key on this machine. Add one in Settings.",
+            )),
+            BackendPurpose::Replay(keys) => Some((
+                keys,
+                "This replay used Gemini, but there is no Gemini key on this machine. Add one in Settings.",
+            )),
+            BackendPurpose::Preview => None,
         }
     }
+
+    fn unsupported(self, provider: &str) -> WobuError {
+        let message = match self {
+            BackendPurpose::Replay(_) => {
+                format!("This build has no image adapter for the recorded provider {provider}.")
+            }
+            _ => format!("This build has no image adapter for {provider}."),
+        };
+        WobuError::new(Code::Invalid, message)
+    }
+}
+
+fn provider_unavailable(error: ImageError) -> WobuError {
+    WobuError::new(Code::ProviderUnavailable, error.to_string())
+}
+
+/// Every image adapter that needs no local endpoint.
+///
+/// Split from the ComfyUI arm because ComfyUI is the one adapter the callers
+/// legitimately disagree about — see [`image_backend`] and
+/// [`unprobed_image_backend`] — while the hosted arms are identical everywhere
+/// and were previously spelled out three times.
+fn hosted_image_backend(
+    provider: &str,
+    purpose: BackendPurpose<'_>,
+) -> CommandResult<Arc<dyn ImageBackend>> {
+    if provider != gemini::ID {
+        return Err(purpose.unsupported(provider));
+    }
+    let key = match purpose.credential() {
+        Some((keys, missing)) => keys
+            .secret(gemini::ID)
+            .ok_or_else(|| WobuError::new(Code::ProviderNoKey, missing))?
+            .expose()
+            .to_owned(),
+        None => "capability-preview".to_owned(),
+    };
+    Ok(Arc::new(GeminiBackend::new(key).map_err(provider_unavailable)?))
+}
+
+/// The adapter for a caller that can await, which is every caller but one.
+///
+/// ComfyUI is *probed*: `capabilities` for a local server are what that server
+/// actually has — its models and the resolution its VRAM allows — so an
+/// unprobed adapter would answer with assumptions.
+async fn image_backend(
+    provider: &str,
+    machine: &MachineSettings,
+    purpose: BackendPurpose<'_>,
+) -> CommandResult<Arc<dyn ImageBackend>> {
+    if provider == comfy::ID {
+        return Ok(Arc::new(machine.connect_comfy_image().await.map_err(provider_unavailable)?));
+    }
+    hosted_image_backend(provider, purpose)
+}
+
+/// The same adapter for the one caller that cannot await: the synchronous
+/// reference report.
+///
+/// The difference is deliberate and is a difference in what the answer means. A
+/// probe is a network round trip, and the report is recomputed on every slider
+/// nudge; more importantly, a local server that is switched off would turn an
+/// advisory panel into an error. So the report reads ComfyUI's *declared*
+/// capabilities and is allowed to be optimistic about a machine that is not
+/// listening — where execution, which is about to spend real time, is not.
+fn unprobed_image_backend(
+    provider: &str,
+    machine: &MachineSettings,
+    purpose: BackendPurpose<'_>,
+) -> CommandResult<Arc<dyn ImageBackend>> {
+    if provider == comfy::ID {
+        return Ok(Arc::new(machine.comfy_image().map_err(provider_unavailable)?));
+    }
+    hosted_image_backend(provider, purpose)
+}
+
+/// Everything planning reads from the open project.
+struct PlanningInputs {
+    root: PathBuf,
+    project_id: Id,
+    nodes: Vec<Node>,
+    assets: Vec<Asset>,
+    selection: ProviderChoice,
+}
+
+/// Take one copy of the project state a plan is built from, then let go.
+///
+/// The lock is held for exactly this read and is released before the adapter is
+/// built, which is where the network is. Both queueing commands read the same
+/// five things and differ only in what a read-only project should be told they
+/// were trying to save.
+fn planning_inputs(state: &AppState, read_only: &'static str) -> CommandResult<PlanningInputs> {
+    state.with(|project| {
+        if project.is_read_only() {
+            return Err(WobuError::new(Code::ReadOnly, read_only));
+        }
+        // Order matters and is the order the caller would want to be told
+        // about: writable, then configured, then readable.
+        let selection = selected_image_provider(project)?;
+        Ok(PlanningInputs {
+            root: project.root().to_path_buf(),
+            project_id: project.id(),
+            nodes: project.world_nodes()?.to_vec(),
+            assets: project.list_assets()?,
+            selection,
+        })
+    })
 }
 
 /// Start one image and return the queue id immediately.
@@ -543,33 +747,15 @@ pub async fn generate_start(
     grid: Option<VariantGrid>,
     views: Option<Vec<String>>,
 ) -> CommandResult<String> {
-    let (root, project_id, nodes, assets, selection) = state.with(|project| {
-        if project.is_read_only() {
-            return Err(WobuError::new(
-                Code::ReadOnly,
-                "This project is read-only, so a generated image could not be saved.",
-            ));
-        }
-        let selection = selected_image_provider(project)?;
-        Ok((
-            project.root().to_path_buf(),
-            project.id(),
-            project.world_nodes()?.to_vec(),
-            project.list_assets()?,
-            selection,
-        ))
-    })?;
+    let read_only = "This project is read-only, so a generated image could not be saved.";
+    let PlanningInputs { root, project_id, nodes, assets, selection } =
+        planning_inputs(&state, read_only)?;
 
     let backend =
-        execution_backend(&selection.provider, &keys, &machine, BackendPurpose::Generate).await?;
+        image_backend(&selection.provider, &machine, BackendPurpose::Generate(&keys)).await?;
     let model = selection.model(model, backend.default_model());
-    let locked_seed =
-        nodes.iter().find(|node| node.id == subject_id).and_then(|node| node.locked_seed);
-    let (seed, seed_source) = match (seed, locked_seed) {
-        (Some(seed), _) => (seed, SeedSource::Rerolled),
-        (None, Some(seed)) => (seed, SeedSource::Locked),
-        (None, None) => (u128::from(new_id()) as u64, SeedSource::Random),
-    };
+    let locked_seed = locked_seed_of(&nodes, subject_id);
+    let (seed, seed_source) = resolve_seed(seed, locked_seed, SeedIntent::Execute);
 
     let mut plan = prepare_blocking("Generation preparation stopped unexpectedly.", move || {
         prepare(Prepare {
@@ -660,22 +846,9 @@ pub async fn scene_generate_start(
         return Err(WobuError::new(Code::Invalid, "A scene cannot contain the same entity twice."));
     }
 
-    let (root, project_id, nodes, assets, selection) = state.with(|project| {
-        if project.is_read_only() {
-            return Err(WobuError::new(
-                Code::ReadOnly,
-                "This project is read-only, so a generated scene could not be saved.",
-            ));
-        }
-        let selection = selected_image_provider(project)?;
-        Ok((
-            project.root().to_path_buf(),
-            project.id(),
-            project.world_nodes()?.to_vec(),
-            project.list_assets()?,
-            selection,
-        ))
-    })?;
+    let read_only = "This project is read-only, so a generated scene could not be saved.";
+    let PlanningInputs { root, project_id, nodes, assets, selection } =
+        planning_inputs(&state, read_only)?;
 
     for subject_id in &subject_ids {
         let subject = nodes.iter().find(|node| node.id == *subject_id).ok_or_else(|| {
@@ -691,10 +864,11 @@ pub async fn scene_generate_start(
     }
 
     let backend =
-        execution_backend(&selection.provider, &keys, &machine, BackendPurpose::Generate).await?;
+        image_backend(&selection.provider, &machine, BackendPurpose::Generate(&keys)).await?;
     let model = selection.model(model, backend.default_model());
-    let seed_source = if seed.is_some() { SeedSource::Rerolled } else { SeedSource::Random };
-    let seed = seed.unwrap_or_else(|| u128::from(new_id()) as u64);
+    // A composition has no locked seed of its own: its participants may each
+    // have one and they may disagree, so there is nothing to inherit.
+    let (seed, seed_source) = resolve_seed(seed, None, SeedIntent::Execute);
     let mut plan = prepare_blocking("Scene preparation stopped unexpectedly.", move || {
         prepare_scene(ScenePrepare {
             root,
@@ -754,7 +928,7 @@ pub async fn generation_replay(
         .unwrap_or_else(|| format!("generation {}", generation.id));
 
     let backend =
-        execution_backend(&generation.backend, &keys, &machine, BackendPurpose::Replay).await?;
+        image_backend(&generation.backend, &machine, BackendPurpose::Replay(&keys)).await?;
     let capabilities = backend.capabilities(&generation.model);
     let requires_billing = capabilities.requires_billing;
     let replay_root = root.clone();
@@ -770,25 +944,26 @@ pub async fn generation_replay(
         ));
     }
     let subject_id = plan.generation.node_id;
-    let mut task = GenerateTask {
+    let mut task = PlannedBatch {
         label: format!("Replay {subject_name}"),
         subject_id,
-        project_id,
-        root,
-        backend,
         plans: vec![plan],
-        next: 0,
-        completed: Vec::new(),
-        app,
         requires_billing,
-        reservation: None,
         archival_replay: true,
-    };
+    }
+    .into_task(root, project_id, backend, app);
     task.reserve_spend()?;
     let id = jobs.queue().submit(task);
     Ok(id.to_string())
 }
 
+/// Replay's one planned image.
+///
+/// Deliberately not a [`ReceiptPreparation`]: replay copies the original
+/// receipt and patches the handful of fields that are about *this* attempt,
+/// because preparing a fresh one would re-derive values from today's
+/// capabilities and today's registry. It joins the shared path at
+/// [`PlannedBatch::into_task`], which is where spend reservation lives.
 fn replay_plan(
     root: &Path,
     assets: &[Asset],
@@ -1285,24 +1460,7 @@ pub async fn image_generation_capabilities(
     model: Option<String>,
 ) -> CommandResult<ImageGenerationCapabilities> {
     let selection = state.with(|project| selected_image_provider(project))?;
-    let backend: Box<dyn ImageBackend> = match selection.provider.as_str() {
-        comfy::ID => Box::new(
-            machine
-                .connect_comfy_image()
-                .await
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        gemini::ID => Box::new(
-            GeminiBackend::new("capability-preview")
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        other => {
-            return Err(WobuError::new(
-                Code::Invalid,
-                format!("This build has no image adapter for {other}."),
-            ));
-        }
-    };
+    let backend = image_backend(&selection.provider, &machine, BackendPurpose::Preview).await?;
     let model = selection.model(model, backend.default_model());
     Ok(aspect_capability_view(selection.provider, model.clone(), backend.capabilities(&model)))
 }
@@ -1435,29 +1593,10 @@ pub fn image_reference_report(
         let selection = selected_image_provider(project)?;
         Ok((project.world_nodes()?.to_vec(), selection))
     })?;
-    let backend: Box<dyn ImageBackend> = match selection.provider.as_str() {
-        comfy::ID => Box::new(
-            machine
-                .comfy_image()
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        gemini::ID => Box::new(
-            GeminiBackend::new("capability-preview")
-                .map_err(|error| WobuError::new(Code::ProviderUnavailable, error.to_string()))?,
-        ),
-        other => {
-            return Err(WobuError::new(
-                Code::Invalid,
-                format!("This build has no image adapter for {other}."),
-            ));
-        }
-    };
+    let backend = unprobed_image_backend(&selection.provider, &machine, BackendPurpose::Preview)?;
     let model = selection.model(model, backend.default_model());
-    let subject = nodes.iter().find(|node| node.id == subject_id).ok_or_else(|| {
-        WobuError::new(Code::NoSuchNode, "That entity is not in this project any more.")
-    })?;
-    let locked_seed = subject.locked_seed;
-    let estimate_seed = seed.or(locked_seed).unwrap_or(0);
+    let locked_seed = locked_seed_of(&nodes, subject_id);
+    let (seed, seed_source) = resolve_seed(seed, locked_seed, SeedIntent::Estimate);
     reference_report_for_plan(
         &nodes,
         &selection.provider,
@@ -1469,14 +1608,22 @@ pub fn image_reference_report(
             sliders: sliders.unwrap_or_default(),
             shot: shot.unwrap_or_default(),
             aspect,
-            seed: estimate_seed,
-            seed_source: SeedSource::Random,
+            seed,
+            seed_source,
             locked_seed,
             grid,
         },
     )
 }
 
+/// The preview half of the shared planning path.
+///
+/// Everything here is read off the same [`PreparedGenerationPlan`] execution
+/// runs on, and the reference budget is read off the same *cell*: the first
+/// one, which is the image `plan_batch` will send first. A grid varies one axis
+/// per cell and a named-view preset varies the view, so one report can only be
+/// true about one of them — and reporting the viewless, gridless fragment set
+/// instead would be a budget for an image this preset never sends.
 fn reference_report_for_plan(
     nodes: &[Node],
     provider: &str,
@@ -1488,19 +1635,19 @@ fn reference_report_for_plan(
     let caps = backend.capabilities(model);
     let plan = prepare_generation_plan(nodes, request, &caps)?;
     let stack = resolve_generation_stack(nodes, &plan)?;
-    let sliders = Sliders::from_pairs(plan.controls.slider_values.iter().copied());
-    let mut extracted = fragments(&stack, &plan.chosen, &sliders);
-    append_user_prompt(&stack, &mut extracted, &plan.controls.user_prompt);
-    let negotiated = negotiate(&extracted, plan.controls.requested_aspect, &caps);
-    let prices: Vec<Price> = plan
-        .cells
-        .iter()
-        .filter_map(|cell| {
-            let fragments = fragments_for_cell(&stack, cell, &plan.controls.user_prompt);
-            let negotiated = negotiate(&fragments, cell.aspect, &caps);
-            image_price(provider, model, negotiated.resolution())
-        })
-        .collect();
+    let mut prices = Vec::with_capacity(plan.cells.len());
+    let mut first = None;
+    for cell in &plan.cells {
+        let extracted = fragments_for_cell(&stack, cell, &plan.controls.user_prompt);
+        let negotiated = negotiate(&extracted, cell.aspect, &caps);
+        prices.extend(image_price(provider, model, negotiated.resolution()));
+        if first.is_none() {
+            first = Some(negotiated);
+        }
+    }
+    let negotiated = first.ok_or_else(|| {
+        WobuError::new(Code::Internal, "This preset produced no images to estimate.")
+    })?;
     let cost = cost_estimate_prices(prices, plan.cells.len());
     let buckets = negotiated
         .images()
@@ -1572,7 +1719,6 @@ fn variant_cells(
     base_aspect: AspectRatio,
     base_seed: u64,
     base_seed_source: SeedSource,
-    _locked_seed: Option<u64>,
     slider_values: &[(Id, f32)],
     available_nodes: &HashSet<Id>,
     grid: Option<&VariantGrid>,
@@ -1806,6 +1952,23 @@ struct ScenePrepare {
     app: AppHandle,
 }
 
+/// Composition's half of the shared planning seam. Same shape and same rules as
+/// [`BatchPlan`]: borrowed project state in, immutable [`PlannedBatch`] out, no
+/// `AppHandle` and no queue.
+struct ScenePlan<'a> {
+    root: &'a Path,
+    nodes: &'a [Node],
+    assets: &'a [Asset],
+    subject_ids: &'a [Id],
+    prompt: &'a str,
+    aspect: Option<&'a str>,
+    model: &'a str,
+    provider: &'a str,
+    seed: u64,
+    seed_source: SeedSource,
+    backend: &'a dyn ImageBackend,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct NormalizedSceneControls {
     prompt: String,
@@ -1819,13 +1982,46 @@ fn normalize_scene_controls(
 ) -> CommandResult<NormalizedSceneControls> {
     Ok(NormalizedSceneControls {
         prompt: normalize_prompt(Some(prompt)),
-        aspect: normalize_aspect(aspect, "16:9")?,
+        aspect: normalize_aspect(aspect, SCENE_ASPECT)?,
         shot_weight: normalize_weight(None),
     })
 }
 
+impl NormalizedSceneControls {
+    /// `params.controls` for a composition.
+    ///
+    /// Deliberately a different shape from the single-subject one: a scene has
+    /// no per-layer sliders and no Shot label to re-apply, and History reads the
+    /// `scene` key to know which of the two it is looking at.
+    fn receipt_controls(&self) -> Value {
+        json!({
+            "scene": {
+                "prompt": self.prompt,
+                "aspect": self.aspect.to_string(),
+            },
+        })
+    }
+}
+
 fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
-    let controls = normalize_scene_controls(&input.prompt, input.aspect.as_deref())?;
+    let planned = plan_scene(ScenePlan {
+        root: &input.root,
+        nodes: &input.nodes,
+        assets: &input.assets,
+        subject_ids: &input.subject_ids,
+        prompt: &input.prompt,
+        aspect: input.aspect.as_deref(),
+        model: &input.model,
+        provider: &input.provider,
+        seed: input.seed,
+        seed_source: input.seed_source,
+        backend: input.backend.as_ref(),
+    })?;
+    Ok(planned.into_task(input.root, input.project_id, input.backend, input.app))
+}
+
+fn plan_scene(input: ScenePlan<'_>) -> CommandResult<PlannedBatch> {
+    let controls = normalize_scene_controls(input.prompt, input.aspect)?;
     let world = World::new(input.nodes.iter());
     let names: Vec<String> = input
         .subject_ids
@@ -1840,7 +2036,7 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
     let scene_label = format!("Scene · {}", names.join(" + "));
     let scene = resolve_scene(
         &world,
-        &input.subject_ids,
+        input.subject_ids,
         Shot { label: &scene_label, weight: controls.shot_weight },
     )
     .map_err(|error| {
@@ -1850,16 +2046,16 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
     let mut extracted = scene_fragments(&world, &scene);
     append_scene_prompt(&scene, &mut extracted, &controls.prompt);
     let requested_aspect = controls.aspect;
-    let caps = input.backend.capabilities(&input.model);
-    let negotiated = negotiate_scene(&extracted, requested_aspect, &caps, &input.subject_ids);
-    ensure_scene_reference_fairness(&input.subject_ids, &extracted, &negotiated)?;
+    let caps = input.backend.capabilities(input.model);
+    let negotiated = negotiate_scene(&extracted, requested_aspect, &caps, input.subject_ids);
+    ensure_scene_reference_fairness(input.subject_ids, &extracted, &negotiated)?;
     let (prompt, negative) = compile_scene_prompt(&scene, negotiated.fragments(), &names);
     let loras = resolve_loras(
-        &input.root,
-        &input.nodes,
+        input.root,
+        input.nodes,
         scene.stack().sources().iter().filter_map(|source| source.node_id()),
-        &input.model,
-        input.backend.as_ref(),
+        input.model,
+        input.backend,
     );
     let prompt = scene_prompt_with_lora_triggers(&prompt, &loras.weights);
     if prompt.trim().is_empty() {
@@ -1870,28 +2066,14 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
     }
 
     let assets: HashMap<Id, &Asset> = input.assets.iter().map(|asset| (asset.id, asset)).collect();
-    let mut references = Vec::new();
     let mut reference_loader = ReferenceLoader::new();
-    for bucket in negotiated.images().buckets() {
-        for fragment in bucket.kept() {
-            let asset_id = fragment.asset_id().expect("kept image fragments have asset ids");
-            let asset = assets.get(&asset_id).ok_or_else(|| {
-                WobuError::new(Code::NoSuchAsset, "A scene reference is no longer in this project.")
-                    .with_detail(asset_id.to_string())
-            })?;
-            let bytes = reference_loader
-                .load(asset_id, &input.root.join(&asset.rel_path))
-                .map_err(|error| {
-                    WobuError::new(Code::Io, "A scene reference image could not be read.")
-                        .with_detail(error.to_string())
-                })?;
-            if let Some(reference) =
-                Reference::from_fragment(*fragment, bucket.bucket(), bytes, asset.mime.clone())
-            {
-                references.push(reference);
-            }
-        }
-    }
+    let references = load_references(
+        &negotiated,
+        &assets,
+        input.root,
+        &mut reference_loader,
+        ReferenceScope::Scene,
+    )?;
     let dropped: Vec<FragmentKey> = negotiated
         .images()
         .dropped()
@@ -1899,7 +2081,7 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
         .chain(negotiated.downgrades().iter().map(|drop| FragmentKey::of(drop.fragment)))
         .collect();
     let resolution = negotiated.resolution();
-    let price = image_price(&input.provider, &input.model, resolution);
+    let price = image_price(input.provider, input.model, resolution);
     let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
     let reference_asset_ids =
         references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>();
@@ -1916,13 +2098,14 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
         loras: &loras.receipts,
         lora_downgrades: &loras.downgrades,
         price,
+        controls: controls.receipt_controls(),
     }
     .params();
     params.insert(
         "sceneComposition".into(),
         serde_json::to_value(SceneComposition {
             version: 1,
-            subject_ids: input.subject_ids.clone(),
+            subject_ids: input.subject_ids.to_vec(),
             subject_names: names.clone(),
         })
         .map_err(|error| {
@@ -1930,16 +2113,7 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
                 .with_detail(error.to_string())
         })?,
     );
-    params.insert(
-        "controls".into(),
-        json!({
-            "scene": {
-                "prompt": controls.prompt,
-                "aspect": requested_aspect.to_string(),
-            },
-        }),
-    );
-    let request = ImageRequest::new(input.model.clone(), &prompt, input.seed, &negotiated)
+    let request = ImageRequest::new(input.model.to_owned(), &prompt, input.seed, &negotiated)
         .with_negative(&negative)
         .with_references(references)
         .with_loras(loras.weights);
@@ -1957,25 +2131,18 @@ fn prepare_scene(input: ScenePrepare) -> CommandResult<GenerateTask> {
         user_prompt: controls.prompt.clone(),
         compiled_prompt: prompt,
         negative_prompt: negative,
-        backend: input.provider,
-        model: input.model,
+        backend: input.provider.to_owned(),
+        model: input.model.to_owned(),
         seed: input.seed,
         params,
         output_asset_ids: Vec::new(),
         influence_snapshot: snapshot(scene.stack(), &extracted, &[], &HashSet::new(), &dropped),
     };
-    Ok(GenerateTask {
+    Ok(PlannedBatch {
         label: format!("Compose scene · {}", names.join(" + ")),
         subject_id: primary,
-        project_id: input.project_id,
-        root: input.root,
-        backend: input.backend,
         plans: vec![PlannedImage { request, cost_usd_micros, generation }],
-        next: 0,
-        completed: Vec::new(),
-        app: input.app,
         requires_billing: caps.requires_billing,
-        reservation: None,
         archival_replay: false,
     })
 }
@@ -2103,17 +2270,47 @@ struct Prepare {
     app: AppHandle,
 }
 
+/// The batch planning seam.
+///
+/// Everything downstream of [`prepare_generation_plan`] — negotiation, prompt
+/// compilation, reference loading, pricing and receipt preparation — happens
+/// here, from borrowed project state and a borrowed adapter. Nothing in it can
+/// reach the running app, which is what lets the same call the Inspector's
+/// preview makes be exercised directly by a test.
+struct BatchPlan<'a> {
+    root: &'a Path,
+    nodes: &'a [Node],
+    assets: &'a [Asset],
+    request: GenerationPlanRequest,
+    model: &'a str,
+    provider: &'a str,
+    backend: &'a dyn ImageBackend,
+}
+
 fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
-    let caps = input.backend.capabilities(&input.model);
-    let plan = prepare_generation_plan(&input.nodes, input.request, &caps)?;
-    let stack = resolve_generation_stack(&input.nodes, &plan)?;
+    let planned = plan_batch(BatchPlan {
+        root: &input.root,
+        nodes: &input.nodes,
+        assets: &input.assets,
+        request: input.request,
+        model: &input.model,
+        provider: &input.provider,
+        backend: input.backend.as_ref(),
+    })?;
+    Ok(planned.into_task(input.root, input.project_id, input.backend, input.app))
+}
+
+fn plan_batch(input: BatchPlan<'_>) -> CommandResult<PlannedBatch> {
+    let caps = input.backend.capabilities(input.model);
+    let plan = prepare_generation_plan(input.nodes, input.request, &caps)?;
+    let stack = resolve_generation_stack(input.nodes, &plan)?;
     let assets: HashMap<Id, &Asset> = input.assets.iter().map(|asset| (asset.id, asset)).collect();
     let loras = resolve_loras(
-        &input.root,
-        &input.nodes,
+        input.root,
+        input.nodes,
         stack.sources().iter().filter_map(|source| source.node_id()),
-        &input.model,
-        input.backend.as_ref(),
+        input.model,
+        input.backend,
     );
     let batch_size = plan.cells.len();
     let mut plans = Vec::with_capacity(batch_size);
@@ -2123,30 +2320,13 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         let negotiated = negotiate(&extracted, cell.aspect, &caps);
         let compiled = compile(negotiated.fragments(), Budget::unlimited());
         let compiled_prompt = prompt_with_lora_triggers(compiled.prompt(), &loras.weights);
-        let mut references = Vec::new();
-        for bucket in negotiated.images().buckets() {
-            for fragment in bucket.kept() {
-                let asset_id = fragment.asset_id().expect("kept image fragments have asset ids");
-                let asset = assets.get(&asset_id).ok_or_else(|| {
-                    WobuError::new(
-                        Code::NoSuchAsset,
-                        "A reference image is no longer in this project.",
-                    )
-                    .with_detail(asset_id.to_string())
-                })?;
-                let bytes = reference_loader
-                    .load(asset_id, &input.root.join(&asset.rel_path))
-                    .map_err(|error| {
-                        WobuError::new(Code::Io, "A reference image could not be read.")
-                            .with_detail(error.to_string())
-                    })?;
-                if let Some(reference) =
-                    Reference::from_fragment(*fragment, bucket.bucket(), bytes, asset.mime.clone())
-                {
-                    references.push(reference);
-                }
-            }
-        }
+        let references = load_references(
+            &negotiated,
+            &assets,
+            input.root,
+            &mut reference_loader,
+            ReferenceScope::Image,
+        )?;
         let dropped: Vec<FragmentKey> = compiled
             .dropped()
             .iter()
@@ -2155,7 +2335,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             .chain(negotiated.downgrades().iter().map(|drop| FragmentKey::of(drop.fragment)))
             .collect();
         let resolution = negotiated.resolution();
-        let price = image_price(&input.provider, &input.model, resolution);
+        let price = image_price(input.provider, input.model, resolution);
         let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
         let reference_asset_ids =
             references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>();
@@ -2172,23 +2352,9 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             loras: &loras.receipts,
             lora_downgrades: &loras.downgrades,
             price,
+            controls: plan.controls.receipt_controls(&cell.slider_values),
         }
         .params();
-        params.insert(
-            "controls".into(),
-            json!({
-                "sliders": cell.slider_values.iter().map(|(node_id, value)| json!({
-                    "nodeId": node_id,
-                    "value": value,
-                    "muted": plan.controls.muted_nodes.contains(node_id),
-                })).collect::<Vec<_>>(),
-                "shot": {
-                    "label": plan.controls.shot_label,
-                    "weight": plan.controls.shot_weight,
-                    "prompt": plan.controls.user_prompt,
-                },
-            }),
-        );
         if let Some(locked_seed) = plan.locked_seed {
             params.insert("lockedSeed".into(), json!(locked_seed));
             params.insert("usedLockedSeed".into(), json!(cell.item.seed == locked_seed));
@@ -2206,7 +2372,7 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
             );
         }
         let request =
-            ImageRequest::new(input.model.clone(), &compiled_prompt, cell.item.seed, &negotiated)
+            ImageRequest::new(input.model.to_owned(), &compiled_prompt, cell.item.seed, &negotiated)
                 .with_negative(compiled.negative())
                 .with_references(references)
                 .with_loras(loras.weights.clone());
@@ -2222,8 +2388,8 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
                 user_prompt: plan.controls.user_prompt.clone(),
                 compiled_prompt,
                 negative_prompt: compiled.negative().to_owned(),
-                backend: input.provider.clone(),
-                model: input.model.clone(),
+                backend: input.provider.to_owned(),
+                model: input.model.to_owned(),
                 seed: cell.item.seed,
                 params,
                 output_asset_ids: Vec::new(),
@@ -2238,18 +2404,11 @@ fn prepare(input: Prepare) -> CommandResult<GenerateTask> {
         });
     }
 
-    Ok(GenerateTask {
+    Ok(PlannedBatch {
         label: format!("Generate {} ×{}", plan.subject_name, plans.len()),
         subject_id: plan.subject_id,
-        project_id: input.project_id,
-        root: input.root,
-        backend: input.backend,
         plans,
-        next: 0,
-        completed: Vec::new(),
-        app: input.app,
         requires_billing: caps.requires_billing,
-        reservation: None,
         archival_replay: false,
     })
 }
@@ -2371,6 +2530,48 @@ struct PlannedImage {
     request: ImageRequest,
     cost_usd_micros: u64,
     generation: Generation,
+}
+
+/// A finished plan: every provider request and every receipt this job will
+/// write, decided before anything is queued and unable to change afterwards.
+///
+/// This is the single output of planning. Batch generation ([`plan_batch`]),
+/// scene composition ([`plan_scene`]) and replay ([`replay_plan`]) all produce
+/// one, and [`PlannedBatch::into_task`] is the only way any of them reaches the
+/// queue — so spend reservation, billing and the archival-replay exemption are
+/// stated once rather than three times.
+struct PlannedBatch {
+    label: String,
+    subject_id: Id,
+    plans: Vec<PlannedImage>,
+    requires_billing: bool,
+    /// Replay can legitimately outlive the node its immutable receipt names.
+    archival_replay: bool,
+}
+
+impl PlannedBatch {
+    fn into_task(
+        self,
+        root: PathBuf,
+        project_id: Id,
+        backend: Arc<dyn ImageBackend>,
+        app: AppHandle,
+    ) -> GenerateTask {
+        GenerateTask {
+            label: self.label,
+            subject_id: self.subject_id,
+            project_id,
+            root,
+            backend,
+            plans: self.plans,
+            next: 0,
+            completed: Vec::new(),
+            app,
+            requires_billing: self.requires_billing,
+            reservation: None,
+            archival_replay: self.archival_replay,
+        }
+    }
 }
 
 impl GenerateTask {
@@ -3080,6 +3281,8 @@ fn no_image_provider() -> WobuError {
 
 #[cfg(test)]
 mod tests {
+    use wobu_core::{AssetRef, Description, SectionValue};
+
     use super::*;
 
     struct TestProject {
@@ -3108,6 +3311,169 @@ mod tests {
             // supplied directory or a workspace root.
             let _ = std::fs::remove_dir_all(&self.parent);
         }
+    }
+
+    /* ── the planning fixture ─────────────────────────────────────────────── */
+
+    /// The model every planning test below prices against. Pinned rather than
+    /// defaulted: a default that moved would silently rewrite every expected
+    /// cost in this file.
+    const MODEL: &str = "gemini-3.1-flash-image";
+
+    /// A world with files in it: a house style, two characters, and one
+    /// reference image each on disk.
+    ///
+    /// Planning reads reference bytes, so the images have to exist; everything
+    /// else is in memory, because the point of the seam under test is that
+    /// planning takes nodes and assets rather than an open project.
+    struct PlanWorld {
+        parent: PathBuf,
+        root: PathBuf,
+        nodes: Vec<Node>,
+        assets: Vec<Asset>,
+        kael: Id,
+        rell: Id,
+        kael_costume: Id,
+    }
+
+    impl PlanWorld {
+        fn new() -> PlanWorld {
+            let parent = std::env::temp_dir().join(format!("wobu-plan-test-{}", new_id()));
+            let root = parent.join("world");
+            std::fs::create_dir_all(root.join("assets/img")).unwrap();
+
+            let mut assets = Vec::new();
+            let mut attach = |owner: &mut Node, name: &str, role: AssetRole| {
+                let id = new_id();
+                let rel_path = format!("assets/img/{name}.png");
+                std::fs::write(root.join(&rel_path), name.as_bytes()).unwrap();
+                owner.asset_links.push(AssetRef::new(id, role));
+                assets.push(Asset {
+                    id,
+                    hash: format!("hash-{name}"),
+                    kind: AssetKind::Reference,
+                    rel_path,
+                    thumb_path: None,
+                    mime: "image/png".into(),
+                    width: 1_024,
+                    height: 1_024,
+                    bytes: name.len() as u64,
+                    created_at: Utc::now(),
+                });
+                id
+            };
+
+            let mut style = Node::new(wobu_core::NodeKind::StyleGuide, "Ashfall House Style")
+                .expect("fixture names are sluggable");
+            describe(&mut style, [("medium", prose("Oil on board"))]);
+
+            let mut kael = Node::new(wobu_core::NodeKind::Character, "Kael Vantris")
+                .expect("fixture names are sluggable");
+            describe(
+                &mut kael,
+                [
+                    ("silhouette", prose("Tall, narrow, hooded")),
+                    ("costume", prose("Ash-grey longcoat")),
+                    ("never", list(&["modern firearms"])),
+                ],
+            );
+            let kael_costume = attach(&mut kael, "kael-costume", AssetRole::Costume);
+
+            let mut rell = Node::new(wobu_core::NodeKind::Character, "Rell Sarn")
+                .expect("fixture names are sluggable");
+            describe(&mut rell, [("silhouette", prose("Short, broad, plated"))]);
+            attach(&mut rell, "rell-costume", AssetRole::Costume);
+
+            let (kael_id, rell_id) = (kael.id, rell.id);
+            PlanWorld {
+                parent,
+                root,
+                nodes: vec![style, kael, rell],
+                assets,
+                kael: kael_id,
+                rell: rell_id,
+                kael_costume,
+            }
+        }
+
+        fn backend() -> GeminiBackend {
+            GeminiBackend::new("test-key").expect("the placeholder key is well formed")
+        }
+
+        fn request(&self, preset_id: &str, seed: u64) -> GenerationPlanRequest {
+            GenerationPlanRequest {
+                subject_id: self.kael,
+                preset_id: Some(preset_id.to_owned()),
+                sliders: Vec::new(),
+                shot: GenerateShot::default(),
+                aspect: None,
+                seed,
+                seed_source: SeedSource::Random,
+                locked_seed: None,
+                grid: None,
+            }
+        }
+
+        fn plan(&self, request: GenerationPlanRequest) -> CommandResult<PlannedBatch> {
+            let backend = PlanWorld::backend();
+            plan_batch(BatchPlan {
+                root: &self.root,
+                nodes: &self.nodes,
+                assets: &self.assets,
+                request,
+                model: MODEL,
+                provider: gemini::ID,
+                backend: &backend,
+            })
+        }
+
+        fn compose(&self, prompt: &str, aspect: Option<&str>) -> CommandResult<PlannedBatch> {
+            let backend = PlanWorld::backend();
+            plan_scene(ScenePlan {
+                root: &self.root,
+                nodes: &self.nodes,
+                assets: &self.assets,
+                subject_ids: &[self.kael, self.rell],
+                prompt,
+                aspect,
+                model: MODEL,
+                provider: gemini::ID,
+                seed: 7,
+                seed_source: SeedSource::Random,
+                backend: &backend,
+            })
+        }
+
+        fn preview(&self, request: GenerationPlanRequest) -> CommandResult<ImageReferenceReport> {
+            let backend = PlanWorld::backend();
+            reference_report_for_plan(&self.nodes, gemini::ID, MODEL, &backend, request)
+        }
+    }
+
+    impl Drop for PlanWorld {
+        fn drop(&mut self) {
+            // The parent is a unique path minted by this test, never a caller
+            // supplied directory or a workspace root.
+            let _ = std::fs::remove_dir_all(&self.parent);
+        }
+    }
+
+    fn describe(node: &mut Node, sections: impl IntoIterator<Item = (&'static str, SectionValue)>) {
+        node.description = Some(Description::from_sections(
+            sections.into_iter().map(|(key, value)| (key.to_owned(), value)),
+        ));
+    }
+
+    fn prose(value: &str) -> SectionValue {
+        SectionValue::Text(value.to_owned())
+    }
+
+    fn list(items: &[&str]) -> SectionValue {
+        SectionValue::List(items.iter().map(|item| (*item).to_owned()).collect())
+    }
+
+    fn keys(params: &Map<String, Value>) -> Vec<&str> {
+        params.keys().map(String::as_str).collect()
     }
 
     fn receipt(node_id: Id, backend: &str, model: &str, width: u32, height: u32) -> Generation {
@@ -3351,7 +3717,6 @@ mod tests {
             AspectRatio::parse("3:4").unwrap(),
             42,
             SeedSource::Locked,
-            Some(42),
             &[],
             &available,
             Some(&weight_grid),
@@ -3378,7 +3743,6 @@ mod tests {
             AspectRatio::parse("3:4").unwrap(),
             42,
             SeedSource::Locked,
-            Some(42),
             &[],
             &available,
             Some(&seed_grid),
@@ -3433,8 +3797,10 @@ mod tests {
         assert_eq!(execution.controls.shot_label, "low angle");
         assert_eq!(execution.controls.shot_weight, 1.0);
         assert_eq!(execution.controls.user_prompt, "wind catches the cloak");
-        assert_eq!(execution.controls.slider_values, [(subject_id, 0.75)]);
-        assert_eq!(execution.controls.requested_aspect, AspectRatio::parse("3:4").unwrap());
+        // The per-cell copies are the authoritative ones, and for a request
+        // with no grid every cell agrees with the request.
+        assert_eq!(execution.cells[0].slider_values, [(subject_id, 0.75)]);
+        assert_eq!(execution.cells[0].aspect, AspectRatio::parse("3:4").unwrap());
 
         let execution_stack = resolve_generation_stack(&nodes, &execution).unwrap();
         let execution_fragments = fragments_for_cell(
@@ -3479,9 +3845,247 @@ mod tests {
 
         assert_eq!(plan.controls.user_prompt, scene.prompt);
         assert_eq!(plan.controls.shot_weight, scene.shot_weight);
-        assert_eq!(plan.controls.requested_aspect, scene.aspect);
         assert_eq!(plan.cells[0].aspect, scene.aspect);
         assert_eq!(plan.cells[1].aspect, AspectRatio::parse("1:1").unwrap());
+    }
+
+    /* ── what the three callers plan ──────────────────────────────────────── */
+
+    #[test]
+    fn a_batch_plans_one_receipt_and_one_request_per_cell() {
+        let world = PlanWorld::new();
+        let mut request = world.request("character_sheet", 100);
+        request.locked_seed = Some(100);
+        request.seed_source = SeedSource::Locked;
+        request.shot = GenerateShot {
+            label: Some("  low angle  ".into()),
+            weight: Some(0.5),
+            prompt: Some("  wind catches the cloak  ".into()),
+        };
+        let planned = world.plan(request).unwrap();
+
+        assert_eq!(planned.label, "Generate Kael Vantris ×4");
+        assert_eq!(planned.subject_id, world.kael);
+        assert!(planned.requires_billing);
+        assert!(!planned.archival_replay);
+        // `character_sheet` emits four images on the adjacent-seed family, and
+        // only the first of them is the lock itself.
+        assert_eq!(
+            planned.plans.iter().map(|plan| plan.generation.seed).collect::<Vec<_>>(),
+            [100, 101, 102, 103]
+        );
+        assert_eq!(
+            planned.plans.iter().map(|plan| plan.request.seed).collect::<Vec<_>>(),
+            [100, 101, 102, 103]
+        );
+
+        let first = &planned.plans[0].generation;
+        assert_eq!(
+            keys(&first.params),
+            [
+                "aspect",
+                "batchIndex",
+                "batchSize",
+                "controls",
+                "estimatedCostUsdMicros",
+                "height",
+                "lockedSeed",
+                "loraDowngrades",
+                "loras",
+                "negativePromptSupported",
+                "pricingCheckedAt",
+                "pricingConservativeFallback",
+                "pricingIndicative",
+                "pricingSource",
+                "referenceAssetIds",
+                "requestedAspect",
+                "seedSource",
+                "usedLockedSeed",
+                "width",
+            ]
+        );
+        assert_eq!(first.preset, "character_sheet");
+        assert_eq!(first.view_type, None);
+        assert_eq!(first.user_prompt, "wind catches the cloak");
+        assert_eq!(first.backend, gemini::ID);
+        assert_eq!(first.model, MODEL);
+        assert_eq!(first.params["batchIndex"], json!(0));
+        assert_eq!(first.params["batchSize"], json!(4));
+        assert_eq!(first.params["requestedAspect"], json!("3:4"));
+        assert_eq!(first.params["aspect"], json!("3:4"));
+        assert_eq!(first.params["seedSource"], json!("locked"));
+        assert_eq!(first.params["lockedSeed"], json!(100));
+        assert_eq!(first.params["usedLockedSeed"], json!(true));
+        assert_eq!(first.params["referenceAssetIds"], json!([world.kael_costume]));
+        assert_eq!(
+            first.params["controls"],
+            json!({
+                "sliders": [],
+                "shot": { "label": "low angle", "weight": 0.5, "prompt": "wind catches the cloak" },
+            })
+        );
+        assert!(first.compiled_prompt.contains("Ash-grey longcoat"));
+        assert!(first.compiled_prompt.contains("wind catches the cloak"));
+        // Gemini has no negative prompt, so negotiation withholds the `never`
+        // section rather than the receipt claiming one was sent.
+        assert_eq!(first.params["negativePromptSupported"], json!(false));
+        assert_eq!(first.negative_prompt, "");
+        assert_eq!(planned.plans[0].request.references.len(), 1);
+        assert_eq!(planned.plans[0].request.references[0].asset_id, world.kael_costume);
+
+        // Only the first cell is the lock, and every cell is priced.
+        assert_eq!(planned.plans[1].generation.params["usedLockedSeed"], json!(false));
+        assert_eq!(planned.plans[1].generation.params["seedSource"], json!("locked_derived"));
+        let cost = planned.plans[0].cost_usd_micros;
+        assert!(cost > 0);
+        assert!(planned.plans.iter().all(|plan| plan.cost_usd_micros == cost));
+    }
+
+    #[test]
+    fn a_named_view_batch_plans_eight_tagged_views_on_one_seed() {
+        let world = PlanWorld::new();
+        let planned = world.plan(world.request("turnaround", 55)).unwrap();
+        assert_eq!(
+            planned
+                .plans
+                .iter()
+                .map(|plan| (
+                    plan.generation.view_type.clone().unwrap(),
+                    plan.generation.seed,
+                    plan.generation.params["batchSize"].clone()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("front".to_owned(), 55, json!(8)),
+                ("left".to_owned(), 55, json!(8)),
+                ("right".to_owned(), 55, json!(8)),
+                ("back".to_owned(), 55, json!(8)),
+                ("top".to_owned(), 55, json!(8)),
+                ("bottom".to_owned(), 55, json!(8)),
+                ("left_front".to_owned(), 55, json!(8)),
+                ("right_front".to_owned(), 55, json!(8)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_variant_grid_varies_one_axis_and_records_it_per_cell() {
+        let world = PlanWorld::new();
+        let mut request = world.request("character_sheet", 12);
+        request.grid = Some(VariantGrid::FragmentWeight {
+            node_id: world.kael,
+            values: vec![0.25, 0.75],
+        });
+        let planned = world.plan(request).unwrap();
+
+        assert_eq!(planned.plans.len(), 2);
+        for (index, weight) in [0.25_f32, 0.75].into_iter().enumerate() {
+            let params = &planned.plans[index].generation.params;
+            // One seed across the grid: the axis is the weight, nothing else.
+            assert_eq!(planned.plans[index].generation.seed, 12);
+            assert_eq!(params["controls"]["sliders"][0]["nodeId"], json!(world.kael));
+            assert_eq!(params["controls"]["sliders"][0]["value"], json!(weight));
+            assert_eq!(params["variation"]["index"], json!(index));
+            assert_eq!(params["variation"]["total"], json!(2));
+            assert_eq!(params["variation"]["axis"], json!("fragment_weight"));
+            assert_eq!(params["variation"]["weight"], json!(weight));
+        }
+        assert_eq!(
+            planned.plans[0].generation.params["variation"]["gridId"],
+            planned.plans[1].generation.params["variation"]["gridId"]
+        );
+    }
+
+    #[test]
+    fn a_composition_plans_one_receipt_naming_every_participant() {
+        let world = PlanWorld::new();
+        let planned = world.compose("  they meet on the bridge  ", None).unwrap();
+
+        assert_eq!(planned.label, "Compose scene · Kael Vantris + Rell Sarn");
+        assert_eq!(planned.subject_id, world.kael);
+        assert_eq!(planned.plans.len(), 1);
+        let generation = &planned.plans[0].generation;
+        assert_eq!(generation.preset, "environment_matte");
+        assert_eq!(generation.node_id, world.kael);
+        assert_eq!(generation.user_prompt, "they meet on the bridge");
+        assert_eq!(generation.params["batchSize"], json!(1));
+        assert_eq!(generation.params["requestedAspect"], json!("16:9"));
+        assert_eq!(
+            generation.params["controls"],
+            json!({ "scene": { "prompt": "they meet on the bridge", "aspect": "16:9" } })
+        );
+        assert_eq!(generation.params["sceneComposition"]["version"], json!(1));
+        assert_eq!(
+            generation.params["sceneComposition"]["subjectIds"],
+            json!([world.kael, world.rell])
+        );
+        assert_eq!(
+            generation.params["sceneComposition"]["subjectNames"],
+            json!(["Kael Vantris", "Rell Sarn"])
+        );
+        // Composition has no per-layer sliders and no `variation`, and it never
+        // acquires a `lockedSeed`: the participants may disagree about theirs.
+        assert!(!generation.params.contains_key("variation"));
+        assert!(!generation.params.contains_key("lockedSeed"));
+        assert!(generation.compiled_prompt.contains("Kael Vantris"));
+        assert!(generation.compiled_prompt.contains("Rell Sarn"));
+        assert_eq!(planned.plans[0].request.references.len(), 2);
+    }
+
+    #[test]
+    fn the_preview_prices_and_budgets_exactly_what_the_batch_would_send() {
+        let world = PlanWorld::new();
+        let request = world.request("character_sheet", 3);
+        let planned = world.plan(request.clone()).unwrap();
+        let preview = world.preview(request).unwrap();
+
+        let cost = preview.cost.unwrap();
+        assert_eq!(cost.images, planned.plans.len());
+        assert_eq!(cost.per_image_usd_micros, planned.plans[0].cost_usd_micros);
+        assert_eq!(
+            cost.batch_usd_micros,
+            planned.plans.iter().map(|plan| plan.cost_usd_micros).sum::<u64>()
+        );
+        assert!(!cost.varies_by_cell);
+
+        let kept: usize = preview.buckets.iter().map(|bucket| bucket.kept).sum();
+        assert_eq!(kept, planned.plans[0].request.references.len());
+        assert_eq!(preview.buckets.iter().map(|bucket| bucket.dropped).sum::<usize>(), 0);
+        assert_eq!(preview.layers.iter().map(|layer| layer.kept).sum::<usize>(), kept);
+    }
+
+    #[test]
+    fn the_preview_budgets_the_grids_first_cell_and_not_the_ungridded_request() {
+        // The report used to negotiate the request's own fragment set, which
+        // for a grid is a set no cell sends. Silencing the subject in cell one
+        // is the case where that shows: the reference the report counted was
+        // one the first image would not have carried.
+        let world = PlanWorld::new();
+        let mut request = world.request("character_sheet", 4);
+        request.grid =
+            Some(VariantGrid::FragmentWeight { node_id: world.kael, values: vec![0.0, 1.0] });
+        let planned = world.plan(request.clone()).unwrap();
+        let preview = world.preview(request).unwrap();
+
+        assert_eq!(planned.plans[0].request.references.len(), 0);
+        assert_eq!(planned.plans[1].request.references.len(), 1);
+        assert_eq!(preview.buckets.iter().map(|bucket| bucket.kept).sum::<usize>(), 0);
+    }
+
+    #[test]
+    fn the_preview_budgets_the_first_view_of_a_named_view_preset() {
+        // A Turnaround's cells are per-view, so the report has to be a report
+        // about a view: the viewless fragment set is one this preset never
+        // sends. First rather than an average, because it is the cell execution
+        // renders first and the only one a single report can be true about.
+        let world = PlanWorld::new();
+        let request = world.request("turnaround", 5);
+        let planned = world.plan(request.clone()).unwrap();
+        let preview = world.preview(request).unwrap();
+
+        let kept: usize = preview.buckets.iter().map(|bucket| bucket.kept).sum();
+        assert_eq!(kept, planned.plans[0].request.references.len());
+        assert_eq!(preview.cost.unwrap().images, 8);
     }
 
     #[test]
@@ -3495,7 +4099,6 @@ mod tests {
             AspectRatio::parse("1:1").unwrap(),
             1,
             SeedSource::Locked,
-            Some(1),
             &[],
             &HashSet::from([subject.id]),
             Some(&grid),

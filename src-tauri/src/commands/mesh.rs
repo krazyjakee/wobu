@@ -59,6 +59,7 @@ use crate::machine::MachineSettings;
 use crate::state::{AppState, Jobs};
 
 use super::blocking;
+use super::providers::ProviderChoice;
 
 /// The keychain entries Tencent's signature needs. Two, not one: `keys.rs`
 /// registers the pair separately because there is no join format both sides
@@ -235,7 +236,7 @@ pub fn mesh_options(
     keys: State<'_, Keys>,
     machine: State<'_, MachineSettings>,
 ) -> CommandResult<MeshOptions> {
-    let selection = state.with(|project| Ok(mesh_selection(project)))?;
+    let selection = state.with(|project| Ok(ProviderChoice::of(project, MESH_CAPABILITY)))?;
     let Some(selection) = selection else {
         return Ok(MeshOptions {
             provider: None,
@@ -260,7 +261,7 @@ pub fn mesh_options(
         provider: Some(selection.provider.clone()),
         label: label.to_owned(),
         model,
-        region: selection.region.clone(),
+        region: selection.setting("region"),
         max_views: caps.max_views,
         face_count_min: *caps.face_count.start(),
         face_count_max: *caps.face_count.end(),
@@ -274,35 +275,17 @@ pub fn mesh_options(
     })
 }
 
-#[derive(Debug, Clone)]
-struct MeshSelection {
-    provider: String,
-    model: Option<String>,
-    region: Option<String>,
-}
-
-fn mesh_selection(project: &Project) -> Option<MeshSelection> {
-    let selected = project.meta().providers.get(MESH_CAPABILITY)?.as_object()?;
-    let text = |key: &str| {
-        selected
-            .get(key)
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned)
-    };
-    let provider = text("provider")?;
-    Some(MeshSelection { provider, model: text("model"), region: text("region") })
-}
-
 /// Label, resolved model and capabilities, with no credential involved.
+///
+/// The model is resolved by [`ProviderChoice::model`], the same call image
+/// generation makes: 3D has no per-request model override, so it passes `None`
+/// and takes the project's pin or the adapter's default.
 fn describe_backend(
-    selection: &MeshSelection,
+    selection: &ProviderChoice,
 ) -> CommandResult<(&'static str, String, MeshCapabilities)> {
     match selection.provider.as_str() {
         tencent::ID => {
-            let model =
-                selection.model.clone().unwrap_or_else(|| tencent::DEFAULT_MODEL.to_owned());
+            let model = selection.model(None, tencent::DEFAULT_MODEL);
             // Capabilities are a pure function of the model id; the credential
             // is never used and the object never makes a call.
             let backend = HunyuanBackend::new(
@@ -317,10 +300,7 @@ fn describe_backend(
             Ok((tencent::LABEL, model, caps))
         }
         comfy::ID => {
-            let model = selection
-                .model
-                .clone()
-                .unwrap_or_else(|| wobu_imagine::comfy_mesh::DEFAULT_MODEL.to_owned());
+            let model = selection.model(None, wobu_imagine::comfy_mesh::DEFAULT_MODEL);
             let backend =
                 ComfyMeshBackend::new("http://127.0.0.1:8188").map_err(provider_unavailable)?;
             let caps = backend.capabilities(&model);
@@ -333,16 +313,16 @@ fn describe_backend(
     }
 }
 
-fn region_of(selection: &MeshSelection) -> tencent::Region {
+fn region_of(selection: &ProviderChoice) -> tencent::Region {
     selection
-        .region
+        .setting("region")
         .as_deref()
         .and_then(tencent::Region::parse)
         .unwrap_or(tencent::Region::ApSingapore)
 }
 
 fn mesh_readiness(
-    selection: &MeshSelection,
+    selection: &ProviderChoice,
     keys: &Keys,
     machine: &MachineSettings,
 ) -> (bool, String) {
@@ -375,7 +355,7 @@ fn provider_unavailable(error: ImageError) -> WobuError {
 
 /// The real backend, with this machine's credential.
 async fn execution_backend(
-    selection: &MeshSelection,
+    selection: &ProviderChoice,
     keys: &Keys,
     machine: &MachineSettings,
 ) -> CommandResult<Arc<dyn MeshBackend>> {
@@ -456,7 +436,7 @@ pub async fn mesh_start(
                 "This project is read-only, so a generated mesh could not be saved.",
             ));
         }
-        let selection = mesh_selection(project).ok_or_else(no_mesh_provider)?;
+        let selection = ProviderChoice::of(project, MESH_CAPABILITY).ok_or_else(no_mesh_provider)?;
         let subject_name = project
             .world_nodes()?
             .iter()
@@ -541,7 +521,7 @@ pub async fn mesh_start(
     // field as a figure somebody stood behind, and zero here would be a claim
     // that a billed Hunyuan3D job was free. `billedJobs`, written when the
     // provider answers, is the only cost fact this pipeline has.
-    if let Some(region) = &selection.region {
+    if let Some(region) = selection.setting("region") {
         params.insert("region".into(), json!(region));
     }
 
