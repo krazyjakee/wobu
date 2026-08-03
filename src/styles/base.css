@@ -209,12 +209,3 @@ kbd {
   color: var(--border-str);
   margin-bottom: 2px;
 }
-.milestone {
-  font: 10px var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 3px 8px;
-  border-radius: 20px;
-  border: 1px solid var(--border-str);
-  color: var(--text-faint);
-}

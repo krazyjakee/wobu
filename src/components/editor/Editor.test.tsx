@@ -151,7 +151,7 @@ describe('Enhance shortcut', () => {
 
   it('does not Enhance while the shortcut originates in an editable control', async () => {
     renderEditor()
-    const notes = await screen.findByPlaceholderText(/Messy is fine/)
+    const notes = await screen.findByPlaceholderText(/Write your notes/)
 
     fireEvent.keyDown(notes, { key: 'e', metaKey: true })
 

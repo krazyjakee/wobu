@@ -549,7 +549,7 @@ describe('Forge mode', () => {
 
     fireEvent.click(screen.getByText('Compose a multi-entity scene'))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Mira' }))
-    fireEvent.change(screen.getByPlaceholderText('Crossing the flooded market at blue hour…'), {
+    fireEvent.change(screen.getByPlaceholderText('Describe the scene…'), {
       target: { value: 'Crossing the flooded market' },
     })
     const sceneAspect = screen.getByLabelText('Scene aspect')

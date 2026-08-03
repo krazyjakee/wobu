@@ -434,7 +434,7 @@ function GenerationTile({
       {confirmDelete && (
         <ConfirmSheet
           title="Delete this concept?"
-          body="It will disappear from Concepts and History. Its output assets remain in the Asset Library, and its archived receipt remains in spend accounting."
+          body="It will disappear from Concepts, History, the Asset Library and the board, and its images will be deleted. Any image you pinned as a reference or set as a cover is kept, as is its archived receipt in spend accounting."
           confirmLabel="Delete concept"
           danger
           busy={deleteGeneration.isPending}

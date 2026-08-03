@@ -398,7 +398,7 @@ function NewProjectSheet({ onClose }: { onClose: () => void }) {
         <input
           id="np-name"
           value={name}
-          placeholder="Ashfall"
+          placeholder="name your project…"
           data-modal-initial-focus
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {

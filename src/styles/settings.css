@@ -1,6 +1,6 @@
 /* ── settings ──
-   Scrolls and starts at the top, unlike `.mode-empty`, which centres a short
-   placeholder. Same grid column so the rail stays put. */
+   Scrolls and starts at the top rather than centring its content. Same grid
+   column as the other modes so the rail stays put. */
 .settings-mode {
   grid-column: 2 / -1;
   min-height: 0;

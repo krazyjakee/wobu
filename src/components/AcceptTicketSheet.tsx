@@ -102,7 +102,7 @@ export function AcceptTicketSheet({
           id="accept-ticket"
           rows={4}
           value={token}
-          placeholder="wobuproject…"
+          placeholder="Paste the ticket here…"
           disabled={busy}
           data-modal-initial-focus
           onChange={(event) => setToken(event.target.value)}

@@ -1099,6 +1099,14 @@ export function useReplayGeneration() {
   })
 }
 
+/**
+ * Deleting a concept takes its unclaimed output images with it, so the asset
+ * views have to be told as well as the receipt views. Concepts, History and
+ * the 3D gallery are the receipt; the Asset Library and the board are the
+ * blobs, and leaving either half stale is the whole bug — a concept that is
+ * gone from the tab it was deleted in and still on the board has not been
+ * deleted as far as the user is concerned.
+ */
 export function useDeleteGeneration() {
   const qc = useQueryClient()
   return useMutation({
@@ -1108,6 +1116,8 @@ export function useDeleteGeneration() {
       void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
       void qc.invalidateQueries({ queryKey: ['generation_list_all'] })
       void qc.invalidateQueries({ queryKey: qk.meshes(nodeId) })
+      void qc.invalidateQueries({ queryKey: qk.assets })
+      void qc.invalidateQueries({ queryKey: qk.assetUsages })
       toast('Concept deleted')
     },
     onError: (error) => report(error, 'Could not delete that concept'),

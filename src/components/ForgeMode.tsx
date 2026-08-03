@@ -310,7 +310,7 @@ function SceneComposer({
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Crossing the flooded market at blue hour…"
+              placeholder="Describe the scene…"
             />
           </label>
           <label>

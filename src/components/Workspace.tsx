@@ -28,7 +28,6 @@ import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { StyleTransferSheet } from './StyleTransferSheet'
-import { MilestoneMode } from './MilestoneMode'
 import { AssetsMode } from './AssetsMode'
 import { BoardMode, type BoardAttachRequest } from './BoardMode'
 import { HistoryMode } from './HistoryMode'
@@ -396,10 +395,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
           />
         ) : mode === 'history' ? (
           <HistoryMode nodes={nodes} readOnly={readOnly} onJump={jumpTo} />
-        ) : mode === 'settings' ? (
-          <Settings project={project} />
         ) : (
-          <MilestoneMode mode={mode} queue={queue} />
+          <Settings project={project} />
         )}
       </div>
 

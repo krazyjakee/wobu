@@ -14,7 +14,7 @@
  * What it switches off: creating, renaming, moving, deleting and duplicating
  * nodes, editing notes, autosave, and undo/redo — every one of which ends in a
  * write that the backend would reject anyway, only later and one action at a
- * time. Enhance (M4) and Generate (M5) join that list at their own buttons,
+ * time. Enhance and Generate join that list at their own buttons,
  * because they write to the node like any other edit; see `Editor.tsx`.
  */
 export const READ_ONLY_BANNER = 'project.read_only'

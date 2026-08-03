@@ -142,11 +142,7 @@ function NotesField({
       value={text}
       readOnly={readOnly}
       spellCheck={false}
-      placeholder={
-        readOnly
-          ? 'This project folder is read-only.'
-          : 'Messy is fine. This half is yours and nothing ever writes over it.'
-      }
+      placeholder={readOnly ? 'This project folder is read-only.' : 'Write your notes here…'}
       onChange={(e) => {
         setDraft({ source: node.notesRaw, value: e.target.value, editing: true })
         autosave.queue({ notesRaw: e.target.value })
@@ -184,7 +180,6 @@ function Description({
           sections{def ? ` — ${def.sections.map((s) => s.label).join(' · ')}` : ''} — which is what
           the influence compiler reads.
         </span>
-        <span className="milestone">M4 — Enhance (first BYOK providers)</span>
       </div>
     )
   }

@@ -207,8 +207,8 @@ describe('the write controls, on a read-only folder', () => {
   })
 
   it('leaves Enhance disabled, and says the share is why', async () => {
-    // M4 has not landed, so this button is disabled either way — what changes
-    // is the reason, and the reason is the one that will still be true in M4.
+    // Enhance writes to the node, so a read-only folder disables it like any
+    // other edit — and the reason is what this asserts, not the disabling.
     await open(true)
     fireEvent.click(row('Kael'))
     expect(button(/Enhance/).title).toContain('read-only')

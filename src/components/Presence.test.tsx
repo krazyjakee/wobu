@@ -269,7 +269,7 @@ describe('the banner over a node being edited elsewhere', () => {
     await act(async () => {})
     expect(bannerCodes()).toEqual([PRESENCE_BANNER])
 
-    const notes = (await screen.findByPlaceholderText(/Messy is fine/)) as HTMLTextAreaElement
+    const notes = (await screen.findByPlaceholderText(/Write your notes/)) as HTMLTextAreaElement
     expect(notes.readOnly).toBe(false)
     expect((screen.getByRole('button', { name: 'New entity' }) as HTMLButtonElement).disabled).toBe(
       false,

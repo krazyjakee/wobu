@@ -236,15 +236,6 @@
   background: var(--accent);
 }
 
-/* ── mode placeholder (Board / Forge / Assets / Settings) ── */
-.mode-empty {
-  grid-column: 2 / -1;
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  background: var(--bg);
-}
-
 /* ── status ── */
 .status {
   display: flex;
@@ -305,48 +296,4 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 40vw;
-}
-
-/* The status-bar queue link lands here. This is intentionally the queue view,
-   even while Forge's generation grid remains a later milestone. */
-.queue-view {
-  place-items: stretch;
-  padding: 28px;
-}
-.queue-panel {
-  min-width: 0;
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-panel);
-}
-.queue-head,
-.queue-jobs li {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.queue-head {
-  justify-content: space-between;
-}
-.queue-head h3,
-.queue-head p {
-  margin: 0 0 6px;
-}
-.queue-jobs {
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.queue-jobs li {
-  padding: 10px 0;
-  border-top: 1px solid var(--border);
-}
-.queue-jobs li > :first-child {
-  flex: 1;
-  color: var(--text-dim);
-}
-.queue-empty {
-  margin-top: 24px;
-  color: var(--text-faint);
 }

@@ -95,6 +95,13 @@ The replay receipt points back with `params.replayOf`; its current-price reserva
 separately from the source receipt's original estimate. A missing snapshot reference is a hard
 error, never an invitation to substitute a current node link.
 
+Deleting a concept moves its receipt to `generations/.deleted/<month>/` — out of Concepts and
+History, still there for strict spend reconstruction — and takes its output blobs with it, so the
+picture leaves the Asset Library and the board at the same moment it leaves the grid. An output
+that a node still claims, as a reference or as its cover, is left alone, and so is one that
+another visible receipt also lists: the user asked to delete a result, not to break an image they
+kept or blank another concept's tile.
+
 A mesh receipt uses the typed `params.meshOutput` object rather than putting a GLB in the image
 `outputAssetIds` list: `{ assetId, turnaroundGenerationIds }`. The source ids name the immutable
 eight-view receipts that actually fed the mesh job. If an older or externally written receipt

@@ -1252,6 +1252,29 @@ impl Index {
         Ok(doc.and_then(|doc| serde_json::from_str(&doc).ok()))
     }
 
+    /// Whether any receipt still on the visible ledger claims this asset as an
+    /// output.
+    ///
+    /// Assets are content-addressed, so two runs that produced identical bytes
+    /// share one id and one file. Deleting one of those concepts must not take
+    /// the picture out from under the other, which is why this asks the whole
+    /// table rather than trusting the receipt being deleted. `first_asset_id`
+    /// answers the common single-output case from a column; the `LIKE` widens
+    /// it to multi-output receipts and the parse confirms the match, so a hit
+    /// on the same id inside a prompt or an influence snapshot cannot pass for
+    /// an output.
+    pub fn generation_outputs_contain(&self, asset_id: Id) -> Result<bool> {
+        let id = asset_id.to_string();
+        let mut stmt = self
+            .conn
+            .prepare("SELECT doc FROM generations WHERE first_asset_id = ?1 OR doc LIKE ?2")?;
+        let candidates =
+            collect_json_documents(stmt.query_map(params![id, format!("%{id}%")], document_row)?)?;
+        Ok(candidates
+            .iter()
+            .any(|generation: &Generation| generation.output_asset_ids.contains(&asset_id)))
+    }
+
     /// Full node receipts for the mesh adapter's immutable turnaround joins.
     pub fn generation_documents_for_node(&self, node_id: Id) -> Result<Vec<Generation>> {
         let mut stmt = self.conn.prepare(

@@ -1558,6 +1558,12 @@ impl Project {
             return Err(Error::AssetInUse { asset: id.to_string(), nodes: users });
         }
 
+        self.remove_asset_blob(&asset)
+    }
+
+    /// The destructive half of a deletion, once something has decided it is
+    /// allowed. Every caller does its own permission thinking first.
+    fn remove_asset_blob(&mut self, asset: &Asset) -> Result<()> {
         if let Some(thumb) = &asset.thumb_path {
             remove_asset_file(&paths::from_rel_string(&self.root, thumb))?;
         }
@@ -1661,6 +1667,19 @@ impl Project {
     }
 
     /// Remove a receipt from user-facing history while retaining it for spend accounting.
+    ///
+    /// The pictures go with it. A deleted concept that left its image in the
+    /// Asset Library and on the board would only be deleted from the one view
+    /// the user happened to be looking at, which is not what the button says.
+    /// So each output blob is taken too — but only where nothing else claims
+    /// it: an image pinned as a reference, chosen as a cover, or shared with a
+    /// receipt that is still on the ledger stays exactly where it is, because
+    /// removing it would break something the user never asked to touch.
+    ///
+    /// The receipt is archived first, and the outputs are cleaned up after it:
+    /// deleting the concept is the operation the user asked for, so it is the
+    /// one allowed to fail. An output that cannot be removed is left behind
+    /// rather than turning a completed deletion into an error.
     pub fn delete_generation(&mut self, id: Id) -> Result<()> {
         self.ensure_writable()?;
         let generation = self
@@ -1669,7 +1688,36 @@ impl Project {
             .ok_or_else(|| Error::NoSuchGeneration(id.to_string()))?;
         let rel = generations::archive(&self.root, &generation)?;
         self.index.remove_generation_by_rel_path(&rel)?;
+
+        let mut seen = std::collections::BTreeSet::new();
+        for asset_id in &generation.output_asset_ids {
+            if seen.insert(*asset_id) {
+                // A blob that will not go — an unreadable node file it cannot
+                // clear itself against, a file held open by a viewer — is left
+                // where it is. The concept has already been deleted, and
+                // reporting a failure for work that succeeded would only invite
+                // the user to try again at nothing.
+                let _ = self.delete_unclaimed_output(*asset_id);
+            }
+        }
         Ok(())
+    }
+
+    /// Delete one output blob of a just-deleted receipt, if nothing claims it.
+    ///
+    /// Unlike [`delete_asset`](Self::delete_asset) a claim is not an error
+    /// here: the user deleted a concept, not an image, and being told that the
+    /// operation failed because they had pinned the result would be a refusal
+    /// of a request that has already succeeded.
+    fn delete_unclaimed_output(&mut self, id: Id) -> Result<()> {
+        let Some(asset) = self.get_asset(id)? else { return Ok(()) };
+        if self.canonical_asset_users(id)? > 0 {
+            return Ok(());
+        }
+        if self.index.generation_outputs_contain(id)? {
+            return Ok(());
+        }
+        self.remove_asset_blob(&asset)
     }
 
     /// Attach an asset to a node in a role.
@@ -2700,6 +2748,7 @@ fn is_conflict_path(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assets::png;
     use wobu_core::new_id;
 
     fn new_project() -> (tempfile::TempDir, Project) {
@@ -2814,13 +2863,11 @@ mod tests {
         assert_eq!(project.list_generations(node.id).unwrap().len(), 2);
     }
 
-    #[test]
-    fn replay_receipt_may_outlive_its_original_node() {
-        let (_dir, mut project) = new_project();
-        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
-        let original = Generation {
+    /// One recorded concept, with whatever it produced.
+    fn concept(node_id: Id, outputs: Vec<Id>) -> Generation {
+        Generation {
             id: new_id(),
-            node_id: node.id,
+            node_id,
             created_at: "2026-07-31T14:22:11Z".parse().unwrap(),
             preset: "portrait".into(),
             view_type: None,
@@ -2831,9 +2878,76 @@ mod tests {
             model: "local".into(),
             seed: 42,
             params: Default::default(),
-            output_asset_ids: vec![],
+            output_asset_ids: outputs,
             influence_snapshot: wobu_core::InfluenceSnapshot { layers: vec![] },
-        };
+        }
+    }
+
+    #[test]
+    fn deleting_a_concept_takes_the_picture_it_produced() {
+        // Otherwise the concept is deleted from Concepts and still sitting in
+        // the Asset Library and on the board, which is not what the button says.
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let output = project.import_asset(&png(64, 64), AssetKind::Generated).unwrap().asset;
+        let generation = concept(node.id, vec![output.id]);
+        project.record_generation(generation.clone()).unwrap();
+
+        project.delete_generation(generation.id).unwrap();
+
+        assert!(project.get_generation(generation.id).unwrap().is_none());
+        assert!(project.get_asset(output.id).unwrap().is_none());
+        assert!(!paths::from_rel_string(project.root(), &output.rel_path).exists());
+    }
+
+    #[test]
+    fn deleting_a_concept_leaves_an_output_the_user_kept() {
+        // Pinning a result as a reference, or making it a cover, is the user
+        // saying they want the picture for its own sake. Deleting the receipt
+        // it came from is not them changing their mind about that.
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let pinned = project.import_asset(&png(64, 64), AssetKind::Generated).unwrap().asset;
+        let cover = project.import_asset(&png(65, 65), AssetKind::Generated).unwrap().asset;
+        let loose = project.import_asset(&png(66, 66), AssetKind::Generated).unwrap().asset;
+        project.link_asset(node.id, pinned.id, AssetRole::FullRef, None).unwrap();
+        project.set_cover_asset(node.id, Some(cover.id)).unwrap();
+        let generation = concept(node.id, vec![pinned.id, cover.id, loose.id]);
+        project.record_generation(generation.clone()).unwrap();
+
+        project.delete_generation(generation.id).unwrap();
+
+        assert!(project.get_asset(pinned.id).unwrap().is_some());
+        assert!(project.get_asset(cover.id).unwrap().is_some());
+        assert!(project.get_asset(loose.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn deleting_a_concept_leaves_an_output_another_receipt_still_shows() {
+        // Assets are content-addressed, so two runs that produced the same
+        // bytes are one file. Deleting one of those concepts must not blank the
+        // tile of the other.
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let shared = project.import_asset(&png(64, 64), AssetKind::Generated).unwrap().asset;
+        let first = concept(node.id, vec![shared.id]);
+        let second = concept(node.id, vec![shared.id]);
+        project.record_generation(first.clone()).unwrap();
+        project.record_generation(second.clone()).unwrap();
+
+        project.delete_generation(first.id).unwrap();
+        assert!(project.get_asset(shared.id).unwrap().is_some());
+
+        // And once the last receipt showing it is gone, so is the picture.
+        project.delete_generation(second.id).unwrap();
+        assert!(project.get_asset(shared.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn replay_receipt_may_outlive_its_original_node() {
+        let (_dir, mut project) = new_project();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+        let original = concept(node.id, vec![]);
         project.record_generation(original.clone()).unwrap();
         project.delete_node(node.id).unwrap();
         let mut replay = original.clone();

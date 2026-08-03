@@ -629,21 +629,27 @@ fn validate_regular_hash(
     ))
 }
 
+/// A PNG header and nothing else. Every dimension gives different bytes and so
+/// a different hash, which is all any test in this crate needs of an image.
+///
+/// It lives out here rather than in the test module below because importing an
+/// image is a precondition of tests all over the crate, and a second copy of
+/// these fourteen bytes would be one more thing to keep in step with what
+/// `image::probe` accepts.
+#[cfg(test)]
+pub(crate) fn png(width: u32, height: u32) -> Vec<u8> {
+    let mut out = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    out.extend_from_slice(&13u32.to_be_bytes());
+    out.extend_from_slice(b"IHDR");
+    out.extend_from_slice(&width.to_be_bytes());
+    out.extend_from_slice(&height.to_be_bytes());
+    out.extend_from_slice(&[8, 6, 0, 0, 0]);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A PNG header and nothing else. Every dimension gives different bytes and
-    /// so a different hash, which is all these tests need.
-    fn png(width: u32, height: u32) -> Vec<u8> {
-        let mut out = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-        out.extend_from_slice(&13u32.to_be_bytes());
-        out.extend_from_slice(b"IHDR");
-        out.extend_from_slice(&width.to_be_bytes());
-        out.extend_from_slice(&height.to_be_bytes());
-        out.extend_from_slice(&[8, 6, 0, 0, 0]);
-        out
-    }
 
     #[test]
     fn the_id_is_the_hash_and_survives_a_string_round_trip() {
