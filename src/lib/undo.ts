@@ -342,33 +342,3 @@ export function editEntry(before: WobuNode, after: WobuNode): NewEntry | null {
     coalesce: true,
   }
 }
-
-/**
- * What a keydown means for the undo stack, if anything.
- *
- * `typing` is the caller's answer to "is a text field focused", and when it is
- * true this returns `null` on purpose: while the caret is in a textarea, ⌘Z
- * belongs to the field, and stealing it would make the workspace rewind a
- * whole save every time someone tried to take back a word.
- *
- * The cost of that rule, stated plainly because it is a real one: once the
- * field's own undo stack is exhausted the browser does nothing at all, and
- * workspace undo never gets its turn without the user first clicking away. The
- * alternative — taking ⌘Z once the native stack looks empty — cannot be
- * implemented, because the DOM does not expose whether it is. Between a key
- * that occasionally does nothing and a key that occasionally discards a
- * paragraph the user was still editing, this is the safe direction.
- */
-export function undoIntent(
-  e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey'>,
-  typing: boolean,
-): 'undo' | 'redo' | null {
-  if (!(e.metaKey || e.ctrlKey)) return null
-  const key = e.key.toLowerCase()
-  // ⇧⌘Z is the mac redo; ⌃Y is what a Windows keyboard reaches for, and both
-  // land here because the same build runs on both.
-  if (key === 'z' && e.shiftKey) return typing ? null : 'redo'
-  if (key === 'z') return typing ? null : 'undo'
-  if (key === 'y' && !e.shiftKey) return typing ? null : 'redo'
-  return null
-}

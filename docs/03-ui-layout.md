@@ -165,12 +165,60 @@ title bar so the chrome matches on all three platforms.
 
 ## Keyboard
 
+`⌘` is Command on a Mac and Control everywhere else; both are accepted on every platform, and
+only the printed form differs. These are defaults — every one of them can be changed, and the
+list below is generated from the same registry the app dispatches from
+(`src/store/keybindings.ts`), so it cannot drift from what the keys actually do.
+
+**Getting around**
+
 | | |
 | --- | --- |
-| `⌘K` | command palette / jump to node |
+| `⌘K` | command palette / jump to node — works while typing, on purpose |
+| `⌘/` | the keyboard reference, in the app |
+| `⌘F` | filter the navigator (names and summaries; the palette searches notes too) |
+| `⇧⌘L` `⌘\` `⇧⌘A` `⌘,` | Library · Forge, and back · Assets · Settings |
+
+**Panels**
+
+| | |
+| --- | --- |
+| `[` `]` | collapse navigator / inspector |
+| `⇧⌘C` | collapse everything in the navigator, or expand it again |
+
+**The editor**
+
+| | |
+| --- | --- |
+| `⌘1…5` | Notes · References · Concepts · 3D · Relations (returns to the Library) |
+
+**Writing**
+
+| | |
+| --- | --- |
 | `⌘N` | new node in current group |
+| `⌘Z` `⇧⌘Z` | undo / redo (`⌘Y` also redoes) |
 | `⌘E` | Enhance current node |
 | `⌘↵` | Generate |
-| `⌘1…5` | editor tabs |
-| `[` `]` | collapse navigator / inspector |
-| `⌘\` | toggle Forge |
+
+`Escape` dismisses whatever is on top, `Tab` and `⇧Tab` move within a dialog without leaving it,
+and the arrows plus `↵` choose in the palette and in menus. Those are fixed rather than
+configurable: they are what every dialog on every platform means by those keys.
+
+### The rules
+
+- **One registry.** `store/keybindings.ts` declares every command, its default chord and its
+  scope. Surfaces resolve a keystroke through it rather than comparing `e.key` themselves, so
+  exactly one command runs for any chord — including the two that stay with their surfaces
+  (Enhance and Generate know whether they are eligible; nothing else does).
+- **Nothing fires while you are typing** unless the command says otherwise. Only the palette,
+  the reference and the navigator filter say otherwise, because all three are ways of leaving
+  where you are.
+- **Nothing fires behind a dialog.** A shortcut that toggled a pane under the sheet you are
+  answering acts on something you cannot see.
+- **Conflicts are reported, not absorbed.** Two commands may share a chord; the earlier one in
+  the registry wins, and Settings and the reference both name the winner and the command that
+  has stopped working, with an offer to put the default back.
+- **Bindings are per machine.** Local storage, beside the interface scale and favourites, never
+  the project folder — a remapped key is a fact about one person's hands, and syncing it would
+  push it onto everybody who opens the world.

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { setModalDepth } from '../lib/modalStack'
 
 const FOCUSABLE = [
   'a[href]',
@@ -37,6 +38,12 @@ function restoreElement(element: HTMLElement) {
 }
 
 function syncBackground() {
+  // Published for the keyboard dispatcher, which has to know whether the
+  // workspace is reachable before it runs a shortcut against it. Set here
+  // rather than at the two call sites so it cannot fall out of step with the
+  // stack: everything that changes the stack ends by calling this.
+  setModalDepth(stack.length)
+
   // A background child can unmount while a nested modal is still open. Do not
   // retain detached nodes in the process-long restoration map.
   for (const element of inertBeforeModal.keys()) {

@@ -7,7 +7,6 @@ import {
   editEntry,
   editLabel,
   moveEntry,
-  undoIntent,
   useUndoStack,
   type NewEntry,
   type UndoEntry,
@@ -256,38 +255,6 @@ describe('project scope', () => {
     useUndoStack.getState().setProject(null)
     useUndoStack.getState().push(entry({ nodeId: 'kell' }))
     expect(useUndoStack.getState().past).toEqual([])
-  })
-})
-
-describe('undoIntent — who owns ⌘Z', () => {
-  const key = (over: Partial<KeyboardEvent> = {}) =>
-    ({ key: 'z', metaKey: true, ctrlKey: false, shiftKey: false, ...over }) as KeyboardEvent
-
-  it('claims ⌘Z and ⌃Z for the workspace', () => {
-    expect(undoIntent(key(), false)).toBe('undo')
-    expect(undoIntent(key({ metaKey: false, ctrlKey: true }), false)).toBe('undo')
-  })
-
-  it('reads ⇧⌘Z and ⌃Y as redo', () => {
-    expect(undoIntent(key({ shiftKey: true }), false)).toBe('redo')
-    expect(undoIntent(key({ key: 'y', metaKey: false, ctrlKey: true }), false)).toBe('redo')
-  })
-
-  it('yields to a focused text field', () => {
-    // While the caret is in a textarea the field's own undo owns the key.
-    // Stealing it would rewind a whole save every time someone tried to take
-    // back a word.
-    expect(undoIntent(key(), true)).toBeNull()
-    expect(undoIntent(key({ shiftKey: true }), true)).toBeNull()
-  })
-
-  it('ignores an unmodified z, which is just typing', () => {
-    expect(undoIntent(key({ metaKey: false }), false)).toBeNull()
-  })
-
-  it('ignores the other modified keys the workspace binds', () => {
-    expect(undoIntent(key({ key: 'k' }), false)).toBeNull()
-    expect(undoIntent(key({ key: 'n' }), false)).toBeNull()
   })
 })
 

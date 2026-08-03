@@ -48,6 +48,7 @@ import {
 import { report, toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { Icon } from './Icon'
+import { KeybindingsSection } from './KeybindingsSection'
 import { LegalSection } from './LegalSection'
 import { LicencesSection } from './LicencesSection'
 import { WikiExportSection } from './WikiExportSection'
@@ -70,6 +71,7 @@ export function Settings({ project }: { project?: ProjectSummary }) {
         <Storage />
         <EditorPrefs />
         <Appearance />
+        <KeybindingsSection />
         {project && <WikiExportSection project={project} />}
         <Diagnostics />
         <About />

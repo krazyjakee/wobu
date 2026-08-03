@@ -6,6 +6,7 @@ import { Settings } from './Settings'
 import type { ComfyEndpointProbe, KeyStatus, ProviderSelections } from '../lib/api'
 import { useUI } from '../store/ui'
 import { useSettings } from '../store/settings'
+import { useKeybindings } from '../store/keybindings'
 
 /*
  * The providers pane, which is the one surface in the app where a credential
@@ -142,6 +143,7 @@ beforeEach(() => {
   }
   useUI.setState({ toasts: [], banners: [] })
   useSettings.getState().reset()
+  useKeybindings.setState({ overrides: {} })
   // Without this `isTauri()` is false and every command rejects before it is
   // sent, which is right in a browser and useless here.
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
@@ -660,5 +662,90 @@ describe('the legal pane', () => {
         address,
       )
     }
+  })
+})
+
+/*
+ * Rebinding.
+ *
+ * The assertions worth having here are about the two ways this pane can lie:
+ * showing a shortcut that no longer runs, and accepting an assignment that
+ * quietly does nothing because an earlier command already owns the chord.
+ */
+describe('the keyboard pane', () => {
+  /** The chord button for a command, by the label beside it. */
+  function chordButton(label: string): HTMLElement {
+    return screen.getByRole('button', { name: new RegExp(`^${label} — `) })
+  }
+
+  it('records a new chord, and shows it in this platform’s notation', async () => {
+    await open()
+    fireEvent.click(chordButton('Assets'))
+    const recording = screen.getByRole('button', { name: /Press the new shortcut for Assets/ })
+
+    fireEvent.keyDown(recording, { key: 'j', ctrlKey: true })
+
+    expect(useKeybindings.getState().overrides['mode.assets']).toBe('Mod+J')
+    expect(chordButton('Assets')).toHaveTextContent('CtrlJ')
+  })
+
+  it('abandons the recording on Escape without changing anything', async () => {
+    await open()
+    fireEvent.click(chordButton('Assets'))
+    fireEvent.keyDown(screen.getByRole('button', { name: /Press the new shortcut/ }), {
+      key: 'Escape',
+    })
+
+    expect(useKeybindings.getState().overrides['mode.assets']).toBeUndefined()
+  })
+
+  it('leaves a command unbound on Backspace, and says so', async () => {
+    await open()
+    fireEvent.click(chordButton('Toggle the inspector'))
+    fireEvent.keyDown(screen.getByRole('button', { name: /Press the new shortcut/ }), {
+      key: 'Backspace',
+    })
+
+    expect(useKeybindings.getState().overrides['panel.inspector']).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /Toggle the inspector — no shortcut/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('reports a clash instead of letting the loser fail silently', async () => {
+    await open()
+    fireEvent.click(chordButton('Assets'))
+    fireEvent.keyDown(screen.getByRole('button', { name: /Press the new shortcut/ }), {
+      key: 'k',
+      ctrlKey: true,
+    })
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(/runs Command palette/)
+    expect(alert).toHaveTextContent(/Assets does nothing/)
+
+    // And the offer to undo it puts the default back.
+    fireEvent.click(within(alert).getByRole('button', { name: /Restore the default/ }))
+    expect(useKeybindings.getState().overrides['mode.assets']).toBeUndefined()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('offers the default back for one command, and for all of them', async () => {
+    await open()
+    useKeybindings.getState().setBinding('mode.assets', 'Mod+J')
+    useKeybindings.getState().setBinding('mode.settings', 'Mod+M')
+
+    const [restore] = await screen.findAllByRole('button', { name: /^Default \(/ })
+    fireEvent.click(restore!)
+    expect(useKeybindings.getState().overrides['mode.assets']).toBeUndefined()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset every shortcut' }))
+    expect(useKeybindings.getState().overrides).toEqual({})
+  })
+
+  it('opens the reference from here as well', async () => {
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Show the printable list' }))
+    expect(useUI.getState().shortcutsOpen).toBe(true)
   })
 })

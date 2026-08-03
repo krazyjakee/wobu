@@ -102,6 +102,10 @@ interface UIState {
   paletteOpen: boolean
   setPaletteOpen: (v: boolean) => void
 
+  /** The keyboard reference. Ephemeral like the palette; the bindings are not. */
+  shortcutsOpen: boolean
+  setShortcutsOpen: (v: boolean) => void
+
   toasts: Toast[]
   pushToast: (text: string, kind?: Toast['kind'], options?: ToastOptions) => number
   updateToast: (id: number, update: ToastUpdate) => void
@@ -202,6 +206,9 @@ export const useUI = create<UIState>((set) => ({
 
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+
+  shortcutsOpen: false,
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 
   toasts: [],
   pushToast: (text, kind = 'info', options = {}) => {

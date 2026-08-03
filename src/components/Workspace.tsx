@@ -26,6 +26,7 @@ import { Navigator } from './navigator/Navigator'
 import { Editor } from './editor/Editor'
 import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
+import { ShortcutsSheet } from './ShortcutsSheet'
 import { NewNodeSheet } from './NewNodeSheet'
 import { StyleTransferSheet } from './StyleTransferSheet'
 import { AssetsMode } from './AssetsMode'
@@ -168,7 +169,10 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
   }, [readOnly])
 
-  useKeyboard({ onNewNode: openNewNode, readOnly })
+  // `navKinds` is what the collapse-everything shortcut needs to close, and it
+  // is known here rather than in the navigator because the group order is
+  // derived from the kind registry above.
+  useKeyboard({ onNewNode: openNewNode, readOnly, navKinds: kindOrder })
 
   /* ── navigator resize ── */
   const dragging = useRef(false)
@@ -381,6 +385,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
         onNewNode={openNewNode}
         readOnly={readOnly}
       />
+
+      <ShortcutsSheet />
 
       {newNode && (
         <NewNodeSheet

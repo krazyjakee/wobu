@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeSummary } from '../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../lib/kinds'
 import { nameMatches, textMatches } from '../lib/search'
 import { useNodeSearch, useUndo } from '../lib/queries'
 import { useNodeThumbs } from '../lib/nodeThumbs'
 import { useDebounced } from '../hooks/useDebounced'
+import { formatChord } from '../lib/keys'
+import { bindingOf, useKeybindings, type CommandId } from '../store/keybindings'
 import { useUI } from '../store/ui'
 import { NodeThumbnail } from './AssetMedia'
 import { Icon } from './Icon'
@@ -94,6 +96,22 @@ function OpenCommandPalette({
   const setOpen = useUI((s) => s.setPaletteOpen)
   const toggleNav = useUI((s) => s.toggleNav)
   const toggleInsp = useUI((s) => s.toggleInsp)
+  const setShortcutsOpen = useUI((s) => s.setShortcutsOpen)
+
+  /*
+   * The hint on each row is the binding that is actually in force, read from
+   * the registry rather than typed into the label. It used to be a literal
+   * "⌘Z", which was wrong twice over: it said Command on a machine with no
+   * Command key, and it went on saying it after the user rebound undo.
+   */
+  const overrides = useKeybindings((s) => s.overrides)
+  const hint = useCallback(
+    (id: CommandId): string | undefined => {
+      const chord = bindingOf(overrides, id)
+      return chord ? formatChord(chord) : undefined
+    },
+    [overrides],
+  )
 
   const { undo, redo, nextUndo, nextRedo } = useUndo()
 
@@ -121,7 +139,7 @@ function OpenCommandPalette({
               id: 'cmd:new',
               label: 'New node…',
               icon: 'plus',
-              hint: 'create',
+              hint: hint('node.new'),
               run: () => onNewNode(),
             },
           ]),
@@ -131,7 +149,7 @@ function OpenCommandPalette({
               id: 'cmd:undo',
               label: `Undo ${nextUndo.label}`,
               icon: 'refresh',
-              hint: '⌘Z',
+              hint: hint('edit.undo'),
               run: () => void undo(),
             },
           ]
@@ -142,7 +160,7 @@ function OpenCommandPalette({
               id: 'cmd:redo',
               label: `Redo ${nextRedo.label}`,
               icon: 'refresh',
-              hint: '⇧⌘Z',
+              hint: hint('edit.redo'),
               run: () => void redo(),
             },
           ]
@@ -151,18 +169,40 @@ function OpenCommandPalette({
         id: 'cmd:nav',
         label: 'Toggle navigator',
         icon: 'library',
-        hint: '[',
+        hint: hint('panel.navigator'),
         run: () => toggleNav(),
       },
       {
         id: 'cmd:insp',
         label: 'Toggle inspector',
         icon: 'layers',
-        hint: ']',
+        hint: hint('panel.inspector'),
         run: () => toggleInsp(),
       },
+      // The way in for anyone who has never pressed a shortcut here: the
+      // palette is the one surface people already search when they suspect a
+      // command exists, so the map of every other key belongs in it.
+      {
+        id: 'cmd:shortcuts',
+        label: 'Keyboard shortcuts',
+        icon: 'settings',
+        hint: hint('shortcuts.show'),
+        run: () => setShortcutsOpen(true),
+      },
     ],
-    [onNewNode, readOnly, toggleNav, toggleInsp, undo, redo, nextUndo, nextRedo],
+    // `hint` changes with the bindings, which is what re-labels these rows.
+    [
+      hint,
+      onNewNode,
+      readOnly,
+      toggleNav,
+      toggleInsp,
+      setShortcutsOpen,
+      undo,
+      redo,
+      nextUndo,
+      nextRedo,
+    ],
   )
 
   const needle = q.trim().toLowerCase()

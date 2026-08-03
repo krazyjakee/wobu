@@ -1,4 +1,7 @@
+export function isMac(): boolean {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+}
+
 export function modKey(): string {
-  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
-  return mac ? '⌘' : 'Ctrl+'
+  return isMac() ? '⌘' : 'Ctrl+'
 }
