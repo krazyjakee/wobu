@@ -103,12 +103,63 @@ jobs:
 
       - run: cargo test --workspace
 
+  # Attribution is a shipping requirement, not a chore: MIT, BSD and Apache-2.0
+  # all ask that their notices travel with the binary, and a dependency added
+  # last week is one nobody remembers to add a notice for. So the notice file is
+  # regenerated here and the job fails if it differs from the committed copy —
+  # which makes "did you update the notices?" a machine's question rather than a
+  # reviewer's.
+  licences:
+    name: Licences — notices current, no incompatible dependency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # The generator takes the package *set* from the lockfiles but the licence
+      # *texts* from the packages themselves, so the trees have to be on disk.
+      - run: npm ci
+
+      # Seconds, and it fails on the half of the generator that can be wrong
+      # quietly — before the cargo steps below have spent five minutes.
+      - name: Test the licence classifier
+        run: npm run licences:tool:test
+
+      - name: Install the pinned Rust toolchain
+        working-directory: src-tauri
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          # Its own key: this job compiles nothing, and sharing `rust`'s cache
+          # would mean each run evicting the other's.
+          key: licences
+
+      # Unpacks every crate in `Cargo.lock`, including the ones this runner will
+      # never build. Without it the notices are missing the macOS and Windows
+      # halves of the graph, which are exactly the ones a Linux developer's
+      # local run would also miss.
+      - name: Unpack the crate sources
+        working-directory: src-tauri
+        run: cargo metadata --format-version 1 --locked > /dev/null
+
+      # Two failures, one command: notices that no longer match the lockfiles,
+      # and a copyleft or non-commercial licence in the distributed graph.
+      - run: npm run licences:check
+
   # The expensive one, and the reason it is worth having: a `cargo test` that
   # passes says nothing about whether the app still packages. Bundling breakage
   # is otherwise found on release day.
   bundle:
     name: Bundle (${{ matrix.os }})
-    needs: [frontend, rust]
+    # `licences` too: the notice file is a bundled resource, so a bundle built
+    # without it is one that cannot legally be handed to anyone.
+    needs: [frontend, licences, rust]
     runs-on: ${{ matrix.os }}
     strategy:
       # One platform's packaging failure is not a reason to stop finding out

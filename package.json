@@ -2,6 +2,7 @@
   "name": "wobu",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,6 +19,9 @@
     "check:dead-code": "knip --no-progress",
     "check:duplicates": "node scripts/check-duplication.mjs",
     "check:duplicates:report": "jscpd src src-tauri",
+    "licences": "node scripts/generate-third-party-notices.mjs",
+    "licences:check": "node scripts/generate-third-party-notices.mjs --check",
+    "licences:tool:test": "node --test scripts/generate-third-party-notices.test.mjs",
     "check:code-health": "npm run check:dead-code && npm run check:duplicates",
     "release:check": "node scripts/release-version.mjs --check",
     "release:set": "node scripts/release-version.mjs --set",

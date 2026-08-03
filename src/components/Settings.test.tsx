@@ -496,3 +496,69 @@ describe('the machine-local ComfyUI endpoint', () => {
     expect(screen.getAllByText(/cannot start.*local mesh request yet/i)).not.toHaveLength(0)
   })
 })
+
+/*
+ * The Licences pane. Its whole value is that the text on screen is the text
+ * that ships: the app licence is read from `LICENSE` and the attributions from
+ * the generated `THIRD-PARTY-NOTICES.md`, both at build time. So these
+ * assertions go through the real files rather than a fixture — a stub here
+ * would pass on the day someone deleted the notice file, which is the one
+ * failure the pane exists to prevent.
+ */
+describe('the licences pane', () => {
+  function pane(): HTMLElement {
+    const section = screen.getByRole('heading', { name: 'Licences' }).closest('section')
+    if (!section) throw new Error('the Licences heading is not inside a section')
+    return section
+  }
+
+  it('states Wobu’s own licence and shows the text of the LICENSE file on demand', async () => {
+    await open()
+
+    expect(within(pane()).getByText('MIT — © 2026 Jake Cattrall')).toBeTruthy()
+    expect(pane().textContent).not.toContain('Permission is hereby granted')
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Show licence' }))
+
+    const shown = pane().textContent ?? ''
+    expect(shown).toContain('MIT License')
+    expect(shown).toContain('Copyright (c) 2026 Jake Cattrall')
+    expect(shown).toContain('Permission is hereby granted')
+  })
+
+  it('loads the generated third-party notices, and not before they are asked for', async () => {
+    await open()
+
+    // The notices are a megabyte of licence text behind a dynamic import.
+    // Nothing about them is in the document until the button is pressed.
+    expect(pane().textContent).not.toContain('Third-party notices')
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Show third-party notices' }))
+    await within(pane()).findByRole('button', { name: 'Hide third-party notices' })
+
+    const shown = pane().textContent ?? ''
+    // The generated file's own heading, the attribution for a crate that is
+    // linked into the binary, and one for a package bundled into this frontend.
+    expect(shown).toContain('# Third-party notices')
+    expect(shown).toContain('| tauri |')
+    expect(shown).toContain('| react |')
+    // The audit the generator runs is part of the shipped file, so a copyleft
+    // dependency arriving is visible to a user and not only to CI.
+    expect(shown).toContain('Licences needing a human')
+  })
+
+  it('copies the notices in full rather than what happens to be on screen', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    await open()
+
+    fireEvent.click(within(pane()).getByRole('button', { name: 'Show third-party notices' }))
+    fireEvent.click(await within(pane()).findByRole('button', { name: 'Copy' }))
+
+    await waitFor(() => expect(useUI.getState().toasts).toHaveLength(1))
+    const [copied] = writeText.mock.calls[0] as [string]
+    expect(copied.startsWith('# Third-party notices')).toBe(true)
+    expect(copied).toContain('## Licence texts')
+    expect(copied.length).toBeGreaterThan(10_000)
+  })
+})

@@ -48,6 +48,7 @@ import {
 import { report, toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { Icon } from './Icon'
+import { LicencesSection } from './LicencesSection'
 import { WikiExportSection } from './WikiExportSection'
 
 /**
@@ -70,6 +71,7 @@ export function Settings({ project }: { project?: ProjectSummary }) {
         {project && <WikiExportSection project={project} />}
         <Diagnostics />
         <About />
+        <LicencesSection />
       </div>
     </div>
   )

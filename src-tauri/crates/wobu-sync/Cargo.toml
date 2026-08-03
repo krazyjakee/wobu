@@ -2,6 +2,7 @@
 name = "wobu-sync"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 # Boxed futures for the two traits this crate asks the app to implement. The

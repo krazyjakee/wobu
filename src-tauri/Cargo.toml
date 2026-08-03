@@ -4,6 +4,10 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+# Inherited by every crate rather than written eight times. `cargo metadata`
+# reads this, which is what keeps Wobu's own crates out of the third-party
+# notices as *ours* rather than as packages with no licence at all.
+license = "MIT"
 # Not an aspiration: below this the workspace does not build, because
 # `libsqlite3-sys`'s build script uses `cfg_select!`. `rust-toolchain.toml`
 # pins the toolchain that is actually used; this is the floor cargo enforces.
@@ -45,6 +49,7 @@ wobu-sync = { path = "crates/wobu-sync" }
 name = "wobu"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "Local-first, AI-assisted world building for concept art"
 default-run = "wobu"
 
