@@ -45,6 +45,7 @@ import {
   SCALE_STEP,
   useSettings,
 } from '../store/settings'
+import { useOnboarding } from '../store/onboarding'
 import { report, toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { Icon } from './Icon'
@@ -69,6 +70,19 @@ export function Settings({ project }: { project?: ProjectSummary }) {
         <h2>Settings</h2>
         <Providers />
         <LegalSection />
+        <section className="set-sec">
+          <h3>Introduction</h3>
+          <p className="set-note">
+            The first-run walkthrough — what Wobu is, where a project lives, and how a first concept
+            gets made. Running it again changes nothing: your agreement to the terms stays recorded.
+          </p>
+          <div className="set-acts">
+            <button className="btn-mini" onClick={() => useOnboarding.getState().restart()}>
+              <Icon name="spark" size="sm" />
+              Show the introduction
+            </button>
+          </div>
+        </section>
         <McpSection />
         <Storage />
         <EditorPrefs />

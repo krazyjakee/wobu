@@ -1,0 +1,267 @@
+/* ── first run ────────────────────────────────────────────────────────────────
+
+   The introduction overlay and the legal gate in front of it (issues #131,
+   #137). It is a `.sheet` with one extra class rather than a surface of its
+   own: the same panel, border, shadow and focus behaviour as every other modal
+   in the app, so the first thing a new user sees is also the thing they will
+   recognise later.
+
+   Every colour is a token from `tokens.css`. The mark is `branding.css`'s, at
+   the size the launcher already uses. Nothing new is invented here.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.onb {
+  width: min(620px, 94vw);
+  display: flex;
+  flex-direction: column;
+  /* The privacy policy is several thousand words. The panel is allowed to grow
+     to most of the window and then the body scrolls, so the footer — which
+     holds the only way forward — is never pushed off the bottom. */
+  max-height: min(760px, 88vh);
+}
+
+.onb-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 14px;
+}
+.onb-head h2 {
+  margin-bottom: 3px;
+}
+.onb-head p {
+  margin-bottom: 0;
+}
+
+/* ── progress ──
+
+   Named steps rather than dots. Four words cost one line and tell the reader
+   how long this is and what is still coming, which is the actual question
+   behind "how many of these are there". They are buttons because a reader who
+   wants the provider step now should not have to press Next three times. */
+.onb-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.onb-steps button {
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  color: var(--text-faint);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.onb-steps button:hover {
+  color: var(--text-dim);
+  background: var(--bg-raised);
+}
+.onb-steps .is-on button {
+  color: var(--text);
+  border-color: var(--border-str);
+  background: var(--bg-raised);
+}
+
+/* ── body ── */
+
+.onb-body {
+  overflow-y: auto;
+  /* Room for the focus ring on the scroll container's own children. */
+  padding-right: 2px;
+  margin-bottom: 4px;
+}
+.onb-body > p:last-child {
+  margin-bottom: 0;
+}
+
+.onb-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.onb-facts,
+.onb-rows,
+.onb-numbered {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.62;
+  margin-bottom: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.onb-facts {
+  list-style: none;
+}
+.onb-facts li {
+  padding-left: 13px;
+  position: relative;
+}
+.onb-facts li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.onb-rows {
+  list-style: none;
+}
+.onb-rows li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+.onb-rows .ic {
+  margin-top: 2px;
+  color: var(--text-faint);
+  flex: none;
+}
+.onb-rows b,
+.onb-numbered b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.onb-numbered {
+  padding-left: 17px;
+}
+.onb-numbered li {
+  padding-left: 3px;
+}
+.onb-numbered::marker,
+.onb-numbered li::marker {
+  color: var(--text-faint);
+}
+
+/* ── state rows ──
+
+   The two answers the tour can give about the machine it is running on. Both
+   are one line with an icon, deliberately the same shape: "ready" and "not
+   ready yet" are the same *kind* of fact, and giving the bad one a heavier
+   treatment would read as an error when it is only a step not taken. */
+.onb-done,
+.onb-warn {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 11.5px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  padding: 9px 11px;
+  margin-bottom: 14px;
+}
+.onb-done {
+  color: var(--text-dim);
+}
+.onb-done .ic {
+  color: var(--l-species);
+}
+.onb-warn {
+  color: var(--text-dim);
+}
+.onb-warn .ic {
+  color: var(--accent);
+}
+.onb-done .ic,
+.onb-warn .ic {
+  margin-top: 2px;
+  flex: none;
+}
+.onb-done b {
+  color: var(--text);
+}
+.onb-done code {
+  font: 10.5px var(--mono);
+  color: var(--l-world);
+  word-break: break-all;
+}
+
+.onb-acts {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* ── the legal gate ── */
+
+.onb-docs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* Scrollable and focusable: a document nobody can reach with a keyboard is a
+   document that has not really been offered. */
+.onb-doc {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 10.5px/1.65 var(--mono);
+  color: var(--text-dim);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.onb-rev {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  margin-bottom: 0;
+}
+
+.onb-err {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #f2777a;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+/* ── the way back in ──
+
+   Used wherever a surface outside the overlay offers to re-run it. Set as text
+   rather than as a button because it sits inside a sentence, and a third
+   button on the launcher's action row would compete with New project for
+   attention it does not deserve. */
+.onb-link {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.onb-link:hover {
+  color: var(--text);
+}
+
+/* ── footer ── */
+
+.onb-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 13px;
+  margin-top: 10px;
+}

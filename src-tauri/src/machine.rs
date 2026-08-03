@@ -32,12 +32,44 @@ use crate::error::{Code, CommandResult, WobuError};
 #[serde(rename_all = "camelCase")]
 struct Stored {
     comfyui_endpoint: String,
+    /// `default` rather than required: every `settings.json` written before
+    /// first-run onboarding existed has no such key, and an installation that
+    /// predates the gate has genuinely accepted nothing.
+    #[serde(default)]
+    onboarding: OnboardingState,
 }
 
 impl Default for Stored {
     fn default() -> Self {
-        Self { comfyui_endpoint: comfy::DEFAULT_URL.to_owned() }
+        Self { comfyui_endpoint: comfy::DEFAULT_URL.to_owned(), onboarding: OnboardingState::default() }
     }
+}
+
+/// What the first run settled, as durable as the ComfyUI route beside it.
+///
+/// Here rather than in the project folder for exactly the reason the endpoint
+/// is: accepting the terms is a fact about this installation and the person at
+/// this keyboard, not about a world that gets copied onto a share. Writing it
+/// into `project.json` would mean one author's acceptance travelled to every
+/// collaborator who opened the folder, which is not what any of them agreed to.
+///
+/// Three separate `Option`s rather than one boolean because the questions are
+/// separate. "Have the documents been accepted" gates the app; "which revision"
+/// is what lets a future edit to `docs/legal/*.md` ask again rather than
+/// silently inherit consent for text nobody has read; "was the tour finished"
+/// only decides whether an overlay appears. `None` everywhere is a fresh
+/// install, and that is also what a deleted `settings.json` reads as.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OnboardingState {
+    /// RFC 3339. `None` means the documents have never been accepted here.
+    pub legal_accepted_at: Option<String>,
+    /// The revision string the webview derived from the two shipped documents.
+    pub legal_version: Option<String>,
+    /// RFC 3339, set when the tour is finished *or* skipped — both mean "do not
+    /// show this again", and recording them as one field is what stops a skip
+    /// from being a decision the user has to make on every launch.
+    pub completed_at: Option<String>,
 }
 
 /// The machine-local settings returned to Settings.
@@ -89,13 +121,33 @@ impl MachineSettings {
         let stored = std::fs::read_to_string(&path)
             .ok()
             .and_then(|raw| serde_json::from_str::<Stored>(&raw).ok())
-            .and_then(|stored| {
-                normalise_endpoint(&stored.comfyui_endpoint)
-                    .ok()
-                    .map(|comfyui_endpoint| Stored { comfyui_endpoint })
+            .map(|stored| {
+                // An endpoint this build cannot parse falls back to loopback
+                // rather than discarding the whole file. It used to discard it,
+                // which was harmless when the file held one URL and is not now:
+                // a recorded acceptance must not be undone by a bad address.
+                let comfyui_endpoint = normalise_endpoint(&stored.comfyui_endpoint)
+                    .unwrap_or_else(|_| comfy::DEFAULT_URL.to_owned());
+                Stored { comfyui_endpoint, ..stored }
             })
             .unwrap_or_default();
         Self { path, stored: RwLock::new(stored) }
+    }
+
+    /// Read, change, write, publish — under one lock, for the whole file.
+    ///
+    /// Every mutation goes through here so that none of them can serialise only
+    /// the field it happens to know about. The bug this makes impossible is the
+    /// obvious one: saving a ComfyUI address rewriting `settings.json` without
+    /// the onboarding block, and quietly asking the user to accept the terms
+    /// again the next time they launch.
+    fn update<T>(&self, change: impl FnOnce(&mut Stored) -> T) -> CommandResult<T> {
+        let mut current = self.stored.write();
+        let mut next = current.clone();
+        let out = change(&mut next);
+        save(&self.path, &next)?;
+        *current = next;
+        Ok(out)
     }
 
     pub fn view(&self) -> MachineSettingsView {
@@ -108,10 +160,36 @@ impl MachineSettings {
 
     pub fn set_comfyui_endpoint(&self, endpoint: &str) -> CommandResult<MachineSettingsView> {
         let endpoint = normalise_endpoint(endpoint)?;
-        let next = Stored { comfyui_endpoint: endpoint };
-        save(&self.path, &next)?;
-        *self.stored.write() = next;
+        self.update(|stored| stored.comfyui_endpoint = endpoint)?;
         Ok(self.view())
+    }
+
+    pub fn onboarding(&self) -> OnboardingState {
+        self.stored.read().onboarding.clone()
+    }
+
+    /// Record that the terms of use and the privacy policy were accepted.
+    ///
+    /// The timestamp is taken here rather than passed in: the fact being
+    /// recorded is what this machine's clock said when the button was pressed,
+    /// and a value the webview supplied would be a value the webview could get
+    /// wrong. `version` is text the webview *derived* from the two documents it
+    /// rendered, which is the one thing the Rust side cannot know — it is the
+    /// revision that was actually on screen.
+    fn accept_legal(&self, version: String) -> CommandResult<OnboardingState> {
+        self.update(|stored| {
+            stored.onboarding.legal_accepted_at = Some(now());
+            stored.onboarding.legal_version = Some(version);
+            stored.onboarding.clone()
+        })
+    }
+
+    /// Record that the tour is over, however it ended.
+    fn finish_onboarding(&self) -> CommandResult<OnboardingState> {
+        self.update(|stored| {
+            stored.onboarding.completed_at = Some(now());
+            stored.onboarding.clone()
+        })
     }
 
     /// The synchronous image factory used by status/capability paths.
@@ -138,6 +216,34 @@ impl MachineSettings {
 #[tauri::command]
 pub fn machine_settings(settings: State<'_, MachineSettings>) -> MachineSettingsView {
     settings.view()
+}
+
+/// What the shell needs before it draws its first surface: whether the legal
+/// gate has been passed, and whether the tour has been seen.
+#[tauri::command]
+pub fn onboarding_state(settings: State<'_, MachineSettings>) -> OnboardingState {
+    settings.onboarding()
+}
+
+/// The acceptance step of the first run.
+///
+/// Separate from [`onboarding_finish`] on purpose. Skipping the tour is a
+/// preference; accepting the documents is not, and collapsing the two into one
+/// "onboarding done" flag would make a dismissed overlay indistinguishable from
+/// an agreement. Nothing un-accepts: re-running the tour re-opens the overlay
+/// but leaves the recorded acceptance alone.
+#[tauri::command]
+pub fn onboarding_accept_legal(
+    settings: State<'_, MachineSettings>,
+    version: String,
+) -> CommandResult<OnboardingState> {
+    settings.accept_legal(version)
+}
+
+/// Finished or skipped — both mean the overlay should not open itself again.
+#[tauri::command]
+pub fn onboarding_finish(settings: State<'_, MachineSettings>) -> CommandResult<OnboardingState> {
+    settings.finish_onboarding()
 }
 
 #[tauri::command]
@@ -190,6 +296,10 @@ fn classify_probe(error: &ImageError) -> ComfyEndpointState {
     } else {
         ComfyEndpointState::Unreachable
     }
+}
+
+fn now() -> String {
+    chrono::Utc::now().to_rfc3339()
 }
 
 fn plural(count: usize) -> &'static str {
@@ -316,6 +426,67 @@ mod tests {
 
         assert_eq!(settings.comfy_image().unwrap().base_url(), "http://renderbox.local:9000/proxy");
         assert_eq!(settings.comfy_mesh().unwrap().base_url(), "http://renderbox.local:9000/proxy");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn an_installation_that_predates_onboarding_has_accepted_nothing() {
+        let path = scratch("legacy");
+        std::fs::write(&path, r#"{"comfyuiEndpoint":"http://renderbox:8188"}"#).unwrap();
+
+        let settings = MachineSettings::load_from(path.clone());
+        assert_eq!(settings.onboarding(), OnboardingState::default());
+        assert_eq!(settings.comfyui_endpoint(), "http://renderbox:8188");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn acceptance_outlives_a_restart_and_an_endpoint_change() {
+        let path = scratch("acceptance");
+        let settings = MachineSettings::load_from(path.clone());
+        settings.accept_legal("terms 3 August 2026".into()).unwrap();
+        // The regression this pins: writing one field must not rewrite the file
+        // without the others.
+        settings.set_comfyui_endpoint("renderbox.local:8188").unwrap();
+
+        let reloaded = MachineSettings::load_from(path.clone());
+        let state = reloaded.onboarding();
+        assert_eq!(state.legal_version.as_deref(), Some("terms 3 August 2026"));
+        assert!(state.legal_accepted_at.is_some());
+        assert!(state.completed_at.is_none(), "accepting is not finishing the tour");
+        assert_eq!(reloaded.comfyui_endpoint(), "http://renderbox.local:8188");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn finishing_the_tour_leaves_the_recorded_agreement_alone() {
+        let path = scratch("finish");
+        let settings = MachineSettings::load_from(path.clone());
+        settings.accept_legal("v1".into()).unwrap();
+        let accepted = settings.onboarding().legal_accepted_at;
+
+        let after = settings.finish_onboarding().unwrap();
+        assert!(after.completed_at.is_some());
+        assert_eq!(after.legal_accepted_at, accepted);
+        assert_eq!(after.legal_version.as_deref(), Some("v1"));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn an_endpoint_this_build_rejects_does_not_discard_the_agreement() {
+        let path = scratch("salvage");
+        let settings = MachineSettings::load_from(path.clone());
+        settings.accept_legal("v1".into()).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, raw.replace(comfy::DEFAULT_URL, "file:///tmp/comfy")).unwrap();
+
+        let reloaded = MachineSettings::load_from(path.clone());
+        assert_eq!(reloaded.comfyui_endpoint(), comfy::DEFAULT_URL);
+        assert_eq!(reloaded.onboarding().legal_version.as_deref(), Some("v1"));
 
         let _ = std::fs::remove_file(path);
     }

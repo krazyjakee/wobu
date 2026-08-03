@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectSummary } from '../lib/api'
+import { useOnboarding } from '../store/onboarding'
 import { Launcher } from './Launcher'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn(), openDialog: vi.fn() }))
@@ -174,6 +175,20 @@ describe('launcher branding', () => {
     // head. Renaming either silently unbrands the window.
     expect(document.querySelectorAll('.brand-mark')).toHaveLength(2)
     expect(document.querySelector('.lch-head .brand-mark')).toHaveClass('brand-lg')
+  })
+})
+
+describe('re-running the introduction', () => {
+  it('offers the tour from the one screen a project-less user is stuck on', async () => {
+    useOnboarding.setState({
+      record: { legalAcceptedAt: '2026-08-01T09:00:00Z', legalVersion: null, completedAt: null },
+      open: false,
+      step: 'legal',
+    })
+    showLauncher()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show the introduction' }))
+    expect(useOnboarding.getState().open).toBe(true)
   })
 })
 

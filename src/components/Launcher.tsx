@@ -8,6 +8,7 @@ import {
   useRecentProjects,
 } from '../lib/queries'
 import { useOpenProgress } from '../hooks/useOpenProgress'
+import { useOnboarding } from '../store/onboarding'
 import { report } from '../store/ui'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
@@ -170,7 +171,14 @@ export function Launcher({ error }: { error: string | null }) {
 
           <p className="lch-note">
             A project is a folder, not a database file. Point Wobu at a share and anyone who can see
-            the path can open it — their keys, their machine, the same world.
+            the path can open it — their keys, their machine, the same world.{' '}
+            {/* The launcher's own way back to the introduction. Settings has one
+                too, but Settings only exists inside an open project, and the
+                person most likely to want the tour again is the one still
+                looking at this screen. */}
+            <button className="onb-link" onClick={() => useOnboarding.getState().restart()}>
+              Show the introduction
+            </button>
           </p>
 
           {error && (
@@ -333,7 +341,8 @@ function lastOpened(iso: string | null): string {
   return new Date(t).toLocaleDateString()
 }
 
-function NewProjectSheet({ onClose }: { onClose: () => void }) {
+/** Exported for the onboarding overlay, which offers the same entry point. */
+export function NewProjectSheet({ onClose }: { onClose: () => void }) {
   const createProject = useCreateProject()
   const [parentDir, setParentDir] = useState('')
   const [name, setName] = useState('')

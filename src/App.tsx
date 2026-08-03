@@ -4,6 +4,7 @@ import { errorMessage, isTauri } from './lib/api'
 import { useUndoStack } from './lib/undo'
 import { Launcher } from './components/Launcher'
 import { Workspace } from './components/Workspace'
+import { OnboardingOverlay } from './components/OnboardingOverlay'
 import { Toasts } from './components/Toasts'
 import { Icon } from './components/Icon'
 import { useUiScale } from './hooks/useUiScale'
@@ -81,6 +82,13 @@ export function App() {
       ) : (
         <Launcher error={current.isError ? errorMessage(current.error) : null} />
       )}
+      {/* Outside the launcher/workspace branch on purpose. The first run spans
+          both — it starts with no project open and ends by describing the
+          workspace — and mounting it inside either one would tear it down at
+          the moment a project opens, which is the middle of the flow rather
+          than the end of it. It is also where the legal gate lives (#137), so
+          it must be reachable on the very first frame the app can draw. */}
+      <OnboardingOverlay />
       <Toasts />
     </>
   )
