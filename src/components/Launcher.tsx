@@ -14,6 +14,11 @@ import { Modal } from './Modal'
 import { WindowControls } from './WindowControls'
 import { ContextMenu } from './navigator/ContextMenu'
 import { AcceptTicketSheet } from './AcceptTicketSheet'
+// The app mark, the launcher art and the boot surface. Imported here rather
+// than from `styles/index.css` so the artwork travels with the screen that
+// introduces it; `App` imports `Launcher` statically, so the title bar gets the
+// same mark.
+import '../styles/branding.css'
 
 /**
  * What a slow open looks like.

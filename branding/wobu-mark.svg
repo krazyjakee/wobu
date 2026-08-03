@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wobu mark, tile removed. Same geometry as branding/wobu-icon.svg, cropped to
+  the glyph so it can sit directly on an app surface (title bar, launcher head,
+  boot screen) without a second background fighting the panel behind it.
+
+  Keep the two files in step: the icon is what ships in src-tauri/icons/, this
+  is what the UI draws.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372" width="372" height="372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>

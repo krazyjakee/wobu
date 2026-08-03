@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wobu app icon, master artwork. 512x512, squircle tile.
+
+  The mark is an inheritance chain: an authored node, its descendant, and that
+  descendant's descendant, each hanging off the one above on the same elbow the
+  navigator tree draws. Every link is painted in the colour of the node it
+  leaves, because the whole product is "author the hierarchy once, every
+  generation inherits it" (docs/01-vision.md). The step-down diagonal is what
+  keeps it readable at 16 px, where a symmetric fork collapses into a blob.
+
+  Colours are the app's own tokens from src/styles/tokens.css: accent for the
+  authored root, l-world and l-subject for what descends from it, bg and
+  bg-raised for the tile.
+
+  Every raster in src-tauri/icons/ is generated from this file by
+  scripts/generate-icons.sh. Do not hand-edit the PNG, ICO or ICNS output.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#232833" />
+      <stop offset="1" stop-color="#0d0e12" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.28" cy="0.26" r="0.62">
+      <stop offset="0" stop-color="#e2a44f" stop-opacity="0.2" />
+      <stop offset="1" stop-color="#e2a44f" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="114" ry="114" fill="url(#tile)" />
+  <rect width="512" height="512" rx="114" ry="114" fill="url(#glow)" />
+  <rect x="1.5" y="1.5" width="509" height="509" rx="112.5" ry="112.5" fill="none"
+        stroke="#ffffff" stroke-opacity="0.06" stroke-width="3" />
+
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>

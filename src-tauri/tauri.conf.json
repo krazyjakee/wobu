@@ -54,10 +54,30 @@
     },
     "icon": [
       "icons/32x32.png",
+      "icons/64x64.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
+      "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "dmg": {
+        "background": "../branding/installer/dmg-background.png"
+      }
+    },
+    "windows": {
+      "nsis": {
+        "headerImage": "../branding/installer/nsis-header.bmp",
+        "sidebarImage": "../branding/installer/nsis-sidebar.bmp",
+        "uninstallerHeaderImage": "../branding/installer/nsis-header.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      },
+      "wix": {
+        "bannerPath": "../branding/installer/wix-banner.bmp",
+        "dialogImagePath": "../branding/installer/wix-dialog.bmp"
+      }
+    }
   }
 }

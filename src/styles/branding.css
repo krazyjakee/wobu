@@ -1,0 +1,114 @@
+/* ── branding ─────────────────────────────────────────────────────────────────
+
+   App mark, launcher art and the boot surface (issue #136).
+
+   Imported from `Launcher.tsx` rather than `styles/index.css` so the art and the
+   component that owns it move together; `Launcher` is statically imported by
+   `App`, so the rules are present for the title bar too.
+
+   The mark rules are written one level more specific than `shell.css` on
+   purpose: that file still carries the placeholder conic-gradient chip, and the
+   real artwork has to win regardless of which stylesheet the bundler emits
+   first. When #134 formalises the brand palette, fold these two rules back into
+   `shell.css` and delete the extra `:root`.
+
+   Every colour here comes from `tokens.css`. Nothing new is invented — #134 owns
+   that. ─────────────────────────────────────────────────────────────────────── */
+
+:root .brand-mark {
+  /* The same artwork the OS shows in the dock, so the chip in the title bar and
+     the icon in the taskbar are recognisably one thing. */
+  background: url('../../branding/wobu-icon.svg') center / cover no-repeat;
+  border-radius: 3px;
+}
+
+:root .brand-lg {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+}
+
+/* ── launcher ── */
+
+/* A wash of the two ends of the influence palette — warm where the authored
+   root sits, cool where its descendants do. Both ellipses are anchored off the
+   top edge and faded through a midpoint so the falloff never draws an edge of
+   its own, and the default attachment keeps them still while the recent list
+   scrolls underneath. */
+.launcher .lch-body {
+  background-image:
+    radial-gradient(
+      150% 150% at 4% -22%,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      color-mix(in srgb, var(--accent) 3%, transparent) 34%,
+      transparent 100%
+    ),
+    radial-gradient(
+      130% 130% at 100% -14%,
+      color-mix(in srgb, var(--l-world) 10%, transparent),
+      color-mix(in srgb, var(--l-world) 2%, transparent) 36%,
+      transparent 100%
+    );
+  background-repeat: no-repeat;
+}
+
+.launcher .lch-head h1 {
+  /* The wordmark is set lowercase everywhere; tighten it so it reads as a mark
+     rather than a heading that happens to be the product name. */
+  letter-spacing: -0.02em;
+}
+
+.launcher .lch-head p {
+  color: var(--text-dim);
+}
+
+/* ── boot ──
+
+   `App` renders the launcher chrome with an empty body while it asks the core
+   which project is open. That is the first frame after the boot screen in
+   `index.html` hands over, and it used to be a blank rectangle. Painting the
+   mark into the empty body brands it without a new component, a new stage, or a
+   single millisecond of work before first paint — the moment the body has
+   content, the rule stops matching on its own. */
+.launcher .lch-body:empty {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  row-gap: 15px;
+  /* Overrides the launcher's own padding in full: the mark has to land on the
+     same pixel it occupied on the boot screen in `index.html`, or the handover
+     shows as a jump. */
+  padding: 0 0 12vh;
+  animation: wobu-boot-breathe 1.9s ease-in-out infinite;
+}
+
+.launcher .lch-body:empty::before {
+  content: '';
+  width: 84px;
+  height: 84px;
+  background: url('../../branding/wobu-mark.svg') center / contain no-repeat;
+}
+
+.launcher .lch-body:empty::after {
+  content: 'wobu';
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+}
+
+@keyframes wobu-boot-breathe {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher .lch-body:empty {
+    animation: none;
+  }
+}

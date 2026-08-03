@@ -3,10 +3,155 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
     <title>Wobu</title>
+    <link rel="icon" type="image/svg+xml" href="./branding/wobu-icon.svg" />
+    <!--
+      Boot screen. The window is undecorated and opens before the bundle has
+      parsed, so without this the first thing Wobu ever shows is an empty dark
+      rectangle. These styles are inline and the artwork is inline SVG so the
+      first paint needs no stylesheet, no script and no extra request; React
+      clears #root when it mounts, which takes all of it away again.
+
+      The values are duplicated from src/styles/tokens.css by necessity — that
+      sheet is part of the bundle this screen exists to cover. Keep them in step,
+      and see branding/wobu-icon.svg for the mark itself.
+    -->
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #0d0e12;
+        color: #e7e9f0;
+        overflow: hidden;
+      }
+      body {
+        font:
+          13px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Inter,
+          Roboto,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wb-boot {
+        display: grid;
+        grid-template-rows: 40px 1fr;
+        height: 100vh;
+        user-select: none;
+      }
+      .wb-boot-bar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding-left: 14px;
+        background: #14161c;
+        border-bottom: 1px solid #252932;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+      }
+      .wb-boot-chip {
+        width: 13px;
+        height: 13px;
+        border-radius: 3px;
+      }
+      /* Laid out to match `.lch-body:empty` in src/styles/branding.css, which
+         paints the same thing once React has taken the window over. Nothing
+         should move between the two. */
+      .wb-boot-body {
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        row-gap: 15px;
+        padding-bottom: 12vh;
+        animation: wobu-boot-breathe 1.9s ease-in-out infinite;
+      }
+      .wb-boot-mark {
+        width: 84px;
+        height: 84px;
+      }
+      .wb-boot-word {
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+        color: #9aa1b3;
+      }
+      @keyframes wobu-boot-breathe {
+        0%,
+        100% {
+          opacity: 0.9;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wb-boot-body {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <svg width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute">
+        <defs>
+          <linearGradient id="wb-tile" x1="0" y1="0" x2="0.35" y2="1">
+            <stop offset="0" stop-color="#232833" />
+            <stop offset="1" stop-color="#0d0e12" />
+          </linearGradient>
+          <radialGradient id="wb-glow" cx="0.28" cy="0.26" r="0.62">
+            <stop offset="0" stop-color="#e2a44f" stop-opacity="0.2" />
+            <stop offset="1" stop-color="#e2a44f" stop-opacity="0" />
+          </radialGradient>
+          <g id="wb-glyph">
+            <path
+              d="M140 176 V 226 Q140 258 172 258 H 216"
+              fill="none"
+              stroke="#e2a44f"
+              stroke-width="30"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M256 296 V 350 Q256 382 288 382 H 332"
+              fill="none"
+              stroke="#4fd1c5"
+              stroke-width="30"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+            <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+            <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+          </g>
+        </defs>
+      </svg>
+
+      <div class="wb-boot" data-tauri-drag-region>
+        <div class="wb-boot-bar" data-tauri-drag-region>
+          <svg class="wb-boot-chip" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+            <rect width="512" height="512" rx="114" fill="url(#wb-tile)" />
+            <rect width="512" height="512" rx="114" fill="url(#wb-glow)" />
+            <use href="#wb-glyph" />
+          </svg>
+          wobu
+        </div>
+        <div class="wb-boot-body">
+          <svg
+            class="wb-boot-mark"
+            viewBox="66 68 372 372"
+            role="img"
+            aria-label="Wobu is starting"
+          >
+            <use href="#wb-glyph" />
+          </svg>
+          <span class="wb-boot-word">wobu</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

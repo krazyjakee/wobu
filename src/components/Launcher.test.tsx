@@ -164,6 +164,19 @@ describe('accepting a share ticket', () => {
   })
 })
 
+describe('launcher branding', () => {
+  it('keeps the two mark hooks branding.css paints the app icon into', async () => {
+    showLauncher()
+    await screen.findByRole('button', { name: /^Ashfall/ })
+
+    // These class names are the whole contract between the launcher and
+    // `styles/branding.css`: one chip in the title bar, one large mark in the
+    // head. Renaming either silently unbrands the window.
+    expect(document.querySelectorAll('.brand-mark')).toHaveLength(2)
+    expect(document.querySelector('.lch-head .brand-mark')).toHaveClass('brand-lg')
+  })
+})
+
 describe('new project sheet', () => {
   it('uses modal semantics, closes with Escape, and restores focus to its opener', async () => {
     showLauncher()
