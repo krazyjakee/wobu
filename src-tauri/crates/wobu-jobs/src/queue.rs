@@ -45,8 +45,30 @@
 //! This is the one thing here that a build setting can defeat: under
 //! `panic = "abort"` there is no unwind to catch and the process dies. The
 //! workspace does not set it, and this is the reason not to.
+//!
+//! ## Shutdown
+//!
+//! The process leaving is the one event the queue cannot ride out, and dropping
+//! it on the floor is not free: an image job killed by `exit(0)` has usually
+//! already been billed, and a ComfyUI run has a prompt on somebody's GPU that
+//! nothing will ever interrupt. So there is an explicit wind-down —
+//! [`Queue::close`], then [`Queue::quiesce`] — and `src-tauri/src/shutdown.rs`
+//! is its only caller. See `docs/15-exit-policy.md`.
+//!
+//! Two properties make that wind-down worth having rather than theatre:
+//!
+//! - **Closing is cancelling.** [`Queue::close`] cancels every unfinished job
+//!   through the same token a Stop button uses, so every adapter's existing
+//!   cancellation path runs — including ComfyUI's `/interrupt` and the
+//!   `Billed` report that #55's spend ceiling counts.
+//! - **A closed queue cannot be re-armed.** A command racing the teardown could
+//!   otherwise start a paid call during shutdown. A job submitted after `close`
+//!   is born cancelled: it is admitted, recorded and finished as `cancelled`
+//!   without ever running, so the submitter still gets an id and still gets an
+//!   answer rather than a job that hangs in `queued` forever.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -114,6 +136,14 @@ struct Inner {
     history: usize,
     default_retry: RetryPolicy,
     registry: Mutex<Registry>,
+    /// Set by [`Queue::close`] and never cleared. A queue that could be
+    /// reopened would be a shutdown that a slow command could undo.
+    closed: AtomicBool,
+    /// Rung whenever the last unfinished job finishes. [`Queue::quiesce`] is
+    /// the only listener, and it re-checks the registry on every wake, so a
+    /// spurious ring costs one comparison and a missed one is impossible —
+    /// the waiter is registered before it looks.
+    idle: tokio::sync::Notify,
 }
 
 /// Everything the queue knows about jobs, behind one lock.
@@ -176,6 +206,8 @@ impl Queue {
             history: config.history,
             default_retry: config.retry,
             registry: Mutex::new(Registry { cap, ..Registry::default() }),
+            closed: AtomicBool::new(false),
+            idle: tokio::sync::Notify::new(),
         }))
     }
 
@@ -198,6 +230,13 @@ impl Queue {
     pub fn submit_with<T: Task>(&self, task: T, retry: RetryPolicy) -> JobId {
         let id = JobId::new();
         let cancel = Cancel::new();
+        // Born cancelled on a closed queue. The job is still recorded and still
+        // reported, because a caller that got an id back and never heard
+        // anything again would be a spinner nobody clears — it simply never
+        // runs, which is the whole point during a shutdown.
+        if self.0.closed.load(Ordering::SeqCst) {
+            cancel.cancel();
+        }
         let snapshot = {
             let mut registry = self.0.lock();
             registry.order.push_back(id);
@@ -248,6 +287,85 @@ impl Queue {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Ask every job that has not finished to stop. Returns how many were asked.
+    ///
+    /// The same token, and therefore the same path, as a Stop button — which is
+    /// what makes this worth doing at all rather than letting the process take
+    /// them: an adapter told to stop reports what it was billed and tells the
+    /// provider, and one that is merely killed does neither.
+    pub fn cancel_all(&self) -> usize {
+        // Collected under the lock and cancelled outside it, for the reason
+        // [`cancel`](Self::cancel) gives: waking a token runs code we do not
+        // control on this thread.
+        let tokens: Vec<Cancel> = {
+            let registry = self.0.lock();
+            registry
+                .jobs
+                .values()
+                .filter(|record| !record.state.is_terminal())
+                .map(|record| record.cancel.clone())
+                .collect()
+        };
+        let asked = tokens.len();
+        for cancel in tokens {
+            cancel.cancel();
+        }
+        asked
+    }
+
+    /// Stop accepting work, and stop the work already here. Returns how many
+    /// jobs were asked to stop.
+    ///
+    /// Idempotent, and one-way: see the module header for why a closed queue is
+    /// never reopened.
+    pub fn close(&self) -> usize {
+        self.0.closed.store(true, Ordering::SeqCst);
+        self.cancel_all()
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.0.closed.load(Ordering::SeqCst)
+    }
+
+    /// Everything that has not finished — the number [`quiesce`](Self::quiesce)
+    /// is waiting to reach zero.
+    pub fn active(&self) -> usize {
+        self.0.lock().active()
+    }
+
+    /// Wait until nothing is queued, running or retrying. `false` if `budget`
+    /// ran out first.
+    ///
+    /// Called after [`close`](Self::close) and never instead of it — on an open
+    /// queue this would be a wait for the user to stop working. The budget is
+    /// not negotiable for the same reason `SyncManager::shutdown` has one: a
+    /// quit that hangs is worse than a job that is cut off, and an adapter
+    /// wedged inside a provider's socket is exactly the case where waiting for
+    /// ever is the tempting mistake. The queue's own `cancel_grace` already
+    /// bounds each job, so reaching the budget means something below that is
+    /// wrong rather than merely slow.
+    pub async fn quiesce(&self, budget: Duration) -> bool {
+        let deadline = Instant::now() + budget;
+        loop {
+            // Registered *before* the check, and `enable` is what makes that
+            // true: `Notified` does not join the waiter list until it is first
+            // polled, so building it and checking afterwards would still lose
+            // the wake from a job that finished in between.
+            let mut waiter = std::pin::pin!(self.0.idle.notified());
+            waiter.as_mut().enable();
+            if self.active() == 0 {
+                return true;
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return false;
+            }
+            if tokio::time::timeout(left, waiter).await.is_err() {
+                return self.active() == 0;
+            }
         }
     }
 
@@ -309,7 +427,7 @@ impl Inner {
     /// put in a log line, say — would otherwise deadlock on a mutex its own
     /// caller is holding, and it would do it only sometimes.
     fn transition(&self, id: JobId, state: JobState, attempt: Option<u32>) {
-        let snapshot = {
+        let (snapshot, idle) = {
             let mut registry = self.lock();
             let terminal = state.is_terminal();
             match registry.jobs.get_mut(&id) {
@@ -330,8 +448,13 @@ impl Inner {
             if terminal {
                 registry.prune(self.history);
             }
-            registry.snapshot()
+            (registry.snapshot(), registry.active() == 0)
         };
+        // Outside the lock, like the notification below it and for the same
+        // reason: a woken waiter may run on this thread immediately.
+        if idle {
+            self.idle.notify_waiters();
+        }
         self.notify.notify(Event::State(snapshot));
     }
 
@@ -403,6 +526,11 @@ impl Inner {
 }
 
 impl Registry {
+    /// Jobs that have not reached a terminal state, history excluded.
+    fn active(&self) -> usize {
+        self.jobs.values().filter(|record| !record.state.is_terminal()).count()
+    }
+
     fn snapshot(&self) -> QueueSnapshot {
         let mut queued = 0;
         let mut running = 0;

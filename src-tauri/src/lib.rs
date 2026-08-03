@@ -10,6 +10,7 @@ mod keys;
 mod lora;
 mod machine;
 mod redact;
+mod shutdown;
 mod state;
 mod sync;
 
@@ -71,6 +72,11 @@ pub fn run() {
             // task; every sync command answers "still starting" until it lands.
             let state = app.state::<AppState>().handle();
             app.state::<sync::SyncState>().start(app.handle(), state);
+            // A logout or a `systemctl stop` never reaches the window event
+            // below, so without this the whole exit policy would apply to
+            // exactly one of the ways this process can be asked to stop.
+            // `docs/15-exit-policy.md` enumerates the rest.
+            shutdown::install_signal_handlers(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -79,6 +85,13 @@ pub fn run() {
             // it and the index is not canonical. So the first close request is
             // refused and handed to the UI to explain; `force_quit` is how the
             // user says they meant it.
+            //
+            // This is a backstop rather than the gate. The renderer refuses the
+            // same request in `useSafeWindowClose`, settles every editor write
+            // and warns about unfinished jobs before it lets the window go —
+            // and it is the only half that can, because the pending keystroke
+            // lives over there. What this covers is a webview that is not
+            // listening: one that crashed, or reloaded mid-close.
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.state::<AppState>().is_offline()
             {
@@ -190,7 +203,9 @@ pub fn run() {
         // and aborts its accept loop when dropped — so letting the process fall
         // over the end of `main` would sever every inbound connection silently,
         // at whatever point in a transfer it happened to be. `RunEvent::Exit` is
-        // the last moment there is still a runtime to wind it down on.
+        // the last moment there is still a runtime to wind any of it down on,
+        // and the job queue is in the same position: a cancelled provider call
+        // reports what it was billed, a killed one does not.
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
@@ -198,9 +213,10 @@ pub fn run() {
                 // On the main thread, with no locks held. Both halves matter: a
                 // hang here is a window that will not close, and a shutdown that
                 // ran while holding the project mutex would wait for a round
-                // that is waiting for the mutex. `SyncManager::shutdown` carries
-                // its own deadline for the case this reasoning is wrong.
-                app.state::<sync::SyncState>().stop();
+                // that is waiting for the mutex. Every stage in `shutdown.rs`
+                // carries its own deadline for the case that reasoning is
+                // wrong.
+                shutdown::wind_down(app);
             }
         });
 }

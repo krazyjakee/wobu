@@ -748,3 +748,103 @@ async fn a_job_submitted_with_no_retries_at_all_is_attempted_once() {
     assert!(matches!(settle(&queue, &recorder, id).await, JobState::Failed { .. }));
     assert_eq!(log.started(), 1);
 }
+
+/* ── shutdown (#143) ──────────────────────────────────────────────────────── */
+
+#[tokio::test(flavor = "multi_thread")]
+async fn closing_the_queue_stops_everything_unfinished_and_then_quiesces() {
+    // The exit path, whole: three jobs the user can see — one running, one
+    // waiting behind the cap, one that has already finished — and the promise
+    // that after `close` + `quiesce` there is nothing left in flight. The
+    // running one is `AwaitCancel` because that is what a real adapter does,
+    // and its `Cancelled` state is the evidence the token reached it rather
+    // than the process merely ending underneath it.
+    let (queue, recorder) = queue_with(Config { concurrency: 1, ..Config::default() });
+
+    let finished = queue.submit(Fake::new("already done", [Step::Finish]));
+    assert!(matches!(settle(&queue, &recorder, finished).await, JobState::Done));
+
+    let running = Fake::new("mid generation", [Step::AwaitCancel]);
+    let running_log = running.log();
+    let running = queue.submit(running);
+    let queued = Fake::new("waiting behind it", [Step::Finish]);
+    let queued_log = queued.log();
+    let queued = queue.submit(queued);
+    recorder.until(|| running_log.started() == 1).await;
+
+    assert_eq!(queue.active(), 2, "one running, one queued");
+    assert_eq!(queue.close(), 2, "both unfinished jobs are asked to stop");
+    assert!(queue.quiesce(Duration::from_secs(5)).await, "the queue did not wind down");
+
+    assert_eq!(queue.active(), 0);
+    assert!(matches!(state_of(&queue, running), Some(JobState::Cancelled)));
+    assert!(matches!(state_of(&queue, queued), Some(JobState::Cancelled)));
+    assert_eq!(queued_log.started(), 0, "a queued job must never start during a shutdown");
+    assert!(
+        matches!(state_of(&queue, finished), Some(JobState::Done)),
+        "a job that had already finished is not rewritten by the shutdown"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_job_that_ignores_its_token_is_still_gone_when_the_queue_quiesces() {
+    // The case the budget exists for, and the one that decides whether a quit
+    // hangs: an adapter wedged in a socket that never looks at the token. The
+    // queue's own `cancel_grace` aborts it, so `quiesce` returns on time rather
+    // than waiting out a provider's idea of a timeout.
+    let (queue, recorder) = queue_with(Config {
+        cancel_grace: Duration::from_millis(50),
+        ..Config::default()
+    });
+    let task = Fake::new("wedged", [Step::Ignore]);
+    let log = task.log();
+    let id = queue.submit(task);
+    recorder.until(|| log.started() == 1).await;
+
+    queue.close();
+    assert!(queue.quiesce(Duration::from_secs(5)).await);
+    assert!(matches!(state_of(&queue, id), Some(JobState::Cancelled)));
+    assert_eq!(log.dropped(), 1, "the future should have been aborted, not merely ignored");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn quiesce_gives_up_rather_than_holding_the_window_open_for_ever() {
+    // A shutdown that cannot finish must still finish. `Duration::ZERO` is the
+    // degenerate budget, and the answer has to be "no", not a hang.
+    let (queue, recorder) = queue_with(Config::default());
+    let task = Fake::new("still going", [Step::AwaitCancel]);
+    let log = task.log();
+    queue.submit(task);
+    recorder.until(|| log.started() == 1).await;
+
+    assert!(!queue.quiesce(Duration::ZERO).await);
+    assert_eq!(queue.active(), 1, "quiesce alone must not cancel anything");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn work_submitted_after_the_queue_closed_is_born_cancelled() {
+    // A command racing the teardown. Starting a paid call while the process is
+    // on its way out is the one outcome worth being strict about, and the
+    // submitter still gets an id and a terminal state rather than silence.
+    let (queue, recorder) = queue_with(Config::default());
+    assert_eq!(queue.close(), 0, "an idle queue has nothing to stop");
+    assert!(queue.is_closed());
+
+    let task = Fake::new("too late", [Step::Finish]);
+    let log = task.log();
+    let id = queue.submit(task);
+
+    assert!(matches!(settle(&queue, &recorder, id).await, JobState::Cancelled));
+    assert_eq!(log.started(), 0, "a job admitted to a closed queue must never run");
+    assert!(queue.quiesce(Duration::from_secs(5)).await);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn quiescing_an_already_idle_queue_returns_at_once() {
+    // The common case on exit: nothing was running, and the user should not
+    // wait out a budget to find that out.
+    let (queue, _recorder) = queue_with(Config::default());
+    let began = std::time::Instant::now();
+    assert!(queue.quiesce(Duration::from_secs(30)).await);
+    assert!(began.elapsed() < Duration::from_secs(1), "{:?}", began.elapsed());
+}

@@ -108,6 +108,11 @@ tokio = { version = "1.53.1", features = [
     "sync",
     "process",
     "io-util",
+    # `signal` for #143: a logout or a `systemctl stop` sends SIGTERM, which by
+    # default kills the process where it stands — orphaning whatever paid job
+    # was in flight and leaving our presence entry on the share. `shutdown.rs`
+    # catches it and takes the ordinary exit path instead.
+    "signal",
 ] }
 url = "2.5.8"
 wobu-core = { workspace = true }
