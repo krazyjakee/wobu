@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   Generation,
+  GenerationPage,
+  GenerationSummary,
   JobPreview,
   JobProgress,
   LinkEdge,
@@ -50,6 +52,38 @@ function generation(over: Partial<Generation> & Pick<Generation, 'id'>): Generat
   }
 }
 
+/**
+ * `generation_list` answers with the indexed summary row, not the receipt.
+ *
+ * The tests are written against whole `Generation` fixtures because that is
+ * what a reader needs to see, so the projection the backend does in SQL is
+ * done here instead — one place, rather than a second parallel fixture that
+ * can drift from the receipt it is supposed to summarise.
+ */
+function summarise(receipt: Generation): GenerationSummary {
+  return {
+    id: receipt.id,
+    nodeId: receipt.nodeId,
+    createdAt: receipt.createdAt,
+    preset: receipt.preset,
+    viewType: receipt.viewType,
+    backend: receipt.backend,
+    model: receipt.model,
+    seed: receipt.seed,
+    promptExcerpt: receipt.compiledPrompt,
+    firstAssetId: receipt.outputAssetIds[0] ?? null,
+    outputCount: receipt.outputAssetIds.length,
+    seedSource: (receipt.params.seedSource as string | undefined) ?? null,
+    usedLockedSeed: (receipt.params.usedLockedSeed as boolean | undefined) ?? null,
+    sceneSubjectNames: [],
+    thumbnailPath: null,
+  }
+}
+
+function pageOf(receipts: Generation[]): GenerationPage {
+  return { items: receipts.map(summarise), total: receipts.length, nextOffset: null }
+}
+
 const emptyQueue: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
 let history: Generation[] = []
 let worldNodes: NodeSummary[] = []
@@ -79,10 +113,17 @@ beforeEach(() => {
   h.invoke.mockReset()
   h.listeners.clear()
   h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
-    if (command === 'generation_list') return Promise.resolve(history)
+    if (command === 'generation_list') return Promise.resolve(pageOf(history))
+    if (command === 'generation_get') {
+      return Promise.resolve(history.find((item) => item.id === args?.generationId) ?? null)
+    }
     if (command === 'node_list') return Promise.resolve(worldNodes)
     if (command === 'node_links') return Promise.resolve(worldLinks)
     if (command === 'asset_thumb') return Promise.resolve(`/thumb-${args?.assetId}`)
+    if (command === 'asset_thumb_batch') {
+      const ids = (args?.assetIds ?? []) as string[]
+      return Promise.resolve(Object.fromEntries(ids.map((id) => [id, `/thumb-${id}`])))
+    }
     if (command === 'asset_original') return Promise.resolve(`/original-${args?.assetId}`)
     if (command === 'asset_link') {
       return Promise.resolve({
@@ -103,6 +144,18 @@ beforeEach(() => {
     if (command === 'job_cancel') return Promise.resolve(true)
     return Promise.resolve(null)
   })
+  // The concept grid is virtualized, and jsdom reports every box as zero-sized,
+  // so without this only the overscan rows mount and the assertions below are
+  // about tiles that were never asked to render.
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 900 })
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  )
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 

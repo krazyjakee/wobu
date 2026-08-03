@@ -61,7 +61,6 @@ export const qk = {
   loraStatus: (nodeId: string) => ['lora_status', nodeId] as const,
   meshes: (nodeId: string) => ['mesh_concepts', nodeId] as const,
   meshPath: (assetId: string) => ['mesh_asset_path', assetId] as const,
-  generationHistory: (filters: api.GenerationFilters) => ['generation_list_all', filters] as const,
   assetThumb: (assetId: string) => ['asset_thumb', assetId] as const,
   node: (id: string) => ['node_get', id] as const,
   backlinks: (id: string) => ['node_backlinks', id] as const,
@@ -117,7 +116,6 @@ export function invalidateWorld(qc: QueryClient) {
   // of the same reconcile that raised this.
   void qc.invalidateQueries({ queryKey: qk.assets })
   void qc.invalidateQueries({ queryKey: ['generation_list'] })
-  void qc.invalidateQueries({ queryKey: ['generation_list_all'] })
   // A stack is built from other people's nodes as much as from the subject's:
   // an edit two layers out changes the compiled prompt without touching
   // anything the panel is pointing at, so these move with the world rather than
@@ -1037,66 +1035,6 @@ export function useMeshAssetPath(assetId: string | null): UseQueryResult<string 
   })
 }
 
-function summaryMatches(summary: api.GenerationSummary, filters: api.GenerationFilters): boolean {
-  return (
-    (!filters.preset || summary.preset === filters.preset) &&
-    (!filters.model || summary.model === filters.model) &&
-    (!filters.from || summary.createdAt.slice(0, 10) >= filters.from) &&
-    (!filters.to || summary.createdAt.slice(0, 10) <= filters.to) &&
-    (filters.seed === undefined || summary.seed === filters.seed)
-  )
-}
-
-/** Project-wide filtered and paginated immutable generation history. */
-export function useGenerationHistory(filters: api.GenerationFilters) {
-  const qc = useQueryClient()
-  const query = useInfiniteQuery({
-    queryKey: qk.generationHistory(filters),
-    initialPageParam: 0,
-    queryFn: async ({ pageParam }) =>
-      generationPageWithThumbnails(
-        await api.generationListAll(pageParam, GENERATION_PAGE_SIZE, filters),
-      ),
-    getNextPageParam: (last) => last.nextOffset ?? undefined,
-    retry: false,
-  })
-
-  useEffect(() => {
-    if (!api.isTauri()) return
-    let disposed = false
-    let unlisten: (() => void) | undefined
-    void listen<api.GenerationRecorded>('generation:recorded', (event) => {
-      void recordedSummary(event.payload).then((summary) => {
-        if (disposed) return
-        for (const cached of qc.getQueryCache().findAll({ queryKey: ['generation_list_all'] })) {
-          const cachedFilters = (cached.queryKey[1] ?? {}) as api.GenerationFilters
-          if (!summaryMatches(summary, cachedFilters)) continue
-          qc.setQueryData<GenerationPages>(cached.queryKey, (current) =>
-            prependGeneration(current, summary),
-          )
-        }
-      })
-    })
-      .then((fn) => {
-        if (disposed) fn()
-        else unlisten = fn
-      })
-      .catch(() => {})
-    return () => {
-      disposed = true
-      unlisten?.()
-    }
-  }, [qc])
-
-  return {
-    ...query,
-    data: query.data?.pages.flatMap((page) => page.items),
-    total: query.data?.pages[0]?.total ?? 0,
-    presets: query.data?.pages[0]?.presets ?? [],
-    models: query.data?.pages[0]?.models ?? [],
-  }
-}
-
 export function useReplayGeneration() {
   return useMutation({
     mutationFn: api.generationReplay,
@@ -1107,11 +1045,11 @@ export function useReplayGeneration() {
 
 /**
  * Deleting a concept takes its unclaimed output images with it, so the asset
- * views have to be told as well as the receipt views. Concepts, History and
- * the 3D gallery are the receipt; the Asset Library and the board are the
- * blobs, and leaving either half stale is the whole bug — a concept that is
- * gone from the tab it was deleted in and still on the board has not been
- * deleted as far as the user is concerned.
+ * views have to be told as well as the receipt views. Concepts and the 3D
+ * gallery are the receipt; the Asset Library is the blobs, and leaving either
+ * half stale is the whole bug — a concept that is gone from the tab it was
+ * deleted in and still in the Asset Library has not been deleted as far as the
+ * user is concerned.
  */
 export function useDeleteGeneration() {
   const qc = useQueryClient()
@@ -1120,7 +1058,6 @@ export function useDeleteGeneration() {
       api.generationDelete(generationId),
     onSuccess: (_result, { nodeId }) => {
       void qc.invalidateQueries({ queryKey: qk.generations(nodeId) })
-      void qc.invalidateQueries({ queryKey: ['generation_list_all'] })
       void qc.invalidateQueries({ queryKey: qk.meshes(nodeId) })
       void qc.invalidateQueries({ queryKey: qk.assets })
       void qc.invalidateQueries({ queryKey: qk.assetUsages })

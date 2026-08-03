@@ -129,7 +129,6 @@ pub fn run() {
             commands::mesh_asset_path,
             commands::mesh_source_path,
             commands::mesh_export,
-            commands::generation_list_all,
             commands::generation_get,
             commands::generation_delete,
             commands::asset_thumb,

@@ -977,35 +977,6 @@ pub async fn mesh_export(
     Ok(())
 }
 
-/// One filtered, bounded page of project generation history.
-#[tauri::command]
-pub fn generation_list_all(
-    state: State<'_, AppState>,
-    offset: u32,
-    limit: u32,
-    preset: Option<String>,
-    model: Option<String>,
-    from: Option<String>,
-    to: Option<String>,
-    seed: Option<u64>,
-) -> CommandResult<GenerationPage> {
-    state.with(|project| {
-        generation_page(
-            project,
-            GenerationPageRequest {
-                node_id: None,
-                preset,
-                model,
-                from,
-                to,
-                seed,
-                offset,
-                limit,
-            },
-        )
-    })
-}
-
 /// The full immutable receipt for the one tile a person opened.
 #[tauri::command]
 pub fn generation_get(
@@ -1015,7 +986,7 @@ pub fn generation_get(
     state.with(|project| Ok(project.get_generation(generation_id)?))
 }
 
-/// Remove a generation from Concepts and History without erasing its spend record.
+/// Remove a generation from Concepts without erasing its spend record.
 #[tauri::command]
 pub fn generation_delete(state: State<'_, AppState>, generation_id: Id) -> CommandResult<()> {
     state.with(|project| Ok(project.delete_generation(generation_id)?))

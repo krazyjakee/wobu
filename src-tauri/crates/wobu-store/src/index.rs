@@ -163,7 +163,6 @@ CREATE TABLE IF NOT EXISTS generations (
     doc        TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS generations_node ON generations(node_id, created_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS generations_model ON generations(backend, model);
 
 -- Files that are on disk and could not be parsed. Deliberately a table of its
 -- own rather than a column on `nodes`: a file a sync client truncated may never
@@ -315,7 +314,7 @@ pub struct CorruptFile {
     pub detected_at: String,
 }
 
-/// The indexed fields a history tile needs. Full immutable receipts remain in
+/// The indexed fields a concept tile needs. Full immutable receipts remain in
 /// `generations.doc` and cross the bridge only when one tile is opened.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -341,11 +340,6 @@ pub struct GenerationSummary {
 #[derive(Debug, Clone, Default)]
 pub struct GenerationPageRequest {
     pub node_id: Option<Id>,
-    pub preset: Option<String>,
-    pub model: Option<String>,
-    pub from: Option<String>,
-    pub to: Option<String>,
-    pub seed: Option<u64>,
     pub offset: u32,
     pub limit: u32,
 }
@@ -355,8 +349,6 @@ pub struct GenerationPageRequest {
 pub struct GenerationPage {
     pub items: Vec<GenerationSummary>,
     pub total: u64,
-    pub presets: Vec<String>,
-    pub models: Vec<String>,
     pub next_offset: Option<u32>,
 }
 
@@ -1292,14 +1284,7 @@ impl Index {
     pub fn generation_page(&self, request: &GenerationPageRequest) -> Result<GenerationPage> {
         let node_id = request.node_id.map(|id| id.to_string());
         let limit = request.limit.clamp(1, 100);
-        let seed = request.seed.map(|value| value as i64);
-        let predicates =
-            "(?1 IS NULL OR g.node_id = ?1)
-             AND (?2 IS NULL OR g.preset = ?2)
-             AND (?3 IS NULL OR g.model = ?3)
-             AND (?4 IS NULL OR substr(g.created_at, 1, 10) >= ?4)
-             AND (?5 IS NULL OR substr(g.created_at, 1, 10) <= ?5)
-             AND (?6 IS NULL OR g.seed = ?6)";
+        let predicate = "(?1 IS NULL OR g.node_id = ?1)";
         let sql = format!(
             "SELECT g.id, g.node_id, g.created_at, g.preset, g.view_type,
                     g.backend, g.model, g.seed, g.prompt_excerpt,
@@ -1307,23 +1292,12 @@ impl Index {
                     g.used_locked_seed, g.scene_subject_names, a.thumb_path
              FROM generations g
              LEFT JOIN assets a ON a.id = g.first_asset_id
-             WHERE {predicates}
-             ORDER BY g.created_at DESC, g.id DESC LIMIT ?7 OFFSET ?8"
+             WHERE {predicate}
+             ORDER BY g.created_at DESC, g.id DESC LIMIT ?2 OFFSET ?3"
         );
         let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(
-            params![
-                node_id,
-                request.preset,
-                request.model,
-                request.from,
-                request.to,
-                seed,
-                limit,
-                request.offset,
-            ],
-            generation_summary_row,
-        )?;
+        let rows =
+            stmt.query_map(params![node_id, limit, request.offset], generation_summary_row)?;
         let mut items = Vec::new();
         for row in rows {
             if let Some(summary) = row? {
@@ -1331,38 +1305,15 @@ impl Index {
             }
         }
 
-        let count_sql = format!("SELECT COUNT(*) FROM generations g WHERE {predicates}");
-        let total = self.conn.query_row(
-            &count_sql,
-            params![
-                node_id,
-                request.preset,
-                request.model,
-                request.from,
-                request.to,
-                seed,
-            ],
-            |row| row.get::<_, i64>(0),
-        )? as u64;
+        let count_sql = format!("SELECT COUNT(*) FROM generations g WHERE {predicate}");
+        let total =
+            self.conn.query_row(&count_sql, params![node_id], |row| row.get::<_, i64>(0))? as u64;
         let consumed = request.offset.saturating_add(items.len() as u32);
         Ok(GenerationPage {
             items,
             total,
-            presets: self.generation_values("preset", node_id.as_deref())?,
-            models: self.generation_values("model", node_id.as_deref())?,
             next_offset: (u64::from(consumed) < total).then_some(consumed),
         })
-    }
-
-    fn generation_values(&self, column: &str, node_id: Option<&str>) -> Result<Vec<String>> {
-        debug_assert!(matches!(column, "preset" | "model"));
-        let sql = format!(
-            "SELECT DISTINCT {column} FROM generations
-             WHERE (?1 IS NULL OR node_id = ?1) ORDER BY {column}"
-        );
-        let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![node_id], |row| row.get::<_, String>(0))?;
-        Ok(rows.filter_map(std::result::Result::ok).collect())
     }
 
     /// Every generation path held by the disposable index.

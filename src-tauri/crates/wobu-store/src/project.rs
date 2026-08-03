@@ -1656,11 +1656,6 @@ impl Project {
         self.index.generation_documents_for_node(node_id)
     }
 
-    /// Every immutable receipt, for reconstructing project spend.
-    pub fn list_all_generations(&self) -> Result<Vec<Generation>> {
-        generations::read_all_strict(&self.root)
-    }
-
     /// One indexed generation, without reading across the project share.
     pub fn get_generation(&self, id: Id) -> Result<Option<Generation>> {
         self.index.generation(id)
@@ -1669,8 +1664,8 @@ impl Project {
     /// Remove a receipt from user-facing history while retaining it for spend accounting.
     ///
     /// The pictures go with it. A deleted concept that left its image in the
-    /// Asset Library and on the board would only be deleted from the one view
-    /// the user happened to be looking at, which is not what the button says.
+    /// Asset Library would only be deleted from the one view the user happened
+    /// to be looking at, which is not what the button says.
     /// So each output blob is taken too — but only where nothing else claims
     /// it: an image pinned as a reference, chosen as a cover, or shared with a
     /// receipt that is still on the ledger stays exactly where it is, because

@@ -10,9 +10,9 @@ live here 95% of the time. Everything else is a mode swap in the centre or a mod
 │  wobu   [ Ashfall ▾ ]   Species / Vashk / Kael Vantris        ⌘K search      ⚙︎     │ title bar
 ├────┬────────────────────┬──────────────────────────────┬───────────────────────────┤
 │ ▤  │ ⌕ filter…          │  KAEL VANTRIS      ⋯  Enhance│  INFLUENCE STACK          │
-│ ▦  │                    │  character · Vashk · Ember G.│  ┌──────────────────────┐ │
-│ ✦  │ ★ Art Style        │ ─────────────────────────────│  │ ● Art Style          │ │
-│ ⬚  │ ★ World Canon      │  Notes │ Refs │ Concepts │ 3D│  │   Ashfall House  1.0 ▸│ │
+│ ✦  │                    │  character · Vashk · Ember G.│  ┌──────────────────────┐ │
+│ ⬚  │ ★ Art Style        │ ─────────────────────────────│  │ ● Art Style          │ │
+│    │ ★ World Canon      │  Notes │ Refs │ Concepts │ 3D│  │   Ashfall House  1.0 ▸│ │
 │    │                    │ ─────────────────────────────│  ├──────────────────────┤ │
 │ ⚙  │ ▾ Species          │  ┌───────────┬──────────────┐│  │ ● World Canon    0.8 ▸│ │
 │    │    Vashk           │  │ RAW NOTES │ DESCRIPTION  ││  ├──────────────────────┤ │
@@ -38,18 +38,17 @@ live here 95% of the time. Everything else is a mode swap in the centre or a mod
 ## Regions
 
 ### Mode rail (52px)
-Icon-only, always visible. `Library` (the tree above) · `Board` (mood-board canvas) ·
-`Forge` (full-width generation + result grid) · `Assets` (all images, filterable) ·
-`Settings`. Keeps the top bar clean and makes mode switching muscle memory.
+Icon-only, always visible. `Library` (the tree above) · `Forge` (full-width generation +
+result grid) · `Assets` (all images, filterable) · `Settings`. Keeps the top bar clean and
+makes mode switching muscle memory.
 
 ### Navigator (272px, resizable)
 Filter box at top. Two pinned singletons — **Art Style** and **World Canon** — sit above the
 rule, because they are the roots of every influence stack and should never be hunted for.
 Below: collapsible groups per node kind, each nesting by `parent_id`. Drag to re-parent.
 Right-click for New / Duplicate / Delete. A node with unresolved `stale` descriptions gets a
-small dot. A **Tree · Graph** switch replaces the tree with a read-only relationship map that
-draws implicit parent links and explicit cross-kind influences; selecting a graph node opens the
-same document editor, while link editing remains in the Relations tab.
+small dot. The navigator is the tree and nothing else: the links a node has, and the ones
+pointing back at it, are read and edited in the Relations tab.
 
 ### Editor (fluid)
 - **Sticky header** — name (inline-editable), kind badge, and the *influence breadcrumb*:
@@ -66,8 +65,10 @@ same document editor, while link editing remains in the Relations tab.
     beside notes; a permanent editor sidebar would compete with the Influence Inspector.
   - **References**: image grid; each tile carries a role chip (`silhouette`, `palette`,
     `material`, `mood`, `pose`) and a weight. Drag-drop and paste to add.
-  - **Concepts**: generated art for this entity. Hover for prompt/seed; pin to promote a
-    result into References.
+  - **Concepts**: generated art for this entity, and the only place a generation receipt is
+    reachable. Hover for prompt/seed; open a tile for its immutable receipt — the recorded
+    stack, params and seed, with Replay — or pin it to promote the result into References.
+    The grid is virtualized and paged, so an entity with a long run stays responsive.
   - **3D**: turnaround sheets and generated meshes with an inline viewer.
   - **Relations**: the links this node has, and backlinks — "3 characters inherit from this".
 
@@ -98,8 +99,6 @@ Backend health, active image model, job queue depth, active LLM, last generation
   Forge also composes scenes: the selected entity is the primary history anchor, one to three more
   are chosen in prompt order, and the scene direction and aspect are explicit. Scene tiles and
   receipt details name every participant rather than presenting only the primary entity.
-- **Board** — freeform pan/zoom canvas for mood boarding; images can be dragged onto a node
-  to become references.
 - **Settings** — **implemented** provider selection and local credentials for the adapters Wobu
   ships, a text-model override, the machine-local ComfyUI endpoint
   ([#108](https://github.com/krazyjakee/wobu/issues/108)), local-index inspection/rebuild,

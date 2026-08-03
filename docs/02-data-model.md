@@ -87,17 +87,17 @@ model + params + seed, output asset ids, and an `influence_snapshot` — the exa
 stack, weights and all. That snapshot is what makes a result reproducible six months later
 after the world has moved on.
 
-The project-wide History view reads these append-only receipts from the disposable index; the
-same receipt remains visible under a node's Concepts tab. Opening one shows its stored prompts,
-request parameters and every snapshot fragment. Replay constructs the provider request directly
+A node's Concepts tab reads these append-only receipts from the disposable index, a bounded
+page at a time. Opening one shows its stored prompts, request parameters and every snapshot
+fragment. Replay constructs the provider request directly
 from those immutable fields and reference asset bytes, without resolving today's nodes or presets.
 The replay receipt points back with `params.replayOf`; its current-price reservation is recorded
 separately from the source receipt's original estimate. A missing snapshot reference is a hard
 error, never an invitation to substitute a current node link.
 
-Deleting a concept moves its receipt to `generations/.deleted/<month>/` — out of Concepts and
-History, still there for strict spend reconstruction — and takes its output blobs with it, so the
-picture leaves the Asset Library and the board at the same moment it leaves the grid. An output
+Deleting a concept moves its receipt to `generations/.deleted/<month>/` — out of Concepts,
+still there for strict spend reconstruction — and takes its output blobs with it, so the
+picture leaves the Asset Library at the same moment it leaves the grid. An output
 that a node still claims, as a reference or as its cover, is left alone, and so is one that
 another visible receipt also lists: the user asked to delete a result, not to break an image they
 kept or blank another concept's tile.

@@ -29,8 +29,6 @@ function page(start: number, nextOffset: number | null): GenerationPage {
       summary(`old-${start + index}`),
     ),
     total: 180,
-    presets: ['portrait'],
-    models: ['flux-dev'],
     nextOffset,
   }
 }

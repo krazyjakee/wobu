@@ -241,17 +241,3 @@ describe('the same controls, on a folder that can be written to', () => {
     expect(newEntity).toHaveFocus()
   })
 })
-
-describe('the relationship graph navigator', () => {
-  it('loads on demand and uses the same selection route as the tree', async () => {
-    await open(false)
-    expect(h.invoke).not.toHaveBeenCalledWith('node_links', undefined)
-
-    fireEvent.click(button('Graph'))
-    expect(await screen.findByText('Read-only map')).toBeTruthy()
-    expect(h.invoke).toHaveBeenCalledWith('node_links', undefined)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Kael, Character' }))
-    expect((await screen.findByLabelText('Node name')).getAttribute('value')).toBe('Kael')
-  })
-})

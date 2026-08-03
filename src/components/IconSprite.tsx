@@ -9,10 +9,6 @@ export function IconSprite() {
         <g id="i-library">
           <path d="M4 5h5v14H4zM11 5h4v14h-4zM17 6l3 12" />
         </g>
-        <g id="i-board">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M3 10h18M11 10v10" />
-        </g>
         <g id="i-forge">
           <path d="M12 3l2.2 5.2 5.8.5-4.4 3.8 1.3 5.6L12 15.2 7.1 18.1l1.3-5.6L4 8.7l5.8-.5z" />
         </g>
@@ -20,10 +16,6 @@ export function IconSprite() {
           <rect x="3" y="4" width="18" height="16" rx="2" />
           <circle cx="8.5" cy="9.5" r="1.6" />
           <path d="M21 16l-5-5-9 9" />
-        </g>
-        <g id="i-history">
-          <circle cx="12" cy="12" r="8.5" />
-          <path d="M12 7v5l3.5 2M5.8 5.8L3.5 4.5 4.8 7" />
         </g>
         <g id="i-settings">
           <circle cx="12" cy="12" r="3" />

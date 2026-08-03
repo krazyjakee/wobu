@@ -29,8 +29,6 @@ import { CommandPalette } from './CommandPalette'
 import { NewNodeSheet } from './NewNodeSheet'
 import { StyleTransferSheet } from './StyleTransferSheet'
 import { AssetsMode } from './AssetsMode'
-import { BoardMode, type BoardAttachRequest } from './BoardMode'
-import { HistoryMode } from './HistoryMode'
 import { ForgeMode } from './ForgeMode'
 import { Settings } from './Settings'
 import { Banners } from './Banners'
@@ -62,10 +60,6 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const [newNode, setNewNode] = useState<{ kind: NodeKind | null; parentId: string | null } | null>(
     null,
   )
-  const [boardAttach, setBoardAttach] = useState<{
-    projectId: string
-    request: BoardAttachRequest
-  } | null>(null)
   const [transferSource, setTransferSource] = useState<string | null>(null)
 
   const kindIndex = useMemo(() => indexKinds(kindsQ.data), [kindsQ.data])
@@ -214,9 +208,6 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
   }, [project.id, readOnly, clearBanners])
 
-  const pendingBoardAttach =
-    mode === 'board' && boardAttach?.projectId === project.id ? boardAttach.request : null
-
   // Both presence effects below are declared *after* that one on purpose:
   // effects run in source order, so opening a project clears the banners first
   // and this raises against the clean slate rather than into one about to be
@@ -272,7 +263,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
   const style: CSSProperties = {
     gridTemplateColumns: [
       'var(--rail)',
-      navCollapsed || (mode !== 'library' && mode !== 'board') ? null : `${navWidth}px`,
+      navCollapsed || mode !== 'library' ? null : `${navWidth}px`,
       '1fr',
       inspCollapsed || mode !== 'library' ? null : 'var(--insp)',
     ]
@@ -357,31 +348,6 @@ export function Workspace({ project }: { project: ProjectSummary }) {
               </div>
             )}
           </>
-        ) : mode === 'board' ? (
-          <>
-            {!navCollapsed && (
-              <Navigator
-                {...navigatorProps}
-                onAssetDrop={
-                  readOnly
-                    ? undefined
-                    : (assetId, nodeId) =>
-                        setBoardAttach({ projectId: project.id, request: { assetId, nodeId } })
-                }
-              />
-            )}
-            <BoardMode
-              projectId={project.id}
-              nodes={nodes}
-              kinds={kindIndex}
-              readOnly={readOnly}
-              navigatorVisible={!navCollapsed}
-              pendingAttach={pendingBoardAttach}
-              onPendingAttach={(request) =>
-                setBoardAttach(request ? { projectId: project.id, request } : null)
-              }
-            />
-          </>
         ) : mode === 'assets' ? (
           <AssetsMode nodes={nodes} kinds={kindIndex} readOnly={readOnly} onJump={jumpTo} />
         ) : mode === 'forge' ? (
@@ -393,8 +359,6 @@ export function Workspace({ project }: { project: ProjectSummary }) {
             queue={queue}
             onJump={jumpTo}
           />
-        ) : mode === 'history' ? (
-          <HistoryMode nodes={nodes} readOnly={readOnly} onJump={jumpTo} />
         ) : (
           <Settings project={project} />
         )}

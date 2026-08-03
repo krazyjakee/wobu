@@ -798,17 +798,7 @@ export interface GenerationSummary {
 export interface GenerationPage {
   items: GenerationSummary[]
   total: number
-  presets: string[]
-  models: string[]
   nextOffset: number | null
-}
-
-export interface GenerationFilters {
-  preset?: string
-  model?: string
-  from?: string
-  to?: string
-  seed?: number
 }
 
 export interface GenerationRecorded {
@@ -921,10 +911,6 @@ export const meshSourcePath = (assetId: string) =>
 /** Copy a fully validated GLB to the modeller's chosen destination. */
 export const meshExport = (assetId: string, destination: string) =>
   call<void>('mesh_export', { assetId, destination })
-
-/** One filtered, bounded page of project generation summaries. */
-export const generationListAll = (offset: number, limit: number, filters: GenerationFilters) =>
-  call<GenerationPage>('generation_list_all', { offset, limit, ...filters })
 
 /** Full immutable receipt for the one history tile being opened. */
 export const generationGet = (generationId: string) =>

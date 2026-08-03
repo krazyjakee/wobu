@@ -113,14 +113,6 @@ overwritten. A `.wobu-export-incomplete` marker is created first, `index.html` i
 the marker is removed only after success. A failed export is left visibly incomplete and
 recoverable; the exporter never cleans up or deletes user data.
 
-Board geometry follows the same ownership rule for a different reason. Pan, zoom, and image
-coordinates are persisted in the webview's machine-local storage under `wobu.board-layouts.v1`,
-keyed by project ULID. They are personal UI state, not canonical world data: putting them in
-`.wobu/` would make two collaborators arranging the same mood board continuously conflict.
-Every asset also has a deterministic fallback grid position, so a project remains usable on a
-machine that has never saved a local layout. Removing the local entry only resets arrangement;
-it cannot remove or alter an asset or node link.
-
 ## Concerns worth naming early
 
 - **Secrets**: BYOK API keys go in the OS keychain via `keyring`, never in `project.json`.

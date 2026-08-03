@@ -1,10 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { errorMessage, type CorruptFile, type NodeKind, type NodeSummary } from '../../lib/api'
-import { useDeleteNode, useDuplicateNode, useMoveNode, useNodeLinks } from '../../lib/queries'
+import type { CorruptFile, NodeKind, NodeSummary } from '../../lib/api'
+import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { descendantsOf, type KindGroup, type TreeNode } from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
-import { BOARD_ASSET_MIME } from '../../lib/board'
 import { editingTitle } from '../../lib/presence'
 import { useNodeThumbs } from '../../lib/nodeThumbs'
 import { useUI, report, toast } from '../../store/ui'
@@ -13,7 +12,6 @@ import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { BrokenFiles } from './BrokenFiles'
-import { RelationshipGraph } from './RelationshipGraph'
 import { buildNavigatorRows, groupDropId, type NavigatorListRow } from './navigatorRows'
 
 const DRAG_MIME = 'application/x-wobu-node'
@@ -39,7 +37,6 @@ export function Navigator({
   projectPath,
   onNewNode,
   onStyleTransfer,
-  onAssetDrop,
   onRowRender,
 }: {
   nodes: NodeSummary[]
@@ -56,8 +53,6 @@ export function Navigator({
   projectPath: string
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
   onStyleTransfer?: () => void
-  /** Board-only drop path; absent in Library so node reparenting is unchanged. */
-  onAssetDrop?: (assetId: string, nodeId: string) => void
   /** Performance-test instrumentation; omitted by the application. */
   onRowRender?: (nodeId: string) => void
 }) {
@@ -74,17 +69,11 @@ export function Navigator({
   const [confirm, setConfirm] = useState<NodeSummary | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropId, setDropId] = useState<string | null>(null)
-  const [view, setView] = useState<'tree' | 'graph'>('tree')
 
   const move = useMoveNode()
   const del = useDeleteNode()
   const dup = useDuplicateNode()
-  const linksQ = useNodeLinks(view === 'graph')
   const moveNode = move.mutate
-  const assetDropRef = useRef(onAssetDrop)
-  useEffect(() => {
-    assetDropRef.current = onAssetDrop
-  }, [onAssetDrop])
 
   const forbidden = useMemo(
     () => (dragId ? descendantsOf(dragId, nodes) : new Set<string>()),
@@ -138,10 +127,6 @@ export function Navigator({
     setDragId(null)
     setDropId(null)
   }, [])
-  const handleAssetDrop = useCallback(
-    (assetId: string, nodeId: string) => assetDropRef.current?.(assetId, nodeId),
-    [],
-  )
   const handleGroupContext = useCallback(
     (kind: NodeKind) => {
       setCtx(null)
@@ -167,16 +152,7 @@ export function Navigator({
         )}
       </div>
 
-      <div className="nav-view-switch" role="group" aria-label="Navigator view">
-        <button aria-pressed={view === 'tree'} onClick={() => setView('tree')}>
-          Tree
-        </button>
-        <button aria-pressed={view === 'graph'} onClick={() => setView('graph')}>
-          Graph
-        </button>
-      </div>
-
-      {view === 'tree' && pinned.length > 0 && (
+      {pinned.length > 0 && (
         <div className="nav-pinned">
           {pinned.map((n) => {
             const def = kinds.get(n.kind)
@@ -192,20 +168,6 @@ export function Navigator({
                   setCtx({ x: e.clientX, y: e.clientY, node: n, opener: e.currentTarget })
                 }}
                 title={n.summary || labelFor(def, n.kind)}
-                onDragOver={(event) => {
-                  if (readOnly || !onAssetDrop || !hasBoardAsset(event.dataTransfer)) return
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'link'
-                  setDropId(n.id)
-                }}
-                onDragLeave={() => setDropId((id) => (id === n.id ? null : id))}
-                onDrop={(event) => {
-                  const assetId = boardAssetFrom(event.dataTransfer)
-                  if (readOnly || !onAssetDrop || !assetId) return
-                  event.preventDefault()
-                  onAssetDrop(assetId, n.id)
-                  setDropId(null)
-                }}
               >
                 <NodeThumbnail
                   path={pinnedThumbs.get(n.id)}
@@ -226,19 +188,18 @@ export function Navigator({
         </div>
       )}
 
-      {view === 'tree' ? (
-        <div className="nav-tree">
-          <BrokenFiles files={corrupt} projectPath={projectPath} />
-          {loading && <p className="nav-note">Reading the world…</p>}
-          {error && <p className="nav-note">Could not list nodes — {error}</p>}
-          {!loading && !error && nodes.length === 0 && (
-            <p className="nav-note">
-              This project has no nodes yet. <b>New entity</b> writes the first Markdown file into{' '}
-              <b>nodes/</b>.
-            </p>
-          )}
+      <div className="nav-tree">
+        <BrokenFiles files={corrupt} projectPath={projectPath} />
+        {loading && <p className="nav-note">Reading the world…</p>}
+        {error && <p className="nav-note">Could not list nodes — {error}</p>}
+        {!loading && !error && nodes.length === 0 && (
+          <p className="nav-note">
+            This project has no nodes yet. <b>New entity</b> writes the first Markdown file into{' '}
+            <b>nodes/</b>.
+          </p>
+        )}
 
-          {/*
+        {/*
           The filter stays name-and-summary only; the palette is the search
           surface. This is a decision, not an omission (#12).
 
@@ -251,65 +212,45 @@ export function Navigator({
           jobs, and the palette does the second one honestly, with a heading
           that says which half of the search found each row.
         */}
-          {filter && !list.hasMatches && (
-            <p className="nav-note">
-              Nothing here matches <b>{filter}</b>. This box filters names and summaries — press{' '}
-              <kbd>Ctrl+K</kbd> to search inside notes and descriptions too.
-            </p>
-          )}
-          <VirtualNavigatorRows
-            rows={list.rows}
-            kinds={kinds}
-            selectedId={selectedId}
-            dragId={dragId}
-            dropId={dropId}
-            readOnly={readOnly}
-            editedElsewhere={editedElsewhere}
-            onSelect={select}
-            onToggle={toggleNodeOpen}
-            onToggleGroup={toggleGroup}
-            onGroupContext={handleGroupContext}
-            onContext={handleContext}
-            onDragStart={setDragId}
-            onDragEnd={handleDragEnd}
-            canDrop={canDrop}
-            onDropOn={doMove}
-            setDropId={setDropId}
-            onAssetDrop={onAssetDrop ? handleAssetDrop : undefined}
-            onRowRender={onRowRender}
-          />
-        </div>
-      ) : (
-        <div className="nav-graph-shell">
-          <BrokenFiles files={corrupt} projectPath={projectPath} />
-          <RelationshipGraph
-            nodes={nodes}
-            links={linksQ.data ?? []}
-            kinds={kinds}
-            selectedId={selectedId}
-            filter={filter}
-            loading={loading || linksQ.isPending}
-            error={error ?? (linksQ.isError ? errorMessage(linksQ.error) : null)}
-            onSelect={select}
-            readOnly={readOnly}
-            onAssetDrop={onAssetDrop}
-          />
-        </div>
-      )}
+        {filter && !list.hasMatches && (
+          <p className="nav-note">
+            Nothing here matches <b>{filter}</b>. This box filters names and summaries — press{' '}
+            <kbd>Ctrl+K</kbd> to search inside notes and descriptions too.
+          </p>
+        )}
+        <VirtualNavigatorRows
+          rows={list.rows}
+          kinds={kinds}
+          selectedId={selectedId}
+          dragId={dragId}
+          dropId={dropId}
+          readOnly={readOnly}
+          editedElsewhere={editedElsewhere}
+          onSelect={select}
+          onToggle={toggleNodeOpen}
+          onToggleGroup={toggleGroup}
+          onGroupContext={handleGroupContext}
+          onContext={handleContext}
+          onDragStart={setDragId}
+          onDragEnd={handleDragEnd}
+          canDrop={canDrop}
+          onDropOn={doMove}
+          setDropId={setDropId}
+          onRowRender={onRowRender}
+        />
+      </div>
 
-      {view === 'tree' && (
-        <div className="nav-actions">
-          <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
-            <Icon name="plus" size="sm" />
-            New entity
+      <div className="nav-actions">
+        <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
+          <Icon name="plus" size="sm" />
+          New entity
+        </button>
+        {onStyleTransfer && (
+          <button className="nav-import" onClick={onStyleTransfer} disabled={readOnly}>
+            Import style/subtree…
           </button>
-          {onStyleTransfer && (
-            <button className="nav-import" onClick={onStyleTransfer} disabled={readOnly}>
-              Import style/subtree…
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {ctx && (
         <ContextMenu
@@ -509,7 +450,6 @@ interface NavigatorRowsProps {
   canDrop: (targetId: string | null, kind: NodeKind) => boolean
   onDropOn: (id: string | null) => void
   setDropId: (id: string | null) => void
-  onAssetDrop?: (assetId: string, nodeId: string) => void
   onRowRender?: (nodeId: string) => void
 }
 
@@ -644,7 +584,6 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
                 readOnly={props.readOnly}
                 who={props.editedElsewhere.get(row.tree.node.id)}
                 thumb={thumbs.get(row.tree.node.id)}
-                onAssetDrop={props.onAssetDrop}
                 onRender={props.onRowRender}
               />
             ),
@@ -722,7 +661,6 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
   readOnly,
   who,
   thumb,
-  onAssetDrop,
   onRender,
 }: {
   tree: TreeNode
@@ -744,7 +682,6 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
   who: string | undefined
   /** Resolved by the window above; `null` while unknown and when there is none. */
   thumb: string | null
-  onAssetDrop?: (assetId: string, nodeId: string) => void
   onRender?: (nodeId: string) => void
 }) {
   const n = tree.node
@@ -780,12 +717,6 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
       }}
       onDragEnd={onDragEnd}
       onDragOver={(e) => {
-        if (!readOnly && onAssetDrop && hasBoardAsset(e.dataTransfer)) {
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'link'
-          setDropId(n.id)
-          return
-        }
         if (!canDrop(n.id, n.kind)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
@@ -793,13 +724,6 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
       }}
       onDragLeave={() => setDropId(null)}
       onDrop={(e) => {
-        const assetId = boardAssetFrom(e.dataTransfer)
-        if (!readOnly && onAssetDrop && assetId) {
-          e.preventDefault()
-          onAssetDrop(assetId, n.id)
-          setDropId(null)
-          return
-        }
         if (!canDrop(n.id, n.kind)) return
         e.preventDefault()
         onDropOn(n.id)
@@ -832,12 +756,3 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
     </button>
   )
 })
-
-function hasBoardAsset(dataTransfer: DataTransfer): boolean {
-  return Array.from(dataTransfer.types).includes(BOARD_ASSET_MIME)
-}
-
-function boardAssetFrom(dataTransfer: DataTransfer): string | null {
-  if (!hasBoardAsset(dataTransfer)) return null
-  return dataTransfer.getData(BOARD_ASSET_MIME) || null
-}
