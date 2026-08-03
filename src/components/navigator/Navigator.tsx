@@ -2,8 +2,17 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CorruptFile, NodeKind, NodeSummary } from '../../lib/api'
 import { useDeleteNode, useDuplicateNode, useMoveNode } from '../../lib/queries'
 import { colorFor, labelFor, pluralFor, spriteFor, type KindIndex } from '../../lib/kinds'
-import { descendantsOf, type KindGroup, type TreeNode } from '../../lib/tree'
+import {
+  bucketLetter,
+  bucketOf,
+  bucketRoots,
+  descendantsOf,
+  type AlphaBucket,
+  type KindGroup,
+  type TreeNode,
+} from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
+import { useFavourites } from '../../lib/favourites'
 import { editingTitle } from '../../lib/presence'
 import { useNodeThumbs } from '../../lib/nodeThumbs'
 import { useUI, report, toast } from '../../store/ui'
@@ -12,9 +21,24 @@ import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { BrokenFiles } from './BrokenFiles'
-import { buildNavigatorRows, groupDropId, type NavigatorListRow } from './navigatorRows'
+import {
+  RECENT_MIN_WORLD,
+  bucketBand,
+  buildNavigatorRows,
+  groupDropId,
+  type NavigatorListRow,
+  type NavigatorPlace,
+} from './navigatorRows'
 
 const DRAG_MIME = 'application/x-wobu-node'
+
+/**
+ * A shared empty list, so a project with no favourites and no history hands the
+ * row builder the *same* array on every render rather than a new one. Without
+ * it, selecting a node would rebuild ten thousand rows to arrive at the list it
+ * already had.
+ */
+const NONE: NodeSummary[] = []
 
 interface Ctx {
   x: number
@@ -64,6 +88,9 @@ export function Navigator({
   const toggleGroup = useUI((s) => s.toggleGroup)
   const collapsedNodes = useUI((s) => s.collapsedNodes)
   const toggleNodeOpen = useUI((s) => s.toggleNodeOpen)
+  const bands = useUI((s) => s.bands)
+  const setBandOpen = useUI((s) => s.setBandOpen)
+  const recentIds = useUI((s) => s.recentIds)
 
   const [ctx, setCtx] = useState<Ctx | null>(null)
   const [confirm, setConfirm] = useState<NodeSummary | null>(null)
@@ -80,9 +107,120 @@ export function Navigator({
     [dragId, nodes],
   )
 
+  const favouriteIdList = useFavourites((s) => s.byProject[projectPath])
+  const toggleFavourite = useFavourites((s) => s.toggle)
+  const favouriteIds = useMemo(() => new Set(favouriteIdList ?? []), [favouriteIdList])
+
+  /*
+   * Favourites read alphabetically rather than in the order they were starred.
+   *
+   * Starring is not a ranking — people star what they are working on, over
+   * weeks, in no order at all — and a list that reshuffles whenever somebody
+   * adds one is a list you have to re-read every time. Sorted, the row a reader
+   * has clicked forty times stays where their hand expects it.
+   */
+  const favourites = useMemo(() => {
+    if (!favouriteIdList?.length) return NONE
+    const list = favouriteIdList
+      .map((id) => byId.get(id))
+      .filter((node): node is NodeSummary => node !== undefined)
+    list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    return list.length ? list : NONE
+  }, [byId, favouriteIdList])
+
+  // The node you are looking at is not a place you might want to go back to, so
+  // the selection is left out. It also keeps a click from adding a row: the
+  // section only grows when the reader moves *on*.
+  const recents = useMemo(() => {
+    if (nodes.length < RECENT_MIN_WORLD) return NONE
+    const list = recentIds
+      .filter((id) => id !== selectedId)
+      .map((id) => byId.get(id))
+      .filter((node): node is NodeSummary => node !== undefined)
+    return list.length ? list : NONE
+  }, [byId, nodes.length, recentIds, selectedId])
+
+  /** The index each oversized kind is drawn with (see lib/tree.ts). */
+  const indexed = useMemo(() => {
+    const map = new Map<NodeKind, AlphaBucket[]>()
+    for (const group of groups) {
+      const buckets = bucketRoots(group.roots)
+      if (buckets) map.set(group.kind, buckets)
+    }
+    return map
+  }, [groups])
+
+  /*
+   * The heading the selection is filed under, or `null` when it is not behind
+   * one. Derived rather than searched for: it yields the *same string* while
+   * the reader moves around inside one heading, which is what keeps the effect
+   * below from firing — and the row list from being rebuilt — on every click.
+   */
+  const selectedBand = useMemo(() => {
+    const node = selectedId ? byId.get(selectedId) : undefined
+    const buckets = node ? indexed.get(node.kind) : undefined
+    if (!node || !buckets) return null
+    // Roots of a kind group are the nodes whose parent is outside the kind, so
+    // that is where the walk stops — the same rule `nest()` uses to build them.
+    let root = node
+    const seen = new Set([root.id])
+    while (root.parentId) {
+      const parent = byId.get(root.parentId)
+      if (!parent || parent.kind !== root.kind || seen.has(parent.id)) break
+      seen.add(parent.id)
+      root = parent
+    }
+    const from = bucketOf(buckets, bucketLetter(root.name))
+    return from ? bucketBand(node.kind, from) : null
+  }, [byId, indexed, selectedId])
+
+  /*
+   * Opening a node from somewhere else — the palette, a breadcrumb, a backlink,
+   * a freshly created entity — has to land on a row that exists, and inside an
+   * indexed group that row can be behind a closed heading. Opening it is a real
+   * change to the reader's navigator, kept exactly like the ancestor branches
+   * `openAncestors` opens on the same journey: the way back is left open.
+   */
+  useEffect(() => {
+    if (!selectedBand) return
+    const ui = useUI.getState()
+    if (ui.bands[selectedBand] !== true) ui.setBandOpen(selectedBand, true)
+  }, [selectedBand])
+
   const list = useMemo(
-    () => buildNavigatorRows(groups, filter, closedGroups, collapsedNodes),
-    [closedGroups, collapsedNodes, filter, groups],
+    () =>
+      buildNavigatorRows({
+        groups,
+        filter,
+        closedGroups,
+        collapsedNodes,
+        bands,
+        favourites,
+        recents,
+      }),
+    [bands, closedGroups, collapsedNodes, favourites, filter, groups, recents],
+  )
+
+  const allClosed = groups.length > 0 && groups.every((group) => closedGroups[group.kind])
+  const collapseEverything = useCallback(() => {
+    const state = useUI.getState()
+    if (allClosed) {
+      state.expandAll()
+      return
+    }
+    state.collapseAll(
+      groups.map((group) => group.kind),
+      list.rows.flatMap((row) => (row.type === 'band' ? [row.key] : [])),
+    )
+  }, [allClosed, groups, list.rows])
+
+  const handleFavourite = useCallback(
+    (id: string) => toggleFavourite(projectPath, id),
+    [projectPath, toggleFavourite],
+  )
+  const handleBand = useCallback(
+    (key: string, open: boolean) => setBandOpen(key, open),
+    [setBandOpen],
   )
 
   // The pinned strip is its own short, unvirtualized list, so it asks for its
@@ -151,6 +289,35 @@ export function Navigator({
           </button>
         )}
       </div>
+
+      {/*
+        The size of the world, said out loud.
+
+        A navigator that has been restructured into sections and letters can no
+        longer be sized by eye — the reader sees eleven headings and has no idea
+        whether that is forty entities or nine hundred. While a filter is
+        narrowing, the same line becomes the answer to "did that find anything,
+        and how much", which is otherwise only knowable by scrolling.
+      */}
+      {nodes.length > 0 && (
+        <div className="nav-tools">
+          <span className="nav-count">
+            {filter ? `${list.shown} of ${nodes.length} shown` : `${nodes.length} entities`}
+          </span>
+          <button
+            className="nav-tool"
+            onClick={collapseEverything}
+            disabled={groups.length === 0}
+            title={
+              allClosed
+                ? 'Open every group and branch'
+                : 'Close every group, keeping what is open inside them'
+            }
+          >
+            {allClosed ? 'Expand all' : 'Collapse all'}
+          </button>
+        </div>
+      )}
 
       {pinned.length > 0 && (
         <div className="nav-pinned">
@@ -226,11 +393,14 @@ export function Navigator({
           dropId={dropId}
           readOnly={readOnly}
           editedElsewhere={editedElsewhere}
+          favourites={favouriteIds}
           onSelect={select}
           onToggle={toggleNodeOpen}
           onToggleGroup={toggleGroup}
+          onToggleBand={handleBand}
           onGroupContext={handleGroupContext}
           onContext={handleContext}
+          onFavourite={handleFavourite}
           onDragStart={setDragId}
           onDragEnd={handleDragEnd}
           canDrop={canDrop}
@@ -265,7 +435,9 @@ export function Navigator({
             kinds={kinds}
             readOnly={readOnly}
             busy={dup.isPending || del.isPending}
+            favourite={favouriteIds.has(ctx.node.id)}
             onClose={() => setCtx(null)}
+            onFavourite={() => handleFavourite(ctx.node.id)}
             onNewNode={onNewNode}
             onDuplicate={() =>
               dup.mutate(ctx.node.id, {
@@ -352,6 +524,19 @@ function PeerDot({ who }: { who: string | undefined }) {
   )
 }
 
+/**
+ * The favourite mark, drawn in CSS rather than from the sprite sheet.
+ *
+ * Two reasons, and neither is aesthetic. The sheet has no star, and it lives in
+ * `IconSprite.tsx`, which is shared by every surface in the app. And an
+ * `<Icon>` is two elements — an `<svg>` and a `<use>` — where this is one,
+ * which matters on the navigator row that carries the same mark: a full window
+ * of rows pays that cost on every scroll tick.
+ */
+function Star({ on }: { on?: boolean }) {
+  return <span className={on ? 'star is-on' : 'star'} aria-hidden />
+}
+
 function deleteWarning(node: NodeSummary, nodes: NodeSummary[]): string {
   const kids = descendantsOf(node.id, nodes).size
   const base = 'Its Markdown file is removed from the project folder.'
@@ -364,7 +549,9 @@ function NodeMenu({
   kinds,
   readOnly,
   busy,
+  favourite,
   onClose,
+  onFavourite,
   onNewNode,
   onDuplicate,
   onDelete,
@@ -373,7 +560,9 @@ function NodeMenu({
   kinds: KindIndex
   readOnly: boolean
   busy: boolean
+  favourite: boolean
   onClose: () => void
+  onFavourite: () => void
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
   onDuplicate: () => void
   onDelete: () => void
@@ -407,6 +596,14 @@ function NodeMenu({
         </button>
       )}
       <div className="ctx-sep" role="separator" />
+      {/* Never disabled by `readOnly`: a favourite is this reader's shortcut,
+          held on this machine, and a project on a read-only share is exactly
+          the one you most want to keep your bearings in. */}
+      <button role="menuitem" onClick={pick(onFavourite)}>
+        <Star on={favourite} />
+        {favourite ? 'Remove from favourites' : 'Add to favourites'}
+      </button>
+      <div className="ctx-sep" role="separator" />
       <button
         role="menuitem"
         disabled={readOnly || def?.singleton || busy}
@@ -432,7 +629,26 @@ const NAVIGATOR_ROW_HEIGHT = 28
 const NAVIGATOR_OVERSCAN = 8
 const NAVIGATOR_FALLBACK_HEIGHT = 560
 
-interface NavigatorRowsProps {
+/**
+ * Everything a node row can do, named once.
+ *
+ * The window holds these to hand down and the row holds them to call, so
+ * spelling the same nine signatures out twice is how one of them ends up
+ * differing from the other by a parameter nobody notices.
+ */
+interface NavigatorRowActions {
+  onSelect: (id: string) => void
+  onToggle: (id: string) => void
+  onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
+  onFavourite: (id: string) => void
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+  canDrop: (targetId: string | null, kind: NodeKind) => boolean
+  onDropOn: (id: string | null) => void
+  setDropId: (id: string | null) => void
+}
+
+interface NavigatorRowsProps extends NavigatorRowActions {
   rows: NavigatorListRow[]
   kinds: KindIndex
   selectedId: string | null
@@ -440,16 +656,10 @@ interface NavigatorRowsProps {
   dropId: string | null
   readOnly: boolean
   editedElsewhere: Map<string, string>
-  onSelect: (id: string) => void
-  onToggle: (id: string) => void
+  favourites: Set<string>
   onToggleGroup: (kind: NodeKind) => void
+  onToggleBand: (key: string, open: boolean) => void
   onGroupContext: (kind: NodeKind) => void
-  onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
-  onDragStart: (id: string) => void
-  onDragEnd: () => void
-  canDrop: (targetId: string | null, kind: NodeKind) => boolean
-  onDropOn: (id: string | null) => void
-  setDropId: (id: string | null) => void
   onRowRender?: (nodeId: string) => void
 }
 
@@ -486,8 +696,11 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
 
   useEffect(() => {
     if (!props.selectedId) return
+    // The tree row, not the favourite or the recent copy of it: those are
+    // shortcuts at the top of the list, and scrolling to one would leave the
+    // reader looking at the shortcut instead of the entity's place in the world.
     const index = props.rows.findIndex(
-      (row) => row.type === 'node' && row.tree.node.id === props.selectedId,
+      (row) => row.type === 'node' && row.place === 'tree' && row.tree.node.id === props.selectedId,
     )
     const element = viewport.current
     if (index < 0 || !element) return
@@ -563,19 +776,32 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
                 onDropOn={props.onDropOn}
                 setDropId={props.setDropId}
               />
+            ) : row.type === 'band' ? (
+              <NavigatorBandRow
+                key={row.key}
+                bandKey={row.key}
+                label={row.label}
+                count={row.count}
+                open={row.open}
+                nested={row.nested}
+                onToggle={props.onToggleBand}
+              />
             ) : (
               <NavigatorNodeRow
                 key={row.key}
                 tree={row.tree}
+                place={row.place}
                 kinds={props.kinds}
                 open={row.open}
                 hasChildren={row.hasChildren}
                 selected={props.selectedId === row.tree.node.id}
                 dragging={props.dragId === row.tree.node.id}
-                dropTarget={props.dropId === row.tree.node.id}
+                dropTarget={props.dropId === row.tree.node.id && row.place === 'tree'}
+                favourite={props.favourites.has(row.tree.node.id)}
                 onSelect={props.onSelect}
                 onToggle={props.onToggle}
                 onContext={props.onContext}
+                onFavourite={props.onFavourite}
                 onDragStart={props.onDragStart}
                 onDragEnd={props.onDragEnd}
                 canDrop={props.canDrop}
@@ -642,17 +868,56 @@ const NavigatorGroupRow = memo(function NavigatorGroupRow({
   )
 })
 
+/**
+ * A heading that is neither a kind nor a node — a section, or a letter.
+ *
+ * One component for both because they are the same control: a disclosure, a
+ * title and a count. What separates them is where the row builder puts them and
+ * whether they start open, and neither is the row's business. They are
+ * deliberately *not* the group header: that one is a drop target for
+ * re-parenting to the top level, and dropping a species onto the letter `V`
+ * would have to mean something.
+ */
+const NavigatorBandRow = memo(function NavigatorBandRow({
+  bandKey,
+  label,
+  count,
+  open,
+  nested,
+  onToggle,
+}: {
+  bandKey: string
+  label: string
+  count: number
+  open: boolean
+  nested: boolean
+  onToggle: (key: string, open: boolean) => void
+}) {
+  return (
+    <div className={`group band${nested ? ' band-nested' : ''}${open ? ' open' : ''}`}>
+      <button className="group-h" aria-expanded={open} onClick={() => onToggle(bandKey, !open)}>
+        <Icon name="chev" />
+        {label}
+        <span className="gcount">{count}</span>
+      </button>
+    </div>
+  )
+})
+
 const NavigatorNodeRow = memo(function NavigatorNodeRow({
   tree,
+  place,
   kinds,
   open,
   hasChildren,
   selected,
   dragging,
   dropTarget,
+  favourite,
   onSelect,
   onToggle,
   onContext,
+  onFavourite,
   onDragStart,
   onDragEnd,
   canDrop,
@@ -662,22 +927,16 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
   who,
   thumb,
   onRender,
-}: {
+}: NavigatorRowActions & {
   tree: TreeNode
+  place: NavigatorPlace
   kinds: KindIndex
   open: boolean
   hasChildren: boolean
   selected: boolean
   dragging: boolean
   dropTarget: boolean
-  onSelect: (id: string) => void
-  onToggle: (id: string) => void
-  onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
-  onDragStart: (id: string) => void
-  onDragEnd: () => void
-  canDrop: (targetId: string | null, kind: NodeKind) => boolean
-  onDropOn: (id: string | null) => void
-  setDropId: (id: string | null) => void
+  favourite: boolean
   readOnly: boolean
   who: string | undefined
   /** Resolved by the window above; `null` while unknown and when there is none. */
@@ -689,8 +948,13 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
     onRender?.(n.id)
   })
   const def = kinds.get(n.kind)
+  // A shortcut row is a way back to an entity, not the entity's place in the
+  // world: re-parenting by dragging one, or dropping onto one, would move a
+  // node using a row that says nothing about where it currently sits.
+  const inTree = place === 'tree'
   const cls = [
     'node',
+    inTree ? '' : 'node-shortcut',
     selected ? 'is-sel' : '',
     dragging ? 'is-dragging' : '',
     dropTarget ? 'drop-target' : '',
@@ -709,7 +973,7 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
         e.currentTarget.focus()
         onContext(e.clientX, e.clientY, n, e.currentTarget)
       }}
-      draggable={!readOnly}
+      draggable={!readOnly && inTree}
       onDragStart={(e) => {
         e.dataTransfer.setData(DRAG_MIME, n.id)
         e.dataTransfer.effectAllowed = 'move'
@@ -717,14 +981,14 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
       }}
       onDragEnd={onDragEnd}
       onDragOver={(e) => {
-        if (!canDrop(n.id, n.kind)) return
+        if (!inTree || !canDrop(n.id, n.kind)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
         setDropId(n.id)
       }}
       onDragLeave={() => setDropId(null)}
       onDrop={(e) => {
-        if (!canDrop(n.id, n.kind)) return
+        if (!inTree || !canDrop(n.id, n.kind)) return
         e.preventDefault()
         onDropOn(n.id)
       }}
@@ -751,6 +1015,20 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
         }
       />
       <span className="nm">{n.name}</span>
+      {/* Invisible until hovered unless it is on, so a thousand rows do not
+          read as a thousand stars, and the way to make one is still findable
+          without opening a menu to look for it. Not a `<button>`, for the same
+          reason the twist beside it is not one: the row itself is the button,
+          and the keyboard route to both is the row's context menu. */}
+      <span
+        className={favourite ? 'fav star is-on' : 'fav star'}
+        aria-hidden
+        title={favourite ? `Remove ${n.name} from favourites` : `Add ${n.name} to favourites`}
+        onClick={(e) => {
+          e.stopPropagation()
+          onFavourite(n.id)
+        }}
+      />
       <PeerDot who={who} />
       <StaleDot state={n.descriptionState} />
     </button>

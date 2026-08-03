@@ -88,7 +88,14 @@ describe('large Navigator rendering', () => {
     const groups = buildGroups(nodes, ['character', 'culture', 'setting'], kinds)
     const stats: NavigatorBuildStats = { filteredGroups: 0 }
 
-    const result = buildNavigatorRows(groups, '2-9', {}, {}, stats)
+    const result = buildNavigatorRows({
+      groups,
+      filter: '2-9',
+      closedGroups: {},
+      collapsedNodes: {},
+      bands: {},
+      stats,
+    })
 
     expect(stats.filteredGroups).toBe(groups.length)
     expect(result.hasMatches).toBe(true)

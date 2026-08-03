@@ -57,18 +57,20 @@ describe('Navigator context menu accessibility', () => {
     expect(items.map((item) => item.textContent?.trim())).toEqual([
       'New character',
       'New child of Kael',
+      'Add to favourites',
       'Duplicate',
       'Delete',
     ])
     expect(items[0]).toHaveFocus()
 
+    const last = items.length - 1
     fireEvent.keyDown(items[0] as HTMLElement, { key: 'End' })
-    expect(items[3]).toHaveFocus()
-    fireEvent.keyDown(items[3] as HTMLElement, { key: 'ArrowDown' })
+    expect(items[last]).toHaveFocus()
+    fireEvent.keyDown(items[last] as HTMLElement, { key: 'ArrowDown' })
     expect(items[0]).toHaveFocus()
     fireEvent.keyDown(items[0] as HTMLElement, { key: 'ArrowUp' })
-    expect(items[3]).toHaveFocus()
-    fireEvent.keyDown(items[3] as HTMLElement, { key: 'Home' })
+    expect(items[last]).toHaveFocus()
+    fireEvent.keyDown(items[last] as HTMLElement, { key: 'Home' })
     expect(items[0]).toHaveFocus()
 
     fireEvent.keyDown(items[0] as HTMLElement, { key: 'Escape' })

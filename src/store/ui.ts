@@ -49,12 +49,24 @@ export interface Banner {
 const NAV_MIN = 200
 const NAV_MAX = 460
 
+/**
+ * How many nodes the navigator's Recent section remembers.
+ *
+ * Short on purpose. Recent is for the handful of entities in play right now —
+ * long enough to cover a morning's back-and-forth between a species, its
+ * culture and two characters, short enough that it never becomes a second list
+ * to scroll.
+ */
+const RECENT_LIMIT = 8
+
 interface UIState {
   mode: Mode
   setMode: (m: Mode) => void
 
   selectedId: string | null
   select: (id: string | null) => void
+  /** Most recently opened first, current selection included, capped. */
+  recentIds: string[]
 
   tab: EditorTab
   setTab: (t: EditorTab) => void
@@ -75,6 +87,17 @@ interface UIState {
   collapsedNodes: Record<string, true>
   toggleNodeOpen: (id: string) => void
   openAncestors: (ids: string[]) => void
+
+  /**
+   * Open/closed for the navigator's headings that are neither a kind group nor
+   * a node — its sections and its letter index. One record rather than two
+   * because the defaults differ per kind of heading and the caller, which knows
+   * which heading it drew, passes the state it wants rather than a toggle.
+   */
+  bands: Record<string, boolean>
+  setBandOpen: (key: string, open: boolean) => void
+  collapseAll: (kinds: NodeKind[], bandKeys: string[]) => void
+  expandAll: () => void
 
   paletteOpen: boolean
   setPaletteOpen: (v: boolean) => void
@@ -102,7 +125,17 @@ export const useUI = create<UIState>((set) => ({
   setMode: (mode) => set({ mode }),
 
   selectedId: null,
-  select: (selectedId) => set({ selectedId }),
+  // Every route into a node — a row, the palette, a breadcrumb, a backlink —
+  // goes through `select`, so the recent list is kept here rather than at the
+  // call sites, where one forgotten path would make it quietly wrong.
+  recentIds: [],
+  select: (selectedId) =>
+    set((s) => ({
+      selectedId,
+      recentIds: selectedId
+        ? [selectedId, ...s.recentIds.filter((id) => id !== selectedId)].slice(0, RECENT_LIMIT)
+        : s.recentIds,
+    })),
 
   tab: 'notes',
   setTab: (tab) => set({ tab }),
@@ -147,6 +180,25 @@ export const useUI = create<UIState>((set) => ({
       }
       return changed ? { collapsedNodes: next } : {}
     }),
+
+  bands: {},
+  setBandOpen: (key, open) => set((s) => ({ bands: { ...s.bands, [key]: open } })),
+  // Closing the kind groups hides everything under them, so the node and letter
+  // state below is left exactly as it was: re-opening a group should return the
+  // reader to the shape they had, not to a wall of every branch expanded.
+  collapseAll: (kinds, bandKeys) =>
+    set((s) => {
+      const closedGroups: Record<string, true> = { ...s.closedGroups }
+      for (const kind of kinds) closedGroups[kind] = true
+      const bands = { ...s.bands }
+      for (const key of bandKeys) bands[key] = false
+      return { closedGroups, bands }
+    }),
+  // Groups, sections and branches all open; the letter index returns to its
+  // default, which is closed. The index is the *shape* of an oversized group
+  // rather than something collapsed inside it, and pouring nine hundred names
+  // back onto the screen is the state this restructure exists to end (#145).
+  expandAll: () => set({ closedGroups: {}, collapsedNodes: {}, bands: {} }),
 
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),

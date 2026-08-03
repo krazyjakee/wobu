@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
   ancestorsOf,
+  bucketLetter,
+  bucketOf,
+  bucketRoots,
   buildGroups,
   descendantsOf,
   filterTree,
+  flatTree,
   indexNodes,
   influenceDependentsOf,
+  matchesQuery,
+  BUCKET_MAX,
+  BUCKET_MIN_ROOTS,
+  BUCKET_MIN_SIZE,
 } from './tree'
 import type { TreeNode } from './tree'
 import type { LinkEdge } from './api'
@@ -437,5 +445,108 @@ describe('influenceDependentsOf', () => {
 describe('indexNodes', () => {
   it('handles undefined, which is what a pending query hands it', () => {
     expect(indexNodes(undefined).size).toBe(0)
+  })
+})
+
+describe('bucketLetter', () => {
+  it('folds case and accents onto one letter, and files the rest under #', () => {
+    expect(bucketLetter('Kael')).toBe('K')
+    expect(bucketLetter('kael')).toBe('K')
+    // A reader looking for Élan looks under E. An index entry of its own is a
+    // heading that only its author would ever click.
+    expect(bucketLetter('Élan')).toBe('E')
+    expect(bucketLetter('  spaced')).toBe('S')
+    expect(bucketLetter('3rd Legion')).toBe('#')
+    expect(bucketLetter('"The" Watcher')).toBe('#')
+    expect(bucketLetter('')).toBe('#')
+    // Not every world writes in Latin script, and forcing one to `#` would put
+    // the whole project under a single heading.
+    expect(bucketLetter('日輪')).toBe('日')
+  })
+})
+
+describe('bucketRoots', () => {
+  const roots = (names: string[]): TreeNode[] =>
+    names.map((name, index) => ({
+      node: summary({ id: `n-${index}`, name }),
+      depth: 0,
+      children: [],
+    }))
+
+  const spread = (count: number): TreeNode[] =>
+    roots(
+      Array.from(
+        { length: count },
+        (_, index) => `${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[index % 26]}${index}`,
+      ),
+    )
+
+  it('leaves a group the reader can already scan alone', () => {
+    expect(bucketRoots(spread(BUCKET_MIN_ROOTS - 1))).toBeNull()
+  })
+
+  it('leaves a long group alone when its names do not divide', () => {
+    // What a bulk import or a naming convention looks like. One heading over
+    // everything hides the group behind a click and says nothing.
+    expect(bucketRoots(roots(Array.from({ length: 200 }, (_, i) => `Node ${i}`)))).toBeNull()
+  })
+
+  it('caps the headings and widens them into runs as the group grows', () => {
+    const small = bucketRoots(spread(60))
+    const large = bucketRoots(spread(2_000))
+    expect(small).not.toBeNull()
+    expect(large).not.toBeNull()
+    expect(small!.length).toBeLessThanOrEqual(BUCKET_MAX)
+    expect(large!.length).toBeLessThanOrEqual(BUCKET_MAX)
+    // Every root is filed exactly once, whatever the split.
+    expect(large!.reduce((total, bucket) => total + bucket.roots.length, 0)).toBe(2_000)
+    expect(large![0]!.from).toBe('A')
+    expect(large!.at(-1)!.to).toBe('Z')
+    expect(small![0]!.label).toMatch(/^[A-Z](–[A-Z])?$/)
+  })
+
+  it('counts nested descendants, because that is what is behind the heading', () => {
+    const list = spread(60)
+    list[0]!.children = [{ node: summary({ id: 'kid', name: 'Kid' }), depth: 1, children: [] }]
+    const buckets = bucketRoots(list)
+    expect(buckets![0]!.count).toBe(buckets![0]!.roots.length + 1)
+  })
+
+  it('never leaves a stray letter under a heading of its own', () => {
+    const buckets = bucketRoots(spread(61))
+    expect(buckets!.at(-1)!.roots.length).toBeGreaterThanOrEqual(BUCKET_MIN_SIZE)
+  })
+
+  it('resolves the heading a letter falls under', () => {
+    const buckets = bucketRoots(spread(2_000))!
+    const first = buckets[0]!
+    expect(bucketOf(buckets, first.from)).toBe(first.from)
+    expect(bucketOf(buckets, first.to)).toBe(first.from)
+    expect(bucketOf(buckets, 'Z')).toBe(buckets.at(-1)!.from)
+  })
+
+  it('files symbols last', () => {
+    const list = [...spread(60), ...roots(['3 Ravens', '#hash', '9 Lives'])]
+    const buckets = bucketRoots(list)!
+    expect(buckets.at(-1)!.to).toBe('#')
+  })
+})
+
+describe('flatTree', () => {
+  it('hands back the same wrapper for the same node, so memoized rows hold', () => {
+    const node = summary({ id: 'kael', name: 'Kael' })
+    const first = flatTree(node)
+    expect(flatTree(node)).toBe(first)
+    expect(first.depth).toBe(0)
+    expect(first.children).toEqual([])
+  })
+})
+
+describe('matchesQuery', () => {
+  it('reads the name and the summary, and nothing deeper', () => {
+    const node = summary({ id: 'kael', name: 'Kael', summary: 'Ember guild deserter' })
+    expect(matchesQuery(node, 'kae')).toBe(true)
+    expect(matchesQuery(node, 'deserter')).toBe(true)
+    expect(matchesQuery(node, 'scarred')).toBe(false)
   })
 })

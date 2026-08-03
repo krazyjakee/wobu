@@ -43,12 +43,46 @@ result grid) · `Assets` (all images, filterable) · `Settings`. Keeps the top b
 makes mode switching muscle memory.
 
 ### Navigator (272px, resizable)
-Filter box at top. Two pinned singletons — **Art Style** and **World Canon** — sit above the
-rule, because they are the roots of every influence stack and should never be hunted for.
-Below: collapsible groups per node kind, each nesting by `parent_id`. Drag to re-parent.
-Right-click for New / Duplicate / Delete. A node with unresolved `stale` descriptions gets a
-small dot. The navigator is the tree and nothing else: the links a node has, and the ones
-pointing back at it, are read and edited in the Relations tab.
+Filter box at top, and under it one line giving the size of the world — `812 entities`, or
+`14 of 812 shown` while the filter is narrowing — with **Collapse all** beside it. Two pinned
+singletons — **Art Style** and **World Canon** — sit above the rule, because they are the
+roots of every influence stack and should never be hunted for. Below: collapsible groups per
+node kind, each nesting by `parent_id`. Drag to re-parent. Right-click for New / Favourite /
+Duplicate / Delete. A node with unresolved `stale` descriptions gets a small dot. The
+navigator is the tree and nothing else: the links a node has, and the ones pointing back at
+it, are read and edited in the Relations tab.
+
+#### Structure at a few hundred nodes
+
+A creature list alone runs to hundreds of entries, and a flat tree of them is only navigable
+by scrolling. Three things shape the list, none of which needs configuring first:
+
+- **Favourites** — star a row (the star on hover, or the row's context menu) and it appears
+  in a section above the tree, sorted by name. This is the reader's working set, and it is
+  the one part of the structure they author.
+- **Recent** — the last handful of entities opened, most recent first, excluding the one on
+  screen. Appears once a project is past ~30 entities; below that everything is already
+  visible and the section would only draw the same rows twice.
+- **Alphabetical index** — a kind group past ~48 roots is drawn as at most twelve headings
+  (`A–E`, `F–K`, …) that start closed, so a thousand characters open as a dozen rows rather
+  than a thousand. The runs widen as the group grows, the index is rebuilt on whatever
+  survives the filter, and a group whose names do not divide — a bulk import, a naming
+  convention — is left flat, because one heading over everything hides the group and tells
+  the reader nothing. Opening a node from anywhere else (palette, breadcrumb, backlink, a
+  node just created) opens the heading it is filed under, exactly as jumping already opens
+  collapsed ancestors.
+
+Rows are virtualized against a fixed row height, so only the visible window is ever in the
+DOM and only that window asks for thumbnails.
+
+**None of this reaches the disk.** Sections, headings and the index are a view over
+`node_list`; they add no folder, no ordering file and no front-matter field, so the project
+folder stays exactly as `docs/02-data-model.md` describes it and remains legible to somebody
+reading the Markdown without Wobu. Favourites are per-machine, in local storage beside the
+other preferences (`store/settings.ts`), because a favourite is one reader's shortcut rather
+than a fact about the world — writing them into the shared folder would sync one person's
+working set onto everyone else's screen and conflict every time two people starred something.
+Recent, collapse state and which headings are open are session state in `store/ui.ts`.
 
 ### Editor (fluid)
 - **Sticky header** — name (inline-editable), kind badge, and the *influence breadcrumb*:
