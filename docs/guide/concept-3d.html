@@ -35,40 +35,45 @@
         <p class="eyebrow">Making images</p>
         <h1>Concept 3D</h1>
         <p class="lede">
-          The current 3D tab views and exports completed meshes already present in a project. The
-          turnaround-to-mesh creation flow below is planned, not reachable UI.
+          Eight views of one subject, reviewed, then reconstructed into a mesh you can turn around
+          in the app and hand to a modeller.
         </p>
 
-        <div class="warn">
-          <span class="note-label">View/export only in the current build</span>
-          <p>
-            Wobu cannot yet review and reroll a completed turnaround or start reconstruction from
-            the UI. Those controls, job orchestration, and automatic handoff to the viewer are
-            tracked in <a href="https://github.com/krazyjakee/wobu/issues/110">#110</a>.
-          </p>
-        </div>
-
-        <h2>The planned creation pipeline</h2>
+        <h2>The pipeline</h2>
 
         <ol class="steps">
           <li>
-            <strong>Planned — generate a turnaround.</strong> Pick the Turnaround preset on a
-            character, creature or prop. It emits eight views on a locked seed.
+            <strong>Generate a turnaround.</strong> Pick the Turnaround preset on a character,
+            creature or prop. It emits eight views on a locked seed. The 3D tab (<kbd>⌘4</kbd>) will
+            also start one for you if the subject has never had one.
           </li>
           <li>
-            <strong>Planned — review the sheet.</strong> The 3D tab (<kbd>⌘4</kbd>) shows the
-            turnaround as a set. Views that came out inconsistent can be re-rolled individually
-            before you spend money on reconstruction.
+            <strong>Review the sheet.</strong> The 3D tab shows the turnaround as a set of eight
+            slots. Views that came out inconsistent can be re-rolled individually — one image, on a
+            seed of its own — before you spend money on reconstruction. Re-roll as often as you
+            like; every take is kept, and each slot lets you go back to an earlier one.
           </li>
           <li>
-            <strong>Planned — reconstruct.</strong> Wobu submits the views to the mesh backend and
-            polls the job. A <code>.glb</code> lands in the project folder when it's done.
+            <strong>Reconstruct.</strong> Choose the face count and reconstruction mode, confirm the
+            cost, and press Reconstruct. Wobu submits the views to the mesh backend and polls the
+            job; Stop cancels it like any other. A <code>.glb</code> lands in the project folder
+            when it's done.
           </li>
           <li>
-            <strong>Implemented — inspect and export.</strong> Existing mesh records open in an
-            inline three.js viewer with a turntable and can be exported for a modeller.
+            <strong>Inspect and export.</strong> The finished mesh appears in the viewer beside the
+            sheet — an inline three.js turntable with a wireframe toggle and a one-metre marker —
+            and exports for a modeller from the same toolbar.
           </li>
         </ol>
+
+        <div class="note">
+          <span class="note-label">The sheet is the last cheap place to fix a mesh</span>
+          <p>
+            Reconstruction is one paid job and takes minutes. A bad back view is seconds to re-roll
+            and cannot be repaired afterwards, so Wobu will not let you start until every view the
+            backend needs is on screen and chosen.
+          </p>
+        </div>
 
         <h2>Why the Turnaround preset looks the way it does</h2>
 
@@ -117,18 +122,34 @@
           produces a bad mesh, and no amount of prompt work at this stage will help.
         </p>
 
-        <h2>Jobs and waiting (planned UI)</h2>
+        <h2>Jobs and waiting</h2>
 
         <p>
-          The implemented backend protocol is asynchronous — submit, then poll — but #110 still has
-          to connect it to the app's job controls. The planned UI will use the same cancellation and
-          progress model as images and respect the backend's three-job concurrency limit.
+          The backend protocol is asynchronous — submit, then poll — and a reconstruction is a job
+          in the same queue as images, with the same Stop button and the same progress line. The
+          queue holds the backend to three concurrent jobs because that is the account limit.
         </p>
 
         <p>
-          Provider results expire within 24 hours. Backend storage downloads completed meshes into
-          the project folder rather than retaining a URL that would rot; automatic UI handoff is
-          part of #110.
+          A mesh job is minutes long, which means most of the ways it can fail happen after the
+          money was spent. Wobu writes a receipt for those too, marked as failed and carrying what
+          it cost, so a job that produced nothing still leaves a record you can find.
+        </p>
+
+        <p>
+          Provider results expire within 24 hours, so Wobu downloads the finished mesh into the
+          project folder rather than keeping a URL that would rot. It appears in the viewer as soon
+          as it lands.
+        </p>
+
+        <h2>What a reconstruction costs</h2>
+
+        <p>
+          The hosted backend charges per submitted job — including one you cancel while it is
+          running — and its international API does not report the amount back. There is therefore no
+          honest figure Wobu can put in front of you and nothing for the image spend ceiling to
+          reserve, so paid reconstruction is gated on a confirmation instead: you tick the box that
+          says so, and the receipt records how many jobs the provider admitted to billing.
         </p>
 
         <h2>Storage</h2>
@@ -142,29 +163,34 @@
           a thumbnail and most sessions never need one.
         </p>
 
-        <h2>Local versus hosted (planned creation choices)</h2>
+        <h2>Local versus hosted</h2>
 
         <p>
-          The backend supports local ComfyUI mesh generation as an explicit alternative to the
-          hosted service. The current UI cannot start either route; when #110 connects them, local
-          will be attractive for cost and privacy but will carry a quality trade:
+          You pick the 3D backend in Settings, per project. Local ComfyUI mesh generation is an
+          explicit alternative to the hosted service, attractive for cost and privacy, and it
+          carries a quality trade:
         </p>
 
         <div class="warn">
           <span class="note-label">Local is a different tier, not a fallback</span>
           <p>
-            Open weights stop at an earlier version than the hosted model. Running locally gets you
-            a materially older and lower-quality result, not a drop-in substitute for the cloud one.
+            Open weights stop at an earlier version than the hosted model, and that version
+            reconstructs from a <em>single</em> image rather than eight. Running locally gets you a
+            materially older and lower-quality result, not a drop-in substitute for the cloud one.
             Wobu presents it as a separate quality tier and won't silently fall back to it when a
             key is missing.
+          </p>
+          <p>
+            When the selected backend takes fewer views than a turnaround has, the 3D tab says which
+            ones it will actually send — the front view first, because a single-image reconstruction
+            <em>is</em> the front view — and dims the rest rather than hiding them.
           </p>
         </div>
 
         <h2>What you get out</h2>
 
         <p>
-          The planned creation output is a blockout mesh with optional PBR materials, at a face
-          count you choose. Existing meshes can already be inspected and exported. They are concept
+          A blockout mesh with optional PBR materials, at a face count you choose. These are concept
           geometry: enough to judge proportion, silhouette and scale in three dimensions, enough to
           hand to a modeller as a reference, and not enough to ship.
         </p>

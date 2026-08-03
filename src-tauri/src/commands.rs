@@ -51,6 +51,12 @@ use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 use crate::machine::MachineSettings;
 use crate::state::{AppState, Jobs, ProjectTicket, WORLD_CHANGED};
 
+/// Reviewing a turnaround and reconstructing a mesh from it (#110). A submodule
+/// rather than more of this file: it is the one command group with a job, a
+/// provider adapter and a task of its own, and `mesh_concepts` above is only
+/// the reading half of it.
+pub mod mesh;
+
 /// How many thumbnails one IPC may ask for, assets or nodes alike.
 ///
 /// A bound rather than a page size: the caller sends the window it is about to

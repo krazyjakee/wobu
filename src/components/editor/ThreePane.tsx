@@ -3,16 +3,35 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import * as api from '../../lib/api'
-import type { MeshConcept, TurnaroundView, WobuNode } from '../../lib/api'
+import type { MeshConcept, QueueSnapshot, TurnaroundView, WobuNode } from '../../lib/api'
 import { useAssetThumb, useMeshAssetPath, useMeshConcepts } from '../../lib/queries'
+import { TurnaroundReview } from './TurnaroundReview'
 
 const MeshViewport = lazy(() => import('./MeshViewport'))
 
-export function ThreePane({ node }: { node: WobuNode }) {
-  return <ThreePaneSession key={node.id} node={node} />
+const EMPTY_QUEUE: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
+
+export function ThreePane({
+  node,
+  queue = EMPTY_QUEUE,
+  readOnly = false,
+}: {
+  node: WobuNode
+  queue?: QueueSnapshot
+  readOnly?: boolean
+}) {
+  return <ThreePaneSession key={node.id} node={node} queue={queue} readOnly={readOnly} />
 }
 
-function ThreePaneSession({ node }: { node: WobuNode }) {
+function ThreePaneSession({
+  node,
+  queue,
+  readOnly,
+}: {
+  node: WobuNode
+  queue: QueueSnapshot
+  readOnly: boolean
+}) {
   const concepts = useMeshConcepts(node.id)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected =
@@ -69,12 +88,22 @@ function ThreePaneSession({ node }: { node: WobuNode }) {
       </div>
     )
   }
+  // An entity with no mesh yet is the state this tab exists to get *out* of, so
+  // the reconstruction panel is what fills it rather than a sentence about
+  // meshes that will appear from somewhere unspecified (#110).
   if (!selected) {
     return (
-      <div className="mesh-empty">
-        <h3>No meshes yet</h3>
-        <p>Generated GLBs for {node.name} will appear here without loading until this tab opens.</p>
-      </div>
+      <section className="mesh-pane is-empty" aria-label={`3D concepts for ${node.name}`}>
+        <div className="mesh-workbench">
+          <div className="mesh-empty">
+            <h3>No meshes yet</h3>
+            <p>
+              Reconstruct one from a turnaround and it opens here, in the viewer, ready to export.
+            </p>
+          </div>
+          <TurnaroundReview node={node} queue={queue} readOnly={readOnly} />
+        </div>
+      </section>
     )
   }
 
@@ -140,6 +169,7 @@ function ThreePaneSession({ node }: { node: WobuNode }) {
         </div>
         <TurnaroundSheet concept={selected} />
       </div>
+      <TurnaroundReview node={node} queue={queue} readOnly={readOnly} />
     </section>
   )
 }

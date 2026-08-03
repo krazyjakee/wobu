@@ -1,7 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Generation, LoraStatus, ProjectSummary, QueueSnapshot } from '../lib/api'
+import type {
+  Generation,
+  GenerationPage,
+  GenerationSummary,
+  LoraStatus,
+  ProjectSummary,
+  QueueSnapshot,
+} from '../lib/api'
 import { useUI } from '../store/ui'
 import { kindDef, kindIndex, summary } from '../test/fixtures'
 import { ForgeMode } from './ForgeMode'
@@ -71,6 +78,35 @@ function receipt(id: string, assetId: string, seed: number, prompt: string): Gen
     outputAssetIds: [assetId],
     influenceSnapshot: { layers: [] },
   }
+}
+
+/*
+ * `generation_list` answers with a page of lightweight summaries, not with the
+ * immutable receipts. Handing the receipts back verbatim made every Forge test
+ * that reads history fail on a shape the command has never returned.
+ */
+function summarise(receipt: Generation): GenerationSummary {
+  return {
+    id: receipt.id,
+    nodeId: receipt.nodeId,
+    createdAt: receipt.createdAt,
+    preset: receipt.preset,
+    viewType: receipt.viewType,
+    backend: receipt.backend,
+    model: receipt.model,
+    seed: receipt.seed,
+    promptExcerpt: receipt.compiledPrompt,
+    firstAssetId: receipt.outputAssetIds[0] ?? null,
+    outputCount: receipt.outputAssetIds.length,
+    seedSource: (receipt.params.seedSource as string | undefined) ?? null,
+    usedLockedSeed: (receipt.params.usedLockedSeed as boolean | undefined) ?? null,
+    sceneSubjectNames: [],
+    thumbnailPath: null,
+  }
+}
+
+function pageOf(receipts: Generation[]): GenerationPage {
+  return { items: receipts.map(summarise), total: receipts.length, nextOffset: null }
 }
 
 function Harness({
@@ -244,9 +280,13 @@ beforeEach(() => {
       })
     }
     if (command === 'generation_list') {
-      return Promise.resolve(args?.nodeId === 'kael' ? generations : [])
+      return Promise.resolve(pageOf(args?.nodeId === 'kael' ? generations : []))
     }
     if (command === 'asset_thumb') return Promise.resolve(`/thumb-${args?.assetId}`)
+    if (command === 'asset_thumb_batch') {
+      const ids = (args?.assetIds ?? []) as string[]
+      return Promise.resolve(Object.fromEntries(ids.map((id) => [id, `/thumb-${id}`])))
+    }
     if (command === 'asset_original') return Promise.resolve(`/original-${args?.assetId}`)
     if (command === 'generate_start') return Promise.resolve('job-forge')
     if (command === 'scene_generate_start') return Promise.resolve('job-scene')
@@ -703,7 +743,7 @@ describe('Forge mode', () => {
     )
   })
 
-  it('mounts and fetches thumbnails only for the virtualized result window', async () => {
+  it('mounts only the virtualized result window and batches its previews once', async () => {
     render(
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -714,21 +754,22 @@ describe('Forge mode', () => {
     const mounted = await screen.findAllByRole('button', { name: /generation .* for comparison/ })
     expect(mounted.length).toBeGreaterThan(0)
     expect(mounted.length).toBeLessThan(generations.length)
+    // Previews arrive with the page rather than one IPC per tile: sixty tiles
+    // scrolled past is sixty round trips, which is the cost this batch exists
+    // to remove. Per-tile `asset_thumb` here would mean it had come back.
     await waitFor(() => {
-      const thumbnailIds = new Set(
-        h.invoke.mock.calls
-          .filter(([command]) => command === 'asset_thumb')
-          .map(([, args]) => (args as { assetId: string }).assetId),
-      )
-      expect(thumbnailIds.size).toBeGreaterThan(0)
-      expect(thumbnailIds.size).toBeLessThan(generations.length)
+      expect(h.invoke).toHaveBeenCalledWith('asset_thumb_batch', expect.anything())
     })
+    expect(h.invoke.mock.calls.filter(([command]) => command === 'asset_thumb')).toHaveLength(0)
   })
 
-  it('keeps the Forge preview loading label while a mounted thumbnail is pending', async () => {
+  it('keeps the Forge preview loading label when the batch had no path for a tile', async () => {
     const defaultInvoke = h.invoke.getMockImplementation()!
     h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
-      if (command === 'asset_thumb') return new Promise(() => {})
+      // A thumbnail that has not been derived yet is absent from the batch
+      // answer rather than an error, and the tile has to say so instead of
+      // reaching for the full-resolution original.
+      if (command === 'asset_thumb_batch') return Promise.resolve({})
       return defaultInvoke(command, args)
     })
     renderForge()

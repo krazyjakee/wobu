@@ -912,6 +912,91 @@ export const meshSourcePath = (assetId: string) =>
 export const meshExport = (assetId: string, destination: string) =>
   call<void>('mesh_export', { assetId, destination })
 
+/**
+ * One rendered answer for one of the eight views.
+ *
+ * A view can have several: the Turnaround preset locks one seed across the whole
+ * sheet, so re-rolling a single view produces a take on a seed of its own rather
+ * than a ninth member of the original batch.
+ */
+export interface TurnaroundTake {
+  generationId: string
+  assetId: string
+  seed: number
+  createdAt: string
+  backend: string
+  model: string
+}
+
+export interface TurnaroundSlot {
+  viewType: string
+  /** Newest first. Empty when this view has never been rendered. */
+  takes: TurnaroundTake[]
+}
+
+/** One complete eight-view run, identified by the seed the preset locked. */
+export interface TurnaroundBatch {
+  seed: number
+  createdAt: string
+  /** In provider view order — front, left, right, back, top, bottom, and the two three-quarters. */
+  generationIds: string[]
+}
+
+export interface TurnaroundSheet {
+  /** Always eight, in provider view order, present or not. */
+  views: TurnaroundSlot[]
+  /** Complete runs, newest first. */
+  batches: TurnaroundBatch[]
+  /** View names with nothing rendered yet. */
+  missing: string[]
+}
+
+/** What this entity has rendered towards a mesh. Receipts only; no image bytes. */
+export const turnaroundSheet = (nodeId: string) =>
+  call<TurnaroundSheet>('turnaround_sheet', { nodeId })
+
+/**
+ * What the project's selected 3D backend accepts, and whether it could run now.
+ *
+ * `requiresBilling` is the gate on `meshStart`: a backend that charges per job
+ * and cannot report the amount back has to be confirmed rather than estimated.
+ */
+export interface MeshOptions {
+  /** Null when `project.json` selects no 3D backend at all. */
+  provider: string | null
+  label: string
+  model: string
+  region: string | null
+  /** Including the front view. One means single-image reconstruction. */
+  maxViews: number
+  faceCountMin: number
+  faceCountMax: number
+  defaultFaceCount: number
+  pbr: boolean
+  generateTypes: string[]
+  requiresBilling: boolean
+  ready: boolean
+  /** Why not, when `ready` is false. */
+  detail: string
+}
+
+export const meshOptions = () => call<MeshOptions>('mesh_options')
+
+export interface MeshStartOptions {
+  faceCount?: number
+  enablePbr?: boolean
+  generateType?: string
+  /** Required by the backend whenever `requiresBilling` is true. */
+  acceptCost?: boolean
+}
+
+/** Queue one reconstruction from reviewed turnaround views and return its job id. */
+export const meshStart = (
+  nodeId: string,
+  generationIds: string[],
+  options: MeshStartOptions = {},
+) => call<string>('mesh_start', { nodeId, generationIds, ...options })
+
 /** Full immutable receipt for the one history tile being opened. */
 export const generationGet = (generationId: string) =>
   call<Generation | null>('generation_get', { generationId })
@@ -1208,6 +1293,14 @@ export interface GenerateOptions {
   model?: string
   seed?: number
   grid?: VariantGrid
+  /**
+   * Restrict a named-view preset to some of its views.
+   *
+   * Only Turnaround has views at all, and this exists for one reason: re-rolling
+   * the back view has to be one image tagged `back`, not eight more. Omitted
+   * means the whole sheet, which is what the Inspector's Generate button sends.
+   */
+  views?: string[]
 }
 
 export type VariantGrid =

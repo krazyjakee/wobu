@@ -26,7 +26,7 @@ the initial plan.
 | [M5 — Enhance](https://github.com/krazyjakee/wobu/milestone/4) | **Implemented** | Keys/providers/schema/pipeline ([#31](https://github.com/krazyjakee/wobu/issues/31) through [#37](https://github.com/krazyjakee/wobu/issues/37)) and stale/edit/review behavior ([#38](https://github.com/krazyjakee/wobu/issues/38) through [#40](https://github.com/krazyjakee/wobu/issues/40)) are closed. |
 | [M6 — Influence Engine + first images](https://github.com/krazyjakee/wobu/milestone/5) | **Validated** | The core loop is validated by [#57](https://github.com/krazyjakee/wobu/issues/57) and [acceptance evidence](13-acceptance-evidence.md#m6--first-generation-loop); provider-owned aspect selection and dimension previews were completed by [#111](https://github.com/krazyjakee/wobu/issues/111). |
 | [M7 — Iteration and consistency](https://github.com/krazyjakee/wobu/milestone/6) | **Implemented** | [Forge #58](https://github.com/krazyjakee/wobu/issues/58), [variants/seed locking #59](https://github.com/krazyjakee/wobu/issues/59), [pinning #60](https://github.com/krazyjakee/wobu/issues/60), and [replay #61](https://github.com/krazyjakee/wobu/issues/61) are closed. |
-| [M8 — Concept 3D](https://github.com/krazyjakee/wobu/milestone/7) | **Partial** | Turnaround, adapters, GLB storage, and viewer/export are implemented by [#62](https://github.com/krazyjakee/wobu/issues/62) through [#68](https://github.com/krazyjakee/wobu/issues/68). The UI can view/export existing meshes, but creation/review/reroll remains planned in [#110](https://github.com/krazyjakee/wobu/issues/110). |
+| [M8 — Concept 3D](https://github.com/krazyjakee/wobu/milestone/7) | **Implemented** | Turnaround, adapters, GLB storage, and viewer/export are implemented by [#62](https://github.com/krazyjakee/wobu/issues/62) through [#68](https://github.com/krazyjakee/wobu/issues/68); review, per-view reroll, and queued reconstruction are joined to them by [#110](https://github.com/krazyjakee/wobu/issues/110). |
 | [M9 — Later, if earned](https://github.com/krazyjakee/wobu/milestone/8) | **Implemented** | Every retained extension has a closed canonical issue; see the feature table below. |
 
 Cross-cutting code-health and performance milestones after M9 stay on GitHub. They are engineering
@@ -97,9 +97,11 @@ Turnaround preset → image-to-3D via Hunyuan3D — hosted BYOK and/or local wei
 [08](08-providers.md) — GLB storage in the project folder, in-app three.js viewer with turntable,
 and export for a modeller.
 
-The backend and viewer portions ship. Until [#110](https://github.com/krazyjakee/wobu/issues/110)
-closes, the reachable product is view/export-only: users cannot review and reroll a turnaround or
-start reconstruction from the UI.
+The 3D tab is the whole of it: it surfaces every rendered turnaround view, re-rolls a bad one as a
+single image on its own seed, gates a paid reconstruction behind an explicit confirmation — the
+hosted backend bills per job and does not report the amount back, so there is nothing for the image
+spend ceiling to reserve — and queues the job beside the image ones. The finished GLB appears in the
+viewer without a reload ([#110](https://github.com/krazyjakee/wobu/issues/110)).
 
 ### M9 — Later, if earned
 

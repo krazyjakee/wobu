@@ -213,7 +213,7 @@ export function Editor({
             {tab === 'concepts' && (
               <ConceptsPane node={node} queue={queue} kinds={kinds} readOnly={readOnly} />
             )}
-            {tab === 'three' && <ThreePane node={node} />}
+            {tab === 'three' && <ThreePane node={node} queue={queue} readOnly={readOnly} />}
             {tab === 'relations' && (
               <RelationsPane
                 node={node}

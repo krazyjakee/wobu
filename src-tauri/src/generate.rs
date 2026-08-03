@@ -541,6 +541,7 @@ pub async fn generate_start(
     model: Option<String>,
     seed: Option<u64>,
     grid: Option<VariantGrid>,
+    views: Option<Vec<String>>,
 ) -> CommandResult<String> {
     let (root, project_id, nodes, assets, selection) = state.with(|project| {
         if project.is_read_only() {
@@ -594,9 +595,46 @@ pub async fn generate_start(
         })
     })
     .await?;
+    keep_named_views(&mut plan, views.as_deref())?;
     plan.reserve_spend()?;
     let id = jobs.queue().submit(plan);
     Ok(id.to_string())
+}
+
+/// Re-roll part of a named-view preset instead of the whole sheet.
+///
+/// The Turnaround preset emits eight images on one locked seed, which is what
+/// makes them views of the same object — and is also why "this back view came
+/// out wrong" cannot be answered by generating eight more. #110's review step
+/// needs one image, tagged with the view it replaces, on a seed of its own.
+///
+/// Applied by filtering the prepared plan rather than by teaching the planner a
+/// subset: the cells are already built and already carry their `view_type`, and
+/// a second path through `variant_cells` would be a second place for the eight
+/// names to be spelled. Spend is reserved *after* this, so a one-view reroll
+/// reserves one image.
+fn keep_named_views(plan: &mut GenerateTask, views: Option<&[String]>) -> CommandResult<()> {
+    let Some(views) = views.filter(|views| !views.is_empty()) else { return Ok(()) };
+    let wanted: HashSet<&str> = views.iter().map(|view| view.trim()).collect();
+    plan.plans.retain(|planned| {
+        planned.generation.view_type.as_deref().is_some_and(|view| wanted.contains(view))
+    });
+    if plan.plans.is_empty() {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "That preset does not emit any of the named views that were asked for.",
+        ));
+    }
+    // The receipt says which of *this* batch each image is, and after filtering
+    // this batch is the reroll rather than the sheet it came from.
+    let size = plan.plans.len();
+    for (index, planned) in plan.plans.iter_mut().enumerate() {
+        planned.generation.params.insert("batchIndex".into(), json!(index));
+        planned.generation.params.insert("batchSize".into(), json!(size));
+    }
+    let stem = plan.label.rsplit_once(" ×").map_or(plan.label.as_str(), |(head, _)| head);
+    plan.label = format!("{stem} ×{size}");
+    Ok(())
 }
 
 /// Queue one image containing two to four ordered world entities.
