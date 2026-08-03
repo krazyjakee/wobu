@@ -18,6 +18,7 @@ that context automatically.
 | [12 — Packaging & Releases](12-releasing.md) | Tagged bundles, signing and updater policy, version stamping |
 | [13 — Acceptance Evidence](13-acceptance-evidence.md) | Repeatable M1/M6 contracts and the live smoke checks they cannot replace |
 | [14 — Code-health Checks](14-code-health.md) | Dead-code, direct-dependency, public-surface, and duplication regression gates |
+| [15 — Exit Policy](15-exit-policy.md) | Every way the app can be stopped, what is in flight on each, and what is flushed, cancelled or accepted as lost |
 
 Two constraints shape most of the above and are worth knowing up front:
 
