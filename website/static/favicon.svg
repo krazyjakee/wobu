@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Wobu">
+  <!--
+    Fallback only. When `branding/wobu-icon.svg` is present in the checkout the
+    build overwrites this file with that master artwork; the geometry here is
+    the same inheritance chain so the two never disagree visually.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#232833" />
+      <stop offset="1" stop-color="#0d0e12" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="114" ry="114" fill="url(#tile)" />
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>

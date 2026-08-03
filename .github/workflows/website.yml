@@ -1,0 +1,84 @@
+name: Website
+
+# Unlike `ci.yml`, this one is automatic. It is a few seconds of Node with a
+# single dependency — nothing here compiles Rust or bundles a webview — and a
+# public site that silently lags the repository is worse than no site. The path
+# filter keeps it off every unrelated push.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/guide/**'
+      - 'docs/legal/**'
+      - 'LICENSE'
+      - '.github/workflows/website.yml'
+  # A published release changes what the download page's "latest release" links
+  # resolve to, so rebuild then as well.
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# One publish at a time, and never cancel one halfway: `gh-pages` is a
+# force-pushed branch, so a cancelled push is a site in an unknown state.
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build and publish to gh-pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          # `website/` has its own manifest on purpose: the site must not add a
+          # dependency to the application's.
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install the site's dependencies
+        working-directory: website
+        run: npm ci
+
+      # Reads `docs/legal/*.md`, `docs/guide/` and `LICENSE` from the checkout;
+      # any of them being absent is a warning, not a failure.
+      - name: Build the site
+        working-directory: website
+        run: npm run build
+
+      # Cheap insurance against publishing an empty or CNAME-less tree, which
+      # is how a custom domain silently unbinds itself.
+      - name: Check the output
+        working-directory: website
+        run: |
+          test -s dist/index.html
+          test -s dist/download.html
+          test -s dist/legal.html
+          test -f dist/.nojekyll
+          grep -qx 'wobu.app' dist/CNAME
+
+      # A plain force-push rather than a third-party action: the branch is a
+      # build artefact with no history worth keeping, and this is the whole
+      # deployment in eight readable lines.
+      - name: Publish to the gh-pages branch
+        if: >-
+          github.ref == 'refs/heads/main' || github.event_name == 'release' ||
+          github.event_name == 'workflow_dispatch'
+        working-directory: website/dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init --quiet --initial-branch gh-pages
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit --quiet --message "Publish wobu.app from ${GITHUB_SHA}"
+          git push --quiet --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
