@@ -1,0 +1,178 @@
+/* ── notification centre ───────────────────────────────────────────────────
+   The reviewable half of the error surface (#142). The trigger sits inline in
+   the status bar; the panel is fixed above it, docked to the same corner, so
+   opening it never reflows the workspace behind it. */
+
+.notif-bell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+.notif-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--border-str);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+}
+/* Money is the one thing that changes the badge. A user who was charged for
+   nothing should be able to tell from the corner of the screen, without
+   opening anything. */
+.notif-bell.is-charged .notif-count {
+  background: #c4384a;
+  color: #fff;
+}
+.notif-bell.is-charged {
+  color: #e79aa5;
+}
+
+.notif-panel {
+  position: fixed;
+  right: 10px;
+  bottom: 34px;
+  /* Under the toast (80) and over the modal overlay (60): a toast is the
+     interruption and must never be hidden behind the record of it. */
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 20px));
+  max-height: min(520px, calc(100vh - 120px));
+  border: 1px solid var(--border-str);
+  border-radius: var(--r);
+  background: var(--bg-panel);
+  color: var(--text);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 55%);
+  font-size: 12px;
+  /* The status bar switches selection off, and this panel is a child of it.
+     An error message that cannot be copied into a bug report is half useless. */
+  user-select: text;
+}
+.notif-panel:focus {
+  outline: none;
+}
+
+.notif-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.notif-space {
+  flex: 1;
+}
+.notif-x {
+  flex: none;
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.notif-x:hover,
+.notif-x:focus-visible {
+  opacity: 1;
+}
+
+.notif-empty {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.notif-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+.notif-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 8px 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.notif-item:last-child {
+  border-bottom: 0;
+}
+.notif-item.is-charged {
+  border-left: 2px solid #c4384a;
+  padding-left: 10px;
+  background: color-mix(in srgb, #c4384a 8%, transparent);
+}
+
+.notif-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.notif-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.notif-when {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.notif-charge {
+  margin: 0;
+  color: #e79aa5;
+  font-weight: 550;
+  line-height: 1.45;
+}
+.notif-guide {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+/* The backend's own sentence. Kept because it is evidence, demoted because it
+   is the sentence that made #142 necessary. */
+.notif-reason {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.notif-acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.notif-more {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.notif-more:hover,
+.notif-more:focus-visible {
+  color: var(--text-dim);
+}
+.notif-detail {
+  display: block;
+  font: 11px var(--mono);
+  color: var(--text-faint);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StatusBar } from './StatusBar'
 import { relativeTime } from '../lib/time'
 import type { ProjectSummary, ProjectSyncStatus, QueueSnapshot, StatusBarBackend } from '../lib/api'
 import { useUI } from '../store/ui'
+import { reportJobFailure, useNotifications } from '../lib/notifications'
 
 const project: ProjectSummary = {
   id: 'p1',
@@ -159,5 +160,39 @@ describe('backend and queue facts', () => {
     open(null, { ...backend, health: { state: 'unavailable', detail: 'connection refused' } })
     expect(screen.getByText('ComfyUI unavailable')).toHaveProperty('title', 'connection refused')
     expect(screen.queryByText('ComfyUI connected')).toBeNull()
+  })
+})
+
+/**
+ * The status bar is the only surface on screen in every mode, which is why the
+ * notification centre hangs off it: a failure recorded while the user was in
+ * Forge has to still be reachable from Settings.
+ */
+describe('the notification centre in the status bar', () => {
+  it('is present in every mode and shows what has not been read', () => {
+    useNotifications.setState({ entries: [], open: false })
+    open(null)
+    expect(screen.getByRole('button', { name: /Notifications, nothing unread/ })).toBeTruthy()
+
+    act(() =>
+      reportJobFailure({
+        id: 'j1',
+        kind: 'generate',
+        label: 'Generate Kael',
+        subjectId: 'kael',
+        attempt: 1,
+        elapsedMs: 900,
+        state: 'failed',
+        retryHeld: false,
+        failure: {
+          code: 'provider.unavailable',
+          message: 'connection refused',
+          retryable: true,
+          billed: 'nothing',
+        },
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: 'Notifications, 1 unread' })).toBeTruthy()
   })
 })

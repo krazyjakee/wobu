@@ -12,6 +12,7 @@ import { elapsedText, lastGeneration } from '../lib/jobs'
 import { sessionsText, sessionsTitle } from '../lib/presence'
 import { relativeTime } from '../lib/time'
 import { useUI } from '../store/ui'
+import { NotificationCentre } from './NotificationCentre'
 
 /**
  * Honest by construction: every state here comes from a backend observation.
@@ -124,6 +125,10 @@ export function StatusBar({
         </span>
       )}
       {generation && <span title={generation.label}>· ⏱ {elapsedText(generation.elapsedMs)}</span>}
+      {/* The status bar is the one surface present in every mode, which is what
+          makes it the right home for a record that has to outlive the pane the
+          failure happened in (#142). */}
+      <NotificationCentre />
     </footer>
   )
 }
