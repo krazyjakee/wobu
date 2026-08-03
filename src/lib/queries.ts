@@ -36,6 +36,7 @@ import type {
   SliderSetting,
   WobuNode,
 } from './api'
+import { refreshNodeThumbs } from './nodeThumbs'
 import { applyCommand, birthEntry, deletionEntry, editEntry, moveEntry, useUndoStack } from './undo'
 import { PRESENCE_POLL_MS, livePeers } from './presence'
 import { report, toast, useUI } from '../store/ui'
@@ -127,6 +128,11 @@ export function invalidateWorld(qc: QueryClient) {
   // Reference pins, provider selection, and the entity's attached weight all
   // participate in LoRA readiness.
   void qc.invalidateQueries({ queryKey: ['lora_status'] })
+  // Row thumbnails are keyed by node rather than by query, so they are not in
+  // the client's cache at all — see `lib/nodeThumbs.ts`. Choosing a cover or
+  // attaching a reference changes what a hundred rows should draw, and this is
+  // the one event that says so.
+  refreshNodeThumbs()
 }
 
 /* ── reads ────────────────────────────────────────────────────────────────── */

@@ -6,7 +6,9 @@ import { descendantsOf, type KindGroup, type TreeNode } from '../../lib/tree'
 import { canDrop as allow } from '../../lib/drop'
 import { BOARD_ASSET_MIME } from '../../lib/board'
 import { editingTitle } from '../../lib/presence'
+import { useNodeThumbs } from '../../lib/nodeThumbs'
 import { useUI, report, toast } from '../../store/ui'
+import { NodeThumbnail } from '../AssetMedia'
 import { Icon } from '../Icon'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
@@ -93,6 +95,10 @@ export function Navigator({
     () => buildNavigatorRows(groups, filter, closedGroups, collapsedNodes),
     [closedGroups, collapsedNodes, filter, groups],
   )
+
+  // The pinned strip is its own short, unvirtualized list, so it asks for its
+  // own ids; they join whatever the tree window asks for in the same batch.
+  const pinnedThumbs = useNodeThumbs(useMemo(() => pinned.map((n) => n.id), [pinned]))
 
   /** The rules themselves live in lib/drop.ts, where they can be tested. */
   const canDrop = useCallback(
@@ -201,10 +207,15 @@ export function Navigator({
                   setDropId(null)
                 }}
               >
-                <Icon
-                  name={spriteFor(def, n.kind)}
-                  size="sm"
-                  style={{ color: colorFor(def, n.kind) }}
+                <NodeThumbnail
+                  path={pinnedThumbs.get(n.id)}
+                  fallback={
+                    <Icon
+                      name={spriteFor(def, n.kind)}
+                      size="sm"
+                      style={{ color: colorFor(def, n.kind) }}
+                    />
+                  }
                 />
                 <span className="nm">{n.name}</span>
                 <PeerDot who={editedElsewhere.get(n.id)} />
@@ -561,6 +572,21 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
       NAVIGATOR_OVERSCAN,
   )
 
+  const visible = props.rows.slice(start, end)
+  /*
+   * Thumbnails are asked for by the window, not by the row.
+   *
+   * This is the whole reason the navigator can carry pictures at all. The rows
+   * on screen are a few dozen out of a possible ten thousand, so one call
+   * covers everything visible and nothing else — scrolling past a branch never
+   * fetches it. A row is then handed a plain string or `null`, which is what
+   * lets `NavigatorNodeRow` stay memoized: a node with no picture is passed
+   * `null` before and after the batch resolves, so it never re-renders.
+   */
+  const thumbs = useNodeThumbs(
+    visible.filter((row) => row.type === 'node').map((row) => row.tree.node.id),
+  )
+
   return (
     <div
       className="nav-tree-scroll"
@@ -585,45 +611,44 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
           className="nav-virtual-window"
           style={{ transform: `translateY(${start * NAVIGATOR_ROW_HEIGHT}px)` }}
         >
-          {props.rows
-            .slice(start, end)
-            .map((row) =>
-              row.type === 'group' ? (
-                <NavigatorGroupRow
-                  key={row.key}
-                  row={row}
-                  dropTarget={props.dropId === groupDropId(row.group.kind)}
-                  canDrop={props.canDrop}
-                  onToggle={props.onToggleGroup}
-                  onContext={props.onGroupContext}
-                  onDropOn={props.onDropOn}
-                  setDropId={props.setDropId}
-                />
-              ) : (
-                <NavigatorNodeRow
-                  key={row.key}
-                  tree={row.tree}
-                  kinds={props.kinds}
-                  open={row.open}
-                  hasChildren={row.hasChildren}
-                  selected={props.selectedId === row.tree.node.id}
-                  dragging={props.dragId === row.tree.node.id}
-                  dropTarget={props.dropId === row.tree.node.id}
-                  onSelect={props.onSelect}
-                  onToggle={props.onToggle}
-                  onContext={props.onContext}
-                  onDragStart={props.onDragStart}
-                  onDragEnd={props.onDragEnd}
-                  canDrop={props.canDrop}
-                  onDropOn={props.onDropOn}
-                  setDropId={props.setDropId}
-                  readOnly={props.readOnly}
-                  who={props.editedElsewhere.get(row.tree.node.id)}
-                  onAssetDrop={props.onAssetDrop}
-                  onRender={props.onRowRender}
-                />
-              ),
-            )}
+          {visible.map((row) =>
+            row.type === 'group' ? (
+              <NavigatorGroupRow
+                key={row.key}
+                row={row}
+                dropTarget={props.dropId === groupDropId(row.group.kind)}
+                canDrop={props.canDrop}
+                onToggle={props.onToggleGroup}
+                onContext={props.onGroupContext}
+                onDropOn={props.onDropOn}
+                setDropId={props.setDropId}
+              />
+            ) : (
+              <NavigatorNodeRow
+                key={row.key}
+                tree={row.tree}
+                kinds={props.kinds}
+                open={row.open}
+                hasChildren={row.hasChildren}
+                selected={props.selectedId === row.tree.node.id}
+                dragging={props.dragId === row.tree.node.id}
+                dropTarget={props.dropId === row.tree.node.id}
+                onSelect={props.onSelect}
+                onToggle={props.onToggle}
+                onContext={props.onContext}
+                onDragStart={props.onDragStart}
+                onDragEnd={props.onDragEnd}
+                canDrop={props.canDrop}
+                onDropOn={props.onDropOn}
+                setDropId={props.setDropId}
+                readOnly={props.readOnly}
+                who={props.editedElsewhere.get(row.tree.node.id)}
+                thumb={thumbs.get(row.tree.node.id)}
+                onAssetDrop={props.onAssetDrop}
+                onRender={props.onRowRender}
+              />
+            ),
+          )}
         </div>
       </div>
     </div>
@@ -696,6 +721,7 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
   setDropId,
   readOnly,
   who,
+  thumb,
   onAssetDrop,
   onRender,
 }: {
@@ -716,6 +742,8 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
   setDropId: (id: string | null) => void
   readOnly: boolean
   who: string | undefined
+  /** Resolved by the window above; `null` while unknown and when there is none. */
+  thumb: string | null
   onAssetDrop?: (assetId: string, nodeId: string) => void
   onRender?: (nodeId: string) => void
 }) {
@@ -792,7 +820,12 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
       ) : (
         <span className="twist" />
       )}
-      <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
+      <NodeThumbnail
+        path={thumb}
+        fallback={
+          <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
+        }
+      />
       <span className="nm">{n.name}</span>
       <PeerDot who={who} />
       <StaleDot state={n.descriptionState} />

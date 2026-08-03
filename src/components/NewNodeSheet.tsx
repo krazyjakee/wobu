@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import type { KindDef, NodeKind, NodeSummary } from '../lib/api'
 import { errorMessage } from '../lib/api'
 import { useCreateNode } from '../lib/queries'
-import { labelFor } from '../lib/kinds'
+import { useNodeThumbs } from '../lib/nodeThumbs'
+import { colorFor, labelFor, spriteFor } from '../lib/kinds'
+import { NodeThumbnail } from './AssetMedia'
+import { Icon } from './Icon'
 import { Modal } from './Modal'
 
 export function NewNodeSheet({
@@ -42,6 +45,18 @@ export function NewNodeSheet({
     () => nodes.filter((n) => n.kind === kind).sort((a, b) => a.name.localeCompare(b.name)),
     [nodes, kind],
   )
+
+  /*
+   * The picture of whatever is currently chosen to nest inside.
+   *
+   * A native `<select>` cannot draw one per row — an `<option>` may contain
+   * text and nothing else — and a hand-rolled listbox here would trade a
+   * keyboard-complete control that every platform already gets right for a
+   * thumbnail on a list the user visits once per node. So the parent list stays
+   * a `<select>`, and the confirmation of *which* entity was picked sits beside
+   * it in the same fixed slot the navigator uses.
+   */
+  const parentThumbs = useNodeThumbs(useMemo(() => (parentId ? [parentId] : []), [parentId]))
 
   function submit() {
     if (!kind) {
@@ -113,14 +128,30 @@ export function NewNodeSheet({
           {def?.nests && (
             <div className="field">
               <label htmlFor="nn-parent">Nest inside (optional)</label>
-              <select id="nn-parent" value={parentId} onChange={(e) => setParentId(e.target.value)}>
-                <option value="">— top level —</option>
-                {parents.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              <div className="thumb-field">
+                <NodeThumbnail
+                  path={parentId ? parentThumbs.get(parentId) : null}
+                  fallback={
+                    <Icon
+                      name={spriteFor(def, def.kind)}
+                      size="sm"
+                      style={{ color: colorFor(def, def.kind) }}
+                    />
+                  }
+                />
+                <select
+                  id="nn-parent"
+                  value={parentId}
+                  onChange={(e) => setParentId(e.target.value)}
+                >
+                  <option value="">— top level —</option>
+                  {parents.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </>

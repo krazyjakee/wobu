@@ -1,0 +1,90 @@
+/*
+ * The entity thumbnail slot (#146).
+ *
+ * One rule matters more than how it looks: the box is the same size whether it
+ * holds a picture or the kind icon, and its size never comes from the image.
+ * Rows in this app are virtualized against a constant row height, so a slot
+ * that grew with its content would not merely reflow the list — it would put
+ * every row somewhere other than where the scroll arithmetic placed it.
+ */
+.node-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--thumb-size, 18px);
+  height: var(--thumb-size, 18px);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.node-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Crop rather than letterbox: portraits and 16:9 concepts share one row. */
+  object-fit: cover;
+}
+.node-thumb.has-image {
+  background: var(--bg-input);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* The palette is a reading surface with room for a legible picture. */
+.pal-row .node-thumb {
+  --thumb-size: 24px;
+  border-radius: 4px;
+}
+
+/*
+ * A relation row is two lines of text about another entity, so the picture goes
+ * beside them rather than above: the row keeps the height it is laid out with
+ * (`.relation-row` sets a 52px minimum) and the name stays on one line.
+ */
+.relation-target {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.relation-target .node-thumb {
+  --thumb-size: 32px;
+  border-radius: 4px;
+}
+/*
+ * The two lines the picture sits beside, kept in their own column.
+ *
+ * It is a `span`, so the pane's caption rule (`.relation-target span`) lands on
+ * the wrapper as well as on the caption it wraps — and `capitalize` must not
+ * reach the entity's own name, which is spelled the way its author spelled it.
+ */
+.relation-target .relation-target-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  font-size: inherit;
+  text-transform: none;
+}
+
+/* An influence layer names one entity; its picture replaces nothing. */
+.layer-h .node-thumb {
+  --thumb-size: 22px;
+  border-radius: 4px;
+}
+
+/*
+ * A form control with the picture of its own current value beside it, for the
+ * pickers that are native `<select>`s and so cannot carry one per row.
+ */
+.thumb-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.thumb-field .node-thumb {
+  --thumb-size: 22px;
+}
+.thumb-field select {
+  flex: 1;
+  min-width: 0;
+}

@@ -15,7 +15,10 @@ import {
   useRemoveNodeLink,
   useUpdateNodeLink,
 } from '../../lib/queries'
-import type { KindIndex } from '../../lib/kinds'
+import { useNodeThumbs } from '../../lib/nodeThumbs'
+import { colorFor, spriteFor, type KindIndex } from '../../lib/kinds'
+import { NodeThumbnail } from '../AssetMedia'
+import { Icon } from '../Icon'
 
 const ROLE_LABEL: Record<LinkRole, string> = {
   species_of: 'Species',
@@ -92,6 +95,26 @@ function RelationsPaneSession({
   const parent = node.parentId ? byId.get(node.parentId) : undefined
   const busy = add.isPending || remove.isPending || update.isPending
 
+  /*
+   * Every entity this pane names, asked for once.
+   *
+   * Both halves of the pane go into one list on purpose: influences and
+   * backlinks are drawn in the same commit, so asking for them together is one
+   * call rather than two, and a node that appears on both sides — A styled by
+   * B, B located in A — is asked for once rather than twice. Neither list is
+   * virtualized, but neither is unbounded either: `nodeThumbBatch` pages at the
+   * backend's limit, so a subject that a hundred others inherit from still
+   * costs a bounded number of calls.
+   */
+  const thumbIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (node.parentId) ids.add(node.parentId)
+    for (const link of node.links) ids.add(link.toId)
+    for (const edge of backlinksQ.data ?? []) ids.add(edge.fromId)
+    return [...ids]
+  }, [backlinksQ.data, node.links, node.parentId])
+  const thumbs = useNodeThumbs(thumbIds)
+
   return (
     <div className="relations-pane">
       <section className="relations-section">
@@ -105,7 +128,13 @@ function RelationsPaneSession({
         {node.parentId && (
           <RelationGroup title="Parent">
             <div className="relation-row is-implicit">
-              <RelationTarget target={parent} fallback={node.parentId} onJump={onJump} />
+              <RelationTarget
+                target={parent}
+                fallback={node.parentId}
+                kinds={kinds}
+                thumb={thumbs.get(node.parentId)}
+                onJump={onJump}
+              />
               <span className="relation-note">Implicit · read-only</span>
               <span className="relation-weight-static">1.00</span>
             </div>
@@ -123,6 +152,8 @@ function RelationsPaneSession({
                   nodeId={node.id}
                   link={link}
                   target={byId.get(link.toId)}
+                  kinds={kinds}
+                  thumb={thumbs.get(link.toId)}
                   readOnly={readOnly}
                   busy={busy}
                   onJump={onJump}
@@ -216,6 +247,8 @@ function RelationsPaneSession({
                   key={`${edge.fromId}:${edge.role}`}
                   edge={edge}
                   source={byId.get(edge.fromId)}
+                  kinds={kinds}
+                  thumb={thumbs.get(edge.fromId)}
                   onJump={onJump}
                 />
               ))}
@@ -251,19 +284,48 @@ function RelationGroup({ title, children }: { title: string; children: ReactNode
   )
 }
 
+/**
+ * One end of a relation: its picture, its name, and what it is.
+ *
+ * The thumbnail sits *inside* the jump button rather than beside it, so the
+ * picture is part of the same target the user is already aiming at — and so the
+ * row's grid keeps the four columns it was laid out with. It is decorative
+ * (`NodeThumbnail` marks it so), which leaves the button's accessible name the
+ * entity's name, exactly as before.
+ */
 function RelationTarget({
   target,
   fallback,
+  kinds,
+  thumb,
   onJump,
 }: {
   target: NodeSummary | undefined
   fallback: string
+  kinds: KindIndex
+  /** Resolved by the pane above; `null` while unknown and when there is none. */
+  thumb: string | null
   onJump: (id: string) => void
 }) {
+  const def = target ? kinds.get(target.kind) : undefined
   return (
     <button className="relation-target" onClick={() => onJump(target?.id ?? fallback)}>
-      <strong>{target?.name ?? 'Missing node'}</strong>
-      <span>{target?.kind.replaceAll('_', ' ') ?? fallback}</span>
+      <NodeThumbnail
+        path={thumb}
+        fallback={
+          <Icon
+            // A link whose other end is gone still occupies the same slot: it
+            // is the one row in this pane the user most needs to see and fix.
+            name={target ? spriteFor(def, target.kind) : 'cube'}
+            size="sm"
+            style={target ? { color: colorFor(def, target.kind) } : undefined}
+          />
+        }
+      />
+      <span className="relation-target-text">
+        <strong>{target?.name ?? 'Missing node'}</strong>
+        <span>{target?.kind.replaceAll('_', ' ') ?? fallback}</span>
+      </span>
     </button>
   )
 }
@@ -272,6 +334,8 @@ function OutgoingRow({
   nodeId: _nodeId,
   link,
   target,
+  kinds,
+  thumb,
   readOnly,
   busy,
   onJump,
@@ -281,6 +345,8 @@ function OutgoingRow({
   nodeId: string
   link: Link
   target: NodeSummary | undefined
+  kinds: KindIndex
+  thumb: string | null
   readOnly: boolean
   busy: boolean
   onJump: (id: string) => void
@@ -301,7 +367,13 @@ function OutgoingRow({
 
   return (
     <div className={link.enabled ? 'relation-row' : 'relation-row is-muted'}>
-      <RelationTarget target={target} fallback={link.toId} onJump={onJump} />
+      <RelationTarget
+        target={target}
+        fallback={link.toId}
+        kinds={kinds}
+        thumb={thumb}
+        onJump={onJump}
+      />
       <label className="relation-enabled">
         <input
           type="checkbox"
@@ -341,17 +413,27 @@ function OutgoingRow({
 function BacklinkRow({
   edge,
   source,
+  kinds,
+  thumb,
   onJump,
 }: {
   edge: LinkEdge
   source: NodeSummary | undefined
+  kinds: KindIndex
+  thumb: string | null
   onJump: (id: string) => void
 }) {
   return (
     <div
       className={edge.enabled ? 'relation-row is-backlink' : 'relation-row is-backlink is-muted'}
     >
-      <RelationTarget target={source} fallback={edge.fromId} onJump={onJump} />
+      <RelationTarget
+        target={source}
+        fallback={edge.fromId}
+        kinds={kinds}
+        thumb={thumb}
+        onJump={onJump}
+      />
       <span className="relation-note">{edge.enabled ? 'Inherits from this' : 'Muted'}</span>
       <span className="relation-weight-static">{edge.weight.toFixed(2)}</span>
     </div>

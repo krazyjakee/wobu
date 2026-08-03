@@ -42,13 +42,19 @@ function link(assetId: string, role: AssetLink['role'] = 'full_ref'): AssetLink 
   return { assetId, role, weight: 1, enabled: true }
 }
 
+/** What `asset_thumb_batch` answers: one path per blob that has one. */
+function thumbPage(args?: Record<string, unknown>): Record<string, string> {
+  const assetIds = (args?.assetIds ?? []) as string[]
+  return Object.fromEntries(assetIds.map((assetId) => [assetId, `/thumb/${assetId}.webp`]))
+}
+
 function renderPane(node: WobuNode, assets: Asset[], readOnly = false) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
     if (command === 'asset_list') return Promise.resolve(assets)
-    if (command === 'asset_thumb') return Promise.resolve(`/thumb/${String(args?.assetId)}.webp`)
+    if (command === 'asset_thumb_batch') return Promise.resolve(thumbPage(args))
     if (command === 'asset_set_cover') {
       return Promise.resolve({ ...node, coverAssetId: args?.assetId as string | null })
     }
@@ -94,6 +100,49 @@ describe('ReferencesPane', () => {
     expect(mounted).toBeGreaterThan(0)
     expect(mounted).toBeLessThan(links.length)
     expect(view.container.querySelector('.reference-grid')).toHaveStyle({ height: '4228px' })
+  })
+
+  it('resolves the previews of the visible window in one call, not one per tile', async () => {
+    const links = Array.from({ length: 40 }, (_, index) => link(`asset-${index}`))
+    const view = renderPane(
+      buildNode({ id: 'kael', assetLinks: links }),
+      links.map((item) => asset(item.assetId)),
+    )
+
+    await waitFor(() =>
+      expect(view.container.querySelector('.reference-image img')).toHaveAttribute(
+        'src',
+        'asset:///thumb/asset-0.webp',
+      ),
+    )
+
+    // The board used to be one IPC and one stat per tile, which on a network
+    // share is what #97 was raised about. It is now one call for the window.
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_thumb', expect.anything())
+    const batches = h.invoke.mock.calls.filter(([command]) => command === 'asset_thumb_batch')
+    expect(batches).toHaveLength(1)
+    const asked = (batches[0]?.[1] as { assetIds: string[] }).assetIds
+    expect(asked).toHaveLength(view.container.querySelectorAll('.reference-tile').length)
+    expect(asked.length).toBeLessThan(links.length)
+  })
+
+  it('settles a tile whose blob has no drawable preview instead of waiting on it', async () => {
+    const node = buildNode({ id: 'kael', assetLinks: [link('one')] })
+    h.invoke.mockImplementation((command: string) => {
+      if (command === 'asset_list') return Promise.resolve([asset('one')])
+      // The blob is there; nothing could be drawn from it.
+      if (command === 'asset_thumb_batch') return Promise.resolve({})
+      return Promise.resolve(null)
+    })
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ReferencesPane node={node} readOnly={false} autosave={autosave} />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('Preview failed')).toBeInTheDocument()
   })
 
   it('edits role and weight, reorders, removes, and chooses a cover', async () => {
@@ -154,10 +203,8 @@ describe('ReferencesPane', () => {
         options?: { headers?: Record<string, string> },
       ) => {
         if (command === 'asset_list') return Promise.resolve([])
-        if (command === 'asset_thumb')
-          return Promise.resolve(
-            `/thumb/${String((args as Record<string, unknown>)?.assetId)}.webp`,
-          )
+        if (command === 'asset_thumb_batch')
+          return Promise.resolve(thumbPage(args as Record<string, unknown>))
         if (command === 'asset_import_transfer_begin') {
           const transferId = `transfer-${++transferSequence}`
           return Promise.resolve({

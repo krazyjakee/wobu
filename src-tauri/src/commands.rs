@@ -51,6 +51,12 @@ use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 use crate::machine::MachineSettings;
 use crate::state::{AppState, Jobs, ProjectTicket, WORLD_CHANGED};
 
+/// How many thumbnails one IPC may ask for, assets or nodes alike.
+///
+/// A bound rather than a page size: the caller sends the window it is about to
+/// draw, and a window that large is a caller that has stopped virtualizing.
+const THUMB_BATCH_LIMIT: usize = 100;
+
 const ASSET_TRANSFER_CHUNK_BYTES: usize = 1024 * 1024;
 const ASSET_TRANSFER_MAX_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -1149,15 +1155,117 @@ pub async fn asset_thumb_batch(
     state: State<'_, AppState>,
     asset_ids: Vec<Id>,
 ) -> CommandResult<HashMap<String, String>> {
-    if asset_ids.len() > 100 {
+    if asset_ids.len() > THUMB_BATCH_LIMIT {
         return Err(WobuError::new(
             Code::Invalid,
             "A thumbnail page may contain at most 100 assets.",
         ));
     }
-    let handle = state.handle();
+    thumb_paths(state.handle(), &asset_ids).await
+}
+
+/// One thumbnail per *node*, for every list that draws entities rather than blobs.
+///
+/// The navigator, the palette, the relation lists and the influence stack all
+/// show entities, and an entity is not an asset — so the webview cannot use
+/// `asset_thumb_batch` for them without first learning which picture stands for
+/// which node, which is a question only the index can answer. Doing that here
+/// keeps it at one IPC for a whole visible window rather than one per row,
+/// which is the entire point (#146, and #97 before it).
+///
+/// Nodes with no picture are simply absent from the map rather than present
+/// with a null: "no thumbnail" and "thumbnail not drawn yet" are the same thing
+/// to a caller that draws a fallback for both, and an absent key is cheaper to
+/// send for the common case of a text-only world.
+#[tauri::command]
+pub async fn node_thumb_batch(
+    state: State<'_, AppState>,
+    node_ids: Vec<Id>,
+) -> CommandResult<HashMap<String, String>> {
+    if node_ids.len() > THUMB_BATCH_LIMIT {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "A thumbnail page may contain at most 100 nodes.",
+        ));
+    }
+    let pairs = match state.with(|project| node_thumb_assets(project, &node_ids)) {
+        Ok(pairs) => pairs,
+        // A closed or unmounted project draws placeholders, exactly as one
+        // whose blobs will not decode does. Neither is actionable from a row.
+        Err(error) if error.code == Code::NoProjectOpen || error.code == Code::ShareUnmounted => {
+            return Ok(HashMap::new());
+        }
+        Err(error) => return Err(error),
+    };
+    if pairs.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut asset_ids: Vec<Id> = Vec::with_capacity(pairs.len());
+    let mut seen = HashSet::new();
+    for (_, asset_id) in &pairs {
+        if seen.insert(*asset_id) {
+            asset_ids.push(*asset_id);
+        }
+    }
+    let by_asset = thumb_paths(state.handle(), &asset_ids).await?;
+    Ok(pairs
+        .into_iter()
+        .filter_map(|(node_id, asset_id)| {
+            by_asset.get(&asset_id.to_string()).map(|path| (node_id.to_string(), path.clone()))
+        })
+        .collect())
+}
+
+/// The picture that stands for each node, in the order the caller asked.
+///
+/// Read from the local index rather than from `world_nodes`: the navigator asks
+/// for this on the first paint, and materialising the whole world to answer it
+/// would move a cost that today is paid only by projects that open the
+/// Inspector onto every project that opens at all.
+fn node_thumb_assets(project: &Project, node_ids: &[Id]) -> CommandResult<Vec<(Id, Id)>> {
+    let mut pairs = Vec::new();
+    let mut seen = HashSet::new();
+    for node_id in node_ids {
+        if !seen.insert(*node_id) {
+            continue;
+        }
+        if let Some(asset_id) = node_thumb_asset(project.index(), *node_id)? {
+            pairs.push((*node_id, asset_id));
+        }
+    }
+    Ok(pairs)
+}
+
+/// Cover first, then the first live reference, then the newest concept output.
+///
+/// That order is the user's own: a cover is an explicit choice about how this
+/// entity should be shown, so nothing may override it. A disabled reference is
+/// still preferred over nothing, because `enabled` says whether a picture is
+/// *sent to a backend* — it was never a statement about display.
+fn node_thumb_asset(index: &wobu_store::Index, node_id: Id) -> CommandResult<Option<Id>> {
+    if let Some(cover) = index.cover_asset_of(node_id)? {
+        return Ok(Some(cover));
+    }
+    let links = index.asset_links_of(node_id)?;
+    if let Some(link) = links.iter().find(|link| link.enabled).or_else(|| links.first()) {
+        return Ok(Some(link.asset_id));
+    }
+    let page = index.generation_page(&GenerationPageRequest {
+        node_id: Some(node_id),
+        offset: 0,
+        limit: 1,
+        ..GenerationPageRequest::default()
+    })?;
+    Ok(page.items.first().and_then(|item| item.first_asset_id))
+}
+
+/// The shared body of both thumbnail batches: asset ids in, absolute paths out.
+async fn thumb_paths(
+    handle: AppState,
+    asset_ids: &[Id],
+) -> CommandResult<HashMap<String, String>> {
     let prepared = handle.ticket(|project| {
-        Ok((project.thumb_targets(&asset_ids)?, project.can_write_thumb()))
+        Ok((project.thumb_targets(asset_ids)?, project.can_write_thumb()))
     })?;
     let (project, (targets, can_write)) = prepared;
     if targets.is_empty() {
@@ -2678,6 +2786,90 @@ mod bridge {
         assert!(project.list_assets().unwrap().is_empty(), "slow work must not mutate the index");
         project.record_import(&imported).unwrap();
         assert_eq!(project.list_assets().unwrap(), [imported.asset]);
+        drop(project);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A blob record without the blob: enough for every index question here.
+    fn staged_asset(project: &Project, seed: &str) -> Id {
+        let hash = seed.repeat(32);
+        let asset = Asset {
+            id: wobu_core::new_id(),
+            hash: hash.clone(),
+            kind: AssetKind::Reference,
+            rel_path: format!("assets/originals/{}/{hash}.png", &hash[..2]),
+            thumb_path: None,
+            mime: "image/png".into(),
+            width: 8,
+            height: 8,
+            bytes: 12,
+            created_at: chrono::Utc::now(),
+        };
+        project.index().upsert_asset(&asset).unwrap();
+        asset.id
+    }
+
+    fn concept_receipt(node_id: Id, output: Id) -> Generation {
+        Generation {
+            id: wobu_core::new_id(),
+            node_id,
+            created_at: chrono::Utc::now(),
+            preset: "portrait".into(),
+            view_type: None,
+            user_prompt: String::new(),
+            compiled_prompt: "an ashwalker".into(),
+            negative_prompt: String::new(),
+            backend: "comfyui".into(),
+            model: "flux-dev".into(),
+            seed: 7,
+            params: serde_json::Map::new(),
+            output_asset_ids: vec![output],
+            influence_snapshot: wobu_core::InfluenceSnapshot { layers: Vec::new() },
+        }
+    }
+
+    #[test]
+    fn a_row_picture_prefers_the_cover_then_a_reference_then_the_newest_concept() {
+        let dir = std::env::temp_dir().join(format!("wobu-node-thumb-{}", wobu_core::new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let mut project = Project::create(&dir, "Row pictures").unwrap();
+        let node = project.create_node(NodeKind::Character, "Kael", None).unwrap();
+
+        // A text-only entity is absent from the answer rather than present with
+        // a null: the row draws its kind icon and asks for nothing.
+        assert_eq!(node_thumb_asset(project.index(), node.id).unwrap(), None);
+        assert!(node_thumb_assets(&project, &[node.id]).unwrap().is_empty());
+
+        let concept = staged_asset(&project, "c0");
+        let reference = staged_asset(&project, "b1");
+        let cover = staged_asset(&project, "a2");
+
+        // A generated concept stands in when nothing has been chosen, which is
+        // the case the issue is really about: entities whose only picture was
+        // produced by Forge and never pinned anywhere.
+        project.record_generation(concept_receipt(node.id, concept)).unwrap();
+        assert_eq!(node_thumb_asset(project.index(), node.id).unwrap(), Some(concept));
+
+        // An attached reference outranks it — including one switched off, since
+        // `enabled` decides what a backend is sent and was never a statement
+        // about what the user should be able to see in a list.
+        project.link_asset(node.id, reference, AssetRole::Pose, None).unwrap();
+        project
+            .update_asset_link(node.id, reference, AssetRole::Pose, None, Some(false))
+            .unwrap();
+        assert_eq!(node_thumb_asset(project.index(), node.id).unwrap(), Some(reference));
+
+        // And an explicit cover outranks everything, because it is the one
+        // answer the user gave on purpose.
+        project.set_cover_asset(node.id, Some(cover)).unwrap();
+        assert_eq!(node_thumb_asset(project.index(), node.id).unwrap(), Some(cover));
+
+        // Repeats collapse: a caller may send whatever its window contains.
+        assert_eq!(
+            node_thumb_assets(&project, &[node.id, node.id]).unwrap(),
+            vec![(node.id, cover)]
+        );
+
         drop(project);
         let _ = fs::remove_dir_all(dir);
     }

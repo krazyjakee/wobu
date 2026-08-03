@@ -134,6 +134,7 @@ pub fn run() {
             commands::generation_delete,
             commands::asset_thumb,
             commands::asset_thumb_batch,
+            commands::node_thumb_batch,
             commands::asset_original,
             commands::asset_thumbs_ensure,
             commands::asset_thumbs_cancel,

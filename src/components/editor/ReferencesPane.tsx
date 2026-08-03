@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import * as api from '../../lib/api'
 import type { Asset, AssetLink, AssetRole, WobuNode } from '../../lib/api'
 import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
-import { useAssetThumb, useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
+import { useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
 type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed' | 'cancelled'
@@ -26,6 +26,8 @@ const TILE_MIN = 196
 const TILE_HEIGHT = 302
 const GAP = 12
 const OVERSCAN = 2
+/** The bound `asset_thumb_batch` enforces; a wider window is split across calls. */
+const THUMB_PAGE = 100
 
 export function ReferencesPane({
   node,
@@ -389,6 +391,16 @@ function VirtualReferenceGrid({
   const endRow = Math.min(rows, Math.ceil((scrollTop + size.height) / TILE_HEIGHT) + OVERSCAN)
   const start = startRow * columns
   const end = Math.min(links.length, endRow * columns)
+  const visible = links.slice(start, end)
+  /*
+   * One request for the tiles on screen, not one per tile (#146).
+   *
+   * A board of forty references used to be forty IPC calls and forty stats on
+   * whatever holds the project — which on a network share is exactly the cost
+   * #97 was raised about. The window already knows which tiles exist, so it is
+   * the right place to ask, and a tile is handed a path it can draw.
+   */
+  const thumbs = useReferenceThumbs(visible.map((link) => link.assetId))
 
   const move = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= links.length || to >= links.length) return
@@ -417,7 +429,7 @@ function VirtualReferenceGrid({
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
       <div className="reference-grid" style={{ height: rows * TILE_HEIGHT }}>
-        {links.slice(start, end).map((link, offset) => {
+        {visible.map((link, offset) => {
           const index = start + offset
           const row = Math.floor(index / columns)
           const column = index % columns
@@ -426,6 +438,7 @@ function VirtualReferenceGrid({
               key={`${link.assetId}-${link.role}`}
               link={link}
               asset={assets.get(link.assetId)}
+              thumb={thumbs.get(link.assetId)}
               index={index}
               count={links.length}
               width={tileWidth}
@@ -460,9 +473,69 @@ function VirtualReferenceGrid({
   )
 }
 
+/**
+ * Thumbnail paths for a set of blobs, resolved once each and kept.
+ *
+ * Keyed by asset rather than by window: a thumbnail's path is derived from the
+ * blob's hash, so it cannot change while the pane is open, and a tile scrolled
+ * back into view redraws from memory instead of asking again. That is also why
+ * this is not a react-query key — the input is "whichever tiles are on screen",
+ * which changes on every scroll tick and would make a cache entry per scroll
+ * position, re-fetching blobs that were resolved a frame earlier.
+ *
+ * A resolved-but-absent entry is stored as `null` and is not the same as an
+ * absent key: the first says the blob has no drawable thumbnail, the second
+ * says the answer has not arrived, and the tile has a different label for each.
+ */
+function useReferenceThumbs(assetIds: readonly string[]): ReadonlyMap<string, string | null> {
+  // The ids, not the array identity: a fresh array is built on every scroll
+  // tick and must not re-run this unless the window actually moved.
+  const key = assetIds.join(' ')
+  const asked = useRef(new Set<string>())
+  const mounted = useRef(true)
+  const [paths, setPaths] = useState<ReadonlyMap<string, string | null>>(() => new Map())
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const wanted = key === '' ? [] : key.split(' ')
+    const missing = wanted.filter((assetId) => !asked.current.has(assetId))
+    if (missing.length === 0) return
+    for (const assetId of missing) asked.current.add(assetId)
+    void (async () => {
+      const found = new Map<string, string | null>()
+      for (let from = 0; from < missing.length; from += THUMB_PAGE) {
+        const page = missing.slice(from, from + THUMB_PAGE)
+        try {
+          const resolved = await api.assetThumbBatch(page)
+          for (const assetId of page) found.set(assetId, resolved[assetId] ?? null)
+        } catch {
+          // A preview is decoration: a closed project, a read-only folder and a
+          // blob that will not decode all settle on the same tile label, and
+          // none of them is something the user can act on from the board. What
+          // must not happen is a tile left waiting on an answer that failed.
+          for (const assetId of page) found.set(assetId, null)
+        }
+      }
+      // Deliberately not cancelled when the window moves: the answer is about
+      // the blob, not about where it happened to be on screen when it was asked
+      // for, and dropping it would leave that tile waiting forever.
+      if (mounted.current) setPaths((current) => new Map([...current, ...found]))
+    })()
+  }, [key])
+
+  return paths
+}
+
 function ReferenceTile({
   link,
   asset,
+  thumb,
   index,
   count,
   width,
@@ -480,6 +553,8 @@ function ReferenceTile({
 }: {
   link: AssetLink
   asset: Asset | undefined
+  /** Path from the window's batch; `null` when there is none, absent while waiting. */
+  thumb: string | null | undefined
   index: number
   count: number
   width: number
@@ -495,7 +570,6 @@ function ReferenceTile({
   onDragStart: () => void
   onDrop: () => void
 }) {
-  const thumb = useAssetThumb(link.assetId)
   return (
     <article
       className={`reference-tile${link.enabled ? '' : ' is-muted'}${isCover ? ' is-cover' : ''}`}
@@ -520,10 +594,10 @@ function ReferenceTile({
       }}
     >
       <div className="reference-image">
-        {thumb.data ? (
-          <img src={convertFileSrc(thumb.data)} alt={`${roleLabel(link.role)} reference`} />
+        {thumb ? (
+          <img src={convertFileSrc(thumb)} alt={`${roleLabel(link.role)} reference`} />
         ) : (
-          <span>{thumb.isError ? 'Preview failed' : 'Loading preview…'}</span>
+          <span>{thumb === null ? 'Preview failed' : 'Loading preview…'}</span>
         )}
         {isCover && <b>Cover</b>}
       </div>

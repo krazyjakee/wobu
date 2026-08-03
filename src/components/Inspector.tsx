@@ -10,6 +10,7 @@ import type {
 } from '../lib/api'
 import { layerColor, layerLabel, type KindIndex } from '../lib/kinds'
 import { negotiatedAspect } from '../lib/generationCapabilities'
+import { useNodeThumbs } from '../lib/nodeThumbs'
 import {
   useCompiledPrompt,
   useImageGenerationCapabilities,
@@ -25,6 +26,7 @@ import {
 import { report, toast } from '../store/ui'
 import { useActionShortcut } from '../hooks/useKeyboard'
 import { useDebounced } from '../hooks/useDebounced'
+import { NodeThumbnail } from './AssetMedia'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Icon } from './Icon'
 import { PromptBox } from './inspector/PromptBox'
@@ -179,6 +181,23 @@ function InspectorSession({
       : ceilingSource === null || ceilingSource === undefined
         ? ''
         : microsAsInput(ceilingSource)
+  /*
+   * The stack is short — a subject and the handful of things it inherits from —
+   * and it is resolved as one document, so the whole of it goes in one call.
+   *
+   * The shot layer has no `nodeId` and so no picture; it is left out of the
+   * request rather than asked about, because "which entity is this" is the only
+   * question this batch can answer.
+   */
+  const stackThumbs = useNodeThumbs(
+    useMemo(
+      () =>
+        (stack.data?.layers ?? [])
+          .map((layer) => layer.nodeId)
+          .filter((nodeId): nodeId is string => !!nodeId),
+      [stack.data?.layers],
+    ),
+  )
   const dropped = useMemo(() => {
     const count = new Map<string, number>()
     for (const item of compiled.data?.dropped ?? []) {
@@ -385,6 +404,7 @@ function InspectorSession({
                 <Layer
                   key={key}
                   card={card}
+                  thumb={card.nodeId ? stackThumbs.get(card.nodeId) : null}
                   value={value}
                   muted={isMuted}
                   textCount={textCount}
@@ -735,6 +755,7 @@ function parseVariantGrid(
 
 function Layer({
   card,
+  thumb,
   value,
   muted,
   textCount,
@@ -747,6 +768,8 @@ function Layer({
   onJump,
 }: {
   card: LayerCard
+  /** Resolved above for the whole stack; `null` for the shot and for text-only sources. */
+  thumb: string | null
   value: number
   muted: boolean
   textCount: number
@@ -765,7 +788,11 @@ function Layer({
       style={{ '--lc': color } as CSSProperties}
     >
       <summary className="layer-h">
-        <span className="layer-dot" aria-hidden="true" />
+        {/* The dot is the fallback rather than a second marker: a layer that has
+            a picture says which entity it is with the picture, and one that has
+            none keeps the coloured dot in the same box, so the rows below a
+            resolved thumbnail never move. */}
+        <NodeThumbnail path={thumb} fallback={<span className="layer-dot" aria-hidden="true" />} />
         <span className="txt">
           <span className="layer-l">{layerLabel(card.layer)}</span>
           <span className="layer-n">{card.name}</span>

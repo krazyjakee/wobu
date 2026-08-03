@@ -3,20 +3,24 @@ import type { NodeSummary } from '../lib/api'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../lib/kinds'
 import { nameMatches, textMatches } from '../lib/search'
 import { useNodeSearch, useUndo } from '../lib/queries'
+import { useNodeThumbs } from '../lib/nodeThumbs'
 import { useDebounced } from '../hooks/useDebounced'
 import { useUI } from '../store/ui'
+import { NodeThumbnail } from './AssetMedia'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 
 function NodeRow({
   node,
   kinds,
+  thumb,
   on,
   onHover,
   onPick,
 }: {
   node: NodeSummary
   kinds: KindIndex
+  thumb: string | null
   on: boolean
   onHover: () => void
   onPick: () => void
@@ -24,10 +28,15 @@ function NodeRow({
   const def = kinds.get(node.kind)
   return (
     <button className={on ? 'pal-row is-on' : 'pal-row'} onMouseEnter={onHover} onClick={onPick}>
-      <Icon
-        name={spriteFor(def, node.kind)}
-        size="sm"
-        style={{ color: colorFor(def, node.kind) }}
+      <NodeThumbnail
+        path={thumb}
+        fallback={
+          <Icon
+            name={spriteFor(def, node.kind)}
+            size="sm"
+            style={{ color: colorFor(def, node.kind) }}
+          />
+        }
       />
       {node.name}
       <span className="sub">{node.summary || labelFor(def, node.kind)}</span>
@@ -197,6 +206,17 @@ function OpenCommandPalette({
     [matchedNodes, matchedText, matchedCmds],
   )
 
+  /*
+   * One call for the whole result list, refreshed as the query narrows it.
+   *
+   * `nameMatches` and `textMatches` are both capped (`NAME_LIMIT`, `TEXT_LIMIT`)
+   * so this can never exceed the backend's per-call bound, however large the
+   * world is — the palette shows sixty rows at most and asks for exactly those.
+   */
+  const thumbs = useNodeThumbs(
+    useMemo(() => [...matchedNodes, ...matchedText].map((n) => n.id), [matchedNodes, matchedText]),
+  )
+
   const activeCursor = rows.length === 0 ? 0 : Math.min(cursor, rows.length - 1)
 
   useEffect(() => {
@@ -266,6 +286,7 @@ function OpenCommandPalette({
             key={n.id}
             node={n}
             kinds={kinds}
+            thumb={thumbs.get(n.id)}
             on={activeCursor === i}
             onHover={() => setCursor(i)}
             onPick={() => pick(i)}
@@ -282,6 +303,7 @@ function OpenCommandPalette({
               key={n.id}
               node={n}
               kinds={kinds}
+              thumb={thumbs.get(n.id)}
               on={activeCursor === i}
               onHover={() => setCursor(i)}
               onPick={() => pick(i)}
@@ -299,7 +321,12 @@ function OpenCommandPalette({
               onMouseEnter={() => setCursor(i)}
               onClick={() => pick(i)}
             >
-              <Icon name={c.icon} size="sm" />
+              {/* The same empty slot the node rows use, so a command and an
+                  entity sitting next to each other line up and are the same
+                  height. A command never has a picture. */}
+              <span className="node-thumb is-empty" aria-hidden>
+                <Icon name={c.icon} size="sm" />
+              </span>
               {c.label}
               {c.hint && <span className="sub">{c.hint}</span>}
             </button>
