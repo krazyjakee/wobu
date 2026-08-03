@@ -878,7 +878,8 @@ export function prependGeneration(
   summary: api.GenerationSummary,
 ): GenerationPages | undefined {
   if (!current || current.pages.length === 0) return current
-  if (current.pages.some((page) => page.items.some((item) => item.id === summary.id))) return current
+  if (current.pages.some((page) => page.items.some((item) => item.id === summary.id)))
+    return current
   let carry: api.GenerationSummary | undefined = summary
   const pages = current.pages.map((page) => {
     const items = carry ? [carry, ...page.items] : [...page.items]
@@ -913,9 +914,9 @@ async function recordedSummary(event: api.GenerationRecorded): Promise<api.Gener
     backend: generation.backend,
     model: generation.model,
     seed: generation.seed,
-    promptExcerpt: `${[...generation.compiledPrompt].slice(0, 240).join('')}${[
-      ...generation.compiledPrompt,
-    ].length > 240 ? '…' : ''}`,
+    promptExcerpt: `${[...generation.compiledPrompt].slice(0, 240).join('')}${
+      [...generation.compiledPrompt].length > 240 ? '…' : ''
+    }`,
     firstAssetId,
     outputCount: generation.outputAssetIds.length,
     seedSource: typeof source === 'string' ? source : null,

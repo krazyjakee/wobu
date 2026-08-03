@@ -167,7 +167,12 @@ function VirtualConceptGrid({
         })}
       </div>
       {hasMore && (
-        <button className="btn concept-more" type="button" disabled={loadingMore} onClick={onLoadMore}>
+        <button
+          className="btn concept-more"
+          type="button"
+          disabled={loadingMore}
+          onClick={onLoadMore}
+        >
           {loadingMore ? 'Loading more…' : 'Load more concepts'}
         </button>
       )}

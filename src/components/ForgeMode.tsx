@@ -502,7 +502,12 @@ function VirtualResultGrid({
         })}
       </div>
       {hasMore && (
-        <button className="btn forge-more" type="button" disabled={loadingMore} onClick={onLoadMore}>
+        <button
+          className="btn forge-more"
+          type="button"
+          disabled={loadingMore}
+          onClick={onLoadMore}
+        >
           {loadingMore ? 'Loading more…' : 'Load more results'}
         </button>
       )}
@@ -541,22 +546,23 @@ function ForgeResultTile({
     >
       <span className="forge-result-image asset-media-frame">
         {generation.thumbnailPath ? (
-          <img src={convertFileSrc(generation.thumbnailPath)} alt="" loading="lazy" decoding="async" />
+          <img
+            src={convertFileSrc(generation.thumbnailPath)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <span>{assetId ? 'Loading preview…' : 'No output'}</span>
         )}
         <b>{selected ? 'Selected' : assetId ? 'Compare' : 'Receipt only'}</b>
       </span>
       <span className="forge-result-meta media-card-copy">
-        <b>
-          {subject}
-        </b>
+        <b>{subject}</b>
         <span>
           {generation.model} · seed {generation.seed}
         </span>
-        <small>
-          {new Date(generation.createdAt).toLocaleString()}
-        </small>
+        <small>{new Date(generation.createdAt).toLocaleString()}</small>
         <p>{generation.promptExcerpt}</p>
       </span>
     </button>
