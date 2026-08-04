@@ -170,8 +170,15 @@
   margin-top: 5px;
   font-size: 11px;
 }
+/* The preview is the way into the original, so it is a control: the same box as
+   before, with a zoom cursor and a caption that only appears on hover or focus.
+   The caption is the discoverable part — nothing else in the panel says the
+   thumbnail can be opened. */
 .asset-details-preview {
+  position: relative;
   display: grid;
+  width: 100%;
+  padding: 0;
   place-items: center;
   aspect-ratio: 16 / 10;
   overflow: hidden;
@@ -179,11 +186,34 @@
   background: var(--bg-input);
   color: var(--text-faint);
   font-size: 10px;
+  cursor: zoom-in;
+}
+.asset-details-preview:disabled {
+  cursor: default;
 }
 .asset-details-preview img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+.asset-details-zoom {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 18px 8px 7px;
+  color: var(--on-scrim);
+  background: linear-gradient(transparent, var(--scrim-strong));
+  font-size: 9.5px;
+  opacity: 0;
+  transform: translateY(var(--rise));
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+.asset-details-preview:hover .asset-details-zoom,
+.asset-details-preview:focus-visible .asset-details-zoom,
+.asset-details-preview:disabled .asset-details-zoom {
+  opacity: 1;
+  transform: none;
 }
 .asset-details > h3 {
   margin-top: 11px;
@@ -297,6 +327,35 @@
   padding: 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
+}
+
+/* The original over the library, bounded by the window rather than by its own
+   pixel count — a 6000px scan has to fit on screen without the scrim scrolling.
+   It is decoded from disk after the modal is already open, so its arrival is
+   worth a fade; the grid tiles get none, because there an image "arriving" only
+   means the user scrolled. */
+.asset-viewer-scrim {
+  background: var(--scrim-strong);
+}
+.asset-viewer {
+  padding: 34px;
+}
+.asset-viewer img {
+  display: block;
+  max-width: 94vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  animation: wb-fade var(--dur-3) var(--ease-out);
+}
+.asset-viewer-close {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 1;
+  color: var(--on-scrim);
+  font-size: 28px;
 }
 
 @media (max-width: 1040px) {

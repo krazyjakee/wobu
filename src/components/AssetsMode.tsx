@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { Asset, AssetKind, AssetRole, AssetUsage, NodeSummary } from '../lib/api'
 import type { KindIndex } from '../lib/kinds'
@@ -8,6 +9,7 @@ import { useUI } from '../store/ui'
 import { Combobox } from './Combobox'
 import { ConfirmSheet } from './ConfirmSheet'
 import { LazyAssetThumbnail } from './AssetMedia'
+import { Modal } from './Modal'
 import { TipButton } from './Tooltip'
 import { useVirtualCardWindow } from './useVirtualCardWindow'
 
@@ -383,6 +385,9 @@ function AssetDetails({
   const [selectedNodeId, setNodeId] = useState(nodes[0]?.id ?? '')
   const [role, setRole] = useState<AssetRole>('full_ref')
   const [error, setError] = useState<string | null>(null)
+  const [fullSize, setFullSize] = useState<string | null>(null)
+  const [opening, setOpening] = useState(false)
+  const [openError, setOpenError] = useState<string | null>(null)
 
   const nodeId = nodes.some((node) => node.id === selectedNodeId)
     ? selectedNodeId
@@ -414,6 +419,29 @@ function AssetDetails({
   const alreadyAttached = usages.some(
     (usage) => usage.nodeId === nodeId && usage.roles.some((item) => item.role === role),
   )
+  /*
+   * The original, read on the click that asks for it.
+   *
+   * Everything above this panel is drawn from thumbnails the grid already has,
+   * which is what keeps a library of thousands cheap to scroll. The original is
+   * the megabytes: it is fetched here, for one asset, and never as part of
+   * selecting a tile. `asset_original` answers `null` when the blob has gone
+   * missing from the folder — a thing to say under the preview, not an error.
+   */
+  async function openFullSize() {
+    setOpening(true)
+    setOpenError(null)
+    try {
+      const path = await api.assetOriginal(assetId)
+      if (path) setFullSize(convertFileSrc(path))
+      else setOpenError('The original is no longer in the project folder.')
+    } catch (reason) {
+      setOpenError(api.errorMessage(reason))
+    } finally {
+      setOpening(false)
+    }
+  }
+
   async function attach() {
     if (!nodeId || readOnly || alreadyAttached) return
     setError(null)
@@ -426,15 +454,25 @@ function AssetDetails({
 
   return (
     <aside className="asset-details" aria-label={`Details for asset ${asset.id}`}>
-      <div className="asset-details-preview">
+      <button
+        className="asset-details-preview"
+        type="button"
+        disabled={opening}
+        aria-label={`View asset ${asset.id} full size`}
+        onClick={() => void openFullSize()}
+      >
         <LazyAssetThumbnail
           assetId={asset.id}
-          alt="Selected asset thumbnail"
+          alt=""
           loadingLabel="Loading thumbnail…"
           missingLabel="Preview failed"
           errorLabel="Preview failed"
         />
-      </div>
+        <span className="asset-details-zoom">{opening ? 'Opening…' : 'View full size'}</span>
+      </button>
+      {openError && (
+        <p className="asset-library-error inline-error">Could not open it: {openError}</p>
+      )}
       <h3>{kindLabel(asset.kind)} asset</h3>
       <dl>
         <div>
@@ -560,6 +598,34 @@ function AssetDetails({
           delete it.
         </p>
       ) : null}
+
+      {fullSize && (
+        <Modal
+          className="asset-viewer"
+          scrimClassName="asset-viewer-scrim"
+          titleId="asset-viewer-title"
+          descriptionId="asset-viewer-description"
+          onClose={() => setFullSize(null)}
+        >
+          <h2 id="asset-viewer-title" className="modal-sr-only">
+            Full-size asset
+          </h2>
+          <p id="asset-viewer-description" className="modal-sr-only">
+            The original image for asset {asset.id}. Press Escape, or use Close, to go back to the
+            library.
+          </p>
+          <img src={fullSize} alt={`Asset ${asset.id} at full size`} />
+          <button
+            className="ibtn asset-viewer-close"
+            type="button"
+            onClick={() => setFullSize(null)}
+            aria-label="Close full-size image"
+            data-modal-initial-focus
+          >
+            ×
+          </button>
+        </Modal>
+      )}
     </aside>
   )
 }
