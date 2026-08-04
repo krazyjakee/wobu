@@ -41,7 +41,7 @@
 //! and the whole argument for this crate rests on being able to reason about it.
 //!
 //! It also holds no domain knowledge. The tools are named and described here
-//! and executed through the [`World`](world::World) trait, which the shell
+//! and executed through the [`World`] trait, which the shell
 //! implements against the open project. That split is what lets the tests below
 //! exercise the whole protocol without a Tauri app, a project folder or a disk.
 
@@ -65,7 +65,7 @@ use std::net::SocketAddr;
 ///
 /// Deliberately small. A tool that fails because the project is closed is not
 /// an error of *this* crate — it is an answer, and it travels back to the agent
-/// inside a `tools/call` result as [`WorldError`](world::WorldError). What is
+/// inside a `tools/call` result as [`WorldError`]. What is
 /// here is the handful of failures that mean the door itself would not open.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

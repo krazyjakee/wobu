@@ -1,5 +1,5 @@
 //! The listener, and the four things that have to be true before a request
-//! reaches [`Dispatcher`](crate::Dispatcher).
+//! reaches [`Dispatcher`].
 //!
 //! ## 1. It is bound to loopback, and that is not configurable
 //!
