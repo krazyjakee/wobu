@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PresetView, ProjectSummary } from '../lib/api'
+import type { ProjectSummary } from '../lib/api'
 import { resetNodeThumbs } from '../lib/nodeThumbs'
-import { chooseOption } from './Combobox.testing'
 import { kindDef, kindIndex, summary } from '../test/fixtures'
 import { Inspector } from './Inspector'
 
@@ -33,7 +32,7 @@ const preset = {
   framing: 'portrait framing',
   aspect: '3:4',
   images: 1,
-  views: [] as PresetView[],
+  views: [],
   imageConstraints: null,
 }
 
@@ -236,99 +235,5 @@ describe('influence layer context menu', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Mute this layer' })).not.toHaveAttribute(
       'aria-disabled',
     )
-  })
-})
-
-/*
- * Asking for one image instead of the preset's batch.
- *
- * A preset is the only way to say "this framing, these priorities", and it
- * also fixes how many pictures come back — so wanting one portrait meant
- * paying for four. The tick trims the batch and nothing else, which is why
- * these tests watch what `generate_start` is sent rather than what is drawn.
- */
-describe('single image generation', () => {
-  /** The shipped presets emit batches; the shared fixture emits one. */
-  function withPreset(overrides: Partial<typeof preset>) {
-    const base = h.invoke.getMockImplementation() as (
-      command: string,
-      args?: Record<string, unknown>,
-    ) => Promise<unknown>
-    h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) =>
-      command === 'preset_list'
-        ? Promise.resolve([{ ...preset, ...overrides }])
-        : base(command, args),
-    )
-  }
-
-  const tick = () => screen.getByRole('checkbox', { name: 'Just one image' })
-
-  async function generate() {
-    const button = await screen.findByRole('button', { name: /^Generate/ })
-    await waitFor(() => expect(button).not.toBeDisabled())
-    fireEvent.click(button)
-    await waitFor(() =>
-      expect(h.invoke.mock.calls.some(([command]) => command === 'generate_start')).toBe(true),
-    )
-    const calls = h.invoke.mock.calls.filter(([command]) => command === 'generate_start')
-    return calls[calls.length - 1]?.[1] as Record<string, unknown>
-  }
-
-  it('sends one image, and the whole batch when it is not asked for', async () => {
-    withPreset({ images: 4 })
-    draw()
-
-    expect(await generate()).toMatchObject({ single: false })
-
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Just one image' }))
-    expect(tick()).toBeChecked()
-    expect(await generate()).toMatchObject({ single: true, preset: 'portrait' })
-  })
-
-  it('prices the one image rather than the batch it came from', async () => {
-    withPreset({ images: 4 })
-    draw()
-
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Just one image' }))
-    await waitFor(() =>
-      expect(
-        h.invoke.mock.calls.some(
-          ([command, args]) =>
-            command === 'image_reference_report' &&
-            (args as Record<string, unknown>)?.single === true,
-        ),
-      ).toBe(true),
-    )
-  })
-
-  /*
-   * A grid says how many pictures the batch is, and so does this — the backend
-   * refuses to be told twice. Parking the tick rather than clearing it means a
-   * grid can be tried out and abandoned without the setting being lost.
-   */
-  it('hands the count to a variant grid, and takes it back when the grid goes off', async () => {
-    withPreset({ images: 4 })
-    draw()
-
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Just one image' }))
-    expect(tick()).toBeChecked()
-
-    chooseOption('Variant grid', 'Vary seed')
-    await waitFor(() => expect(tick()).toBeDisabled())
-    expect(tick()).not.toBeChecked()
-    expect(await generate()).toMatchObject({ single: false })
-
-    chooseOption('Variant grid', 'Off')
-    await waitFor(() => expect(tick()).toBeChecked())
-    expect(await generate()).toMatchObject({ single: true })
-  })
-
-  it('refuses on a named-view preset, where one image would be a sheet with no views', async () => {
-    withPreset({ images: 8, views: [{ viewType: 'front', framing: 'front view' }] })
-    draw()
-
-    await waitFor(() => expect(tick()).toBeDisabled())
-    expect(screen.getByText(/one image per named view/)).toBeInTheDocument()
-    expect(await generate()).toMatchObject({ single: false })
   })
 })

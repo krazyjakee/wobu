@@ -53,7 +53,7 @@
         {
           "slug": "generating",
           "title": "Generating",
-          "summary": "Presets, aspects, seeds, batch size, variant grids, the job queue, pinning and cost."
+          "summary": "Presets, aspects, seeds, variant grids, the job queue, pinning and cost."
         },
         {
           "slug": "concept-3d",

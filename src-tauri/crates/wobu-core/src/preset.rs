@@ -206,6 +206,29 @@ const TURNAROUND_VIEWS: &[PresetView] = &[
 
 const REGISTRY: &[Preset] = &[
     Preset {
+        id: "single_image",
+        label: "Single image",
+        kinds: ANY_KIND,
+        default_for: &[],
+        // No priorities at all, and that absence *is* this preset.
+        //
+        // Every other row here is an opinion about which sections matter for a
+        // particular kind of sheet. This one declines to have one: the stack has
+        // already said what the subject is, and a single image is the request to
+        // see that, at the world's own emphasis rather than a costume plate's.
+        //
+        // It is also the only preset that answers "I just want one picture".
+        // That count belongs here rather than as a switch beside the picker,
+        // because the picker is already where a batch size is chosen and two
+        // controls deciding one number can disagree.
+        priorities: &[],
+        framing: "one complete view of the subject, clearly lit, plain background",
+        aspect: "1:1",
+        images: 1,
+        views: &[],
+        image_constraints: None,
+    },
+    Preset {
         id: "character_sheet",
         label: "Character sheet",
         kinds: &[NodeKind::Character, NodeKind::Creature],
@@ -629,14 +652,40 @@ mod tests {
         }
     }
 
+    /// One image, offered everywhere, with no opinion of its own.
+    ///
+    /// All three are the preset. A `single_image` that reweighted a section
+    /// would be a sheet with a count of one rather than "just this entity, once";
+    /// one that named kinds would be missing from the dropdown of whichever kind
+    /// was forgotten; and the count is the whole reason it exists.
+    #[test]
+    fn the_single_image_preset_emits_one_and_reweights_nothing() {
+        let single = preset("single_image").unwrap();
+        assert_eq!(single.images, 1);
+        assert_eq!(single.generations(7).len(), 1);
+        assert_eq!(single.generations(7)[0].seed, 7);
+        assert!(single.views.is_empty());
+        assert!(!single.locks_seed());
+        assert!(single.priorities.is_empty());
+        for def in kind_registry() {
+            assert!(single.applies_to(def.kind), "{} is not offered a single image", def.kind);
+            assert!(!single.is_default_for(def.kind), "{} would skip its own preset", def.kind);
+        }
+        // Every section stays where the stack put it.
+        for section in ["silhouette", "materials", "light", "costume"] {
+            assert_eq!(single.section_priority(section), 1.0);
+        }
+    }
+
     #[test]
     fn the_table_in_the_docs_is_the_registry() {
-        // `docs/04-influence-engine.md` lists these eight and the kinds each is
+        // `docs/04-influence-engine.md` lists these nine and the kinds each is
         // for. Dropping one is a documentation change as much as a code one.
         let ids: Vec<&str> = REGISTRY.iter().map(|p| p.id).collect();
         assert_eq!(
             ids,
             [
+                "single_image",
                 "character_sheet",
                 "turnaround",
                 "portrait_study",
