@@ -851,15 +851,7 @@ pub fn generation_list(
     limit: u32,
 ) -> CommandResult<GenerationPage> {
     state.with(|project| {
-        generation_page(
-            project,
-            GenerationPageRequest {
-                node_id: Some(node_id),
-                offset,
-                limit,
-                ..GenerationPageRequest::default()
-            },
-        )
+        generation_page(project, GenerationPageRequest { node_id: Some(node_id), offset, limit })
     })
 }
 
@@ -1237,7 +1229,6 @@ fn node_thumb_asset(index: &wobu_store::Index, node_id: Id) -> CommandResult<Opt
         node_id: Some(node_id),
         offset: 0,
         limit: 1,
-        ..GenerationPageRequest::default()
     })?;
     Ok(page.items.first().and_then(|item| item.first_asset_id))
 }
