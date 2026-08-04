@@ -53,6 +53,11 @@
   /* The status bar switches selection off, and this panel is a child of it.
      An error message that cannot be copied into a bug report is half useless. */
   user-select: text;
+  /* Rises out of the bell it is docked above, the same way a toast rises out of
+     the same edge — the panel is the record of those toasts, and arriving from
+     the same place is what says so. `--dur-2` rather than the toast's
+     `--dur-3`: this one the user asked for and is already looking at. */
+  animation: wb-rise var(--dur-2) var(--ease-out);
 }
 .notif-panel:focus {
   outline: none;
@@ -76,6 +81,7 @@
   color: inherit;
   opacity: 0.6;
   cursor: pointer;
+  transition: opacity var(--dur-1) var(--ease-out);
 }
 .notif-x:hover,
 .notif-x:focus-visible {
@@ -164,6 +170,7 @@
   color: var(--text-faint);
   text-decoration: underline;
   cursor: pointer;
+  transition: color var(--dur-1) var(--ease-out);
 }
 .notif-more:hover,
 .notif-more:focus-visible {

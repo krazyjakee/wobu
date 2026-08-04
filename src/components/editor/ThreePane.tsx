@@ -37,7 +37,15 @@ function ThreePaneSession({
   const selected =
     concepts.data?.find((concept) => concept.asset.id === selectedId) ?? concepts.data?.[0] ?? null
   const path = useMeshAssetPath(selected?.asset.id ?? null)
-  const [turntable, setTurntable] = useState(true)
+  // Defaults on, except for someone who has asked the system for less motion.
+  // This is the largest and most continuous movement in the app, and being WebGL
+  // it is the one animation `prefers-reduced-motion` cannot reach from CSS. The
+  // toggle still works either way; only the starting position changes.
+  const [turntable, setTurntable] = useState(
+    () =>
+      typeof window.matchMedia !== 'function' ||
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
   const [wireframe, setWireframe] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)

@@ -57,6 +57,10 @@
   border-radius: var(--r-sm);
   padding: 3px 8px;
   cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 .onb-steps button:hover {
   color: var(--text-dim);
@@ -250,6 +254,7 @@
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+  transition: color var(--dur-1) var(--ease-out);
 }
 .onb-link:hover {
   color: var(--text);

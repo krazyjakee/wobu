@@ -40,6 +40,9 @@
   margin-left: -6px;
   min-width: 60px;
   max-width: 100%;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
 }
 .ed-name:hover {
   border-color: var(--border);
@@ -96,6 +99,24 @@
   border-bottom: 1px solid var(--border);
   flex: none;
 }
+/* The editor's own small controls, on the same `--dur-1` step as every other
+   control in the app. Listed by property rather than written `transition: all`:
+   several of these sit inside virtualized card grids, and `all` would sooner or
+   later pick up a `transform` or a `height` that the grid sets per frame. */
+.description-remove,
+.description-add,
+.reference-actions button,
+.mesh-history button,
+.concept-delete {
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+/* The underline is a colour change on a border that is always there, never a
+   width or a position, so switching tabs cannot move the tab strip and a second
+   tab can be clicked while the first is still settling. */
 .tab {
   padding: 9px 11px;
   font-size: 12.5px;
@@ -105,6 +126,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  transition:
+    color var(--dur-1) var(--ease-out),
+    border-bottom-color var(--dur-1) var(--ease-out);
 }
 .tab:hover {
   color: var(--text-dim);
@@ -343,6 +367,7 @@
   background: color-mix(in srgb, var(--bg-input) 88%, var(--ai) 12%);
   color: var(--text-dim);
   font: 12px/1.55 var(--mono);
+  transition: border-color var(--dur-1) var(--ease-out);
 }
 .description-text {
   display: block;
@@ -917,10 +942,10 @@
   color: var(--on-scrim);
   background: linear-gradient(transparent, var(--scrim-strong));
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(var(--rise));
   transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
   text-align: left;
   line-height: 1.35;
 }
@@ -1036,7 +1061,7 @@
   display: block;
   height: 100%;
   background: var(--ai);
-  transition: width 100ms linear;
+  transition: width var(--dur-bar) linear;
 }
 .concept-failure,
 .concept-error {
@@ -1064,11 +1089,18 @@
 .concept-viewer {
   padding: 34px;
 }
+/* A full-size original, decoded from disk after the viewer is already open, so
+   this is the one image in the app whose arrival is worth a fade: without it a
+   3 megapixel concept slams into an empty frame a beat after the modal opens.
+   The cards in the grids get no such treatment on purpose — they are inside
+   virtualized windows, where an image "arriving" only means the user scrolled.
+   `--dur-3` matches the modal it lands in. */
 .concept-viewer img {
   max-width: 94vw;
   max-height: 90vh;
   object-fit: contain;
   box-shadow: var(--shadow-2);
+  animation: wb-fade var(--dur-3) var(--ease-out);
 }
 .concept-viewer-close {
   position: fixed;
@@ -1096,12 +1128,17 @@
   flex: 1;
   min-height: 0;
 }
+/* Mounted when a conflict is found, above the editor and pushing it down. Same
+   reasoning as the banner row in `overlays.css`: the block takes its height at
+   once and only its contents drop in, so the notes the user is comparing it
+   against do not slide for the duration of the animation. */
 .conflicts {
   flex: none;
   max-height: 46%;
   overflow-y: auto;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
+  animation: wb-drop var(--dur-2) var(--ease-out);
 }
 .conflict {
   padding: 10px 16px 12px;

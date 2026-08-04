@@ -10,10 +10,18 @@
   border-radius: var(--r);
   background: var(--media-card-background, var(--bg-panel));
 }
+/* These tiles live in virtualized grids that place them with inline `top` and
+   `left`, rewritten as the window scrolls. Only colour is transitioned, and the
+   properties are named: a `transition: all` here would put the whole grid on a
+   120ms lag behind its own scrollbar. There is no entrance animation for the
+   same reason — a tile mounts because the user scrolled to it. */
 .selectable-media-card {
   padding: 0;
   color: inherit;
   text-align: left;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
 }
 .selectable-media-card:hover,
 .selectable-media-card.is-selected {

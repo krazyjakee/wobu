@@ -70,6 +70,38 @@
 
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
+  /* ── motion (#133) ──
+
+     Three durations, chosen by *how far the thing travelled to get here*
+     rather than by how important it is. Nothing is longer than 200ms, because
+     Wobu is a tool somebody drives for hours: a transition is only worth having
+     while it is shorter than the gap between two of the user's own actions.
+
+       --dur-1  a control answering the pointer — a hover tint, a focus edge, a
+                twisty rotating. The user is already looking at it and may well
+                be about to click it again.
+       --dur-2  something appearing where it already belonged — a menu under its
+                button, a popup under its field, a pane arriving on a mode swap.
+       --dur-3  something arriving from outside the layout — a modal, a toast.
+                The longest, because it is also the one the eye has to *find*.
+
+     `--dur-bar` is separate and linear: a progress fill is a measurement, and
+     an eased one appears to accelerate when the work did not.
+
+     `--rise` is how far an appearing surface travels. One number, so a toast, a
+     sheet and a dropdown all move the same distance and read as one system. */
+  --dur-1: 90ms;
+  --dur-2: 140ms;
+  --dur-3: 200ms;
+  --dur-bar: 120ms;
+
+  /* Arrivals decelerate, so the frame the eye lands on is the still one. */
+  --ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+  /* Both ends anchored, for a thing moving between two on-screen states. */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --rise: 6px;
+
   /* Surfaces that sit under artwork rather than under the UI. A concept image
      is the same picture whichever theme is around it, so the scrim over it, the
      text on that scrim and the letterbox behind a 3D view stay dark in both. */
@@ -182,4 +214,25 @@
   --scroll-hover: #a9a297;
   --shadow-1: 0 10px 26px rgb(48 38 20 / 16%);
   --shadow-2: 0 20px 52px rgb(48 38 20 / 22%);
+}
+
+/* ── reduced motion ──
+
+   The first half of the guarantee: every duration collapses and nothing
+   travels, so anything expressed in the tokens above stops moving without
+   knowing this media query exists. The second half — the safety net for
+   `animation` shorthands, which name their own duration and so cannot be
+   reached from here — is at the top of `base.css`.
+
+   Not `display: none` on anything, and not a different layout: a user who asks
+   for less motion is asking for the same app to hold still, not for a reduced
+   one. Everything still appears, it simply appears rather than arrives. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-bar: 0ms;
+    --rise: 0px;
+  }
 }

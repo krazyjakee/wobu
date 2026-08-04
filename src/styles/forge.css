@@ -296,12 +296,17 @@
   padding: 7px 12px;
   border-bottom: 1px solid var(--border);
 }
+/* One chip per generation in flight. They appear when work starts and vanish
+   when a result lands, which is the moment #133 is about: the row is small, it
+   is never virtualized, and a chip fading in is the cheapest possible way to
+   say the machine took the job. */
 .forge-active span {
   padding: 3px 7px;
   border-radius: 14px;
   background: color-mix(in srgb, var(--ai) 12%, transparent);
   color: var(--ai-text);
   font-size: 9px;
+  animation: wb-fade var(--dur-2) var(--ease-out);
 }
 .forge-grid-viewport {
   flex: 1;

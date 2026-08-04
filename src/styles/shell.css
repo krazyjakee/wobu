@@ -18,6 +18,32 @@
   position: relative;
 }
 
+/* ── mode switching (#133) ──
+
+   Every one of these is a whole pane that React mounts and unmounts: switching
+   mode swaps them, and collapsing the navigator or the inspector removes one.
+   Before this the workspace changed between two frames with nothing to say it
+   had, which is what made a mode swap feel like a redraw rather than a move.
+
+   Opacity only, and deliberately no travel. Everything else that appears in
+   Wobu rises or drops by `--rise`, but these are full window panes — sliding a
+   1000px column is a great deal of the screen in motion for a change the user
+   just asked for, and it would drag the virtualized lists inside them through a
+   composited transform for the duration. A crossfade at `--dur-2` says "this is
+   a different pane" and is finished before a second mode key can land.
+
+   `.editor-region` covers the library mode as a whole; the editor inside it
+   stays mounted while the selection changes, so this does not fire on every
+   click in the navigator. */
+.workspace > .nav,
+.workspace > .editor-region,
+.workspace > .insp-region,
+.workspace > .assets-mode,
+.workspace > .forge-mode,
+.workspace > .settings-mode {
+  animation: wb-fade var(--dur-2) var(--ease-out);
+}
+
 /* ── title bar ── */
 .titlebar {
   display: flex;
@@ -61,6 +87,16 @@
   border: 1px solid var(--border);
   font-size: 12px;
   font-weight: 550;
+}
+.projpick,
+.omni,
+.crumbs button,
+.status-link,
+.wctl button {
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 .projpick:hover {
   border-color: var(--border-str);
@@ -174,6 +210,9 @@
   border-radius: 9px;
   color: var(--text-faint);
   position: relative;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 .rbtn:hover {
   color: var(--text);
@@ -183,6 +222,13 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+/* The one piece of chrome that says which mode is on. The marker exists only
+   while its button is active, so switching mode generates it afresh and this
+   plays — it grows out of the button's own centre line rather than appearing
+   whole, which is the smallest possible way to say "the thing you pressed is
+   the thing that changed". 2px wide and 16px tall: there is not enough of it on
+   screen for the growth to disturb anything, and `transform` keeps it off the
+   layout entirely. */
 .rbtn.is-active::before {
   content: '';
   position: absolute;
@@ -191,6 +237,13 @@
   height: 16px;
   border-radius: 2px;
   background: var(--accent);
+  animation: wb-rail-mark var(--dur-2) var(--ease-out);
+}
+@keyframes wb-rail-mark {
+  from {
+    opacity: 0;
+    transform: scaleY(0.25);
+  }
 }
 .rbtn::after {
   content: attr(data-tip);
@@ -205,11 +258,18 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.1s;
+  /* Fades out over `--dur-1` and in after a beat. The delay is the useful part:
+     the rail is a column of five buttons a hand often passes across on the way
+     somewhere else, and without it every crossing leaves a trail of labels. On
+     the way out there is no delay, so the label is gone the instant the pointer
+     is. */
+  transition: opacity var(--dur-1) var(--ease-out);
   z-index: 20;
 }
-.rbtn:hover::after {
+.rbtn:hover::after,
+.rbtn:focus-visible::after {
   opacity: 1;
+  transition-delay: 320ms;
 }
 
 /* ── pane resizer ── */
@@ -222,12 +282,15 @@
   cursor: col-resize;
   z-index: 6;
 }
+/* The bar under the pointer, not the pane. The width itself is set from a
+   mousemove handler and is never transitioned: a resize that lagged the cursor
+   would be a worse control than one with no motion at all. */
 .resizer::after {
   content: '';
   position: absolute;
   inset: 0 3px;
   background: transparent;
-  transition: background 0.12s;
+  transition: background-color var(--dur-1) var(--ease-out);
 }
 .resizer:hover::after,
 .resizer.is-dragging::after {

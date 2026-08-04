@@ -133,6 +133,7 @@
   padding: 0 1px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  transition: background-color var(--dur-1) var(--ease-out);
 }
 .pfrag.is-linked {
   cursor: pointer;
@@ -201,6 +202,9 @@
 }
 button.prompt-rowh {
   cursor: pointer;
+}
+button.prompt-rowh .prompt-src {
+  transition: color var(--dur-1) var(--ease-out);
 }
 button.prompt-rowh:hover .prompt-src {
   color: var(--text);

@@ -3,6 +3,83 @@
   margin: 0;
   padding: 0;
 }
+
+/* ── reduced motion, the safety net (#133) ────────────────────────────────────
+
+   `tokens.css` already zeroes every motion token, which covers everything
+   written in terms of them. This covers everything that is not: an `animation`
+   shorthand names its own duration, so a keyframe animation added later — here,
+   or in a stylesheet that does not exist yet — cannot be switched off from a
+   custom property. Rather than trust every future rule to remember the media
+   query, the query is declared once and applies to all of them.
+
+   `1ms` rather than `0s` on purpose: a zero-duration animation does not fire
+   `animationend`, and script that waits for one would hang instead of degrade.
+   `animation-iteration-count: 1` is what stops an infinite animation from
+   looping invisibly forever and keeping a compositor layer alive.
+
+   Two consequences to know about, both handled where they arise: an animation
+   whose *last* keyframe is not its resting state settles somewhere wrong, so
+   the one such animation in the app — the indeterminate progress sweep in
+   `overlays.css` — is given a still form of its own inside this query rather
+   than left to snap to the end of its travel. And `!important` here outranks
+   ordinary declarations but not more specific `!important` ones, which is
+   exactly how that override wins. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── shared entrances ─────────────────────────────────────────────────────────
+
+   Four ways for something to appear, declared once so that a toast, a menu and
+   a modal are recognisably the same app. Which one a surface uses says where it
+   came from: `wb-fade` for something that was always in that spot, `wb-rise`
+   for something docked to the bottom of the window, `wb-drop` for something
+   docked to the top, `wb-lift` for a modal, which is the only thing allowed to
+   change size on the way in because it is the only thing that is *over* the
+   app rather than part of it.
+
+   All of them start from a transform and an opacity and nothing else. Both are
+   compositor properties, so an entrance never reads back a layout, and a list
+   underneath one can still be scrolled while it plays.
+
+   There are no matching exits. React unmounts these surfaces the moment they
+   close and CSS cannot animate a node that is already gone; a `.is-closing`
+   class and a timer would have to come from the components, which is out of
+   scope here. Appearing is the half that carries the meaning anyway — the user
+   knows they pressed Escape. */
+@keyframes wb-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes wb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise));
+  }
+}
+@keyframes wb-drop {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--rise) * -1));
+  }
+}
+@keyframes wb-lift {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--rise) * -1)) scale(0.985);
+  }
+}
 html,
 body,
 #root {
@@ -85,6 +162,25 @@ kbd {
 }
 
 /* ── shared controls ─────────────────────────────────────────────────────── */
+
+/* Every control settles at `--dur-1`, the shortest step on the scale.
+   A button is the one surface the user is most likely to press twice in a row,
+   so its transition has to be over before the second press — and it is only
+   ever colour, never size or position, so a control cannot move out from under
+   a pointer that is already on its way down. Colour transitions do not affect
+   hit testing, so the second click lands whether or not the first one finished
+   animating. */
+.btn,
+.ibtn,
+.chip,
+.btn-mini,
+.nav-tool {
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out),
+    opacity var(--dur-1) var(--ease-out);
+}
 .btn {
   display: inline-flex;
   align-items: center;
@@ -122,6 +218,11 @@ kbd {
   color: var(--on-accent);
   font-weight: 600;
   background: linear-gradient(180deg, var(--accent-fill-hi), var(--accent-fill));
+}
+.btn-primary {
+  transition:
+    filter var(--dur-1) var(--ease-out),
+    opacity var(--dur-1) var(--ease-out);
 }
 .btn-primary:hover {
   filter: brightness(1.08);

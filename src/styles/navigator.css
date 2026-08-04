@@ -16,6 +16,7 @@
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text-faint);
+  transition: border-color var(--dur-1) var(--ease-out);
 }
 .nav-search:focus-within {
   border-color: var(--border-str);
@@ -116,14 +117,37 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
+  transition: color var(--dur-1) var(--ease-out);
 }
 .group-h:hover {
   color: var(--text-dim);
 }
+/* ── the tree, and what may not move in it ────────────────────────────────────
+
+   The whole tree is virtualized: `.nav-virtual-window` is a single absolutely
+   positioned box whose `transform` is rewritten on every scroll frame, and the
+   `.node` and `.group` rows inside it are mounted and unmounted as the window
+   passes over them. Two rules follow, and they are the reason this file is
+   quieter than the rest of the pass.
+
+   Nothing here may carry an entrance animation. A row is mounted because the
+   user scrolled past it, not because anything happened to it, so an entrance
+   would fire hundreds of times during one flick of the wheel — every row in the
+   list arriving over and over, and a composited layer per row while it did.
+
+   And nothing may transition `transform`. `.nav-virtual-window` sets its own on
+   every frame; a transition inherited onto it would make the list lag the
+   scrollbar by exactly the duration, which is the one thing a list of ten
+   thousand entities cannot afford. The rotations below are on the twisty
+   glyphs — leaf elements with no scroll responsibility — and are named
+   property by property so they can never reach the window itself.
+
+   Transitions on hover and selection are safe and are used: they fire on a
+   state change, never on mount, so scrolling costs nothing. */
 .group-h .ic {
   width: 11px;
   height: 11px;
-  transition: transform 0.12s;
+  transition: transform var(--dur-1) var(--ease-in-out);
 }
 .group.open > .group-h .ic {
   transform: rotate(90deg);
@@ -171,6 +195,9 @@
   color: var(--text-dim);
   text-align: left;
   position: relative;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 .node:hover {
   background: var(--bg-raised);
@@ -206,7 +233,7 @@
   width: 11px;
   height: 11px;
   opacity: 0.6;
-  transition: transform 0.12s;
+  transition: transform var(--dur-1) var(--ease-in-out);
   margin-left: -4px;
 }
 .node .twist.open {
@@ -224,6 +251,7 @@
   background: var(--accent);
   opacity: 0.55;
   flex: none;
+  transition: opacity var(--dur-1) var(--ease-out);
 }
 .node:hover .stale,
 .node.is-sel .stale {
@@ -242,6 +270,7 @@
   border: 1px solid var(--text-dim);
   opacity: 0.6;
   flex: none;
+  transition: opacity var(--dur-1) var(--ease-out);
 }
 .node .peer + .stale {
   margin-left: 4px;
@@ -272,6 +301,9 @@
   margin-left: auto;
   opacity: 0;
   cursor: pointer;
+  transition:
+    opacity var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 .node:hover .fav {
   opacity: 0.5;
@@ -300,6 +332,7 @@
   background: var(--bg-raised);
   border: 1px solid var(--border);
   margin-top: 6px;
+  transition: border-color var(--dur-1) var(--ease-out);
 }
 .node-pin:hover {
   border-color: var(--border-str);
@@ -318,6 +351,9 @@
   border-radius: var(--r-sm);
   color: var(--text-faint);
   font-size: 12px;
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
 .nav-actions {
   display: grid;
@@ -328,6 +364,7 @@
   padding: 5px 7px;
   color: var(--text-faint);
   font-size: 11px;
+  transition: color var(--dur-1) var(--ease-out);
 }
 .nav-import:hover {
   color: var(--text);
@@ -351,12 +388,15 @@
    Above the tree, not in it. A file a sync client mangled may never have had
    a node, and filing it under whichever kind folder it happens to live in is
    how it goes unnoticed. */
+/* Above the tree rather than in it, so this one *may* animate: it is mounted
+   because a file broke, not because anything scrolled. */
 .broken {
   margin: 0 8px 10px;
   padding: 8px 10px;
   border-radius: var(--r);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  animation: wb-drop var(--dur-2) var(--ease-out);
 }
 .broken-h {
   display: flex;
