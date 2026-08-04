@@ -64,8 +64,25 @@ impl Peer {
         let _ = self.manager().run_once(project).await;
     }
 
+    /// A loopback QUIC connection can still be dropped part-way through a
+    /// round, and the error says as much about itself — `retryable: true`. The
+    /// product's answer to that is to run the round again, so a helper that
+    /// gave up on the first drop would be asserting something stricter than
+    /// Wobu promises. A round is idempotent, so going again is safe; what the
+    /// test still insists on is that the peers converge.
     async fn sync_with(&self, project: Id, other: &Peer) {
-        self.manager().run_ticket(project, &other.ticket).await.unwrap();
+        const ATTEMPTS: u32 = 5;
+        for attempt in 1..=ATTEMPTS {
+            match self.manager().run_ticket(project, &other.ticket).await {
+                Ok(()) => return,
+                Err(error) if error.retryable && attempt < ATTEMPTS => {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                Err(error) => {
+                    panic!("a sync round still failed after {attempt} attempts: {error:?}")
+                }
+            }
+        }
     }
 
     fn edit(&self, project: Id, node: Id, notes: &str) {
