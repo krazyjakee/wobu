@@ -49,6 +49,17 @@ jobs:
   rust:
     name: Rust — fmt, clippy, tests, dependency and public-surface checks
     runs-on: ubuntu-latest
+    env:
+      # `cargo test --workspace` links around forty test binaries, and with the
+      # default full DWARF for each it filled the runner's disk — "No space left
+      # on device", surfacing first as rust-lld dying with a bus error partway
+      # through linking. Line tables keep file and line numbers in panic
+      # backtraces, which is all a CI log is ever read for, at a fraction of the
+      # size. Incremental state is likewise written once and never reused, since
+      # every job starts from the same restored cache.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+      CARGO_INCREMENTAL: 0
     defaults:
       run:
         # The Rust workspace root is `src-tauri/`, and `rust-toolchain.toml`
