@@ -22,8 +22,11 @@ import {
 } from '../../lib/queries'
 import { labelFor, pluralFor, type KindIndex } from '../../lib/kinds'
 import { influenceDependentsOf } from '../../lib/tree'
+import { useContextMenu } from '../../hooks/useContextMenu'
 import { Combobox } from '../Combobox'
+import { ContextMenu, MenuItem, MenuLabel, MenuSeparator } from '../ContextMenu'
 import { GenerationDetail } from '../GenerationDetail'
+import { Icon } from '../Icon'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { useVirtualCardWindow } from '../useVirtualCardWindow'
 
@@ -322,6 +325,7 @@ function GenerationTile({
   const [error, setError] = useState<string | null>(null)
   const pinned = pinnedRoles.includes(role)
   const changingPin = linkAsset.isPending || unlinkAsset.isPending
+  const menu = useContextMenu<GenerationSummary>()
 
   async function open() {
     setOpening(true)
@@ -361,6 +365,11 @@ function GenerationTile({
     <article
       className="concept-tile historical"
       style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
+      // See `ReferencesPane`: a container, not a control, but a menu opened on
+      // it needs somewhere to return focus to.
+      tabIndex={-1}
+      aria-label={`Concept from ${new Date(generation.createdAt).toLocaleString()}`}
+      {...menu.trigger(generation)}
     >
       <button
         className="concept-open"
@@ -432,6 +441,69 @@ function GenerationTile({
         Delete concept…
       </button>
       {error && <p className="concept-failure">{error}</p>}
+
+      {/*
+        The card's three actions, at the pointer.
+
+        Pinning is the one worth the trouble: the control for it is a picker and
+        a button at the bottom of a 430px card, and the answer to "make this the
+        reference" is a right-click away instead of a scroll and two clicks. The
+        role it pins as is the one the card's own picker is showing, so the menu
+        never decides something the card is not already saying.
+      */}
+      {menu.anchor && (
+        <ContextMenu
+          x={menu.anchor.x}
+          y={menu.anchor.y}
+          onClose={menu.close}
+          restoreFocus={menu.anchor.opener}
+          label={`Actions for generation ${generation.id}`}
+        >
+          <MenuLabel>
+            {generation.model} · seed {generation.seed}
+          </MenuLabel>
+          <MenuItem
+            icon={<Icon name="image" size="sm" />}
+            disabledReason={opening ? 'This receipt is already being opened.' : null}
+            onSelect={() => void open()}
+          >
+            Open concept
+          </MenuItem>
+          <MenuItem
+            icon={<Icon name="pin" size="sm" />}
+            disabledReason={
+              !assetId
+                ? 'This generation produced no image, so there is nothing to pin.'
+                : readOnly
+                  ? CONCEPT_READ_ONLY
+                  : changingPin
+                    ? 'The last pin change is still being written.'
+                    : null
+            }
+            onSelect={() => void togglePin()}
+          >
+            {pinned
+              ? `Unpin ${roleLabel(role).toLowerCase()}`
+              : `Pin as ${roleLabel(role).toLowerCase()}`}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            danger
+            icon={<Icon name="trash" size="sm" />}
+            disabledReason={
+              readOnly
+                ? CONCEPT_READ_ONLY
+                : deleteGeneration.isPending
+                  ? 'This concept is already being deleted.'
+                  : null
+            }
+            onSelect={() => setConfirmDelete(true)}
+          >
+            Delete concept…
+          </MenuItem>
+        </ContextMenu>
+      )}
+
       {confirmDelete && (
         <ConfirmSheet
           title="Delete this concept?"
@@ -451,6 +523,9 @@ function GenerationTile({
     </article>
   )
 }
+
+const CONCEPT_READ_ONLY =
+  'This project is open read-only, so its concepts cannot be changed. Check the folder permissions, or reopen a copy somewhere writable.'
 
 function pinConsequence(
   role: AssetRole,

@@ -5,8 +5,11 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import * as api from '../../lib/api'
 import type { Asset, AssetLink, AssetRole, WobuNode } from '../../lib/api'
 import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
+import { useContextMenu, type MenuTriggerProps } from '../../hooks/useContextMenu'
 import { useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
 import { Combobox } from '../Combobox'
+import { ContextMenu, MenuItem, MenuLabel, MenuSeparator } from '../ContextMenu'
+import { Icon } from '../Icon'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
 type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed' | 'cancelled'
@@ -373,6 +376,9 @@ function VirtualReferenceGrid({
   const [size, setSize] = useState({ width: 800, height: 600 })
   const [scrollTop, setScrollTop] = useState(0)
   const [dragged, setDragged] = useState<number | null>(null)
+  // Keyed by position rather than by asset: the same picture can be attached
+  // twice in two roles, and the menu acts on the tile that was clicked.
+  const menu = useContextMenu<number>()
 
   useEffect(() => {
     const element = viewport.current
@@ -410,6 +416,28 @@ function VirtualReferenceGrid({
     if (!item) return
     next.splice(to, 0, item)
     onChange(next)
+  }
+
+  /*
+   * One implementation of each edit, for both routes into it.
+   *
+   * The tile's own buttons and its context menu are the same five actions, and
+   * the menu is deliberately an accelerator rather than a second way of writing
+   * them: a rule that lived twice — "muting clears the cover", say — would only
+   * ever be fixed in whichever copy the reporter happened to use.
+   */
+  const update = (index: number, patch: Partial<AssetLink>) => {
+    const link = links[index]
+    if (!link) return
+    const next = [...links]
+    next[index] = { ...link, ...patch }
+    onChange(next)
+  }
+  const removeAt = (index: number) => onChange(links.filter((_, position) => position !== index))
+  const coverAt = (index: number) => {
+    const link = links[index]
+    if (!link) return
+    onCover(isCover(coverAssetId, link.assetId) ? null : link.assetId)
   }
 
   if (links.length === 0) {
@@ -453,13 +481,10 @@ function VirtualReferenceGrid({
                     candidate.assetId === link.assetId && candidateIndex !== index,
                 )
                 .map((candidate) => candidate.role)}
-              onUpdate={(patch) => {
-                const next = [...links]
-                next[index] = { ...link, ...patch }
-                onChange(next)
-              }}
-              onRemove={() => onChange(links.filter((_, linkIndex) => linkIndex !== index))}
-              onCover={() => onCover(isCover(coverAssetId, link.assetId) ? null : link.assetId)}
+              menuProps={menu.trigger(index)}
+              onUpdate={(patch) => update(index, patch)}
+              onRemove={() => removeAt(index)}
+              onCover={() => coverAt(index)}
               onMove={(to) => move(index, to)}
               onDragStart={() => setDragged(index)}
               onDrop={() => {
@@ -470,7 +495,112 @@ function VirtualReferenceGrid({
           )
         })}
       </div>
+
+      {menu.anchor && links[menu.anchor.item] && (
+        <ContextMenu
+          x={menu.anchor.x}
+          y={menu.anchor.y}
+          onClose={menu.close}
+          restoreFocus={menu.anchor.opener}
+          label={`Actions for reference ${menu.anchor.item + 1}`}
+        >
+          <ReferenceMenu
+            link={links[menu.anchor.item] as AssetLink}
+            index={menu.anchor.item}
+            count={links.length}
+            isCover={isCover(coverAssetId, (links[menu.anchor.item] as AssetLink).assetId)}
+            readOnly={readOnly}
+            onUpdate={update}
+            onRemove={removeAt}
+            onCover={coverAt}
+            onMove={move}
+          />
+        </ContextMenu>
+      )}
     </div>
+  )
+}
+
+const REFERENCE_READ_ONLY =
+  'This project is open read-only, so the reference board cannot be changed. Check the folder permissions, or reopen a copy somewhere writable.'
+
+/**
+ * The reference board's menu — the tile's own five controls, at the pointer.
+ *
+ * Reordering is the reason this exists. The board is a *ranked* list, the
+ * arrows that reorder it are two of the smallest targets in the app, and
+ * dragging a tile across a virtualized grid to reach position one is the
+ * gesture people give up on. Nothing here is only here: every row is a button
+ * already drawn on the tile.
+ */
+function ReferenceMenu({
+  link,
+  index,
+  count,
+  isCover: cover,
+  readOnly,
+  onUpdate,
+  onRemove,
+  onCover,
+  onMove,
+}: {
+  link: AssetLink
+  index: number
+  count: number
+  isCover: boolean
+  readOnly: boolean
+  onUpdate: (index: number, patch: Partial<AssetLink>) => void
+  onRemove: (index: number) => void
+  onCover: (index: number) => void
+  onMove: (from: number, to: number) => void
+}) {
+  const frozen = readOnly ? REFERENCE_READ_ONLY : null
+  return (
+    <>
+      <MenuLabel>
+        {roleLabel(link.role)} · {index + 1} of {count}
+      </MenuLabel>
+      <MenuItem
+        icon={<Icon name="chev" size="sm" />}
+        disabledReason={frozen ?? (index === 0 ? 'This is already the first reference.' : null)}
+        onSelect={() => onMove(index, index - 1)}
+      >
+        Move earlier
+      </MenuItem>
+      <MenuItem
+        icon={<Icon name="chev" size="sm" />}
+        disabledReason={
+          frozen ?? (index === count - 1 ? 'This is already the last reference.' : null)
+        }
+        onSelect={() => onMove(index, index + 1)}
+      >
+        Move later
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        icon={<Icon name={link.enabled ? 'minus' : 'check'} size="sm" />}
+        disabledReason={frozen}
+        onSelect={() => onUpdate(index, { enabled: !link.enabled })}
+      >
+        {link.enabled ? 'Mute' : 'Unmute'}
+      </MenuItem>
+      <MenuItem
+        icon={<Icon name="image" size="sm" />}
+        disabledReason={frozen}
+        onSelect={() => onCover(index)}
+      >
+        {cover ? 'Clear cover' : 'Set cover'}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        danger
+        icon={<Icon name="trash" size="sm" />}
+        disabledReason={frozen}
+        onSelect={() => onRemove(index)}
+      >
+        Remove from this entity
+      </MenuItem>
+    </>
   )
 }
 
@@ -545,6 +675,7 @@ function ReferenceTile({
   isCover,
   readOnly,
   usedRoles,
+  menuProps,
   onUpdate,
   onRemove,
   onCover,
@@ -564,6 +695,8 @@ function ReferenceTile({
   isCover: boolean
   readOnly: boolean
   usedRoles: AssetRole[]
+  /** Right-click and Shift+F10; the menu itself is drawn by the grid. */
+  menuProps: MenuTriggerProps
   onUpdate: (patch: Partial<AssetLink>) => void
   onRemove: () => void
   onCover: () => void
@@ -575,6 +708,12 @@ function ReferenceTile({
     <article
       className={`reference-tile${link.enabled ? '' : ' is-muted'}${isCover ? ' is-cover' : ''}`}
       style={{ width, height: TILE_HEIGHT - GAP, transform: `translate(${left}px, ${top}px)` }}
+      // Focusable only programmatically: the tile is a container of controls
+      // rather than a control, so it takes no tab stop of its own — but a menu
+      // opened on it has somewhere to put focus back when it closes.
+      tabIndex={-1}
+      aria-label={`Reference ${index + 1}, ${roleLabel(link.role)}`}
+      {...menuProps}
       draggable={!readOnly}
       onDragStart={(event) => {
         event.dataTransfer.setData('application/x-wobu-reference', String(index))

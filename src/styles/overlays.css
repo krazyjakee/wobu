@@ -535,10 +535,11 @@
 }
 
 /* ── context menu ────────────────────────────────────────────────────────── */
-/* `--dur-1`, the shortest step, and the only surface on it. A context menu opens
-   under a pointer that is already moving towards the item it wants; anything
-   slower is time spent waiting for a menu the user has finished reading. It
-   drops from above because that is where the click that opened it was. */
+/* One menu, on eight surfaces (#130). `--dur-1`, the shortest step, and the only
+   surface on it. A context menu opens under a pointer that is already moving
+   towards the item it wants; anything slower is time spent waiting for a menu
+   the user has finished reading. It drops from above because that is where the
+   click that opened it was. */
 .ctx {
   position: fixed;
   z-index: 60;
@@ -550,11 +551,16 @@
   box-shadow: var(--shadow-1);
   animation: wb-drop var(--dur-1) var(--ease-out);
 }
+
+/* The two menus that are not opened by a pointer and are placed by their own
+   trigger instead. They are rendered where they were written, so they can be
+   positioned against it. */
 .ctx.title-project-menu {
   position: absolute;
   top: 30px;
   left: 0;
 }
+
 .ctx button {
   display: flex;
   align-items: center;
@@ -581,6 +587,23 @@
   opacity: 0.4;
   pointer-events: none;
 }
+
+/* A refused row keeps its pointer events — that is the whole of #129 — so the
+   only thing restated here is that it does not light up under the pointer as
+   though it were about to do something. `tooltip.css` dims it. */
+.ctx button[aria-disabled='true']:hover {
+  background: none;
+  color: var(--text-dim);
+}
+
+/* The chord a row is an accelerator for, pushed to the trailing edge the way
+   every desktop menu prints one. It is never typed into this stylesheet's
+   markup by hand: `<MenuItem command>` reads the binding in force. */
+.ctx-chord {
+  margin-left: auto;
+  padding-left: 12px;
+}
+
 .ctx-sep {
   height: 1px;
   margin: 4px 6px;

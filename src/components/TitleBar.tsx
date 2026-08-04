@@ -8,7 +8,7 @@ import { modKey } from '../lib/platform'
 import { Icon } from './Icon'
 import { IconButton, Tooltip } from './Tooltip'
 import { WindowControls } from './WindowControls'
-import { ContextMenu } from './navigator/ContextMenu'
+import { ContextMenu, MenuItem, MenuLabel, MenuSeparator } from './ContextMenu'
 import { SharingSheet } from './SharingSheet'
 
 export function TitleBar({
@@ -62,31 +62,20 @@ export function TitleBar({
             restoreFocusRef={projectMenuButton}
             onClose={() => setMenu(false)}
           >
-            <div className="ctx-label" role="presentation">
-              {project.path}
-            </div>
-            <div className="ctx-sep" role="separator" />
-            <button
-              role="menuitem"
-              onClick={() => {
-                setMenu(false)
-                setSharing(true)
-              }}
-            >
-              <Icon name="share" size="sm" />
+            <MenuLabel>{project.path}</MenuLabel>
+            <MenuSeparator />
+            <MenuItem icon={<Icon name="share" size="sm" />} onSelect={() => setSharing(true)}>
               Share this project…
-            </button>
-            <button
-              role="menuitem"
-              onClick={() => {
-                setMenu(false)
-                requestProjectClose()
-              }}
-              disabled={closeProject.isPending}
+            </MenuItem>
+            <MenuItem
+              icon={<Icon name="folder" size="sm" />}
+              disabledReason={
+                closeProject.isPending ? 'This project is already being closed.' : null
+              }
+              onSelect={requestProjectClose}
             >
-              <Icon name="folder" size="sm" />
               Close project
-            </button>
+            </MenuItem>
           </ContextMenu>
         )}
       </div>

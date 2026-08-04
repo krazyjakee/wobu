@@ -314,6 +314,76 @@ describe('generation history', () => {
     ).toBeInTheDocument()
   })
 
+  /*
+   * The concept card's context menu (#130).
+   *
+   * The card is 430px tall and its pin control is at the bottom of it, behind a
+   * picker. The menu is the same three actions — open, pin as whatever the
+   * card's own picker is showing, delete — without the scroll.
+   */
+  it('offers open, pin and delete from the card’s own menu', async () => {
+    history = [generation({ id: 'candidate' })]
+    open()
+
+    const tile = await screen.findByRole('article', { name: /Concept from/ })
+    fireEvent.contextMenu(tile, { clientX: 20, clientY: 30 })
+    const menu = screen.getByRole('menu', { name: 'Actions for generation candidate' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['Open concept', 'Pin as full reference', 'Delete concept…'])
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Pin as full reference' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_link', {
+        nodeId: 'kael',
+        assetId: 'asset-1',
+        role: 'full_ref',
+        weight: undefined,
+      }),
+    )
+
+    // The role the menu pins as is the one the card is showing, so the two can
+    // never disagree.
+    chooseOption('Reference role for generation candidate', 'Palette')
+    fireEvent.keyDown(tile, { key: 'ContextMenu' })
+    expect(screen.getByRole('menuitem', { name: 'Pin as palette' })).toBeInTheDocument()
+  })
+
+  it('sends the menu’s delete through the same confirmation as the card’s', async () => {
+    history = [generation({ id: 'doomed' })]
+    open()
+
+    const tile = await screen.findByRole('article', { name: /Concept from/ })
+    fireEvent.keyDown(tile, { key: 'F10', shiftKey: true })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete concept…' }))
+
+    // Nothing is deleted by the menu itself: it opens the same sheet the
+    // card's own button does, which is where the consequence is spelled out.
+    expect(h.invoke).not.toHaveBeenCalledWith('generation_delete', expect.anything())
+    expect(await screen.findByText('Delete this concept?')).toBeInTheDocument()
+  })
+
+  it('refuses the menu’s writes in a read-only project, with the reason', async () => {
+    history = [generation({ id: 'frozen' })]
+    open(emptyQueue, node, true)
+
+    const tile = await screen.findByRole('article', { name: /Concept from/ })
+    fireEvent.contextMenu(tile, { clientX: 20, clientY: 30 })
+
+    const pin = screen.getByRole('menuitem', { name: 'Pin as full reference' })
+    expect(pin).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.focus(pin)
+    expect(document.getElementById(pin.getAttribute('aria-describedby') ?? '')).toHaveTextContent(
+      /read-only/,
+    )
+    // Opening a receipt writes nothing, so it stays available.
+    expect(screen.getByRole('menuitem', { name: 'Open concept' })).not.toHaveAttribute(
+      'aria-disabled',
+    )
+  })
+
   it('leaves pinning visible but unavailable in a read-only project', async () => {
     history = [generation({ id: 'readonly' })]
     open(emptyQueue, node, true)

@@ -19,7 +19,8 @@ import { useUI, report, toast } from '../../store/ui'
 import { NodeThumbnail } from '../AssetMedia'
 import { Icon } from '../Icon'
 import { IconButton, TipButton, Tooltip } from '../Tooltip'
-import { ContextMenu } from './ContextMenu'
+import { ContextMenu, MenuItem, MenuLabel, MenuSeparator } from '../ContextMenu'
+import { useContextMenu, type MenuTriggerProps } from '../../hooks/useContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { BrokenFiles } from './BrokenFiles'
 import {
@@ -51,13 +52,6 @@ const READ_ONLY_REASON =
  * already had.
  */
 const NONE: NodeSummary[] = []
-
-interface Ctx {
-  x: number
-  y: number
-  node: NodeSummary
-  opener: HTMLButtonElement
-}
 
 export function Navigator({
   nodes,
@@ -104,7 +98,8 @@ export function Navigator({
   const setBandOpen = useUI((s) => s.setBandOpen)
   const recentIds = useUI((s) => s.recentIds)
 
-  const [ctx, setCtx] = useState<Ctx | null>(null)
+  const nodeMenu = useContextMenu<NodeSummary>()
+  const groupMenu = useContextMenu<KindGroup>()
   const [confirm, setConfirm] = useState<NodeSummary | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropId, setDropId] = useState<string | null>(null)
@@ -268,22 +263,10 @@ export function Navigator({
     [byId, dragId, moveNode],
   )
 
-  const handleContext = useCallback(
-    (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) =>
-      setCtx({ x, y, node, opener }),
-    [],
-  )
   const handleDragEnd = useCallback(() => {
     setDragId(null)
     setDropId(null)
   }, [])
-  const handleGroupContext = useCallback(
-    (kind: NodeKind) => {
-      setCtx(null)
-      if (!readOnly) onNewNode(kind, null)
-    },
-    [onNewNode, readOnly],
-  )
 
   return (
     <aside className="nav">
@@ -345,11 +328,7 @@ export function Navigator({
                   className={`node node-pin${selectedId === n.id ? ' is-sel' : ''}${dropId === n.id ? ' drop-target' : ''}`}
                   aria-current={selectedId === n.id ? 'true' : undefined}
                   onClick={() => select(n.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    e.currentTarget.focus()
-                    setCtx({ x: e.clientX, y: e.clientY, node: n, opener: e.currentTarget })
-                  }}
+                  {...nodeMenu.trigger(n)}
                 >
                   <NodeThumbnail
                     path={pinnedThumbs.get(n.id)}
@@ -414,8 +393,8 @@ export function Navigator({
           onToggle={toggleNodeOpen}
           onToggleGroup={toggleGroup}
           onToggleBand={handleBand}
-          onGroupContext={handleGroupContext}
-          onContext={handleContext}
+          groupTrigger={groupMenu.trigger}
+          trigger={nodeMenu.trigger}
           onFavourite={handleFavourite}
           onDragStart={setDragId}
           onDragEnd={handleDragEnd}
@@ -454,25 +433,24 @@ export function Navigator({
         )}
       </div>
 
-      {ctx && (
+      {nodeMenu.anchor && (
         <ContextMenu
-          x={ctx.x}
-          y={ctx.y}
-          onClose={() => setCtx(null)}
-          restoreFocus={ctx.opener}
-          label={`Actions for ${ctx.node.name}`}
+          x={nodeMenu.anchor.x}
+          y={nodeMenu.anchor.y}
+          onClose={nodeMenu.close}
+          restoreFocus={nodeMenu.anchor.opener}
+          label={`Actions for ${nodeMenu.anchor.item.name}`}
         >
           <NodeMenu
-            node={ctx.node}
+            node={nodeMenu.anchor.item}
             kinds={kinds}
             readOnly={readOnly}
             busy={dup.isPending || del.isPending}
-            favourite={favouriteIds.has(ctx.node.id)}
-            onClose={() => setCtx(null)}
-            onFavourite={() => handleFavourite(ctx.node.id)}
+            favourite={favouriteIds.has(nodeMenu.anchor.item.id)}
+            onFavourite={handleFavourite}
             onNewNode={onNewNode}
-            onDuplicate={() =>
-              dup.mutate(ctx.node.id, {
+            onDuplicate={(id) =>
+              dup.mutate(id, {
                 onError: (e) => report(e),
                 onSuccess: (n) => {
                   select(n.id)
@@ -480,9 +458,31 @@ export function Navigator({
                 },
               })
             }
-            onDelete={() => setConfirm(ctx.node)}
+            onDelete={setConfirm}
           />
         </ContextMenu>
+      )}
+
+      {/*
+        A heading's menu, rather than the heading's right-click *being* the
+        action. Right-clicking a group used to open the new-entity sheet with no
+        menu in between, which is the one gesture on this pane that did
+        something irreversible-looking without asking — and it left the group's
+        other action, the one bound to a chord, reachable only from a button at
+        the top of the pane.
+      */}
+      {groupMenu.anchor && (
+        <GroupMenu
+          group={groupMenu.anchor.item}
+          x={groupMenu.anchor.x}
+          y={groupMenu.anchor.y}
+          opener={groupMenu.anchor.opener}
+          readOnly={readOnly}
+          allClosed={allClosed}
+          onClose={groupMenu.close}
+          onNewNode={onNewNode}
+          onToggleAll={collapseEverything}
+        />
       )}
 
       {confirm && (
@@ -575,13 +575,65 @@ function deleteWarning(node: NodeSummary, nodes: NodeSummary[]): string {
   return `${base} ${kids} node${kids === 1 ? '' : 's'} nest inside it — how the backend treats them is its call, so check the tree afterwards.`
 }
 
+function GroupMenu({
+  group,
+  x,
+  y,
+  opener,
+  readOnly,
+  allClosed,
+  onClose,
+  onNewNode,
+  onToggleAll,
+}: {
+  group: KindGroup
+  x: number
+  y: number
+  opener: HTMLElement
+  readOnly: boolean
+  allClosed: boolean
+  onClose: () => void
+  onNewNode: (kind: NodeKind | null, parentId: string | null) => void
+  onToggleAll: () => void
+}) {
+  const plural = pluralFor(group.def, group.kind)
+  return (
+    <ContextMenu
+      x={x}
+      y={y}
+      onClose={onClose}
+      restoreFocus={opener}
+      label={`Actions for ${plural}`}
+    >
+      <MenuLabel>{plural}</MenuLabel>
+      <MenuItem
+        icon={<Icon name="plus" size="sm" />}
+        disabledReason={readOnly ? READ_ONLY_REASON : null}
+        onSelect={() => onNewNode(group.kind, null)}
+      >
+        New {labelFor(group.def, group.kind).toLowerCase()}
+      </MenuItem>
+      <MenuSeparator />
+      {/* The chord is printed, not typed: this is the same action as the button
+          in `.nav-tools` and the same command the dispatcher runs, so the row
+          says whatever the user has bound it to today. */}
+      <MenuItem
+        icon={<Icon name="chev" size="sm" />}
+        command="nav.toggleAll"
+        onSelect={onToggleAll}
+      >
+        {allClosed ? 'Expand everything' : 'Collapse everything'}
+      </MenuItem>
+    </ContextMenu>
+  )
+}
+
 function NodeMenu({
   node,
   kinds,
   readOnly,
   busy,
   favourite,
-  onClose,
   onFavourite,
   onNewNode,
   onDuplicate,
@@ -592,84 +644,61 @@ function NodeMenu({
   readOnly: boolean
   busy: boolean
   favourite: boolean
-  onClose: () => void
-  onFavourite: () => void
+  onFavourite: (id: string) => void
   onNewNode: (kind: NodeKind | null, parentId: string | null) => void
-  onDuplicate: () => void
-  onDelete: () => void
+  onDuplicate: (id: string) => void
+  onDelete: (node: NodeSummary) => void
 }) {
   const def = kinds.get(node.kind)
-  const pick = (fn: () => void) => () => {
-    onClose()
-    fn()
-  }
+  const busyReason = busy ? 'Another change to this node is still being written.' : null
   return (
     <>
-      <div className="ctx-label" role="presentation">
-        {labelFor(def, node.kind)}
-      </div>
-      <TipButton
-        role="menuitem"
+      <MenuLabel>{labelFor(def, node.kind)}</MenuLabel>
+      <MenuItem
+        icon={<Icon name="plus" size="sm" />}
         disabledReason={readOnly ? READ_ONLY_REASON : null}
-        placement="right"
-        onClick={pick(() => onNewNode(node.kind, node.parentId))}
+        onSelect={() => onNewNode(node.kind, node.parentId)}
       >
-        <Icon name="plus" size="sm" />
         New {labelFor(def, node.kind).toLowerCase()}
-      </TipButton>
+      </MenuItem>
       {def?.nests && (
-        <TipButton
-          role="menuitem"
+        <MenuItem
+          icon={<Icon name="plus" size="sm" />}
           disabledReason={readOnly ? READ_ONLY_REASON : null}
-          placement="right"
-          onClick={pick(() => onNewNode(node.kind, node.id))}
+          onSelect={() => onNewNode(node.kind, node.id)}
         >
-          <Icon name="plus" size="sm" />
           New child of {node.name}
-        </TipButton>
+        </MenuItem>
       )}
-      <div className="ctx-sep" role="separator" />
+      <MenuSeparator />
       {/* Never disabled by `readOnly`: a favourite is this reader's shortcut,
           held on this machine, and a project on a read-only share is exactly
           the one you most want to keep your bearings in. */}
-      <button role="menuitem" onClick={pick(onFavourite)}>
-        <Star on={favourite} />
+      <MenuItem icon={<Star on={favourite} />} onSelect={() => onFavourite(node.id)}>
         {favourite ? 'Remove from favourites' : 'Add to favourites'}
-      </button>
-      <div className="ctx-sep" role="separator" />
-      <TipButton
-        role="menuitem"
-        placement="right"
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        icon={<Icon name="copy" size="sm" />}
         disabledReason={
           readOnly
             ? READ_ONLY_REASON
             : def?.singleton
               ? `A world has one ${labelFor(def, node.kind).toLowerCase()}, so there is nothing to duplicate it into.`
-              : busy
-                ? 'Another change to this node is still being written.'
-                : null
+              : busyReason
         }
-        onClick={pick(onDuplicate)}
+        onSelect={() => onDuplicate(node.id)}
       >
-        <Icon name="copy" size="sm" />
         Duplicate
-      </TipButton>
-      <TipButton
-        role="menuitem"
-        className="danger"
-        placement="right"
-        disabledReason={
-          readOnly
-            ? READ_ONLY_REASON
-            : busy
-              ? 'Another change to this node is still being written.'
-              : null
-        }
-        onClick={pick(onDelete)}
+      </MenuItem>
+      <MenuItem
+        danger
+        icon={<Icon name="trash" size="sm" />}
+        disabledReason={readOnly ? READ_ONLY_REASON : busyReason}
+        onSelect={() => onDelete(node)}
       >
-        <Icon name="trash" size="sm" />
         Delete
-      </TipButton>
+      </MenuItem>
     </>
   )
 }
@@ -688,7 +717,8 @@ const NAVIGATOR_FALLBACK_HEIGHT = 560
 interface NavigatorRowActions {
   onSelect: (id: string) => void
   onToggle: (id: string) => void
-  onContext: (x: number, y: number, node: NodeSummary, opener: HTMLButtonElement) => void
+  /** The right-click and Shift+F10 handlers for one row, from `useContextMenu`. */
+  trigger: (node: NodeSummary) => MenuTriggerProps
   onFavourite: (id: string) => void
   onDragStart: (id: string) => void
   onDragEnd: () => void
@@ -708,7 +738,7 @@ interface NavigatorRowsProps extends NavigatorRowActions {
   favourites: Set<string>
   onToggleGroup: (kind: NodeKind) => void
   onToggleBand: (key: string, open: boolean) => void
-  onGroupContext: (kind: NodeKind) => void
+  groupTrigger: (group: KindGroup) => MenuTriggerProps
   onRowRender?: (nodeId: string) => void
 }
 
@@ -821,7 +851,7 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
                 dropTarget={props.dropId === groupDropId(row.group.kind)}
                 canDrop={props.canDrop}
                 onToggle={props.onToggleGroup}
-                onContext={props.onGroupContext}
+                trigger={props.groupTrigger}
                 onDropOn={props.onDropOn}
                 setDropId={props.setDropId}
               />
@@ -849,7 +879,7 @@ function VirtualNavigatorRows(props: NavigatorRowsProps) {
                 favourite={props.favourites.has(row.tree.node.id)}
                 onSelect={props.onSelect}
                 onToggle={props.onToggle}
-                onContext={props.onContext}
+                trigger={props.trigger}
                 onFavourite={props.onFavourite}
                 onDragStart={props.onDragStart}
                 onDragEnd={props.onDragEnd}
@@ -874,7 +904,7 @@ const NavigatorGroupRow = memo(function NavigatorGroupRow({
   dropTarget,
   canDrop,
   onToggle,
-  onContext,
+  trigger,
   onDropOn,
   setDropId,
 }: {
@@ -882,7 +912,7 @@ const NavigatorGroupRow = memo(function NavigatorGroupRow({
   dropTarget: boolean
   canDrop: (targetId: string | null, kind: NodeKind) => boolean
   onToggle: (kind: NodeKind) => void
-  onContext: (kind: NodeKind) => void
+  trigger: (group: KindGroup) => MenuTriggerProps
   onDropOn: (id: string | null) => void
   setDropId: (id: string | null) => void
 }) {
@@ -904,10 +934,7 @@ const NavigatorGroupRow = memo(function NavigatorGroupRow({
           event.preventDefault()
           onDropOn(null)
         }}
-        onContextMenu={(event) => {
-          event.preventDefault()
-          onContext(group.kind)
-        }}
+        {...trigger(group)}
       >
         <Icon name="chev" />
         {pluralFor(group.def, group.kind)}
@@ -965,7 +992,7 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
   favourite,
   onSelect,
   onToggle,
-  onContext,
+  trigger,
   onFavourite,
   onDragStart,
   onDragEnd,
@@ -1018,11 +1045,7 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
         aria-current={selected ? 'true' : undefined}
         style={{ paddingLeft: 12 + tree.depth * 14 }}
         onClick={() => onSelect(n.id)}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          e.currentTarget.focus()
-          onContext(e.clientX, e.clientY, n, e.currentTarget)
-        }}
+        {...trigger(n)}
         draggable={!readOnly && inTree}
         onDragStart={(e) => {
           e.dataTransfer.setData(DRAG_MIME, n.id)

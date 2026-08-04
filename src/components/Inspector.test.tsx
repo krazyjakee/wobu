@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectSummary } from '../lib/api'
 import { resetNodeThumbs } from '../lib/nodeThumbs'
@@ -51,12 +51,12 @@ function layer(nodeId: string | null, name: string, layerName: string) {
   }
 }
 
-function draw() {
+function draw(onJump: (id: string) => void = () => {}) {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <Inspector project={project} selected={selected} kinds={kinds} onJump={() => {}} />
+      <Inspector project={project} selected={selected} kinds={kinds} onJump={onJump} />
     </QueryClientProvider>,
   )
 }
@@ -177,5 +177,63 @@ describe('influence stack thumbnails', () => {
     expect(batches).toHaveLength(1)
     // The shot layer has no entity behind it, so there is nothing to ask about.
     expect((batches[0]?.[1] as { nodeIds: string[] }).nodeIds).toEqual(['guild', 'kael'])
+  })
+})
+
+/*
+ * The layer heading's context menu (#130).
+ *
+ * A layer is a `<details>`, and both of the things you can do to one — mute it,
+ * open the entity it came from — are inside the fold. On a stack of six that is
+ * a disclosure and a scroll before the first click. The heading is on screen
+ * either way, so the menu goes there.
+ */
+describe('influence layer context menu', () => {
+  function heading(view: ReturnType<typeof draw>, index: number) {
+    return view.container.querySelectorAll('.layer-h')[index] as HTMLElement
+  }
+
+  it('mutes the layer and opens its source from the heading, by key or pointer', async () => {
+    const jumped = vi.fn()
+    const view = draw(jumped)
+    await waitFor(() => expect(view.container.querySelectorAll('.layer-h')).toHaveLength(3))
+
+    fireEvent.keyDown(heading(view, 0), { key: 'F10', shiftKey: true })
+    const menu = screen.getByRole('menu', { name: 'Actions for the culture layer' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['Mute this layer', 'Open source'])
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Mute this layer' }))
+    // Muting re-resolves the stack, so the layers are drawn again from the
+    // answer rather than from the click.
+    await waitFor(() => expect(view.container.querySelectorAll('.layer.is-muted')).toHaveLength(1))
+    // The card's own button now says the same thing the menu will next time.
+    expect(screen.getAllByRole('button', { name: 'Unmute' })).toHaveLength(1)
+
+    fireEvent.contextMenu(heading(view, 1), { clientX: 10, clientY: 20 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open source' }))
+    expect(jumped).toHaveBeenCalledWith('kael')
+  })
+
+  it('refuses to open a source the shot layer does not have, and says why', async () => {
+    const view = draw()
+    await waitFor(() => expect(view.container.querySelectorAll('.layer-h')).toHaveLength(3))
+
+    fireEvent.contextMenu(heading(view, 2), { clientX: 10, clientY: 20 })
+    const menu = screen.getByRole('menu', { name: 'Actions for the shot layer' })
+    const source = within(menu).getByRole('menuitem', { name: 'Open source' })
+    expect(source).toHaveAttribute('aria-disabled', 'true')
+
+    fireEvent.focus(source)
+    expect(
+      document.getElementById(source.getAttribute('aria-describedby') ?? ''),
+    ).toHaveTextContent(/the shot itself/)
+    // Muting the shot is a real thing to do, so the menu is not pointless here.
+    expect(within(menu).getByRole('menuitem', { name: 'Mute this layer' })).not.toHaveAttribute(
+      'aria-disabled',
+    )
   })
 })

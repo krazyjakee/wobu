@@ -16,9 +16,11 @@ import {
   useUpdateNodeLink,
 } from '../../lib/queries'
 import { useNodeThumbs } from '../../lib/nodeThumbs'
+import { useContextMenu } from '../../hooks/useContextMenu'
 import { colorFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { NodeThumbnail } from '../AssetMedia'
 import { Combobox } from '../Combobox'
+import { ContextMenu, MenuItem, MenuLabel, MenuSeparator } from '../ContextMenu'
 import { Icon } from '../Icon'
 
 const ROLE_LABEL: Record<LinkRole, string> = {
@@ -379,6 +381,7 @@ function OutgoingRow({
   onUpdate: (patch: { weight?: number; enabled?: boolean }) => void
 }) {
   const [weight, setWeight] = useState(String(link.weight))
+  const menu = useContextMenu<Link>()
   const commitWeight = () => {
     const parsed = Number(weight)
     if (!Number.isFinite(parsed)) {
@@ -390,8 +393,20 @@ function OutgoingRow({
     if (clamped !== link.weight) onUpdate({ weight: clamped })
   }
 
+  const frozen = readOnly
+    ? 'This project is open read-only, so its relations cannot be changed.'
+    : busy
+      ? 'Another change to this node’s relations is still being written.'
+      : null
+
   return (
-    <div className={link.enabled ? 'relation-row' : 'relation-row is-muted'}>
+    <div
+      className={link.enabled ? 'relation-row' : 'relation-row is-muted'}
+      // Not a tab stop: the row's own controls are. It takes focus only when a
+      // menu is opened on it, so that closing the menu lands somewhere.
+      tabIndex={-1}
+      {...menu.trigger(link)}
+    >
       <RelationTarget
         target={target}
         fallback={link.toId}
@@ -431,6 +446,53 @@ function OutgoingRow({
       <button className="btn btn-mini" disabled={readOnly || busy} onClick={onRemove}>
         Remove
       </button>
+
+      {/*
+        The three things a relation row does, without hunting for its controls.
+        Weight is left out on purpose: it is a value rather than an action, the
+        field beside it is already the shortest route to typing one, and a menu
+        cannot hold a number without becoming a form.
+      */}
+      {menu.anchor && (
+        <ContextMenu
+          x={menu.anchor.x}
+          y={menu.anchor.y}
+          onClose={menu.close}
+          restoreFocus={menu.anchor.opener}
+          label={`Actions for the relation to ${target?.name ?? link.toId}`}
+        >
+          <MenuLabel>
+            {ROLE_LABEL[link.role]} · weight {link.weight.toFixed(2)}
+          </MenuLabel>
+          <MenuItem
+            icon={<Icon name="link" size="sm" />}
+            disabledReason={
+              target
+                ? null
+                : 'The other end of this relation is missing from the project, so there is nothing to open.'
+            }
+            onSelect={() => onJump(link.toId)}
+          >
+            Open {target?.name ?? 'the missing node'}
+          </MenuItem>
+          <MenuItem
+            icon={<Icon name={link.enabled ? 'minus' : 'check'} size="sm" />}
+            disabledReason={frozen}
+            onSelect={() => onUpdate({ enabled: !link.enabled })}
+          >
+            {link.enabled ? 'Mute this influence' : 'Unmute this influence'}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            danger
+            icon={<Icon name="trash" size="sm" />}
+            disabledReason={frozen}
+            onSelect={onRemove}
+          >
+            Remove relation
+          </MenuItem>
+        </ContextMenu>
+      )}
     </div>
   )
 }

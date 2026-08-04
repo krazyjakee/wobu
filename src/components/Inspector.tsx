@@ -25,9 +25,11 @@ import {
 } from '../lib/queries'
 import { report, toast } from '../store/ui'
 import { useActionShortcut } from '../hooks/useKeyboard'
+import { useContextMenu } from '../hooks/useContextMenu'
 import { useDebounced } from '../hooks/useDebounced'
 import { NodeThumbnail } from './AssetMedia'
 import { Combobox } from './Combobox'
+import { ContextMenu, MenuItem, MenuLabel } from './ContextMenu'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Icon } from './Icon'
 import { TipButton, Tooltip } from './Tooltip'
@@ -837,12 +839,20 @@ function Layer({
   onJump: (id: string) => void
 }) {
   const color = layerColor(card.layer)
+  const menu = useContextMenu<LayerCard>()
   return (
     <details
       className={muted ? 'layer is-muted' : 'layer'}
       style={{ '--lc': color } as CSSProperties}
     >
-      <summary className="layer-h">
+      {/*
+        The menu is on the heading only, not the whole card. Everything below
+        the fold is prose the reader may well want to copy, and taking the
+        platform's own menu away from a paragraph to offer "Mute" instead is a
+        bad trade. The heading is also the part that is on screen when the card
+        is shut, which is when muting and jumping are two clicks away.
+      */}
+      <summary className="layer-h" {...menu.trigger(card)}>
         {/* The dot is the fallback rather than a second marker: a layer that has
             a picture says which entity it is with the picture, and one that has
             none keeps the coloured dot in the same box, so the rows below a
@@ -902,6 +912,32 @@ function Layer({
           </button>
         )}
       </div>
+
+      {menu.anchor && (
+        <ContextMenu
+          x={menu.anchor.x}
+          y={menu.anchor.y}
+          onClose={menu.close}
+          restoreFocus={menu.anchor.opener}
+          label={`Actions for the ${layerLabel(card.layer).toLowerCase()} layer`}
+        >
+          <MenuLabel>{card.name}</MenuLabel>
+          <MenuItem icon={<Icon name={muted ? 'check' : 'minus'} size="sm" />} onSelect={onMute}>
+            {muted ? 'Unmute this layer' : 'Mute this layer'}
+          </MenuItem>
+          <MenuItem
+            icon={<Icon name="link" size="sm" />}
+            disabledReason={
+              card.nodeId
+                ? null
+                : 'This layer is the shot itself rather than an entity, so there is no source to open.'
+            }
+            onSelect={() => onJump(card.nodeId as string)}
+          >
+            Open source
+          </MenuItem>
+        </ContextMenu>
+      )}
     </details>
   )
 }

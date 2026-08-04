@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, AssetLink, WobuNode } from '../../lib/api'
 import { node as buildNode } from '../../test/fixtures'
@@ -324,6 +324,75 @@ describe('ReferencesPane', () => {
     expect(screen.queryByText('Drop images to import and attach')).not.toBeInTheDocument()
     fireEvent.paste(region, { clipboardData: { files: [imageFile('ignored.png', 1)] } })
     expect(h.invoke).not.toHaveBeenCalledWith('asset_import_transfer_begin', expect.anything())
+  })
+
+  /*
+   * The board's context menu (#130).
+   *
+   * It is an accelerator for the tile's own five controls and nothing else —
+   * the reordering arrows especially, which are the smallest targets on the
+   * card and the ones a ranked list needs most.
+   */
+  it('offers the tile’s own actions from a right-click and from Shift+F10', async () => {
+    const links = [link('one'), link('two')]
+    const node = buildNode({ id: 'kael', assetLinks: links })
+    renderPane(node, [asset('one'), asset('two')])
+
+    const tile = (await screen.findAllByRole('article'))[0] as HTMLElement
+    fireEvent.contextMenu(tile, { clientX: 30, clientY: 40 })
+
+    const menu = screen.getByRole('menu', { name: 'Actions for reference 1' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['Move earlier', 'Move later', 'Mute', 'Set cover', 'Remove from this entity'])
+    // First in the list, so there is nowhere earlier to go — refused with the
+    // reason rather than silently absent.
+    expect(within(menu).getByRole('menuitem', { name: 'Move earlier' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+
+    // Escape leaves the board exactly as it was, with the caret back on the
+    // tile the menu was opened from.
+    fireEvent.keyDown(within(menu).getByRole('menuitem', { name: 'Move later' }), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(tile).toHaveFocus()
+    expect(autosave.queue).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(tile, { key: 'F10', shiftKey: true })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move later' }))
+    expect(autosave.queue).toHaveBeenLastCalledWith({ assetLinks: [links[1], links[0]] })
+
+    // The same tile, now second, muted from the menu rather than from the
+    // button on the card.
+    fireEvent.contextMenu(tile, { clientX: 30, clientY: 40 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mute' }))
+    expect(autosave.queue).toHaveBeenLastCalledWith({
+      assetLinks: [links[1], { ...links[0], enabled: false }],
+    })
+  })
+
+  it('refuses every row of the menu, with the reason, in a read-only project', async () => {
+    const node = buildNode({ id: 'kael', assetLinks: [link('one'), link('two')] })
+    renderPane(node, [asset('one'), asset('two')], true)
+
+    const tile = (await screen.findAllByRole('article'))[0] as HTMLElement
+    fireEvent.contextMenu(tile, { clientX: 30, clientY: 40 })
+
+    const menu = screen.getByRole('menu', { name: 'Actions for reference 1' })
+    for (const item of within(menu).getAllByRole('menuitem')) {
+      expect(item).toHaveAttribute('aria-disabled', 'true')
+    }
+    const remove = within(menu).getByRole('menuitem', { name: 'Remove from this entity' })
+    fireEvent.focus(remove)
+    expect(
+      document.getElementById(remove.getAttribute('aria-describedby') ?? ''),
+    ).toHaveTextContent(/read-only/)
+
+    fireEvent.click(remove)
+    expect(autosave.queue).not.toHaveBeenCalled()
   })
 })
 

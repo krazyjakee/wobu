@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WobuNode } from '../../lib/api'
 import { resetNodeThumbs } from '../../lib/nodeThumbs'
@@ -217,6 +217,109 @@ describe('relation row thumbnails', () => {
     // of the button's name — the row already says the entity in text, and a
     // second mention would give the pane two ways to match the same row.
     expect(screen.getAllByRole('button', { name: /Human/ })).toHaveLength(1)
+  })
+})
+
+/*
+ * The relation row's context menu (#130).
+ *
+ * Everything on it is already on the row — the jump, the Active/Muted
+ * checkbox, Remove. What the menu buys is that the three of them are one
+ * gesture apart on a row whose controls are a button, a checkbox, a number
+ * field and another button, laid out in four columns.
+ */
+describe('relation row context menu', () => {
+  const related = node({
+    id: 'hero',
+    kind: 'character',
+    name: 'Hero',
+    links: [{ toId: 'human', role: 'species_of', weight: 0.6, enabled: true }],
+  })
+
+  function openRowMenu(view: ReturnType<typeof draw>, key = 'F10') {
+    const row = view.container.querySelector('.relation-row') as HTMLElement
+    if (key === 'F10') fireEvent.keyDown(row, { key: 'F10', shiftKey: true })
+    else fireEvent.contextMenu(row, { clientX: 20, clientY: 30 })
+    return row
+  }
+
+  it('offers the row’s own three actions, by keyboard as well as by pointer', async () => {
+    const view = draw(related)
+    await screen.findByRole('button', { name: /Human/ })
+
+    const row = openRowMenu(view)
+    const menu = screen.getByRole('menu', { name: 'Actions for the relation to Human' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['Open Human', 'Mute this influence', 'Remove relation'])
+
+    fireEvent.keyDown(within(menu).getByRole('menuitem', { name: 'Open Human' }), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(row).toHaveFocus()
+  })
+
+  it('mutes and removes through the same commands as the row’s own controls', async () => {
+    const view = draw(related)
+    await screen.findByRole('button', { name: /Human/ })
+
+    openRowMenu(view, 'pointer')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mute this influence' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('node_link_update', {
+        nodeId: 'hero',
+        toId: 'human',
+        role: 'species_of',
+        enabled: false,
+      }),
+    )
+
+    openRowMenu(view, 'pointer')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove relation' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('node_link_remove', {
+        nodeId: 'hero',
+        toId: 'human',
+        role: 'species_of',
+      }),
+    )
+  })
+
+  it('says why the menu refuses to write in a read-only project', async () => {
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RelationsPane
+          node={related}
+          def={kinds.get('character')}
+          kinds={kinds}
+          readOnly
+          onJump={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole('button', { name: /Human/ })
+
+    fireEvent.contextMenu(document.querySelector('.relation-row') as HTMLElement, {
+      clientX: 20,
+      clientY: 30,
+    })
+    const remove = screen.getByRole('menuitem', { name: 'Remove relation' })
+    expect(remove).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.focus(remove)
+    expect(
+      document.getElementById(remove.getAttribute('aria-describedby') ?? ''),
+    ).toHaveTextContent(/read-only/)
+
+    fireEvent.click(remove)
+    expect(h.invoke).not.toHaveBeenCalledWith('node_link_remove', expect.anything())
+    // Jumping is not a write, so it is still offered on a folder nothing can be
+    // written to.
+    expect(screen.getByRole('menuitem', { name: 'Open Human' })).not.toHaveAttribute(
+      'aria-disabled',
+    )
   })
 })
 

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { chordParts } from '../../lib/keys'
 import { buildGroups, indexNodes } from '../../lib/tree'
 import { useUI } from '../../store/ui'
 import { kindDef, kindIndex, summary } from '../../test/fixtures'
@@ -11,13 +12,15 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 
 const nodes = [summary({ id: 'kael', name: 'Kael', kind: 'character' })]
 const kinds = kindIndex([kindDef('character', { label: 'Character', plural: 'Characters' })])
+const newNode = vi.fn()
 
 beforeEach(() => {
   h.invoke.mockReset()
   h.invoke.mockImplementation((command: string) =>
     Promise.resolve(command === 'node_links' ? [] : null),
   )
-  useUI.setState({ filter: '', selectedId: null, collapsedNodes: {}, closedGroups: {} })
+  newNode.mockReset()
+  useUI.setState({ filter: '', selectedId: null, collapsedNodes: {}, closedGroups: {}, bands: {} })
 })
 
 function showNavigator() {
@@ -36,7 +39,7 @@ function showNavigator() {
         corrupt={[]}
         editedElsewhere={new Map()}
         projectPath="/project"
-        onNewNode={() => {}}
+        onNewNode={newNode}
       />
     </QueryClientProvider>,
   )
@@ -76,5 +79,63 @@ describe('Navigator context menu accessibility', () => {
     fireEvent.keyDown(items[0] as HTMLElement, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
     expect(opener).toHaveFocus()
+  })
+
+  /*
+   * The keyboard route to the same menu (#130).
+   *
+   * The row's star and its twist are deliberately not tab stops — a thousand
+   * rows would be three thousand of them — so this menu is the *only* way to
+   * favourite a node without a mouse. Which makes Shift+F10 and the Menu key
+   * part of the feature rather than a nicety.
+   */
+  it('opens from Shift+F10 and from the Menu key, not only from the right button', () => {
+    showNavigator()
+    const row = screen.getByRole('button', { name: /Kael/ })
+    row.focus()
+
+    fireEvent.keyDown(row, { key: 'F10', shiftKey: true })
+    expect(screen.getByRole('menu', { name: 'Actions for Kael' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getAllByRole('menuitem')[0] as HTMLElement, { key: 'Escape' })
+    expect(row).toHaveFocus()
+
+    // The Menu key, which is the one a Windows keyboard has and Shift+F10 is
+    // the fallback for. Choosing a row closes the menu and hands focus back.
+    fireEvent.keyDown(row, { key: 'ContextMenu' })
+    expect(screen.getByRole('menuitem', { name: 'Add to favourites' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New child of Kael' }))
+    expect(newNode).toHaveBeenCalledWith('character', 'kael')
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(row).toHaveFocus()
+  })
+
+  /*
+   * A group heading used to *be* the action: right-clicking it opened the
+   * new-entity sheet with no menu in between, which is the one gesture on this
+   * pane that did something without asking. It now offers the two things a
+   * heading can do, one of which has a chord — printed from the registry, so a
+   * rebinding shows here without this menu knowing what it was rebound to.
+   */
+  it('offers a real menu on a group heading, with the live chord for the one that has one', () => {
+    showNavigator()
+    const heading = screen.getByRole('button', { name: /Characters/ })
+
+    fireEvent.keyDown(heading, { key: 'F10', shiftKey: true })
+    const menu = screen.getByRole('menu', { name: 'Actions for Characters' })
+    expect(newNode).not.toHaveBeenCalled()
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['New character', expect.stringContaining('Collapse everything')])
+
+    const collapse = within(menu).getByRole('menuitem', { name: /Collapse everything/ })
+    for (const part of chordParts('Mod+Shift+C')) expect(collapse).toHaveTextContent(part)
+    fireEvent.click(collapse)
+    expect(useUI.getState().closedGroups.character).toBe(true)
+
+    fireEvent.contextMenu(heading, { clientX: 5, clientY: 5 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New character' }))
+    expect(newNode).toHaveBeenCalledWith('character', null)
   })
 })
