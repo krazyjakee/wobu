@@ -48,9 +48,9 @@ jobs:
 
   rust:
     name: Rust — fmt, clippy, tests, dependency and public-surface checks
-    # Self-hosted: a GitHub-hosted runner cannot fit this workspace's debug
-    # build, and ran out of disk partway through linking the test binaries.
-    runs-on: [self-hosted, Linux, X64]
+    # Not the self-hosted pool: those runners are Ubuntu 20.04, which has no
+    # `libwebkit2gtk-4.1-dev` — Tauri v2 needs 4.1, first packaged in 22.04.
+    runs-on: ubuntu-latest
     env:
       # `cargo test --workspace` links around forty test binaries, and with the
       # default full DWARF for each it filled the runner's disk — "No space left
@@ -70,6 +70,16 @@ jobs:
         working-directory: src-tauri
     steps:
       - uses: actions/checkout@v5
+
+      # The image ships an Android SDK, a .NET runtime and a GHC that nothing
+      # here uses, and together they are most of a disk this job needs for
+      # object files. Reclaiming them is the difference between finishing and
+      # "No space left on device" halfway through linking.
+      - name: Reclaim the runner's preinstalled toolchains
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
 
       # The shell crate links against the system webview even for `cargo check`,
       # because `tauri-build` and the `*-sys` crates run pkg-config at build
