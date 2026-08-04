@@ -1,27 +1,28 @@
 # Generating
 
-Presets turn one description into the right *kind* of sheet. Generations are disposable by default;
-pinning one is what changes the world.
+Presets turn one description into the right *sort* of picture. What comes out is throwaway by
+default; pinning one is the thing that changes your world.
 
 ## The controls
 
-At the base of the inspector, under the compiled prompt: **Output preset**, **Aspect**, **Model**,
-an **Extra shot prompt**, **Seed**, the **Variant grid**, the project's spend ceiling, and
+At the bottom of the right-hand panel, under the prompt: **Output preset**, **Aspect**, **Model**,
+an **Extra shot prompt**, **Seed**, the **Variant grid**, the world's spending limit, and
 **Generate**.
 
-The extra shot prompt is the one place to type free text at generation time — framing, action,
-weather, a camera direction. It contributes at the Shot layer and is not saved to the world.
+The extra shot prompt is the one place to type something off the cuff — framing, an action, the
+weather, a camera angle. It counts as part of the shot and is not saved into your world.
 
-> **Aspect negotiation** The aspect list comes from the selected image provider. Wobu shows the
-> ratio it will actually queue and its pixel dimensions beside the control, and repairs an
-> unsupported or malformed saved value before it can reach the queue — saying which value it
-> replaced. A flexible provider such as ComfyUI gets Wobu's curated, validated ratio vocabulary
-> rather than accepting arbitrary text. Generate stays disabled until the negotiation has resolved.
+> **About shapes** The list of shapes comes from whichever image service you chose. Wobu shows the
+> one it will actually ask for and its size in pixels right beside the control, and quietly fixes a
+> saved shape the service will not accept — telling you what it changed. A flexible service like
+> ComfyUI gets Wobu's own tidy list rather than being handed anything at all. Generate stays
+> switched off until that is sorted out.
 
 ## Output presets
 
-A preset defines section priorities, framing text, an aspect and an image count. This is how the
-same entity produces a costume plate one minute and a material study the next.
+A preset decides which parts of the description to lean on, how the shot is framed, its shape and
+how many pictures you get. It is how the same page gives you a costume plate one minute and a
+close study of materials the next.
 
 | Preset | Aspect | Images | Chosen by default for |
 | --- | --- | --- | --- |
@@ -35,113 +36,117 @@ same entity produces a costume plate one minute and a material study the next.
 | Environment matte | 21:9 | 3 | environment, setting |
 | Interior | 16:9 | 3 | — |
 
-Presets reweight rather than replace. A material study still inherits your Art Style and World Canon
-— it just promotes `materials` to the front and pushes `silhouette` down.
+Presets shuffle the order rather than replacing anything. A material study still gets your art style
+and your world — it just brings materials to the front and pushes silhouette back.
 
-**Single image** is the exception that reweights nothing, and it is how you ask for one picture
-instead of a sheet. It is offered for every kind, it takes the stack exactly as the entity describes
-it, and it emits one image — so the estimate beside Generate is the price of one. Every other preset
-emits the batch in the table above; the count is part of choosing the preset, not a separate switch.
+**Single image** is the odd one out: it shuffles nothing, and it is how you ask for one picture
+rather than a whole sheet. It is offered for everything, it takes your world exactly as written, and
+it makes one image — so the estimate beside Generate is the price of one. Every other preset makes
+the batch in the table above; how many you get is part of choosing the preset, not a separate
+setting.
 
 ## Seeds
 
-The seed control shows one of four states, and the wording is exact about what the *next* result
-will use: unlocked, locked, locked-and-re-rolled, or locked-with-the-grid-varying-it. **Lock seed**
-attaches a seed to the entity so re-rolls stay in family instead of producing a different character
-each time; **Re-roll**, **Use locked** and **Clear lock** do what they say. Every result records
-which of those cases produced it, so a concept's caption tells you whether it came from a locked
-seed, an explicit re-roll, a variant cell or a replay.
+A seed is the number that decides the random part of a picture. The control shows one of four
+states, and it is precise about what the *next* picture will use: unlocked, locked, locked but
+re-rolled, or locked with the grid varying it. **Lock seed** ties a seed to the page, so trying
+again gives you the same character rather than a different one; **Re-roll**, **Use locked** and
+**Clear lock** do what they say. Every picture records which of those it came from, so its caption
+tells you whether it was a locked seed, a deliberate re-roll, one cell of a grid, or a rerun.
 
 ## The variant grid
 
-Sweep exactly one axis across a batch and compare: **Vary seed**, **Vary fragment weight**, **Vary
-preset** or **Vary aspect**. You type the values, between two and sixteen of them, all
-distinct; varying a fragment weight also asks which layer. The footer states how many outputs that
-is and refuses clearly when a value is not supported by the provider. Presets with named views —
-Turnaround — cannot be varied, because their views are already the axis.
+Change exactly one thing across a batch and compare: **Vary seed**, **Vary fragment weight**, **Vary
+preset** or **Vary aspect**. You type in the values, between two and sixteen of them, all different;
+varying a strength also asks which layer. The footer tells you how many pictures that comes to, and
+says plainly when the service will not do one of them. Presets with named views — Turnaround —
+cannot be varied, because their views are already the thing that varies.
 
-## The job queue
+## Waiting your turn
 
-Generations run through a queue that holds three jobs at a time across the whole application —
-images, enhances, meshes, thumbnails and LoRA training all share it. The status bar shows the queue
-depth, the active model and the last generation time, and clicking the queue jumps to Forge.
+Everything Wobu asks a service for goes through one queue, three at a time across the whole app —
+pictures, enhances, 3D shapes, thumbnails and training all share it. The bottom bar shows how many
+are waiting, which model is in use and how long the last one took; click the queue to jump to Forge.
 
-While an image runs, its tile shows a progress bar, the provider's own status note, and a live
-preview on providers that stream one. **Cancel** stops it; a stalled provider or a slow NAS must
-never present as a frozen app.
+While a picture is being made, its tile shows a progress bar, whatever the service is saying, and a
+live preview if it offers one. **Cancel** stops it. A service that has stalled, or a slow network
+drive, must never look like a frozen app.
 
-A failure that cost nothing is retried automatically with a widening backoff. A failure that cost
-money is **not** retried behind your back: it is held, and it goes to the notification centre with
-what it cost, what the provider said, and where to go next. Cancelling is not a failure and is never
-reported as one.
+A failure that cost nothing is retried automatically, waiting a little longer each time. A failure
+that cost money is **not** retried behind your back — it is held, and sent to notifications with
+what it cost, what the service said, and where to go next. Cancelling something yourself is not a
+failure and is never reported as one.
 
 ## The Concepts tab
 
-Results land in **Concepts** on the entity they were generated for. A tile shows the model, the seed
-and where the seed came from; hovering shows the prompt. Opening one shows the whole receipt: the
-recorded request, the exact recorded stack, whether the world has drifted since, and **Replay
+Results land in **Concepts**, on the page you made them for. A tile shows the model, the seed and
+where that seed came from; hover it for the prompt. Open one and you get the whole record: what was
+asked for, exactly what went into it, whether your world has moved on since, and **Replay
 snapshot**.
 
 ### Pinning
 
-Pinning promotes a generated image to a reference on that entity — **Full reference** by default,
-though you can pin it as a palette, a silhouette or any other role. From then on it feeds back as
-conditioning for the next generation and, because references inherit, for everything downstream of
-that entity too. Wobu prints the consequence under the button before you press it, naming how many
-downstream entities will inherit it.
+Pinning turns a picture you made into a reference on that page — a **Full reference** unless you
+choose otherwise. From then on it feeds into the next picture and, because references are inherited,
+into everything below that page too. Wobu tells you the consequence before you press it, naming how
+many pages will inherit it.
 
-> **This is the flywheel** Iterate cheaply, promote deliberately. Generations are disposable;
-> pinning is a decision. Pin a good Vashk and every Vashk character afterwards starts from a
-> stronger place. It is the main tool for locking a look, and it is why the hundredth character is
-> easier than the first.
+> **This is the flywheel** Try things cheaply, pin them deliberately. Pictures are throwaway;
+> pinning is a decision. Pin a good Vashk and every Vashk character after it starts from a better
+> place. It is the main way to lock in a look, and it is why your hundredth character is easier than
+> your first.
 
 ### Deleting
 
-**Delete concept…** removes the result from Concepts and the asset library and deletes its images.
-Anything you pinned as a reference, or set as a cover, is kept: deleting a result you did not want
-is not a decision to undo one you did. The receipt is archived rather than erased, so what the
-generation cost still counts towards project spend.
+**Delete concept…** removes a result from Concepts and from your pictures, and deletes the images.
+Anything you had pinned as a reference, or set as a cover, stays: throwing away a result you did not
+want is not the same as undoing one you did. The record of it is kept rather than erased, so what it
+cost still counts towards what the world has cost you.
 
 ## Forge mode
 
-Forge takes the inspector's controls and promotes them to full width, with a large result grid. It
-is for when you are iterating hard on one subject and want to compare twenty variants at once rather
+Forge takes those same controls and gives them the whole window, with a big grid of results. It is
+for when you are hammering away at one subject and want to compare twenty attempts at once rather
 than squinting at a narrow column.
 
-- **Compare** up to four completed results side by side at full resolution.
-- **Compose a multi-entity scene** — a primary subject plus one to three participants, in prompt
-  order, with a scene direction and its own aspect. Art Style and World Canon shape a scene but
-  cannot be participants in one.
-- **Train an entity LoRA** from the full references you have pinned, when the selected provider
-  supports it. The card states how many valid references it has of how many it needs before the
-  button will do anything.
+- **Compare** up to four finished pictures side by side, full size.
+- **Put several characters in one scene** — a main subject plus one to three others, in order, with
+  a line of direction and its own shape. Art Style and World Canon shape a scene but cannot be in
+  one.
+- **Teach a model one character's look** from the full references you have pinned, if the service
+  you chose supports it. The card tells you how many usable references it has, of how many it needs,
+  before the button will do anything.
 
-## Cost and consent
+## What it costs
 
-Bring-your-own-key means every call is billed to you, so Wobu is built not to surprise you:
+Because everything runs on your own account, Wobu is built not to surprise you:
 
-- The Generate button shows an **estimated cost** for the batch on paid providers, and the panel
-  shows what has already been spent and what is still set aside.
-- A local ComfyUI provider shows **no cost at all**. That asymmetry is the point.
-- A **shared spend ceiling**, recorded in the project so it applies to everyone who opens it, with a
-  hard stop. A turnaround loop is exactly the kind of thing that runs two hundred images unattended.
-- Every generation record stores its provider, model and parameters — so actual spend is
-  reconstructable from the project folder itself, without a vendor dashboard.
+- The Generate button shows an **estimate** for the batch on paid services, and the panel shows what
+  you have already spent and what is still set aside.
+- Making pictures on your own machine with ComfyUI shows **no cost at all**. That difference is the
+  point.
+- A **spending limit** is saved in the world folder, so it applies to everyone who opens it, and it
+  stops things dead. A turnaround loop is exactly the sort of thing that quietly runs two hundred
+  pictures while you are making tea.
+- Every picture is saved with the service, model and settings that made it — so what a world cost
+  can be worked out from the folder itself, without logging into anybody's billing page.
 
-The estimate is an indicative output price. Input tokens and any optional search charges are not in
-it, and the panel says so.
+The estimate is a guide to the price of what comes out. What goes in, and any optional extras, are
+not in it, and the panel says so.
 
-> **Watermarking** Images generated through Google's models carry SynthID watermarking. Worth
-> knowing, since this is concept art headed into a production pipeline.
+> **A note on Google's watermarks** Pictures made through Google's models carry an invisible SynthID
+> watermark. Worth knowing, since this is concept art heading into real work.
 
-## Generation records
+## What gets saved
 
-Each generation writes one JSON file into the project folder, named by ULID and never modified:
+Each picture writes one small file into the world folder, named by a code and never changed
+afterwards:
 
 ```
 generations/2026-07/01ARZ3NDEKTSV4RRFFQ69G5FAV.json
 ```
 
-It holds the user prompt, the compiled prompt, the negative prompt, the model, parameters and seed,
-the output asset ids, and the influence snapshot. Because records are write-once and ULID-named, two
-people generating at the same time on a shared folder can never collide — they simply both appear.
+It holds what you asked for, the prompt that was sent, the "never draw this" list, the model, the
+settings, the seed, which pictures came out, and everything that went into it. Because these are
+written once and never touched again, two people generating at the same moment on a shared drive can
+never clash — both simply appear.

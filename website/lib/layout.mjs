@@ -114,9 +114,8 @@ function footer(rel) {
           <div class="footer-about">
             <p class="footer-brand">${mark()}<span class="wordmark">wobu</span></p>
             <p>
-              Wobu operates no servers. There is no account, no inference proxy, no telemetry and
-              no update check — all inference runs on your own machine or under your own provider
-              credentials.
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
             </p>
           </div>
           ${columns}
@@ -124,7 +123,7 @@ function footer(rel) {
         <p class="footer-legal">
           © ${site.year} ${escapeHtml(site.author)}. Wobu is free software under the
           <a href="${rel}legal/licence.html">MIT licence</a>. This site is built from the
-          <a href="${site.repo}" rel="noopener">Wobu repository</a>.
+          <a href="${site.repo}" rel="noopener">Wobu source code</a>.
         </p>
       </div>
     </footer>`

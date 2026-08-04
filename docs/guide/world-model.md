@@ -1,22 +1,23 @@
 # Entities and hierarchy
 
-Species, characters, settings, props, cultures, vehicles — and the Art Style and World Canon
-entities themselves — are all the same record type. They differ only in kind, which selects an icon,
-a colour, an influence layer, a set of description sections and some default relations.
+Species, characters, places, props, cultures, vehicles — and the Art Style and World Canon pages
+themselves — are all the same thing underneath. Wobu calls each one an **entity**, and they differ
+only in **kind**. A kind picks the icon, the colour, where it sits in a prompt, which sections its
+description has, and what it can be joined to.
 
-This is why there is exactly one editor to learn. It is also why adding "Factions" or "Technologies"
-later is a registry change rather than a new feature.
+That is why there is only one editor to learn. It is also why adding "Factions" or "Technologies"
+later is a small job rather than a whole new feature.
 
 ## The ten kinds
 
-The list of kinds lives in Wobu itself, and the interface never invents one that is not on it.
-`Nests` means the kind can be nested inside *itself* — a region inside a region. Nesting never
-crosses kinds; that is what links are for.
+Wobu never invents a kind that is not on this list. *Nests* means one can go inside another of the
+same kind — a region inside a region. Nesting never crosses kinds; joining things up across kinds is
+what links are for.
 
 | Kind | Nests | Description sections |
 | --- | --- | --- |
-| Art Style | singleton | Medium, Rendering, Line quality, Lighting model, Palette, Never |
-| World Canon | singleton | Era, Tone, Tech & magic level, Materials, Palette, Never |
+| Art Style | one per world | Medium, Rendering, Line quality, Lighting model, Palette, Never |
+| World Canon | one per world | Era, Tone, Tech & magic level, Materials, Palette, Never |
 | Species | yes | Silhouette, Anatomy, Materials, Palette, Signature details, Never |
 | Culture | yes | Costume, Ornament, Iconography, Weapon language, Materials, Palette, Never |
 | Setting | yes | Climate, Architecture, Ambient light, Wear & age, Materials, Palette, Never |
@@ -26,89 +27,91 @@ crosses kinds; that is what links are for.
 | Environment | no | Architecture, Ambient light, Climate, Materials, Palette, Signature details, Never |
 | Vehicle | no | Silhouette, Materials, Wear & age, Palette, Signature details, Never |
 
-Every kind has a **Never** section, because every kind can contribute to the negative prompt.
-*Palette*, *Signature details* and *Never* are lists; everything else is prose.
+Every kind has a **Never** section, because anything can have something it should never look like.
+*Palette*, *Signature details* and *Never* are lists; the rest is ordinary writing.
 
-The sections are what make Enhance useful. A structured description with a *Silhouette* field and a
-*Materials* field lets the prompt compiler pick the right fields for a full-body shot versus a
-material study. A blob of prose could not.
+Those sections are what make Enhance worth having. Because the description has a *Silhouette* field
+and a *Materials* field, Wobu can lean on the right ones for a full-body shot and different ones for
+a close study of fabric. A single lump of prose could not do that.
 
-Kinds also carry a few small **attributes** you write yourself rather than have enhanced: *Era*,
-*Scale*, *Biome* and *Primary material*, on the kinds where they mean something. They live under the
-raw notes, and a kind that declares none shows nothing.
+Kinds also carry a few short facts you fill in yourself rather than have written for you — *Era*,
+*Scale*, *Biome* and *Primary material*, on the kinds where they make sense. They sit under your
+notes, and a kind with none of them shows nothing.
 
-## Two kinds of relationship
+## Two ways things connect
 
-Wobu distinguishes **nesting** from **linking**, and the difference matters.
+Wobu keeps **nesting** and **linking** apart, and the difference matters.
 
-### Nesting — within a kind
+### Nesting — inside the same kind
 
-An entity's parent is always the same kind as itself. Ember Coast contains Cinder Bay contains the
-Kiln Quarter. Vashk has a sub-species. A lantern belongs to a prop set. Nesting is what the
-navigator tree draws, and you change it by dragging. Only Species, Culture, Setting and Prop nest;
+What something sits inside is always the same kind as itself. Ember Coast holds Cinder Bay holds the
+Kiln Quarter. Vashk has a sub-species. A lantern belongs to a set of props. This is the shape the
+list on the left draws, and you change it by dragging. Only Species, Culture, Setting and Prop nest;
 the other six are flat.
 
-A parent is treated as an implicit influence of full weight. The Kiln Quarter inherits everything
-Cinder Bay says, which inherits everything Ember Coast says.
+Whatever something sits inside counts fully towards it. The Kiln Quarter inherits everything Cinder
+Bay says, which inherits everything Ember Coast says.
 
 ### Linking — across kinds
 
-Links are the edges the influence engine walks. Each has a role and a weight, and can be disabled.
-You set them from the **Relations** tab, which also lists the links pointing *back* at this entity —
-which is how you find out what you are about to break before you edit a species.
+Links are how influence travels between different sorts of thing. Each one has a job and a strength,
+and can be switched off. You set them on the **Relations** tab, which also lists everything pointing
+back *at* this page — which is how you find out what you are about to break before you go editing a
+species.
 
 | Role | Shown as | Means |
 | --- | --- | --- |
-| `styled_by` | Styled by | Rendered in this art style. The Art Style entity is seeded into every stack anyway. |
-| `species_of` | Species | This character or creature is of that species. Feeds the Ancestry layer. |
+| `styled_by` | Styled by | Drawn in this art style. Art Style is included in everything anyway. |
+| `species_of` | Species | This character or creature is one of those. Feeds the Ancestry layer. |
 | `member_of` | Member of | Belongs to that culture, guild or faction. |
-| `located_in` | Located in | Lives in, or is found in, that setting. |
-| `related_to` | Related to | A lateral association — a rival, a matching prop, a sibling design. It contributes at the subject layer rather than getting a layer of its own. |
+| `located_in` | Located in | Lives in, or is found in, that place. |
+| `related_to` | Related to | A sideways connection — a rival, a matching prop, a sister design. It adds to the subject rather than getting a layer of its own. |
 
-## What an entity holds
+## What a page holds
 
 | | |
 | --- | --- |
-| Name and summary | The summary is one line, shown on tree rows and influence cards. |
-| Raw notes | Your Markdown. Never machine-written. |
-| Description | The structured, enhanced sections. Editable. |
+| Name and summary | The summary is one line, shown on rows in the list and on layer cards. |
+| Raw notes | Yours. Never machine-written. |
+| Description | The tidied sections from Enhance. You can edit them. |
 | Description state | `none · enhancing · fresh · edited · stale` |
-| Attributes | Kind-specific fields — era, scale, biome, primary material. |
-| Tags | Free-form, for filtering the asset library and the wiki export. |
-| Cover asset | The image shown on cards, on tree rows and in the inspector. |
-| References | Images attached to this entity, each with a role and a weight. |
-| Links | The influence edges above. |
-| Locked seed and LoRA | Generation state that belongs to this entity — see [Generating](generating.md). |
+| Attributes | The short facts for this kind — era, scale, biome, main material. |
+| Tags | Whatever you like, for filtering your pictures and the website export. |
+| Cover picture | The image shown on cards, on list rows and in the right-hand panel. |
+| References | Pictures attached here, each with a job and a strength. |
+| Links | The connections above. |
+| Locked seed and LoRA | Picture-making settings that belong to this page — see [Generating](generating.md). |
 
-### Description state, and staleness
+### Going stale
 
-A description goes **stale** when the raw notes changed, or when something upstream changed, since
-the last Enhance. Wobu shows a quiet dot and a re-enhance affordance — it never silently
-regenerates, because regenerating costs your money and might undo an edit you made by hand.
+A description goes **stale** when your notes changed, or when something above it changed, since the
+last time you enhanced. Wobu shows a quiet dot and offers to redo it — it never quietly redoes it
+itself, because that would spend your money and might throw away an edit you made by hand.
 
-**Edited by you** means you changed the machine's description yourself. That is fully supported;
-re-enhancing over it offers a diff and refuses to write until you say so explicitly.
+**Edited by you** means you changed the machine's description yourself. That is completely fine.
+Enhancing over it shows you a comparison first and refuses to write anything until you agree.
 
-## Creating and organising
+## Making and organising
 
-- **New entity** at the bottom of the navigator, the command palette, or right-click → **New**. You
-  pick a kind, a name and — for kinds that nest — an optional parent.
-- **Duplicate** copies notes, description and links. It is the fastest way to make the second of
-  anything. Singletons cannot be duplicated.
-- **Drag to re-parent**, within a kind. This changes what the entity inherits, so it will often mark
-  descendants stale. Dropping onto a group header moves an entity back to the top level — which is
-  always allowed, so a wrongly parented entity always has a way out.
-- **Delete** asks for confirmation and removes one Markdown file. **Its children are promoted to its
-  parent** rather than deleted with it, and links pointing at the deleted entity are stripped from
-  every other file. Generations that referenced it stay on disk — they are write-once history.
-- **Undo** covers all of this. It is session-only and never persisted: between quit and relaunch the
-  folder may have been edited in Obsidian, pulled, synced or restored, and replaying a week-old
-  inverse over that would not be undo. One caveat is stated out loud when you undo a delete — the
-  links that pointed at the entity were removed by the delete and do not come back.
+- **New entity** at the bottom of the list, from **Jump to…**, or right-click → **New**. You choose
+  a kind, a name, and — for kinds that nest — what it goes inside.
+- **Duplicate** copies the notes, description and links. It is the quickest way to make the second
+  of anything. Art Style and World Canon cannot be duplicated.
+- **Drag to move**, within a kind. This changes what a page inherits, so it will often mark things
+  below it as stale. Dropping onto a group heading puts it back at the top level — always allowed,
+  so anything filed in the wrong place always has a way out.
+- **Delete** asks first, then removes one text file. **Anything that was inside it moves up** rather
+  than being deleted too, and links pointing at it are cleaned out of the other files. Pictures made
+  from it stay where they are — that history is never rewritten.
+- **Undo** covers all of this. It only lasts for as long as the app is open, on purpose: between one
+  session and the next the folder may have been edited elsewhere, synced or restored from a backup,
+  and replaying a week-old undo over that would not be undo. One thing is said out loud when you
+  undo a delete — the links that pointed at it were removed by the delete, and they do not come
+  back.
 
-> **Getting the altitude right** The single most common mistake is writing at the wrong level. If a
-> detail is true of every Vashk, it belongs on the species. If it is true only of guild members, it
-> belongs on the culture. If it is true only of Kael, it belongs on Kael.
+> **Getting the level right** The single most common mistake is writing something in the wrong
+> place. If it is true of every Vashk, it belongs on the species. If it is true only of guild
+> members, it belongs on the culture. If it is true only of Kael, it belongs on Kael.
 >
-> Put it too low and you repeat yourself and drift. Put it too high and it contaminates everything.
-> When unsure, ask: *would this be wrong for a sibling entity?* If yes, it is too high.
+> Too low and you repeat yourself and drift. Too high and it leaks into everything. When you are not
+> sure, ask: *would this be wrong for the one next to it?* If yes, it is too high.

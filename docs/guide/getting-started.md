@@ -1,45 +1,47 @@
 # Your first project
 
-Fifteen minutes from an empty folder to a world tree that produces consistent images. The order
-below is deliberate: breadth before depth, style before subject.
+Fifteen minutes, from an empty folder to a world that makes pictures which actually look like each
+other. The order below matters: broad strokes before detail, look before subject.
 
 ## Before anything else
 
-On first run Wobu shows two documents — the terms of use and the privacy policy — read from the same
-files the installer put beside the application. Agreeing to them is the one thing in Wobu you cannot
-skip; the buttons are **Quit without agreeing** and **I agree — continue**.
+The first time you run Wobu it shows you two documents — the terms of use and the privacy policy —
+read from the files that came with the app. Agreeing to them is the one thing you cannot skip. The
+buttons are **Quit without agreeing** and **I agree — continue**.
 
-After that comes a short introduction: what the four modes are, opening or creating a project, your
-keys, and your first concept. **Skip for now** ends it at any point, and it never asks again unless
-you run it from the launcher's **Show the introduction** button or from Settings → Introduction.
+Then there is a short tour: what the four screens are, opening or making a world, your keys, and
+your first picture. **Skip for now** ends it whenever you like, and it never nags you again unless
+you ask for it from the opening screen's **Show the introduction** button or Settings →
+Introduction.
 
-## Creating a project
+## Making a world
 
-Wobu opens on the **launcher** — recent projects as cards, plus three actions: **Accept ticket…**,
-**Open folder…** and **New project**. There is no global library and no sign-in; a project is just a
-directory you choose.
+Wobu opens on the **launcher** — your recent worlds as cards, plus three buttons: **Accept
+ticket…**, **Open folder…** and **New project**. There is no library to manage and nothing to sign
+in to. A world is simply a folder you picked.
 
-1. **Pick a location.** Anywhere you like — a local disk, a NAS, a synced folder. If several people
-   will work on this world, put it on the share now rather than moving it later.
-2. **Name it.** Wobu creates a self-contained folder at that location: notes, images, generation
-   receipts, all of it inside.
-3. **Wait for the first open.** A brand new project opens instantly. Opening an existing world for
-   the first time reads every file to build the local search index, showing `Reading n of m files`
-   and a **Cancel** button. Subsequent opens re-read only what changed.
+1. **Choose where it goes.** Anywhere: your disk, a network drive, a synced folder. If other people
+   will be working on this world too, put it on the shared drive now rather than moving it later.
+2. **Give it a name.** Wobu makes a self-contained folder there — notes, pictures, records of what
+   you made, all inside it.
+3. **Wait for the first open.** A brand new world opens instantly. An existing one has to be read
+   through once so search works, and it shows you `Reading n of m files` with a **Cancel** button.
+   After that it only re-reads what changed.
 
-> **Where things live** Everything canonical is in the project folder. The search index is *not* —
-> it lives in your local application data, keyed by project ID, because SQLite over SMB or NFS
-> corrupts. Delete the search index and nothing is lost; the next open just takes a little longer.
-> Full layout in the [reference](reference.md).
+> **Where your stuff lives** Everything that matters is in the world folder. The search index is
+> not — it sits in Wobu's own application folder, because that sort of file gets corrupted on
+> network drives. Delete it and you lose nothing; the next open just takes a bit longer. Full
+> layout in the [reference](reference.md).
 
-## Write the Art Style entity first
+## Write the Art Style page first
 
-Two entities exist in every project from the moment it is created, pinned to the top of the
-navigator above the rule: **Art Style** and **World Canon**. They are pinned because they are the
-roots of every influence stack and you should never have to hunt for them.
+Two pages exist in every world from the moment you make it, pinned to the top of the list: **Art
+Style** and **World Canon**. They are pinned there because everything you ever make is built on
+them, and you should never have to go looking.
 
-Open **Art Style** and write, in the raw notes column, how your world should *look* — not what is in
-it. Medium, rendering, line quality, lighting, palette discipline, and what to never do:
+Open **Art Style** and write, in the notes column on the left, how your world should *look* — not
+what is in it. The medium, the brushwork, the lighting, the colours you allow, and what should never
+happen:
 
 ```
 painterly, heavy brush texture, visible edges
@@ -49,13 +51,13 @@ palette stays muted — ash greys, ember orange, one teal accent
 never: neon, chrome, lens flare, symmetrical hero poses
 ```
 
-This is the layer that touches every single image you will ever make in this project. Fifteen
-minutes here is worth more than an hour anywhere else.
+This page touches every single picture you will ever make here. Fifteen minutes spent on it is
+worth more than an hour spent anywhere else.
 
 ### Then World Canon
 
-Same idea, different axis: era, tone, technology and magic level, the materials that exist, and the
-things that must never appear. Where Art Style governs rendering, World Canon governs *fact*.
+Same idea, different question. Not how it looks — what is *true*. The era, the mood, how advanced
+things are, whether there is magic, what materials exist, and what must never turn up:
 
 ```
 late iron age, post-eruption, forty years after the ash fall
@@ -65,54 +67,54 @@ everything is scavenged, repaired, mismatched
 never: firearms, printed cloth, glass windows
 ```
 
-## Build breadth before depth
+## Broad strokes before detail
 
-The instinct is to jump straight to your favourite character. Resist it for ten more minutes. Add
-the layers *above* that character first, because a character entity with nothing above it is just a
-prompt with extra steps.
+The temptation is to leap straight to your favourite character. Hold off for ten more minutes and
+add the layers *above* them first — a character with nothing above them is just a prompt with extra
+clicking.
 
-1. **One species.** Silhouette and anatomy — the things every member shares. **New entity** at the
-   bottom of the navigator opens the sheet; pick *Species* and name it.
-2. **One culture.** Costume, ornament, iconography, weapon language. Link it to the species it
-   belongs to from the **Relations** tab.
-3. **One setting.** Climate, architecture, ambient light, wear. Settings nest — region, city,
-   district — so start at whatever scale you actually know.
-4. **Now your character.** Give it a species, a culture and a home, and watch the *inherits* line
-   appear under the name.
+1. **One species.** Shape and build: the things every one of them shares. **New entity** at the
+   bottom of the list; pick *Species* and name it.
+2. **One culture.** Clothing, jewellery, symbols, the look of their weapons. Join it to the species
+   it belongs to from the **Relations** tab.
+3. **One place.** Weather, buildings, light, wear and tear. Places sit inside places — region, city,
+   district — so start at whatever size you actually know something about.
+4. **Now your character.** Give them a species, a culture and a home, and watch the *inherits* line
+   appear under their name.
 
-By this point the inspector on the right shows a stack of five or six layers, and the compiled
-prompt beneath it is already several hundred words you never had to type.
+By now the panel on the right shows a stack of five or six layers, and the prompt underneath it is
+already several hundred words you never had to type.
 
 ## Enhance, then generate
 
-1. **Add a key.** Settings → Providers and models. Enhance needs a text provider; Generate needs an
-   image provider. They can be different vendors — see [Providers and keys](providers.md).
-2. **Enhance each entity** from the top down. Your rough notes become a structured description —
-   *Silhouette, Anatomy, Materials, Palette, Signature details, Never* — streaming into the
-   right-hand column. **Nothing is written until you accept it**: you get a section-by-section
-   review with **Keep current** and **Use new**, then **Accept selected** or **Accept all**. Enhance
-   the Art Style entity first, then World Canon, then the species, then down the tree.
-3. **Check the compiled prompt** in the inspector. Turn on **Show sources** and every fragment is
-   tinted by the layer that produced it. If something reads wrong, you now know exactly which entity
-   to go and fix.
-4. **Generate.** Pick an output preset and one of the aspects the selected provider offers, check
-   the negotiated pixel dimensions beside the control, and press **Generate**. Results land on the
-   **Concepts** tab of the entity you generated for.
-5. **Pin the one that is right.** Pinning promotes a generation to a reference image on that entity
-   — which then influences everything downstream of it. That is the flywheel; the world gets more
-   consistent every time you use it.
+1. **Add a key.** Settings → Providers and models. Enhance needs a text service; Generate needs an
+   image one. They can be different companies — see [Providers and keys](providers.md).
+2. **Enhance each page, working downwards.** Your rough notes come back as a tidy description —
+   *Silhouette, Anatomy, Materials, Palette, Signature details, Never* — appearing in the right-hand
+   column as it is written. **Nothing is saved until you accept it**: you get a section-by-section
+   comparison with **Keep current** and **Use new**, then **Accept selected** or **Accept all**. Do
+   Art Style first, then World Canon, then the species, then down the tree.
+3. **Read the prompt** in the panel on the right. Turn on **Show sources** and every phrase is
+   tinted by the page that produced it. If something reads wrong, you now know exactly where to go
+   and fix it.
+4. **Generate.** Pick what sort of sheet you want, pick a shape, glance at the pixel size shown
+   beside it, and press **Generate**. Results land on the **Concepts** tab of whoever you generated
+   for.
+5. **Pin the one that is right.** Pinning turns a result into a reference picture on that page —
+   which then feeds into everything below it. That is the flywheel. Your world gets more consistent
+   every time you use it.
 
-> **A note on cost** Everything is billed to your own provider account, so the Generate button shows
-> an estimated cost before a paid batch runs, and a project can carry a spend ceiling with a hard
-> stop. A local ComfyUI provider shows no cost at all — that asymmetry is intentional.
+> **About money** Everything is billed to your own account, so the Generate button shows an estimate
+> before a paid batch runs, and a world can carry a spending limit that stops it dead. Making
+> pictures on your own machine with ComfyUI shows no cost at all — that difference is deliberate.
 
 ## Habits that pay off
 
 | | |
 | --- | --- |
-| Write at the right altitude | If a fact is true of every member of a species, it belongs on the species, not repeated on nine characters. Repetition is the thing Wobu exists to delete. |
-| Keep raw notes messy | They are input, not output. Fragments and contradictions are fine — Enhance is what makes them presentable, and it keeps your original. |
-| Use *Never* lists | They compile into the negative prompt. "No modern firearms" at world level saves you forty corrections later. |
-| Re-enhance when things go stale | Change an entity's notes and its descendants pick up a quiet stale dot. Nothing regenerates behind your back — you decide when to refresh. |
-| Promote deliberately | Generations are disposable by default. Pinning is the act that changes the world, and it should feel like a decision. |
-| Star what you are working on | The star on a navigator row puts it in **Favourites** at the top of the tree. It is per-machine and changes nothing on disk. |
+| Write things at the right level | If it is true of every member of a species, it belongs on the species — not repeated on nine characters. Saying things twice is exactly what Wobu is here to stop. |
+| Keep your notes messy | They are raw material, not the finished thing. Fragments and contradictions are fine — Enhance is what tidies them, and it keeps your original. |
+| Use *Never* lists | They become the "do not draw this" half of the prompt. "No modern firearms" written once at world level saves you forty corrections later. |
+| Re-enhance when things go stale | Change a page and everything below it quietly picks up a dot. Nothing is redone behind your back — you choose when. |
+| Pin deliberately | Pictures are throwaway by default. Pinning is the thing that changes your world, and it should feel like a decision. |
+| Star what you are working on | The star on a row puts it in **Favourites** at the top of the list. It is just for you, on this computer, and changes nothing in the folder. |

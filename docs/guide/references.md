@@ -1,114 +1,112 @@
 # References and assets
 
-Images are first-class context, not decoration. A reference carries a role, and the role is what
-tells the compiler whether it becomes style conditioning, structure conditioning, a colour pass — or
-something only you ever see.
+Pictures are part of the description, not decoration. Every reference you add has a **job**, and
+that job decides whether it steers the style, holds the shape, sets the colours — or is only ever
+seen by you.
 
 ## Adding references
 
-The **References** tab on any entity is a grid, headed *Reference board*. Four ways in, all of which
-attach to the entity you are looking at:
+The **References** tab on any page is a grid, headed *Reference board*. Four ways in, all of which
+attach to the page you are looking at:
 
 - **Add images…** opens a file picker (PNG, JPEG, GIF or WebP).
 - **Drag files in** from your file manager.
 - **Paste** from the clipboard.
-- **Pin a generated image** from the Concepts tab.
+- **Pin a picture you made** from the Concepts tab.
 
-Images are hashed and stored inside the project folder, so two people importing the same reference
-produce the same file and nothing conflicts. An import you already have reports `Already present ·
-attached` rather than making a second copy. Large drops import one at a time on purpose: every
-attachment is a guarded write to the same Markdown file, and running them in parallel would turn a
-successful forty-file drop into conflicts Wobu created itself.
+Pictures are filed by their contents rather than their filename, inside the world folder, so two
+people adding the same reference end up with the same single file and nothing clashes. Add one you
+already have and it says `Already present · attached` instead of making a second copy. Dropping a
+big pile in brings them one at a time on purpose: each one is a careful write to the same file, and
+doing them all at once would turn a perfectly good forty-file drop into a mess of Wobu's own making.
 
-Each tile then carries a role, a weight from 0 to 1, reorder arrows, a mute toggle, **Set cover**
+Each tile then has a job, a strength from 0 to 1, arrows to reorder it, a mute switch, **Set cover**
 and **Remove**.
 
-## Roles
+## Jobs
 
-The role is the important part — it decides where the image is routed at generation time. A new
-import starts as **Full reference**.
+The job is the important part — it decides what happens to the picture when you generate. Anything
+you add starts as **Full reference**.
 
-| Role | Routed to | Use it for |
+| Job | Used as | Use it for |
 | --- | --- | --- |
-| Silhouette | Structure conditioning | Body plan and outline — the shape you want held. |
-| Palette | Colour conditioning | A swatch or a painting whose colour relationships you want. |
-| Material | Style conditioning | Surface, weave, glaze, corrosion, wear. |
-| Mood | Nothing — human only | Atmosphere you want in your head, not in the model's. |
-| Pose | Structure conditioning | A stance or gesture to copy. Needs a provider that accepts structure references. |
-| Costume | Style conditioning | Garment cut, layering, ornament. |
-| Full reference | Character or object reference | "This is what it looks like." What a pinned generation becomes. |
+| Silhouette | The shape to hold | Body plan and outline — the shape you want kept. |
+| Palette | The colours | A swatch, or a painting whose colours you want. |
+| Material | The style | Surface, weave, glaze, rust, wear. |
+| Mood | Nothing — your eyes only | Atmosphere you want in your head, not in the model's. |
+| Pose | The shape to hold | A stance or gesture to copy. Needs a service that takes shape references. |
+| Costume | The style | Cut, layering, ornament. |
+| Full reference | "This is what it looks like" | What a picture you pinned becomes. |
 
-A single image can hold two roles on the same entity — the same painting as both a palette and a
-full reference — because a reference is identified by the pair of image and role. A role already
-taken on that entity is shown as `taken` rather than hidden.
+One picture can do two jobs on the same page — the same painting as both a palette and a full
+reference — because a reference is the picture *and* the job together. A job already taken on that
+page is shown as `taken` rather than hidden.
 
-> **Mood is deliberately inert** A `mood` reference is never sent to a provider, and there is a test
-> in the engine asserting it is the only role that never leaves the machine. It exists so you can
-> keep a Bruegel and a photo of a rained-on foundry on the entity without them leaking into every
-> render. Not everything on a mood board should be conditioning.
+> **Mood pictures never leave your computer** A *mood* reference is never sent anywhere, and there
+> is a test in Wobu making sure it stays that way. It is there so you can keep a Bruegel and a photo
+> of a rained-on foundry pinned to a page without them bleeding into every picture. Not everything
+> on a mood board is meant to be copied.
 
-## Where references sit in the hierarchy
+## Where references sit
 
-References inherit exactly like text does. A material swatch on your *Culture* entity reaches every
-character in that culture. A silhouette reference on a *Species* reaches every member. Put an image
-at the altitude where it is true, for the same reasons as [notes](world-model.md).
+References are inherited exactly like words are. A fabric swatch on a *Culture* page reaches every
+character in that culture. A silhouette on a *Species* reaches every one of them. Put a picture at
+the level where it is true, for the same reasons as [your notes](world-model.md).
 
-### The image budget bites harder than the text budget
+### There is less room for pictures than for words
 
-Providers cap how many reference images they accept, and they cap them *by bucket*. Wobu's three
-buckets are **objects**, **characters** and **style refs**, and a five-layer stack can easily offer
-more style references than a model will take. So images are budgeted per bucket against whatever the
-selected provider declares, highest weight first, and the strip across the top of the influence
-stack says so:
+Services cap how many reference pictures they will take, and they cap them by *type*. Wobu's three
+types are **objects**, **characters** and **style**, and a five-layer stack can easily offer more
+style references than a model will accept. So pictures are counted per type against whatever the
+chosen service allows, strongest first, and the strip across the top of the panel says where you are:
 
 ```
 3/3 style refs · 2 dropped
 ```
 
-Silently discarding a reference you deliberately attached would be the worst thing this engine could
-do, so it never does. If you need a dropped reference, raise its weight or mute a layer that is
-outbidding it.
+Quietly binning a picture you deliberately attached would be the worst thing Wobu could do, so it
+never does. If you need one that got dropped, make it stronger or mute a layer that is outbidding
+it.
 
-> **Capability differences are visible, not hidden** A provider that accepts no structure references
-> shows yours as downgraded to mood-board-only rather than pretending to use them. The shipped
-> ComfyUI workflows currently take no image input at all, so on a local provider *every* reference
-> is reported as not sent — which is worth knowing before you spend an afternoon attaching them.
+> **You always see what a service cannot do** A service that takes no shape references shows yours
+> as downgraded to mood-board-only rather than pretending to use them. The ComfyUI setups that ship
+> with Wobu currently take no pictures at all, so on your own machine *every* reference is reported
+> as not sent — worth knowing before you spend an afternoon attaching them.
 
 ## Assets mode
 
-Every image in the project in one filterable grid — imported references and generated results
-together. Filter by kind (reference, generated, upload), by role, by entity, or by the tags of the
-entities an image is linked to, and toggle **Unused** to see every image nothing points at.
+Every picture in the world in one filterable grid — references you added and pictures you made,
+together. Filter by sort (reference, generated, upload), by job, by page, or by the tags on the
+pages a picture is attached to, and switch on **Unused** to find every picture nothing points at.
 
-Selecting a tile shows its dimensions, size, id, and every entity that uses it with each role and
-weight. Click the preview at the top of that panel to open the original full size; Escape, or the
-close button, puts you back in the grid. From there you can **attach it as a reference** to another
-entity — which is the point of
-the mode: it is where an image already in the project gets reused, rather than where images come in.
-Importing happens on an entity's References tab.
+Click a tile and you get its size, its dimensions, its id, and every page using it with its job and
+strength. Click the preview at the top of that panel to see the original full size; Escape, or the
+close button, puts you back in the grid. From there you can **attach it to another page** — which is
+the point of this screen. It is where pictures already in your world get reused, not where new ones
+come in. Adding new ones happens on a page's References tab.
 
-Deletion is offered only for unused images, and it is permanent: it removes the original and its
-thumbnail. A generated image's receipt survives and shows the output as missing, because the receipt
-is the record of what you spent.
+Deleting is only offered for pictures nothing is using, and it is permanent — the original and its
+thumbnail both go. The record of a generated picture stays, showing the image as missing, because
+that record is what you spent.
 
-## How images are stored
+## How pictures are stored
 
-Content-addressed by hash, sharded two levels deep, inside the project folder:
+Filed by a fingerprint of their contents, two folders deep, inside the world folder:
 
 ```
 assets/
-├── originals/a3/a3f9…c1.png     the file you imported or generated
-├── thumbs/a3/a3f9…c1.webp       generated thumbnail
-├── loras/7d/7d42…9e.safetensors trained entity weights
-└── meshes/7b/7b21…04.glb        concept 3D output
+├── originals/a3/a3f9…c1.png     the picture you added or made
+├── thumbs/a3/a3f9…c1.webp       its thumbnail
+├── loras/7d/7d42…9e.safetensors a trained look
+└── meshes/7b/7b21…04.glb        a 3D shape
 ```
 
-Two consequences worth knowing. **Deduplication is free** — importing the same image twice costs one
-file. And **asset writes can never conflict**, because the same bytes always land at the same path,
-which is what makes shared project folders safe. The file extension comes from what the bytes
-actually are, not from what the file you dropped was called.
+Two things follow from that. **Duplicates cost nothing** — adding the same picture twice makes one
+file. And **pictures can never clash on a shared drive**, because the same picture always lands in
+the same place, which is what makes sharing a world folder safe. The file extension comes from what
+the file actually is, not what it happened to be called.
 
-Thumbnails live in the project folder rather than in local cache on purpose: the first person to
-import an image pays the cost of generating them and everyone else on the share gets them free.
-Grids and navigator rows bind to thumbnails only; full-resolution originals are fetched one at a
-time when you actually open an image.
+Thumbnails live in the world folder rather than on your own machine on purpose: whoever adds a
+picture first pays for making them, and everybody else on the shared drive gets them free. Grids and
+list rows only ever load thumbnails; the full-size original is fetched one at a time, when you
+actually open one.

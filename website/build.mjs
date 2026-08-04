@@ -43,22 +43,20 @@ const LEGAL_DOCUMENTS = [
     slug: 'privacy-policy',
     source: 'docs/legal/privacy-policy.md',
     label: 'Privacy policy',
-    summary: `Every outbound destination and what is sent to it, what stays on disk and where, and
-      how credentials are held in the operating-system keychain.`,
+    summary: `Everywhere your work can possibly go, and what is sent when it does. What stays on
+      your disk, where it sits, and how your keys are kept.`,
     description:
-      "Wobu's privacy policy: no servers, no account, no telemetry, and an exact account of the " +
-      'only requests the application ever makes.',
+      "Wobu's privacy policy: no servers, no account, no tracking, and a plain list of the only " +
+      'times the app talks to anything at all.',
   },
   {
     slug: 'terms',
     source: 'docs/legal/terms.md',
-    label: 'Terms of use and EULA',
-    summary: `The MIT grant restated for a downloaded binary, the absence of warranty, and how
-      provider terms and generated-content ownership pass through to your own agreement with each
-      provider.`,
+    label: 'Terms of use',
+    summary: `What you are allowed to do with Wobu, the fact that it comes with no warranty, and
+      why who owns a generated picture is between you and the AI service, not us.`,
     description:
-      "Wobu's terms of use and end user licence agreement, restating the MIT grant for a " +
-      'downloaded binary.',
+      "Wobu's terms of use: what you may do with the app, and what it does not promise you.",
   },
 ]
 
@@ -113,7 +111,7 @@ async function buildLegal() {
   const licenceDocument = {
     slug: 'licence',
     label: 'MIT licence',
-    summary: 'The licence Wobu itself is released under, in full.',
+    summary: 'The licence Wobu is given to you under, in full. Short, and unusually readable.',
     description: 'The MIT licence Wobu is released under.',
   }
   documents.push({ ...licenceDocument, available: licence !== null })
@@ -197,9 +195,9 @@ ${body}
           <hr />
           ${guideSteps(ordered[index - 1], ordered[index + 1])}
           <p class="doc-source">
-            This page is rendered from
-            <a href="${GUIDE_BLOB_DIR}/${entry.slug}.md" rel="noopener">its source in the
-            repository</a> — the same file the application reads for its built-in guide.
+            This page comes from
+            <a href="${GUIDE_BLOB_DIR}/${entry.slug}.md" rel="noopener">a file in the source
+            code</a> — the very same one the app shows you in its own built-in guide.
           </p>
         </article>
       </div>`

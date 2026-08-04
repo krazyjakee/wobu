@@ -1,78 +1,81 @@
 # Wobu
 
-Wobu is a local-first world building tool for producing concept art and concept 3D art. You author
-your world once — art style, canon, species, cultures, places — and every image you generate
-inherits that context automatically.
+Wobu is a world building app for making concept art. You describe your world once — how it looks,
+what is true in it, who lives there — and every picture you make from then on already knows all of
+it. Everything stays on your own computer.
 
-## The idea in one paragraph
+## The idea, in one paragraph
 
-Every image tool treats a prompt as a blank page. But world building is not a sequence of unrelated
-prompts — it is a **tree**. A character belongs to a species, which belongs to a world, which is
-rendered in a house art style. Today that context lives in your head and gets retyped, badly and
-differently, into every prompt. That is exactly where visual consistency dies.
+Most image tools hand you a blank box and expect you to fill it in again every single time. But a
+world is not a pile of unrelated prompts. It is a **family tree**. A character comes from a people,
+that people lives in a world, and the whole thing is drawn in one look. Normally all of that lives
+in your head, and you retype a rough version of it into every prompt — a little differently each
+time. That is exactly where consistency falls apart.
 
-Wobu asks you to write it down once, at the level where it belongs. Style on the Art Style entity.
-Anatomy on the species. Costume on the culture. Personality on the character. When you press
-**Generate**, the prompt is compiled from that whole chain — and you can see exactly which layer
-contributed which words.
+Wobu asks you to write it down once, in the place it belongs. How things are drawn goes on Art
+Style. What is true goes on World Canon. Build and anatomy go on the species. Clothing goes on the
+culture. Only what makes someone *them* goes on the character. When you press **Generate**, Wobu
+writes the prompt using that whole chain — and shows you which page every phrase came from.
 
 ## Start here
 
 | Page | What it covers |
 | --- | --- |
-| [Your first project](getting-started.md) | From an empty folder to a world tree that produces consistent images. |
-| [The workspace](workspace.md) | The rail, the navigator, the editor and the inspector — where everything lives. |
-| [Entities and hierarchy](world-model.md) | The ten entity kinds, how they nest, and how influence flows between them. |
-| [The influence stack](influence.md) | How your notes become a prompt, and how to steer it without rewriting the world. |
+| [Your first project](getting-started.md) | From an empty folder to a world that makes pictures which look like each other. |
+| [The workspace](workspace.md) | A tour of the screen, and what each part of it is for. |
+| [Entities and hierarchy](world-model.md) | The ten sorts of page, what goes inside what, and how they are joined up. |
+| [The influence stack](influence.md) | How your notes turn into a prompt, and how to steer it without rewriting anything. |
 
-The first time you open Wobu it walks you through this itself: two legal documents to accept, then a
-short introduction to the four modes, opening a project, and your keys. You can skip the
-introduction at any point and run it again later from the launcher or from Settings.
+The first time you open Wobu it walks you through some of this itself: two documents to agree to,
+then a quick look around, opening a world, and adding your keys. You can skip the tour whenever you
+like and run it again later from the opening screen or from Settings.
 
 ## What makes Wobu different
 
-### The hierarchy is the product
+### The world is the point, not the pictures
 
-Not the image grid. The value compounds as the tree grows — the hundredth character is cheaper and
-more consistent than the first, because by then the world already knows what your species look like,
-how your cultures dress, and what light your coast gets.
+It gets easier the more you put in. Your hundredth character takes less work than your first,
+because by then Wobu already knows what your people look like, how that culture dresses, and what
+the light is like on that coast.
 
-### Notes in, canon out
+### Scribbled notes in, proper description out
 
-You write rough, messy, half-sentence notes. **Enhance** turns them into a structured canonical
-description. Your messy notes are never overwritten — they remain the source. Nothing Enhance
-produces is written to disk until you have read it and accepted it, section by section if you like.
+You write roughly — half sentences, contradictions, whatever comes out. **Enhance** turns that into
+a clear, organised description. Your own scribbles are never overwritten; they stay exactly as you
+left them. And nothing Enhance writes is saved until you have read it and said yes, section by
+section if you like.
 
-### Nothing is hidden
+### Nothing is hidden from you
 
-The compiled prompt is always visible and always attributed. There is no invisible prompt-magic, no
-secret quality suffix, no reordering you cannot see. If an image came out wrong, you can point at
-the layer that caused it.
+The prompt is always on screen, and every phrase in it is labelled with where it came from. There
+is no secret wording bolted on the end and no shuffling behind your back. If a picture comes out
+wrong, you can see which page to go and fix.
 
-### Images are context, not decoration
+### Pictures count as description too
 
-A reference image carries a **role** — silhouette, palette, material, mood, pose, costume or full
-reference — so the compiler knows whether to route it to a style adapter, a structure adapter, or
-just your own mood board.
+Every reference picture you add gets a **job** — a shape to keep, a colour palette, a fabric, a
+mood, a pose, an outfit, or "this is what it looks like". Wobu uses each one the way you meant it
+instead of throwing them all in together.
 
-### Local first, and yours
+### It is yours, and it stays put
 
-A project is a folder on disk. Notes are Markdown. Images are files. It works offline against a
-local GPU, it opens in Obsidian, it versions in git, and it survives Wobu being uninstalled. This
-guide is inside the application, so it works with no network at all.
+A world is a folder on your disk. Notes are plain text. Pictures are ordinary image files. It works
+offline against your own graphics card, it opens in other apps, it backs up like anything else, and
+it is still there and still readable if you uninstall Wobu. This guide is inside the app too, so it
+works with no internet at all.
 
-> **Bring your own key** Wobu operates no inference of its own and no proxy. Nothing is
-> pre-configured and there is no account: you supply credentials you obtained yourself, and Wobu
-> talks to those providers directly on your behalf. Keys live in your operating system's keychain
-> and never enter the project folder. Until you add one, Enhance and Generate are switched off and
-> say why — everything else in the app works. See [Providers and keys](providers.md).
+> **You bring your own AI account** Wobu does no AI work of its own and sells you nothing. You paste
+> in a key you got yourself, and Wobu talks to that service directly on your behalf. There is no
+> account to make here. Your keys live in your computer's password store and never go anywhere near
+> the world folder. Until you add one, Enhance and Generate are switched off and say why —
+> everything else works fine. See [Providers and keys](providers.md).
 
 ## What Wobu is not
 
 | | |
 | --- | --- |
-| Not a finishing pipeline | Output is concept art. The 3D tab reconstructs blockout meshes from a turnaround and exports them. Neither is a production asset. |
-| Not a wiki or a novel-writing app | Notes exist to drive images. If a fact cannot shape a render, it does not need to live here. (There is a static wiki *export*, for showing the world to other people.) |
-| Not a node-graph tool | ComfyUI already exists, and Wobu can drive it. Wobu's surface is a document editor, not a canvas of wires. |
-| Not real-time multiplayer | Several people can share one project folder, and copies can sync peer-to-peer. But there is no co-editing cursor and no server. See [Sharing a project](collaboration.md). |
-| Not a telemetry client | Wobu reports nothing, anywhere, ever. The only outbound requests are the ones you cause by pressing Enhance or Generate. |
+| Not a finishing tool | What comes out is concept art. The 3D tab makes rough shapes from a turnaround and exports them. Neither is ready to put in a game. |
+| Not a wiki or a writing app | Notes are here to shape pictures. If a fact could never change what gets drawn, it does not need to live here. (There *is* a website export, for showing your world to other people.) |
+| Not a node graph | ComfyUI already does that beautifully, and Wobu can drive it. Wobu feels like a document, not a tangle of wires. |
+| Not real-time collaboration | Several people can share one world folder, and two copies can catch each other up. But there are no live cursors and no server. See [Sharing a project](collaboration.md). |
+| Not watching you | Wobu reports nothing, to anyone, ever. The only time it talks to the outside world is when you press Enhance or Generate. |

@@ -1,12 +1,12 @@
 # Notes and Enhance
 
-You write rough. Enhance turns rough into canon. The two live side by side and never overwrite each
-other — left is yours, right is the machine's.
+You write roughly. Enhance turns rough into something usable. The two sit side by side and never
+write over each other — left is yours, right is the machine's.
 
-## The raw notes column
+## Your notes, on the left
 
-Plain Markdown, autosaved as you type. This column is **never** machine-written. Nothing Wobu does
-will edit it, reorder it, or tidy it up, which means you can write badly in it on purpose:
+Plain text, saved as you type. This column is **never** written to by Wobu. Nothing the app does
+will edit it, reorder it or tidy it up, which means you are free to write badly in it on purpose:
 
 ```
 kael — ex ember guild, thrown out not left
@@ -17,49 +17,50 @@ carries the lantern everywhere. never lights it.
 tired. not brooding-tired. actually-tired.
 ```
 
-Fragments, contradictions and half-thoughts are fine. This is input.
+Half-thoughts, contradictions, single words. All fine. This is raw material.
 
-### Autosave
+### Saving
 
-Wobu saves on a debounce — half a second by default, tunable in Settings → Editor — and on blur. The
-column header shows the state: `unsaved…`, `saving…`, `saved`, or `waiting for the share…` when a
-network folder has gone away and the save is being held rather than lost. If the project sits on a
-slow share, nudging the delay up reduces write chatter.
+Wobu saves shortly after you stop typing — half a second by default, adjustable in Settings →
+Editor — and whenever you click away. The column header tells you where it is up to: `unsaved…`,
+`saving…`, `saved`, or `waiting for the share…` when a network drive has gone quiet and your save is
+being held rather than thrown away. On a slow shared drive, nudging that delay up means fewer
+writes.
 
 ## What Enhance does
 
-The violet **Enhance** button in the editor header, or its keyboard shortcut. It reads:
+The violet **Enhance** button at the top of the editor, or its keyboard shortcut. It reads:
 
-- The **descriptions** of every layer above this entity — not their raw notes, so what the model
-  sees is already canon.
-- This entity's raw notes.
-- Its attributes, and the roles of any reference images attached to it.
+- The **descriptions** of every page above this one — the tidied versions, not their rough notes, so
+  what it sees is already settled.
+- This page's notes.
+- Its short facts, and what job each reference picture on it has.
 
-and returns a structured description — schema-valid JSON via tool use, not parsed prose — which
-streams into the right-hand column as it arrives. You can stop it mid-stream.
+and sends back a description split into sections, which appears in the right-hand column as it is
+written. You can stop it part way through.
 
-> **Enhance writes nothing** Not while it streams, and not when it finishes. A completed description
-> waits in memory until you accept it, and the button changes to **Review Enhance**. A run you
-> stopped leaves a local draft that is never saved at all. Your existing description is untouched
-> the entire time.
+> **Enhance saves nothing** Not while it is writing, and not when it finishes. A finished
+> description waits for you, and the button changes to **Review Enhance**. If you stop it half way,
+> what it managed is kept on screen and never written to disk at all. Your existing description is
+> untouched the whole time.
 
-### Reviewing it
+### Reading it over
 
-The right column becomes a review, section by section, with the current text and the new text side
-by side and each one tagged `added`, `removed`, `changed` or `unchanged`. Per section you choose
-**Keep current** or **Use new**; at the bottom you press **Accept selected**, **Accept all** or
-**Reject**.
+The right column turns into a comparison, section by section, with what you have now beside what has
+just been written, and each one marked `added`, `removed`, `changed` or `unchanged`. For each
+section you pick **Keep current** or **Use new**; at the bottom you press **Accept selected**,
+**Accept all** or **Reject**.
 
-If the model left something genuinely unknown it says so rather than inventing an answer, under
-**Questions for you**.
+If something was genuinely unclear it says so rather than making it up, under **Questions for you**.
 
-If the description you are replacing was hand-edited, Wobu refuses to write until you confirm, with
-**Replace hand-edited description**. The *Current* column is re-read from disk at that moment, so
-what you are comparing against is what is actually there — not what was there when Enhance started.
+If the description you are about to replace was one you had edited by hand, Wobu will not write over
+it until you confirm, with **Replace hand-edited description**. The *Current* column is re-read from
+the folder at that moment, so what you are comparing against is what is really there — not what was
+there when you pressed the button.
 
 ### Sections, not a blob
 
-The sections depend on the entity's kind. For a character:
+Which sections you get depends on the kind of page. For a character:
 
 ```
 {
@@ -77,49 +78,49 @@ The sections depend on the entity's kind. For a character:
 }
 ```
 
-Structure is what makes the prompt compiler useful. A *material study* preset can boost `materials`
-and drop `silhouette`; a *turnaround* does the reverse. Neither is possible against a paragraph of
-prose. `never` becomes negative prompt input, and `palette` can drive a colour-conditioning pass.
+Splitting it up is what makes the rest work. A close study of materials can lean on `materials` and
+push `silhouette` back; a turnaround does the opposite. Neither is possible with one paragraph of
+prose. `never` becomes the "do not draw this" half of the prompt, and `palette` can be used to steer
+the colours.
 
 ## The four rules Enhance follows
 
-These constraints matter more than any prompt wording, and knowing them tells you how to write notes
-that enhance well.
+These matter more than any clever wording, and knowing them tells you how to write notes that
+enhance well.
 
 | | |
 | --- | --- |
-| Do not invent | Enhance elaborates on what your notes imply. Where something is missing it asks you a question rather than confabulating an answer. |
-| Write visually | Every sentence must change what a renderer would draw. History, motive and plot are dropped unless they are visible on the body — "thrown out of the guild" survives only as the ground-off signet. |
-| Do not restate inherited traits | If the species already establishes four-jointed legs, the character description will not repeat them. Only *deviations* from the inherited baseline get written down. |
-| Populate *Never* | Explicit negatives are the main defence against visual drift, so Enhance always fills them in. |
+| Never make things up | Enhance builds on what your notes imply. Where something is missing it asks you rather than inventing an answer. |
+| Only write what can be seen | Every sentence has to change what would be drawn. History, motives and plot are dropped unless they show on the body — "thrown out of the guild" survives only as the ground-off signet. |
+| Never repeat what is inherited | If the species already says four-jointed legs, the character will not say it again. Only the ways this one *differs* get written down. |
+| Always fill in *Never* | Saying what should not appear is the main defence against everything slowly drifting, so Enhance always writes some. |
 
-> **Why Enhance reads the whole stack** The third rule is the subtle one, and it is the reason
-> Enhance is given every layer above the entity rather than just the entity's own notes. Each layer
-> stays lean and orthogonal, nothing is said twice, and the compiled prompt stays inside the model's
-> budget. An entity enhanced in isolation would duplicate half its species.
+> **Why Enhance reads the whole chain** The third rule is the subtle one, and it is why Enhance is
+> handed every page above this one rather than just this page's notes. Each layer stays lean and
+> stays in its lane, nothing is said twice, and the prompt stays short enough to fit. A page
+> enhanced on its own would repeat half its species.
 
-## Freshness and staleness
+## Fresh and stale
 
 | State | Shown as | Meaning |
 | --- | --- | --- |
 | `none` | not generated | Never enhanced. The right column explains what would happen. |
-| `enhancing` | enhancing… | Streaming right now. Stoppable. |
-| `fresh` | fresh | Enhanced, and everything it was based on is unchanged. |
-| `edited` | edited by you | You changed the machine's text by hand. Fully supported. |
-| `stale` | stale | The notes, or something upstream, changed since the last enhance. |
+| `enhancing` | enhancing… | Being written right now. You can stop it. |
+| `fresh` | fresh | Enhanced, and nothing it was based on has changed since. |
+| `edited` | edited by you | You changed the machine's text by hand. Perfectly fine. |
+| `stale` | stale | Your notes, or something above this page, changed since the last enhance. |
 
-On accept, Wobu stamps which upstream sources were used. When any of them changes later, this entity
-flips to **stale** and picks up a quiet dot in the navigator. Nothing regenerates on its own —
-re-enhancing spends your money and might overwrite an edit you made deliberately, so it stays your
-call.
+When you accept, Wobu notes which pages it was based on. If any of those change later, this one
+turns **stale** and picks up a quiet dot in the list. Nothing is redone on its own — redoing it
+spends your money and might wipe out an edit you made deliberately, so it stays your call.
 
-## Order of operations
+## Do it from the top down
 
-Enhance **top down**. Art Style first, then World Canon, then species, cultures, settings, and
-subjects last. Because each enhance reads the descriptions above it, an un-enhanced parent means a
-child is enhanced against nothing — and you will feel it in the output.
+Art Style first, then World Canon, then species, cultures and places, and your characters last.
+Because each enhance reads the descriptions above it, an un-enhanced parent means its children are
+being written against nothing — and you will see it in the pictures.
 
 > **Editing the machine's column** The right column is yours to edit too, field by field, including
-> the palette swatches and the list sections. Accepting an enhance is an ordinary edit as far as the
-> rest of the app is concerned, so undo takes it back. The asymmetry is only in the other direction:
+> the colour swatches and the lists. Accepting an enhance counts as an ordinary edit as far as the
+> rest of the app is concerned, so undo takes it back. The one-way rule only runs the other way:
 > Wobu never touches the left column.

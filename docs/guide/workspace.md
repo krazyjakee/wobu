@@ -1,7 +1,8 @@
 # The workspace
 
-One primary screen with three vertical regions and a mode rail. You will live here most of the time
-— everything else is a mode swap in the centre or a dialog.
+One main screen, split into three columns, with a strip of buttons down the left. This is where you
+will spend nearly all your time — everything else is either a swap of the middle column or a dialog
+box.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
@@ -31,159 +32,160 @@ One primary screen with three vertical regions and a mode rail. You will live he
    rail          navigator                 editor                    inspector
 ```
 
-## Mode rail
+## The four screens
 
-Icon-only, always visible on the far left. Four destinations, which keeps the top bar clean and
-makes switching muscle memory. Each button's tooltip carries its current shortcut, read live from
-the keyboard registry — so if you rebind it, the tooltip moves with it.
+The icons down the far left are always there. Only four, so switching becomes muscle memory
+quickly. Hover one and its tooltip tells you the current keyboard shortcut — and if you change that
+shortcut, the tooltip changes with it.
 
 | | |
 | --- | --- |
-| Library | The world tree and the entity editor — the screen above. Your default. |
-| Forge | Generation promoted to full width with a large result grid, for iterating hard on one subject. |
-| Assets | Every image in the project in one filterable grid, with what each one is attached to. |
-| Settings | Providers, keys, legal, agent access, storage, editor, appearance, keyboard, wiki export, diagnostics, about and licences. |
+| Library | Your world and the page you are writing — the screen above. This is home. |
+| Forge | Making pictures, given the whole window, with a big grid of results. For when you are hammering away at one subject. |
+| Assets | Every picture in the world in one grid you can filter, showing what each one is attached to. |
+| Settings | Keys, legal, AI assistants, storage, editing, appearance, keyboard, website export, diagnostics, about and licences. |
 
-The navigator and the inspector belong to Library. In Forge, Assets and Settings they are not
-collapsed but absent — the mode gets the whole width.
+The world list and the right-hand panel belong to Library. In the other three they are not squashed
+up, they are simply gone — those screens get the whole window.
 
 ## Title bar
 
-A custom title bar, so the chrome matches on Linux, macOS and Windows. Left to right: the **wobu**
-mark, the **project menu** (click the project name for its full path, **Share this project…** and
-**Close project**), a **read-only** badge when the folder is not writable, and the **influence
-breadcrumb** for the selected entity. Every crumb is clickable and jumps to that entity. On the
-right, **Jump to…** opens the command palette, and the gear opens Settings.
+Wobu draws its own, so it looks the same on Windows, macOS and Linux. Left to right: the **wobu**
+mark, then the **world menu** (click the name for its full location, **Share this project…** and
+**Close project**), a **read-only** badge if you cannot write to the folder, and the trail of pages
+above whoever you have open. Every step in that trail is clickable. Over on the right, **Jump to…**
+opens the search box and the cog opens Settings.
 
 ## Navigator
 
-Resizable by dragging its right edge, and collapsible from the keyboard.
+The list of everything in your world, down the left. Drag its right edge to resize it, or hide it
+from the keyboard.
 
-- **Filter box** at the top — placeholder *Filter world…* — matches entity names and one-line
-  summaries. For searching inside notes and descriptions, use the command palette instead; the
-  navigator says so when nothing matches.
-- **A count and a collapse control.** `812 entities`, or `14 of 812 shown` while filtering, and one
-  button that reads **Collapse all** or **Expand all**. Collapsing closes every kind group and
-  leaves the state *inside* them alone, so re-opening a group returns you to the shape you had.
-- **Two pinned singletons** — Art Style and World Canon — sit above the rule, because they root
-  every influence stack.
-- **Favourites** and **Recent** sections come first. Favourites are the rows you starred, listed
-  alphabetically; Recent is the handful of entities you have opened lately and appears only in
-  worlds large enough to need it. Both are shortcuts into the tree below, not a second copy of it —
-  you cannot drag them.
-- **A group per kind**, each nesting by parent. Regions contain cities contain districts.
-- **Alphabetical bands** appear inside a group once it has too many top-level rows to scan — `A–E`,
-  `F`, `M`, and `#` for everything that does not start with a letter. They start closed.
-- **A thumbnail per row**, so a species you have already drawn is recognisable without reading. Rows
-  with no picture keep the same slot, filled with the kind's icon, so nothing shifts.
-- **Drag to re-parent.** Dropping an entity onto another moves it in the hierarchy — and therefore
-  changes what it inherits. Only within the same kind; dropping onto a group header moves it to the
+- **Filter box** at the top — *Filter world…* — matches names and one-line summaries. To search
+  inside notes and descriptions, use **Jump to…** instead; the list tells you so when nothing
+  matches.
+- **A count, and a way to fold it up.** `812 entities`, or `14 of 812 shown` while filtering, and
+  one button reading **Collapse all** or **Expand all**. Collapsing shuts the top-level groups and
+  leaves whatever you had open *inside* them alone, so opening one again puts you back where you
+  were.
+- **Art Style and World Canon** sit above the line, on their own, because everything is built on
+  them.
+- **Favourites** and **Recent** come next. Favourites are the rows you starred; Recent is what you
+  have opened lately, and only turns up in worlds big enough to need it. Both are shortcuts into
+  the list below rather than a second copy of it, so you cannot drag things around in them.
+- **A group per sort of thing**, each nested by what it belongs to. Regions hold cities hold
+  districts.
+- **Letter bands** appear inside a group once it has more rows than you can scan — `A–E`, `F`, `M`,
+  and `#` for anything not starting with a letter. They start closed.
+- **A thumbnail on every row**, so a species you have already drawn is recognisable without reading.
+  Rows without a picture keep the same space, filled with an icon, so nothing jumps about.
+- **Drag to move things.** Dropping one page onto another moves it inside — and changes what it
+  inherits. Only within the same sort of thing; dropping onto a group heading puts it back at the
   top level.
-- **Right-click** for New, New child, favourite, Duplicate and Delete. Singletons cannot be
-  duplicated or deleted.
-- **Status dots.** An entity whose description has gone stale gets a small dot; an entity someone
-  else has open in another copy of Wobu gets a presence dot.
+- **Right-click** for New, New child, favourite, Duplicate and Delete. Art Style and World Canon
+  cannot be copied or deleted.
+- **Little dots.** A page whose description has fallen behind gets one; so does a page somebody else
+  currently has open.
 
-> **Broken files** If a file in the project folder cannot be parsed — a sync client mangled it, or a
-> hand edit broke the frontmatter — Wobu lists it at the top of the navigator with the parser's own
-> error and offers **Show in folder** and **Reload**. It never silently skips a file, and it never
-> writes over one it could not read.
+> **When a file is broken** If something in the folder cannot be read — a sync app mangled it, or a
+> hand edit went wrong — Wobu lists it at the top with the actual error, and offers **Show in
+> folder** and **Reload**. It never quietly skips a file, and it never writes over one it could not
+> read.
 
 ## Editor
 
-The fluid centre column, and the place you actually author.
+The middle column, and where you actually do the writing.
 
 ### Header
 
-An inline-editable name, a kind badge, a *stale* badge when the description has drifted from the
-notes, the **inherits** line listing the layers above this entity, the autosave state, and the
-**Enhance** button in the violet AI accent. Wobu saves as you type on a delay you can tune in
-Settings → Editor.
+The name, which you can click and type over; a badge saying what sort of page it is; a *stale* badge
+when the description has fallen behind the notes; the **inherits** line showing what sits above this
+page; whether it has saved; and the **Enhance** button in violet. Wobu saves as you type, after a
+short pause you can adjust in Settings → Editor.
 
 ### Tabs
 
-Five tabs, each with a shortcut shown in its tooltip:
+Five of them, each with its shortcut in the tooltip:
 
 | | |
 | --- | --- |
-| Notes | The centre of gravity: raw notes on the left, the enhanced structured description on the right. |
-| References | Image grid; each tile carries a role, a weight, a mute toggle and a cover control. Drag, drop or paste to add. |
-| Concepts | Generated art for this entity, with the prompt and seed behind each result. Pin one to promote it into References. |
-| 3D | Turnaround review and generated meshes, with an inline viewer. |
-| Relations | The links this entity has and the ones pointing back at it. |
+| Notes | The heart of it: your rough notes on the left, the tidied description on the right. |
+| References | Your reference pictures. Each one has a job, a strength, a mute switch and a "use as cover" button. Drag, drop or paste to add more. |
+| Concepts | Pictures made for this page, each with the prompt and seed behind it. Pin one to promote it to a reference. |
+| 3D | Turnaround sheets and the rough 3D shapes made from them, with a viewer built in. |
+| Relations | What this page is joined to, and what is joined to it. |
 
-### The Notes split
+### The two columns
 
-Two columns. **Left is yours, right is the machine's** — the left is tagged *yours* and the right
-*written by Enhance*. That spatial split is the mental model of the whole app: Wobu never writes
-into your column, and you can always edit its column. Covered in [Notes and
-Enhance](notes-and-enhance.md).
+**Left is yours, right is the machine's** — the left is labelled *yours* and the right *written by
+Enhance*. That split is the whole idea of the app in one picture: Wobu never writes in your column,
+and you can always edit its column. More in [Notes and Enhance](notes-and-enhance.md).
 
 ## Inspector
 
-On the right, collapsible. This is the differentiating panel, and it has no tabs — three sections
-stacked in one column:
+The panel on the right, which you can hide. This is the part of Wobu that does not exist anywhere
+else, and it has no tabs — just three things stacked in a column:
 
-1. **Influence stack** — the layers feeding this generation, outermost first, with the provider's
-   reference budget across the top.
-2. **Compiled prompt** — the exact text that will be sent, with a **Show sources** toggle that tints
-   every fragment by the layer that produced it.
-3. **Shot controls** — output preset, aspect, model, an extra shot prompt, seed, the variant grid,
-   the project's spend ceiling, and **Generate**.
+1. **Influence stack** — every layer feeding this picture, broadest first, with a strip at the top
+   showing how many reference pictures the service will take.
+2. **Compiled prompt** — the exact words that will be sent, with a **Show sources** switch that
+   tints every phrase by the page it came from.
+3. **The shot controls** — what sort of sheet, what shape, which model, an extra line of direction,
+   the seed, the variant grid, the world's spending limit, and **Generate**.
 
-Each layer card carries a thumbnail or a colour dot, the source entity, a count of the text and
-image fragments it contributed and how many were dropped, a weight slider, a mute toggle and an
-**Open source** button. The full explanation is in [The influence stack](influence.md).
+Each layer card shows a thumbnail or a coloured dot, which page it is, how many bits of text and
+how many pictures it put in (and how many did not fit), a strength slider, a mute switch and an
+**Open source** button. Full explanation in [The influence stack](influence.md).
 
-> **The one rule worth internalising** Muting or reweighting in the inspector affects **this
-> generation only**. It never edits your world. Editing the world happens in the editor. If you find
-> yourself muting the same layer every time, that is a signal to go and fix the entity.
+> **The one thing worth remembering** Muting or turning down a layer here changes **this picture
+> only**. It never edits your world. Editing your world happens in the middle column. If you find
+> yourself muting the same layer every time, that is a hint: go and fix the page.
 
 ## Status bar
 
-Along the bottom in every mode, and mostly read-only: project name and path, whether the folder is a
-network share or read-only, sync state and connected peers, how many other people have it open, the
-entity count, which panels are hidden, provider health and the active image model, the job queue
-depth, the text model and its context size, and a timer for the running generation.
+Along the bottom of every screen, and mostly just telling you things: the world's name and where it
+is, whether the folder is on a network drive or read-only, sync status and who else is connected,
+how many people have it open, how many pages there are, which panels are hidden, whether your AI
+services are reachable and which image model is in use, how many jobs are waiting, the text model
+and how much it can hold, and a timer while a picture is being made.
 
-Two things in it are buttons. **queue n** switches to Forge, and **notifications** opens the
-notification centre.
+Two things there are buttons. **queue n** takes you to Forge, and **notifications** opens the list
+of things that went wrong.
 
-### The notification centre
+### Notifications
 
-Toasts vanish; some failures should not. Anything that failed — a generation the provider refused, a
-save the share rejected, a job that cost money and produced nothing — is kept here with what it
-cost, what went wrong in the provider's own words, and where to go next: **Open Settings**, **Open
-in Forge** or **Show the entity**. Opening the panel marks everything read; **Clear all** empties
-it.
+Pop-up messages disappear; some failures should not. Anything that failed — a picture the service
+refused, a save the shared drive would not take, a job that cost money and produced nothing — is
+kept here with what it cost, what went wrong in the service's own words, and somewhere to go next:
+**Open Settings**, **Open in Forge** or **Show the entity**. Opening the panel marks them all read;
+**Clear all** empties it.
 
-## Command palette
+## Jump to…
 
-From anywhere, and deliberately reachable mid-sentence — it is how you leave where you are. It
-searches in two phases: entity names and summaries match instantly, then full-text hits from inside
-notes and descriptions arrive a moment later, ranked by the search index. Results are grouped
-**Entities**, **In notes and descriptions** and **Commands**. Arrow keys move, Enter picks, Escape
-closes.
+Available from anywhere, and it works even mid-sentence, because it is how you leave where you are.
+It searches in two goes: names and summaries match instantly, then matches from inside your notes
+and descriptions arrive a moment later. Results are grouped under **Entities**, **In notes and
+descriptions** and **Commands**. Arrow keys move, Enter picks, Escape closes.
 
 The commands are New entity, Undo, Redo, Toggle navigator, Toggle inspector and Keyboard shortcuts.
-On a read-only folder the ones that write are absent rather than disabled.
+On a read-only folder, the ones that would write something are simply not there rather than greyed
+out.
 
-## Pickers
+## Choosing from a long list
 
-Anywhere Wobu has more than a handful of choices — the output preset, an aspect, a relation target,
-a parent entity, an asset filter — the control is a searchable combobox rather than a dropdown. Type
-to filter, arrows to move, Enter to take, Escape to abandon the search and keep what you had. It
-announces how many results it has, options that are offered but unavailable say so rather than
-disappearing, and lists of thousands of entities stay responsive because only the visible rows are
-drawn. Genuine five-item enums are still plain dropdowns.
+Anywhere Wobu has more than a handful of options — the sort of sheet, the shape, what to join
+something to, which parent, a filter — you get a box you can type in rather than a plain dropdown.
+Type to narrow it, arrows to move, Enter to take one, Escape to give up and keep what you had. It
+says how many matches it found, options that exist but are unavailable say so instead of vanishing,
+and a list of thousands stays quick because only the rows you can see are drawn. Genuinely short
+lists are still plain dropdowns.
 
-## Appearance
+## Theme and size
 
-Settings → Appearance carries a **Theme** — *Match system*, *Light* or *Dark* — and an **Interface
-scale**. Both themes carry the same palette: the six influence-layer colours stay distinguishable
-from one another, including under the common forms of colour-vision deficiency, and text keeps its
-contrast either way. *Match system* follows the desktop as it changes rather than freezing whatever
-it was when you chose it.
+Settings → Appearance has a **Theme** — *Match system*, *Light* or *Dark* — and an **Interface
+scale**. Both themes use the same colours: the six layer colours stay tellable apart, including for
+the common sorts of colour blindness, and text stays readable either way. *Match system* keeps
+following your desktop as it changes, rather than freezing whatever it was when you picked it.
 
-The interface scale scales the whole interface rather than only the text, because the navigator and
-inspector are fixed widths and type alone would grow inside boxes that did not.
+Interface scale grows the whole app, not just the text — the two side panels are fixed widths, so
+text alone would end up straining against boxes that had not grown with it.

@@ -22,9 +22,9 @@ export function legalIndexPage(documents) {
           <p class="eyebrow">Legal</p>
           <h1>Licence, privacy and terms</h1>
           <p class="lede">
-            Wobu is free software under the MIT licence, operates no servers and collects nothing.
-            These are the documents that say so precisely. Each one also ships beside the binary in
-            every installer and is shown in the app under Settings › Legal.
+            Wobu is free, open source, runs no servers and collects nothing about you. These are the
+            documents that say all of that properly. They come with the app too — inside every
+            installer, and readable under Settings › Legal.
           </p>
         </div>
       </section>
@@ -36,10 +36,9 @@ export function legalIndexPage(documents) {
           ${items}
           </ul>
           <p class="measure">
-            Attribution for the open-source components Wobu is built from is generated from the
-            lockfiles into
+            Wobu is built on a lot of other people's free software. They are all credited in
             <a href="${site.notices}" rel="noopener"><code>THIRD-PARTY-NOTICES.md</code></a>, which
-            ships beside the application and is shown in Settings › Licences.
+            comes with the app and is shown under Settings › Licences.
           </p>
         </div>
       </section>`
@@ -77,9 +76,9 @@ export function legalDocumentPage({ slug, label, title, description, html, toc, 
 ${html}
           <hr />
           <p class="doc-source">
-            This page is rendered from
-            <a href="${sourceUrl}" rel="noopener">the source document in the repository</a>, which
-            is the same file shipped inside every installer.
+            This page comes from
+            <a href="${sourceUrl}" rel="noopener">the original document in the source code</a> — the
+            same file that comes with the app.
           </p>
         </article>
       </div>`
@@ -101,9 +100,9 @@ export function legalStubPage({ slug, label, description }) {
           <p class="eyebrow">Legal</p>
           <h1>${escapeHtml(label)}</h1>
           <p class="lede">
-            This document has not been published to the website yet. The current text lives in the
-            <a href="${site.repo}/tree/main/docs/legal" rel="noopener">repository</a> and ships
-            beside the application in every installer.
+            This one is not on the website yet. The current wording lives with the
+            <a href="${site.repo}/tree/main/docs/legal" rel="noopener">source code</a>, and comes
+            with the app in every installer.
           </p>
           <p><a class="text-link" href="../legal.html">Back to legal →</a></p>
         </div>
@@ -124,12 +123,13 @@ export function licencePage(text) {
         <article class="doc">
           <h1>MIT Licence</h1>
           <p>
-            Wobu is released under the MIT licence. The text below is the <code>LICENSE</code> file
-            from the repository, which also ships beside the application in every installer.
+            Wobu is yours to use, change and pass on, under the MIT licence. This is the
+            <code>LICENSE</code> file from the source code, word for word, and the same one that
+            comes with the app.
           </p>
           <pre class="code licence"><code>${escapeHtml(text.trim())}</code></pre>
           <p>
-            The licences of the open-source components Wobu is built from are listed in
+            Everything Wobu is built on has its own licence, and they are all listed in
             <a href="${site.notices}" rel="noopener"><code>THIRD-PARTY-NOTICES.md</code></a>.
           </p>
           <p><a class="text-link" href="../legal.html">Back to legal →</a></p>

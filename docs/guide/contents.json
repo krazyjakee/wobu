@@ -1,6 +1,6 @@
 {
   "title": "Wobu guide",
-  "description": "The user guide for Wobu, the local-first world building tool for concept art.",
+  "description": "How to use Wobu, the world building app for making concept art that stays consistent.",
   "groups": [
     {
       "title": "Getting started",
@@ -8,17 +8,17 @@
         {
           "slug": "index",
           "title": "Overview",
-          "summary": "What Wobu is, why the hierarchy is the product, and what it is not."
+          "summary": "What Wobu is for, why writing your world down pays off, and what it will not do."
         },
         {
           "slug": "getting-started",
           "title": "Your first project",
-          "summary": "From an empty folder to a world tree that produces consistent images."
+          "summary": "From an empty folder to a world that makes pictures which look like each other."
         },
         {
           "slug": "workspace",
           "title": "The workspace",
-          "summary": "The rail, navigator, editor, inspector and status bar — where everything lives."
+          "summary": "A tour of the screen: where everything is and what each part is for."
         }
       ]
     },
@@ -28,17 +28,17 @@
         {
           "slug": "world-model",
           "title": "Entities and hierarchy",
-          "summary": "The ten kinds, what nests inside what, and how links differ from nesting."
+          "summary": "The ten sorts of page, what goes inside what, and how they are joined up."
         },
         {
           "slug": "notes-and-enhance",
           "title": "Notes and Enhance",
-          "summary": "Rough notes on the left, reviewed canon on the right, and nothing written until you accept it."
+          "summary": "Scribbles on the left, a proper description on the right, and nothing saved until you say so."
         },
         {
           "slug": "references",
           "title": "References and assets",
-          "summary": "Reference roles, how they are budgeted per backend, and where images live on disk."
+          "summary": "Giving each reference picture a job, and where all your images live."
         }
       ]
     },
@@ -48,17 +48,17 @@
         {
           "slug": "influence",
           "title": "The influence stack",
-          "summary": "How seven layers compile into one attributed prompt, and how to steer it."
+          "summary": "How your world turns into a prompt, and how to steer it without rewriting anything."
         },
         {
           "slug": "generating",
           "title": "Generating",
-          "summary": "Presets, aspects, seeds, variant grids, the job queue, pinning and cost."
+          "summary": "Presets, shapes, seeds, comparing versions, waiting your turn, pinning and what it costs."
         },
         {
           "slug": "concept-3d",
           "title": "Concept 3D",
-          "summary": "Reviewing a turnaround and reconstructing a blockout mesh you can export."
+          "summary": "Turning eight views of a character into a rough 3D shape you can spin and export."
         }
       ]
     },
@@ -68,17 +68,17 @@
         {
           "slug": "providers",
           "title": "Providers and keys",
-          "summary": "Bring your own key: which providers serve which capability, and where keys live."
+          "summary": "Which AI service does what, where your keys are kept, and why they never leave your machine."
         },
         {
           "slug": "collaboration",
           "title": "Sharing a project",
-          "summary": "One folder with several people, or copies that catch each other up, machine to machine."
+          "summary": "Several people in one folder, or two copies that keep each other up to date."
         },
         {
           "slug": "agent-access",
           "title": "Agent access (MCP)",
-          "summary": "The opt-in MCP server and client, and exactly what an agent can and cannot do."
+          "summary": "Letting an AI assistant read your world, and exactly what it can and cannot do."
         }
       ]
     },
@@ -88,7 +88,7 @@
         {
           "slug": "reference",
           "title": "Keyboard, settings and files",
-          "summary": "Default shortcuts, every settings section, the on-disk layout and a glossary."
+          "summary": "Every shortcut and setting, what is in the folder, what to try when something is wrong, and a glossary."
         }
       ]
     }

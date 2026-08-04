@@ -4,6 +4,9 @@ import { site } from '../lib/site.mjs'
  * Every claim below is taken from `README.md`, `docs/01-vision.md` and
  * `docs/09-roadmap.md`. Feature status is deliberately hedged where the
  * roadmap hedges it — Concept 3D is view/export-only today.
+ *
+ * The reader is a world builder, not an engineer: a GM writing a setting, a
+ * small game team, a novelist with a map. Keep the words they would use.
  */
 
 const LAYERS = [
@@ -21,68 +24,70 @@ const LAYERS = [
 
 const FEATURES = [
   {
-    title: 'A hierarchy, not a prompt box',
-    body: `Author style at the project level, anatomy at the species level, costume at the culture
-      level, personality at the character level. The hundredth character is cheaper and more
-      consistent than the first.`,
+    title: 'Say it once, in the right place',
+    body: `Your art style belongs to the whole world. Build and anatomy belong to the species.
+      Clothing belongs to the culture. Only what makes someone <em>them</em> belongs on the
+      character. Do that and your hundredth character is quicker to make than your first — and fits
+      in better.`,
   },
   {
-    title: 'Notes in, canon out',
-    body: `Write rough, messy notes. <em>Enhance</em> turns them into a structured, editable
-      description — silhouette, anatomy, materials, palette, signature details, never — using
-      Anthropic or Gemini with your own key. Your original notes are never overwritten.`,
+    title: 'Scribbled notes in, proper description out',
+    body: `Write the way you would in a notebook. Press <em>Enhance</em> and your notes come back
+      as a clear description — shape, build, materials, colours, and a list of things to never
+      draw. You read it and choose what to keep. Your own notes are never touched.`,
   },
   {
-    title: 'Prompts you can audit',
-    body: `The compiled prompt is always on screen and every fragment is attributed to the layer
-      it came from. Mute or reweight any layer for a single generation without editing the world.`,
+    title: 'Nothing is hidden from you',
+    body: `The prompt is always on screen, and every phrase in it is colour-coded to show which
+      page it came from. Turn any part of your world down, or off, for one picture without
+      changing anything you have written.`,
   },
   {
-    title: 'Reference images with a role',
-    body: `An image carries a role — silhouette, structure, palette, material, mood or pose — so
-      the compiler knows whether to route it to a style adapter, a structure adapter, or the
-      reference grid, and how much weight to give it.`,
+    title: 'Pictures count as description too',
+    body: `Every reference picture you add gets a job — a shape to keep, a colour palette, a
+      fabric, a pose, or just something for your own eyes. Wobu uses each one the way you meant
+      it, instead of throwing them all in together.`,
   },
   {
-    title: 'Local ComfyUI or hosted models',
-    body: `Generate through a local ComfyUI installation or through Gemini, with per-entity
-      generation history, replayable snapshots, variant grids, seed locking and pin-to-reference
-      promotion.`,
+    title: 'Your own graphics card, or a paid service',
+    body: `Make pictures on your own machine through ComfyUI, or through Google Gemini. Everything
+      you make is kept with the exact settings that made it, so you can compare, try again, or
+      redo it months later.`,
   },
   {
-    title: 'Share a folder, or a ticket',
-    body: `A project can live on a file share with presence, conflict-safe atomic writes and
-      conflict siblings; or you can sync directly with a peer over a ticket. No server in the
-      middle either way.`,
+    title: 'Work with other people, no server',
+    body: `Put the world on a shared drive and a few of you can work in it at once, without
+      standing on each other's toes. Or send someone a ticket and your two copies keep each other
+      up to date, machine to machine. Nothing passes through us.`,
   },
 ]
 
 const STEPS = [
   {
-    title: 'Author the world once',
-    body: `Create a <code>.wobu</code> project and fill in its Style Guide and World Canon, then
-      add species, cultures, places and characters as a tree. Notes are ordinary Markdown files
-      you could read without Wobu installed.`,
+    title: 'Write your world down once',
+    body: `Make a <code>.wobu</code> project and fill in two pages: how your world looks, and what
+      is true in it. Then add your peoples, their cultures, their places and your characters, a
+      page each. They are ordinary text files you could still read if Wobu vanished tomorrow.`,
   },
   {
-    title: 'Enhance the messy parts',
-    body: `Turn half-sentence notes into structured canonical descriptions with your own
-      Anthropic or Gemini key. The result is editable and tracked; re-enhancing shows a diff you
-      accept or reject.`,
+    title: 'Tidy up the messy bits',
+    body: `Half-finished notes become a proper description, using your own Claude or Gemini
+      account. You get a side-by-side look at what changed and decide what to keep — nothing is
+      saved until you say so.`,
   },
   {
-    title: 'Generate with the whole chain',
-    body: `Hit Generate on any node and the prompt is compiled from every layer above it, with
-      per-role reference images budgeted alongside the text. Pin a result to promote it to a
-      reference that then influences everything downstream.`,
+    title: 'Make a picture',
+    body: `Press Generate on anyone in your world and Wobu writes the prompt for you, gathering
+      every layer above them and the reference pictures that belong. Like what comes out? Pin it,
+      and everything below that point starts to look more like it.`,
   },
 ]
 
 const NOT = [
-  ['Not a finishing pipeline.', 'Output is concept art and blockout meshes for a modeller.'],
-  ['Not a wiki or a novel-writing app.', 'Notes exist to drive images.'],
-  ['Not a node-graph tool.', 'ComfyUI already exists, and Wobu can drive it.'],
-  ['Not a service.', 'There is no account to create and no server to sign in to.'],
+  ['Not a finishing tool.', 'You get concept art and rough 3D shapes to hand to an artist.'],
+  ['Not a wiki or a writing app.', 'Notes are here to shape pictures.'],
+  ['Not a node graph.', 'ComfyUI already does that beautifully, and Wobu can drive it.'],
+  ['Not a service.', 'No account to make, nothing to sign in to, nothing to subscribe to.'],
 ]
 
 function prompt() {
@@ -98,8 +103,8 @@ function prompt() {
           ${fragments}
         </div>
         <figcaption>
-          A compiled prompt for one character. Each fragment is labelled and tinted with the layer
-          that contributed it, and every layer can be muted or reweighted for a single generation.
+          The prompt Wobu wrote for one character. Each part is labelled and tinted with the page it
+          came from, and you can turn any of them down — or off — for a single picture.
         </figcaption>
       </figure>`
 }
@@ -126,20 +131,20 @@ export function homePage() {
 
   const main = `      <section class="hero">
         <div class="wrap">
-          <p class="eyebrow">Local-first · Bring your own key · MIT licensed</p>
-          <h1>Author your world once.<br />Every image inherits it.</h1>
+          <p class="eyebrow">Runs on your computer · Uses your own AI account · Free and open source</p>
+          <h1>Write your world down once.<br />Every picture remembers it.</h1>
           <p class="lede">
-            Wobu is a desktop app for building coherent fictional worlds and producing consistent
-            concept art. Define lore, visual style, species, cultures, places, characters and props
-            once; Wobu resolves that hierarchy into an attributed prompt whenever you generate an
-            image.
+            Wobu is a desktop app for people building worlds — a campaign setting, a game, a story.
+            Describe your art style, your peoples, their cultures, their places and your characters
+            once. From then on, every picture you make already knows all of it.
           </p>
           <p class="cta-row">
             <a class="btn btn-primary" href="download.html">Download the beta</a>
             <a class="btn" href="guide/index.html">Read the guide</a>
           </p>
           <p class="hero-note">
-            Beta software: release bundles are currently unsigned. Download them only from
+            Still in beta, and the downloads are not signed yet — so your computer will warn you
+            about them. Only ever get Wobu from
             <a href="${site.releases}" rel="noopener">GitHub Releases</a>.
           </p>
         </div>
@@ -147,13 +152,13 @@ export function homePage() {
 
       <section class="band" aria-labelledby="problem-heading">
         <div class="wrap">
-          <h2 id="problem-heading">World building is a tree, not a list of prompts</h2>
+          <h2 id="problem-heading">A world is a family tree, not a pile of prompts</h2>
           <p class="measure">
-            A character belongs to a species, which belongs to a world, which is rendered in a house
-            art style. Today that context lives in the artist's head and gets retyped — badly,
-            inconsistently, differently every time — into each prompt. That is exactly where visual
-            consistency dies: two characters of the same species end up looking unrelated, the
-            lighting drifts, the palette drifts, and by image forty the world has no identity.
+            A character comes from a people. That people lives in a world. The whole thing is drawn
+            in one look. Right now all of that sits in your head, and you retype a rough version of
+            it into every prompt — a little differently each time. That is why two people of the same
+            species end up looking unrelated, why the light keeps drifting, and why by the fortieth
+            picture your world has stopped looking like one place.
           </p>
           ${prompt()}
         </div>
@@ -181,19 +186,19 @@ export function homePage() {
         <div class="wrap">
           <div class="split">
             <div>
-              <h2 id="local-heading">Local-first, and private by construction</h2>
+              <h2 id="local-heading">It all stays on your computer</h2>
               <p>
-                A project is an ordinary, self-contained <code>.wobu</code> directory. Notes stay
-                readable Markdown, assets stay files, and the disposable search index lives outside
-                the project. It survives Wobu being uninstalled.
+                A world is just a folder, ending in <code>.wobu</code>. The notes are plain text and
+                the pictures are ordinary image files, so you can open them in anything, back them
+                up, drop them on a USB stick or keep them in version control. Uninstall Wobu and your
+                world is still sitting there, still readable.
               </p>
               <p>
-                Wobu operates no servers. There is no account, no inference proxy, no telemetry, no
-                crash reporting and no update check — the application never contacts us, because
-                there is nowhere for it to contact. Content leaves your machine only when you invoke
-                a feature that uses a provider you configured, and then it goes directly to that
-                provider under your own credentials, which are held in the operating-system
-                keychain.
+                We run no servers. There is no account, no tracking, no crash reports and no update
+                check — the app has nowhere to phone home to. Your work leaves your computer only
+                when you press Enhance or Generate, and then it goes straight to the service you
+                chose, on your own account. Your keys are kept in your computer's own password
+                store, never in the world folder.
               </p>
               <p>
                 <a class="text-link" href="legal/privacy-policy.html"
@@ -215,16 +220,16 @@ export function homePage() {
         <div class="wrap">
           <h2 id="status-heading">Where it is up to</h2>
           <p class="measure">
-            Wobu is in beta and under active development. The world tree, shareable projects,
-            peer-to-peer sync, references, Enhance, the influence engine and the full generation
-            loop are implemented; Forge, variant grids, per-entity LoRA training, cross-project
-            style transfer, multi-entity scene composition and static wiki export ship too. Concept
-            3D is partial — the app can view and export existing meshes, but starting a turnaround
-            reconstruction from the UI is still planned.
+            Wobu is in beta and worked on most days. Building your world, sharing it, syncing between
+            two machines, reference pictures, Enhance and the whole picture-making loop all work
+            today — as do Forge, variant grids, teaching a model one character's look, borrowing a
+            style from another world, scenes with several characters in them, and exporting your
+            world as a browsable website. Concept 3D is half there: Wobu can show and export meshes,
+            but it cannot yet start one from a turnaround for you.
           </p>
           <p>
             <a class="text-link" href="${site.roadmap}" rel="noopener"
-              >Read the roadmap for exact feature status →</a
+              >See exactly what is finished →</a
             >
           </p>
         </div>
@@ -234,8 +239,8 @@ export function homePage() {
         <div class="wrap">
           <h2 id="download-heading">Try it</h2>
           <p class="measure">
-            Bundles are built for Linux, macOS and Windows from a tagged release, or you can run the
-            app from source with Node 22 and the Rust toolchain.
+            There are installers for Windows, macOS and Linux. If you would rather build it
+            yourself, the whole thing is on GitHub.
           </p>
           <p class="cta-row">
             <a class="btn btn-primary" href="download.html">Download Wobu</a>
@@ -250,8 +255,8 @@ export function homePage() {
     depth: 0,
     title: site.name,
     description:
-      'Wobu is a local-first desktop app for building coherent fictional worlds and producing ' +
-      'consistent concept art. Author the hierarchy once; every generated image inherits it.',
+      'Wobu is a desktop app for building a world and making concept art that stays consistent. ' +
+      'Describe your world once; every picture you make already knows it.',
     main,
   }
 }
