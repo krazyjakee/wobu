@@ -1,28 +1,65 @@
-/* Design tokens — docs/03-ui-layout.md. Ported verbatim from prototype/styles.css. */
+/* ── design tokens ───────────────────────────────────────────────────────────
+
+   The brand palette, and both themes of it (issue #134). Everything else in
+   `src/styles` reads from here; a raw hex anywhere below this file is a bug,
+   because it is a value that cannot follow the theme.
+
+   ── how a theme is chosen ──
+
+   `<html>` always carries `data-theme="dark"` or `data-theme="light"`. The
+   inline script in `index.html` writes it before first paint from the stored
+   preference (`wobu.settings` → `state.theme`, one of `system | light | dark`)
+   and `prefers-color-scheme`; `src/lib/ThemeMode.ts` rewrites it whenever the
+   preference or the OS setting changes. Dark is the value of bare `:root`, so a
+   window that somehow gets here with no attribute renders the theme Wobu has
+   always shipped rather than an unstyled one.
+
+   ── brand vs semantic ──
+
+   `--brand-*` is *identity*: the three hues in the mark, and the two greys of
+   its tile. They are the same in both themes, because an app icon does not
+   change colour when the desktop does, and they are the only values in this
+   file that are copied outside it (see the contract below).
+
+   Everything else is a *role*. `--accent` is "the user is about to do
+   something" and `--ai` is "the machine is"; in dark they happen to equal the
+   brand amber and violet, in light they are darkened until they are readable on
+   paper. Splitting the two means retuning a role for contrast can never silently
+   repaint the logo, and restyling the logo can never silently change what a
+   button means.
+
+   ── the duplication contract ──
+
+   Three places cannot read this file and therefore hold their own copies of the
+   brand hexes:
+
+     1. `branding/wobu-icon.svg` and `branding/wobu-mark.svg` — SVG masters, and
+        the source of every raster in `src-tauri/icons/`.
+     2. `index.html` — the boot screen paints before the bundle exists.
+     3. `scripts/generate-icons.sh` — the installer gradient, composed by
+        ImageMagick outside any browser.
+
+   `src/lib/ThemeContract.test.ts` reads all four files and fails if a copy
+   drifts from the `--brand-*` value it mirrors. Change a brand hue here, run the
+   tests, and the failure tells you which copies to update.
+
+   Contrast: `ThemeContract.test.ts` also asserts WCAG AA (4.5:1) for every text
+   role against every surface in both themes, 3:1 for `--border-str`, and a
+   minimum CIEDE2000 separation between the six influence colours under normal,
+   protanopic and deuteranopic vision. `--border` is deliberately below 3:1 in
+   both themes: it is the seam between two panels, not the edge of a control —
+   controls that need a visible boundary use `--border-str`.
+   ────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --bg: #0d0e12;
-  --bg-panel: #14161c;
-  --bg-raised: #1a1d25;
-  --bg-input: #0f1117;
+  /* ── brand identity — the same in both themes, copied in three places ── */
+  --brand-amber: #e2a44f; /* the authored root of the mark */
+  --brand-teal: #4fd1c5; /* what descends from it */
+  --brand-violet: #9d7cf5; /* and what descends from that */
+  --brand-tile-hi: #232833; /* icon tile, top of the gradient */
+  --brand-tile-lo: #0d0e12; /* icon tile, bottom */
 
-  --border: #252932;
-  --border-str: #333846;
-
-  --text: #e7e9f0;
-  --text-dim: #9aa1b3;
-  --text-faint: #656c7e;
-
-  --accent: #e2a44f; /* user actions */
-  --ai: #9d7cf5; /* AI actions — reserved */
-
-  /* influence layer colours */
-  --l-style: #e2a44f;
-  --l-world: #4fd1c5;
-  --l-species: #7bd88f;
-  --l-culture: #f28bb4;
-  --l-place: #6aa9f5;
-  --l-subject: #9d7cf5;
-
+  /* ── theme-independent ── */
   --r-sm: 6px;
   --r: 10px;
   --r-lg: 14px;
@@ -32,4 +69,117 @@
   --insp: 352px;
 
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Surfaces that sit under artwork rather than under the UI. A concept image
+     is the same picture whichever theme is around it, so the scrim over it, the
+     text on that scrim and the letterbox behind a 3D view stay dark in both. */
+  --scrim: rgb(4 5 8 / 84%);
+  --scrim-strong: rgb(4 5 8 / 94%);
+  --scrim-soft: rgb(4 5 8 / 66%);
+  --on-scrim: #e7e9f0;
+  --on-scrim-dim: #b9bfcd;
+  --accent-on-scrim: #e9b06a;
+  --ai-on-scrim: #c8b4ff;
+  --media-bg: #111319;
+
+  /* Filled accent surfaces keep the brand amber in both themes — a primary
+     button is a piece of the logo — so the ink on them is fixed too. */
+  --accent-fill: var(--brand-amber);
+  --accent-fill-hi: #eeb463;
+  --on-accent: #1c1305;
+  --on-danger: #ffffff;
+
+  /* ── dark (the default) ── */
+  color-scheme: dark;
+
+  --bg: #0d0e12;
+  --bg-panel: #14161c;
+  --bg-raised: #1a1d25;
+  --bg-input: #0f1117;
+
+  --border: #2b303c;
+  --border-str: #616a7e;
+
+  --text: #e7e9f0;
+  --text-dim: #9aa1b3;
+  --text-faint: #7d859a;
+
+  --accent: var(--brand-amber); /* user actions */
+  --ai: var(--brand-violet); /* AI actions */
+  --ai-text: #c8b4ff; /* AI text on an --ai tint */
+  --warn: var(--accent);
+  --danger: #c4384a; /* filled: destructive controls, error badges */
+  --danger-soft: #f2748b; /* borders and tints of a warning about content */
+  --danger-text: #e79aa5; /* error text on a --danger tint */
+  --ok: #5fce8b;
+
+  /* influence layer colours — see docs/04-influence-engine.md. Retuned for
+     mutual separation under colour-vision deficiency; the amber stays the brand
+     amber because the style layer is the authored root the mark draws. */
+  --l-style: #e2a44f;
+  --l-world: #5ee9de;
+  --l-species: #6fd095;
+  --l-culture: #e07d9f;
+  --l-place: #83bafe;
+  --l-subject: #926cf5;
+
+  /* The mark on an app surface. Dark themes get the tile-less glyph so nothing
+     boxes it in; light themes get the tiled icon, whose dark squircle is what
+     makes bright brand hues legible on paper — that is the light-background
+     variant, rather than a second piece of artwork to keep in step. */
+  --brand-art: url('../../branding/wobu-mark.svg');
+
+  --tip-bg: #05060a;
+  --tip-text: #e7e9f0;
+  --scroll: #2b303a;
+  --scroll-hover: #3b4250;
+  --shadow-1: 0 12px 34px rgb(0 0 0 / 50%);
+  --shadow-2: 0 24px 70px rgb(0 0 0 / 60%);
+}
+
+/* ── light ──
+
+   Warm paper rather than white: the neutrals carry a trace of the brand amber,
+   so the two themes are the same product rather than one product and its
+   negative. Panels get *lighter* than the page here, the mirror of dark, which
+   is why `--bg-raised` is the only pure white in the file. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #eeebe6;
+  --bg-panel: #f8f6f3;
+  --bg-raised: #ffffff;
+  --bg-input: #ffffff;
+
+  --border: #d0c9bd;
+  --border-str: #7d7669;
+
+  --text: #191b21;
+  --text-dim: #4d525e;
+  --text-faint: #636876;
+
+  --accent: #905d0c;
+  --ai: #5c1d96;
+  --ai-text: #4e197f;
+  --warn: var(--accent);
+  --danger: #b3172d;
+  --danger-soft: #b8304a;
+  --danger-text: #a3122a;
+  --ok: #17703d;
+
+  --l-style: #905d0c;
+  --l-world: #006f75;
+  --l-species: #244b13;
+  --l-culture: #af0053;
+  --l-place: #0d5dd9;
+  --l-subject: #5c1d96;
+
+  --brand-art: url('../../branding/wobu-icon.svg');
+
+  --tip-bg: #22262e;
+  --tip-text: #f5f5f7;
+  --scroll: #c8c3ba;
+  --scroll-hover: #a9a297;
+  --shadow-1: 0 10px 26px rgb(48 38 20 / 16%);
+  --shadow-2: 0 20px 52px rgb(48 38 20 / 22%);
 }

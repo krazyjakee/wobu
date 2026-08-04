@@ -35,24 +35,21 @@
   letter-spacing: 0.02em;
   font-size: 13px;
 }
+/* The same artwork the OS shows in the dock, so the chip in the title bar and
+   the icon in the taskbar are recognisably one thing. The tile is dark in both
+   themes — an app icon does not invert when the desktop does — which is also
+   what keeps the bright brand hues legible on a light title bar. */
 .brand-mark {
   width: 13px;
   height: 13px;
   border-radius: 3px;
-  background: conic-gradient(
-    from 210deg,
-    var(--accent),
-    var(--l-culture),
-    var(--ai),
-    var(--l-world),
-    var(--accent)
-  );
+  background: url('../../branding/wobu-icon.svg') center / cover no-repeat;
   flex: none;
 }
 .brand-lg {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
 }
 .projpick {
   display: flex;
@@ -147,8 +144,8 @@
   color: var(--text);
 }
 .wctl button.close:hover {
-  background: #c4384a;
-  color: #fff;
+  background: var(--danger);
+  color: var(--on-danger);
 }
 .wctl .ic {
   width: 13px;
@@ -201,7 +198,8 @@
   left: 40px;
   padding: 3px 7px;
   font-size: 11px;
-  background: #000;
+  background: var(--tip-bg);
+  color: var(--tip-text);
   border: 1px solid var(--border-str);
   border-radius: 5px;
   white-space: nowrap;

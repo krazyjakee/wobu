@@ -49,8 +49,8 @@
 }
 .inline-error {
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, #c4384a 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
   border-radius: var(--r-sm);
-  color: #e79aa5;
+  color: var(--danger-text);
   font-size: 11px;
 }

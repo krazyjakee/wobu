@@ -74,7 +74,10 @@ trap 'rm -rf "$work"' EXIT
 mkdir -p "$installer_out"
 
 # The tile gradient from the icon master, so every surface a user meets during
-# an install is the same dark-to-warm wash.
+# an install is the same dark-to-warm wash. ImageMagick cannot read a stylesheet,
+# so these two hexes are the third copy of --brand-tile-hi and --brand-tile-lo
+# from src/styles/tokens.css; src/lib/ThemeContract.test.ts fails if they drift.
+# Installer art stays dark in both themes, like the icon it is composed from.
 tile="gradient:#232833-#0d0e12"
 
 # NSIS header: 150x57, shown on every page but the first and last.

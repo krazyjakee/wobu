@@ -28,6 +28,7 @@ import {
   machineSettings,
   providerProbe,
 } from '../lib/api'
+import { THEME_LABELS, THEME_MODES } from '../lib/ThemeMode'
 import {
   invalidateWorld,
   useDeleteProviderKey,
@@ -1153,23 +1154,46 @@ function EditorPrefs() {
 }
 
 /**
- * There is no theme control, and that is deliberate rather than unfinished.
+ * Theme and interface scale.
  *
- * The palette in `styles/tokens.css` is the design — ported verbatim from the
- * prototype and specified in docs/03-ui-layout.md, down to the influence layer
- * colours that carry meaning in the Inspector. A light theme is a second
- * palette that has to be designed, not a switch that has not been wired, and
- * inventing one here would be picking the product's visual identity from a
- * settings pane.
+ * The theme is a three-way choice rather than a toggle because "match system"
+ * is a different thing from either fixed value: it keeps following the desktop
+ * afterwards, including a desktop that switches itself at sunset. Applying it
+ * is not this component's job — `store/settings` writes the resolved theme onto
+ * `<html>` the moment it changes, so the buttons only record what was asked
+ * for (#134).
  */
 function Appearance() {
   const scale = useSettings((s) => s.uiScale)
   const setScale = useSettings((s) => s.setUiScale)
+  const theme = useSettings((s) => s.theme)
+  const setTheme = useSettings((s) => s.setTheme)
   const pct = Math.round(scale * 100)
 
   return (
     <section className="set-sec">
       <h3>Appearance</h3>
+      <div className="set-row set-row-col">
+        <span className="set-label" id="settings-theme-label">
+          Theme
+        </span>
+        <div className="set-levels" role="group" aria-labelledby="settings-theme-label">
+          {THEME_MODES.map((mode) => (
+            <button
+              key={mode}
+              className={mode === theme ? 'btn-mini is-on' : 'btn-mini'}
+              aria-pressed={mode === theme}
+              onClick={() => setTheme(mode)}
+            >
+              {THEME_LABELS[mode]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="set-note">
+        Both themes carry the same palette: the influence-layer colours stay distinguishable, and
+        text keeps its contrast either way. Match system follows the desktop as it changes.
+      </p>
       <div className="set-row set-row-col">
         <label className="set-label" htmlFor="settings-interface-scale">
           Interface scale

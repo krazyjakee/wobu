@@ -5,7 +5,16 @@
   boot screen) without a second background fighting the panel behind it.
 
   Keep the two files in step: the icon is what ships in src-tauri/icons/, this
-  is what the UI draws.
+  is what the UI draws on a dark surface. On a light one the UI draws the tiled
+  icon instead (the brand-art token in src/styles/tokens.css): the brand hues
+  are bright by design and need the dark squircle behind them to hold their
+  contrast on paper, so there is no third, light-background piece of artwork to
+  maintain.
+
+  The three hexes are copies of the brand-amber, brand-teal and brand-violet
+  tokens; src/lib/ThemeContract.test.ts fails if they drift from tokens.css.
+  (An XML comment may not contain a double hyphen, so the tokens are named here
+  without the two leading dashes they carry in CSS.)
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372" width="372" height="372">
   <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">

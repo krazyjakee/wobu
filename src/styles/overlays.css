@@ -11,7 +11,7 @@
   font-size: 11px;
 }
 .sheet-warning {
-  color: var(--warn, #e2a44f);
+  color: var(--warn);
 }
 
 .launcher {
@@ -156,12 +156,12 @@
 }
 .lch-open-failure {
   padding: 10px 12px 12px;
-  border-top: 1px solid color-mix(in srgb, #c4384a 34%, transparent);
-  background: color-mix(in srgb, #c4384a 10%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 .lch-open-failure > p {
   margin-bottom: 8px;
-  color: #e79aa5;
+  color: var(--danger-text);
   font-size: 11.5px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -249,9 +249,9 @@
   border-radius: var(--r-sm);
   font-size: 12px;
   line-height: 1.6;
-  background: color-mix(in srgb, #c4384a 12%, transparent);
-  border: 1px solid color-mix(in srgb, #c4384a 34%, transparent);
-  color: #e79aa5;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
+  color: var(--danger-text);
 }
 .lch-err code {
   font: 11px var(--mono);
@@ -261,7 +261,7 @@
 .scrim {
   position: fixed;
   inset: 0;
-  background: rgba(4, 5, 8, 0.66);
+  background: var(--scrim-soft);
   backdrop-filter: blur(2px);
   display: grid;
   z-index: 50;
@@ -288,7 +288,7 @@
   background: var(--bg-panel);
   border: 1px solid var(--border-str);
   border-radius: var(--r-lg);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 .pal-in {
@@ -372,7 +372,7 @@
   border: 1px solid var(--border-str);
   border-radius: var(--r-lg);
   padding: 18px 20px 20px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-2);
 }
 .sheet h2 {
   font-size: 14px;
@@ -441,7 +441,7 @@
 }
 .sheet-err {
   font-size: 11.5px;
-  color: #e79aa5;
+  color: var(--danger-text);
   line-height: 1.55;
   margin-bottom: 10px;
 }
@@ -461,7 +461,7 @@
   background: var(--bg-input);
 }
 .share-warning strong {
-  color: var(--warn, #e2a44f);
+  color: var(--warn);
   font-size: 12px;
 }
 .share-warning p,
@@ -480,7 +480,7 @@
   color: var(--text-faint);
 }
 .share-relay-warning {
-  color: var(--warn, #e2a44f);
+  color: var(--warn);
   line-height: 1.5;
 }
 .share-actions {
@@ -503,7 +503,7 @@
   background: var(--bg-raised);
   border: 1px solid var(--border-str);
   border-radius: var(--r);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-1);
 }
 .ctx.title-project-menu {
   position: absolute;
@@ -526,8 +526,8 @@
   color: var(--text);
 }
 .ctx button.danger:hover {
-  background: color-mix(in srgb, #c4384a 22%, transparent);
-  color: #f0b3bb;
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger-text);
 }
 .ctx button[disabled] {
   opacity: 0.4;
@@ -573,14 +573,14 @@
   font-size: 12px;
   background: var(--bg-raised);
   border: 1px solid var(--border-str);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-1);
   color: var(--text-dim);
   max-width: 60vw;
   pointer-events: auto;
 }
 .toast-item.err {
-  border-color: color-mix(in srgb, #c4384a 45%, transparent);
-  color: #e79aa5;
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger-text);
 }
 .toast-body {
   display: flex;
@@ -658,9 +658,9 @@
   gap: 10px;
   padding: 9px 12px;
   font-size: 12px;
-  background: color-mix(in srgb, #c4384a 16%, var(--bg-raised));
-  border-bottom: 1px solid color-mix(in srgb, #c4384a 45%, transparent);
-  color: #f0c2c8;
+  background: color-mix(in srgb, var(--danger) 16%, var(--bg-raised));
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger-text);
 }
 /* A read-only folder is a state, not a failure: it is an ordinary way to open
    somebody else's world, and the alarm colouring above would say something
@@ -730,13 +730,13 @@
   flex: none;
   padding: 3px 10px;
   border-radius: var(--r);
-  border: 1px solid color-mix(in srgb, #c4384a 55%, transparent);
-  background: color-mix(in srgb, #c4384a 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
   color: inherit;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 .banner-act:hover {
-  background: color-mix(in srgb, #c4384a 34%, transparent);
+  background: color-mix(in srgb, var(--danger) 34%, transparent);
 }

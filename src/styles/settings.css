@@ -117,7 +117,7 @@
 }
 .wiki-export-warning,
 .wiki-export-error {
-  color: var(--warn, #e2a44f);
+  color: var(--warn);
 }
 .wiki-export-error {
   margin: 10px 0 0;
@@ -473,10 +473,10 @@
   top: 2px;
 }
 .prov-probe.is-ok {
-  color: #5fce8b;
+  color: var(--ok);
 }
 .prov-probe.is-bad {
-  color: #e79aa5;
+  color: var(--danger-text);
 }
 .prov-probe-cost {
   color: var(--text-faint);

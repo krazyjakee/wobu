@@ -167,7 +167,7 @@
 }
 .col-tag-ai {
   background: color-mix(in srgb, var(--ai) 16%, transparent);
-  color: #c3aefc;
+  color: var(--ai-text);
 }
 .col-tag-save {
   margin-left: auto;
@@ -317,7 +317,7 @@
   opacity: 0.6;
 }
 .sec.never li::before {
-  background: #f2748b;
+  background: var(--danger-soft);
   border-radius: 1px;
   width: 6px;
   height: 1.5px;
@@ -390,8 +390,8 @@
   font-size: 16px;
 }
 .description-remove:hover:not(:disabled) {
-  background: color-mix(in srgb, #f2748b 12%, transparent);
-  color: #f2748b;
+  background: color-mix(in srgb, var(--danger-soft) 12%, transparent);
+  color: var(--danger-soft);
 }
 .description-add {
   padding: 3px 5px;
@@ -462,13 +462,13 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 7px;
-  border-color: color-mix(in srgb, #f2748b 45%, var(--border));
-  background: color-mix(in srgb, #f2748b 7%, transparent);
+  border-color: color-mix(in srgb, var(--danger-soft) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger-soft) 7%, transparent);
   color: var(--text-dim);
   font-size: 11.5px;
 }
 .enhance-guard b {
-  color: #f2a0af;
+  color: var(--danger-text);
 }
 .enhance-waiting {
   padding: 28px 14px;
@@ -616,9 +616,9 @@
 }
 .references-error {
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, #f2748b 45%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--danger-soft) 45%, var(--border));
   border-radius: var(--r-sm);
-  color: #f2a0af;
+  color: var(--danger-text);
   font-size: 11.5px;
 }
 .reference-imports {
@@ -664,10 +664,10 @@
 }
 .reference-import small {
   grid-column: 1 / -1;
-  color: #f2a0af;
+  color: var(--danger-text);
 }
 .reference-import.is-failed b {
-  color: #f2748b;
+  color: var(--danger-soft);
 }
 .reference-imports > button {
   margin-top: 6px;
@@ -725,8 +725,8 @@
   right: 7px;
   padding: 2px 6px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 82%, #000);
-  color: #17130c;
+  background: color-mix(in srgb, var(--accent-fill) 82%, #000);
+  color: var(--on-accent);
   font-size: 9.5px;
 }
 .reference-controls {
@@ -914,8 +914,8 @@
   flex-direction: column;
   gap: 7px;
   padding: 32px 10px 10px;
-  color: var(--text);
-  background: linear-gradient(transparent, rgba(4, 5, 8, 0.94));
+  color: var(--on-scrim);
+  background: linear-gradient(transparent, var(--scrim-strong));
   opacity: 0;
   transform: translateY(4px);
   transition:
@@ -929,7 +929,10 @@
   opacity: 1;
   transform: none;
 }
-.concept-hover code,
+.concept-hover code {
+  color: var(--on-scrim-dim);
+  font: 10px var(--mono);
+}
 .concept-caption time {
   color: var(--text-faint);
   font: 10px var(--mono);
@@ -940,7 +943,8 @@
   right: 8px;
   padding: 2px 6px;
   border-radius: 20px;
-  background: rgba(4, 5, 8, 0.8);
+  background: var(--scrim);
+  color: var(--on-scrim);
 }
 .concept-pinned {
   position: absolute;
@@ -951,8 +955,8 @@
   padding: 3px 7px;
   border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
   border-radius: 20px;
-  background: rgba(4, 5, 8, 0.86);
-  color: var(--accent);
+  background: var(--scrim);
+  color: var(--accent-on-scrim);
   font-size: 9px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -1022,7 +1026,7 @@
 }
 .concept-delete {
   margin: 0 10px 10px auto;
-  color: #f0b3bb;
+  color: var(--danger-text);
 }
 .concept-progress {
   height: 3px;
@@ -1038,14 +1042,14 @@
 .concept-error {
   margin: 0;
   padding: 9px 10px;
-  color: #e79aa5;
-  background: color-mix(in srgb, #c4384a 12%, transparent);
+  color: var(--danger-text);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
   font-size: 11px;
   line-height: 1.45;
 }
 .concept-error {
   margin-bottom: 12px;
-  border: 1px solid color-mix(in srgb, #c4384a 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
   border-radius: var(--r-sm);
 }
 .concept-empty {
@@ -1064,7 +1068,7 @@
   max-width: 94vw;
   max-height: 90vh;
   object-fit: contain;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72);
+  box-shadow: var(--shadow-2);
 }
 .concept-viewer-close {
   position: fixed;
@@ -1193,7 +1197,7 @@
    number gutters, which are spans too. */
 .conflict-row.is-removed .conflict-l,
 .conflict-row.is-changed .conflict-l {
-  background: color-mix(in srgb, #c4384a 16%, transparent);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
 .conflict-row.is-added .conflict-r,
 .conflict-row.is-changed .conflict-r {
@@ -1469,8 +1473,8 @@
   min-height: 360px;
   place-items: center;
   overflow: hidden;
-  background: #111319;
-  color: var(--text-faint);
+  background: var(--media-bg);
+  color: var(--on-scrim-dim);
 }
 .mesh-canvas,
 .mesh-canvas canvas {

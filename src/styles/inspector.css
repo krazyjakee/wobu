@@ -131,7 +131,7 @@
   margin: 7px 0 0;
   padding: 6px 7px;
   border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--warn, #e2a44f) 10%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
   color: var(--text-dim);
 }
 .layer-fragment {
@@ -243,8 +243,8 @@
   color: var(--text-faint);
 }
 .aspect-preview.is-substituted {
-  border-color: color-mix(in srgb, var(--warn, #e2a44f) 55%, var(--border-str));
-  background: color-mix(in srgb, var(--warn, #e2a44f) 8%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--border-str));
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
 }
 .seed-controls,
 .variant-controls {
@@ -286,7 +286,7 @@
   line-height: 1.35;
 }
 .variant-controls > small.variant-error {
-  color: var(--danger, #d96c6c);
+  color: var(--danger);
 }
 .spend-panel {
   border: 1px solid var(--border-str);

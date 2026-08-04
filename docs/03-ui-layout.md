@@ -138,27 +138,39 @@ Backend health, active image model, job queue depth, active LLM, last generation
   ([#108](https://github.com/krazyjakee/wobu/issues/108)), local-index inspection/rebuild,
   autosave delay, interface scale, diagnostics, version/schema information, and project wiki export.
   The earlier sketch's Replicate/fal token fields and storage-location picker are **not current
-  requirements**; add a canonical issue before describing either as planned. Appearance currently
-  means interface scale and the intentional dark palette, not a retained theme-switch requirement.
+  requirements**; add a canonical issue before describing either as planned. Appearance means
+  interface scale and the theme (Match system / Light / Dark), persisted in `wobu.settings`
+  ([#134](https://github.com/krazyjakee/wobu/issues/134)).
 
 ## Design tokens
 
-Dark-first. Neutral cool greys so that concept art — which is the actual content — carries all
-the colour. One warm accent for user actions; one violet accent reserved exclusively for
-AI actions, so "the machine is about to do something" is always legible.
+Two themes, light and dark, selected by Match system / Light / Dark in Settings → Appearance.
+Neutral cool greys either way, so that concept art — which is the actual content — carries all the
+colour. One warm accent for user actions; one violet accent reserved exclusively for AI actions, so
+"the machine is about to do something" is always legible.
 
-```
---bg           #0d0e12    --text        #e7e9f0    --accent   #e2a44f  (user actions)
---bg-panel     #14161c    --text-dim    #9aa1b3    --ai       #9d7cf5  (AI actions)
---bg-raised    #1a1d25    --text-faint  #656c7e
---border       #252932    --border-str  #333846
-```
+`src/styles/tokens.css` is the whole palette and the only file allowed to contain a colour literal.
+It separates **brand identity** (`--brand-amber`, `--brand-teal`, `--brand-violet`, and the two tile
+greys) from the **semantic roles** below, so retuning a role for contrast cannot repaint the logo,
+and vice versa. Do not quote hexes here — they are two sets now, and a copy in prose goes stale
+silently. Read the tokens file.
 
-Influence layer colours — used for dots, prompt tinting, and reference borders:
+Roles: `--bg`, `--bg-panel`, `--bg-raised`, `--border`, `--border-str`, `--text`, `--text-dim`,
+`--text-faint`, `--accent` (user actions), `--ai` (AI actions), the `--danger-*` / `--ok` families,
+and `--on-scrim` for text sitting over artwork — which stays light in both themes, because a concept
+image does not change with the desktop.
 
-```
-style #e2a44f · world #4fd1c5 · species #7bd88f · culture #f28bb4 · place #6aa9f5 · subject #9d7cf5
-```
+Both themes meet WCAG AA (4.5:1) for every text role on every surface, and 3:1 for `--border-str`.
+`--border` is deliberately below 3:1: it is the seam between panels, not a control edge.
+
+Influence layer colours — used for dots, prompt tinting and reference borders — are tuned per theme
+for separation under colour blindness as well as for contrast; the minimum CIEDE2000 distance across
+all fifteen pairs under deuteranopia is 12.0 in dark and 11.5 in light.
+
+`src/lib/ThemeContract.test.ts` enforces all of the above: it reads `tokens.css`, both brand SVGs,
+`index.html` and `scripts/generate-icons.sh` from disk and fails, naming the file, if a brand hex
+drifts between copies, if a brand hue differs between themes, if the contrast ratios or colour-blind
+separations regress, or if a hex literal appears in any stylesheet other than `tokens.css`.
 
 Radii `6 / 10 / 14`. Base font size 13px (dense tool UI), mono for prompts. Custom Tauri
 title bar so the chrome matches on all three platforms.

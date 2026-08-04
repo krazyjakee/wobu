@@ -9,9 +9,15 @@
   generation inherits it" (docs/01-vision.md). The step-down diagonal is what
   keeps it readable at 16 px, where a symmetric fork collapses into a blob.
 
-  Colours are the app's own tokens from src/styles/tokens.css: accent for the
-  authored root, l-world and l-subject for what descends from it, bg and
-  bg-raised for the tile.
+  Colours are the brand tokens from src/styles/tokens.css: brand-amber for the
+  authored root, brand-teal and brand-violet for what descends from it,
+  brand-tile-hi and brand-tile-lo for the tile. (Those names take the usual two
+  leading dashes as CSS properties; an XML comment may not contain them.) The
+  five are identity, not theme: the same hexes in light mode and in dark, which
+  is what lets one icon sit in a dock either way. This file cannot read the
+  stylesheet, so it holds the second of three copies of them —
+  src/lib/ThemeContract.test.ts fails if any copy drifts, and names the file to
+  fix.
 
   Every raster in src-tauri/icons/ is generated from this file by
   scripts/generate-icons.sh. Do not hand-edit the PNG, ICO or ICNS output.

@@ -1,32 +1,21 @@
 /* ── branding ─────────────────────────────────────────────────────────────────
 
-   App mark, launcher art and the boot surface (issue #136).
+   Launcher art and the boot surface (issues #136, #134).
 
    Imported from `Launcher.tsx` rather than `styles/index.css` so the art and the
    component that owns it move together; `Launcher` is statically imported by
    `App`, so the rules are present for the title bar too.
 
-   The mark rules are written one level more specific than `shell.css` on
-   purpose: that file still carries the placeholder conic-gradient chip, and the
-   real artwork has to win regardless of which stylesheet the bundler emits
-   first. When #134 formalises the brand palette, fold these two rules back into
-   `shell.css` and delete the extra `:root`.
+   The mark itself now lives in `shell.css` beside the rest of the title bar —
+   the conic-gradient placeholder it used to outrank is gone, and with it the
+   `:root` these rules were written behind.
 
-   Every colour here comes from `tokens.css`. Nothing new is invented — #134 owns
-   that. ─────────────────────────────────────────────────────────────────────── */
-
-:root .brand-mark {
-  /* The same artwork the OS shows in the dock, so the chip in the title bar and
-     the icon in the taskbar are recognisably one thing. */
-  background: url('../../branding/wobu-icon.svg') center / cover no-repeat;
-  border-radius: 3px;
-}
-
-:root .brand-lg {
-  width: 46px;
-  height: 46px;
-  border-radius: 11px;
-}
+   Which piece of artwork the app draws is a token, `--brand-art`: the tile-less
+   glyph on a dark theme, the tiled icon on a light one, because the brand hues
+   are bright by design and need the dark squircle behind them to hold their
+   contrast on paper. See `tokens.css` for why the brand hexes themselves are the
+   same in both themes, and for the three files that hold copies of them.
+   ────────────────────────────────────────────────────────────────────────────*/
 
 /* ── launcher ── */
 
@@ -86,7 +75,7 @@
   content: '';
   width: 84px;
   height: 84px;
-  background: url('../../branding/wobu-mark.svg') center / contain no-repeat;
+  background: var(--brand-art) center / contain no-repeat;
 }
 
 .launcher .lch-body:empty::after {

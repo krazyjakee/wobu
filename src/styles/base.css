@@ -29,7 +29,8 @@ textarea {
   color: inherit;
 }
 select {
-  color-scheme: dark;
+  /* Inherits `color-scheme` from :root, so the native popup follows the theme. */
+  color-scheme: inherit;
 }
 select option,
 select optgroup {
@@ -73,13 +74,13 @@ kbd {
   height: 9px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2b303a;
+  background: var(--scroll);
   border-radius: 9px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b4250;
+  background: var(--scroll-hover);
   background-clip: content-box;
 }
 
@@ -106,7 +107,7 @@ kbd {
 .btn-ai {
   background: color-mix(in srgb, var(--ai) 15%, transparent);
   border-color: color-mix(in srgb, var(--ai) 38%, transparent);
-  color: #c8b4ff;
+  color: var(--ai-text);
 }
 .btn-ai:hover {
   background: color-mix(in srgb, var(--ai) 24%, transparent);
@@ -118,9 +119,9 @@ kbd {
 }
 .btn-primary {
   border: 0;
-  color: #1c1305;
+  color: var(--on-accent);
   font-weight: 600;
-  background: linear-gradient(180deg, #eeb463, var(--accent));
+  background: linear-gradient(180deg, var(--accent-fill-hi), var(--accent-fill));
 }
 .btn-primary:hover {
   filter: brightness(1.08);
@@ -175,8 +176,8 @@ kbd {
   border-radius: 50%;
 }
 .dot-ok {
-  background: #5fce8b;
-  box-shadow: 0 0 6px #5fce8b88;
+  background: var(--ok);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ok) 53%, transparent);
 }
 .dot-warn {
   background: var(--accent);

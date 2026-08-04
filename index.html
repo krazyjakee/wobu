@@ -3,27 +3,66 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <title>Wobu</title>
     <link rel="icon" type="image/svg+xml" href="./branding/wobu-icon.svg" />
     <!--
       Boot screen. The window is undecorated and opens before the bundle has
-      parsed, so without this the first thing Wobu ever shows is an empty dark
+      parsed, so without this the first thing Wobu ever shows is an empty
       rectangle. These styles are inline and the artwork is inline SVG so the
       first paint needs no stylesheet, no script and no extra request; React
       clears #root when it mounts, which takes all of it away again.
 
       The values are duplicated from src/styles/tokens.css by necessity — that
-      sheet is part of the bundle this screen exists to cover. Keep them in step,
-      and see branding/wobu-icon.svg for the mark itself.
+      sheet is part of the bundle this screen exists to cover. They are one of
+      the three copies of the palette that `src/lib/ThemeContract.test.ts`
+      checks; if you change a colour there, the test names this file.
+
+      There is no theme script here on purpose. `tauri.conf.json` sets a CSP with
+      `default-src 'self'` and no `script-src`, so an inline script would be
+      blocked in a packaged build even though it works under the dev server, and
+      a screen whose whole job is the first 200ms cannot depend on something that
+      only sometimes runs. So the boot screen follows `prefers-color-scheme`, and
+      `src/lib/ThemeMode.ts` writes `data-theme` onto <html> the moment the
+      bundle evaluates — which is why the rules below answer to both. A user
+      whose stored choice contradicts their OS sees the OS's colours for the one
+      frame before that, and nothing moves when it changes.
     -->
     <style>
+      html {
+        color-scheme: dark;
+        /* dark, from tokens.css */
+        --wb-bg: #0d0e12;
+        --wb-panel: #14161c;
+        --wb-border: #2b303c;
+        --wb-text: #e7e9f0;
+        --wb-faint: #7d859a;
+      }
+      @media (prefers-color-scheme: light) {
+        html:not([data-theme='dark']) {
+          color-scheme: light;
+          /* light, from tokens.css */
+          --wb-bg: #eeebe6;
+          --wb-panel: #f8f6f3;
+          --wb-border: #d0c9bd;
+          --wb-text: #191b21;
+          --wb-faint: #636876;
+        }
+      }
+      html[data-theme='light'] {
+        color-scheme: light;
+        --wb-bg: #eeebe6;
+        --wb-panel: #f8f6f3;
+        --wb-border: #d0c9bd;
+        --wb-text: #191b21;
+        --wb-faint: #636876;
+      }
       html,
       body {
         height: 100%;
         margin: 0;
-        background: #0d0e12;
-        color: #e7e9f0;
+        background: var(--wb-bg);
+        color: var(--wb-text);
         overflow: hidden;
       }
       body {
@@ -47,8 +86,8 @@
         align-items: center;
         gap: 7px;
         padding-left: 14px;
-        background: #14161c;
-        border-bottom: 1px solid #252932;
+        background: var(--wb-panel);
+        border-bottom: 1px solid var(--wb-border);
         font-weight: 650;
         letter-spacing: 0.02em;
       }
@@ -72,11 +111,33 @@
         width: 84px;
         height: 84px;
       }
+      /* Same swap as `--brand-art`: the glyph alone on dark, the glyph on its
+         tile on light, where bright brand hues need the dark squircle to hold
+         their contrast. Both are in the document because CSS cannot change a
+         viewBox, and the hidden one costs a few hundred bytes that never leave
+         the binary. */
+      .wb-boot-tiled {
+        display: none;
+      }
+      @media (prefers-color-scheme: light) {
+        html:not([data-theme='dark']) .wb-boot-plain {
+          display: none;
+        }
+        html:not([data-theme='dark']) .wb-boot-tiled {
+          display: block;
+        }
+      }
+      html[data-theme='light'] .wb-boot-plain {
+        display: none;
+      }
+      html[data-theme='light'] .wb-boot-tiled {
+        display: block;
+      }
       .wb-boot-word {
         font-size: 15px;
         font-weight: 650;
         letter-spacing: 0.02em;
-        color: #9aa1b3;
+        color: var(--wb-faint);
       }
       @keyframes wobu-boot-breathe {
         0%,
@@ -127,26 +188,37 @@
             <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
             <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
           </g>
+          <g id="wb-tiled">
+            <rect width="512" height="512" rx="114" fill="url(#wb-tile)" />
+            <rect width="512" height="512" rx="114" fill="url(#wb-glow)" />
+            <use href="#wb-glyph" />
+          </g>
         </defs>
       </svg>
 
       <div class="wb-boot" data-tauri-drag-region>
         <div class="wb-boot-bar" data-tauri-drag-region>
           <svg class="wb-boot-chip" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
-            <rect width="512" height="512" rx="114" fill="url(#wb-tile)" />
-            <rect width="512" height="512" rx="114" fill="url(#wb-glow)" />
-            <use href="#wb-glyph" />
+            <use href="#wb-tiled" />
           </svg>
           wobu
         </div>
         <div class="wb-boot-body">
           <svg
-            class="wb-boot-mark"
+            class="wb-boot-mark wb-boot-plain"
             viewBox="66 68 372 372"
             role="img"
             aria-label="Wobu is starting"
           >
             <use href="#wb-glyph" />
+          </svg>
+          <svg
+            class="wb-boot-mark wb-boot-tiled"
+            viewBox="0 0 512 512"
+            role="img"
+            aria-label="Wobu is starting"
+          >
+            <use href="#wb-tiled" />
           </svg>
           <span class="wb-boot-word">wobu</span>
         </div>

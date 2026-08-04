@@ -1,5 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import {
+  DEFAULT_THEME,
+  applyTheme,
+  isThemeMode,
+  watchSystemTheme,
+  type ThemeMode,
+} from '../lib/ThemeMode'
 
 /**
  * Preferences that belong to this machine, not to the world.
@@ -39,6 +46,10 @@ interface SettingsState {
   autosaveDelay: number
   setAutosaveDelay: (v: number) => void
 
+  /** Which palette to wear. `system` follows the desktop — see `lib/ThemeMode`. */
+  theme: ThemeMode
+  setTheme: (v: ThemeMode) => void
+
   reset: () => void
 }
 
@@ -57,7 +68,7 @@ function clamp(v: unknown, lo: number, hi: number, fallback: number): number {
   return Math.min(hi, Math.max(lo, n))
 }
 
-const DEFAULTS = { uiScale: 1, autosaveDelay: AUTOSAVE_DEFAULT }
+const DEFAULTS = { uiScale: 1, autosaveDelay: AUTOSAVE_DEFAULT, theme: DEFAULT_THEME }
 
 export const useSettings = create<SettingsState>()(
   persist(
@@ -71,6 +82,7 @@ export const useSettings = create<SettingsState>()(
         set({
           autosaveDelay: Math.round(clamp(v, AUTOSAVE_MIN, AUTOSAVE_MAX, DEFAULTS.autosaveDelay)),
         }),
+      setTheme: (v) => set({ theme: isThemeMode(v) ? v : DEFAULTS.theme }),
       reset: () => set(DEFAULTS),
     }),
     {
@@ -86,8 +98,30 @@ export const useSettings = create<SettingsState>()(
           autosaveDelay: Math.round(
             clamp(s.autosaveDelay, AUTOSAVE_MIN, AUTOSAVE_MAX, DEFAULTS.autosaveDelay),
           ),
+          // Same reasoning as the numbers: a stored theme from a build that
+          // spelled the modes differently must not leave the window with no
+          // palette at all.
+          theme: isThemeMode(s.theme) ? s.theme : DEFAULTS.theme,
         }
       },
     },
   ),
 )
+
+/*
+ * Paint the stored theme, and keep painting it.
+ *
+ * At module scope rather than in a hook: this store is evaluated while the
+ * bundle is, which is before React renders its first element, so the palette is
+ * settled before anything is drawn with it. A `useEffect` would mean one frame
+ * of the wrong theme on every launch — and the boot screen in `index.html`,
+ * which has no way to read this preference, is the frame it would replace.
+ *
+ * Both subscriptions run for the life of the process. There is nothing to tear
+ * down: the window and the store end together.
+ */
+applyTheme(useSettings.getState().theme)
+useSettings.subscribe((state, previous) => {
+  if (state.theme !== previous.theme) applyTheme(state.theme)
+})
+watchSystemTheme(() => applyTheme(useSettings.getState().theme))

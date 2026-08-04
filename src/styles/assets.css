@@ -74,7 +74,7 @@
 .asset-library-error {
   flex: none;
   margin: 0;
-  background: color-mix(in srgb, #c4384a 12%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 .asset-library-body {
   display: grid;
@@ -115,8 +115,8 @@
   right: 7px;
   padding: 2px 6px;
   border-radius: 16px;
-  background: rgba(4, 5, 8, 0.84);
-  color: #e9b06a;
+  background: var(--scrim);
+  color: var(--accent-on-scrim);
   font-size: 9px;
 }
 .asset-library-tile-meta {
@@ -284,8 +284,8 @@
 }
 .asset-delete-offer > button {
   margin-top: 8px;
-  border-color: #7d2b36;
-  color: #f0b3bb;
+  border-color: color-mix(in srgb, var(--danger) 62%, var(--border));
+  color: var(--danger-text);
 }
 .asset-delete-blocked {
   margin-top: 14px;
