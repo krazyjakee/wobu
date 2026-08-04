@@ -39,9 +39,9 @@ use wobu_llm::{
     TextProvider, Usage, anthropic, gemini,
 };
 use wobu_store::{
-    AssetUsage, Conflict, CorruptFile, ImportedAsset, Keep, Peer, Project, ProjectSummary,
-    GenerationPage, GenerationPageRequest, Resolved, SaveOutcome, TransferOutcome,
-    TransferPreview, WikiExport, recent, transfer,
+    AssetUsage, Conflict, CorruptFile, GenerationPage, GenerationPageRequest, ImportedAsset, Keep,
+    Peer, Project, ProjectSummary, Resolved, SaveOutcome, TransferOutcome, TransferPreview,
+    WikiExport, recent, transfer,
 };
 
 use crate::diag;
@@ -1243,13 +1243,9 @@ fn node_thumb_asset(index: &wobu_store::Index, node_id: Id) -> CommandResult<Opt
 }
 
 /// The shared body of both thumbnail batches: asset ids in, absolute paths out.
-async fn thumb_paths(
-    handle: AppState,
-    asset_ids: &[Id],
-) -> CommandResult<HashMap<String, String>> {
-    let prepared = handle.ticket(|project| {
-        Ok((project.thumb_targets(asset_ids)?, project.can_write_thumb()))
-    })?;
+async fn thumb_paths(handle: AppState, asset_ids: &[Id]) -> CommandResult<HashMap<String, String>> {
+    let prepared = handle
+        .ticket(|project| Ok((project.thumb_targets(asset_ids)?, project.can_write_thumb())))?;
     let (project, (targets, can_write)) = prepared;
     if targets.is_empty() {
         return Ok(HashMap::new());
@@ -1264,20 +1260,12 @@ async fn thumb_paths(
                 .map(|target| target.asset_id)
                 .collect());
         }
-        wobu_store::thumbs::ensure_all(
-            &root,
-            &work,
-            &wobu_store::Cancel::new(),
-            &mut |_| {},
-        )
+        wobu_store::thumbs::ensure_all(&root, &work, &wobu_store::Cancel::new(), &mut |_| {})
     })
     .await??;
     let completed: HashSet<_> = completed.into_iter().collect();
-    let completed_targets: Vec<_> = targets
-        .iter()
-        .filter(|target| completed.contains(&target.asset_id))
-        .cloned()
-        .collect();
+    let completed_targets: Vec<_> =
+        targets.iter().filter(|target| completed.contains(&target.asset_id)).cloned().collect();
     handle.with_ticket(&project, |project| {
         if can_write {
             project.verify_writable()?;
@@ -2824,9 +2812,7 @@ mod bridge {
         // `enabled` decides what a backend is sent and was never a statement
         // about what the user should be able to see in a list.
         project.link_asset(node.id, reference, AssetRole::Pose, None).unwrap();
-        project
-            .update_asset_link(node.id, reference, AssetRole::Pose, None, Some(false))
-            .unwrap();
+        project.update_asset_link(node.id, reference, AssetRole::Pose, None, Some(false)).unwrap();
         assert_eq!(node_thumb_asset(project.index(), node.id).unwrap(), Some(reference));
 
         // And an explicit cover outranks everything, because it is the one

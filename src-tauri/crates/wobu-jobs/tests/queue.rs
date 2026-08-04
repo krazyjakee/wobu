@@ -792,10 +792,8 @@ async fn a_job_that_ignores_its_token_is_still_gone_when_the_queue_quiesces() {
     // hangs: an adapter wedged in a socket that never looks at the token. The
     // queue's own `cancel_grace` aborts it, so `quiesce` returns on time rather
     // than waiting out a provider's idea of a timeout.
-    let (queue, recorder) = queue_with(Config {
-        cancel_grace: Duration::from_millis(50),
-        ..Config::default()
-    });
+    let (queue, recorder) =
+        queue_with(Config { cancel_grace: Duration::from_millis(50), ..Config::default() });
     let task = Fake::new("wedged", [Step::Ignore]);
     let log = task.log();
     let id = queue.submit(task);

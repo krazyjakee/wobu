@@ -176,10 +176,7 @@ fn sheet(generations: &[Generation]) -> TurnaroundSheet {
         .map(|(seed, run)| TurnaroundBatch {
             seed,
             created_at: run.values().map(|take| take.created_at).max().unwrap_or_else(Utc::now),
-            generation_ids: View::ALL
-                .iter()
-                .map(|view| run[view].generation_id)
-                .collect(),
+            generation_ids: View::ALL.iter().map(|view| run[view].generation_id).collect(),
         })
         .collect();
     batches.sort_by(|left, right| {
@@ -306,10 +303,9 @@ fn describe_backend(
             let caps = backend.capabilities(&model);
             Ok((wobu_imagine::comfy_mesh::LABEL, model, caps))
         }
-        other => Err(WobuError::new(
-            Code::Invalid,
-            format!("This build has no 3D adapter for {other}."),
-        )),
+        other => {
+            Err(WobuError::new(Code::Invalid, format!("This build has no 3D adapter for {other}.")))
+        }
     }
 }
 
@@ -379,10 +375,9 @@ async fn execution_backend(
             Ok(Arc::new(backend))
         }
         comfy::ID => Ok(Arc::new(machine.comfy_mesh().map_err(provider_unavailable)?)),
-        other => Err(WobuError::new(
-            Code::Invalid,
-            format!("This build has no 3D adapter for {other}."),
-        )),
+        other => {
+            Err(WobuError::new(Code::Invalid, format!("This build has no 3D adapter for {other}.")))
+        }
     }
 }
 
@@ -436,7 +431,8 @@ pub async fn mesh_start(
                 "This project is read-only, so a generated mesh could not be saved.",
             ));
         }
-        let selection = ProviderChoice::of(project, MESH_CAPABILITY).ok_or_else(no_mesh_provider)?;
+        let selection =
+            ProviderChoice::of(project, MESH_CAPABILITY).ok_or_else(no_mesh_provider)?;
         let subject_name = project
             .world_nodes()?
             .iter()
@@ -448,13 +444,7 @@ pub async fn mesh_start(
         let assets: HashMap<Id, Asset> =
             project.list_assets()?.into_iter().map(|asset| (asset.id, asset)).collect();
         let chosen = resolve_views(project, node_id, &generation_ids, &assets)?;
-        Ok((
-            project.root().to_path_buf(),
-            project.id(),
-            subject_name,
-            selection,
-            chosen,
-        ))
+        Ok((project.root().to_path_buf(), project.id(), subject_name, selection, chosen))
     })?;
 
     let (_, model, caps) = describe_backend(&selection)?;
@@ -575,11 +565,11 @@ fn parse_generate_type(name: Option<&str>) -> CommandResult<GenerateType> {
     };
     [GenerateType::Normal, GenerateType::Geometry, GenerateType::LowPoly, GenerateType::Sketch]
         .into_iter()
-    .find(|candidate| candidate.as_str().eq_ignore_ascii_case(name))
-    .ok_or_else(|| {
-        WobuError::new(Code::Invalid, "That is not a reconstruction mode.")
-            .with_detail(name.to_owned())
-    })
+        .find(|candidate| candidate.as_str().eq_ignore_ascii_case(name))
+        .ok_or_else(|| {
+            WobuError::new(Code::Invalid, "That is not a reconstruction mode.")
+                .with_detail(name.to_owned())
+        })
 }
 
 /// Turn chosen receipts into a de-duplicated, view-ordered slate.
@@ -738,7 +728,9 @@ impl Task for MeshTask {
                 // one: a mesh job is minutes long, so almost every way it can
                 // go wrong happens after the money was spent. A receipt is the
                 // only record the user will have of that.
-                if usage.is_billed() && let Err(save) = self.record_failure(&error, usage).await {
+                if usage.is_billed()
+                    && let Err(save) = self.record_failure(&error, usage).await
+                {
                     return Outcome::failed(save);
                 }
                 if matches!(error, ImageError::Cancelled) {
@@ -760,7 +752,9 @@ impl Task for MeshTask {
                     mesh.format
                 ),
             };
-            if usage.is_billed() && let Err(save) = self.record_failure(&error, usage).await {
+            if usage.is_billed()
+                && let Err(save) = self.record_failure(&error, usage).await
+            {
                 return Outcome::failed(save);
             }
             return Outcome::failed(mesh_failure(&error, usage, self.requires_billing));
@@ -801,8 +795,11 @@ impl Task for MeshTask {
                 Outcome::done_with(ready)
             }
             Ok(Err(error)) => Outcome::failed(
-                Failure::new(error.code.as_str(), error.message)
-                    .billed(if usage.is_billed() { Billed::Charged } else { Billed::Nothing }),
+                Failure::new(error.code.as_str(), error.message).billed(if usage.is_billed() {
+                    Billed::Charged
+                } else {
+                    Billed::Nothing
+                }),
             ),
             Err(join) => Outcome::failed(
                 Failure::new("internal", "The generated mesh could not be saved.")
@@ -844,9 +841,11 @@ impl MeshTask {
             Ok(Err(error)) => {
                 Err(Failure::new(error.code.as_str(), error.message).billed(Billed::Charged))
             }
-            Err(join) => Err(Failure::new("internal", "The billed mesh receipt could not be saved.")
-                .with_detail(join.to_string())
-                .billed(Billed::Charged)),
+            Err(join) => {
+                Err(Failure::new("internal", "The billed mesh receipt could not be saved.")
+                    .with_detail(join.to_string())
+                    .billed(Billed::Charged))
+            }
         }
     }
 }
@@ -893,11 +892,8 @@ fn persist_mesh(input: PersistMesh<'_>) -> CommandResult<MeshReady> {
     generation.params.insert("billedJobs".into(), json!(usage.billed_jobs));
     generation.params.insert(
         "meshOutput".into(),
-        serde_json::to_value(MeshOutput {
-            asset_id: stored.asset.id,
-            turnaround_generation_ids,
-        })
-        .unwrap_or(serde_json::Value::Null),
+        serde_json::to_value(MeshOutput { asset_id: stored.asset.id, turnaround_generation_ids })
+            .unwrap_or(serde_json::Value::Null),
     );
     let generation = project.record_generation(generation)?;
     Ok(MeshReady { subject_id, generation, asset_id: stored.asset.id })
@@ -957,9 +953,7 @@ fn mesh_failure(error: &ImageError, usage: MeshUsage, requires_billing: bool) ->
         match error {
             // The provider took the request and then answered with something
             // unusable. If it bills per job, it has probably billed for it.
-            ImageError::Refused { .. }
-            | ImageError::NoMesh
-            | ImageError::NotAMesh { .. }
+            ImageError::Refused { .. } | ImageError::NoMesh | ImageError::NotAMesh { .. }
                 if requires_billing =>
             {
                 Billed::Unknown

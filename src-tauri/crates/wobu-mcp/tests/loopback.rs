@@ -14,8 +14,8 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use wobu_mcp::dispatch::Silent;
-use wobu_mcp::{Dispatcher, NodePatch, Running, Server, Token, World, WorldError};
 use wobu_mcp::world::WorldResult;
+use wobu_mcp::{Dispatcher, NodePatch, Running, Server, Token, World, WorldError};
 
 struct TestWorld;
 
@@ -53,13 +53,7 @@ impl World for TestWorld {
     fn update_node(&self, _id: &str, _patch: &NodePatch) -> WorldResult {
         Err(WorldError::new("the test world refuses to be written to"))
     }
-    fn link_nodes(
-        &self,
-        _node: &str,
-        _to: &str,
-        _role: &str,
-        _weight: Option<f32>,
-    ) -> WorldResult {
+    fn link_nodes(&self, _node: &str, _to: &str, _role: &str, _weight: Option<f32>) -> WorldResult {
         Err(WorldError::new("the test world refuses to be written to"))
     }
 }
@@ -130,7 +124,8 @@ async fn the_listener_is_on_loopback_and_nowhere_else() {
 #[tokio::test]
 async fn a_request_with_no_token_is_refused_and_told_where_to_find_one() {
     let (running, _) = start(false).await;
-    let response = raw(running.port(), &post(r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#, "")).await;
+    let response =
+        raw(running.port(), &post(r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#, "")).await;
     assert!(status(&response).contains("401"), "{}", status(&response));
     assert!(response.contains("Settings"), "{response}");
 }
@@ -211,12 +206,9 @@ async fn a_notification_gets_no_body_at_all() {
 #[tokio::test]
 async fn a_tool_call_reaches_the_world() {
     let (running, _) = start(false).await;
-    let answer = rpc(
-        running.port(),
-        "tools/call",
-        json!({ "name": "world_overview", "arguments": {} }),
-    )
-    .await;
+    let answer =
+        rpc(running.port(), "tools/call", json!({ "name": "world_overview", "arguments": {} }))
+            .await;
     assert_eq!(answer["result"]["isError"], false);
     assert_eq!(answer["result"]["structuredContent"]["name"], "Ashfall");
 }

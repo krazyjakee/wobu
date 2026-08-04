@@ -130,6 +130,11 @@ pub trait World: Send + Sync + 'static {
 
     fn update_node(&self, id: &str, patch: &NodePatch) -> WorldResult;
 
-    fn link_nodes(&self, node_id: &str, to_id: &str, role: &str, weight: Option<f32>)
-    -> WorldResult;
+    fn link_nodes(
+        &self,
+        node_id: &str,
+        to_id: &str,
+        role: &str,
+        weight: Option<f32>,
+    ) -> WorldResult;
 }

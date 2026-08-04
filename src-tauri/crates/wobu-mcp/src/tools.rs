@@ -182,8 +182,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "world_overview",
         title: "World overview",
-        description:
-            "Name, folder, read-only status and node counts by kind for the Wobu project that \
+        description: "Name, folder, read-only status and node counts by kind for the Wobu project that \
              is currently open. Start here: every other tool needs ids from this world, and \
              this is the call that says whether one is open at all.",
         write: false,
@@ -192,8 +191,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "list_nodes",
         title: "List nodes",
-        description:
-            "Every entity in the open world as a summary — id, kind, name, parent, one-line \
+        description: "Every entity in the open world as a summary — id, kind, name, parent, one-line \
              summary and tags. Optionally narrowed to a single kind.",
         write: false,
         schema: list_nodes_schema,
@@ -201,8 +199,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "get_node",
         title: "Read a node",
-        description:
-            "One entity in full: notes, generated description and its freshness, attributes, \
+        description: "One entity in full: notes, generated description and its freshness, attributes, \
              tags, influence links and attached reference images.",
         write: false,
         schema: id_only,
@@ -210,8 +207,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "search_nodes",
         title: "Search the world",
-        description:
-            "Full-text search across names, summaries and notes, answered from the local \
+        description: "Full-text search across names, summaries and notes, answered from the local \
              index. Returns node summaries, not bare ids.",
         write: false,
         schema: search_schema,
@@ -219,8 +215,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "get_node_links",
         title: "Read a node's influence edges",
-        description:
-            "The explicit influence edges into and out of one node, with role and weight. \
+        description: "The explicit influence edges into and out of one node, with role and weight. \
              Parent nesting is on the node itself rather than here.",
         write: false,
         schema: id_only,
@@ -228,8 +223,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "resolve_influence",
         title: "Resolve the influence stack",
-        description:
-            "The layered stack Wobu would resolve for a subject — style guide, world bible, \
+        description: "The layered stack Wobu would resolve for a subject — style guide, world bible, \
              ancestry, culture, place, subject — with which node reached each layer, how it \
              was reached, and at what weight.",
         write: false,
@@ -238,8 +232,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "compile_prompt",
         title: "Compile the prompt",
-        description:
-            "The positive and negative prompt text a generation for this subject would \
+        description: "The positive and negative prompt text a generation for this subject would \
              actually send, plus the fragments it is assembled from and anything the budget \
              dropped. Compiles only; nothing is generated and nothing is spent.",
         write: false,
@@ -248,8 +241,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "list_generations",
         title: "List generation receipts",
-        description:
-            "The recorded generations for one node: provider, model, seed, prompt, cost and \
+        description: "The recorded generations for one node: provider, model, seed, prompt, cost and \
              outcome. These are receipts for work already done — reading them spends nothing.",
         write: false,
         schema: generations_schema,
@@ -264,8 +256,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "create_node",
         title: "Create a node",
-        description:
-            "Add a new entity to the open world. Writes a Markdown file into the user's \
+        description: "Add a new entity to the open world. Writes a Markdown file into the user's \
              project folder.",
         write: true,
         schema: create_node_schema,
@@ -273,8 +264,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "update_node",
         title: "Update a node",
-        description:
-            "Change a node's name, summary, source notes, tags or attributes. Only the fields \
+        description: "Change a node's name, summary, source notes, tags or attributes. Only the fields \
              present in the patch are touched. Writes to the user's project folder.",
         write: true,
         schema: update_node_schema,
@@ -282,8 +272,7 @@ static CATALOGUE: &[Tool] = &[
     Tool {
         name: "link_nodes",
         title: "Link two nodes",
-        description:
-            "Add an explicit influence edge, which changes what future prompts for the \
+        description: "Add an explicit influence edge, which changes what future prompts for the \
              influenced node will contain. Writes to the user's project folder.",
         write: true,
         schema: link_schema,
@@ -363,7 +352,12 @@ mod tests {
     #[test]
     fn read_tools_are_annotated_read_only() {
         for tool in CATALOGUE {
-            assert_eq!(tool.describe()["annotations"]["readOnlyHint"], !tool.write, "{}", tool.name);
+            assert_eq!(
+                tool.describe()["annotations"]["readOnlyHint"],
+                !tool.write,
+                "{}",
+                tool.name
+            );
         }
     }
 }

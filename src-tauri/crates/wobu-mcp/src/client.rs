@@ -306,15 +306,15 @@ impl Connection {
             if let Some(name) = info.get("name").and_then(Value::as_str) {
                 self.reported_name = name.to_owned();
             }
-            self.reported_version =
-                info.get("version").and_then(Value::as_str).map(str::to_owned);
+            self.reported_version = info.get("version").and_then(Value::as_str).map(str::to_owned);
         }
 
         self.notify("notifications/initialized", json!({})).await?;
 
-        let listing = tokio::time::timeout(HANDSHAKE_TIMEOUT, self.request_inner("tools/list", json!({})))
-            .await
-            .map_err(|_| Error::Client(format!("{} never listed its tools.", spec.name)))??;
+        let listing =
+            tokio::time::timeout(HANDSHAKE_TIMEOUT, self.request_inner("tools/list", json!({})))
+                .await
+                .map_err(|_| Error::Client(format!("{} never listed its tools.", spec.name)))??;
         self.tools = listing
             .get("tools")
             .and_then(Value::as_array)
@@ -498,10 +498,7 @@ mod tests {
         // caller is required to use.
         let mut disabled = spec("true", &[]);
         disabled.enabled = false;
-        let settings = crate::config::ClientSettings {
-            enabled: true,
-            servers: vec![disabled],
-        };
+        let settings = crate::config::ClientSettings { enabled: true, servers: vec![disabled] };
         assert_eq!(settings.active().count(), 0);
     }
 }
