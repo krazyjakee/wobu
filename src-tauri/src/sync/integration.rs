@@ -65,7 +65,7 @@ impl Peer {
     }
 
     async fn sync_with(&self, project: Id, other: &Peer) {
-        let _ = self.manager().run_ticket(project, &other.ticket).await.unwrap();
+        self.manager().run_ticket(project, &other.ticket).await.unwrap();
     }
 
     fn edit(&self, project: Id, node: Id, notes: &str) {
