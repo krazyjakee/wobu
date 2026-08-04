@@ -5,11 +5,13 @@
  */
 export const site = {
   name: 'Wobu',
-  url: 'https://wobu.app',
-  domain: 'wobu.app',
+  // The GitHub Pages project path, not a custom domain. Every link the site
+  // writes is page-relative, so only the canonical URLs below depend on this.
+  url: 'https://krazyjakee.github.io/wobu',
+  tagline: 'world building for concept art',
   description:
-    'Wobu is a local-first, AI-assisted desktop app for building coherent fictional worlds and ' +
-    'producing consistent concept art.',
+    'Wobu is a desktop app for building a world and making concept art that stays consistent. ' +
+    'It runs on your own computer.',
   repo: 'https://github.com/krazyjakee/wobu',
   // Deliberately version-less. A hard-coded number on a website is wrong the
   // day after a release; `/releases/latest` is right forever.

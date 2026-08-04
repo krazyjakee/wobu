@@ -72,5 +72,5 @@ const server = createServer(async (request, response) => {
 })
 
 server.listen(port, () => {
-  console.log(`wobu.app preview on http://localhost:${port}/  (serving ${root})`)
+  console.log(`Wobu site preview on http://localhost:${port}/  (serving ${root})`)
 })

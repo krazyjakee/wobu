@@ -1,5 +1,5 @@
 /**
- * Builds the wobu.app static site into `website/dist`.
+ * Builds the public Wobu site into `website/dist`.
  *
  * No framework and no client-side JavaScript: the output is HTML, one
  * stylesheet, and a copy of the product guide that already lives in `docs/`.

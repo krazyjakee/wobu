@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://wobu.app/sitemap.xml
+Sitemap: https://krazyjakee.github.io/wobu/sitemap.xml

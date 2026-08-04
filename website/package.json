@@ -2,7 +2,7 @@
   "name": "wobu-website",
   "private": true,
   "version": "0.0.0",
-  "description": "Static marketing and legal site for wobu.app, published to gh-pages.",
+  "description": "Static marketing and legal site for Wobu, published to gh-pages.",
   "license": "MIT",
   "type": "module",
   "scripts": {
