@@ -395,16 +395,6 @@ struct GenerationPlanRequest {
     seed_source: SeedSource,
     locked_seed: Option<u64>,
     grid: Option<VariantGrid>,
-    /// Emit one image instead of the preset's whole batch.
-    ///
-    /// A preset declares `images` because a set of four is what makes a
-    /// variation batch worth looking at — but the same preset is also the only
-    /// way to say "this shot, these influences", and a user who wants one
-    /// picture of it should not have to pay for four to get it. So this trims
-    /// the batch rather than adding a preset per count: the framing, the
-    /// priorities and the aspect are the preset's, and only how many of them
-    /// are sent changes.
-    single: bool,
 }
 
 /// The controls that are true of the whole batch, after normalization.
@@ -560,7 +550,6 @@ fn prepare_generation_plan(
         &slider_values,
         &available_nodes,
         request.grid.as_ref(),
-        request.single,
         caps,
     )?;
     Ok(PreparedGenerationPlan {
@@ -756,7 +745,6 @@ pub async fn generate_start(
     model: Option<String>,
     seed: Option<u64>,
     grid: Option<VariantGrid>,
-    single: Option<bool>,
     views: Option<Vec<String>>,
 ) -> CommandResult<String> {
     let read_only = "This project is read-only, so a generated image could not be saved.";
@@ -785,7 +773,6 @@ pub async fn generate_start(
                 seed_source,
                 locked_seed,
                 grid,
-                single: single.unwrap_or(false),
             },
             model,
             backend,
@@ -1601,7 +1588,6 @@ pub fn image_reference_report(
     model: Option<String>,
     seed: Option<u64>,
     grid: Option<VariantGrid>,
-    single: Option<bool>,
 ) -> CommandResult<ImageReferenceReport> {
     let (nodes, selection) = state.with(|project| {
         let selection = selected_image_provider(project)?;
@@ -1626,7 +1612,6 @@ pub fn image_reference_report(
             seed_source,
             locked_seed,
             grid,
-            single: single.unwrap_or(false),
         },
     )
 }
@@ -1737,39 +1722,11 @@ fn variant_cells(
     slider_values: &[(Id, f32)],
     available_nodes: &HashSet<Id>,
     grid: Option<&VariantGrid>,
-    single: bool,
     caps: &Capabilities,
 ) -> CommandResult<Vec<VariantCell>> {
-    /*
-     * Both of these say how many images the batch is, so asking for both is a
-     * question with two answers rather than a preference to reconcile. Refused
-     * here, at the one place the count is decided, so the bridge and the MCP
-     * surface cannot each grow their own idea of which wins.
-     */
-    if single && grid.is_some() {
-        return Err(WobuError::new(
-            Code::Invalid,
-            "A single image and a variant grid would both decide how many pictures this batch is. \
-             Ask for one or the other.",
-        ));
-    }
-    if single && !chosen.views.is_empty() {
-        return Err(WobuError::new(
-            Code::Invalid,
-            "Named-view presets such as Turnaround emit one image per view, so a single image \
-             would be a sheet with no views. Ask for the view you want instead.",
-        ));
-    }
-
     let Some(grid) = grid else {
-        let mut items = chosen.generations(base_seed);
-        // The first, not a random one: it is the cell that carries the seed the
-        // caller asked for, so re-rolling a single image and locking the seed
-        // that produced it describe the same picture.
-        if single {
-            items.truncate(1);
-        }
-        return Ok(items
+        return Ok(chosen
+            .generations(base_seed)
             .into_iter()
             .map(|item| VariantCell {
                 preset: chosen,
@@ -3454,7 +3411,6 @@ mod tests {
                 seed_source: SeedSource::Random,
                 locked_seed: None,
                 grid: None,
-                single: false,
             }
         }
 
@@ -3764,7 +3720,6 @@ mod tests {
             &[],
             &available,
             Some(&weight_grid),
-            false,
             &caps,
         )
         .unwrap();
@@ -3791,7 +3746,6 @@ mod tests {
             &[],
             &available,
             Some(&seed_grid),
-            false,
             &caps,
         )
         .unwrap();
@@ -3834,7 +3788,6 @@ mod tests {
             seed_source: SeedSource::Locked,
             locked_seed: Some(42),
             grid: None,
-            single: false,
         };
 
         let preview =
@@ -3884,7 +3837,6 @@ mod tests {
                 seed_source: SeedSource::Random,
                 locked_seed: None,
                 grid: Some(VariantGrid::Aspect { values: vec![" 16:9 ".into(), " 1:1 ".into()] }),
-                single: false,
             },
             &caps,
         )
@@ -4150,106 +4102,6 @@ mod tests {
             &[],
             &HashSet::from([subject.id]),
             Some(&grid),
-            false,
-            &caps,
-        )
-        .unwrap_err();
-        assert_eq!(error.code, Code::Invalid);
-    }
-
-    /// One image, on the seed that was asked for — and priced as one.
-    ///
-    /// The seed assertion is the point of the test rather than a detail of it:
-    /// `generations` walks adjacent seeds so a ×4 batch varies, and trimming to
-    /// any cell but the first would hand back a picture the caller cannot
-    /// reproduce by locking the seed they chose.
-    #[test]
-    fn a_single_image_trims_the_preset_batch_to_one() {
-        let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
-        let chosen = *preset("character_sheet").unwrap();
-        assert!(chosen.images > 1, "this test is only meaningful for a batch preset");
-        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
-        let cells = variant_cells(
-            &subject,
-            chosen,
-            AspectRatio::parse("3:4").unwrap(),
-            42,
-            SeedSource::Locked,
-            &[],
-            &HashSet::from([subject.id]),
-            None,
-            true,
-            &caps,
-        )
-        .unwrap();
-        assert_eq!(cells.len(), 1);
-        assert_eq!(cells[0].item.seed, 42);
-        assert_eq!(cells[0].item.index, 0);
-        assert!(matches!(cells[0].seed_source, SeedSource::Locked));
-        assert!(cells[0].variation.is_none());
-    }
-
-    /// The whole batch — label, receipts, and what gets billed — is one image.
-    ///
-    /// Planned rather than asserted on `variant_cells` alone: `batchSize` and
-    /// the `×4` in the label are derived downstream of the cells, and a trim
-    /// that left either of them describing the preset's count would put a
-    /// receipt on disk that disagrees with the images beside it.
-    #[test]
-    fn a_single_image_plans_one_request_and_bills_for_one() {
-        let world = PlanWorld::new();
-        let mut request = world.request("character_sheet", 100);
-        request.single = true;
-        let planned = world.plan(request).unwrap();
-
-        assert_eq!(planned.label, "Generate Kael Vantris ×1");
-        assert_eq!(planned.plans.len(), 1);
-        assert_eq!(planned.plans[0].generation.seed, 100);
-        assert_eq!(planned.plans[0].generation.params["batchSize"], json!(1));
-        assert_eq!(planned.plans[0].generation.params["batchIndex"], json!(0));
-
-        let batch = world.plan(world.request("character_sheet", 100)).unwrap();
-        assert_eq!(batch.plans.len(), 4, "the same preset unrestricted still emits its batch");
-    }
-
-    /// Both answer "how many images is this batch", so both is not a request.
-    #[test]
-    fn a_single_image_and_a_variant_grid_are_refused_together() {
-        let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
-        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
-        let grid = VariantGrid::Seed { values: vec![1, 2] };
-        let error = variant_cells(
-            &subject,
-            *preset("character_sheet").unwrap(),
-            AspectRatio::parse("1:1").unwrap(),
-            1,
-            SeedSource::Locked,
-            &[],
-            &HashSet::from([subject.id]),
-            Some(&grid),
-            true,
-            &caps,
-        )
-        .unwrap_err();
-        assert_eq!(error.code, Code::Invalid);
-    }
-
-    /// A turnaround trimmed to one image is a sheet with no views, which is
-    /// what the `views` argument exists to ask for instead.
-    #[test]
-    fn named_view_presets_are_refused_as_single_images() {
-        let subject = Node::new(wobu_core::NodeKind::Character, "Kael").unwrap();
-        let caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
-        let error = variant_cells(
-            &subject,
-            *preset("turnaround").unwrap(),
-            AspectRatio::parse("1:1").unwrap(),
-            1,
-            SeedSource::Locked,
-            &[],
-            &HashSet::from([subject.id]),
-            None,
-            true,
             &caps,
         )
         .unwrap_err();

@@ -32,9 +32,19 @@ fn presets_for_preserves_registry_order() {
     let ids = |kind| presets_for(kind).iter().map(|p| p.id).collect::<Vec<_>>();
     assert_eq!(
         ids(NodeKind::Character),
-        ["character_sheet", "turnaround", "portrait_study", "costume_plate", "material_study"]
+        [
+            "single_image",
+            "character_sheet",
+            "turnaround",
+            "portrait_study",
+            "costume_plate",
+            "material_study"
+        ]
     );
-    assert_eq!(ids(NodeKind::Environment), ["material_study", "environment_matte", "interior"]);
+    assert_eq!(
+        ids(NodeKind::Environment),
+        ["single_image", "material_study", "environment_matte", "interior"]
+    );
 }
 
 #[test]

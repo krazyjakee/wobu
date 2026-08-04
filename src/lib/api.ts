@@ -1306,16 +1306,6 @@ export interface GenerateOptions {
   seed?: number
   grid?: VariantGrid
   /**
-   * Emit one image instead of the preset's whole batch.
-   *
-   * The preset still decides the framing, the priorities and the aspect — this
-   * only decides how many of them are sent, which is why it is a flag here
-   * rather than a preset of its own. Refused alongside `grid`, and on
-   * named-view presets, where `views` is the way to ask for less than the
-   * sheet.
-   */
-  single?: boolean
-  /**
    * Restrict a named-view preset to some of its views.
    *
    * Only Turnaround has views at all, and this exists for one reason: re-rolling
@@ -1385,7 +1375,7 @@ export const imageReferenceReport = (
   subjectId: string,
   options: Pick<
     GenerateOptions,
-    'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid' | 'single'
+    'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid'
   > = {},
 ) => call<ImageReferenceReport>('image_reference_report', { subjectId, ...options })
 

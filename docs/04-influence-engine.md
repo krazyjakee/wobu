@@ -67,10 +67,13 @@ for learning to write good upstream notes.
 ## Output presets
 
 Presets are what turn one description into the right *kind* of sheet. Each defines section
-priorities, framing text, aspect, and image count.
+priorities, framing text, aspect, and image count. The image count lives here and nowhere else:
+asking for a single picture is choosing the preset that emits one, not a second control beside
+the picker that could disagree with the one already chosen.
 
 | Preset | For | Emits |
 | --- | --- | --- |
+| Single image | any | one complete view, no section reweighting, ×1 |
 | Character sheet | character, creature | full body, neutral pose, flat light, ×4 |
 | Turnaround | character, creature, prop | 8 named views, consistent seed — see below |
 | Portrait study | character | head & shoulders, dramatic key light, ×4 |
@@ -136,13 +139,6 @@ their deterministic adjacent-seed family, and each receipt records whether it us
 lock, a derived member of that family, an explicit re-roll, or a seed-grid cell. A scene has no
 lock of its own — its participants may each have one and may disagree — so a composition is
 either explicitly re-rolled or random.
-
-A batch may also be trimmed to a single image. The preset still supplies the framing, priorities
-and aspect; only its image count is overridden, and the one cell keeps the seed the request
-carried so locking that seed reproduces it. This is refused alongside a variant grid — both decide
-the size of the batch — and on named-view presets, where the `views` argument is the way to ask
-for less than the whole sheet. Because it narrows the cells rather than the queued jobs, the
-estimate, the spend reservation and the receipt all describe one image.
 
 A variant grid emits one image per explicit cell value. It either varies seed while holding the
 compiled inputs fixed, or holds one seed while varying exactly one of fragment weight, preset,
