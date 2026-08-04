@@ -106,7 +106,7 @@ describe('the 3D pane', () => {
     open()
     await screen.findByTestId('mesh-viewport')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reveal GLB' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show the file' }))
     fireEvent.click(screen.getByRole('button', { name: 'Export copy…' }))
     await waitFor(() => {
       expect(h.reveal).toHaveBeenCalledWith('/project/assets/meshes/canonical.glb')
@@ -121,7 +121,7 @@ describe('the 3D pane', () => {
   it('does not guess a source sheet when the receipt omitted it', async () => {
     open([{ ...concept, turnaround: [] }])
     const sheet = within(await screen.findByLabelText('Source turnaround sheet'))
-    expect(sheet.getByText(/did not record a complete source sheet/)).toBeTruthy()
+    expect(sheet.getByText(/did not keep a complete turnaround/)).toBeTruthy()
     expect(sheet.queryByRole('img')).toBeNull()
   })
 })

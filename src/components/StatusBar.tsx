@@ -9,6 +9,7 @@ import type {
   SyncPeerStatus,
 } from '../lib/api'
 import { elapsedText, lastGeneration } from '../lib/jobs'
+import { syncStateLabel } from '../lib/stateLabels'
 import { sessionsText, sessionsTitle } from '../lib/presence'
 import { relativeTime } from '../lib/time'
 import { useUI } from '../store/ui'
@@ -59,7 +60,7 @@ export function StatusBar({
       {project.onNetworkShare && (
         <>
           <span className="sep" />
-          <span>network share · 5s poll</span>
+          <span>network share · checked every 5s</span>
         </>
       )}
       {project.readOnly && (
@@ -75,9 +76,9 @@ export function StatusBar({
           <span
             className={`dot ${sync.state === 'syncing' ? 'dot-ok' : sync.state === 'connecting' ? 'dot-warn' : ''}`}
             role="img"
-            aria-label={`Sync ${sync.state}`}
+            aria-label={`Sync: ${syncStateLabel(sync.state)}`}
           />
-          <span>sync · {sync.state}</span>
+          <span>sync · {syncStateLabel(sync.state)}</span>
           {connectedText(sync.peers) && <span>· {connectedText(sync.peers)}</span>}
           {last && (
             <span>
@@ -85,7 +86,7 @@ export function StatusBar({
             </span>
           )}
           <span className="sync-caveat">
-            · peer edits arrive only while both people run Wobu · no seed node
+            · edits from the other machine arrive only while you both have Wobu running
           </span>
         </>
       )}
@@ -94,7 +95,7 @@ export function StatusBar({
 
       {sessions && (
         <>
-          <span className="presence" role="img" aria-label="Other sessions in this project" />
+          <span className="presence" role="img" aria-label="Other people in this project" />
           <Tooltip tip={sessionsTitle(peers)}>
             <span tabIndex={0}>{sessions}</span>
           </Tooltip>
@@ -120,7 +121,7 @@ export function StatusBar({
           {backend.image && <span>· {backend.image.model}</span>}
         </>
       ) : (
-        <span>checking backend…</span>
+        <span>checking the image provider…</span>
       )}
       <button
         className="status-link"
@@ -132,7 +133,7 @@ export function StatusBar({
       {backend && (
         <span>
           · {backend.text.model}
-          {backend.text.contextTokens && ` · ${contextText(backend.text.contextTokens)} ctx`}
+          {backend.text.contextTokens && ` · ${contextText(backend.text.contextTokens)} context`}
         </span>
       )}
       {generation && (
@@ -149,7 +150,7 @@ export function StatusBar({
 }
 
 function healthText(status: StatusBarBackend): string {
-  if (!status.image) return 'image backend not selected'
+  if (!status.image) return 'no image provider chosen'
   switch (status.health.state) {
     case 'connected':
       return `${status.image.label} connected`
@@ -164,8 +165,9 @@ function healthText(status: StatusBarBackend): string {
 
 function healthTitle(status: StatusBarBackend): string {
   if (status.health.state !== 'connected') return status.health.detail
-  if (status.health.externalQueue === null) return 'The selected image model answered its probe.'
-  return `The backend answered its health probe and reports ${status.health.externalQueue} external jobs.`
+  if (status.health.externalQueue === null)
+    return 'The chosen image model answered when Wobu asked.'
+  return `The provider answered when Wobu asked, and reports ${status.health.externalQueue} jobs of its own already running.`
 }
 
 function contextText(tokens: number): string {

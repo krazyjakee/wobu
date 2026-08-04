@@ -158,13 +158,29 @@ function fallbackColor(kind: NodeKind): string {
   }
 }
 
+/**
+ * What each kind is called when the registry has not answered yet.
+ *
+ * De-underscoring the enum is not good enough here: `style_guide` and
+ * `world_bible` are the *old* names for the two singletons, and the registry,
+ * the guide and every other surface call them Art Style and World Canon. A
+ * fallback that printed the enum would teach a name the rest of the app has
+ * retired, which is exactly the drift #127 is about. `species` is here for the
+ * unrelated reason that the naive plural of it is "speciess".
+ */
+const FALLBACK_LABELS: Partial<Record<NodeKind, { label: string; plural: string }>> = {
+  style_guide: { label: 'Art Style', plural: 'Art Styles' },
+  world_bible: { label: 'World Canon', plural: 'World Canon' },
+  species: { label: 'Species', plural: 'Species' },
+}
+
 /** Human label without the registry (only used before `kind_registry` lands). */
 export function labelFor(def: KindDef | undefined, kind: NodeKind): string {
-  return def?.label ?? kind.replace(/_/g, ' ')
+  return def?.label ?? FALLBACK_LABELS[kind]?.label ?? kind.replace(/_/g, ' ')
 }
 
 export function pluralFor(def: KindDef | undefined, kind: NodeKind): string {
-  return def?.plural ?? `${labelFor(def, kind)}s`
+  return def?.plural ?? FALLBACK_LABELS[kind]?.plural ?? `${labelFor(def, kind)}s`
 }
 
 export type KindIndex = Map<NodeKind, KindDef>

@@ -439,8 +439,11 @@ describe('settings control accessibility', () => {
     expect(text.getByRole('button', { name: 'Anthropic' })).toHaveAttribute('aria-pressed', 'true')
     expect(text.getByRole('button', { name: 'Gemini' })).toHaveAttribute('aria-pressed', 'false')
 
-    expect(screen.getByRole('button', { name: 'info' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'debug' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Normal' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Everything' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 })
 
@@ -449,7 +452,7 @@ describe('the machine-local ComfyUI endpoint', () => {
     await open()
     const capabilityKey = ['image_generation_capabilities', 'world', 'flux-dev']
     qc.setQueryData(capabilityKey, { width: 2048, height: 2048 })
-    const field = await screen.findByLabelText('Server URL')
+    const field = await screen.findByLabelText('Server address')
     expect(field).toHaveValue('http://127.0.0.1:8188')
 
     fireEvent.change(field, { target: { value: 'http://renderbox.local:9000/comfy/' } })
@@ -481,7 +484,7 @@ describe('the machine-local ComfyUI endpoint', () => {
     }
     await open()
 
-    expect(await screen.findByLabelText('Server URL')).toHaveAccessibleDescription(
+    expect(await screen.findByLabelText('Server address')).toHaveAccessibleDescription(
       /never in project.json or the project folder.*enter only a server you trust/i,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Save and check' }))
@@ -750,7 +753,7 @@ describe('the keyboard pane', () => {
 
   it('opens the reference from here as well', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Show the printable list' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show the full list' }))
     expect(useUI.getState().shortcutsOpen).toBe(true)
   })
 })

@@ -555,7 +555,7 @@ function ComfyEndpointSettings() {
       },
       (reason: unknown) => {
         if (disposed) return
-        setError(`Could not read this computer's ComfyUI endpoint: ${errorMessage(reason)}`)
+        setError(`Could not read this computer's ComfyUI address: ${errorMessage(reason)}`)
         setLoading(false)
       },
     )
@@ -586,10 +586,10 @@ function ComfyEndpointSettings() {
   return (
     <div className="prov-endpoint" aria-label="ComfyUI connection">
       <div className="prov-key-head">
-        <span className="prov-key-name">ComfyUI endpoint</span>
+        <span className="prov-key-name">ComfyUI address</span>
         <span className="badge">local</span>
       </div>
-      <label htmlFor="comfyui-endpoint">Server URL</label>
+      <label htmlFor="comfyui-endpoint">Server address</label>
       <div className="prov-endpoint-entry">
         <input
           id="comfyui-endpoint"
@@ -638,10 +638,10 @@ function ComfyEndpointSettings() {
       <p className="set-note" id="comfyui-endpoint-boundary">
         Saved in Wobu&rsquo;s application data on this computer, never in <code>project.json</code>{' '}
         or the project folder. Image generation, scene composition, replay and local mesh requests
-        all use this route, including the mesh reconstruction started from a node's 3D tab. A
-        non-loopback server receives the prompts and reference images those jobs need, so enter only
-        a server you trust. URL credentials are rejected; an authenticating proxy must be configured
-        outside Wobu.
+        all use this address, including a mesh reconstruction started from an entity&rsquo;s 3D tab.
+        Anything other than a server on this computer receives the prompts and reference images
+        those jobs need, so enter only a server you trust. A user name and password in the address
+        is refused; a server that needs a sign-in has to be put behind something outside Wobu.
       </p>
       {probe && (
         <p className={probe.ok ? 'prov-probe is-ok' : 'prov-probe is-bad'} role="status">
@@ -1041,7 +1041,7 @@ function Storage() {
     try {
       setInfo(await indexInfo())
     } catch (e) {
-      report(e, 'Could not read the index')
+      report(e, 'Could not read the search index')
     }
   }, [])
 
@@ -1051,7 +1051,7 @@ function Storage() {
       (value) => {
         if (!disposed) setInfo(value)
       },
-      (error) => report(error, 'Could not read the index'),
+      (error) => report(error, 'Could not read the search index'),
     )
     return () => {
       disposed = true
@@ -1064,9 +1064,9 @@ function Storage() {
     try {
       await indexRebuild()
       invalidateWorld(qc)
-      toast('Index rebuilt from the project folder.')
+      toast('The search index was rebuilt from the project folder.')
     } catch (e) {
-      report(e, 'Could not rebuild the index')
+      report(e, 'Could not rebuild the search index')
     } finally {
       setBusy(false)
       void refresh()
@@ -1079,32 +1079,34 @@ function Storage() {
     <section className="set-sec">
       <h3>Storage</h3>
       <p className="set-note">
-        The index makes the world searchable. It holds no original copy of anything — every fact is
-        in the project folder as Markdown — so deleting or rebuilding it is always safe.
+        The search index is what makes the world searchable. It holds no original copy of anything —
+        every fact is in the project folder as Markdown — so deleting or rebuilding it is always
+        safe.
       </p>
 
       <div className="set-row">
-        <span className="set-label">Index</span>
+        <span className="set-label">Search index</span>
         <code className="set-path">{info.path}</code>
       </div>
       <div className="set-row">
         <span className="set-label">Size</span>
         <span className="set-value">
-          {formatSize(info.sizeBytes)} · {info.nodeCount} {info.nodeCount === 1 ? 'node' : 'nodes'}
+          {formatSize(info.sizeBytes)} · {info.nodeCount}{' '}
+          {info.nodeCount === 1 ? 'entity' : 'entities'}
         </span>
       </div>
 
       <div className="set-acts">
         <button className="btn-mini" onClick={() => setConfirming(true)} disabled={busy}>
           <Icon name="refresh" size="sm" />
-          {busy ? 'Rebuilding…' : 'Rebuild index'}
+          {busy ? 'Rebuilding…' : 'Rebuild search index'}
         </button>
       </div>
 
       {confirming && (
         <ConfirmSheet
-          title="Rebuild the index?"
-          body="Every node file is read again from the project folder. Nothing you have written is touched — the index is derived from it. On a large world over a network share this can take a while."
+          title="Rebuild the search index?"
+          body="Every entity file is read again from the project folder. Nothing you have written is touched — the index is only made from it. On a large world over a network drive this can take a while."
           confirmLabel="Rebuild"
           onConfirm={() => void rebuild()}
           onCancel={() => setConfirming(false)}
@@ -1259,12 +1261,29 @@ function About() {
   )
 }
 
+/**
+ * The buttons, in words rather than in the log crate's level names.
+ *
+ * `warn` in particular is an abbreviation that exists only in code, and a row
+ * of five lowercase identifiers gave the reader nothing to choose between
+ * without opening the help line under them (#127). The level written into the
+ * log file is unchanged; only what the button says is.
+ */
+const LEVEL_LABEL: Record<LogLevel, string> = {
+  off: 'Off',
+  error: 'Failures',
+  warn: 'Failures and near misses',
+  info: 'Normal',
+  debug: 'Everything',
+}
+
 const LEVEL_HELP: Record<LogLevel, string> = {
   off: 'Records nothing at all, errors included. The file stops growing and stops being useful.',
   error: 'Only failures.',
   warn: 'Failures, and the things that recovered.',
   info: 'The default. Failures plus which project was opened and when.',
-  debug: 'Adds the technical detail behind each failure. Use this to reproduce something once.',
+  debug:
+    'Adds the technical detail behind each failure. Use this while you reproduce something once.',
 }
 
 /**
@@ -1384,7 +1403,7 @@ function Diagnostics() {
               aria-pressed={l === info.level}
               onClick={() => void changeLevel(l)}
             >
-              {l}
+              {LEVEL_LABEL[l]}
             </button>
           ))}
         </div>
@@ -1394,7 +1413,7 @@ function Diagnostics() {
       <div className="set-acts">
         <button className="btn-mini" onClick={() => void reveal()}>
           <Icon name="folder" size="sm" />
-          Reveal log file
+          Show the log file
         </button>
         <button className="btn-mini" onClick={() => void togglePreview()} disabled={busy}>
           <Icon name="search" size="sm" />

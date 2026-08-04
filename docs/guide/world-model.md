@@ -1,16 +1,16 @@
 # Entities and hierarchy
 
-Species, characters, settings, props, cultures, vehicles — and the Art Style and World Canon nodes
-themselves — are all the same record type. They differ only in kind, which selects an icon, a
-colour, an influence layer, a set of description sections and some default relations.
+Species, characters, settings, props, cultures, vehicles — and the Art Style and World Canon
+entities themselves — are all the same record type. They differ only in kind, which selects an icon,
+a colour, an influence layer, a set of description sections and some default relations.
 
 This is why there is exactly one editor to learn. It is also why adding "Factions" or "Technologies"
 later is a registry change rather than a new feature.
 
 ## The ten kinds
 
-The registry lives in the Rust core, and the interface never invents a kind the backend did not
-send. `Nests` means the kind can be nested inside *itself* — a region inside a region. Nesting never
+The list of kinds lives in Wobu itself, and the interface never invents one that is not on it.
+`Nests` means the kind can be nested inside *itself* — a region inside a region. Nesting never
 crosses kinds; that is what links are for.
 
 | Kind | Nests | Description sections |
@@ -43,10 +43,10 @@ Wobu distinguishes **nesting** from **linking**, and the difference matters.
 
 ### Nesting — within a kind
 
-A node's parent is always the same kind as itself. Ember Coast contains Cinder Bay contains the Kiln
-Quarter. Vashk has a sub-species. A lantern belongs to a prop set. Nesting is what the navigator
-tree draws, and you change it by dragging. Only Species, Culture, Setting and Prop nest; the other
-six are flat.
+An entity's parent is always the same kind as itself. Ember Coast contains Cinder Bay contains the
+Kiln Quarter. Vashk has a sub-species. A lantern belongs to a prop set. Nesting is what the
+navigator tree draws, and you change it by dragging. Only Species, Culture, Setting and Prop nest;
+the other six are flat.
 
 A parent is treated as an implicit influence of full weight. The Kiln Quarter inherits everything
 Cinder Bay says, which inherits everything Ember Coast says.
@@ -54,18 +54,18 @@ Cinder Bay says, which inherits everything Ember Coast says.
 ### Linking — across kinds
 
 Links are the edges the influence engine walks. Each has a role and a weight, and can be disabled.
-You set them from the **Relations** tab, which also lists the links pointing *back* at this node —
+You set them from the **Relations** tab, which also lists the links pointing *back* at this entity —
 which is how you find out what you are about to break before you edit a species.
 
 | Role | Shown as | Means |
 | --- | --- | --- |
-| `styled_by` | Styled by | Rendered in this art style. The Art Style node is seeded into every stack anyway. |
+| `styled_by` | Styled by | Rendered in this art style. The Art Style entity is seeded into every stack anyway. |
 | `species_of` | Species | This character or creature is of that species. Feeds the Ancestry layer. |
 | `member_of` | Member of | Belongs to that culture, guild or faction. |
 | `located_in` | Located in | Lives in, or is found in, that setting. |
 | `related_to` | Related to | A lateral association — a rival, a matching prop, a sibling design. It contributes at the subject layer rather than getting a layer of its own. |
 
-## What a node holds
+## What an entity holds
 
 | | |
 | --- | --- |
@@ -76,7 +76,7 @@ which is how you find out what you are about to break before you edit a species.
 | Attributes | Kind-specific fields — era, scale, biome, primary material. |
 | Tags | Free-form, for filtering the asset library and the wiki export. |
 | Cover asset | The image shown on cards, on tree rows and in the inspector. |
-| References | Images attached to this node, each with a role and a weight. |
+| References | Images attached to this entity, each with a role and a weight. |
 | Links | The influence edges above. |
 | Locked seed and LoRA | Generation state that belongs to this entity — see [Generating](generating.md). |
 
@@ -95,20 +95,20 @@ re-enhancing over it offers a diff and refuses to write until you say so explici
   pick a kind, a name and — for kinds that nest — an optional parent.
 - **Duplicate** copies notes, description and links. It is the fastest way to make the second of
   anything. Singletons cannot be duplicated.
-- **Drag to re-parent**, within a kind. This changes what the node inherits, so it will often mark
-  descendants stale. Dropping onto a group header moves a node back to the top level — which is
-  always allowed, so a wrongly parented node always has a way out.
+- **Drag to re-parent**, within a kind. This changes what the entity inherits, so it will often mark
+  descendants stale. Dropping onto a group header moves an entity back to the top level — which is
+  always allowed, so a wrongly parented entity always has a way out.
 - **Delete** asks for confirmation and removes one Markdown file. **Its children are promoted to its
-  parent** rather than deleted with it, and links pointing at the deleted node are stripped from
+  parent** rather than deleted with it, and links pointing at the deleted entity are stripped from
   every other file. Generations that referenced it stay on disk — they are write-once history.
 - **Undo** covers all of this. It is session-only and never persisted: between quit and relaunch the
   folder may have been edited in Obsidian, pulled, synced or restored, and replaying a week-old
   inverse over that would not be undo. One caveat is stated out loud when you undo a delete — the
-  links that pointed at the node were removed by the delete and do not come back.
+  links that pointed at the entity were removed by the delete and do not come back.
 
 > **Getting the altitude right** The single most common mistake is writing at the wrong level. If a
 > detail is true of every Vashk, it belongs on the species. If it is true only of guild members, it
 > belongs on the culture. If it is true only of Kael, it belongs on Kael.
 >
 > Put it too low and you repeat yourself and drift. Put it too high and it contaminates everything.
-> When unsure, ask: *would this be wrong for a sibling node?* If yes, it is too high.
+> When unsure, ask: *would this be wrong for a sibling entity?* If yes, it is too high.

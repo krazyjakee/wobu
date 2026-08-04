@@ -17,7 +17,7 @@ export interface OptionText {
   label: string
   /** Matched by the filter but never displayed — kinds, ids, alternate names. */
   keywords?: string
-  /** Held at the head of the list by the sort — "All nodes", "— top level —". */
+  /** Held at the head of the list by the sort — "All entities", "— top level —". */
   pinned?: boolean
 }
 
@@ -74,7 +74,7 @@ export function prepareOptions<T extends OptionText>(options: T[]): PreparedOpti
  * stable in every engine this ships on, so genuinely identical labels keep the
  * order they arrived in.
  *
- * Pinned rows are not sorted at all. "All nodes" and "— top level —" are not
+ * Pinned rows are not sorted at all. "All entities" and "— top level —" are not
  * entries in the list, they are the way out of it, and alphabetising them into
  * the middle of the names would hide the row a user goes looking for first.
  */

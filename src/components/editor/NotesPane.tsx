@@ -81,13 +81,13 @@ function NotesPaneSession({
       <div className="col col-ai">
         <div className="col-head">
           <h2>{enhance?.active ? 'Enhance review' : 'Enhanced description'}</h2>
-          <span className="col-tag col-tag-ai">machine side</span>
+          <span className="col-tag col-tag-ai">written by Enhance</span>
           <span className="col-tag">
             {enhance?.active
               ? enhance.complete
                 ? 'awaiting decision'
                 : enhance.running
-                  ? 'streaming'
+                  ? 'arriving'
                   : 'local draft'
               : STATE_LABEL[shownDescriptionState]}
           </span>
@@ -176,9 +176,9 @@ function Description({
       <div className="desc-empty">
         <b>Nothing enhanced yet.</b>
         <span>
-          This half is the machine&apos;s. Enhance turns the notes on the left into structured
-          sections{def ? ` — ${def.sections.map((s) => s.label).join(' · ')}` : ''} — which is what
-          the influence compiler reads.
+          This half is Enhance&apos;s. It turns the notes on the left into named sections
+          {def ? ` — ${def.sections.map((s) => s.label).join(' · ')}` : ''} — and those sections are
+          what a prompt is built from.
         </span>
       </div>
     )

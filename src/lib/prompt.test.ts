@@ -177,7 +177,11 @@ describe('fragmentLabel', () => {
 
 describe('sectionLabel', () => {
   it('spells a key as prose without inventing a label the registry did not give', () => {
-    expect(sectionLabel('full_ref')).toBe('full ref')
     expect(sectionLabel('silhouette')).toBe('silhouette')
+    expect(sectionLabel('line_quality')).toBe('line quality')
+    // The exception, and the reason there is a table at all: "full ref" is an
+    // abbreviation that exists only in the enum, and every other surface in the
+    // app spells the role out (#127).
+    expect(sectionLabel('full_ref')).toBe('full reference')
   })
 })

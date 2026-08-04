@@ -4,7 +4,7 @@ import type { JobFailure, JobKind } from './api'
  * Turning a queue failure into something a person can act on.
  *
  * Every string a failed job puts in front of the user comes from here, for one
- * reason: the messages the backend produces are aimed at whoever reads the log.
+ * reason: the messages the provider produces are aimed at whoever reads the log.
  * `wobu_imagine::Error::Unsupported` says so in as many words, and the failure
  * that opened #142 —
  * `this backend cannot honour the request: invalid_request: Image delivery mode
@@ -13,7 +13,7 @@ import type { JobFailure, JobKind } from './api'
  * the *reason*; it is never the whole of what is said.
  *
  * The split is deliberate: `title` is what happened, `guidance` is what to do
- * next, `reason` is the backend's wording, `detail` is the technical remainder
+ * next, `reason` is the provider's wording, `detail` is the technical remainder
  * that starts folded. A failure with no guidance is a failure the user is
  * expected to solve by staring at it.
  */
@@ -25,8 +25,11 @@ export function jobKindLabel(kind: JobKind): string {
       return 'Image generation'
     case 'mesh':
       return '3D reconstruction'
+    // "Enhance" and not "Description enhance": the button, the shortcut, the
+    // tab and the guide all call it the one word, and a notification is a poor
+    // place to introduce a second name for it.
     case 'enhance':
-      return 'Description enhance'
+      return 'Enhance'
     case 'train_lora':
       return 'LoRA training'
     case 'thumbnail':
@@ -42,7 +45,7 @@ export function jobKindLabel(kind: JobKind): string {
  *
  * `unknown` is not rounded down to "free". The queue treats it as charged when
  * it decides whether to retry (see `wobu_jobs::Billed`), and telling somebody
- * their money is safe when the backend never said so is the one lie this
+ * their money is safe when the provider never said so is the one lie this
  * surface must not tell.
  */
 export function chargeLine(failure: JobFailure): string | null {
@@ -51,11 +54,11 @@ export function chargeLine(failure: JobFailure): string | null {
   if (failure.billed === 'charged') {
     return cost
       ? `You were charged for this attempt and got nothing back: ${cost}.`
-      : 'You were charged for this attempt and got nothing back. The backend did not say how much.'
+      : 'You were charged for this attempt and got nothing back. The provider did not say how much.'
   }
   return cost
     ? `This attempt may have been charged for: ${cost}.`
-    : 'The backend did not say whether this attempt was charged for. Treat it as spent.'
+    : 'The provider did not say whether this attempt was charged for. Treat it as spent.'
 }
 
 /** True when the user's money is, or may be, gone. Drives the loudest surface. */
@@ -72,23 +75,23 @@ export function costsMoney(failure: JobFailure): boolean {
  */
 const GUIDANCE: Record<string, string> = {
   'provider.no_key':
-    'Wobu has no key for this backend yet. Open Settings → Providers and add one, then start the job again.',
+    'Wobu has no key for this provider yet. Open Settings → Providers and models and add one, then start the job again.',
   'provider.bad_key':
-    'The backend rejected the key Wobu is using. Open Settings → Providers and paste the key again — a key that has been revoked or copied with a stray space fails exactly like this.',
+    'The provider rejected the key Wobu is using. Open Settings → Providers and models and paste the key again — a key that has been revoked or copied with a stray space fails exactly like this.',
   'provider.keychain_unavailable':
     'Your operating system would not open its keychain, so the saved key could not be read. Unlock the keychain — logging out and back in is usually enough — then start the job again.',
   'provider.clock_skew':
-    "Your computer's clock is too far from real time for the backend to accept the request. Turn on automatic time in your system settings, then start the job again.",
+    "Your computer's clock is too far from real time for the provider to accept the request. Turn on automatic time in your system settings, then start the job again.",
   'provider.billing_required':
-    'The backend will not run this model without billing enabled on the account. Enable it with the provider, then start the job again.',
+    'The provider will not run this model without billing enabled on the account. Enable it with the provider, then start the job again.',
   'provider.unavailable':
-    'Wobu could not reach the backend. If it runs on this machine, check it is still running; if it is a remote service, check your connection. Then start the job again.',
+    'Wobu could not reach the provider. If it runs on this machine, check it is still running; if it is a remote service, check your connection. Then start the job again.',
   'provider.bad_response':
-    'The backend answered, but not with anything Wobu could use. Starting the job again with a new seed usually works — if it keeps happening, the prompt may be being refused rather than failing.',
+    'The provider answered, but not with anything Wobu could use. Starting the job again with a new seed usually works — if it keeps happening, the prompt may be being refused rather than failing.',
   'provider.context_too_long':
-    'The prompt sent to the backend was longer than the model accepts. Shorten the description, or mute a layer or two in the Inspector, then start the job again.',
+    'The prompt sent to the provider was longer than the model accepts. Shorten the description, or mute a layer or two in the inspector, then start the job again.',
   'billing.ceiling_exceeded':
-    "This project's spending ceiling has been reached, so Wobu stopped before spending more. Raise the ceiling in Settings → Providers if you meant to continue.",
+    "This project's spending ceiling has been reached, so Wobu stopped before spending more. Raise the ceiling in Settings → Providers and models if you meant to continue.",
   'write.read_only':
     'The result could not be written because the project folder is read-only. Fix the folder permissions, or copy the project somewhere writable, then start the job again.',
   'share.unmounted':
@@ -96,7 +99,7 @@ const GUIDANCE: Record<string, string> = {
   'io.failed':
     'Wobu could not write the result into the project folder. Check there is free disk space and that the folder is still writable, then start the job again.',
   'node.not_found':
-    'The entity this job was for no longer exists, so there was nowhere to put the result. Nothing is wrong with the backend.',
+    'The entity this job was for no longer exists, so there was nowhere to put the result. Nothing is wrong with the provider.',
   internal:
     'This is a fault in Wobu rather than in your prompt, your key or your machine. Nothing you can change will fix it. Please report it with the details below.',
 }
@@ -116,16 +119,16 @@ function rejectedRequest(failure: JobFailure): string | null {
   if (failure.code !== 'internal') return null
   const message = failure.message.toLowerCase()
   if (!message.includes('cannot honour the request')) return null
-  return 'Wobu asked the backend for an option it does not accept, so nothing was generated. This is a fault in Wobu, not in your prompt. Check for a Wobu update first — several of these have already been fixed — and report it with the details below if you are up to date.'
+  return 'Wobu asked the provider for an option it does not accept, so nothing was generated. This is a fault in Wobu, not in your prompt. Check for a Wobu update first — several of these have already been fixed — and report it with the details below if you are up to date.'
 }
 
 /** A rate limit is the one code whose answer depends on a number in the payload. */
 function rateLimited(failure: JobFailure): string {
   const seconds = failure.retryAfter ? Math.ceil(failure.retryAfter / 1_000) : null
   const wait = seconds
-    ? `The backend asked for ${seconds} second${seconds === 1 ? '' : 's'} before the next attempt.`
-    : 'The backend did not say how long to wait.'
-  return `The backend is turning requests away because this account has sent too many too quickly. ${wait} Running fewer jobs at once, in Settings → Providers, stops it recurring.`
+    ? `The provider asked for ${seconds} second${seconds === 1 ? '' : 's'} before the next attempt.`
+    : 'The provider did not say how long to wait.'
+  return `The provider is turning requests away because this account has sent too many too quickly. ${wait} Running fewer jobs at once, in Settings → Providers and models, stops it recurring.`
 }
 
 export function failureGuidance(failure: JobFailure): string {
@@ -135,8 +138,8 @@ export function failureGuidance(failure: JobFailure): string {
   const known = GUIDANCE[failure.code]
   if (known) return known
   return failure.retryable
-    ? 'Wobu does not have specific advice for this one. Starting the job again is worth a try; the backend’s own words are below.'
-    : 'Wobu does not have specific advice for this one, and starting the job again would fail the same way. The backend’s own words are below.'
+    ? 'Wobu does not have specific advice for this one. Starting the job again is worth a try; the provider’s own words are below.'
+    : 'Wobu does not have specific advice for this one, and starting the job again would fail the same way. The provider’s own words are below.'
 }
 
 /**

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from '../../lib/api'
 import type { MeshOptions, QueueSnapshot, WobuNode } from '../../lib/api'
 import { useAssetThumb } from '../../lib/queries'
+import { jobStateLabel } from '../../lib/stateLabels'
 import { report, toast } from '../../store/ui'
 import { TipButton } from '../Tooltip'
 
@@ -193,7 +194,7 @@ export function TurnaroundReview({
     <aside className="mesh-make" aria-label={`Reconstruct a mesh for ${node.name}`}>
       <header>
         <h3>Make a mesh</h3>
-        <span>{opts?.provider ? opts.label : 'No 3D backend selected'}</span>
+        <span>{opts?.provider ? opts.label : 'No 3D provider chosen'}</span>
       </header>
 
       {empty ? (
@@ -315,7 +316,7 @@ export function TurnaroundReview({
       {meshJob ? (
         <div className="mesh-make-active" role="status">
           <span>
-            {meshJob.label} · {meshJob.state}
+            {meshJob.label} · {jobStateLabel(meshJob.state)}
             {progress ? ` · ${progress}` : ''}
           </span>
           <button className="btn-mini" type="button" onClick={() => void stop()}>
@@ -329,12 +330,12 @@ export function TurnaroundReview({
             !blocked
               ? null
               : readOnly
-                ? 'This project is read-only, and a reconstruction writes a mesh into it.'
+                ? 'This project folder is read-only, and a reconstruction writes a mesh into it.'
                 : missingRequired.length
                   ? `A mesh needs every required view first. Still missing: ${missingRequired.join(', ')}.`
                   : 'Wait for the views to finish.'
           }
-          tip="Send the approved views to the mesh backend"
+          tip="Send the views you approved to the 3D provider"
           onClick={() => void reconstruct()}
         >
           {busy === 'reconstruct' ? 'Queuing…' : 'Reconstruct mesh'}
@@ -344,7 +345,7 @@ export function TurnaroundReview({
       {failedJob && !meshJob && (
         <p className="mesh-make-error" role="status">
           {failedJob.message}
-          {failedJob.billed === 'charged' ? ' This job was charged for.' : ''}
+          {failedJob.billed === 'charged' ? ' You were charged for this attempt.' : ''}
         </p>
       )}
       {error && <p className="mesh-make-error">{error}</p>}
@@ -413,13 +414,13 @@ function ReconstructControls({
           disabled={disabled || !options.pbr}
           onChange={(event) => onPbr(event.target.checked)}
         />
-        <span>PBR materials{options.pbr ? '' : ' — not offered by this backend'}</span>
+        <span>PBR materials{options.pbr ? '' : ' — this provider does not offer them'}</span>
       </label>
       <p className="mesh-make-sending">
         {options.model} · sending {sending.length} view{sending.length === 1 ? '' : 's'} (
         {sending.join(', ')})
         {options.maxViews < 8
-          ? ' — this tier reconstructs from fewer views than a turnaround has.'
+          ? ' — this option reconstructs from fewer views than a turnaround has.'
           : ''}
       </p>
     </div>
@@ -463,7 +464,7 @@ function ViewSlot({
       <figcaption>
         <b>{label}</b>
         {take && <span>seed {take.seed}</span>}
-        {!sent && <span>not sent to this backend</span>}
+        {!sent && <span>not sent to this provider</span>}
       </figcaption>
       <div className="mesh-make-tile-actions">
         {slot.takes.length > 1 && (
@@ -485,7 +486,7 @@ function ViewSlot({
           disabled={readOnly}
           onClick={onReroll}
         >
-          {busy ? '…' : take ? 'Reroll' : 'Generate'}
+          {busy ? '…' : take ? 'Re-roll' : 'Generate'}
         </button>
       </div>
     </figure>

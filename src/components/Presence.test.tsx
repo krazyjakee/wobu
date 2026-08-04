@@ -171,18 +171,18 @@ describe('a node somebody else has open', () => {
     present = [peer({ sessionId: 's1', user: 'Nadia', editing: ['kael'] })]
     await open()
 
-    expect(screen.getByLabelText(/Nadia has this node open/)).toBeTruthy()
+    expect(screen.getByLabelText(/Nadia has this entity open/)).toBeTruthy()
   })
 
   it('loses the dot when that session goes stale', async () => {
     present = [peer({ sessionId: 's1', user: 'Nadia', editing: ['kael'] })]
     const qc = await open()
-    expect(screen.getByLabelText(/Nadia has this node open/)).toBeTruthy()
+    expect(screen.getByLabelText(/Nadia has this entity open/)).toBeTruthy()
 
     present = [peer({ sessionId: 's1', user: 'Nadia', editing: ['kael'], seenSecsAgo: 600 })]
     await poll(qc)
 
-    expect(screen.queryByLabelText(/Nadia has this node open/)).toBeNull()
+    expect(screen.queryByLabelText(/Nadia has this entity open/)).toBeNull()
   })
 
   it('has no dot on a row nobody else is in', async () => {
@@ -201,7 +201,7 @@ describe('the banner over a node being edited elsewhere', () => {
     fireEvent.click(row('Kael'))
     await act(async () => {})
     expect(bannerCodes()).toEqual([PRESENCE_BANNER])
-    expect(screen.getAllByText(/Nadia has “Kael” open in another session/)).toHaveLength(1)
+    expect(screen.getAllByText(/Nadia has “Kael” open in another copy of Wobu/)).toHaveLength(1)
 
     // Each beat brings a fresh answer with a fresh `seenSecsAgo`. The banner is
     // keyed to the situation, not to the poll that reported it.
@@ -211,7 +211,7 @@ describe('the banner over a node being edited elsewhere', () => {
     }
 
     expect(bannerCodes()).toEqual([PRESENCE_BANNER])
-    expect(screen.getAllByText(/Nadia has “Kael” open in another session/)).toHaveLength(1)
+    expect(screen.getAllByText(/Nadia has “Kael” open in another copy of Wobu/)).toHaveLength(1)
   })
 
   it('stays dismissed once it has been read', async () => {
@@ -275,7 +275,7 @@ describe('the banner over a node being edited elsewhere', () => {
       false,
     )
     expect(row('Kael').getAttribute('draggable')).toBe('true')
-    expect((await screen.findByLabelText('Node name')) as HTMLInputElement).toHaveProperty(
+    expect((await screen.findByLabelText('Entity name')) as HTMLInputElement).toHaveProperty(
       'readOnly',
       false,
     )
@@ -286,7 +286,7 @@ describe('the status bar', () => {
   it('counts the sessions in the folder, this one included', async () => {
     present = [peer({ sessionId: 's1', user: 'Nadia' }), peer({ sessionId: 's2', user: 'Tomas' })]
     await open()
-    expect(screen.getByText('3 sessions')).toBeTruthy()
+    expect(screen.getByText('3 people here')).toBeTruthy()
   })
 
   it('says nothing when this is the only session', async () => {

@@ -29,14 +29,14 @@ directory you choose.
 
 > **Where things live** Everything canonical is in the project folder. The search index is *not* —
 > it lives in your local application data, keyed by project ID, because SQLite over SMB or NFS
-> corrupts. Delete the index and nothing is lost; the next open just takes a little longer. Full
-> layout in the [reference](reference.md).
+> corrupts. Delete the search index and nothing is lost; the next open just takes a little longer.
+> Full layout in the [reference](reference.md).
 
-## Write the Art Style node first
+## Write the Art Style entity first
 
-Two nodes exist in every project from the moment it is created, pinned to the top of the navigator
-above the rule: **Art Style** and **World Canon**. They are pinned because they are the roots of
-every influence stack and you should never have to hunt for them.
+Two entities exist in every project from the moment it is created, pinned to the top of the
+navigator above the rule: **Art Style** and **World Canon**. They are pinned because they are the
+roots of every influence stack and you should never have to hunt for them.
 
 Open **Art Style** and write, in the raw notes column, how your world should *look* — not what is in
 it. Medium, rendering, line quality, lighting, palette discipline, and what to never do:
@@ -68,7 +68,7 @@ never: firearms, printed cloth, glass windows
 ## Build breadth before depth
 
 The instinct is to jump straight to your favourite character. Resist it for ten more minutes. Add
-the layers *above* that character first, because a character node with nothing above it is just a
+the layers *above* that character first, because a character entity with nothing above it is just a
 prompt with extra steps.
 
 1. **One species.** Silhouette and anatomy — the things every member shares. **New entity** at the
@@ -87,24 +87,24 @@ prompt beneath it is already several hundred words you never had to type.
 
 1. **Add a key.** Settings → Providers and models. Enhance needs a text provider; Generate needs an
    image provider. They can be different vendors — see [Providers and keys](providers.md).
-2. **Enhance each node** from the top down. Your rough notes become a structured description —
+2. **Enhance each entity** from the top down. Your rough notes become a structured description —
    *Silhouette, Anatomy, Materials, Palette, Signature details, Never* — streaming into the
    right-hand column. **Nothing is written until you accept it**: you get a section-by-section
    review with **Keep current** and **Use new**, then **Accept selected** or **Accept all**. Enhance
-   the Art Style node first, then World Canon, then the species, then down the tree.
+   the Art Style entity first, then World Canon, then the species, then down the tree.
 3. **Check the compiled prompt** in the inspector. Turn on **Show sources** and every fragment is
-   tinted by the layer that produced it. If something reads wrong, you now know exactly which node
+   tinted by the layer that produced it. If something reads wrong, you now know exactly which entity
    to go and fix.
-4. **Generate.** Pick an output preset and one of the aspects the selected backend offers, check the
-   negotiated pixel dimensions beside the control, and press **Generate**. Results land on the
-   **Concepts** tab of the node you generated for.
-5. **Pin the one that is right.** Pinning promotes a generation to a reference image on that node —
-   which then influences everything downstream of it. That is the flywheel; the world gets more
+4. **Generate.** Pick an output preset and one of the aspects the selected provider offers, check
+   the negotiated pixel dimensions beside the control, and press **Generate**. Results land on the
+   **Concepts** tab of the entity you generated for.
+5. **Pin the one that is right.** Pinning promotes a generation to a reference image on that entity
+   — which then influences everything downstream of it. That is the flywheel; the world gets more
    consistent every time you use it.
 
 > **A note on cost** Everything is billed to your own provider account, so the Generate button shows
 > an estimated cost before a paid batch runs, and a project can carry a spend ceiling with a hard
-> stop. A local ComfyUI backend shows no cost at all — that asymmetry is intentional.
+> stop. A local ComfyUI provider shows no cost at all — that asymmetry is intentional.
 
 ## Habits that pay off
 
@@ -113,6 +113,6 @@ prompt beneath it is already several hundred words you never had to type.
 | Write at the right altitude | If a fact is true of every member of a species, it belongs on the species, not repeated on nine characters. Repetition is the thing Wobu exists to delete. |
 | Keep raw notes messy | They are input, not output. Fragments and contradictions are fine — Enhance is what makes them presentable, and it keeps your original. |
 | Use *Never* lists | They compile into the negative prompt. "No modern firearms" at world level saves you forty corrections later. |
-| Re-enhance when things go stale | Change a node's notes and its descendants pick up a quiet stale dot. Nothing regenerates behind your back — you decide when to refresh. |
+| Re-enhance when things go stale | Change an entity's notes and its descendants pick up a quiet stale dot. Nothing regenerates behind your back — you decide when to refresh. |
 | Promote deliberately | Generations are disposable by default. Pinning is the act that changes the world, and it should feel like a decision. |
 | Star what you are working on | The star on a navigator row puts it in **Favourites** at the top of the tree. It is per-machine and changes nothing on disk. |

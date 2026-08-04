@@ -12,16 +12,16 @@ an **Extra shot prompt**, **Seed**, the **Variant grid**, the project's spend ce
 The extra shot prompt is the one place to type free text at generation time — framing, action,
 weather, a camera direction. It contributes at the Shot layer and is not saved to the world.
 
-> **Aspect negotiation** The aspect list comes from the selected image backend. Wobu shows the
+> **Aspect negotiation** The aspect list comes from the selected image provider. Wobu shows the
 > ratio it will actually queue and its pixel dimensions beside the control, and repairs an
 > unsupported or malformed saved value before it can reach the queue — saying which value it
-> replaced. A flexible backend such as ComfyUI gets Wobu's curated, validated ratio vocabulary
+> replaced. A flexible provider such as ComfyUI gets Wobu's curated, validated ratio vocabulary
 > rather than accepting arbitrary text. Generate stays disabled until the negotiation has resolved.
 
 ## Output presets
 
 A preset defines section priorities, framing text, an aspect and an image count. This is how the
-same node produces a costume plate one minute and a material study the next.
+same entity produces a costume plate one minute and a material study the next.
 
 | Preset | Aspect | Images | Chosen by default for |
 | --- | --- | --- | --- |
@@ -49,9 +49,9 @@ seed, an explicit re-roll, a variant cell or a replay.
 ## The variant grid
 
 Sweep exactly one axis across a batch and compare: **Vary seed**, **Vary fragment weight**, **Vary
-preset** or **Vary aspect**. You type the cell values, between two and sixteen of them, all
+preset** or **Vary aspect**. You type the values, between two and sixteen of them, all
 distinct; varying a fragment weight also asks which layer. The footer states how many outputs that
-is and refuses clearly when a value is not supported by the backend. Presets with named views —
+is and refuses clearly when a value is not supported by the provider. Presets with named views —
 Turnaround — cannot be varied, because their views are already the axis.
 
 ## The job queue
@@ -60,18 +60,18 @@ Generations run through a queue that holds three jobs at a time across the whole
 images, enhances, meshes, thumbnails and LoRA training all share it. The status bar shows the queue
 depth, the active model and the last generation time, and clicking the queue jumps to Forge.
 
-While an image runs, its tile shows a progress bar, the backend's own status note, and a live
-preview on backends that stream one. **Cancel** stops it; a stalled backend or a slow NAS must never
-present as a frozen app.
+While an image runs, its tile shows a progress bar, the provider's own status note, and a live
+preview on providers that stream one. **Cancel** stops it; a stalled provider or a slow NAS must
+never present as a frozen app.
 
 A failure that cost nothing is retried automatically with a widening backoff. A failure that cost
 money is **not** retried behind your back: it is held, and it goes to the notification centre with
-what it cost, what the backend said, and where to go next. Cancelling is not a failure and is never
+what it cost, what the provider said, and where to go next. Cancelling is not a failure and is never
 reported as one.
 
 ## The Concepts tab
 
-Results land in **Concepts** on the node they were generated for. A tile shows the model, the seed
+Results land in **Concepts** on the entity they were generated for. A tile shows the model, the seed
 and where the seed came from; hovering shows the prompt. Opening one shows the whole receipt: the
 recorded request, the exact recorded stack, whether the world has drifted since, and **Replay
 snapshot**.
@@ -81,7 +81,7 @@ snapshot**.
 Pinning promotes a generated image to a reference on that entity — **Full reference** by default,
 though you can pin it as a palette, a silhouette or any other role. From then on it feeds back as
 conditioning for the next generation and, because references inherit, for everything downstream of
-that node too. Wobu prints the consequence under the button before you press it, naming how many
+that entity too. Wobu prints the consequence under the button before you press it, naming how many
 downstream entities will inherit it.
 
 > **This is the flywheel** Iterate cheaply, promote deliberately. Generations are disposable;
@@ -106,7 +106,7 @@ than squinting at a narrow column.
 - **Compose a multi-entity scene** — a primary subject plus one to three participants, in prompt
   order, with a scene direction and its own aspect. Art Style and World Canon shape a scene but
   cannot be participants in one.
-- **Train an entity LoRA** from the full references you have pinned, when the selected backend
+- **Train an entity LoRA** from the full references you have pinned, when the selected provider
   supports it. The card states how many valid references it has of how many it needs before the
   button will do anything.
 
@@ -115,8 +115,8 @@ than squinting at a narrow column.
 Bring-your-own-key means every call is billed to you, so Wobu is built not to surprise you:
 
 - The Generate button shows an **estimated cost** for the batch on paid providers, and the panel
-  shows what is already receipted and what is pending.
-- A local ComfyUI backend shows **no cost at all**. That asymmetry is the point.
+  shows what has already been spent and what is still set aside.
+- A local ComfyUI provider shows **no cost at all**. That asymmetry is the point.
 - A **shared spend ceiling**, recorded in the project so it applies to everyone who opens it, with a
   hard stop. A turnaround loop is exactly the kind of thing that runs two hundred images unattended.
 - Every generation record stores its provider, model and parameters — so actual spend is

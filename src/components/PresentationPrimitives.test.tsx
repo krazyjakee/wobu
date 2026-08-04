@@ -145,7 +145,7 @@ describe('generation metadata', () => {
 
     expect(screen.getByTestId('subject')).toHaveTextContent(/^Scene · Kael \+ Mira$/)
     expect(screen.getByTestId('preset-model')).toHaveTextContent(
-      /^Multi-entity · portrait · flux-dev$/,
+      /^Several entities · portrait · flux-dev$/,
     )
   })
 })

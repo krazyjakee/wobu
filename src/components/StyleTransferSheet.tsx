@@ -77,10 +77,10 @@ export function StyleTransferSheet({
             return
           }
           const links = outcome.droppedExternalLinkCount
-            ? ` ${outcome.droppedExternalLinkCount} link${outcome.droppedExternalLinkCount === 1 ? '' : 's'} outside the subtree were left behind.`
+            ? ` ${outcome.droppedExternalLinkCount} link${outcome.droppedExternalLinkCount === 1 ? '' : 's'} pointing outside the branch were left behind.`
             : ''
           toast(
-            `Imported ${outcome.plannedNodeCount} node${outcome.plannedNodeCount === 1 ? '' : 's'}.${links}`,
+            `Imported ${outcome.plannedNodeCount} entit${outcome.plannedNodeCount === 1 ? 'y' : 'ies'}.${links}`,
           )
           onImported(outcome.importedRootId)
         },
@@ -96,13 +96,15 @@ export function StyleTransferSheet({
       onClose={onClose}
       busy={apply.isPending}
       busyMessage={
-        apply.isPending ? 'Importing the subtree. This operation cannot be interrupted.' : undefined
+        apply.isPending
+          ? 'Copying the branch across. This cannot be stopped once it has started.'
+          : undefined
       }
     >
-      <h2 id="style-transfer-title">Import style or subtree</h2>
+      <h2 id="style-transfer-title">Import from another project</h2>
       <p id="style-transfer-description">
         {preview
-          ? `Choose one root from ${preview.sourceProjectName}. Its nested descendants and referenced images come with it; links to everything else stay behind.`
+          ? `Choose one entity from ${preview.sourceProjectName} to bring across. Everything nested inside it, and the images it uses, come with it; links to anything else stay behind.`
           : error
             ? 'The source project preview could not be read.'
             : 'Reading the source project…'}
@@ -111,31 +113,31 @@ export function StyleTransferSheet({
         {preview && (
           <>
             <div className="field">
-              <label htmlFor="transfer-root">Root</label>
+              <label htmlFor="transfer-root">Top of the branch</label>
               <Combobox
                 id="transfer-root"
                 value={rootId}
                 options={rootOptions}
                 sort="title"
-                placeholder="Choose a root"
+                placeholder="Choose where the branch starts"
                 onChange={setRootId}
               />
             </div>
             {candidate && (
               <div className="transfer-summary">
                 <p>
-                  {candidate.nodeCount} node{candidate.nodeCount === 1 ? '' : 's'} ·{' '}
+                  {candidate.nodeCount} entit{candidate.nodeCount === 1 ? 'y' : 'ies'} ·{' '}
                   {candidate.referenceCount} reference{candidate.referenceCount === 1 ? '' : 's'}
                   {candidate.loraCount > 0 &&
                     ` · ${candidate.loraCount} LoRA${candidate.loraCount === 1 ? '' : 's'}`}
                   {candidate.externalLinkCount > 0 &&
-                    ` · ${candidate.externalLinkCount} outside link${candidate.externalLinkCount === 1 ? '' : 's'} dropped`}
+                    ` · ${candidate.externalLinkCount} link${candidate.externalLinkCount === 1 ? '' : 's'} out of the branch, left behind`}
                 </p>
                 {candidate.replacesSingleton && (
                   <p className="sheet-warning">
-                    This replaces the destination{' '}
-                    {labelFor(kinds.get(candidate.kind), candidate.kind)} content. Its destination
-                    identity and incoming links are preserved.
+                    This replaces the {labelFor(kinds.get(candidate.kind), candidate.kind)} already
+                    in this project. The one here keeps its own identity, and everything that links
+                    to it goes on pointing at it.
                   </p>
                 )}
                 {candidate.missingAssetCount > 0 && (
@@ -147,7 +149,7 @@ export function StyleTransferSheet({
                 )}
                 {candidate.missingLoraCount > 0 && (
                   <p className="sheet-err">
-                    {candidate.missingLoraCount} pinned LoRA weight file
+                    {candidate.missingLoraCount} trained style file
                     {candidate.missingLoraCount === 1 ? ' is' : 's are'} missing from the source.
                     Restore them before importing.
                   </p>
@@ -161,11 +163,11 @@ export function StyleTransferSheet({
       {error && <div className="sheet-err">{error}</div>}
       {partial && (
         <div className="sheet-err" role="status">
-          Transfer stopped after {partial.appliedNodeIds.length} of {partial.plannedNodeCount}{' '}
-          nodes. {partial.failure} {partial.pendingNodeIds.length} node
-          {partial.pendingNodeIds.length === 1 ? '' : 's'} remain unapplied.
+          The import stopped after {partial.appliedNodeIds.length} of {partial.plannedNodeCount}{' '}
+          entities. {partial.failure} {partial.pendingNodeIds.length}{' '}
+          {partial.pendingNodeIds.length === 1 ? 'entity was' : 'entities were'} not brought across.
           {partial.conflictPaths.length > 0 &&
-            ` Incoming content is recoverable at ${partial.conflictPaths.join(', ')}.`}
+            ` What was coming in is still on disk at ${partial.conflictPaths.join(', ')}, if you want it.`}
         </div>
       )}
       <div className="sheet-actions">

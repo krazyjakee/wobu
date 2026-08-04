@@ -111,9 +111,14 @@ describe('the notification centre', () => {
 
   it('captures a failed command that only ever had a vanishing toast', () => {
     render(<NotificationCentre />)
-    act(() => report({ code: 'io.failed', message: 'Could not write the file', retryable: true }))
+    act(() =>
+      report({ code: 'io.failed', message: 'io error at /vol/art: no space', retryable: true }),
+    )
 
     openCentre()
-    expect(screen.getByText(/Could not write the file/)).toBeTruthy()
+    // Not the crate's sentence: since #127 the boundary in `lib/errorCopy.ts`
+    // says it in the app's own words. What is pinned here is that a failure
+    // whose toast has gone is still readable, not which words it used.
+    expect(screen.getByText(/could not read or write a file in the project folder/)).toBeTruthy()
   })
 })

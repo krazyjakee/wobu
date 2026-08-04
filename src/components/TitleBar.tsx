@@ -82,7 +82,7 @@ export function TitleBar({
 
       {project.readOnly && (
         <Tooltip
-          tip="Wobu cannot write to this folder, so nothing here can be created, renamed or saved. Check the folder's permissions, or copy the project somewhere writable."
+          tip="Wobu cannot write to this folder, so nothing here can be created, renamed or saved. Check the folder's permissions, or copy the project somewhere you can write to."
           placement="bottom"
         >
           <span className="ro-badge" tabIndex={0}>
@@ -106,7 +106,7 @@ export function TitleBar({
             <span className="cur">{selected.name}</span>
           </>
         ) : (
-          <span>no node selected</span>
+          <span>nothing selected</span>
         )}
       </nav>
 

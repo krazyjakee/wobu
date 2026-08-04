@@ -47,8 +47,9 @@ export function WikiExportSection({ project }: { project: ProjectSummary }) {
     <section className="set-sec" aria-labelledby="wiki-export-title">
       <h3 id="wiki-export-title">Static world wiki</h3>
       <p className="set-note">
-        Make a browsable, self-contained site with node pages, image galleries, concepts, and the
-        influence graph. The project is only read; this also works when it is read-only.
+        Make a browsable, self-contained website: a page for every entity, image galleries,
+        concepts, and a drawing of how influence flows. The project is only read, so this works even
+        when it is read-only.
       </p>
       <p className="set-note">
         Choose a new folder path outside the project. Wobu will not overwrite an existing export.
@@ -59,14 +60,14 @@ export function WikiExportSection({ project }: { project: ProjectSummary }) {
         </button>
         {result && (
           <button className="btn-mini" onClick={() => void reveal()}>
-            Reveal exported folder
+            Show the exported folder
           </button>
         )}
       </div>
       {result && (
         <div className="wiki-export-result" role="status">
           <span>
-            Exported {result.nodeCount} {result.nodeCount === 1 ? 'node' : 'nodes'} and{' '}
+            Exported {result.nodeCount} {result.nodeCount === 1 ? 'entity' : 'entities'} and{' '}
             {result.imageCount} {result.imageCount === 1 ? 'image' : 'images'}.
           </span>
           {result.missingImages > 0 && (

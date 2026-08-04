@@ -124,9 +124,9 @@ remains a document editor.
 
 ## Tencent Hunyuan3D (mesh)
 
-The hosted 3D backend, and the one that is genuinely more work to set up. Settings walks it in three
-linked steps — activate the service, open CAM users, create a sub-account key — and it is worth
-knowing why before you start:
+The hosted 3D provider, and the one that is genuinely more work to set up. Settings walks it in
+three linked steps — activate the service, open CAM users, create a sub-account key — and it is
+worth knowing why before you start:
 
 | | |
 | --- | --- |
@@ -138,16 +138,16 @@ knowing why before you start:
 
 ## Capability negotiation
 
-Each backend declares what it can do, and the generation surfaces consume those declarations before
+Each provider declares what it can do, and the generation surfaces consume those declarations before
 queueing rather than discovering the answer from an error:
 
-- Aspect lists come from the selected backend; unsupported saved values are repaired before
+- Aspect lists come from the selected provider; unsupported saved values are repaired before
   queueing, and the negotiated dimensions are shown.
-- A backend that accepts no structure references shows yours as downgraded to mood-board-only.
+- A provider that accepts no structure references shows yours as downgraded to mood-board-only.
 - Per-bucket reference caps drive the image budget, so the inspector can say `3/3 style refs` and
   name what got dropped.
-- A backend with no negative-prompt support has its negative withheld and says so.
-- Backends that require billing are marked as such before you spend anything.
+- A provider with no negative-prompt support has its negative withheld and says so.
+- Providers that require billing are marked as such before you spend anything.
 
 ## Spend control
 

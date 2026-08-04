@@ -300,7 +300,7 @@ describe('the empty states', () => {
 
   it('says nothing is selected, which is not the same as nothing to say', async () => {
     show({ subject: null })
-    expect(await screen.findByText('No node selected.')).toBeTruthy()
+    expect(await screen.findByText('Nothing selected.')).toBeTruthy()
     expect(h.invoke).not.toHaveBeenCalled()
   })
 
@@ -324,9 +324,11 @@ describe('the empty states', () => {
   })
 
   it('shows the error rather than compiling forever', async () => {
-    h.invoke.mockRejectedValue({ code: 'node.not_found', message: 'That entity is gone.' })
+    // The backend's own sentence is "no node with id …"; what the box shows is
+    // `lib/errorCopy.ts`'s translation of it (#127).
+    h.invoke.mockRejectedValue({ code: 'node.not_found', message: 'no node with id 01ARZ3ND' })
     show()
-    expect(await screen.findByText('That entity is gone.')).toBeTruthy()
+    expect(await screen.findByText(/not in this project any more/)).toBeTruthy()
   })
 })
 

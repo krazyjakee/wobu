@@ -91,7 +91,9 @@ export function ReferencesPane({
       await new Promise<void>((resolve) => window.setTimeout(resolve, 25))
     }
     if (saveStatus.current === 'error' || saveStatus.current === 'held') {
-      throw new Error('The pending reference edit must save before more images can be attached.')
+      throw new Error(
+        'The last change to the references has to save before more images can be attached.',
+      )
     }
   }, [flushAutosave])
 
@@ -269,7 +271,7 @@ export function ReferencesPane({
       <header className="references-head">
         <div>
           <h2>Reference board</h2>
-          <p>Drop or paste images. Roles decide how each one influences generation.</p>
+          <p>Drop or paste images. Each one’s role decides how it steers a generation.</p>
         </div>
         <button
           className="btn"
@@ -293,7 +295,7 @@ export function ReferencesPane({
 
       {assets.isError && (
         <p className="references-error">
-          Could not read the asset library: {api.errorMessage(assets.error)}
+          Could not read this project’s images: {api.errorMessage(assets.error)}
         </p>
       )}
 
@@ -445,7 +447,8 @@ function VirtualReferenceGrid({
       <div className="references-empty">
         <h3>No references yet</h3>
         <p>
-          Drop images here or paste from the clipboard to build this entity&apos;s visual canon.
+          Drop images here, or paste from the clipboard, to build up what this entity should look
+          like.
         </p>
       </div>
     )
@@ -522,7 +525,7 @@ function VirtualReferenceGrid({
 }
 
 const REFERENCE_READ_ONLY =
-  'This project is open read-only, so the reference board cannot be changed. Check the folder permissions, or reopen a copy somewhere writable.'
+  'This project folder is read-only, so the reference board cannot be changed. Check the folder permissions, or reopen a copy somewhere writable.'
 
 /**
  * The reference board's menu — the tile's own five controls, at the pointer.

@@ -114,7 +114,7 @@ export default function MeshViewport({
         setWireframe(gltf.scene, wireframeRef.current)
         const box = new THREE.Box3().setFromObject(gltf.scene)
         if (box.isEmpty()) {
-          onError('The GLB contains no visible geometry.')
+          onError('This mesh file has nothing visible in it.')
           disposeObject(gltf.scene)
           object.current = null
           return
@@ -137,7 +137,7 @@ export default function MeshViewport({
       undefined,
       (error) => {
         if (!disposed) {
-          onError(error instanceof Error ? error.message : 'The GLB could not be loaded.')
+          onError(error instanceof Error ? error.message : 'This mesh file could not be loaded.')
         }
       },
     )

@@ -222,9 +222,9 @@ describe('generation history', () => {
     open()
     fireEvent.click(await screen.findByRole('button', { name: /Open generation from/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Generation details' })
-    expect(within(dialog).getByText('Exact recorded stack')).toBeInTheDocument()
+    expect(within(dialog).getByText('The exact stack that was used')).toBeInTheDocument()
     expect(within(dialog).getByText('ash-grey travelling coat')).toBeInTheDocument()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Replay snapshot' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Run these settings again' }))
     await waitFor(() =>
       expect(h.invoke).toHaveBeenCalledWith('generation_replay', { generationId: 'snapshot' }),
     )
@@ -240,11 +240,11 @@ describe('generation history', () => {
     ]
     open()
 
-    expect(await screen.findByText('used locked seed')).toBeTruthy()
-    expect(screen.getByText('used locked-seed family')).toBeTruthy()
-    expect(screen.getByText('used explicit re-roll')).toBeTruthy()
-    expect(screen.getByText('variant seed cell')).toBeTruthy()
-    expect(screen.getByText('replayed snapshot')).toBeTruthy()
+    expect(await screen.findByText('used the locked seed')).toBeTruthy()
+    expect(screen.getByText('from the locked seed')).toBeTruthy()
+    expect(screen.getByText('seed re-rolled on purpose')).toBeTruthy()
+    expect(screen.getByText('one cell of a variant grid')).toBeTruthy()
+    expect(screen.getByText('ran the recorded settings again')).toBeTruthy()
   })
 
   it('pins with an explicit role through AssetLink without changing generation history', async () => {

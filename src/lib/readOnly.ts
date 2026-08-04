@@ -20,6 +20,6 @@
 export const READ_ONLY_BANNER = 'project.read_only'
 
 export const READ_ONLY_TEXT =
-  'This share is mounted read-only, so nothing can be written back to it. The world is fully ' +
+  'This project folder is read-only, so nothing can be saved back into it. The world is fully ' +
   'readable — creating, renaming, moving, deleting and editing notes are switched off, and ' +
   'nothing is being autosaved.'

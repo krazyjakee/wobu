@@ -57,7 +57,7 @@ function ThreePaneSession({
     if (!selected) return
     try {
       const source = await api.meshSourcePath(selected.asset.id)
-      if (!source) setError('The canonical GLB is unavailable.')
+      if (!source) setError('The mesh file is unavailable.')
       else await revealItemInDir(source)
     } catch (reason) {
       setError(api.errorMessage(reason))
@@ -88,11 +88,11 @@ function ThreePaneSession({
     }
   }
 
-  if (concepts.isPending) return <div className="mesh-empty">Reading 3D history…</div>
+  if (concepts.isPending) return <div className="mesh-empty">Reading what has been made in 3D…</div>
   if (concepts.isError) {
     return (
       <div className="mesh-empty">
-        Could not read 3D history: {api.errorMessage(concepts.error)}
+        Could not read what has been made in 3D: {api.errorMessage(concepts.error)}
       </div>
     )
   }
@@ -105,9 +105,7 @@ function ThreePaneSession({
         <div className="mesh-workbench">
           <div className="mesh-empty">
             <h3>No meshes yet</h3>
-            <p>
-              Reconstruct one from a turnaround and it opens here, in the viewer, ready to export.
-            </p>
+            <p>Reconstruct one from a turnaround and it opens here, ready to look at and export.</p>
           </div>
           <TurnaroundReview node={node} queue={queue} readOnly={readOnly} />
         </div>
@@ -118,7 +116,7 @@ function ThreePaneSession({
   return (
     <section className="mesh-pane" aria-label={`3D concepts for ${node.name}`}>
       {(concepts.data?.length ?? 0) > 1 && (
-        <nav className="mesh-history" aria-label="Mesh history">
+        <nav className="mesh-history" aria-label="Meshes made here">
           {concepts.data?.map((concept) => (
             <button
               key={concept.asset.id}
@@ -152,16 +150,18 @@ function ThreePaneSession({
             <span className="mesh-scale">Orange marker = 1 m</span>
             <span className="mesh-size">{formatBytes(selected.asset.bytes)}</span>
             <button className="btn-mini" onClick={() => void reveal()}>
-              Reveal GLB
+              Show the file
             </button>
             <button className="btn-mini" disabled={exporting} onClick={() => void exportMesh()}>
               {exporting ? 'Exporting…' : 'Export copy…'}
             </button>
           </div>
           <div className="mesh-stage">
-            {path.isPending && <span>Loading and validating GLB…</span>}
+            {path.isPending && <span>Loading and checking the mesh…</span>}
             {path.isError && <span>{api.errorMessage(path.error)}</span>}
-            {!path.isPending && !path.isError && !meshUrl && <span>The GLB is unavailable.</span>}
+            {!path.isPending && !path.isError && !meshUrl && (
+              <span>The mesh file is unavailable.</span>
+            )}
             {meshUrl && (
               <Suspense fallback={<span>Starting 3D viewer…</span>}>
                 <MeshViewport
@@ -206,7 +206,7 @@ function TurnaroundSheet({ concept }: { concept: MeshConcept }) {
         <span>{concept.backend}</span>
       </div>
       {views.length === 0 ? (
-        <p>The immutable mesh receipt did not record a complete source sheet.</p>
+        <p>This reconstruction’s receipt did not keep a complete turnaround.</p>
       ) : (
         <div className="mesh-sheet-grid">
           {views.map((view) => (

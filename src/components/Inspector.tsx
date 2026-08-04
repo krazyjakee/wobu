@@ -11,6 +11,7 @@ import type {
 import { layerColor, layerLabel, type KindIndex } from '../lib/kinds'
 import { negotiatedAspect } from '../lib/generationCapabilities'
 import { useNodeThumbs } from '../lib/nodeThumbs'
+import { sectionLabel } from '../lib/prompt'
 import {
   useCompiledPrompt,
   useImageGenerationCapabilities,
@@ -39,7 +40,7 @@ import { PromptBox } from './inspector/PromptBox'
 const GRID_AXES = [
   { value: 'none', label: 'Off' },
   { value: 'seed', label: 'Vary seed' },
-  { value: 'fragment_weight', label: 'Vary fragment weight' },
+  { value: 'fragment_weight', label: 'Vary a layer’s weight' },
   { value: 'preset', label: 'Vary preset' },
   { value: 'aspect', label: 'Vary aspect' },
 ]
@@ -311,7 +312,7 @@ function InspectorSession({
     if (dollars !== null && (!Number.isFinite(dollars) || dollars < 0)) {
       report(
         new Error(
-          'Enter a non-negative dollar amount, or leave it blank to disable paid generation.',
+          'Enter an amount in dollars, or leave it blank to switch off anything that costs money.',
         ),
       )
       return
@@ -330,14 +331,14 @@ function InspectorSession({
 
   const recoverReservations = async () => {
     const confirmed = window.confirm(
-      'Recover pending spend reservations only after every Wobu window using this project has stopped paid generation. The old ledger will be archived, not deleted. Continue?',
+      'Only do this once every Wobu window using this project has stopped generating. The old spending record is kept, not deleted. Continue?',
     )
     if (!confirmed) return
     try {
       await recoverSpendLedger.mutateAsync(true)
-      toast('Pending spend ledger archived')
+      toast('The stuck spending record was put aside')
     } catch (error) {
-      report(error, 'Could not recover the spend ledger')
+      report(error, 'Could not put the spending record aside')
     }
   }
 
@@ -409,12 +410,12 @@ function InspectorSession({
         : generating
           ? 'This batch is already being queued.'
           : !chosenPreset
-            ? 'Choose a shot preset.'
+            ? 'Choose an output preset.'
             : costBlocked
               ? 'This batch would go past the spending cap left on this project. Raise the cap in Settings, or generate fewer images.'
               : gridBlocked
-                ? 'A grid axis and a preset that already fixes its views cannot both decide the frames. Set the axis back to none, or pick a preset without views.'
-                : 'Waiting for the image backend to say what it accepts. Check it is connected in Settings.'
+                ? 'The variant grid and this preset would both decide what each picture shows. Set the grid back to Off, or choose a preset that does not fix its own views.'
+                : 'Waiting for the image provider to say what it accepts. Check it is connected in Settings.'
 
   const inspector = (
     <>
@@ -425,7 +426,10 @@ function InspectorSession({
         </div>
 
         {imageReport.data && (
-          <div className="ref-budgets" aria-label="Provider reference limits">
+          <div
+            className="ref-budgets"
+            aria-label="How many reference images this provider will take"
+          >
             {imageReport.data.buckets.map((bucket) => (
               <span key={bucket.bucket}>
                 {bucket.kept}
@@ -439,8 +443,10 @@ function InspectorSession({
         <div className="stack">
           {!selected ? (
             <div className="insp-empty">
-              <b>No node selected.</b>
-              <span>The stack is resolved per node, outermost layer first.</span>
+              <b>Nothing selected.</b>
+              <span>
+                The stack is worked out for whichever entity you select, outermost layer first.
+              </span>
             </div>
           ) : stack.isError ? (
             <div className="insp-empty">
@@ -516,14 +522,18 @@ function InspectorSession({
                   {aspectNegotiation.height}px
                 </span>
                 {generationCapabilities.data.flexibleAspect && (
-                  <small>Flexible backend · using Wobu's curated, validated aspect choices.</small>
+                  <small>
+                    This provider accepts any shape, so Wobu offers the ones it has checked.
+                  </small>
                 )}
               </div>
             )}
           {aspectAdjustment && (
             <div className="aspect-preview is-substituted" role="status">
               <span>
-                {aspectAdjustment.valid ? 'Unsupported saved aspect' : 'Malformed saved aspect'}{' '}
+                {aspectAdjustment.valid
+                  ? 'Saved shape not supported'
+                  : 'Saved shape could not be read'}{' '}
                 {aspectAdjustment.requested} was replaced with {aspectAdjustment.actual}.
               </span>
               {aspectNegotiation && (
@@ -639,14 +649,14 @@ function InspectorSession({
             )}
             {gridAxis !== 'none' && (
               <label className="variant-values">
-                <span>Cell values · comma separated</span>
+                <span>Values · separated by commas</span>
                 <input value={gridValues} onChange={(event) => setGridValues(event.target.value)} />
               </label>
             )}
             {gridAxis !== 'none' && (
               <small className={grid.error ? 'variant-error' : ''}>
                 {grid.error ??
-                  `${grid.value?.values.length ?? 0} outputs · exactly one axis varies`}
+                  `${grid.value?.values.length ?? 0} images · exactly one thing varies across them`}
               </small>
             )}
           </div>
@@ -657,14 +667,16 @@ function InspectorSession({
                 <span>
                   {paidEstimate.images}
                   {paidEstimate.variesByCell
-                    ? ' outputs · cell price varies'
+                    ? ' images · each one priced separately'
                     : ` × ${formatUsd(paidEstimate.perImageUsdMicros)} output`}
-                  {paidEstimate.conservativeFallback ? ' · conservative fallback' : ''}
+                  {paidEstimate.conservativeFallback
+                    ? ' · a cautious guess, not the provider’s own price'
+                    : ''}
                 </span>
               </div>
               <div className="spend-running">
                 <span>
-                  Receipted {formatUsd(spend.spentUsdMicros)}
+                  Spent {formatUsd(spend.spentUsdMicros)}
                   {spend.reservedUsdMicros > 0
                     ? ` · ${formatUsd(spend.reservedUsdMicros)} pending`
                     : ''}
@@ -677,7 +689,7 @@ function InspectorSession({
               </div>
               <div className="spend-ceiling">
                 <label>
-                  <span>Shared ceiling (USD)</span>
+                  <span>Spending ceiling, shared (USD)</span>
                   <input
                     type="number"
                     min={0}
@@ -702,8 +714,8 @@ function InspectorSession({
                 <div className="spend-recovery">
                   <span>
                     {spend.ledgerLocked
-                      ? 'The ledger is locked, possibly after a crash.'
-                      : `${spend.pendingReservations} batch reservation${spend.pendingReservations === 1 ? '' : 's'} pending.`}
+                      ? 'The spending record is stuck, most likely after a crash.'
+                      : `${spend.pendingReservations} batch${spend.pendingReservations === 1 ? '' : 'es'} is still counted as money set aside.`}
                   </span>
                   <button
                     className="btn-mini"
@@ -716,8 +728,8 @@ function InspectorSession({
               )}
               <Tooltip tip={`Pricing checked ${paidEstimate.checkedAt}`}>
                 <small tabIndex={0}>
-                  Indicative output price; input tokens and optional search charges are not
-                  included.
+                  A guide to the price of the pictures only. Whatever the provider charges for
+                  reading the prompt, or for any search it does, is not counted.
                 </small>
               </Tooltip>
             </div>
@@ -725,13 +737,13 @@ function InspectorSession({
           <TipButton
             className="btn-primary shot-generate"
             disabledReason={generateReason}
-            tip="Queue this batch against the connected image backend"
+            tip="Send this batch to the connected image provider"
             placement="top"
             onClick={() => void generate()}
           >
             <Icon name="image" size="sm" />
             {generating
-              ? 'Queueing…'
+              ? 'Queuing…'
               : paidEstimate
                 ? `Generate · est. ${formatUsd(paidEstimate.batchUsdMicros)}`
                 : 'Generate'}
@@ -780,13 +792,14 @@ function parseVariantGrid(
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
-  if (raw.length < 2 || raw.length > 16) return { error: 'Enter 2 to 16 distinct cell values.' }
-  if (new Set(raw).size !== raw.length) return { error: 'Every grid cell must be different.' }
+  if (raw.length < 2 || raw.length > 16) return { error: 'Enter 2 to 16 different values.' }
+  if (new Set(raw).size !== raw.length)
+    return { error: 'Every value in the grid must be different.' }
 
   if (axis === 'seed') {
     const values = raw.map(Number)
     if (values.some((value) => !Number.isSafeInteger(value) || value < 0)) {
-      return { error: 'Seeds must be non-negative whole numbers.' }
+      return { error: 'Seeds must be whole numbers, zero or above.' }
     }
     return { value: { axis, values } }
   }
@@ -794,7 +807,7 @@ function parseVariantGrid(
     const values = raw.map(Number)
     if (!nodeId) return { error: 'Choose the influence layer whose weight should vary.' }
     if (values.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
-      return { error: 'Fragment weights must be numbers from 0 to 1.' }
+      return { error: 'Weights must be numbers from 0 to 1.' }
     }
     return { value: { axis, nodeId, values } }
   }
@@ -803,8 +816,8 @@ function parseVariantGrid(
   if (unsupported) {
     return {
       error: aspectChoices.length
-        ? `${unsupported} is not supported by the selected image backend.`
-        : 'Aspect capabilities are not available yet.',
+        ? `${unsupported} is not one of the shapes the selected image provider accepts.`
+        : 'The image provider has not yet said which shapes it accepts.',
     }
   }
   return { value: { axis, values: raw } }
@@ -930,7 +943,7 @@ function Layer({
             disabledReason={
               card.nodeId
                 ? null
-                : 'This layer is the shot itself rather than an entity, so there is no source to open.'
+                : 'This layer is the shot itself rather than an entity, so there is nothing to open.'
             }
             onSelect={() => onJump(card.nodeId as string)}
           >
@@ -945,12 +958,12 @@ function Layer({
 function FragmentRow({ fragment }: { fragment: InfluenceFragment }) {
   return (
     <div className="layer-fragment">
-      <b>{fragment.section.replaceAll('_', ' ')}</b>
+      <b>{sectionLabel(fragment.section)}</b>
       {fragment.text !== null ? (
         <span>{fragment.text}</span>
       ) : (
         <span>
-          Image {fragment.assetId} · {fragment.target.replaceAll('_', ' ')}
+          Image · {sectionLabel(fragment.target)}
           {!fragment.sendable ? ' · private' : ''}
         </span>
       )}

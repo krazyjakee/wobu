@@ -38,7 +38,7 @@ export function GenerationTimestamp({ generation }: { generation: Generation }) 
 export function GenerationPresetModel({ generation }: { generation: Generation }) {
   return (
     <>
-      {sceneComposition(generation) ? 'Multi-entity · ' : ''}
+      {sceneComposition(generation) ? 'Several entities · ' : ''}
       {generation.preset} · {generation.model}
     </>
   )

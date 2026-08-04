@@ -160,15 +160,15 @@ describe('AssetsMode', () => {
     expect(screen.getByRole('button', { name: 'Select upload asset upload' })).toBeVisible()
 
     chooseOption('Filter assets by role', 'All roles')
-    chooseOption('Filter assets by node', 'Kael')
+    chooseOption('Filter assets by entity', 'Kael')
     expect(screen.getByRole('button', { name: 'Select reference asset reference' })).toBeVisible()
 
-    chooseOption('Filter assets by node', 'All nodes')
-    chooseOption('Filter assets by linked node tag', 'ancestry')
+    chooseOption('Filter assets by entity', 'All entities')
+    chooseOption('Filter assets by a tag on a linked entity', 'ancestry')
     expect(screen.getByRole('button', { name: 'Select upload asset upload' })).toBeVisible()
 
-    chooseOption('Filter assets by linked node tag', 'All tags')
-    fireEvent.click(screen.getByRole('button', { name: 'Orphans 1' }))
+    chooseOption('Filter assets by a tag on a linked entity', 'All tags')
+    fireEvent.click(screen.getByRole('button', { name: 'Unused 1' }))
     expect(screen.getByRole('button', { name: 'Select generated asset generated' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Select upload asset upload' })).toBeNull()
   })
@@ -191,7 +191,7 @@ describe('AssetsMode', () => {
     expect(assetButton).toHaveAttribute('aria-pressed', 'true')
     const details = screen.getByRole('complementary', { name: 'Details for asset shared' })
 
-    expect(within(details).getByText('Used by 2 nodes')).toBeInTheDocument()
+    expect(within(details).getByText('Used by 2 entities')).toBeInTheDocument()
     expect(within(details).getByText('Full reference · 1.00')).toBeInTheDocument()
     expect(within(details).getByText('Palette · 0.60')).toBeInTheDocument()
     expect(within(details).getByText('Silhouette · 0.80')).toBeInTheDocument()
@@ -227,9 +227,9 @@ describe('AssetsMode', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Delete…' }))
 
-    const confirm = screen.getByRole('alertdialog', { name: 'Delete orphaned asset?' })
+    const confirm = screen.getByRole('alertdialog', { name: 'Delete this unused image?' })
     expect(
-      within(confirm).getByText(/immutable generation receipt will remain/),
+      within(confirm).getByText(/receipt for the generation that made it is kept/),
     ).toBeInTheDocument()
     expect(h.invoke).not.toHaveBeenCalledWith('asset_delete', expect.anything())
     fireEvent.click(within(confirm).getByRole('button', { name: 'Delete permanently' }))

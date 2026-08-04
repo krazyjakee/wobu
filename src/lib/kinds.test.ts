@@ -124,13 +124,22 @@ describe('labelFor / pluralFor', () => {
   })
 
   it('makes something readable out of the kind alone', () => {
-    expect(labelFor(undefined, 'world_bible')).toBe('world bible')
-    expect(pluralFor(undefined, 'world_bible')).toBe('world bibles')
+    // Not the de-underscored enum: `world_bible` is the *old* name for the
+    // singleton the registry, the guide and every label now call World Canon,
+    // so a fallback that printed the key would teach a retired word (#127).
+    expect(labelFor(undefined, 'world_bible')).toBe('World Canon')
+    expect(pluralFor(undefined, 'world_bible')).toBe('World Canon')
+    // A kind with no special case still degrades to the readable key.
+    expect(labelFor(undefined, 'creature')).toBe('creature')
+    expect(pluralFor(undefined, 'creature')).toBe('creatures')
   })
 
   it('pluralises a registry label when only the plural is missing', () => {
     const def = { ...kindDef('species', { label: 'Species' }), plural: undefined as never }
-    expect(pluralFor(def, 'species')).toBe('Speciess')
+    // "Speciess" is what naive `+ s` produced; the fallback table knows better.
+    expect(pluralFor(def, 'species')).toBe('Species')
+    const creature = { ...kindDef('creature', { label: 'Creature' }), plural: undefined as never }
+    expect(pluralFor(creature, 'creature')).toBe('Creatures')
   })
 })
 

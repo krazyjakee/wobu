@@ -50,12 +50,12 @@ describe('static wiki export', () => {
         destination: '/exports/glass-sea-wiki',
       }),
     )
-    expect(await screen.findByText('Exported 12 nodes and 7 images.')).toBeInTheDocument()
+    expect(await screen.findByText('Exported 12 entities and 7 images.')).toBeInTheDocument()
     expect(
       screen.getByText('2 missing images were replaced with placeholders.'),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reveal exported folder' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show the exported folder' }))
     await waitFor(() => expect(h.reveal).toHaveBeenCalledWith('/exports/glass-sea-wiki'))
   })
 
@@ -72,6 +72,8 @@ describe('static wiki export', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       '/exports/glass-sea-wiki already exists',
     )
-    expect(screen.queryByRole('button', { name: 'Reveal exported folder' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Show the exported folder' }),
+    ).not.toBeInTheDocument()
   })
 })

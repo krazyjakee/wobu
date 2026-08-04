@@ -307,7 +307,7 @@ describe('Forge mode', () => {
         <Harness />
       </QueryClientProvider>,
     )
-    chooseOption('Forge subject', 'Mira')
+    chooseOption('Forge entity', 'Mira')
     expect(useUI.getState().selectedId).toBe('mira')
     expect(
       await screen.findByRole('region', { name: 'Forge results for Mira' }),
@@ -449,7 +449,7 @@ describe('Forge mode', () => {
     const generate = await screen.findByRole('button', { name: 'Generate' })
     await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     chooseOption('Variant grid', 'Vary seed')
-    fireEvent.change(screen.getByLabelText('Cell values · comma separated'), {
+    fireEvent.change(screen.getByLabelText('Values · separated by commas'), {
       target: { value: 'only-one' },
     })
     await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
@@ -476,7 +476,7 @@ describe('Forge mode', () => {
     await client.invalidateQueries({ queryKey: ['image_generation_capabilities'] })
 
     expect(
-      await screen.findByText('Unsupported saved aspect 3:4 was replaced with 1:1.'),
+      await screen.findByText('Saved shape not supported 3:4 was replaced with 1:1.'),
     ).toBeInTheDocument()
     await waitFor(() => expect(aspect).toHaveValue('1:1'))
     expect(
@@ -505,7 +505,7 @@ describe('Forge mode', () => {
     const generate = await screen.findByRole('button', { name: 'Generate' })
     await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     chooseOption('Variant grid', 'Vary aspect')
-    expect(screen.getByLabelText('Cell values · comma separated')).toHaveValue('1:1, 3:2, 2:3')
+    expect(screen.getByLabelText('Values · separated by commas')).toHaveValue('1:1, 3:2, 2:3')
 
     flexibleAspect = false
     aspectRatios = ['1:1']
@@ -513,7 +513,7 @@ describe('Forge mode', () => {
     await client.invalidateQueries({ queryKey: ['image_generation_capabilities'] })
 
     expect(
-      await screen.findByText('3:2 is not supported by the selected image backend.'),
+      await screen.findByText('3:2 is not one of the shapes the selected image provider accepts.'),
     ).toBeInTheDocument()
     expect(generate).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(generate)
@@ -525,7 +525,7 @@ describe('Forge mode', () => {
     const aspect = await screen.findByRole('combobox', { name: /^Aspect$/ })
     await waitFor(() =>
       expect(aspect.closest('.shot-controls')).toHaveTextContent(
-        "Flexible backend · using Wobu's curated, validated aspect choices.",
+        'This provider accepts any shape, so Wobu offers the ones it has checked.',
       ),
     )
     expect(comboboxOptions(/^Aspect$/)).toHaveLength(10)
@@ -562,7 +562,7 @@ describe('Forge mode', () => {
     renderForge()
     expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
     expect(
-      await screen.findByText('Malformed saved aspect wide please was replaced with 1:1.'),
+      await screen.findByText('Saved shape could not be read wide please was replaced with 1:1.'),
     ).toBeInTheDocument()
     const generate = screen.getByRole('button', { name: 'Generate' })
     await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
@@ -588,7 +588,7 @@ describe('Forge mode', () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByText('Compose a multi-entity scene'))
+    fireEvent.click(screen.getByText('Put several entities in one picture'))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Mira' }))
     fireEvent.change(screen.getByPlaceholderText('Describe the scene…'), {
       target: { value: 'Crossing the flooded market' },
@@ -619,15 +619,15 @@ describe('Forge mode', () => {
     aspectDimensions = [768, 768]
     renderForge()
 
-    fireEvent.click(screen.getByText('Compose a multi-entity scene'))
+    fireEvent.click(screen.getByText('Put several entities in one picture'))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Mira' }))
     expect(
-      await screen.findByText('Unsupported saved aspect 16:9 was replaced with 1:1.'),
+      await screen.findByText('Saved shape not supported 16:9 was replaced with 1:1.'),
     ).toBeInTheDocument()
     expect(comboboxOptions('Scene aspect')).toEqual(['1:1'])
-    expect(screen.getByText('Compose a multi-entity scene').closest('details')).toHaveTextContent(
-      'Actual output · 1:1 · 768×768px',
-    )
+    expect(
+      screen.getByText('Put several entities in one picture').closest('details'),
+    ).toHaveTextContent('Actual output · 1:1 · 768×768px')
     const generateScene = screen.getByRole('button', { name: 'Generate scene' })
     await waitFor(() => expect(generateScene).toBeEnabled())
     fireEvent.click(generateScene)
@@ -710,7 +710,7 @@ describe('Forge mode', () => {
     expect(retrain).toHaveAttribute('aria-disabled', 'true')
     fireEvent.focusIn(retrain)
     expect(screen.getByRole('tooltip')).toHaveTextContent(
-      'Training is already active for this entity.',
+      'A style is already being trained for this entity.',
     )
     expect(retrain).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id)
     fireEvent.click(retrain)
@@ -724,7 +724,9 @@ describe('Forge mode', () => {
     const refused = screen.getByRole('button', { name: 'Re-train LoRA for Kael' })
     expect(refused).toHaveAttribute('aria-disabled', 'true')
     fireEvent.focusIn(refused)
-    expect(screen.getByRole('tooltip')).toHaveTextContent('This project is read-only.')
+    expect(screen.getByRole('tooltip')).toHaveTextContent(
+      'This project folder is read-only, so nothing can be trained into it.',
+    )
   })
 
   it('virtualizes receipts and compares selected originals side by side', async () => {
@@ -747,7 +749,7 @@ describe('Forge mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Compare selected · 2' }))
     const comparison = await screen.findByRole('dialog', { name: 'Compare Forge results' })
     expect(comparison).toHaveAttribute('aria-modal', 'true')
-    expect(comparison).toHaveAccessibleDescription(/Full-resolution comparison/)
+    expect(comparison).toHaveAccessibleDescription(/Compared at full size/)
     expect(within(comparison).getByRole('button', { name: 'Close Forge comparison' })).toHaveFocus()
     expect(await screen.findByAltText('first portrait')).toHaveAttribute(
       'src',

@@ -110,7 +110,7 @@ describe('editable structured description', () => {
       .closest('.col')
     expect(rawNotesColumn).not.toBe(machineColumn)
     expect(rawNotesColumn).toHaveTextContent('yours')
-    expect(machineColumn).toHaveTextContent('machine side')
+    expect(machineColumn).toHaveTextContent('written by Enhance')
     expect(machineColumn).toHaveTextContent('fresh')
 
     fireEvent.change(screen.getByLabelText('Silhouette'), {

@@ -31,7 +31,7 @@ export function ShortcutsSheet() {
 
 /** One row's chord, or the fact that it has none. */
 function Chord({ chord }: { chord: string | null }) {
-  if (!chord) return <span className="keys-unbound">not bound</span>
+  if (!chord) return <span className="keys-unbound">no shortcut</span>
   return (
     <span className="keys-chord">
       {chordParts(chord).map((part, i) => (

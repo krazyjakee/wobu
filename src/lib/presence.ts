@@ -123,15 +123,15 @@ export function openedText(peers: Peer[]): string | null {
  */
 export function editingText(peers: Peer[], nodeName: string): string {
   return (
-    `${names(peers)} ${verb(peers)} “${nodeName}” open in another session. Nothing is locked ` +
-    'and nothing here is switched off — if you both save, the later save is parked beside the ' +
-    'file as a conflict for you to resolve rather than overwriting anything.'
+    `${names(peers)} ${verb(peers)} “${nodeName}” open in another copy of Wobu. Nothing is ` +
+    'locked and nothing here is switched off — if you both save, the later save is kept beside ' +
+    'the file as a second version for you to settle, rather than overwriting anything.'
   )
 }
 
 /** The dot's tooltip. A dot with no explanation is just a mark on a row. */
 export function editingTitle(who: string): string {
-  return `${who} has this node open in another session — nothing is locked`
+  return `${who} has this entity open in another copy of Wobu — nothing is locked`
 }
 
 /**
@@ -143,7 +143,7 @@ export function editingTitle(who: string): string {
  */
 export function sessionsText(peers: Peer[]): string | null {
   if (peers.length === 0) return null
-  return `${peers.length + 1} sessions`
+  return `${peers.length + 1} people here`
 }
 
 /** Names and hosts behind the count, for the status bar's tooltip. */

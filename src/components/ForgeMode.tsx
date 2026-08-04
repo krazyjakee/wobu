@@ -3,6 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import * as api from '../lib/api'
 import type { GenerationSummary, NodeSummary, ProjectSummary, QueueSnapshot } from '../lib/api'
 import { negotiatedAspect } from '../lib/generationCapabilities'
+import { jobStateLabel, loraStateLabel, trainerStateLabel } from '../lib/stateLabels'
 import type { KindIndex } from '../lib/kinds'
 import {
   useGenerations,
@@ -63,12 +64,15 @@ export function ForgeMode({
       <header className="forge-head">
         <div>
           <h2>Forge</h2>
-          <p>Iterate on one subject with the complete influence attribution kept in view.</p>
+          <p>
+            Work on one entity at a time, or put several in one picture, with the whole influence
+            stack in view while you do it.
+          </p>
         </div>
         <label>
-          <span>Subject</span>
+          <span>Entity</span>
           <Combobox
-            label="Forge subject"
+            label="Forge entity"
             value={selected?.id ?? ''}
             options={subjectOptions}
             sort="title"
@@ -105,10 +109,10 @@ export function ForgeMode({
         <ForgeResults key={`results:${selected.id}`} subject={selected} queue={queue} />
       ) : (
         <section className="forge-no-subject empty-state">
-          <h3>Choose a subject</h3>
+          <h3>Choose an entity</h3>
           <p>
-            Its influence stack, attributed prompt, batch controls, and generation history will fill
-            the Forge.
+            Its influence stack, its compiled prompt, the controls for a batch and everything it has
+            already made will fill this screen.
           </p>
         </section>
       )}
@@ -135,13 +139,15 @@ function LoraCard({
 
   if (!subject) return null
   if (status.isPending) {
-    return <section className="forge-lora">Checking LoRA readiness…</section>
+    return <section className="forge-lora">Checking whether a style can be trained…</section>
   }
   if (status.isError || !status.data) {
     return (
       <section className="forge-lora" aria-label={`LoRA for ${subject.name}`}>
-        <b>Entity LoRA</b>
-        <span>Could not inspect LoRA readiness: {api.errorMessage(status.error)}</span>
+        <b>Trained style (LoRA)</b>
+        <span>
+          Could not check whether a style can be trained: {api.errorMessage(status.error)}
+        </span>
       </section>
     )
   }
@@ -152,11 +158,11 @@ function LoraCard({
   const blocked = readOnly || active || train.isPending || !value.eligible
   const action = value.pin ? 'Re-train' : 'Train'
   const disabledReason = readOnly
-    ? 'This project is read-only.'
+    ? 'This project folder is read-only, so nothing can be trained into it.'
     : active
-      ? 'Training is already active for this entity.'
+      ? 'A style is already being trained for this entity.'
       : !value.eligible
-        ? 'Resolve the reference, trainer, provider, and model requirements first.'
+        ? 'Not ready yet — the lines above say which of the references, the trainer, the provider and the model still needs sorting out.'
         : undefined
 
   async function start() {
@@ -170,10 +176,8 @@ function LoraCard({
   return (
     <section className="forge-lora" aria-label={`LoRA for ${subject.name}`}>
       <div className="forge-lora-title">
-        <b>Entity LoRA</b>
-        <span data-state={value.applicationState}>
-          {value.applicationState.replaceAll('_', ' ')}
-        </span>
+        <b>Trained style (LoRA)</b>
+        <span data-state={value.applicationState}>{loraStateLabel(value.applicationState)}</span>
       </div>
       <div className="forge-lora-counts">
         <b>
@@ -186,12 +190,12 @@ function LoraCard({
         <div>
           <dt>Trainer</dt>
           <dd>
-            <b>{value.trainerState}</b> · {value.trainerDetail}
+            <b>{trainerStateLabel(value.trainerState)}</b> · {value.trainerDetail}
           </dd>
         </div>
         <div>
           <dt>Model</dt>
-          <dd>{value.selectedModel ?? 'No image checkpoint selected'}</dd>
+          <dd>{value.selectedModel ?? 'No image model chosen'}</dd>
         </div>
         <div>
           <dt>Application</dt>
@@ -255,7 +259,7 @@ function SceneComposer({
     aspectNegotiation &&
     !capabilities.isPlaceholderData &&
     aspectNegotiation.actualAspect !== aspect
-      ? `${aspectNegotiation.requestedValid ? 'Unsupported saved aspect' : 'Malformed saved aspect'} ${aspect} was replaced with ${aspectNegotiation.actualAspect}.`
+      ? `${aspectNegotiation.requestedValid ? 'Saved shape not supported' : 'Saved shape could not be read'} ${aspect} was replaced with ${aspectNegotiation.actualAspect}.`
       : null
   const normalizedAspect = aspectNegotiation?.actualAspect ?? aspect
 
@@ -287,16 +291,16 @@ function SceneComposer({
 
   return (
     <details className="forge-scene">
-      <summary>Compose a multi-entity scene</summary>
+      <summary>Put several entities in one picture</summary>
       {!primary ? (
         <p>Choose the primary Forge subject first.</p>
       ) : !primaryAllowed ? (
-        <p>Style Guides and World Bibles shape a scene, but cannot be participants.</p>
+        <p>Art Style and World Canon shape a scene, but cannot appear in one.</p>
       ) : (
         <div className="forge-scene-body">
           <div className="forge-scene-entities">
             <b>Primary · {primary.name}</b>
-            <span>Add one to three entities in prompt order.</span>
+            <span>Add one to three more entities, in the order they should be described.</span>
             <div role="group" aria-label="Additional scene entities">
               {candidates.map((node) => (
                 <label key={node.id}>
@@ -333,7 +337,7 @@ function SceneComposer({
               Actual output · {aspectNegotiation.actualAspect} · {aspectNegotiation.width}×
               {aspectNegotiation.height}px
               {capabilities.data.flexibleAspect
-                ? " · flexible backend, using Wobu's curated validated choices"
+                ? ' · this provider accepts any shape, so Wobu offers the ones it has checked'
                 : ''}
             </p>
           )}
@@ -399,7 +403,7 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
             {activeJobs.length ? ` · ${activeJobs.length} active` : ''}
           </span>
         </div>
-        <p>Select up to {MAX_COMPARE} completed results for a full-resolution comparison.</p>
+        <p>Select up to {MAX_COMPARE} finished results to compare them at full size.</p>
         <button
           className="btn"
           type="button"
@@ -419,7 +423,7 @@ function ForgeResults({ subject, queue }: { subject: NodeSummary; queue: QueueSn
         <div className="forge-active" aria-label="Active Forge generations">
           {activeJobs.map((job) => (
             <span key={job.id}>
-              {job.label} · {job.state}
+              {job.label} · {jobStateLabel(job.state)}
             </span>
           ))}
         </div>
@@ -481,8 +485,8 @@ function VirtualResultGrid({
         <h3>{loading ? 'Reading results…' : 'No results yet'}</h3>
         <p>
           {loading
-            ? 'Receipts will appear as the index answers.'
-            : 'Queue a generation above; completed images collect here.'}
+            ? 'Receipts will appear as Wobu finishes reading the project.'
+            : 'Generate something above and the finished images collect here.'}
         </p>
       </div>
     )
@@ -594,7 +598,7 @@ function CompareViewer({
         <div>
           <h2 id="forge-compare-title">Compare Forge results</h2>
           <p id="forge-compare-description">
-            Full-resolution comparison · {generations.length} immutable results
+            Compared at full size · {generations.length} results, exactly as they were made
           </p>
         </div>
         <button

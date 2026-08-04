@@ -44,13 +44,13 @@ describe('the command rows', () => {
     open()
     // jsdom is not a Mac, so this is the Ctrl notation rather than the glyph.
     expect(screen.getByRole('button', { name: /Toggle navigator/ })).toHaveTextContent('[')
-    expect(screen.getByRole('button', { name: /New node…/ })).toHaveTextContent('Ctrl+N')
+    expect(screen.getByRole('button', { name: /New entity…/ })).toHaveTextContent('Ctrl+N')
   })
 
   it('follow a rebinding rather than repeating what the build shipped with', () => {
     useKeybindings.getState().setBinding('node.new', 'Mod+Shift+N')
     open()
-    expect(screen.getByRole('button', { name: /New node…/ })).toHaveTextContent('Ctrl+Shift+N')
+    expect(screen.getByRole('button', { name: /New entity…/ })).toHaveTextContent('Ctrl+Shift+N')
   })
 
   it('say nothing at all where the user has removed the key', () => {

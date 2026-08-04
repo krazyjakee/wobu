@@ -3,6 +3,7 @@ import type { ProjectSummary, SharedTicket, SyncStatus } from '../lib/api'
 import { errorMessage, syncShare, syncStatus, syncUnshare } from '../lib/api'
 import { toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
+import { syncStateLabel } from '../lib/stateLabels'
 import { Modal } from './Modal'
 
 export function SharingSheet({
@@ -85,7 +86,7 @@ export function SharingSheet({
         descriptionId="sharing-description"
         onClose={onClose}
         busy={working}
-        busyMessage={working ? 'Updating this project’s sharing state…' : undefined}
+        busyMessage={working ? 'Saving the change to sharing…' : undefined}
       >
         <h2 id="sharing-title">{share ? 'Manage sharing' : 'Share this project'}</h2>
         <p id="sharing-description">
@@ -110,8 +111,8 @@ export function SharingSheet({
         )}
         {status?.running && !status.persistent && (
           <div className="sheet-err" role="alert">
-            This session could not store its identity securely. Tickets may stop identifying this
-            machine after Wobu restarts.
+            Wobu could not store this machine&rsquo;s identity securely, so tickets may stop
+            recognising it once Wobu has restarted.
           </div>
         )}
 
@@ -121,7 +122,7 @@ export function SharingSheet({
             <code>{share.root}</code>
             <span>
               {share.peers} known {share.peers === 1 ? 'peer' : 'peers'}
-              {runtime ? ` · ${runtime.state}` : ''}
+              {runtime ? ` · ${syncStateLabel(runtime.state)}` : ''}
             </span>
             {knownPeers.length > 0 && <span>Joined with {knownPeers.join(', ')}</span>}
           </div>
@@ -133,8 +134,9 @@ export function SharingSheet({
             <textarea id="share-ticket" rows={4} readOnly value={ticket.token} />
             {!ticket.relayed && (
               <small className="share-relay-warning">
-                No relay was available. This ticket is expected to work only on the same local
-                network. Try creating it again when this machine is online for remote sharing.
+                Wobu could not reach a public relay, so this ticket is only expected to work between
+                machines on the same local network. Make another one when this machine is online, if
+                you need to share further afield.
               </small>
             )}
           </div>

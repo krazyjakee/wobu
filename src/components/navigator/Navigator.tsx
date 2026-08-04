@@ -43,7 +43,7 @@ const DRAG_MIME = 'application/x-wobu-node'
  * of the fact that the button does not work.
  */
 const READ_ONLY_REASON =
-  'This project is open read-only: Wobu cannot write to the folder, so nothing can be created here. Check the folder permissions, or reopen a copy somewhere writable.'
+  'This project folder is read-only: Wobu cannot write to it, so nothing can be created here. Check the folder permissions, or reopen a copy somewhere writable.'
 
 /**
  * A shared empty list, so a project with no favourites and no history hands the
@@ -252,8 +252,8 @@ export function Navigator({
           onSuccess: () =>
             toast(
               targetId
-                ? `${src?.name ?? 'Node'} moved under ${byId.get(targetId)?.name ?? 'node'}`
-                : `${src?.name ?? 'Node'} moved to the top level`,
+                ? `${src?.name ?? 'Entity'} moved under ${byId.get(targetId)?.name ?? 'another entity'}`
+                : `${src?.name ?? 'Entity'} moved to the top level`,
             ),
         },
       )
@@ -353,10 +353,10 @@ export function Navigator({
       <div className="nav-tree">
         <BrokenFiles files={corrupt} projectPath={projectPath} />
         {loading && <p className="nav-note">Reading the world…</p>}
-        {error && <p className="nav-note">Could not list nodes — {error}</p>}
+        {error && <p className="nav-note">Could not list this world’s entities — {error}</p>}
         {!loading && !error && nodes.length === 0 && (
           <p className="nav-note">
-            This project has no nodes yet. <b>New entity</b> writes the first Markdown file into{' '}
+            This project has no entities yet. <b>New entity</b> writes the first Markdown file into{' '}
             <b>nodes/</b>.
           </p>
         )}
@@ -416,7 +416,7 @@ export function Navigator({
           className="nav-new"
           onClick={() => onNewNode(null, null)}
           disabledReason={readOnly ? READ_ONLY_REASON : null}
-          tip="Write a new Markdown file into nodes/"
+          tip="Write a new entity into this project as a Markdown file"
         >
           <Icon name="plus" size="sm" />
           New entity
@@ -428,7 +428,7 @@ export function Navigator({
             disabledReason={readOnly ? READ_ONLY_REASON : null}
             tip="Copy a style, or a whole branch, out of another project"
           >
-            Import style/subtree…
+            Import from another project…
           </TipButton>
         )}
       </div>
@@ -499,7 +499,7 @@ export function Navigator({
               onError: (e) => report(e),
               onSuccess: () => {
                 if (selectedId === id) select(null)
-                toast('Node deleted')
+                toast('Entity deleted')
               },
             })
             setConfirm(null)
@@ -527,7 +527,7 @@ export function Navigator({
 function StaleDot({ state }: { state: NodeSummary['descriptionState'] }) {
   if (state !== 'stale') return null
   return (
-    <Tooltip tip="Notes or an upstream influence changed since this was enhanced">
+    <Tooltip tip="Notes, or something this inherits from, changed since this was enhanced">
       <span className="stale" role="img" aria-label="Description is out of date" />
     </Tooltip>
   )
@@ -572,7 +572,8 @@ function deleteWarning(node: NodeSummary, nodes: NodeSummary[]): string {
   const kids = descendantsOf(node.id, nodes).size
   const base = 'Its Markdown file is removed from the project folder.'
   if (kids === 0) return base
-  return `${base} ${kids} node${kids === 1 ? '' : 's'} nest inside it — how the backend treats them is its call, so check the tree afterwards.`
+  const nested = kids === 1 ? '1 entity nests' : `${kids} entities nest`
+  return `${base} ${nested} inside it; they move up to this one’s parent rather than being deleted with it.`
 }
 
 function GroupMenu({
@@ -650,7 +651,7 @@ function NodeMenu({
   onDelete: (node: NodeSummary) => void
 }) {
   const def = kinds.get(node.kind)
-  const busyReason = busy ? 'Another change to this node is still being written.' : null
+  const busyReason = busy ? 'Another change to this entity is still being saved.' : null
   return (
     <>
       <MenuLabel>{labelFor(def, node.kind)}</MenuLabel>

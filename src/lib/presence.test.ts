@@ -90,7 +90,7 @@ describe('the greeting on open', () => {
       peer({ sessionId: 's2', user: 'Nadia', host: 'laptop' }),
     ]
     expect(openedText(twice)).toBe('Nadia has this project open.')
-    expect(sessionsText(twice)).toBe('3 sessions')
+    expect(sessionsText(twice)).toBe('3 people here')
   })
 })
 
@@ -117,16 +117,18 @@ describe('the editor banner', () => {
     // say what the collision costs, the only safe reading would be "wait", which
     // is the hard-lock behaviour advisory presence exists to avoid.
     const text = editingText([peer({ sessionId: 's1', user: 'Nadia' })], 'Kael')
-    expect(text).toContain('Nadia has “Kael” open in another session')
+    expect(text).toContain('Nadia has “Kael” open in another copy of Wobu')
     expect(text).toContain('Nothing is locked')
-    expect(text).toContain('conflict')
+    expect(text).toContain('a second version for you to settle')
   })
 })
 
 describe('the session count', () => {
   it('counts this session as well, because that is what the folder holds', () => {
-    expect(sessionsText([peer({ sessionId: 's1' })])).toBe('2 sessions')
-    expect(sessionsText([peer({ sessionId: 's1' }), peer({ sessionId: 's2' })])).toBe('3 sessions')
+    expect(sessionsText([peer({ sessionId: 's1' })])).toBe('2 people here')
+    expect(sessionsText([peer({ sessionId: 's1' }), peer({ sessionId: 's2' })])).toBe(
+      '3 people here',
+    )
   })
 
   it('says nothing when this is the only session', () => {

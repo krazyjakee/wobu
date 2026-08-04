@@ -61,7 +61,7 @@ describe('toast interaction and expiry', () => {
   it('dismisses from the keyboard with Escape', () => {
     render(<Toasts />)
     enqueue('Saved')
-    const dismiss = screen.getByRole('button', { name: 'Dismiss notification: Saved' })
+    const dismiss = screen.getByRole('button', { name: 'Dismiss message: Saved' })
 
     dismiss.focus()
     fireEvent.keyDown(dismiss, { key: 'Escape' })
@@ -97,7 +97,7 @@ describe('toast interaction and expiry', () => {
     vi.useFakeTimers()
     render(<Toasts />)
     enqueue('Saved')
-    const dismiss = screen.getByRole('button', { name: 'Dismiss notification: Saved' })
+    const dismiss = screen.getByRole('button', { name: 'Dismiss message: Saved' })
 
     act(() => vi.advanceTimersByTime(4_000))
     fireEvent.focusIn(dismiss)

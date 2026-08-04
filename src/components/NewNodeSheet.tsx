@@ -112,17 +112,20 @@ export function NewNodeSheet({
       onClose={onClose}
       busy={create.isPending}
       busyMessage={
-        create.isPending ? 'Creating the node. This operation cannot be interrupted.' : undefined
+        create.isPending
+          ? 'Writing the new entity. This cannot be stopped once it has started.'
+          : undefined
       }
     >
-      <h2 id="new-node-title">New node</h2>
+      <h2 id="new-node-title">New entity</h2>
       <p id="new-node-description">
-        Every entity is the same record — kind only selects the icon, the section schema and the
-        default link roles. This writes one Markdown file under <code>nodes/</code>.
+        Every entity is the same sort of thing. Its kind only decides its icon, which sections its
+        description has, and which relations it offers. This writes one Markdown file into{' '}
+        <code>nodes/</code>.
       </p>
 
       {available.length === 0 ? (
-        <p>The kind registry is empty, so there is nothing to create.</p>
+        <p>Wobu has no kinds of entity to offer, so there is nothing to create.</p>
       ) : (
         <>
           <div className="field">

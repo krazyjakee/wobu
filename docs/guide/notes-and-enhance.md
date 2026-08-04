@@ -30,9 +30,9 @@ slow share, nudging the delay up reduces write chatter.
 
 The violet **Enhance** button in the editor header, or its keyboard shortcut. It reads:
 
-- The **descriptions** of every layer above this node — not their raw notes, so what the model sees
-  is already canon.
-- This node's raw notes.
+- The **descriptions** of every layer above this entity — not their raw notes, so what the model
+  sees is already canon.
+- This entity's raw notes.
 - Its attributes, and the roles of any reference images attached to it.
 
 and returns a structured description — schema-valid JSON via tool use, not parsed prose — which
@@ -59,7 +59,7 @@ what you are comparing against is what is actually there — not what was there 
 
 ### Sections, not a blob
 
-The sections depend on the node's kind. For a character:
+The sections depend on the entity's kind. For a character:
 
 ```
 {
@@ -94,9 +94,9 @@ that enhance well.
 | Populate *Never* | Explicit negatives are the main defence against visual drift, so Enhance always fills them in. |
 
 > **Why Enhance reads the whole stack** The third rule is the subtle one, and it is the reason
-> Enhance is given every layer above the node rather than just the node's own notes. Each layer
+> Enhance is given every layer above the entity rather than just the entity's own notes. Each layer
 > stays lean and orthogonal, nothing is said twice, and the compiled prompt stays inside the model's
-> budget. A node enhanced in isolation would duplicate half its species.
+> budget. An entity enhanced in isolation would duplicate half its species.
 
 ## Freshness and staleness
 
@@ -108,7 +108,7 @@ that enhance well.
 | `edited` | edited by you | You changed the machine's text by hand. Fully supported. |
 | `stale` | stale | The notes, or something upstream, changed since the last enhance. |
 
-On accept, Wobu stamps which upstream sources were used. When any of them changes later, this node
+On accept, Wobu stamps which upstream sources were used. When any of them changes later, this entity
 flips to **stale** and picks up a quiet dot in the navigator. Nothing regenerates on its own —
 re-enhancing spends your money and might overwrite an edit you made deliberately, so it stays your
 call.

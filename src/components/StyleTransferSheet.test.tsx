@@ -59,9 +59,9 @@ describe('StyleTransferSheet', () => {
     const onClose = vi.fn()
     open(onClose)
 
-    const dialog = await screen.findByRole('dialog', { name: 'Import style or subtree' })
+    const dialog = await screen.findByRole('dialog', { name: 'Import from another project' })
     expect(dialog).toHaveAttribute('aria-modal', 'true')
-    expect(dialog).toHaveAccessibleDescription(/Reading the source project|Choose one root/)
+    expect(dialog).toHaveAccessibleDescription(/Reading the source project|Choose one entity/)
     expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledOnce()
@@ -99,9 +99,9 @@ describe('StyleTransferSheet', () => {
     open()
     fireEvent.click(await screen.findByRole('button', { name: 'Replace and import' }))
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'Transfer stopped after 0 of 1 nodes',
+      'The import stopped after 0 of 1 entities',
     )
-    expect(screen.getByRole('status')).toHaveTextContent('1 node remain unapplied')
+    expect(screen.getByRole('status')).toHaveTextContent('1 entity was not brought across')
     expect(screen.getByRole('status')).toHaveTextContent('style.conflict-nadia.md')
     await waitFor(() =>
       expect(h.invoke).toHaveBeenCalledWith('style_transfer_apply', expect.anything()),

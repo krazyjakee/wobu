@@ -135,13 +135,18 @@ export function fragmentLabel(f: InfluenceFragment): string {
 }
 
 /**
- * A description section key or a reference role as prose. The registry's own
- * labels are per kind and a span only carries the key, so the underscore is all
- * there is to fix — and `full_ref` reading as "full ref" is still better than a
- * key nobody typed.
+ * A description section key or a reference role as prose.
+ *
+ * The registry's own labels are per kind and a span only carries the key, so
+ * stripping the underscore is nearly all there is to do. The exception is
+ * `full_ref`, which stripped reads "full ref" — an abbreviation that exists
+ * only in the enum, and which every other surface in the app spells out. One
+ * concept, one word (#127), so it is spelled out here too.
  */
+const KEY_LABELS: Record<string, string> = { full_ref: 'full reference' }
+
 export function sectionLabel(section: string): string {
-  return section.replace(/_/g, ' ')
+  return KEY_LABELS[section] ?? section.replace(/_/g, ' ')
 }
 
 /** Two decimals, because a slider at 0.05 and one at 0.5 must not read alike. */

@@ -83,7 +83,7 @@ function BrokenRow({ file, projectPath }: { file: CorruptFile; projectPath: stri
       <div className="broken-acts">
         <button className="btn-mini" onClick={reveal}>
           <Icon name="folder" size="sm" />
-          Reveal
+          Show in folder
         </button>
         <button className="btn-mini" onClick={reload} disabled={busy}>
           <Icon name="refresh" size="sm" />

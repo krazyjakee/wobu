@@ -84,7 +84,7 @@ export function AssetsMode({
   )
   const nodeFilterOptions = useMemo(
     () => [
-      { value: 'all', label: 'All nodes', pinned: true },
+      { value: 'all', label: 'All entities', pinned: true },
       ...nodes.map((node) => ({ value: node.id, label: node.name, keywords: node.kind })),
     ],
     [nodes],
@@ -137,7 +137,7 @@ export function AssetsMode({
         <div>
           <h2>Assets</h2>
           <p>
-            {assets.data?.length ?? 0} images · {orphanCount} orphaned · thumbnails stay lazy
+            {assets.data?.length ?? 0} images · {orphanCount} unused · previews load as you scroll
           </p>
         </div>
         <button className="btn" type="button" onClick={() => setMode('library')}>
@@ -166,9 +166,9 @@ export function AssetsMode({
           />
         </label>
         <label>
-          <span>Node</span>
+          <span>Entity</span>
           <Combobox
-            label="Filter assets by node"
+            label="Filter assets by entity"
             value={nodeId}
             options={nodeFilterOptions}
             sort="title"
@@ -177,9 +177,9 @@ export function AssetsMode({
           />
         </label>
         <label>
-          <span>Linked-node tag</span>
+          <span>Tag on a linked entity</span>
           <Combobox
-            label="Filter assets by linked node tag"
+            label="Filter assets by a tag on a linked entity"
             value={tag}
             options={tagFilterOptions}
             sort="title"
@@ -194,17 +194,17 @@ export function AssetsMode({
           disabled={!usageKnown}
           onClick={() => setOrphansOnly((value) => !value)}
         >
-          Orphans <b>{orphanCount}</b>
+          Unused <b>{orphanCount}</b>
         </button>
       </div>
 
       {(assets.isError || usages.isError) && (
         <p className="asset-library-error inline-error">
-          Could not read the asset library: {api.errorMessage(assets.error ?? usages.error)}
+          Could not read the assets: {api.errorMessage(assets.error ?? usages.error)}
         </p>
       )}
       {deleteError && (
-        <p className="asset-library-error inline-error">Delete failed: {deleteError}</p>
+        <p className="asset-library-error inline-error">Could not delete it: {deleteError}</p>
       )}
 
       <div className="asset-library-body">
@@ -234,7 +234,7 @@ export function AssetsMode({
 
       {confirmDelete && (
         <ConfirmSheet
-          title="Delete orphaned asset?"
+          title="Delete this unused image?"
           body={deleteWarning(confirmDelete)}
           confirmLabel="Delete permanently"
           danger
@@ -279,8 +279,8 @@ function VirtualAssetGrid({
         <h3>{loading ? 'Reading assets…' : 'No assets match'}</h3>
         <p>
           {loading
-            ? 'The library will appear as the index answers.'
-            : 'Clear or change a filter to widen the library.'}
+            ? 'The assets will appear as Wobu finishes reading the project.'
+            : 'Clear or change a filter to see more.'}
         </p>
       </div>
     )
@@ -347,7 +347,7 @@ function AssetTile({
           missingLabel="Preview failed"
           errorLabel="Preview failed"
         />
-        {usageKnown && usageCount === 0 && <b>Orphan</b>}
+        {usageKnown && usageCount === 0 && <b>Unused</b>}
       </span>
       <span className="asset-library-tile-meta media-card-copy">
         <b>{kindLabel(asset.kind)}</b>
@@ -402,7 +402,10 @@ function AssetDetails({
     return (
       <aside className="asset-details is-empty">
         <h3>Select an asset</h3>
-        <p>Its node links, roles, cover use, and safe actions will appear here.</p>
+        <p>
+          Which entities use it, in what role, whether it is a cover, and what you can safely do
+          with it all appear here.
+        </p>
       </aside>
     )
   }
@@ -458,12 +461,16 @@ function AssetDetails({
 
       <section className="asset-uses">
         <h4>
-          Used by {usages.length} {usages.length === 1 ? 'node' : 'nodes'}
+          Used by {usages.length} {usages.length === 1 ? 'entity' : 'entities'}
         </h4>
         {!usageKnown ? (
-          <p className="asset-orphan-note">Usage is unavailable, so orphan actions are withheld.</p>
+          <p className="asset-orphan-note">
+            Wobu could not work out where this is used, so it will not offer to delete it.
+          </p>
         ) : usages.length === 0 ? (
-          <p className="asset-orphan-note">Orphan — no node links and not used as a cover.</p>
+          <p className="asset-orphan-note">
+            Not used — no entity links to this image, and nothing uses it as a cover.
+          </p>
         ) : (
           usages.map((usage) => (
             <div className="asset-use" key={usage.nodeId}>
@@ -490,13 +497,13 @@ function AssetDetails({
       <section className="asset-attach" aria-label="Attach selected asset">
         <h4>Attach as reference</h4>
         <label>
-          <span>Node</span>
+          <span>Entity</span>
           <Combobox
-            label="Node"
+            label="Entity"
             value={nodeId}
             options={attachNodeOptions}
             sort="title"
-            placeholder="No nodes"
+            placeholder="No entities"
             disabled={readOnly || nodes.length === 0 || linkAsset.isPending}
             onChange={setNodeId}
           />
@@ -515,31 +522,31 @@ function AssetDetails({
           className="btn btn-primary"
           disabledReason={
             readOnly
-              ? 'This project is open read-only, so nothing can be attached to it.'
+              ? 'This project folder is read-only, so nothing can be attached to it.'
               : !nodeId
-                ? 'Choose the node this picture is a reference for.'
+                ? 'Choose the entity this picture is a reference for.'
                 : alreadyAttached
-                  ? 'This asset is already attached to that node in that role.'
+                  ? 'This image is already attached to that entity in that role.'
                   : linkAsset.isPending
-                    ? 'The last attach is still being written.'
+                    ? 'The last change is still being saved.'
                     : null
           }
-          tip="Link this asset to the node as a generation reference"
+          tip="Attach this image to that entity as a reference for its generations"
           onClick={() => void attach()}
         >
           {linkAsset.isPending ? 'Attaching…' : alreadyAttached ? 'Already attached' : 'Attach'}
         </TipButton>
-        {error && <p className="asset-library-error inline-error">Attach failed: {error}</p>}
+        {error && <p className="asset-library-error inline-error">Could not attach it: {error}</p>}
       </section>
 
       {usageKnown && usages.length === 0 ? (
         <section className="asset-delete-offer">
-          <h4>Delete orphan</h4>
+          <h4>Delete unused image</h4>
           <p>Permanently removes the original and thumbnail. This cannot be undone.</p>
           <TipButton
             className="btn"
             disabledReason={
-              readOnly ? 'This project is open read-only, so nothing in it can be deleted.' : null
+              readOnly ? 'This project folder is read-only, so nothing in it can be deleted.' : null
             }
             tip="Delete the original and its thumbnail from the project folder"
             onClick={() => onDelete(asset)}
@@ -549,7 +556,8 @@ function AssetDetails({
         </section>
       ) : usageKnown ? (
         <p className="asset-delete-blocked">
-          Detach every role and clear cover use before deletion is offered.
+          Detach it from every entity, and clear it from any covers, before Wobu will offer to
+          delete it.
         </p>
       ) : null}
     </aside>
@@ -559,7 +567,7 @@ function AssetDetails({
 function deleteWarning(asset: Asset): string {
   const generation =
     asset.kind === 'generated'
-      ? ' Its immutable generation receipt will remain, with this output shown as missing.'
+      ? ' The receipt for the generation that made it is kept, and will show this image as missing.'
       : ''
   return `This permanently removes the original image and its thumbnail. It cannot be undone.${generation}`
 }

@@ -72,7 +72,7 @@ export function Editor({
       <main className="editor">
         <div className="empty" style={{ margin: 'auto' }}>
           <Icon name="library" size="xl" />
-          <h3>{loading ? 'Reading the world…' : hasNodes ? 'No node selected' : 'Empty world'}</h3>
+          <h3>{loading ? 'Reading the world…' : hasNodes ? 'Nothing selected' : 'Empty world'}</h3>
           <p>
             {hasNodes ? (
               <>
@@ -80,8 +80,9 @@ export function Editor({
               </>
             ) : (
               <>
-                Nothing has been written yet. <b>New entity</b> in the navigator creates the first
-                Markdown file — that file is the source of truth, not a database row.
+                Nothing has been written yet. <b>New entity</b> in the navigator writes the first
+                one. Every entity is a Markdown file in the project folder, and that file is the
+                real thing — Wobu keeps no separate copy of it.
               </>
             )}
           </p>
@@ -113,7 +114,7 @@ export function Editor({
           />
           <span className="badge">{labelFor(def, selected.kind)}</span>
           {selected.descriptionState === 'stale' && (
-            <Tooltip tip="Notes or an upstream influence changed since the last enhance, so the description below is older than what it was written from.">
+            <Tooltip tip="The notes, or something this inherits from, changed since the last enhance — so the description below is older than what it was written from.">
               <span className="badge" tabIndex={0}>
                 stale
               </span>
@@ -159,17 +160,17 @@ export function Editor({
               !enhanceDisabled
                 ? null
                 : readOnly && !enhance.active
-                  ? 'This share is read-only and Enhance writes to the node. Open a writable copy to run it.'
+                  ? 'This project folder is read-only, and Enhance writes into it. Open a copy you can write to.'
                   : enhance.starting
-                    ? 'The run is already starting.'
-                    : 'Open a node first — Enhance rewrites the node you are looking at.'
+                    ? 'It is already starting.'
+                    : 'Open an entity first — Enhance rewrites the description of whatever you are looking at.'
             }
             tip={
               enhance.complete
                 ? 'Review the finished description before anything is written'
                 : enhance.stopped
                   ? 'Review the stopped local draft'
-                  : 'Turn notes and influences into reviewed canonical sections'
+                  : 'Turn your notes, and everything this inherits, into a description you review before it is saved'
             }
             onClick={triggerEnhance}
           >
@@ -203,10 +204,10 @@ export function Editor({
       </div>
 
       <div className="panes">
-        {nodeQ.isPending && <div className="empty">Loading node…</div>}
+        {nodeQ.isPending && <div className="empty">Opening…</div>}
         {nodeQ.isError && (
           <div className="empty">
-            <h3>Could not open this node</h3>
+            <h3>Could not open this entity</h3>
             <p>{errorMessage(nodeQ.error)}</p>
           </div>
         )}
@@ -284,7 +285,7 @@ function NameField({
           e.currentTarget.blur()
         }
       }}
-      aria-label="Node name"
+      aria-label="Entity name"
     />
   )
 }

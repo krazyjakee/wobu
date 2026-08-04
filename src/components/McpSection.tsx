@@ -25,7 +25,7 @@ import { TipButton } from './Tooltip'
  * is what it says. `busy` is a *moment*, not a state the user has to fix, so
  * the sentence says that rather than naming a precondition they cannot meet.
  */
-const BUSY_REASON = 'Wait — an MCP change is still being written.'
+const BUSY_REASON = 'Wait — that change is still being saved.'
 
 /**
  * Agent access, in the pane where somebody decides whether to have any.
@@ -211,7 +211,7 @@ export default function McpSection() {
           <div className="set-row">
             <span className="set-label">Address</span>
             <code className="set-path">
-              {server.endpoint ?? `not listening (port ${server.port})`}
+              {server.endpoint ?? `not listening — port ${server.port} could not be opened`}
             </code>
           </div>
           <div className="set-row">
@@ -234,7 +234,7 @@ export default function McpSection() {
               className="btn-mini"
               onClick={() => void reveal()}
               disabledReason={token !== null ? 'The token is already on screen, above.' : null}
-              tip="Read the token out of the OS keychain and show it here"
+              tip="Read the token out of this computer's keychain and show it here"
             >
               <Icon name="lock" size="sm" />
               Show token
@@ -242,7 +242,7 @@ export default function McpSection() {
             <TipButton
               className="btn-mini"
               onClick={() => void copyConfig()}
-              tip="Copy the address and token as a JSON block an MCP client will accept"
+              tip="Copy the address and the token as a block of JSON any MCP client will accept"
             >
               <Icon name="copy" size="sm" />
               Copy connection details
@@ -325,7 +325,7 @@ export default function McpSection() {
             <span className="set-value">
               {activity.length === 0
                 ? 'Nothing has called Wobu yet.'
-                : `The last ${activity.length} tool ${activity.length === 1 ? 'call' : 'calls'}.`}
+                : `The last ${activity.length} ${activity.length === 1 ? 'call' : 'calls'} an agent made.`}
             </span>
           </div>
           {activity.length > 0 && (
@@ -480,7 +480,7 @@ function ClientServers({
       const found = await mcpClientServerProbe(id)
       setProbed((current) => ({
         ...current,
-        [id]: `${found.name} answered with ${found.tools.length} tool${
+        [id]: `${found.name} answered, offering ${found.tools.length} tool${
           found.tools.length === 1 ? '' : 's'
         }: ${found.tools.map((tool) => tool.name).join(', ') || 'none'}`,
       }))
@@ -518,7 +518,7 @@ function ClientServers({
           </label>
           <code className="set-path">
             {[server.command, ...server.args].join(' ')}
-            {server.hasEnv ? '  (with environment overrides from mcp.json)' : ''}
+            {server.hasEnv ? '  (with environment settings from mcp.json)' : ''}
           </code>
           {probed[server.id] && <span className="set-value">{probed[server.id]}</span>}
           <div className="set-acts">

@@ -234,16 +234,16 @@ function WelcomeStep() {
       <p>
         A world is a hierarchy before it is a picture. Wobu is where you write that hierarchy down
         once — the art style, the lore, a species, its cultures, the places and the characters — and
-        every image you generate afterwards inherits it, because the prompt is compiled from the
-        node&rsquo;s ancestors rather than retyped.
+        every image you generate afterwards inherits it, because the prompt is built from everything
+        above the entity rather than retyped.
       </p>
       <ul className="onb-rows">
         <ModeRow icon="library" name="Library">
-          Where the writing happens. A tree of nodes on the left, the node&rsquo;s notes and
-          concepts in the middle, and what its prompt actually inherits on the right.
+          Where the writing happens. A tree of entities on the left, the open entity&rsquo;s notes
+          and concepts in the middle, and what its prompt actually inherits on the right.
         </ModeRow>
         <ModeRow icon="forge" name="Forge">
-          Several nodes in one shot — put a character in a place and compose the scene.
+          Several entities in one picture — put a character in a place and compose the scene.
         </ModeRow>
         <ModeRow icon="assets" name="Assets">
           Every image, reference and mesh in the project folder, in one grid.
@@ -286,10 +286,10 @@ function ProjectStep({ project }: { project: ProjectSummary | null }) {
   return (
     <>
       <p>
-        A project is an ordinary folder, not a database file. Nodes are Markdown you can read in any
-        editor, references and generated images sit beside them, and the whole thing can live on a
-        network share — anyone who can see the path can open it, on their own machine, with their
-        own keys.
+        A project is an ordinary folder, not a single database file. Entities are Markdown you can
+        read in any editor, references and generated images sit beside them, and the whole thing can
+        live on a network share — anyone who can see the path can open it, on their own machine,
+        with their own keys.
       </p>
 
       {project ? (
@@ -367,16 +367,16 @@ function ConceptStep({ project }: { project: ProjectSummary | null }) {
       <p>Three moves, in the Library:</p>
       <ol className="onb-numbered">
         <li>
-          <b>Make a node.</b> <Chord id="node.new" /> or <b>New</b> in the navigator. A character, a
-          place, a species — whatever you have in your head first.
+          <b>Make an entity.</b> <Chord id="node.new" /> or <b>New</b> in the navigator. A
+          character, a place, a species — whatever you have in your head first.
         </li>
         <li>
           <b>Give it its world.</b> Nest it under a parent and pin reference images in the
-          inspector. The inspector shows the compiled prompt, so you can see exactly what the
-          ancestors contributed before spending anything.
+          inspector. The inspector shows the compiled prompt, so you can see exactly what everything
+          above it contributed before you spend anything.
         </li>
         <li>
-          <b>Generate.</b> The <i>Concepts</i> tab on the node, or <Chord id="generate" />. The
+          <b>Generate.</b> The <i>Concepts</i> tab on the entity, or <Chord id="generate" />. The
           result is written into the project folder beside the notes.
         </li>
       </ol>
@@ -438,7 +438,7 @@ function BackendState({ project }: { project: ProjectSummary }) {
   const backend = useStatusBarBackend(project.id)
   if (backend.isPending) return <p className="onb-note">Checking what this project can generate…</p>
   if (backend.isError) {
-    return <p className="onb-note">The image backend could not be checked from here.</p>
+    return <p className="onb-note">The image provider could not be checked from here.</p>
   }
   const health = backend.data?.health
   if (!health) return null
@@ -457,7 +457,7 @@ function BackendState({ project }: { project: ProjectSummary }) {
 function healthText(health: BackendHealth, label: string): string {
   if (health.state === 'connected') return `${label} is ready.`
   if (health.state === 'unconfigured') {
-    return `${health.detail} Choose one under Settings › Providers and add its key.`
+    return `${health.detail} Choose one under Settings › Providers and models, and add its key.`
   }
   return `${label} cannot be reached from here — ${health.detail}`
 }

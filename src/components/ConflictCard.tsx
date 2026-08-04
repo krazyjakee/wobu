@@ -48,7 +48,7 @@ export function ConflictCard({
   // the wording follows `mine` rather than assuming it.
   const owner = conflict.mine ? 'Your' : ownerLabel(conflict.user)
   const keepParked = conflict.mine ? 'Keep mine' : `Keep ${owner}`
-  const keepCurrent = conflict.mine ? 'Keep theirs' : 'Keep what is on disk'
+  const keepCurrent = conflict.mine ? 'Keep theirs' : 'Keep the one in the folder'
   const when = formatWhen(conflict.savedAt)
 
   const busy = resolve.isPending
@@ -84,14 +84,14 @@ export function ConflictCard({
       <p className="conflict-note">
         {/* Said plainly, because the fear this card has to answer immediately is
             "have I lost what I just typed". Nothing has been thrown away yet. */}
-        Both versions are on disk. Nothing has been deleted, and nothing will be until you choose —
-        the one you do not keep is removed then.
+        Both versions are in the project folder. Nothing has been deleted, and nothing will be until
+        you choose — the one you do not keep is removed then.
       </p>
 
       {differs ? (
         <div className="conflict-diff" role="table">
           <div className="conflict-cols" role="row">
-            <span role="columnheader">On disk now</span>
+            <span role="columnheader">In the folder now</span>
             <span role="columnheader">{owner} version</span>
           </div>
           {shown.map((row, i) => (
@@ -123,7 +123,7 @@ export function ConflictCard({
         </button>
         <button className="btn-mini" onClick={reveal}>
           <Icon name="folder" size="sm" />
-          Reveal
+          Show in folder
         </button>
       </div>
     </section>
@@ -150,8 +150,8 @@ export function ConflictsElsewhere({
     <p className="conflict-else">
       <Icon name="layers" size="sm" />
       {conflicts.length === 1
-        ? 'Another node has two versions waiting: '
-        : `${conflicts.length} other nodes have two versions waiting: `}
+        ? 'Another entity has two versions waiting: '
+        : `${conflicts.length} other entities have two versions waiting: `}
       {conflicts.map((c, i) => (
         <span key={c.relPath}>
           {i > 0 && ', '}

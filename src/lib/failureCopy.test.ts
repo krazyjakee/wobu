@@ -57,7 +57,7 @@ describe('a failure that cost money', () => {
 describe('guidance per code', () => {
   it('names the whole route to the fix rather than saying "check your settings"', () => {
     expect(failureGuidance(failure({ code: 'provider.no_key' }))).toMatch(
-      /Settings → Providers and add one/,
+      /Settings → Providers and models and add one/,
     )
   })
 

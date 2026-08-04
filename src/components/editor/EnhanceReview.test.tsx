@@ -68,7 +68,7 @@ describe('EnhanceReview', () => {
     render(<EnhanceReview current={current} definitions={definitions} session={session()} />)
 
     const questions = screen.getByRole('complementary', { name: 'Questions from Enhance' })
-    expect(questions).toHaveTextContent('The model left these open instead of inventing an answer')
+    expect(questions).toHaveTextContent('Enhance left these open rather than invent an answer')
     expect(questions).toHaveTextContent('What is engraved on the signet?')
 
     const silhouette = screen.getByRole('heading', { name: 'Silhouette' }).closest('section')
@@ -128,7 +128,7 @@ describe('EnhanceReview', () => {
     )
 
     expect(
-      screen.getByText(/partial draft stays here locally and is not saved/i),
+      screen.getByText(/half-finished draft stays on this screen and is not saved/i),
     ).toBeInTheDocument()
     expect(screen.getByText('Partial words that arrived')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Accept all' })).not.toBeInTheDocument()

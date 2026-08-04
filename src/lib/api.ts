@@ -6,6 +6,7 @@
  * below are exactly what crosses the bridge.
  */
 import { invoke } from '@tauri-apps/api/core'
+import { plainError } from './errorCopy'
 
 /* ── domain types ─────────────────────────────────────────────────────────── */
 
@@ -338,10 +339,21 @@ export function isRetryable(e: unknown): boolean {
   return isWobuError(e) && e.retryable
 }
 
-/** Normalises the assorted things a Rust command error can arrive as. */
+/**
+ * What to put in front of a person when a command fails.
+ *
+ * Normalises the assorted things a Rust command error can arrive as, and — for
+ * anything that came from the bridge — hands it to `lib/errorCopy.ts` to be
+ * said in the app's own words rather than the data model's. That translation
+ * lives here, at the one function every error surface already went through, so
+ * no call site has to remember to ask for it (#127).
+ *
+ * The untranslated sentence is not lost: it is in the diagnostics log, written
+ * by `WobuError::new` at the moment the error was made.
+ */
 export function errorMessage(e: unknown): string {
   if (typeof e === 'string') return e
-  if (isWobuError(e)) return e.message
+  if (isWobuError(e)) return plainError(e)
   if (e instanceof Error) return e.message
   if (e && typeof e === 'object') {
     const m = (e as { message?: unknown }).message

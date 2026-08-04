@@ -21,6 +21,7 @@ import {
   useUnlinkAsset,
 } from '../../lib/queries'
 import { labelFor, pluralFor, type KindIndex } from '../../lib/kinds'
+import { jobStateLabel } from '../../lib/stateLabels'
 import { influenceDependentsOf } from '../../lib/tree'
 import { useContextMenu } from '../../hooks/useContextMenu'
 import { Combobox } from '../Combobox'
@@ -74,13 +75,16 @@ export function ConceptsPane({
     <section className="concepts" aria-label={`Concepts for ${node.name}`}>
       {history.isError && (
         <div className="concept-error">
-          Could not read generation history: {api.errorMessage(history.error)}
+          Could not read what has been generated here: {api.errorMessage(history.error)}
         </div>
       )}
       {jobs.length === 0 && (history.data?.length ?? 0) === 0 && !history.isPending && (
         <div className="concept-empty">
           <h3>No concepts yet</h3>
-          <p>Generated images for {node.name} will collect here with their prompt and seed.</p>
+          <p>
+            Images generated for {node.name} collect here, each with the prompt and the seed that
+            made it.
+          </p>
         </div>
       )}
       <div className="concept-grid">
@@ -282,11 +286,11 @@ function LiveTile({ job, signal }: { job: JobSnapshot; signal: Signal | undefine
 }
 
 function liveLabel(job: JobSnapshot): string {
-  if (job.state === 'queued') return 'Queued'
+  if (job.state === 'queued') return 'Waiting'
   if (job.state === 'running') return 'Generating…'
   if (job.state === 'retrying') return `Retrying in ${Math.ceil(job.inMs / 1_000)}s`
   if (job.state === 'failed') return 'Failed'
-  return job.state
+  return jobStateLabel(job.state)
 }
 
 function GenerationTile({
@@ -332,13 +336,13 @@ function GenerationTile({
     setError(null)
     try {
       const receipt = await api.generationGet(generation.id)
-      if (!receipt) throw new Error('The immutable generation receipt is no longer indexed.')
+      if (!receipt) throw new Error('That generation’s receipt is no longer in the search index.')
       const outputId = receipt.outputAssetIds[0] ?? null
       const path = outputId ? await api.assetOriginal(outputId) : null
       if (!path) {
         if (outputId) {
           setError(
-            'The full-resolution image is not available; the immutable receipt can still be inspected.',
+            'The full-size image is missing, but the record of how it was made can still be read.',
           )
         }
         onOpen({ src: null, generation: receipt })
@@ -477,7 +481,7 @@ function GenerationTile({
                 : readOnly
                   ? CONCEPT_READ_ONLY
                   : changingPin
-                    ? 'The last pin change is still being written.'
+                    ? 'The last pin change is still being saved.'
                     : null
             }
             onSelect={() => void togglePin()}
@@ -507,7 +511,7 @@ function GenerationTile({
       {confirmDelete && (
         <ConfirmSheet
           title="Delete this concept?"
-          body="It will disappear from Concepts and the Asset Library, and its images will be deleted. Any image you pinned as a reference or set as a cover is kept, as is its archived receipt in spend accounting."
+          body="It will disappear from Concepts and the Asset Library, and its images will be deleted. Any image you pinned as a reference, or set as a cover, is kept — and so is its receipt, with what it cost."
           confirmLabel="Delete concept"
           danger
           busy={deleteGeneration.isPending}
@@ -525,7 +529,7 @@ function GenerationTile({
 }
 
 const CONCEPT_READ_ONLY =
-  'This project is open read-only, so its concepts cannot be changed. Check the folder permissions, or reopen a copy somewhere writable.'
+  'This project folder is read-only, so its concepts cannot be changed. Check the folder permissions, or reopen a copy somewhere writable.'
 
 function pinConsequence(
   role: AssetRole,
@@ -535,7 +539,7 @@ function pinConsequence(
   pending: boolean,
 ): string {
   if (role === 'mood') {
-    return 'Mood is human-only across this entity’s downstream influence stacks; it is never sent to an image model.'
+    return 'Mood is for you to look at. It reaches nothing that inherits from this entity, and it is never sent to an image model.'
   }
   const nodeKind = labelFor(kinds.get(node.kind), node.kind).toLocaleLowerCase()
   const reach = pending
@@ -578,25 +582,25 @@ function roleLabel(role: AssetRole): string {
 const ROLE_OPTIONS = api.ASSET_ROLES.map((role) => ({ value: role, label: roleLabel(role) }))
 
 function seedSourceLabel(generation: GenerationSummary): string {
-  if (generation.seedSource === 'replay') return 'replayed snapshot'
-  if (generation.usedLockedSeed === true) return 'used locked seed'
+  if (generation.seedSource === 'replay') return 'ran the recorded settings again'
+  if (generation.usedLockedSeed === true) return 'used the locked seed'
   const source = generation.seedSource
   switch (source) {
     case 'locked':
       return generation.usedLockedSeed === false
-        ? 'provider changed locked seed'
-        : 'used locked seed'
+        ? 'the provider changed the locked seed'
+        : 'used the locked seed'
     case 'locked_derived':
-      return 'used locked-seed family'
+      return 'from the locked seed'
     case 'rerolled':
-      return 'used explicit re-roll'
+      return 'seed re-rolled on purpose'
     case 'rerolled_derived':
-      return 'used re-roll family'
+      return 'from a re-rolled seed'
     case 'grid':
-      return 'variant seed cell'
+      return 'one cell of a variant grid'
     case 'random_derived':
-      return 'used random-seed family'
+      return 'from a random seed'
     default:
-      return 'used unlocked seed'
+      return 'seed not locked'
   }
 }

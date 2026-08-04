@@ -8,6 +8,9 @@ import type {
 import { generationLoraReceipt, sceneComposition } from '../lib/api'
 import { useCompiledPrompt, useInfluenceStack, useReplayGeneration } from '../lib/queries'
 import { generationDrift } from '../lib/generationDiff'
+import { layerLabel } from '../lib/kinds'
+import { sectionLabel } from '../lib/prompt'
+import { loraStateLabel } from '../lib/stateLabels'
 import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
 import { Modal } from './Modal'
 
@@ -67,7 +70,7 @@ export function GenerationDetail({
             disabled={readOnly || replay.isPending}
             onClick={() => replay.mutate(generation.id)}
           >
-            {replay.isPending ? 'Queuing…' : 'Replay snapshot'}
+            {replay.isPending ? 'Queuing…' : 'Run these settings again'}
           </button>
           <button
             className="ibtn"
@@ -82,7 +85,7 @@ export function GenerationDetail({
       </header>
 
       <div className="generation-detail-body">
-        <section className="generation-receipt" aria-label="Recorded request">
+        <section className="generation-receipt" aria-label="What was sent">
           {imageSrc && (
             <button
               className="generation-receipt-image"
@@ -94,7 +97,7 @@ export function GenerationDetail({
             </button>
           )}
           <dl>
-            <dt>User shot</dt>
+            <dt>Your extra direction</dt>
             <dd>{generation.userPrompt || 'None'}</dd>
             {scene && (
               <>
@@ -110,7 +113,7 @@ export function GenerationDetail({
             <dd>
               <pre>{generation.negativePrompt || 'None'}</pre>
             </dd>
-            <dt>Request</dt>
+            <dt>Sent as</dt>
             <dd>
               {stringParam(generation, 'aspect') ?? 'unknown aspect'} · {sizeLabel(generation)} ·
               seed {generation.seed}
@@ -119,7 +122,7 @@ export function GenerationDetail({
             <dd>
               {generation.id}
               {typeof generation.params.replayOf === 'string' && (
-                <> · replay of {generation.params.replayOf}</>
+                <> · a repeat of {generation.params.replayOf}</>
               )}
             </dd>
             {replaySourceCost !== null && (
@@ -136,12 +139,13 @@ export function GenerationDetail({
             )}
           </dl>
           <p className="generation-replay-note">
-            Replay resubmits this recorded request without reading today’s stack. Paid requests are
-            reserved at the current model price, separately from the original estimate.
+            Running it again sends exactly what is recorded here, without looking at today’s world.
+            If it costs money, it is set aside at today’s price for the model, separately from the
+            original estimate.
           </p>
           {(loras.applied.length > 0 || loras.downgrades.length > 0) && (
-            <section className="generation-lora-receipt" aria-label="Recorded LoRA application">
-              <h3>Entity LoRAs</h3>
+            <section className="generation-lora-receipt" aria-label="Trained styles used">
+              <h3>Trained styles (LoRAs)</h3>
               {loras.applied.length > 0 && (
                 <div>
                   <b>Applied</b>
@@ -164,10 +168,10 @@ export function GenerationDetail({
                   <ul>
                     {loras.downgrades.map((lora, index) => (
                       <li key={`${lora.nodeId}:${lora.contentHash}:${lora.state}:${index}`}>
-                        <strong>{lora.state.replaceAll('_', ' ')}</strong>
+                        <strong>{loraStateLabel(lora.state)}</strong>
                         <span>{lora.detail}</span>
                         <small>
-                          {hashPrefix(lora.contentHash)} · node {lora.nodeId}
+                          {hashPrefix(lora.contentHash)} · entity {lora.nodeId}
                         </small>
                       </li>
                     ))}
@@ -178,14 +182,14 @@ export function GenerationDetail({
           )}
         </section>
 
-        <section className="generation-snapshot" aria-label="Recorded influence snapshot">
-          <h3>Exact recorded stack</h3>
+        <section className="generation-snapshot" aria-label="The influence stack that was recorded">
+          <h3>The exact stack that was used</h3>
           {generation.influenceSnapshot.layers.map((layer) => (
             <article className="generation-layer" key={`${layer.layer}:${layer.nodeId ?? 'shot'}`}>
               <header>
                 <b>{layer.nodeName}</b>
                 <span>
-                  {layer.layer} · weight {weight(layer.weight)}
+                  {layerLabel(layer.layer)} · weight {weight(layer.weight)}
                   {layer.muted ? ' · muted' : ''}
                 </span>
               </header>
@@ -193,7 +197,8 @@ export function GenerationDetail({
                 {layer.fragments.map((fragment, index) => (
                   <li key={`${fragment.section}:${fragment.assetId ?? fragment.text}:${index}`}>
                     <span>
-                      {fragment.section} · {weight(fragment.weight)} · {fragment.target}
+                      {sectionLabel(fragment.section)} · {weight(fragment.weight)} ·{' '}
+                      {sectionLabel(fragment.target)}
                       {fragment.dropped ? ' · dropped' : ''}
                     </span>
                     <p>{fragmentLabel(fragment)}</p>
@@ -204,28 +209,34 @@ export function GenerationDetail({
           ))}
         </section>
 
-        <section className="generation-drift" aria-label="Stack drift">
+        <section className="generation-drift" aria-label="What has changed since">
           <h3>
-            {scene ? 'Scene drift' : controls ? 'Drift from today' : 'Today with default controls'}
+            {scene
+              ? 'What has changed since (scene)'
+              : controls
+                ? 'What has changed since'
+                : 'Today with default controls'}
           </h3>
           {scene && (
             <p className="generation-drift-basis">
-              This receipt preserves a merged multi-entity stack. Single-entity drift is not
-              compared against only its primary participant.
+              This receipt keeps the combined stack of several entities, so Wobu does not compare it
+              against the first entity alone.
             </p>
           )}
           {!scene && (
             <>
               <p className="generation-drift-basis">
                 {controls
-                  ? 'Today’s world is recompiled with the recorded sliders and shot controls.'
-                  : 'This legacy receipt predates stored controls. Weight differences may be generation controls, not world edits.'}
+                  ? 'Today’s world is compiled again using the sliders and shot controls that were recorded here.'
+                  : 'This receipt was written before Wobu stored the controls, so a different weight here may be a control you set at the time rather than a change to the world.'}
               </p>
               {(currentStack.isPending || currentPrompt.isPending) && (
-                <p>Resolving today’s stack…</p>
+                <p>Working out today’s stack…</p>
               )}
               {(currentStack.isError || currentPrompt.isError) && (
-                <p>Today’s stack is unavailable. The recorded snapshot above remains complete.</p>
+                <p>
+                  Today’s stack could not be worked out. What was recorded above is still complete.
+                </p>
               )}
               {drift && (
                 <>
@@ -235,13 +246,13 @@ export function GenerationDetail({
                     }
                   >
                     {drift.promptChanged || drift.negativeChanged
-                      ? `Prompt drifted${drift.negativeChanged ? ' (including negative prompt)' : ''}.`
-                      : 'Comparable compiled prompts are unchanged.'}
+                      ? `The prompt has changed${drift.negativeChanged ? ' (including negative prompt)' : ''}.`
+                      : 'The parts that can be compared are unchanged.'}
                   </p>
                   {!drift.negativeComparable && (
                     <p className="generation-drift-basis">
-                      Negative-prompt drift is not claimed: this receipt does not record a
-                      comparable provider capability.
+                      Wobu will not say whether the Never list has changed: this receipt does not
+                      say what the provider accepted at the time.
                     </p>
                   )}
                   <ul>
@@ -263,7 +274,7 @@ export function GenerationDetail({
                   </ul>
                   {drift.promptChanged && (
                     <details>
-                      <summary>Show current compiled prompt</summary>
+                      <summary>Show today’s compiled prompt</summary>
                       <pre>{currentPrompt.data?.prompt}</pre>
                     </details>
                   )}
@@ -285,7 +296,7 @@ export function GenerationDetail({
             Full-size generated image
           </h2>
           <p id="generation-image-viewer-description" className="modal-sr-only">
-            The original generated image. Press Escape or use Close to return to generation details.
+            The original generated image. Press Escape, or use Close, to go back to the details.
           </p>
           <img src={imageSrc} alt={generation.compiledPrompt} />
           <button
@@ -307,7 +318,7 @@ function fragmentLabel(fragment: GenerationSnapshotFragment): string {
   if (fragment.text) return fragment.text
   if (fragment.assetId)
     return `asset ${fragment.assetId}${fragment.assetRole ? ` · ${fragment.assetRole}` : ''}`
-  return 'No payload'
+  return 'Nothing recorded'
 }
 
 function numberParam(generation: Generation, key: string): number | null {

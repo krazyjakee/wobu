@@ -268,6 +268,6 @@ describe('agent access (MCP)', () => {
     render(<McpSection />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('something else already is')
-    expect(screen.getByText(/not listening \(port 9628\)/)).toBeInTheDocument()
+    expect(screen.getByText(/not listening — port 9628 could not be opened/)).toBeInTheDocument()
   })
 })

@@ -51,7 +51,11 @@ describe('report — which surface an error lands on', () => {
 
   it('prefixes the message so the toast says what was being attempted', () => {
     report(err({ code: 'io.failed', message: 'permission denied' }), 'Could not save')
-    expect(useUI.getState().toasts[0]!.text).toBe('Could not save — permission denied')
+    // The prefix is what this test is about; the half after the dash is now
+    // written by `lib/errorCopy.ts` rather than by the Rust crate (#127).
+    const text = useUI.getState().toasts[0]!.text
+    expect(text.startsWith('Could not save — ')).toBe(true)
+    expect(text).toContain('free disk space')
   })
 
   it('keeps retryable toast errors on a durable surface', () => {

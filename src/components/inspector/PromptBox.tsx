@@ -129,8 +129,8 @@ export function PromptBox({
           />
         ) : !subject ? (
           <Empty
-            title="No node selected."
-            body="Select an entity and this shows the exact string a generation would send for it, fragment by fragment, with what was left out and why."
+            title="Nothing selected."
+            body="Select an entity and this shows the exact words a generation would send for it, piece by piece, with what was left out and why."
           />
         ) : compiled.isError ? (
           <Empty title="The prompt could not be compiled." body={errorMessage(compiled.error)} />
@@ -229,7 +229,7 @@ function Compiled({
           ? `${fragmentLabel(live)} — weight ${formatWeight(live.weight)}${
               live.nodeId ? '. Click to open it.' : '. From the output preset, not the world.'
             }`
-          : 'Hover any fragment to see where it came from. Click it to open that node.'}
+          : 'Hover any part to see where it came from. Click it to open the entity that wrote it.'}
       </p>
 
       {compiled.overflow !== null && (

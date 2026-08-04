@@ -117,7 +117,7 @@ describe('the read-only banner', () => {
 
     const banners = screen.getAllByText(READ_ONLY_TEXT)
     expect(banners).toHaveLength(1)
-    expect(READ_ONLY_TEXT).toContain('This share is mounted read-only')
+    expect(READ_ONLY_TEXT).toContain('This project folder is read-only')
   })
 
   it('stays one banner across selecting nodes and switching modes', async () => {
@@ -161,19 +161,19 @@ describe('the write controls, on a read-only folder', () => {
     // three lines check by every route there is.
     expect(button('New entity')).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(button('New entity'))
-    expect(screen.queryByRole('dialog', { name: 'New node' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'New entity' })).toBeNull()
 
     fireEvent.keyDown(window, { key: 'n', metaKey: true })
     fireEvent.contextMenu(button(/Characters/))
 
-    expect(screen.queryByRole('dialog', { name: 'New node' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'New entity' })).toBeNull()
   })
 
   it('offers no rename, no notes editing, and no save label promising otherwise', async () => {
     await open(true)
     fireEvent.click(row('Kael'))
 
-    const name = (await screen.findByLabelText('Node name')) as HTMLInputElement
+    const name = (await screen.findByLabelText('Entity name')) as HTMLInputElement
     expect(name.readOnly).toBe(true)
 
     const notes = (await screen.findByPlaceholderText(/read-only/)) as HTMLTextAreaElement
@@ -214,7 +214,7 @@ describe('the write controls, on a read-only folder', () => {
     await open(true)
     fireEvent.click(button(/Jump to…/))
 
-    expect(screen.queryByRole('button', { name: /New node…/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /New entity…/ })).toBeNull()
     expect(screen.getByRole('button', { name: /Toggle navigator/ })).toBeTruthy()
   })
 
@@ -241,20 +241,20 @@ describe('the same controls, on a folder that can be written to', () => {
     fireEvent.click(button(/Jump to…/))
     const palette = screen.getByRole('dialog', { name: 'Command palette' })
     expect(palette).toHaveAttribute('aria-modal', 'true')
-    expect(palette).toHaveAccessibleDescription(/Search for a node/)
-    expect(screen.getByPlaceholderText(/Jump to a node/)).toHaveFocus()
-    expect(screen.getByRole('button', { name: /New node…/ })).toBeTruthy()
+    expect(palette).toHaveAccessibleDescription(/Search for an entity/)
+    expect(screen.getByPlaceholderText(/Jump to an entity/)).toHaveFocus()
+    expect(screen.getByRole('button', { name: /New entity…/ })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
 
     const newEntity = button('New entity')
     newEntity.focus()
     fireEvent.click(newEntity)
-    const newNode = screen.getByRole('dialog', { name: 'New node' })
+    const newNode = screen.getByRole('dialog', { name: 'New entity' })
     expect(newNode).toHaveAttribute('aria-modal', 'true')
-    expect(newNode).toHaveAccessibleDescription(/Every entity is the same record/)
+    expect(newNode).toHaveAccessibleDescription(/Every entity is the same sort of thing/)
     expect(screen.getByLabelText('Name')).toHaveFocus()
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: 'New node' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'New entity' })).toBeNull()
     expect(newEntity).toHaveFocus()
   })
 })

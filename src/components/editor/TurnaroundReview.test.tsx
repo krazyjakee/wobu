@@ -206,7 +206,7 @@ describe('the turnaround review', () => {
     }
     open()
     expect(await screen.findByText(/sending 1 view \(front\)/)).toBeInTheDocument()
-    expect(screen.getByLabelText('left view')).toHaveTextContent('not sent to this backend')
+    expect(screen.getByLabelText('left view')).toHaveTextContent('not sent to this provider')
 
     fireEvent.click(screen.getByRole('button', { name: 'Reconstruct mesh' }))
     await waitFor(() => {
@@ -234,7 +234,7 @@ describe('the turnaround review', () => {
       ],
     }
     open(queue)
-    const active = await screen.findByText(/Mesh Kael Vantris · running/)
+    const active = await screen.findByText(/Mesh Kael Vantris · working/)
     expect(active).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reconstruct mesh' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
@@ -265,7 +265,7 @@ describe('the turnaround review', () => {
     }
     open(queue)
     const message = await screen.findByText(/returned no mesh/)
-    expect(message).toHaveTextContent('This job was charged for.')
+    expect(message).toHaveTextContent('You were charged for this attempt.')
   })
 
   it('cycles between takes for one view and reconstructs from the chosen one', async () => {

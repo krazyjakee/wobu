@@ -64,8 +64,12 @@ describe('peer sync in the status bar', () => {
     )
 
     expect(screen.getByText('· last synced with Nadia · 12 minutes ago')).toBeTruthy()
-    expect(screen.getByText(/peer edits arrive only while both people run Wobu/)).toBeTruthy()
-    expect(screen.getByText(/no seed node/)).toBeTruthy()
+    expect(
+      screen.getByText(/edits from the other machine arrive only while you both have Wobu running/),
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/edits from the other machine arrive only while you both have Wobu running/),
+    ).toBeTruthy()
   })
 
   it('shows live state and connected peers without turning them into a cloud guarantee', () => {
@@ -83,7 +87,7 @@ describe('peer sync in the status bar', () => {
       }),
     )
 
-    expect(screen.getByText('sync · syncing')).toBeTruthy()
+    expect(screen.getByText('sync · catching up')).toBeTruthy()
     expect(screen.getByText('· amber-heron connected')).toBeTruthy()
     expect(screen.queryByText(/last synced/)).toBeNull()
   })
@@ -91,7 +95,11 @@ describe('peer sync in the status bar', () => {
   it('does not show a sync claim for a project this installation has not shared', () => {
     open(null)
     expect(screen.queryByText(/sync ·/)).toBeNull()
-    expect(screen.queryByText(/no seed node/)).toBeNull()
+    expect(
+      screen.queryByText(
+        /edits from the other machine arrive only while you both have Wobu running/,
+      ),
+    ).toBeNull()
   })
 })
 
@@ -145,7 +153,7 @@ describe('backend and queue facts', () => {
     expect(screen.getByText('ComfyUI connected')).toBeTruthy()
     expect(screen.getByText('· flux-dev')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open job queue, 2 jobs' })).toBeTruthy()
-    expect(screen.getByText(/claude-sonnet-5 · 1m ctx/)).toBeTruthy()
+    expect(screen.getByText(/claude-sonnet-5 · 1m context/)).toBeTruthy()
     expect(screen.getByText('· ⏱ 4.2s')).toBeTruthy()
   })
 

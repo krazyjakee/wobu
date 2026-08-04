@@ -54,7 +54,7 @@ describe('the keyboard reference', () => {
   it('says so when a command has been left with no key at all', () => {
     useKeybindings.getState().setBinding('panel.inspector', null)
     render(<ShortcutsSheet />)
-    expect(within(row('Toggle the inspector')).getByText('not bound')).toBeInTheDocument()
+    expect(within(row('Toggle the inspector')).getByText('no shortcut')).toBeInTheDocument()
   })
 
   it('names the command that has taken a contested chord', () => {
@@ -65,7 +65,7 @@ describe('the keyboard reference', () => {
 
     const assets = row('Assets')
     expect(assets).toHaveTextContent(/runs Command palette instead/)
-    expect(within(assets).getByText('not bound')).toBeInTheDocument()
+    expect(within(assets).getByText('no shortcut')).toBeInTheDocument()
   })
 
   it('includes the fixed keys it does not own, so the list is the whole truth', () => {

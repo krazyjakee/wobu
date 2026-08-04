@@ -161,8 +161,9 @@ export function reportProjectCloseFailure(
   useUI.getState().raiseBanner({
     code: EDITOR_CLOSE_BLOCKED,
     text:
-      `Wobu kept this project open because ${count} editor ${count === 1 ? 'write has' : 'writes have'} ` +
-      'not saved. Resolve any save error or conflict, then retry.',
+      `Wobu kept this project open because ${count === 1 ? 'an edit has' : `${count} edits have`} ` +
+      'not been saved yet. Deal with any save error, or any file with two versions waiting, ' +
+      'then try again.',
     retryable: true,
     sticky: true,
     action: { label: 'Retry save and close', run: retry },

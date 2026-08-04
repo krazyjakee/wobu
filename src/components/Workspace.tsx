@@ -250,17 +250,17 @@ export function Workspace({ project }: { project: ProjectSummary }) {
     }
     useUI.getState().raiseBanner({
       code: PRESENCE_BANNER,
-      text: editingText(editorsHere, selected?.name ?? 'this node'),
+      text: editingText(editorsHere, selected?.name ?? 'this entity'),
       retryable: false,
     })
   }, [project.id, selectedId, editorsHere, selected?.name])
 
   useEffect(() => {
-    if (kindsQ.isError) report(kindsQ.error, 'Kind registry unavailable')
+    if (kindsQ.isError) report(kindsQ.error, 'Could not read what kinds of entity this project has')
   }, [kindsQ.isError, kindsQ.error])
 
   useEffect(() => {
-    if (nodesQ.isError) report(nodesQ.error, 'Could not list nodes')
+    if (nodesQ.isError) report(nodesQ.error, 'Could not list this world’s entities')
   }, [nodesQ.isError, nodesQ.error])
 
   // Collapsed panes drop their column entirely rather than shrinking to zero,

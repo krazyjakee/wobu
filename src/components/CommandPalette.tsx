@@ -138,7 +138,7 @@ function OpenCommandPalette({
         : [
             {
               id: 'cmd:new',
-              label: 'New node…',
+              label: 'New entity…',
               icon: 'plus',
               hint: hint('node.new'),
               run: () => onNewNode(),
@@ -291,7 +291,7 @@ function OpenCommandPalette({
         Command palette
       </h2>
       <p className="modal-sr-only" id="command-palette-description">
-        Search for a node or choose a workspace command.
+        Search for an entity, or choose something for Wobu to do.
       </p>
       <div className="pal-in">
         <Icon name="search" />
@@ -299,7 +299,7 @@ function OpenCommandPalette({
           data-modal-initial-focus
           spellCheck={false}
           value={q}
-          placeholder="Jump to a node, or type a command…"
+          placeholder="Jump to an entity, or type a command…"
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {
@@ -321,14 +321,14 @@ function OpenCommandPalette({
         {rows.length === 0 && (
           <div className="pal-none">
             {nodes.length === 0
-              ? 'This world has no nodes yet.'
+              ? 'This world has no entities yet.'
               : search.isFetching
                 ? 'Searching notes…'
                 : 'No match.'}
           </div>
         )}
 
-        {matchedNodes.length > 0 && <div className="pal-sec">Nodes</div>}
+        {matchedNodes.length > 0 && <div className="pal-sec">Entities</div>}
         {matchedNodes.map((n, i) => (
           <NodeRow
             key={n.id}

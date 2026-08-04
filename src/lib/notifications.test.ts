@@ -134,9 +134,13 @@ describe('mirroring the toasts every failed command already raises', () => {
     report({ code: 'write.conflict', message: 'Saved elsewhere first', retryable: false })
     stop()
 
+    // The title is whatever the toast said, and since #127 the toast says the
+    // translation of the code rather than the crate's own sentence. What this
+    // pins is that a command failure reaches the centre at all, and arrives
+    // legible — not which particular words the boundary chose.
     const entries = useNotifications.getState().entries
     expect(entries).toHaveLength(1)
-    expect(entries[0]?.title).toContain('Saved elsewhere first')
+    expect(entries[0]?.title).toContain('changed this entity while you were editing it')
   })
 
   it('leaves confirmations alone', () => {

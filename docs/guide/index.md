@@ -11,7 +11,7 @@ prompts — it is a **tree**. A character belongs to a species, which belongs to
 rendered in a house art style. Today that context lives in your head and gets retyped, badly and
 differently, into every prompt. That is exactly where visual consistency dies.
 
-Wobu asks you to write it down once, at the level where it belongs. Style on the Art Style node.
+Wobu asks you to write it down once, at the level where it belongs. Style on the Art Style entity.
 Anatomy on the species. Costume on the culture. Personality on the character. When you press
 **Generate**, the prompt is compiled from that whole chain — and you can see exactly which layer
 contributed which words.

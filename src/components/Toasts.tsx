@@ -7,7 +7,7 @@ export function Toasts() {
 
   if (!toasts.length) return null
   return (
-    <div className="toast" aria-label="Notifications">
+    <div className="toast" aria-label="Messages">
       {toasts.map((t) => (
         <ToastRow key={t.id} toast={t} onDismiss={() => drop(t.id)} />
       ))}
@@ -93,7 +93,7 @@ function ToastRow({ toast, onDismiss }: { toast: Toast; onDismiss: () => void })
       <button
         className="toast-dismiss"
         type="button"
-        aria-label={`Dismiss notification: ${toast.text}`}
+        aria-label={`Dismiss message: ${toast.text}`}
         onClick={onDismiss}
       >
         <span aria-hidden="true">×</span>

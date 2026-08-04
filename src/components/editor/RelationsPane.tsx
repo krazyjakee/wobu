@@ -155,7 +155,7 @@ function RelationsPaneSession({
         <div className="relations-heading">
           <div>
             <h2>Influences</h2>
-            <p>What this node inherits from, grouped by the route into its prompt.</p>
+            <p>What this entity inherits from, grouped by how each one reaches its prompt.</p>
           </div>
         </div>
 
@@ -169,7 +169,7 @@ function RelationsPaneSession({
                 thumb={thumbs.get(node.parentId)}
                 onJump={onJump}
               />
-              <span className="relation-note">Implicit · read-only</span>
+              <span className="relation-note">From its parent · not editable here</span>
               <span className="relation-weight-static">1.00</span>
             </div>
           </RelationGroup>
@@ -204,14 +204,12 @@ function RelationsPaneSession({
         })}
 
         {!node.parentId && node.links.length === 0 && (
-          <p className="relations-empty">
-            No influences yet. Add the first explicit relation below.
-          </p>
+          <p className="relations-empty">No influences yet. Add the first one below.</p>
         )}
 
         <div className="relation-add">
           {allowedRoles.length === 0 ? (
-            <p>This kind does not declare any editable relation roles.</p>
+            <p>This kind of entity has no relations you can add by hand.</p>
           ) : (
             <>
               <Combobox
@@ -229,8 +227,8 @@ function RelationsPaneSession({
                 value={target}
                 options={targetOptions}
                 sort="title"
-                placeholder="Choose a node…"
-                emptyMessage="No node in this layer matches."
+                placeholder="Choose an entity…"
+                emptyMessage="No entity of that sort matches."
                 disabled={readOnly || busy || availableTargets.length === 0}
                 onChange={setTarget}
                 onDrawnRows={setDrawnTargets}
@@ -260,10 +258,14 @@ function RelationsPaneSession({
             <p>{backlinkSummary(backlinksQ.data ?? [], byId, kinds)}</p>
           </div>
         </div>
-        {backlinksQ.isPending && <p className="relations-empty">Reading backlinks…</p>}
-        {backlinksQ.isError && <p className="relations-empty">Backlinks could not be read.</p>}
+        {backlinksQ.isPending && (
+          <p className="relations-empty">Reading what inherits from this…</p>
+        )}
+        {backlinksQ.isError && (
+          <p className="relations-empty">Wobu could not read what inherits from this.</p>
+        )}
         {backlinksQ.data?.length === 0 && (
-          <p className="relations-empty">Nothing explicitly inherits from this node.</p>
+          <p className="relations-empty">Nothing else inherits from this entity.</p>
         )}
         {backlinkRoles(backlinksQ.data ?? []).map((groupRole) => (
           <RelationGroup key={groupRole} title={ROLE_LABEL[groupRole]}>
@@ -350,7 +352,7 @@ function RelationTarget({
         }
       />
       <span className="relation-target-text">
-        <strong>{target?.name ?? 'Missing node'}</strong>
+        <strong>{target?.name ?? 'Missing entity'}</strong>
         <span>{target?.kind.replaceAll('_', ' ') ?? fallback}</span>
       </span>
     </button>
@@ -394,9 +396,9 @@ function OutgoingRow({
   }
 
   const frozen = readOnly
-    ? 'This project is open read-only, so its relations cannot be changed.'
+    ? 'This project folder is read-only, so its relations cannot be changed.'
     : busy
-      ? 'Another change to this node’s relations is still being written.'
+      ? 'Another change to this entity’s relations is still being saved.'
       : null
 
   return (
@@ -473,7 +475,7 @@ function OutgoingRow({
             }
             onSelect={() => onJump(link.toId)}
           >
-            Open {target?.name ?? 'the missing node'}
+            Open {target?.name ?? 'the missing entity'}
           </MenuItem>
           <MenuItem
             icon={<Icon name={link.enabled ? 'minus' : 'check'} size="sm" />}
@@ -556,5 +558,5 @@ function backlinkSummary(
   const parts = [...counts.values()].map(
     ({ count, singular, plural }) => `${count} ${count === 1 ? singular : plural}`,
   )
-  return parts.length > 0 ? `${parts.join(', ')} inherit from this.` : 'No active backlinks.'
+  return parts.length > 0 ? `${parts.join(', ')} inherit from this.` : 'Nothing inherits from this.'
 }

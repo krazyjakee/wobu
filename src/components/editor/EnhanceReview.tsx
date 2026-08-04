@@ -74,7 +74,7 @@ function EnhanceReviewSession({
     <div className="enhance-review" aria-label="Enhance review">
       <div className="enhance-review-head">
         <div>
-          <h3>{session.complete ? 'Review enhanced canon' : 'Enhance draft'}</h3>
+          <h3>{session.complete ? 'Review the enhanced description' : 'Enhance draft'}</h3>
           <p>{reviewStatus(session, candidate !== null)}</p>
         </div>
         {session.running && (
@@ -87,7 +87,7 @@ function EnhanceReviewSession({
       {candidate?.questions.length ? (
         <aside className="enhance-questions" aria-label="Questions from Enhance">
           <h3>Questions for you</h3>
-          <p>The model left these open instead of inventing an answer.</p>
+          <p>Enhance left these open rather than invent an answer.</p>
           <ul>
             {candidate.questions.map((question, index) => (
               <li key={`question-${index}`}>{question}</li>
@@ -100,8 +100,8 @@ function EnhanceReviewSession({
         <div className="enhance-guard" role="alert">
           <b>The current description was hand-edited.</b>
           <span>
-            It may have changed since Enhance started. The Current column now shows the guarded
-            version from disk. Replace it only if the reviewed draft should win.
+            It may have changed since Enhance started. The Current column now shows what is actually
+            in the file. Replace it only if the reviewed draft should win.
           </span>
           <button
             className="btn btn-ai"
@@ -115,7 +115,7 @@ function EnhanceReviewSession({
       )}
 
       {!candidate ? (
-        <div className="enhance-waiting">Waiting for the first structured section…</div>
+        <div className="enhance-waiting">Waiting for the first section…</div>
       ) : (
         <div className="enhance-diffs">
           {sections.map((section) => {
@@ -272,11 +272,12 @@ function changeLabel(before: SectionValue | undefined, after: SectionValue | und
 
 function reviewStatus(session: EnhanceSession, hasDraft: boolean): string {
   if (session.complete) return 'Nothing is written until you accept this review.'
-  if (session.stopped) return 'Stopped. The partial draft stays here locally and is not saved.'
+  if (session.stopped)
+    return 'Stopped. The half-finished draft stays on this screen and is not saved.'
   if (session.failure) {
     return hasDraft
-      ? `${session.failure.message} The partial draft remains local and unsaved.`
+      ? `${session.failure.message} The half-finished draft stays on this screen and is not saved.`
       : session.failure.message
   }
-  return 'Streaming structured sections. The current canon remains untouched.'
+  return 'Sections are arriving. Nothing in the description has been touched yet.'
 }

@@ -170,8 +170,9 @@ export function Launcher({ error }: { error: string | null }) {
           {busy && <Scanning />}
 
           <p className="lch-note">
-            A project is a folder, not a database file. Point Wobu at a share and anyone who can see
-            the path can open it — their keys, their machine, the same world.{' '}
+            A project is an ordinary folder, not a single database file. Point Wobu at one on a
+            network drive and anyone who can reach that path can open it — their own keys, their own
+            machine, the same world.{' '}
             {/* The launcher's own way back to the introduction. Settings has one
                 too, but Settings only exists inside an open project, and the
                 person most likely to want the tour again is the one still
@@ -387,8 +388,9 @@ export function NewProjectSheet({ onClose }: { onClose: () => void }) {
     >
       <h2 id="new-project-title">New project</h2>
       <p id="new-project-description">
-        Wobu creates a self-contained folder — Markdown nodes, assets and generation history all
-        inside it. Put it wherever it belongs, including a network share.
+        Wobu creates one self-contained folder, with the entities as Markdown, the images, and the
+        record of everything generated all inside it. Put it wherever it belongs, including a
+        network drive.
       </p>
 
       <div className="field">

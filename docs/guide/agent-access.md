@@ -43,15 +43,15 @@ a local process can.
 | `compile_prompt` | What that stack compiles to |
 | `list_generations`, `get_generation` | Generation receipts |
 
-There are also three resources — the project, the node list, and each node by id.
+There are also three resources — the project, the entity list, and each entity by id.
 
 ### What it cannot do
 
 There is **no delete tool and no generate tool**. An agent connected to Wobu cannot destroy anything
 and cannot start a job, so nothing it does can spend your money. Even with writes enabled, the three
-write tools are create a node, update a node, and link two nodes — and `update_node` cannot write
-the machine's description. An agent contributing prose writes into the raw notes, where your own
-words go, and Enhance remains something a person presses.
+write tools are create an entity, update an entity, and link two entities — and `update_node` cannot
+write the machine's description. An agent contributing prose writes into the raw notes, where your
+own words go, and Enhance remains something a person presses.
 
 When writes are off, the write tools are not offered to the agent at all, so it does not try and
 then fail.
@@ -79,4 +79,5 @@ you because it holds the token. It is per installation and never inside a projec
 on does not switch it on for everyone who opens your world. Deleting the file turns everything off
 and forgets the token.
 
-The full protocol detail, including the exact refusal rules, is in the repository's `docs/16-mcp.md`.
+The full protocol detail, including the exact refusal rules, is in the repository's
+`docs/16-mcp.md`.

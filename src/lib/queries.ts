@@ -300,14 +300,17 @@ export function useResolveConflict() {
     onSuccess: (result) => {
       if (result.outcome === 'stale') {
         toast(
-          'That node changed while the conflict was open. Nothing was written — here it is again.',
+          'That entity changed while its two versions were open. Nothing was written — here it is again.',
         )
       } else if (result.outcome === 'conflict') {
-        toast(`Someone saved first. Your pick was kept as ${result.conflictPath}.`, 'error')
+        toast(
+          `Somebody saved first. The version you chose was kept as ${result.conflictPath}.`,
+          'error',
+        )
       }
       invalidateWorld(qc)
     },
-    onError: (e) => report(e, 'Could not resolve the conflict'),
+    onError: (e) => report(e, 'Could not settle the two versions'),
   })
 }
 
@@ -1040,7 +1043,8 @@ export function useMeshAssetPath(assetId: string | null): UseQueryResult<string 
 export function useReplayGeneration() {
   return useMutation({
     mutationFn: api.generationReplay,
-    onSuccess: () => toast('Replay queued from the immutable snapshot'),
+    onSuccess: () =>
+      toast('Queued again from the record of the original — today’s world was not re-read'),
     onError: (error) => report(error, 'Could not replay that generation'),
   })
 }
@@ -1546,8 +1550,9 @@ export function useWorldChangedListener() {
 /* ── share connectivity ───────────────────────────────────────────────────── */
 
 const OFFLINE_TEXT =
-  'The project folder is not reachable — the share may be unmounted. Everything here is ' +
-  'still readable from the local index, but nothing can be saved until it is back. Retrying…'
+  'Wobu cannot reach the project folder — a network share or a removable drive has probably ' +
+  'gone away. Everything here is still readable from the search index, but nothing can be saved ' +
+  'until it is back. Still trying…'
 
 function raiseOffline() {
   useUI.getState().raiseBanner({ code: 'share.unmounted', text: OFFLINE_TEXT, retryable: true })
@@ -1599,8 +1604,9 @@ export function useShareListener() {
       useUI.getState().raiseBanner({
         code: 'share.quit_blocked',
         text:
-          'Wobu did not quit, because the share is still away and any edit being held would go ' +
-          'with it. Wait for the folder to come back, or quit and lose them.',
+          'Wobu did not quit, because the project folder is still unreachable and any edit ' +
+          'waiting to be saved would go with it. Wait for the folder to come back, or quit and ' +
+          'lose them.',
         retryable: false,
         sticky: true,
         action: { label: 'Quit anyway', run: () => void api.forceQuit() },

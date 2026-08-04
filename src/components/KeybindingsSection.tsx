@@ -59,8 +59,8 @@ export function KeybindingsSection() {
           <p>
             <b>
               {conflicts.length === 1
-                ? 'One chord runs two commands.'
-                : `${conflicts.length} chords run more than one command.`}
+                ? 'One shortcut runs two commands.'
+                : `${conflicts.length} shortcuts run more than one command.`}
             </b>{' '}
             The first of them wins and the rest do nothing at all, which is why they are named here
             rather than left to be discovered by pressing the key.
@@ -93,7 +93,7 @@ export function KeybindingsSection() {
       <div className="set-acts">
         <button className="btn-mini" onClick={() => setShortcutsOpen(true)}>
           <Icon name="search" size="sm" />
-          Show the printable list
+          Show the full list
         </button>
         {changed && (
           <button
@@ -198,7 +198,7 @@ function BindingRow({
     <div className="keys-edit">
       <span className="keys-edit-label">
         {def.label}
-        {def.surface && <span className="badge">in context</span>}
+        {def.surface && <span className="badge">only where it applies</span>}
       </span>
 
       <button
@@ -223,7 +223,7 @@ function BindingRow({
             ))}
           </span>
         ) : (
-          'not bound'
+          'no shortcut'
         )}
       </button>
 
@@ -233,11 +233,13 @@ function BindingRow({
         </button>
       )}
 
-      {recording && <span className="keys-hint">Escape cancels; Backspace leaves it unbound.</span>}
+      {recording && (
+        <span className="keys-hint">Escape cancels; Backspace leaves it with no shortcut.</span>
+      )}
 
       {shadowedBy && (
         <span className="keys-clash">
-          Shadowed by <b>{shadowedBy.label}</b>, which claims the same chord and runs first.
+          Shadowed by <b>{shadowedBy.label}</b>, which claims the same keys and runs first.
         </span>
       )}
 

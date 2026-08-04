@@ -42,10 +42,11 @@ export function App() {
             <div className="lch-inner">
               <div className="empty">
                 <Icon name="lock" size="xl" />
-                <h3>No backend</h3>
+                <h3>Wobu is not running</h3>
                 <p>
-                  This page is being served by Vite on its own. Wobu&apos;s commands live in the
-                  Rust core, so nothing can be loaded here. Launch the desktop shell instead.
+                  This page is open in a plain browser, without the part of Wobu that reads and
+                  writes your project. Nothing can be loaded here. Open the Wobu application
+                  instead.
                 </p>
               </div>
             </div>
