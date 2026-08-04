@@ -81,6 +81,8 @@ beforeEach(() => {
     if (command === 'asset_list') return Promise.resolve(assets)
     if (command === 'asset_usage_list') return Promise.resolve(usages)
     if (command === 'asset_thumb') return Promise.resolve(`/thumb/${String(args?.assetId)}.webp`)
+    if (command === 'asset_original')
+      return Promise.resolve(`/originals/${String(args?.assetId)}.png`)
     if (command === 'asset_link') {
       return Promise.resolve(
         buildNode({
@@ -199,6 +201,40 @@ describe('AssetsMode', () => {
     expect(within(details).getByText('#hero')).toBeInTheDocument()
     expect(within(details).getByText('#ancestry')).toBeInTheDocument()
     expect(within(details).queryByRole('button', { name: 'Delete…' })).toBeNull()
+  })
+
+  it('opens the original full size from the details preview, and only then reads it', async () => {
+    assets = [asset('big')]
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: 'Select reference asset big' }))
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
+
+    fireEvent.click(screen.getByRole('button', { name: 'View asset big full size' }))
+    await waitFor(() => expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'big' }))
+
+    const viewer = await screen.findByRole('dialog', { name: 'Full-size asset' })
+    expect(within(viewer).getByRole('img', { name: 'Asset big at full size' })).toHaveAttribute(
+      'src',
+      'asset:///originals/big.png',
+    )
+    fireEvent.click(within(viewer).getByRole('button', { name: 'Close full-size image' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('says so when the original behind a preview has gone missing', async () => {
+    assets = [asset('gone')]
+    h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
+      if (command === 'asset_list') return Promise.resolve(assets)
+      if (command === 'asset_usage_list') return Promise.resolve([])
+      if (command === 'asset_thumb') return Promise.resolve(`/thumb/${String(args?.assetId)}.webp`)
+      return Promise.resolve(null)
+    })
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: 'Select reference asset gone' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View asset gone full size' }))
+
+    expect(await screen.findByText(/no longer in the project folder/)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('attaches an orphan to the chosen node and role through the real link command', async () => {

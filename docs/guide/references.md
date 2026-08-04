@@ -81,7 +81,9 @@ together. Filter by kind (reference, generated, upload), by role, by entity, or 
 entities an image is linked to, and toggle **Unused** to see every image nothing points at.
 
 Selecting a tile shows its dimensions, size, id, and every entity that uses it with each role and
-weight. From there you can **attach it as a reference** to another entity — which is the point of
+weight. Click the preview at the top of that panel to open the original full size; Escape, or the
+close button, puts you back in the grid. From there you can **attach it as a reference** to another
+entity — which is the point of
 the mode: it is where an image already in the project gets reused, rather than where images come in.
 Importing happens on an entity's References tab.
 
