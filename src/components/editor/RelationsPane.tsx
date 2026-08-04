@@ -289,7 +289,7 @@ function RelationsPaneSession({
 }
 
 /** A relation's route determines which kind of node can meaningfully supply it. */
-export function targetLayerForRole(role: LinkRole): InfluenceLayer {
+function targetLayerForRole(role: LinkRole): InfluenceLayer {
   switch (role) {
     case 'styled_by':
       return 'style'

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ProjectSummary, SharedTicket, SyncStatus } from '../lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { useCallback, useMemo, useState } from 'react'
+import type { ProjectSummary, SharedTicket } from '../lib/api'
 import { errorMessage, syncShare, syncStatus, syncUnshare } from '../lib/api'
+import { qk } from '../lib/queries'
 import { toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { syncStateLabel } from '../lib/stateLabels'
@@ -13,28 +15,27 @@ export function SharingSheet({
   project: ProjectSummary
   onClose: () => void
 }) {
-  const [status, setStatus] = useState<SyncStatus | null>(null)
   const [ticket, setTicket] = useState<SharedTicket | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [confirmUnshare, setConfirmUnshare] = useState(false)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setStatus(await syncStatus())
-    } catch (reason) {
-      setError(errorMessage(reason))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // The same key `useProjectSync` reads, so sharing from here and the live sync
+  // state elsewhere cannot disagree about who this installation is shared with.
+  const {
+    data: status = null,
+    isFetching: loading,
+    error: readError,
+    refetch,
+  } = useQuery({ queryKey: qk.syncStatus, queryFn: syncStatus, retry: false })
 
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
+  const refresh = useCallback(async () => {
+    setActionError(null)
+    await refetch()
+  }, [refetch])
+
+  // A failed share is the more specific answer, so it wins over a stale read.
+  const error = actionError ?? (readError ? errorMessage(readError) : null)
 
   const share = status?.shares.find((entry) => entry.project === project.id) ?? null
   const runtime = status?.projects.find((entry) => entry.project === project.id) ?? null
@@ -42,7 +43,7 @@ export function SharingSheet({
 
   async function makeTicket(copy: boolean) {
     setWorking(true)
-    setError(null)
+    setActionError(null)
     try {
       const created = await syncShare()
       setTicket(created)
@@ -52,11 +53,11 @@ export function SharingSheet({
           await navigator.clipboard.writeText(created.token)
           toast('Share ticket copied')
         } else {
-          setError('The ticket was created and is shown above, but it could not be copied.')
+          setActionError('The ticket was created and is shown above, but it could not be copied.')
         }
       }
     } catch (reason) {
-      setError(errorMessage(reason))
+      setActionError(errorMessage(reason))
     } finally {
       setWorking(false)
     }
@@ -64,7 +65,7 @@ export function SharingSheet({
 
   async function stopSharing() {
     setWorking(true)
-    setError(null)
+    setActionError(null)
     try {
       await syncUnshare(project.id)
       setTicket(null)
@@ -72,7 +73,7 @@ export function SharingSheet({
       await refresh()
       toast('Project is no longer shared')
     } catch (reason) {
-      setError(errorMessage(reason))
+      setActionError(errorMessage(reason))
       setConfirmUnshare(false)
     } finally {
       setWorking(false)
