@@ -10,6 +10,7 @@ import type {
   QueueSnapshot,
 } from '../lib/api'
 import { useUI } from '../store/ui'
+import { chooseOption, comboboxOptions } from './Combobox.testing'
 import { kindDef, kindIndex, summary } from '../test/fixtures'
 import { ForgeMode } from './ForgeMode'
 import { Inspector } from './Inspector'
@@ -306,7 +307,7 @@ describe('Forge mode', () => {
         <Harness />
       </QueryClientProvider>,
     )
-    fireEvent.change(screen.getByLabelText('Forge subject'), { target: { value: 'mira' } })
+    chooseOption('Forge subject', 'Mira')
     expect(useUI.getState().selectedId).toBe('mira')
     expect(
       await screen.findByRole('region', { name: 'Forge results for Mira' }),
@@ -329,7 +330,7 @@ describe('Forge mode', () => {
         'ash-grey coat',
       ),
     )
-    fireEvent.change(screen.getByLabelText('Variant grid'), { target: { value: 'seed' } })
+    chooseOption('Variant grid', 'Vary seed')
     const generate = await screen.findByRole('button', { name: 'Generate' })
     await waitFor(() => expect(generate).toBeEnabled())
     fireEvent.click(generate)
@@ -447,7 +448,7 @@ describe('Forge mode', () => {
     renderForge()
     const generate = await screen.findByRole('button', { name: 'Generate' })
     await waitFor(() => expect(generate).toBeEnabled())
-    fireEvent.change(screen.getByLabelText('Variant grid'), { target: { value: 'seed' } })
+    chooseOption('Variant grid', 'Vary seed')
     fireEvent.change(screen.getByLabelText('Cell values · comma separated'), {
       target: { value: 'only-one' },
     })
@@ -503,7 +504,7 @@ describe('Forge mode', () => {
     )
     const generate = await screen.findByRole('button', { name: 'Generate' })
     await waitFor(() => expect(generate).toBeEnabled())
-    fireEvent.change(screen.getByLabelText('Variant grid'), { target: { value: 'aspect' } })
+    chooseOption('Variant grid', 'Vary aspect')
     expect(screen.getByLabelText('Cell values · comma separated')).toHaveValue('1:1, 3:2, 2:3')
 
     flexibleAspect = false
@@ -527,7 +528,7 @@ describe('Forge mode', () => {
         "Flexible backend · using Wobu's curated, validated aspect choices.",
       ),
     )
-    expect(aspect.querySelectorAll('option')).toHaveLength(10)
+    expect(comboboxOptions(/^Aspect$/)).toHaveLength(10)
   })
 
   it('debounces custom model capability probes and keeps queueing disabled while they settle', async () => {
@@ -594,7 +595,7 @@ describe('Forge mode', () => {
     })
     const sceneAspect = screen.getByLabelText('Scene aspect')
     await waitFor(() => expect(sceneAspect).toBeEnabled())
-    fireEvent.change(sceneAspect, { target: { value: '3:2' } })
+    chooseOption('Scene aspect', '3:2')
     const generateScene = screen.getByRole('button', { name: 'Generate scene' })
     await waitFor(() => expect(generateScene).toBeEnabled())
     fireEvent.click(generateScene)
@@ -621,7 +622,7 @@ describe('Forge mode', () => {
     expect(
       await screen.findByText('Unsupported saved aspect 16:9 was replaced with 1:1.'),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('Scene aspect').querySelectorAll('option')).toHaveLength(1)
+    expect(comboboxOptions('Scene aspect')).toEqual(['1:1'])
     expect(screen.getByText('Compose a multi-entity scene').closest('details')).toHaveTextContent(
       'Actual output · 1:1 · 768×768px',
     )

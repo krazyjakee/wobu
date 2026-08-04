@@ -27,9 +27,19 @@ import { report, toast } from '../store/ui'
 import { useActionShortcut } from '../hooks/useKeyboard'
 import { useDebounced } from '../hooks/useDebounced'
 import { NodeThumbnail } from './AssetMedia'
+import { Combobox } from './Combobox'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Icon } from './Icon'
 import { PromptBox } from './inspector/PromptBox'
+
+/** The one axis a batch may vary, in the order the panel reads: off, outwards. */
+const GRID_AXES = [
+  { value: 'none', label: 'Off' },
+  { value: 'seed', label: 'Vary seed' },
+  { value: 'fragment_weight', label: 'Vary fragment weight' },
+  { value: 'preset', label: 'Vary preset' },
+  { value: 'aspect', label: 'Vary aspect' },
+]
 
 /** The live, per-generation influence stack and shot controls. */
 export function Inspector({
@@ -335,6 +345,30 @@ function InspectorSession({
       spend.remainingUsdMicros === null ||
       paidEstimate.batchUsdMicros > spend.remainingUsdMicros)
   const gridBlocked = gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
+
+  /*
+   * `sort="none"` throughout this panel, and deliberately.
+   *
+   * Presets arrive from the backend already ranked, the grid axes read as a
+   * sequence from "off" outwards, and the influence layers are in the order
+   * they are applied to the prompt. Alphabetising any of the three would put
+   * the list in an order that contradicts what the panel above it is showing.
+   */
+  const presetOptions = useMemo(
+    () =>
+      (presets.data ?? []).map((preset) => ({
+        value: preset.id,
+        label: `${preset.label} · ${preset.images} image${preset.images === 1 ? '' : 's'}`,
+      })),
+    [presets.data],
+  )
+  const layerOptions = useMemo(
+    () =>
+      (stack.data?.layers ?? [])
+        .filter((layer) => layer.nodeId)
+        .map((layer) => ({ value: layer.nodeId as string, label: layer.name })),
+    [stack.data?.layers],
+  )
   const aspectReady =
     !!generationCapabilities.data &&
     capabilityModel === model.trim() &&
@@ -424,21 +458,17 @@ function InspectorSession({
         <div className="shot-controls" aria-label="Shot controls">
           <label>
             <span>Output preset</span>
-            <select
+            <Combobox
+              label="Output preset"
               value={chosenPreset?.id ?? ''}
-              onChange={(event) => {
-                const next = event.target.value
+              options={presetOptions}
+              placeholder={presets.data?.length ? 'Choose a preset' : 'No presets'}
+              onChange={(next) => {
                 setPresetId(next)
                 setAspect(presets.data?.find((preset) => preset.id === next)?.aspect)
               }}
               disabled={!selected || !presets.data?.length}
-            >
-              {(presets.data ?? []).map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label} · {preset.images} image{preset.images === 1 ? '' : 's'}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label>
             <span>Aspect</span>
@@ -559,30 +589,24 @@ function InspectorSession({
           <div className="variant-controls">
             <label>
               <span>Variant grid</span>
-              <select
+              <Combobox
+                label="Variant grid"
                 value={gridAxis}
-                onChange={(event) => changeGridAxis(event.target.value as typeof gridAxis)}
+                options={GRID_AXES}
+                onChange={(next) => changeGridAxis(next as typeof gridAxis)}
                 disabled={chosenPreset?.views.length !== 0}
-              >
-                <option value="none">Off</option>
-                <option value="seed">Vary seed</option>
-                <option value="fragment_weight">Vary fragment weight</option>
-                <option value="preset">Vary preset</option>
-                <option value="aspect">Vary aspect</option>
-              </select>
+              />
             </label>
             {gridAxis === 'fragment_weight' && (
               <label>
                 <span>Layer</span>
-                <select value={gridNodeId} onChange={(event) => setGridNodeId(event.target.value)}>
-                  {(stack.data?.layers ?? [])
-                    .filter((layer) => layer.nodeId)
-                    .map((layer) => (
-                      <option key={layer.nodeId as string} value={layer.nodeId as string}>
-                        {layer.name}
-                      </option>
-                    ))}
-                </select>
+                <Combobox
+                  label="Layer"
+                  value={gridNodeId}
+                  options={layerOptions}
+                  placeholder="Choose a layer"
+                  onChange={setGridNodeId}
+                />
               </label>
             )}
             {gridAxis !== 'none' && (

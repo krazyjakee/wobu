@@ -18,6 +18,7 @@ import {
 import { useNodeThumbs } from '../../lib/nodeThumbs'
 import { colorFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { NodeThumbnail } from '../AssetMedia'
+import { Combobox } from '../Combobox'
 import { Icon } from '../Icon'
 
 const ROLE_LABEL: Record<LinkRole, string> = {
@@ -84,14 +85,12 @@ function RelationsPaneSession({
     }
     return roles
   }, [allowedRoles, node.links])
-  const availableTargets = nodes
-    .filter(
-      (candidate) =>
-        candidate.id !== node.id &&
-        (!role || kinds.get(candidate.kind)?.layer === targetLayerForRole(role)) &&
-        (!role || !node.links.some((link) => link.role === role && link.toId === candidate.id)),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const availableTargets = nodes.filter(
+    (candidate) =>
+      candidate.id !== node.id &&
+      (!role || kinds.get(candidate.kind)?.layer === targetLayerForRole(role)) &&
+      (!role || !node.links.some((link) => link.role === role && link.toId === candidate.id)),
+  )
   const parent = node.parentId ? byId.get(node.parentId) : undefined
   const busy = add.isPending || remove.isPending || update.isPending
 
@@ -105,15 +104,48 @@ function RelationsPaneSession({
    * virtualized, but neither is unbounded either: `nodeThumbBatch` pages at the
    * backend's limit, so a subject that a hundred others inherit from still
    * costs a bounded number of calls.
+   *
+   * The target picker's open rows join the same list. It reports only the rows
+   * it is currently drawing, so a candidate list the length of the world adds
+   * one screenful of ids here rather than all of them.
    */
+  const [drawnTargets, setDrawnTargets] = useState<string[]>([])
   const thumbIds = useMemo(() => {
     const ids = new Set<string>()
     if (node.parentId) ids.add(node.parentId)
     for (const link of node.links) ids.add(link.toId)
     for (const edge of backlinksQ.data ?? []) ids.add(edge.fromId)
+    for (const id of drawnTargets) ids.add(id)
     return [...ids]
-  }, [backlinksQ.data, node.links, node.parentId])
+  }, [backlinksQ.data, drawnTargets, node.links, node.parentId])
   const thumbs = useNodeThumbs(thumbIds)
+
+  const roleOptions = useMemo(
+    () => allowedRoles.map((allowed) => ({ value: allowed, label: ROLE_LABEL[allowed] })),
+    [allowedRoles],
+  )
+  // Not memoised: a thumbnail resolving re-renders the pane, and a list keyed
+  // on the candidates alone would go on drawing the icons it was built with.
+  const targetOptions = availableTargets.map((candidate) => {
+    const candidateDef = kinds.get(candidate.kind)
+    return {
+      value: candidate.id,
+      label: candidate.name,
+      keywords: candidate.kind,
+      icon: (
+        <NodeThumbnail
+          path={thumbs.get(candidate.id)}
+          fallback={
+            <Icon
+              name={spriteFor(candidateDef, candidate.kind)}
+              size="sm"
+              style={{ color: colorFor(candidateDef, candidate.kind) }}
+            />
+          }
+        />
+      ),
+    }
+  })
 
   return (
     <div className="relations-pane">
@@ -180,34 +212,27 @@ function RelationsPaneSession({
             <p>This kind does not declare any editable relation roles.</p>
           ) : (
             <>
-              <select
+              <Combobox
+                label="Relation role"
                 value={role}
+                options={roleOptions}
                 disabled={readOnly || busy}
-                onChange={(event) => {
-                  setRole(event.target.value as LinkRole)
+                onChange={(next) => {
+                  setRole(next as LinkRole)
                   setTarget('')
                 }}
-                aria-label="Relation role"
-              >
-                {allowedRoles.map((allowed) => (
-                  <option key={allowed} value={allowed}>
-                    {ROLE_LABEL[allowed]}
-                  </option>
-                ))}
-              </select>
-              <select
+              />
+              <Combobox
+                label="Relation target"
                 value={target}
+                options={targetOptions}
+                sort="title"
+                placeholder="Choose a node…"
+                emptyMessage="No node in this layer matches."
                 disabled={readOnly || busy || availableTargets.length === 0}
-                onChange={(event) => setTarget(event.target.value)}
-                aria-label="Relation target"
-              >
-                <option value="">Choose a node…</option>
-                {availableTargets.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setTarget}
+                onDrawnRows={setDrawnTargets}
+              />
               <button
                 className="btn btn-primary"
                 disabled={readOnly || busy || !role || !target}

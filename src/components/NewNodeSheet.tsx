@@ -5,6 +5,7 @@ import { useCreateNode } from '../lib/queries'
 import { useNodeThumbs } from '../lib/nodeThumbs'
 import { colorFor, labelFor, spriteFor } from '../lib/kinds'
 import { NodeThumbnail } from './AssetMedia'
+import { Combobox } from './Combobox'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 
@@ -41,22 +42,52 @@ export function NewNodeSheet({
   const [err, setErr] = useState<string | null>(null)
 
   const def = available.find((k) => k.kind === kind)
-  const parents = useMemo(
-    () => nodes.filter((n) => n.kind === kind).sort((a, b) => a.name.localeCompare(b.name)),
-    [nodes, kind],
+  const parents = useMemo(() => nodes.filter((n) => n.kind === kind), [nodes, kind])
+  const kindOptions = useMemo(
+    () =>
+      available.map((k) => ({
+        value: k.kind,
+        label: labelFor(k, k.kind),
+        keywords: k.kind,
+        icon: <Icon name={spriteFor(k, k.kind)} size="sm" style={{ color: colorFor(k, k.kind) }} />,
+      })),
+    [available],
   )
 
   /*
-   * The picture of whatever is currently chosen to nest inside.
+   * A picture on every candidate row, and on the field beside them (#146).
    *
-   * A native `<select>` cannot draw one per row — an `<option>` may contain
-   * text and nothing else — and a hand-rolled listbox here would trade a
-   * keyboard-complete control that every platform already gets right for a
-   * thumbnail on a list the user visits once per node. So the parent list stays
-   * a `<select>`, and the confirmation of *which* entity was picked sits beside
-   * it in the same fixed slot the navigator uses.
+   * This used to be a native `<select>`, which cannot draw one — an `<option>`
+   * may contain text and nothing else — so the only confirmation of *which*
+   * entity had been picked was the single thumbnail next to the control. The
+   * shared listbox draws one per row, and `onDrawnRows` keeps that affordable:
+   * only the ids in the scrolled window are asked for, so nesting inside a
+   * world with three thousand characters still costs one batch of twenty.
    */
-  const parentThumbs = useNodeThumbs(useMemo(() => (parentId ? [parentId] : []), [parentId]))
+  const [drawn, setDrawn] = useState<string[]>([])
+  const parentThumbs = useNodeThumbs(
+    useMemo(() => [...new Set([...(parentId ? [parentId] : []), ...drawn])], [parentId, drawn]),
+  )
+  const kindIcon = def ? (
+    <Icon name={spriteFor(def, def.kind)} size="sm" style={{ color: colorFor(def, def.kind) }} />
+  ) : (
+    <Icon name="cube" size="sm" />
+  )
+
+  /*
+   * Rebuilt every render rather than memoised on `parents`: the thumbnail cache
+   * signals a resolved picture by re-rendering, and a list memoised on the node
+   * array alone would keep drawing the fallback icons it was built with.
+   */
+  const parentOptions = [
+    { value: '', label: '— top level —', pinned: true },
+    ...parents.map((p) => ({
+      value: p.id,
+      label: p.name,
+      keywords: p.summary,
+      icon: <NodeThumbnail path={parentThumbs.get(p.id)} fallback={kindIcon} />,
+    })),
+  ]
 
   function submit() {
     if (!kind) {
@@ -96,20 +127,16 @@ export function NewNodeSheet({
         <>
           <div className="field">
             <label htmlFor="nn-kind">Kind</label>
-            <select
+            <Combobox
               id="nn-kind"
               value={kind}
-              onChange={(e) => {
-                setKind(e.target.value as NodeKind)
+              options={kindOptions}
+              sort="title"
+              onChange={(next) => {
+                setKind(next as NodeKind)
                 setParentId('')
               }}
-            >
-              {available.map((k) => (
-                <option key={k.kind} value={k.kind}>
-                  {labelFor(k, k.kind)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="field">
@@ -131,26 +158,17 @@ export function NewNodeSheet({
               <div className="thumb-field">
                 <NodeThumbnail
                   path={parentId ? parentThumbs.get(parentId) : null}
-                  fallback={
-                    <Icon
-                      name={spriteFor(def, def.kind)}
-                      size="sm"
-                      style={{ color: colorFor(def, def.kind) }}
-                    />
-                  }
+                  fallback={kindIcon}
                 />
-                <select
+                <Combobox
                   id="nn-parent"
                   value={parentId}
-                  onChange={(e) => setParentId(e.target.value)}
-                >
-                  <option value="">— top level —</option>
-                  {parents.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  options={parentOptions}
+                  sort="title"
+                  placeholder="— top level —"
+                  onChange={setParentId}
+                  onDrawnRows={setDrawn}
+                />
               </div>
             </div>
           )}

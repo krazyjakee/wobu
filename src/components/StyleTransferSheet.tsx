@@ -4,6 +4,7 @@ import { errorMessage, styleTransferPreview } from '../lib/api'
 import { useApplyStyleTransfer } from '../lib/queries'
 import { labelFor, type KindIndex } from '../lib/kinds'
 import { toast } from '../store/ui'
+import { Combobox } from './Combobox'
 import { Modal } from './Modal'
 
 export function StyleTransferSheet({
@@ -41,6 +42,25 @@ export function StyleTransferSheet({
   const candidate = useMemo(
     () => preview?.candidates.find((item) => item.rootId === rootId) ?? null,
     [preview, rootId],
+  )
+
+  /*
+   * Grouped by kind, and named by the entity alone.
+   *
+   * The row used to read "Style guide — Ashgate" because a native `<option>`
+   * had nowhere else to put the kind. With a heading above each run of rows the
+   * kind is said once, the name is what the user filters on, and typing
+   * "ashgate" is no longer competing with the kind's own letters.
+   */
+  const rootOptions = useMemo(
+    () =>
+      (preview?.candidates ?? []).map((item) => ({
+        value: item.rootId,
+        label: item.name,
+        keywords: item.kind,
+        group: labelFor(kinds.get(item.kind), item.kind),
+      })),
+    [kinds, preview?.candidates],
   )
 
   function submit() {
@@ -92,17 +112,14 @@ export function StyleTransferSheet({
           <>
             <div className="field">
               <label htmlFor="transfer-root">Root</label>
-              <select
+              <Combobox
                 id="transfer-root"
                 value={rootId}
-                onChange={(event) => setRootId(event.target.value)}
-              >
-                {preview.candidates.map((item) => (
-                  <option key={item.rootId} value={item.rootId}>
-                    {labelFor(kinds.get(item.kind), item.kind)} — {item.name}
-                  </option>
-                ))}
-              </select>
+                options={rootOptions}
+                sort="title"
+                placeholder="Choose a root"
+                onChange={setRootId}
+              />
             </div>
             {candidate && (
               <div className="transfer-summary">

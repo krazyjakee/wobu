@@ -12,6 +12,7 @@ import {
   useTrainLora,
 } from '../lib/queries'
 import { report, useUI } from '../store/ui'
+import { Combobox } from './Combobox'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Inspector } from './Inspector'
 import { Modal } from './Modal'
@@ -48,6 +49,13 @@ export function ForgeMode({
       ),
     [nodes],
   )
+  // The list the picker draws is ordered by the shared title rule instead —
+  // `sort="title"` on the control — but the scene composer below still reads
+  // `sortedNodes`, so both orders exist for now and neither is invented here.
+  const subjectOptions = useMemo(
+    () => sortedNodes.map((node) => ({ value: node.id, label: node.name, keywords: node.kind })),
+    [sortedNodes],
+  )
 
   return (
     <main className="forge-mode" aria-label="Forge">
@@ -58,18 +66,14 @@ export function ForgeMode({
         </div>
         <label>
           <span>Subject</span>
-          <select
-            aria-label="Forge subject"
+          <Combobox
+            label="Forge subject"
             value={selected?.id ?? ''}
-            onChange={(event) => select(event.target.value || null)}
-          >
-            <option value="">Choose an entity</option>
-            {sortedNodes.map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.name}
-              </option>
-            ))}
-          </select>
+            options={subjectOptions}
+            sort="title"
+            placeholder="Choose an entity"
+            onChange={(value) => select(value || null)}
+          />
         </label>
         <button className="btn" type="button" onClick={() => setMode('library')}>
           Back to Library

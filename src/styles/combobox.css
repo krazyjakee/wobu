@@ -1,0 +1,247 @@
+/*
+ * The shared searchable dropdown — src/components/Combobox.tsx, issue #139.
+ *
+ * Two halves that are not siblings in the DOM: the field, which sits wherever
+ * the `<select>` it replaced sat, and the popup, which is portalled out so no
+ * scrolling ancestor can clip it. Everything here is expressed in the tokens
+ * from tokens.css, never in literal colours, so the control follows the theme.
+ *
+ * The second block reproduces, per site, the sizing the removed `<select>`
+ * inherited from that site's own stylesheet. Those rules key on the element
+ * name and cannot match an input inside a wrapper, so the shapes are restated
+ * here rather than left to drift.
+ */
+
+.cbx {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.cbx-input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 24px 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+  text-overflow: ellipsis;
+}
+.cbx-input:focus {
+  border-color: var(--accent);
+}
+.cbx-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* The current value, shown dim behind the search field while the list is open,
+   so what is about to be replaced stays readable. */
+.cbx-input::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+.cbx-chev {
+  position: absolute;
+  right: 7px;
+  display: flex;
+  pointer-events: none;
+  color: var(--text-faint);
+}
+.cbx-input:disabled ~ .cbx-chev {
+  opacity: 0.55;
+}
+
+/* Announced, never drawn: the result count for screen readers. */
+.cbx-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── the popup ────────────────────────────────────────────────────────── */
+
+.cbx-pop {
+  /* Above every panel and sheet surface, below nothing: the list is the thing
+     the user is currently pointing at. Inside a sheet it is portalled into that
+     sheet's own host, so it stacks with the dialog rather than against it. */
+  z-index: 90;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-str);
+  border-radius: var(--r-sm);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-1);
+  padding: 3px;
+}
+
+.cbx-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+/*
+ * One highlight, driven by the keyboard.
+ *
+ * There is deliberately no `:hover` rule: the pointer sets the same active
+ * index the arrows do, so the mouse and the keyboard can never disagree about
+ * which row Enter would take — which is exactly the bug a separate hover style
+ * hides until someone reaches for the keyboard mid-scroll.
+ */
+.cbx-option.is-active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.cbx-option[aria-selected='true'] .cbx-label {
+  font-weight: 600;
+}
+.cbx-option[aria-selected='true']::after {
+  content: '·';
+  color: var(--accent);
+}
+.cbx-option.is-disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.cbx-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+.cbx-icon .node-thumb {
+  --thumb-size: 20px;
+}
+.cbx-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cbx-hint {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.cbx-group {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.cbx-empty {
+  padding: 10px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+/* ── per-site sizing, restated from the stylesheets that styled `select` ── */
+
+/* overlays.css `.field select` */
+.field .cbx {
+  width: 100%;
+}
+.field .cbx-input:focus {
+  border-color: var(--border-str);
+}
+
+/* thumbs.css `.thumb-field select` */
+.thumb-field .cbx {
+  flex: 1;
+  min-width: 0;
+}
+
+/* assets.css `.asset-filters select`, `.asset-attach select` */
+.asset-filters .cbx-input,
+.asset-attach .cbx-input {
+  padding: 6px 22px 6px 7px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* inspector.css `.shot-controls select` — `.variant-controls` nests inside it */
+.shot-controls .cbx {
+  width: 100%;
+}
+.shot-controls .cbx-input {
+  border-color: var(--border-str);
+  background: var(--bg-raised);
+  padding: 6px 22px 6px 7px;
+  font-size: 11px;
+}
+
+/* forge.css `.forge-head select` and `.forge-scene-body select` */
+.forge-head .cbx-input {
+  border-color: var(--border-str);
+  padding: 7px 22px 7px 8px;
+}
+.forge-scene-body .cbx {
+  width: 100%;
+}
+.forge-scene-body .cbx-input {
+  border-color: var(--border-str);
+  padding: 7px 22px 7px 7px;
+  font-size: 10.5px;
+}
+
+/* editor.css `.relation-add select` */
+.relation-add .cbx-input {
+  padding: 7px 22px 7px 8px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.relation-add .cbx-input:focus {
+  border-color: var(--border-str);
+}
+
+/* editor.css `.reference-controls select` */
+.reference-controls .cbx {
+  width: 100%;
+}
+.reference-controls .cbx-input {
+  padding: 4px 20px 4px 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* editor.css `.concept-pin-action select` */
+.concept-pin-action .cbx {
+  width: 100%;
+}
+.concept-pin-action .cbx-input {
+  padding: 4px 20px 4px 6px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}

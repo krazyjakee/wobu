@@ -6,6 +6,7 @@ import * as api from '../../lib/api'
 import type { Asset, AssetLink, AssetRole, WobuNode } from '../../lib/api'
 import type { useAutosaveNode } from '../../hooks/useAutosaveNode'
 import { useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
+import { Combobox } from '../Combobox'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
 type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed' | 'cancelled'
@@ -602,18 +603,24 @@ function ReferenceTile({
         {isCover && <b>Cover</b>}
       </div>
       <div className="reference-controls">
-        <select
-          aria-label={`Role for reference ${index + 1}`}
+        {/*
+          A role already spoken for on another reference is drawn and announced
+          as unavailable rather than hidden. Hiding it would leave the user
+          hunting for a role that exists, is missing from this list only, and
+          gives no clue where it went.
+        */}
+        <Combobox
+          label={`Role for reference ${index + 1}`}
           value={link.role}
+          options={api.ASSET_ROLES.map((role) => ({
+            value: role,
+            label: roleLabel(role),
+            disabled: usedRoles.includes(role),
+            hint: usedRoles.includes(role) ? 'taken' : undefined,
+          }))}
           disabled={readOnly}
-          onChange={(event) => onUpdate({ role: event.target.value as AssetRole })}
-        >
-          {api.ASSET_ROLES.map((role) => (
-            <option key={role} value={role} disabled={usedRoles.includes(role)}>
-              {roleLabel(role)}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => onUpdate({ role: next as AssetRole })}
+        />
         <label>
           <span>Weight</span>
           <input

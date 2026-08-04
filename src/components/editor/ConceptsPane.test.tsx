@@ -13,6 +13,7 @@ import type {
   WobuNode,
 } from '../../lib/api'
 import { kindDef, kindIndex, node as buildNode, summary } from '../../test/fixtures'
+import { chooseOption } from '../Combobox.testing'
 import { ConceptsPane } from './ConceptsPane'
 
 const h = vi.hoisted(() => ({
@@ -250,11 +251,12 @@ describe('generation history', () => {
     history = [generation({ id: 'candidate' })]
     open()
 
-    const role = (await screen.findByLabelText(
-      'Reference role for generation candidate',
-    )) as HTMLSelectElement
-    expect(role.value).toBe('full_ref')
-    fireEvent.change(role, { target: { value: 'palette' } })
+    const role = await screen.findByRole('combobox', {
+      name: 'Reference role for generation candidate',
+    })
+    // The field states the current role in words now, not its wire name.
+    expect(role).toHaveValue('Full reference')
+    chooseOption('Reference role for generation candidate', 'Palette')
     fireEvent.click(screen.getByRole('button', { name: 'Pin generation candidate as Palette' }))
 
     await waitFor(() =>

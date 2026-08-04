@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, AssetLink, WobuNode } from '../../lib/api'
 import { node as buildNode } from '../../test/fixtures'
+import { chooseOption } from '../Combobox.testing'
 import { ReferencesPane } from './ReferencesPane'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
@@ -150,9 +151,8 @@ describe('ReferencesPane', () => {
     const node = buildNode({ id: 'kael', assetLinks: links })
     renderPane(node, [asset('one'), asset('two')])
 
-    fireEvent.change(await screen.findByLabelText('Role for reference 1'), {
-      target: { value: 'material' },
-    })
+    await screen.findByRole('combobox', { name: 'Role for reference 1' })
+    chooseOption('Role for reference 1', 'Material')
     expect(autosave.queue).toHaveBeenLastCalledWith({
       assetLinks: [{ ...links[0], role: 'material' }, links[1]],
     })

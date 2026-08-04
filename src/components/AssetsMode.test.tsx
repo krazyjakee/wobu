@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, AssetUsage, NodeSummary, WobuNode } from '../lib/api'
 import { kindDef, kindIndex, node as buildNode, summary } from '../test/fixtures'
 import { AssetsMode } from './AssetsMode'
+import { chooseOption } from './Combobox.testing'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
 
@@ -150,31 +151,23 @@ describe('AssetsMode', () => {
     open()
     await screen.findByRole('button', { name: 'Select reference asset reference' })
 
-    fireEvent.change(screen.getByLabelText('Filter assets by kind'), {
-      target: { value: 'generated' },
-    })
+    chooseOption('Filter assets by kind', 'Generated')
     expect(screen.getByRole('button', { name: 'Select generated asset generated' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Select reference asset reference' })).toBeNull()
 
-    fireEvent.change(screen.getByLabelText('Filter assets by kind'), { target: { value: 'all' } })
-    fireEvent.change(screen.getByLabelText('Filter assets by role'), {
-      target: { value: 'palette' },
-    })
+    chooseOption('Filter assets by kind', 'All kinds')
+    chooseOption('Filter assets by role', 'Palette')
     expect(screen.getByRole('button', { name: 'Select upload asset upload' })).toBeVisible()
 
-    fireEvent.change(screen.getByLabelText('Filter assets by role'), { target: { value: 'all' } })
-    fireEvent.change(screen.getByLabelText('Filter assets by node'), { target: { value: 'kael' } })
+    chooseOption('Filter assets by role', 'All roles')
+    chooseOption('Filter assets by node', 'Kael')
     expect(screen.getByRole('button', { name: 'Select reference asset reference' })).toBeVisible()
 
-    fireEvent.change(screen.getByLabelText('Filter assets by node'), { target: { value: 'all' } })
-    fireEvent.change(screen.getByLabelText('Filter assets by linked node tag'), {
-      target: { value: 'ancestry' },
-    })
+    chooseOption('Filter assets by node', 'All nodes')
+    chooseOption('Filter assets by linked node tag', 'ancestry')
     expect(screen.getByRole('button', { name: 'Select upload asset upload' })).toBeVisible()
 
-    fireEvent.change(screen.getByLabelText('Filter assets by linked node tag'), {
-      target: { value: 'all' },
-    })
+    chooseOption('Filter assets by linked node tag', 'All tags')
     fireEvent.click(screen.getByRole('button', { name: 'Orphans 1' }))
     expect(screen.getByRole('button', { name: 'Select generated asset generated' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Select upload asset upload' })).toBeNull()
@@ -213,7 +206,7 @@ describe('AssetsMode', () => {
     open()
     fireEvent.click(await screen.findByRole('button', { name: 'Select upload asset loose' }))
     const details = screen.getByRole('complementary', { name: 'Details for asset loose' })
-    fireEvent.change(within(details).getByLabelText('Role'), { target: { value: 'pose' } })
+    chooseOption('Role', 'Pose', details)
     fireEvent.click(within(details).getByRole('button', { name: 'Attach' }))
 
     await waitFor(() =>

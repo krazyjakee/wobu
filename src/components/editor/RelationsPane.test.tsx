@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WobuNode } from '../../lib/api'
 import { resetNodeThumbs } from '../../lib/nodeThumbs'
 import { kindDef, kindIndex, node, summary } from '../../test/fixtures'
+import { chooseOption, comboboxOptions, filterAndChoose } from '../Combobox.testing'
 import { RelationsPane } from './RelationsPane'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
@@ -59,6 +60,13 @@ beforeEach(() => {
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 
+/** Every candidate the target picker is currently offering, list left closed. */
+function offeredTargets() {
+  const rows = comboboxOptions('Relation target')
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Relation target' }), { key: 'Escape' })
+  return rows
+}
+
 describe('influence relation target picker', () => {
   it('offers only nodes in the layer selected by the first dropdown', async () => {
     render(
@@ -75,18 +83,51 @@ describe('influence relation target picker', () => {
       </QueryClientProvider>,
     )
 
-    const role = (await screen.findByLabelText('Relation role')) as HTMLSelectElement
-    const target = screen.getByLabelText('Relation target')
-    expect(within(target).getByRole('option', { name: 'Human' })).toBeInTheDocument()
-    expect(within(target).queryByRole('option', { name: 'Guild' })).not.toBeInTheDocument()
+    // `node_list` is a query, so the candidates arrive a tick after the two
+    // controls do. Waiting on the picker becoming usable — rather than on the
+    // role control, which is drawn from props and is ready immediately — is
+    // what makes this deterministic.
+    const target = await screen.findByRole('combobox', { name: 'Relation target' })
+    await waitFor(() => expect(target).toBeEnabled())
 
-    fireEvent.change(role, { target: { value: 'member_of' } })
-    expect(within(target).getByRole('option', { name: 'Guild' })).toBeInTheDocument()
-    expect(within(target).queryByRole('option', { name: 'Human' })).not.toBeInTheDocument()
+    expect(offeredTargets()).toEqual(['Human'])
 
-    fireEvent.change(role, { target: { value: 'located_in' } })
-    expect(within(target).getByRole('option', { name: 'Harbour' })).toBeInTheDocument()
-    expect(within(target).queryByRole('option', { name: 'Guild' })).not.toBeInTheDocument()
+    chooseOption('Relation role', 'Member of')
+    expect(offeredTargets()).toEqual(['Guild'])
+
+    chooseOption('Relation role', 'Located in')
+    expect(offeredTargets()).toEqual(['Harbour'])
+  })
+
+  it('filters the candidates by name and adds the one that was typed for', async () => {
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RelationsPane
+          node={subject}
+          def={kinds.get('character')}
+          kinds={kinds}
+          readOnly={false}
+          onJump={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+
+    chooseOption('Relation role', 'Located in')
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Relation target' })).toBeEnabled(),
+    )
+
+    expect(filterAndChoose('Relation target', 'harb')).toHaveValue('Harbour')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add relation' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'node_link_add',
+        expect.objectContaining({ nodeId: 'hero', toId: 'harbour', role: 'located_in' }),
+      ),
+    )
   })
 })
 

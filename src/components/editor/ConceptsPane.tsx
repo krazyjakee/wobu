@@ -22,6 +22,7 @@ import {
 } from '../../lib/queries'
 import { labelFor, pluralFor, type KindIndex } from '../../lib/kinds'
 import { influenceDependentsOf } from '../../lib/tree'
+import { Combobox } from '../Combobox'
 import { GenerationDetail } from '../GenerationDetail'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { useVirtualCardWindow } from '../useVirtualCardWindow'
@@ -397,18 +398,13 @@ function GenerationTile({
           <div className="concept-pin-action">
             <label>
               <span>Reference role</span>
-              <select
-                aria-label={`Reference role for generation ${generation.id}`}
+              <Combobox
+                label={`Reference role for generation ${generation.id}`}
                 value={role}
+                options={ROLE_OPTIONS}
                 disabled={readOnly || changingPin}
-                onChange={(event) => setRole(event.target.value as AssetRole)}
-              >
-                {api.ASSET_ROLES.map((choice) => (
-                  <option value={choice} key={choice}>
-                    {roleLabel(choice)}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => setRole(next as AssetRole)}
+              />
             </label>
             <button
               className={pinned ? 'btn-mini is-pinned' : 'btn-mini'}
@@ -502,6 +498,9 @@ function roleConsequence(role: Exclude<AssetRole, 'mood'>): string {
 function roleLabel(role: AssetRole): string {
   return role === 'full_ref' ? 'Full reference' : `${role.charAt(0).toUpperCase()}${role.slice(1)}`
 }
+
+/** Built once at module scope: the same five rows on every concept card. */
+const ROLE_OPTIONS = api.ASSET_ROLES.map((role) => ({ value: role, label: roleLabel(role) }))
 
 function seedSourceLabel(generation: GenerationSummary): string {
   if (generation.seedSource === 'replay') return 'replayed snapshot'

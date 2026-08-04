@@ -5,6 +5,7 @@ import type { KindIndex } from '../lib/kinds'
 import { labelFor } from '../lib/kinds'
 import { useAssets, useAssetUsages, useDeleteAsset, useLinkAsset } from '../lib/queries'
 import { useUI } from '../store/ui'
+import { Combobox } from './Combobox'
 import { ConfirmSheet } from './ConfirmSheet'
 import { LazyAssetThumbnail } from './AssetMedia'
 import { useVirtualCardWindow } from './useVirtualCardWindow'
@@ -56,6 +57,45 @@ export function AssetsMode({
       ),
     [usages.data],
   )
+  /*
+   * The four filter lists.
+   *
+   * Kinds and roles keep their declared order — `ASSET_ROLES` is the sequence
+   * the rest of the application prints them in — while nodes and tags are
+   * sorted by the shared title rule, because those are names the user is
+   * scanning for rather than a fixed vocabulary they already know. Each list
+   * leads with its own "all" row, pinned so the way out of the filter never
+   * moves.
+   */
+  const kindFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All kinds', pinned: true },
+      ...KINDS.map((value) => ({ value, label: kindLabel(value) })),
+    ],
+    [],
+  )
+  const roleFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All roles', pinned: true },
+      ...api.ASSET_ROLES.map((value) => ({ value, label: roleLabel(value) })),
+    ],
+    [],
+  )
+  const nodeFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All nodes', pinned: true },
+      ...nodes.map((node) => ({ value: node.id, label: node.name, keywords: node.kind })),
+    ],
+    [nodes],
+  )
+  const tagFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All tags', pinned: true },
+      ...tags.map((value) => ({ value, label: value })),
+    ],
+    [tags],
+  )
+
   const orphanCount = usageKnown
     ? (assets.data ?? []).filter((asset) => (usageByAsset.get(asset.id)?.length ?? 0) === 0).length
     : 0
@@ -107,68 +147,44 @@ export function AssetsMode({
       <div className="asset-filters" aria-label="Asset filters">
         <label>
           <span>Kind</span>
-          <select
-            aria-label="Filter assets by kind"
+          <Combobox
+            label="Filter assets by kind"
             value={kind}
-            onChange={(event) => setKind(event.target.value as AssetKind | 'all')}
-          >
-            <option value="all">All kinds</option>
-            {KINDS.map((value) => (
-              <option key={value} value={value}>
-                {kindLabel(value)}
-              </option>
-            ))}
-          </select>
+            options={kindFilterOptions}
+            onChange={(next) => setKind(next as AssetKind | 'all')}
+          />
         </label>
         <label>
           <span>Role</span>
-          <select
-            aria-label="Filter assets by role"
+          <Combobox
+            label="Filter assets by role"
             value={role}
+            options={roleFilterOptions}
             disabled={!usageKnown}
-            onChange={(event) => setRole(event.target.value as AssetRole | 'all')}
-          >
-            <option value="all">All roles</option>
-            {api.ASSET_ROLES.map((value) => (
-              <option key={value} value={value}>
-                {roleLabel(value)}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setRole(next as AssetRole | 'all')}
+          />
         </label>
         <label>
           <span>Node</span>
-          <select
-            aria-label="Filter assets by node"
+          <Combobox
+            label="Filter assets by node"
             value={nodeId}
+            options={nodeFilterOptions}
+            sort="title"
             disabled={!usageKnown}
-            onChange={(event) => setNodeId(event.target.value)}
-          >
-            <option value="all">All nodes</option>
-            {[...nodes]
-              .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-              .map((node) => (
-                <option key={node.id} value={node.id}>
-                  {node.name}
-                </option>
-              ))}
-          </select>
+            onChange={setNodeId}
+          />
         </label>
         <label>
           <span>Linked-node tag</span>
-          <select
-            aria-label="Filter assets by linked node tag"
+          <Combobox
+            label="Filter assets by linked node tag"
             value={tag}
+            options={tagFilterOptions}
+            sort="title"
             disabled={!usageKnown}
-            onChange={(event) => setTag(event.target.value)}
-          >
-            <option value="all">All tags</option>
-            {tags.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+            onChange={setTag}
+          />
         </label>
         <button
           className={orphansOnly ? 'asset-orphan-filter is-active' : 'asset-orphan-filter'}
@@ -370,6 +386,16 @@ function AssetDetails({
   const nodeId = nodes.some((node) => node.id === selectedNodeId)
     ? selectedNodeId
     : (nodes[0]?.id ?? '')
+  // Declared above the early return: this panel renders an empty state when
+  // nothing is selected, and hooks cannot sit behind that branch.
+  const attachNodeOptions = useMemo(
+    () => nodes.map((node) => ({ value: node.id, label: node.name, keywords: node.kind })),
+    [nodes],
+  )
+  const attachRoleOptions = useMemo(
+    () => api.ASSET_ROLES.map((value) => ({ value, label: roleLabel(value) })),
+    [],
+  )
 
   if (!asset) {
     return (
@@ -464,31 +490,25 @@ function AssetDetails({
         <h4>Attach as reference</h4>
         <label>
           <span>Node</span>
-          <select
+          <Combobox
+            label="Node"
             value={nodeId}
+            options={attachNodeOptions}
+            sort="title"
+            placeholder="No nodes"
             disabled={readOnly || nodes.length === 0 || linkAsset.isPending}
-            onChange={(event) => setNodeId(event.target.value)}
-          >
-            {nodes.map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.name}
-              </option>
-            ))}
-          </select>
+            onChange={setNodeId}
+          />
         </label>
         <label>
           <span>Role</span>
-          <select
+          <Combobox
+            label="Role"
             value={role}
+            options={attachRoleOptions}
             disabled={readOnly || linkAsset.isPending}
-            onChange={(event) => setRole(event.target.value as AssetRole)}
-          >
-            {api.ASSET_ROLES.map((value) => (
-              <option key={value} value={value}>
-                {roleLabel(value)}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setRole(next as AssetRole)}
+          />
         </label>
         <button
           className="btn btn-primary"
