@@ -41,7 +41,9 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use bytes::Bytes;
-use http::{HeaderMap, Method, Request as HttpRequest, Response as HttpResponse, StatusCode, header};
+use http::{
+    HeaderMap, Method, Request as HttpRequest, Response as HttpResponse, StatusCode, header,
+};
 use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -76,11 +78,7 @@ impl Server {
     /// a user who does not care can pick; [`Running::port`] reports what was
     /// actually taken, so the settings pane can show the address rather than the
     /// intention.
-    pub async fn start(
-        port: u16,
-        token: Token,
-        dispatcher: Arc<Dispatcher>,
-    ) -> Result<Running> {
+    pub async fn start(port: u16, token: Token, dispatcher: Arc<Dispatcher>) -> Result<Running> {
         // `Ipv4Addr::LOCALHOST`, written here and nowhere else. See the module
         // header: this is the line that makes the guarantee.
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -126,11 +124,9 @@ impl Server {
                 }
                 let context = Arc::clone(&context);
                 tokio::spawn(async move {
-                    let service =
-                        service_fn(move |request| serve(request, Arc::clone(&context)));
-                    let _ = http1::Builder::new()
-                        .serve_connection(TokioIo::new(stream), service)
-                        .await;
+                    let service = service_fn(move |request| serve(request, Arc::clone(&context)));
+                    let _ =
+                        http1::Builder::new().serve_connection(TokioIo::new(stream), service).await;
                 });
             }
         });
@@ -289,8 +285,11 @@ async fn route(
     if answers.is_empty() {
         return Ok(empty(StatusCode::ACCEPTED));
     }
-    let payload =
-        if answers.len() == 1 { answers.into_iter().next().unwrap_or(Value::Null) } else { Value::Array(answers) };
+    let payload = if answers.len() == 1 {
+        answers.into_iter().next().unwrap_or(Value::Null)
+    } else {
+        Value::Array(answers)
+    };
     Ok(json_response(StatusCode::OK, &payload))
 }
 

@@ -2021,9 +2021,7 @@ fn generation_scene_names(generation: &Generation) -> Result<String> {
     Ok(serde_json::to_string(&names)?)
 }
 
-fn generation_summary_row(
-    row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<Option<GenerationSummary>> {
+fn generation_summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Option<GenerationSummary>> {
     let id = row.get::<_, String>(0)?;
     let node_id = row.get::<_, String>(1)?;
     let created_at = row.get::<_, String>(2)?;
@@ -2034,11 +2032,10 @@ fn generation_summary_row(
     ) else {
         return Ok(None);
     };
-    let first_asset_id = row
-        .get::<_, Option<String>>(9)?
-        .and_then(|value| Id::from_string(&value).ok());
-    let scene_subject_names = serde_json::from_str(&row.get::<_, String>(13)?)
-        .unwrap_or_else(|_| Vec::new());
+    let first_asset_id =
+        row.get::<_, Option<String>>(9)?.and_then(|value| Id::from_string(&value).ok());
+    let scene_subject_names =
+        serde_json::from_str(&row.get::<_, String>(13)?).unwrap_or_else(|_| Vec::new());
     Ok(Some(GenerationSummary {
         id,
         node_id,

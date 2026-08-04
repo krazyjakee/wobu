@@ -1677,10 +1677,8 @@ impl Project {
     /// rather than turning a completed deletion into an error.
     pub fn delete_generation(&mut self, id: Id) -> Result<()> {
         self.ensure_writable()?;
-        let generation = self
-            .index
-            .generation(id)?
-            .ok_or_else(|| Error::NoSuchGeneration(id.to_string()))?;
+        let generation =
+            self.index.generation(id)?.ok_or_else(|| Error::NoSuchGeneration(id.to_string()))?;
         let rel = generations::archive(&self.root, &generation)?;
         self.index.remove_generation_by_rel_path(&rel)?;
 

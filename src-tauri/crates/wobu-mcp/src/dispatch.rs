@@ -548,10 +548,7 @@ mod tests {
             .dispatcher
             .handle(&request("initialize", json!({ "protocolVersion": "3000-01-01" })))
             .unwrap();
-        assert_eq!(
-            response.result.unwrap()["protocolVersion"],
-            SUPPORTED_PROTOCOL_VERSIONS[0]
-        );
+        assert_eq!(response.result.unwrap()["protocolVersion"], SUPPORTED_PROTOCOL_VERSIONS[0]);
     }
 
     #[test]
@@ -585,10 +582,7 @@ mod tests {
         // out by being refused.
         let initialize =
             fixture.dispatcher.handle(&request("initialize", json!({}))).unwrap().result.unwrap();
-        assert!(
-            initialize["instructions"].as_str().unwrap().contains("read-only"),
-            "{initialize}"
-        );
+        assert!(initialize["instructions"].as_str().unwrap().contains("read-only"), "{initialize}");
     }
 
     #[test]
@@ -612,8 +606,10 @@ mod tests {
     #[test]
     fn turning_writes_on_takes_effect_on_the_next_call_rather_than_the_next_launch() {
         let fixture = fixture(false);
-        assert_eq!(call(&fixture, "create_node", json!({"kind":"prop","name":"Lamp"}))["result"]
-            ["isError"], true);
+        assert_eq!(
+            call(&fixture, "create_node", json!({"kind":"prop","name":"Lamp"}))["result"]["isError"],
+            true
+        );
 
         fixture.writes.store(true, Ordering::SeqCst);
 
@@ -624,8 +620,8 @@ mod tests {
         // And off again, mid-session, with no restart in between.
         fixture.writes.store(false, Ordering::SeqCst);
         assert_eq!(
-            call(&fixture, "update_node", json!({ "id": "x", "patch": { "summary": "s" } }))
-                ["result"]["isError"],
+            call(&fixture, "update_node", json!({ "id": "x", "patch": { "summary": "s" } }))["result"]
+                ["isError"],
             true
         );
         assert_eq!(fixture.world.writes.lock().unwrap().len(), 1, "a write slipped through");

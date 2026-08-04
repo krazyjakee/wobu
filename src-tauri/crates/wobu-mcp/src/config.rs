@@ -102,12 +102,7 @@ fn default_port() -> u16 {
 
 impl Default for ServerSettings {
     fn default() -> Self {
-        ServerSettings {
-            enabled: false,
-            port: DEFAULT_PORT,
-            allow_writes: false,
-            token: None,
-        }
+        ServerSettings { enabled: false, port: DEFAULT_PORT, allow_writes: false, token: None }
     }
 }
 
@@ -197,7 +192,7 @@ mod tests {
 
     #[test]
     fn a_server_the_user_has_not_ticked_is_never_active_and_nor_is_any_of_them_with_the_master_off()
-     {
+    {
         let one = ClientServer { id: "a".into(), enabled: true, ..ClientServer::default() };
         let two = ClientServer { id: "b".into(), enabled: false, ..ClientServer::default() };
 

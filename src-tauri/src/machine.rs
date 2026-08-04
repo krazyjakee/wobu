@@ -41,7 +41,10 @@ struct Stored {
 
 impl Default for Stored {
     fn default() -> Self {
-        Self { comfyui_endpoint: comfy::DEFAULT_URL.to_owned(), onboarding: OnboardingState::default() }
+        Self {
+            comfyui_endpoint: comfy::DEFAULT_URL.to_owned(),
+            onboarding: OnboardingState::default(),
+        }
     }
 }
 

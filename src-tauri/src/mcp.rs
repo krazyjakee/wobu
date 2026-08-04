@@ -292,7 +292,10 @@ impl McpState {
             Err(error) => {
                 let message = error.to_string();
                 *self.last_error.lock() = Some(message.clone());
-                Err(WobuError::new(Code::Io, format!("Wobu's MCP server could not start. {message}")))
+                Err(WobuError::new(
+                    Code::Io,
+                    format!("Wobu's MCP server could not start. {message}"),
+                ))
             }
         }
     }
@@ -301,10 +304,7 @@ impl McpState {
         let wiring = self.wiring.lock();
         let wiring = wiring.as_ref()?;
         let world = ProjectWorld { state: wiring.world.handle() };
-        let audit = Recorder {
-            app: wiring.app.clone(),
-            activity: Arc::clone(&self.activity),
-        };
+        let audit = Recorder { app: wiring.app.clone(), activity: Arc::clone(&self.activity) };
         Some(Arc::new(Dispatcher::new(
             Arc::new(world),
             Arc::clone(&self.allow_writes),
@@ -381,10 +381,9 @@ struct ProjectWorld {
 
 impl ProjectWorld {
     fn with<T>(&self, f: impl FnOnce(&mut Project) -> CommandResult<T>) -> Result<T, WorldError> {
-        self.state.with(f).map_err(|error| WorldError {
-            message: error.message,
-            retryable: error.retryable,
-        })
+        self.state
+            .with(f)
+            .map_err(|error| WorldError { message: error.message, retryable: error.retryable })
     }
 }
 
@@ -664,7 +663,8 @@ fn preset_for(
 }
 
 fn no_such_subject(id: Id) -> WobuError {
-    WobuError::new(Code::NoSuchNode, "That entity is not in this project.").with_detail(id.to_string())
+    WobuError::new(Code::NoSuchNode, "That entity is not in this project.")
+        .with_detail(id.to_string())
 }
 
 /* ── persistence ──────────────────────────────────────────────────────────── */
@@ -796,16 +796,9 @@ pub async fn mcp_server_token_rotate(state: State<'_, McpState>) -> CommandResul
 /// bridge when somebody asks for it and not on every settings render.
 #[tauri::command]
 pub fn mcp_server_token(state: State<'_, McpState>) -> CommandResult<String> {
-    state
-        .stored
-        .read()
-        .server
-        .token
-        .as_ref()
-        .map(|token| token.expose().to_owned())
-        .ok_or_else(|| {
-            WobuError::new(Code::Invalid, "Wobu has not made an MCP token yet. Turn the server on.")
-        })
+    state.stored.read().server.token.as_ref().map(|token| token.expose().to_owned()).ok_or_else(
+        || WobuError::new(Code::Invalid, "Wobu has not made an MCP token yet. Turn the server on."),
+    )
 }
 
 #[tauri::command]
@@ -864,10 +857,7 @@ pub fn mcp_client_server_upsert(
 }
 
 #[tauri::command]
-pub fn mcp_client_server_remove(
-    state: State<'_, McpState>,
-    id: String,
-) -> CommandResult<McpView> {
+pub fn mcp_client_server_remove(state: State<'_, McpState>, id: String) -> CommandResult<McpView> {
     state.stored.write().client.servers.retain(|server| server.id != id);
     state.save()?;
     state.registry.disconnect(&id);
@@ -886,12 +876,8 @@ pub async fn mcp_client_server_probe(
 ) -> CommandResult<RemoteServer> {
     let (registry, spec) = {
         let stored = state.stored.read();
-        let spec = stored
-            .client
-            .active()
-            .find(|server| server.id == id)
-            .cloned()
-            .ok_or_else(|| {
+        let spec =
+            stored.client.active().find(|server| server.id == id).cloned().ok_or_else(|| {
                 WobuError::new(
                     Code::Invalid,
                     "Enable this server, and MCP clients overall, before Wobu will run it.",
@@ -917,14 +903,15 @@ pub async fn mcp_client_call(
     tool: String,
     arguments: Option<Value>,
 ) -> CommandResult<Value> {
-    let (registry, spec) = {
-        let stored = state.stored.read();
-        let spec =
-            stored.client.active().find(|server| server.id == id).cloned().ok_or_else(|| {
-                WobuError::new(Code::Invalid, "That MCP server is not enabled.")
-            })?;
-        (Arc::clone(&state.registry), spec)
-    };
+    let (registry, spec) =
+        {
+            let stored = state.stored.read();
+            let spec =
+                stored.client.active().find(|server| server.id == id).cloned().ok_or_else(
+                    || WobuError::new(Code::Invalid, "That MCP server is not enabled."),
+                )?;
+            (Arc::clone(&state.registry), spec)
+        };
     registry
         .call(&spec, &tool, arguments.unwrap_or_else(|| json!({})))
         .await
@@ -1026,7 +1013,10 @@ mod tests {
         node.tags = vec!["draft".into()];
         node.attributes.insert("age".into(), json!(31));
 
-        apply_patch(&mut node, &NodePatch { summary: Some("A smuggler.".into()), ..NodePatch::default() });
+        apply_patch(
+            &mut node,
+            &NodePatch { summary: Some("A smuggler.".into()), ..NodePatch::default() },
+        );
 
         assert_eq!(node.summary, "A smuggler.");
         assert_eq!(node.name, "Kael", "a patch without a name renamed the node");

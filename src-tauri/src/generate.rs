@@ -2371,11 +2371,15 @@ fn plan_batch(input: BatchPlan<'_>) -> CommandResult<PlannedBatch> {
                 })?,
             );
         }
-        let request =
-            ImageRequest::new(input.model.to_owned(), &compiled_prompt, cell.item.seed, &negotiated)
-                .with_negative(compiled.negative())
-                .with_references(references)
-                .with_loras(loras.weights.clone());
+        let request = ImageRequest::new(
+            input.model.to_owned(),
+            &compiled_prompt,
+            cell.item.seed,
+            &negotiated,
+        )
+        .with_negative(compiled.negative())
+        .with_references(references)
+        .with_loras(loras.weights.clone());
         plans.push(PlannedImage {
             request,
             cost_usd_micros,
@@ -3972,10 +3976,8 @@ mod tests {
     fn a_variant_grid_varies_one_axis_and_records_it_per_cell() {
         let world = PlanWorld::new();
         let mut request = world.request("character_sheet", 12);
-        request.grid = Some(VariantGrid::FragmentWeight {
-            node_id: world.kael,
-            values: vec![0.25, 0.75],
-        });
+        request.grid =
+            Some(VariantGrid::FragmentWeight { node_id: world.kael, values: vec![0.25, 0.75] });
         let planned = world.plan(request).unwrap();
 
         assert_eq!(planned.plans.len(), 2);
