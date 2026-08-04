@@ -161,8 +161,11 @@ describe('Enhance shortcut', () => {
   it('does not Enhance when the visible action is unavailable on a read-only project', async () => {
     renderEditor(vi.fn(), true)
     await screen.findByDisplayValue('Kael Vantris')
-    expect(screen.getByRole('button', { name: 'Enhance' })).toBeDisabled()
-
+    // Refused rather than `disabled`, so the reason can be read (#129). Both
+    // routes to it — the button and the chord — still do nothing.
+    const enhance = screen.getByRole('button', { name: 'Enhance' })
+    expect(enhance).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(enhance)
     fireEvent.keyDown(window, { key: 'e', ctrlKey: true })
 
     expect(h.invoke).not.toHaveBeenCalledWith('enhance_start', expect.anything())

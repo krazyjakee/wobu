@@ -134,6 +134,25 @@ function promptText(): HTMLElement {
   return chan.querySelector('.prompt-text') as HTMLElement
 }
 
+/**
+ * A run of the prompt, found by the attribution it carries.
+ *
+ * `data-attribution` rather than the `title` this used to read: the attribution
+ * is a real tooltip now (#129), so it is only in the accessible tree while one
+ * is open — but the string itself is on the run at all times, which is what
+ * makes "colour is never the only carrier" true rather than conditional.
+ */
+function fragment(attribution: string, within: ParentNode = document): HTMLElement {
+  const found = within.querySelector(`[data-attribution="${attribution}"]`)
+  if (!found) throw new Error(`no prompt run attributed to ${attribution}`)
+  return found as HTMLElement
+}
+
+async function findFragment(attribution: string): Promise<HTMLElement> {
+  await waitFor(() => fragment(attribution))
+  return fragment(attribution)
+}
+
 describe('the compiled prompt', () => {
   it('shows the string the backend compiled, not a reassembly of its spans', async () => {
     answer = () => compiled({ prompt: 'ink wash, tall and stooped', spans: [style, frag()] })
@@ -152,9 +171,9 @@ describe('the compiled prompt', () => {
     answer = () => compiled({ prompt: 'ink wash, tall and stooped', spans: [style, frag()] })
     show()
 
-    const run = await screen.findByTitle('Style · Ashfall Style · medium — weight 0.80')
+    const run = await findFragment('Style · Ashfall Style · medium — weight 0.80')
     expect(run.textContent).toBe('ink wash')
-    expect(screen.getByTitle('Subject · Kael · silhouette — weight 1.00')).toBeTruthy()
+    expect(fragment('Subject · Kael · silhouette — weight 1.00')).toBeTruthy()
 
     fireEvent.mouseEnter(run)
     expect(screen.getByText(/Style · Ashfall Style · medium — weight 0\.80/)).toBeTruthy()
@@ -181,12 +200,12 @@ describe('the compiled prompt', () => {
     answer = () => compiled({ prompt: 'ink wash, full body', spans: [style, shot] })
     show()
 
-    fireEvent.click(await screen.findByTitle('Style · Ashfall Style · medium — weight 0.80'))
+    fireEvent.click(await findFragment('Style · Ashfall Style · medium — weight 0.80'))
     expect(jump).toHaveBeenCalledWith('style-guide')
 
     // The Shot layer's text comes from the output preset, so there is nothing to
     // open. A link that goes nowhere is worse than no link.
-    const framing = screen.getByTitle('Shot · Character sheet · framing — weight 1.00')
+    const framing = fragment('Shot · Character sheet · framing — weight 1.00')
     expect(framing.getAttribute('role')).toBeNull()
     fireEvent.click(framing)
     expect(jump).toHaveBeenCalledTimes(1)
@@ -200,9 +219,7 @@ describe('the compiled prompt', () => {
     show()
 
     const negative = (await screen.findByText('Negative')).closest('.prompt-chan') as HTMLElement
-    expect(within(negative).getByTitle('World · Kael · avoid — weight 1.00').textContent).toBe(
-      'blurry',
-    )
+    expect(fragment('World · Kael · avoid — weight 1.00', negative).textContent).toBe('blurry')
     // And the negative's words stay out of the positive prompt.
     expect(promptText().textContent).toBe('ink wash')
   })
@@ -262,7 +279,7 @@ describe('nothing is hidden', () => {
       })
     show()
 
-    await screen.findByTitle('Style · Ashfall Style · medium — weight 0.80')
+    await findFragment('Style · Ashfall Style · medium — weight 0.80')
     expect(document.body.textContent).not.toContain('her mother')
     expect(screen.queryByText('Turned down')).toBeNull()
   })
@@ -350,7 +367,7 @@ describe('living updates', () => {
     }
 
     const view = show({ options: { sliders: [{ nodeId: 'style-guide', value: 0.8 }] } })
-    fireEvent.mouseEnter(await screen.findByTitle(/Ashfall Style · medium — weight 0\.80/))
+    fireEvent.mouseEnter(await findFragment('Style · Ashfall Style · medium — weight 0.80'))
     expect(screen.getByText(/weight 0\.80/)).toBeTruthy()
 
     view.again({ sliders: [{ nodeId: 'style-guide', value: 0.2 }] })

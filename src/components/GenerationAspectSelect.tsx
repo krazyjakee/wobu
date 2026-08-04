@@ -28,7 +28,11 @@ export function GenerationAspectSelect({
       value={value}
       options={options}
       onChange={onChange}
-      disabled={!choices.length}
+      disabledReason={
+        choices.length
+          ? null
+          : 'The image backend has not said which aspect ratios it accepts. Check the backend is connected in Settings.'
+      }
       placeholder="No aspects offered"
     />
   )

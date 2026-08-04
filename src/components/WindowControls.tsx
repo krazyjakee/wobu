@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
+import { IconButton } from './Tooltip'
 import {
   closeWindow,
   isMaximized,
@@ -30,21 +31,28 @@ export function WindowControls() {
     }
   }, [])
 
+  // `placement="bottom"`: these sit in the title bar, and a tooltip above them
+  // would be off the top of the window rather than under the pointer.
   return (
     <div className="wctl">
-      <button onClick={() => void minimizeWindow()} title="Minimise" aria-label="Minimise">
+      <IconButton label="Minimise" placement="bottom" onClick={() => void minimizeWindow()}>
         <Icon name="win-min" />
-      </button>
-      <button
+      </IconButton>
+      <IconButton
+        label={max ? 'Restore' : 'Maximise'}
+        placement="bottom"
         onClick={() => void toggleMaximizeWindow()}
-        title={max ? 'Restore' : 'Maximise'}
-        aria-label={max ? 'Restore' : 'Maximise'}
       >
         <Icon name={max ? 'win-restore' : 'win-max'} />
-      </button>
-      <button className="close" onClick={() => void closeWindow()} title="Close" aria-label="Close">
+      </IconButton>
+      <IconButton
+        className="close"
+        label="Close"
+        placement="bottom"
+        onClick={() => void closeWindow()}
+      >
         <Icon name="x" />
-      </button>
+      </IconButton>
     </div>
   )
 }

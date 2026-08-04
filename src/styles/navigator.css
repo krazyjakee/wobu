@@ -145,8 +145,6 @@
    Transitions on hover and selection are safe and are used: they fire on a
    state change, never on mount, so scrolling costs nothing. */
 .group-h .ic {
-  width: 11px;
-  height: 11px;
   transition: transform var(--dur-1) var(--ease-in-out);
 }
 .group.open > .group-h .ic {

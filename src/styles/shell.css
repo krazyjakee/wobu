@@ -183,11 +183,6 @@
   background: var(--danger);
   color: var(--on-danger);
 }
-.wctl .ic {
-  width: 13px;
-  height: 13px;
-  stroke-width: 1.5;
-}
 
 /* ── mode rail ── */
 .rail {
@@ -245,33 +240,6 @@
     transform: scaleY(0.25);
   }
 }
-.rbtn::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 40px;
-  padding: 3px 7px;
-  font-size: 11px;
-  background: var(--tip-bg);
-  color: var(--tip-text);
-  border: 1px solid var(--border-str);
-  border-radius: 5px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  /* Fades out over `--dur-1` and in after a beat. The delay is the useful part:
-     the rail is a column of five buttons a hand often passes across on the way
-     somewhere else, and without it every crossing leaves a trail of labels. On
-     the way out there is no delay, so the label is gone the instant the pointer
-     is. */
-  transition: opacity var(--dur-1) var(--ease-out);
-  z-index: 20;
-}
-.rbtn:hover::after,
-.rbtn:focus-visible::after {
-  opacity: 1;
-  transition-delay: 320ms;
-}
-
 /* ── pane resizer ── */
 .resizer {
   position: absolute;

@@ -244,7 +244,16 @@ describe('AssetsMode', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Select reference asset readonly' }))
     const details = screen.getByRole('complementary', { name: 'Details for asset readonly' })
 
-    expect(within(details).getByRole('button', { name: 'Attach' })).toBeDisabled()
-    expect(within(details).getByRole('button', { name: 'Delete…' })).toBeDisabled()
+    // Refused, and able to say why: `aria-disabled` keeps both reachable so
+    // the read-only reason has somewhere to be read (#129).
+    for (const name of ['Attach', 'Delete…']) {
+      const button = within(details).getByRole('button', { name })
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(button)
+      fireEvent.focusIn(button)
+      expect(screen.getByRole('tooltip')).toHaveTextContent('read-only')
+      fireEvent.focusOut(button)
+    }
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_delete', expect.anything())
   })
 })

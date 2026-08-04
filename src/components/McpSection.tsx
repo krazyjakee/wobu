@@ -18,6 +18,14 @@ import {
 import { report, toast } from '../store/ui'
 import { ConfirmSheet } from './ConfirmSheet'
 import { Icon } from './Icon'
+import { TipButton } from './Tooltip'
+
+/**
+ * Every control in this pane is refused while a change is in flight, and this
+ * is what it says. `busy` is a *moment*, not a state the user has to fix, so
+ * the sentence says that rather than naming a precondition they cannot meet.
+ */
+const BUSY_REASON = 'Wait — an MCP change is still being written.'
 
 /**
  * Agent access, in the pane where somebody decides whether to have any.
@@ -222,17 +230,27 @@ export default function McpSection() {
             }
           />
           <div className="set-acts">
-            <button className="btn-mini" onClick={() => void reveal()} disabled={token !== null}>
+            <TipButton
+              className="btn-mini"
+              onClick={() => void reveal()}
+              disabledReason={token !== null ? 'The token is already on screen, above.' : null}
+              tip="Read the token out of the OS keychain and show it here"
+            >
               <Icon name="lock" size="sm" />
               Show token
-            </button>
-            <button className="btn-mini" onClick={() => void copyConfig()}>
+            </TipButton>
+            <TipButton
+              className="btn-mini"
+              onClick={() => void copyConfig()}
+              tip="Copy the address and token as a JSON block an MCP client will accept"
+            >
               <Icon name="copy" size="sm" />
               Copy connection details
-            </button>
-            <button
+            </TipButton>
+            <TipButton
               className="btn-mini"
-              disabled={busy}
+              disabledReason={busy ? BUSY_REASON : null}
+              tip="Replace the token. Anything already connected with the old one is cut off."
               onClick={() => {
                 setToken(null)
                 void run(mcpServerTokenRotate, 'Could not make a new MCP token')
@@ -240,7 +258,7 @@ export default function McpSection() {
             >
               <Icon name="refresh" size="sm" />
               New token
-            </button>
+            </TipButton>
           </div>
 
           <div className="set-row set-row-col">
@@ -504,24 +522,32 @@ function ClientServers({
           </code>
           {probed[server.id] && <span className="set-value">{probed[server.id]}</span>}
           <div className="set-acts">
-            <button
+            <TipButton
               className="btn-mini"
-              disabled={busy || !server.enabled}
+              disabledReason={
+                !server.enabled
+                  ? 'Switch this server on first — the check starts it and asks what it can do.'
+                  : busy
+                    ? BUSY_REASON
+                    : null
+              }
+              tip="Start the server once and report what it answered"
               onClick={() => void probe(server.id)}
             >
               <Icon name="refresh" size="sm" />
               Check it works
-            </button>
-            <button
+            </TipButton>
+            <TipButton
               className="btn-mini"
-              disabled={busy}
+              disabledReason={busy ? BUSY_REASON : null}
+              tip="Forget this server. The program it names is not touched."
               onClick={() =>
                 void run(() => mcpClientServerRemove(server.id), 'Could not remove that MCP server')
               }
             >
               <Icon name="trash" size="sm" />
               Remove
-            </button>
+            </TipButton>
           </div>
         </div>
       ))}
@@ -552,10 +578,21 @@ function ClientServers({
         />
       </div>
       <div className="set-acts">
-        <button className="btn-mini" disabled={busy || !command.trim()} onClick={add}>
+        <TipButton
+          className="btn-mini"
+          disabledReason={
+            !command.trim()
+              ? 'Fill in Command — the program Wobu would run to start this server.'
+              : busy
+                ? BUSY_REASON
+                : null
+          }
+          tip="Add the server, switched off"
+          onClick={add}
+        >
           <Icon name="plus" size="sm" />
           Add server
-        </button>
+        </TipButton>
       </div>
       <p className="set-note">
         A server is added switched off. Turn it on when you are ready for Wobu to run it.

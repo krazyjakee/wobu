@@ -5,6 +5,7 @@ import { useInfluenceStack, useNode } from '../../lib/queries'
 import { colorFor, labelFor, spriteFor, type KindIndex } from '../../lib/kinds'
 import { useUI, EDITOR_TABS, type EditorTab } from '../../store/ui'
 import { Icon } from '../Icon'
+import { TipButton, Tooltip } from '../Tooltip'
 import { modKey } from '../../lib/platform'
 import { NotesPane } from './NotesPane'
 import { RelationsPane } from './RelationsPane'
@@ -112,9 +113,11 @@ export function Editor({
           />
           <span className="badge">{labelFor(def, selected.kind)}</span>
           {selected.descriptionState === 'stale' && (
-            <span className="badge" title="notes changed since the last enhance">
-              stale
-            </span>
+            <Tooltip tip="Notes or an upstream influence changed since the last enhance, so the description below is older than what it was written from.">
+              <span className="badge" tabIndex={0}>
+                stale
+              </span>
+            </Tooltip>
           )}
         </div>
 
@@ -128,16 +131,17 @@ export function Editor({
                 const kind = layer.kind
                 const c = kind ? colorFor(kinds.get(kind), kind) : 'var(--text-faint)'
                 return (
-                  <button
+                  <TipButton
                     key={layer.nodeId}
                     className="chip"
                     style={{ color: c }}
                     onClick={() => onJump(layer.nodeId as string)}
-                    title={`Open ${layer.name}`}
+                    tip={`Open ${layer.name}`}
+                    placement="bottom"
                   >
                     <i />
                     <span style={{ color: 'var(--text-dim)' }}>{layer.name}</span>
-                  </button>
+                  </TipButton>
                 )
               })
             )}
@@ -146,17 +150,26 @@ export function Editor({
 
         <div className="ed-actions">
           <span className="col-tag-save">{saveLabel(autosave.status)}</span>
-          <button
+          {/* The read-only case is the one worth spelling out: Enhance is the
+              primary action of this pane, and "greyed out" on a share is the
+              question #129 was filed about. */}
+          <TipButton
             className="btn btn-ai"
-            disabled={enhanceDisabled}
-            title={
-              readOnly
-                ? 'This share is read-only, and Enhance writes to the node'
-                : enhance.complete
-                  ? 'Review the finished description before anything is written'
-                  : enhance.stopped
-                    ? 'Review the stopped local draft'
-                    : 'Turn notes and influences into reviewed canonical sections'
+            disabledReason={
+              !enhanceDisabled
+                ? null
+                : readOnly && !enhance.active
+                  ? 'This share is read-only and Enhance writes to the node. Open a writable copy to run it.'
+                  : enhance.starting
+                    ? 'The run is already starting.'
+                    : 'Open a node first — Enhance rewrites the node you are looking at.'
+            }
+            tip={
+              enhance.complete
+                ? 'Review the finished description before anything is written'
+                : enhance.stopped
+                  ? 'Review the stopped local draft'
+                  : 'Turn notes and influences into reviewed canonical sections'
             }
             onClick={triggerEnhance}
           >
@@ -170,21 +183,22 @@ export function Editor({
                   : enhance.stopped || enhance.failure || enhance.candidate
                     ? 'Review draft'
                     : 'Enhance'}
-          </button>
+          </TipButton>
         </div>
       </div>
 
       <div className="tabs">
         {EDITOR_TABS.map((t, i) => (
-          <button
+          <TipButton
             key={t}
             className={tab === t ? 'tab is-active' : 'tab'}
             aria-pressed={tab === t}
             onClick={() => setTab(t)}
-            title={`${modKey()}${i + 1}`}
+            tip={`${TAB_LABEL[t]} · ${modKey()}${i + 1}`}
+            placement="bottom"
           >
             {TAB_LABEL[t]}
-          </button>
+          </TipButton>
         ))}
       </div>
 

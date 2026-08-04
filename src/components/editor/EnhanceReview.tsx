@@ -6,6 +6,7 @@ import {
   sectionValuesEqual,
   type SectionMap,
 } from './structuredSections'
+import { Tooltip } from '../Tooltip'
 
 export function EnhanceReview({
   current,
@@ -228,8 +229,13 @@ function SectionPreview({
   if (sectionKey === 'palette') {
     return (
       <div className="enhance-palette">
+        {/* The swatch is the colour and the colour is a hex, which nobody can
+            read off a 14px square — so the value is a tooltip and the square is
+            focusable, rather than a `title` no keyboard reaches. */}
         {value.value.map((colour, index) => (
-          <span key={`${colour}-${index}`} style={{ backgroundColor: colour }} title={colour} />
+          <Tooltip key={`${colour}-${index}`} tip={colour}>
+            <span style={{ backgroundColor: colour }} role="img" aria-label={colour} tabIndex={0} />
+          </Tooltip>
         ))}
       </div>
     )

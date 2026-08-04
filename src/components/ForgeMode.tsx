@@ -16,6 +16,7 @@ import { Combobox } from './Combobox'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Inspector } from './Inspector'
 import { Modal } from './Modal'
+import { TipButton } from './Tooltip'
 import { useVirtualCardWindow } from './useVirtualCardWindow'
 
 const TILE_MIN = 230
@@ -205,16 +206,17 @@ function LoraCard({
           </div>
         )}
       </dl>
-      <button
+      {/* The precondition, not the refusal. `disabled` plus a `title` said the
+          reason to nobody: the attribute needs a pointer event the disabled
+          button never fires (#129). */}
+      <TipButton
         className="btn"
-        type="button"
         aria-label={`${action} LoRA for ${subject.name}`}
-        disabled={blocked}
-        title={disabledReason}
+        disabledReason={blocked ? (disabledReason ?? 'Training is already starting.') : null}
         onClick={() => void start()}
       >
         {active ? 'Training…' : train.isPending ? 'Starting…' : `${action} LoRA`}
-      </button>
+      </TipButton>
     </section>
   )
 }

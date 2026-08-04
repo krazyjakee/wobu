@@ -78,8 +78,11 @@ describe('EnhanceReview', () => {
 
     const signature = screen.getByRole('heading', { name: 'Signature details' }).closest('section')
     expect(signature).toHaveTextContent('unchanged')
-    expect(screen.getByTitle('#101820')).toBeInTheDocument()
-    expect(screen.getByTitle('#c2703a')).toBeInTheDocument()
+    // The hex is the swatch's accessible name as well as its tooltip: a 14px
+    // square is unreadable, and a `title` on it was reachable by neither a
+    // screen reader nor a keyboard (#129).
+    expect(screen.getByRole('img', { name: '#101820' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '#c2703a' })).toBeInTheDocument()
   })
 
   it('accepts only explicitly selected new sections over the current description', () => {

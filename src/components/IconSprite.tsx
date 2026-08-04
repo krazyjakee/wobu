@@ -1,33 +1,77 @@
 /**
  * Icon sprite, ported from prototype/index.html. Rendered once at the app root;
  * every <Icon> is a <use href="#i-…"> against it.
+ *
+ * ── how to add an icon (#128) ────────────────────────────────────────────────
+ *
+ * 1. **The grid is 24×24, and nothing else is.** Every glyph is authored in
+ *    those units and `<Icon>` maps them onto the 16px (or 14px, or 38px) box
+ *    with a `viewBox`. Coordinates outside 0–24 are cropped.
+ * 2. **Draw inside 3–21, and fill it.** That is the optical size the rest of
+ *    the set uses: `i-world`, `i-species` and `i-trash` all reach it. A glyph
+ *    that only spans 6–18 reads as a smaller icon sitting in a bigger hole,
+ *    even though its box is identical.
+ * 3. **Strokes only, no fills.** `.ic` sets `fill: none` and
+ *    `stroke: currentColor`, and `<Icon>` sets the stroke weight — so do not
+ *    write `stroke-width`, `fill` or a colour into a glyph. A shape is a closed
+ *    path (`z`), not a filled one, and a lone open stroke among closed shapes
+ *    is what made the old `i-library` read as a slash rather than a book.
+ * 4. **Round the ends.** `stroke-linecap` and `stroke-linejoin` are round for
+ *    the whole set; a glyph built from mitred corners will not match.
+ * 5. **One concept, one glyph, and one glyph, one concept.** Before adding an
+ *    id, check whether the concept already has one — and check the new drawing
+ *    is not a copy of an existing one under a new name. `i-assets` and
+ *    `i-image` were byte-identical, as were `i-prop` and `i-cube`, which meant
+ *    an unrecognised entity kind was indistinguishable from a prop.
+ * 6. **Names are concepts, not pictures.** `i-place`, not `i-map-pin`; the
+ *    backend's kind registry sends icon names, and `lib/kinds.ts` maps the
+ *    picture-words (`map-pin`, `globe`, `paw`) onto the concept ids.
  */
 export function IconSprite() {
   return (
     <svg style={{ display: 'none' }} xmlns="http://www.w3.org/2000/svg" aria-hidden>
       <defs>
+        {/* Two upright books and one leaning on them. The third was a bare
+            diagonal stroke, which among two closed rectangles read as a slash
+            through the icon rather than as a book. */}
         <g id="i-library">
-          <path d="M4 5h5v14H4zM11 5h4v14h-4zM17 6l3 12" />
+          <path d="M3.5 5h4.5v14H3.5zM9.5 5h4v14h-4z" />
+          <path d="M15.9 7.2l2.36-.42 2.09 11.82-2.36.42z" />
         </g>
+        {/* Recentred. A five-pointed star's bounding box is not its optical
+            centre, and this one was drawn from 3 to 18.1 in a 24 box — high and
+            small, so the rail's second button sat above the other three. */}
         <g id="i-forge">
-          <path d="M12 3l2.2 5.2 5.8.5-4.4 3.8 1.3 5.6L12 15.2 7.1 18.1l1.3-5.6L4 8.7l5.8-.5z" />
+          <path d="M12 3.2l2.29 6.04 6.46.32-5.04 4.05 1.7 6.23L12 16.3l-5.41 3.54 1.7-6.23L3.25 9.56l6.46-.32z" />
         </g>
+        {/* A stack of framed pictures, not one picture: this was byte-identical
+            to `i-image`, so the Assets *mode* and a single image asset were the
+            same glyph in the same rail. */}
         <g id="i-assets">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <circle cx="8.5" cy="9.5" r="1.6" />
-          <path d="M21 16l-5-5-9 9" />
+          <rect x="8" y="3" width="13" height="11" rx="2" />
+          <circle cx="12" cy="7" r="1.3" />
+          <path d="M21 11.4l-3.5-3.4-4.5 4.4" />
+          <path d="M16 17.5a2.5 2.5 0 01-2.5 2.5h-8A2.5 2.5 0 013 17.5V9" />
         </g>
+        {/* Brought inside 3–21. The spokes reached 2 and 22, which made the
+            rail's Settings button visibly larger than the three above it while
+            every box in the rail was the same size. */}
         <g id="i-settings">
           <circle cx="12" cy="12" r="3" />
-          <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+          <path d="M12 3v2.5M12 18.5V21M5.2 5.2L7 7M17 17l1.8 1.8M3 12h2.5M18.5 12H21M5.2 18.8L7 17M17 7l1.8-1.8" />
         </g>
         <g id="i-search">
           <circle cx="11" cy="11" r="7" />
           <path d="M20 20l-3.5-3.5" />
         </g>
+        {/* A brush. This was a two-plane stack — the top half of `i-layers`
+            drawn identically — so the Style *kind* and the influence-layer
+            legend beside it were near enough the same glyph to swap. `style`
+            here means art direction, which is what the backend's `palette`
+            alias already assumed. */}
         <g id="i-style">
-          <path d="M12 3l9 5-9 5-9-5z" />
-          <path d="M3 13l9 5 9-5" />
+          <path d="M3.4 20.6c0-3.1 1.6-4.7 4.2-4.7s3.3 2 3.3 3.9a1 1 0 01-1 1z" />
+          <path d="M8.4 15.6L18 5.9a2.1 2.1 0 013 3L11.4 18.6" />
         </g>
         <g id="i-world">
           <circle cx="12" cy="12" r="9" />
@@ -37,10 +81,12 @@ export function IconSprite() {
           <path d="M7 3c0 6 10 6 10 12M17 3c0 6-10 6-10 12M7 21c0-2 10-2 10 0" />
           <path d="M8.5 8h7M8.5 13h7" />
         </g>
+        {/* Shifted 1.5 right. The whole group sat left of centre in its box, so
+            a culture row's icon did not line up with the species row above it. */}
         <g id="i-culture">
-          <circle cx="9" cy="8" r="3" />
-          <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-          <path d="M16 5.5a3 3 0 010 5.6M18 20c0-2.6-1-4.5-2.5-5.6" />
+          <circle cx="10.5" cy="8" r="3" />
+          <path d="M4.5 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+          <path d="M17.5 5.5a3 3 0 010 5.6M19.5 20c0-2.6-1-4.5-2.5-5.6" />
         </g>
         <g id="i-place">
           <path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z" />
@@ -55,9 +101,12 @@ export function IconSprite() {
           <path d="M6 8.5L4.5 4l4 2.2M18 8.5L19.5 4l-4 2.2" />
           <path d="M9.5 13.5h.01M14.5 13.5h.01M4 15v4M20 15v4" />
         </g>
+        {/* A crate. Byte-identical to `i-cube` before this, and `i-cube` is the
+            glyph an *unrecognised* entity kind falls back to — so a prop and a
+            kind the frontend had never heard of looked the same. */}
         <g id="i-prop">
-          <path d="M12 2.8l8 4.4v9.6l-8 4.4-8-4.4V7.2z" />
-          <path d="M4 7.2l8 4.4 8-4.4M12 11.6V21" />
+          <rect x="3.5" y="5.5" width="17" height="14" rx="2" />
+          <path d="M3.5 10h17M9.75 14h4.5" />
         </g>
         <g id="i-env">
           <path d="M3 18l5.5-7 4 5 3-3.6L21 18z" />
@@ -141,8 +190,11 @@ export function IconSprite() {
           <circle cx="8.5" cy="9.5" r="1.6" />
           <path d="M21 16l-5-5-9 9" />
         </g>
+        {/* Narrower than `i-minus`, which it was an exact copy of. A window
+            control and an arithmetic operator are not the same concept, and the
+            three window glyphs read as a set at this width. */}
         <g id="i-win-min">
-          <path d="M5 12h14" />
+          <path d="M7 12h10" />
         </g>
         <g id="i-win-max">
           <rect x="5" y="5" width="14" height="14" rx="1.5" />

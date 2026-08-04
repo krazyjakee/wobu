@@ -156,7 +156,12 @@ describe('the write controls, on a read-only folder', () => {
     // would put a Create button in front of the user on a folder that cannot
     // take one.
     await open(true)
-    expect(button('New entity').disabled).toBe(true)
+    // Refused rather than `disabled`, so that it can be asked why (#129) — the
+    // guarantee that matters is that activating it does nothing, which the next
+    // three lines check by every route there is.
+    expect(button('New entity')).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(button('New entity'))
+    expect(screen.queryByRole('dialog', { name: 'New node' })).toBeNull()
 
     fireEvent.keyDown(window, { key: 'n', metaKey: true })
     fireEvent.contextMenu(button(/Characters/))
@@ -187,8 +192,15 @@ describe('the write controls, on a read-only folder', () => {
 
     const menu = within(screen.getByRole('menu'))
     for (const label of [/New character/, 'Duplicate', 'Delete']) {
-      expect((menu.getByRole('menuitem', { name: label }) as HTMLButtonElement).disabled).toBe(true)
+      const item = menu.getByRole('menuitem', { name: label })
+      expect(item).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(item)
     }
+    // Refused, and — unlike a `disabled` menu item — still reachable, so the
+    // reader can be told the folder is read-only rather than left guessing.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.focusIn(menu.getByRole('menuitem', { name: 'Delete' }))
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/read-only/)
   })
 
   it('does not let a row be dragged somewhere else', async () => {
@@ -211,7 +223,12 @@ describe('the write controls, on a read-only folder', () => {
     // other edit — and the reason is what this asserts, not the disabling.
     await open(true)
     fireEvent.click(row('Kael'))
-    expect(button(/Enhance/).title).toContain('read-only')
+    const enhance = button(/Enhance/)
+    expect(enhance).toHaveAttribute('aria-disabled', 'true')
+    // The reason is a real tooltip now, reachable by the keyboard rather than
+    // by resting a mouse on a control the platform had stopped tracking (#129).
+    fireEvent.focusIn(enhance)
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/read-only/)
   })
 })
 

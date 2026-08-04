@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useUI, type Banner } from '../store/ui'
 import { PRESENCE_BANNER } from '../lib/presence'
 import { Icon } from './Icon'
+import { IconButton } from './Tooltip'
 
 /**
  * The glyph for a code, falling back to the padlock.
@@ -71,9 +72,15 @@ function BannerRow({ banner, onDismiss }: { banner: Banner; onDismiss: () => voi
         </button>
       )}
       {!banner.sticky && (
-        <button className="banner-x" onClick={onDismiss} aria-label="Dismiss">
+        <IconButton
+          className="banner-x"
+          label="Dismiss"
+          tip="Hide this banner. The condition it reports is unchanged and it comes back if it happens again."
+          placement="left"
+          onClick={onDismiss}
+        >
           <Icon name="x" size="sm" />
-        </button>
+        </IconButton>
       )}
     </div>
   )

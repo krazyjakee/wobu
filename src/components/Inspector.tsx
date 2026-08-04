@@ -30,6 +30,7 @@ import { NodeThumbnail } from './AssetMedia'
 import { Combobox } from './Combobox'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Icon } from './Icon'
+import { TipButton, Tooltip } from './Tooltip'
 import { PromptBox } from './inspector/PromptBox'
 
 /** The one axis a batch may vary, in the order the panel reads: off, outwards. */
@@ -388,6 +389,31 @@ function InspectorSession({
     imageReport.isPlaceholderData
   useActionShortcut('generate', !generateDisabled, () => void generate())
 
+  /*
+   * Why Generate is refused, in the order the user can act on.
+   *
+   * Generate is the primary action of the whole application and it has eight
+   * separate preconditions, any of which greys it out identically. A user who
+   * has met one of the middle three — a spend cap, a grid axis that clashes
+   * with the preset's views, an aspect the provider has not confirmed — cannot
+   * work out which from looking, because looking is all `disabled` allows.
+   */
+  const generateReason = !generateDisabled
+    ? null
+    : !selected
+      ? 'Select an entity first — a generation is a picture of something.'
+      : project.readOnly
+        ? 'This project is open read-only, and a generation writes its results into it.'
+        : generating
+          ? 'This batch is already being queued.'
+          : !chosenPreset
+            ? 'Choose a shot preset.'
+            : costBlocked
+              ? 'This batch would go past the spending cap left on this project. Raise the cap in Settings, or generate fewer images.'
+              : gridBlocked
+                ? 'A grid axis and a preset that already fixes its views cannot both decide the frames. Set the axis back to none, or pick a preset without views.'
+                : 'Waiting for the image backend to say what it accepts. Check it is connected in Settings.'
+
   const inspector = (
     <>
       <aside className="insp">
@@ -686,14 +712,19 @@ function InspectorSession({
                   </button>
                 </div>
               )}
-              <small title={`Pricing checked ${paidEstimate.checkedAt}`}>
-                Indicative output price; input tokens and optional search charges are not included.
-              </small>
+              <Tooltip tip={`Pricing checked ${paidEstimate.checkedAt}`}>
+                <small tabIndex={0}>
+                  Indicative output price; input tokens and optional search charges are not
+                  included.
+                </small>
+              </Tooltip>
             </div>
           )}
-          <button
+          <TipButton
             className="btn-primary shot-generate"
-            disabled={generateDisabled}
+            disabledReason={generateReason}
+            tip="Queue this batch against the connected image backend"
+            placement="top"
             onClick={() => void generate()}
           >
             <Icon name="image" size="sm" />
@@ -702,7 +733,7 @@ function InspectorSession({
               : paidEstimate
                 ? `Generate · est. ${formatUsd(paidEstimate.batchUsdMicros)}`
                 : 'Generate'}
-          </button>
+          </TipButton>
         </div>
       </aside>
       <PromptBox project={project} subject={selected} options={options} onJump={onJump} />

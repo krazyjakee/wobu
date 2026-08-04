@@ -1,0 +1,113 @@
+/* ── tooltips (#129) ───────────────────────────────────────────────────────
+
+   One tooltip in the application, portalled to <body> and positioned in
+   viewport coordinates by `lib/tooltip.ts`. Fixed rather than absolute because
+   the controls that need tooltips most — the navigator's row tools, the status
+   bar, the mode rail — all live inside panes that clip their own overflow, and
+   an absolutely positioned tooltip in any of them would be cut in half by the
+   pane it belongs to.
+
+   It never receives the pointer: `pointer-events: none` means moving toward the
+   bubble cannot make the control think the pointer left it, and cannot put a
+   surface between the user and the thing they were about to click. */
+
+.tip {
+  position: fixed;
+  z-index: 200;
+  max-width: 280px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-str);
+  border-radius: 5px;
+  background: var(--tip-bg);
+  color: var(--tip-text);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  box-shadow: var(--shadow-1);
+  pointer-events: none;
+  animation: tip-in var(--dur-2) var(--ease-out);
+}
+
+/* It arrives from the side of the control it describes, by 3px — enough to say
+   which control without becoming something the eye has to wait for. */
+.tip-top {
+  animation-name: tip-in-top;
+}
+.tip-bottom {
+  animation-name: tip-in-bottom;
+}
+.tip-left {
+  animation-name: tip-in-left;
+}
+.tip-right {
+  animation-name: tip-in-right;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tip-in-top {
+  from {
+    opacity: 0;
+    translate: 0 3px;
+  }
+}
+@keyframes tip-in-bottom {
+  from {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+}
+@keyframes tip-in-left {
+  from {
+    opacity: 0;
+    translate: 3px 0;
+  }
+}
+@keyframes tip-in-right {
+  from {
+    opacity: 0;
+    translate: -3px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    animation: none;
+  }
+}
+
+/* ── a control that is refused rather than removed ──────────────────────────
+
+   `<TipButton disabledReason>` renders `aria-disabled` instead of `disabled`,
+   because a `disabled` button fires no pointer events and takes no focus, and
+   therefore cannot be asked why it is unavailable. It has to look refused
+   without the `:disabled` pseudo-class every existing rule keys on, so the same
+   treatment is restated here for the attribute.
+
+   Scoped to `button` on purpose: `aria-disabled` also appears on the option
+   rows inside `Combobox`, which are list items and style themselves. */
+button[aria-disabled='true'],
+input[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Truncated text becomes focusable exactly while it is hiding something
+   (`<Truncated>`), so the focus ring has to be worth looking at when it does. */
+.tip-clip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* The mode rail's own `::after` tooltip, replaced by the primitive above.
+   `shell.css` still carries `.rbtn::after { content: attr(data-tip) }`, which
+   with no `data-tip` left on the button would draw an empty bordered box on
+   hover. Neutralised here rather than there, because that stylesheet belongs to
+   another change in flight; the rule itself should go. */
+.rbtn::after {
+  content: none;
+}

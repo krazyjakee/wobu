@@ -18,6 +18,7 @@ import { useNodeThumbs } from '../../lib/nodeThumbs'
 import { useUI, report, toast } from '../../store/ui'
 import { NodeThumbnail } from '../AssetMedia'
 import { Icon } from '../Icon'
+import { IconButton, TipButton, Tooltip } from '../Tooltip'
 import { ContextMenu } from './ContextMenu'
 import { ConfirmSheet } from '../ConfirmSheet'
 import { BrokenFiles } from './BrokenFiles'
@@ -31,6 +32,17 @@ import {
 } from './navigatorRows'
 
 const DRAG_MIME = 'application/x-wobu-node'
+
+/**
+ * Why every writing control in the navigator is refused at once.
+ *
+ * Said in one place because a user who meets it on one button and then another
+ * should be told the same thing, and because it is a *precondition* — it names
+ * what would have to change for the button to work — rather than a restatement
+ * of the fact that the button does not work.
+ */
+const READ_ONLY_REASON =
+  'This project is open read-only: Wobu cannot write to the folder, so nothing can be created here. Check the folder permissions, or reopen a copy somewhere writable.'
 
 /**
  * A shared empty list, so a project with no favourites and no history hands the
@@ -284,9 +296,9 @@ export function Navigator({
           spellCheck={false}
         />
         {filter && (
-          <button className="clear" onClick={() => setFilter('')} aria-label="Clear filter">
+          <IconButton className="clear" label="Clear filter" onClick={() => setFilter('')}>
             <Icon name="x" size="sm" />
-          </button>
+          </IconButton>
         )}
       </div>
 
@@ -304,18 +316,22 @@ export function Navigator({
           <span className="nav-count">
             {filter ? `${list.shown} of ${nodes.length} shown` : `${nodes.length} entities`}
           </span>
-          <button
+          <TipButton
             className="nav-tool"
             onClick={collapseEverything}
-            disabled={groups.length === 0}
-            title={
+            disabledReason={
+              groups.length === 0
+                ? 'Nothing to collapse — the filter is narrowing this to a flat list.'
+                : null
+            }
+            tip={
               allClosed
                 ? 'Open every group and branch'
                 : 'Close every group, keeping what is open inside them'
             }
           >
             {allClosed ? 'Expand all' : 'Collapse all'}
-          </button>
+          </TipButton>
         </div>
       )}
 
@@ -324,32 +340,32 @@ export function Navigator({
           {pinned.map((n) => {
             const def = kinds.get(n.kind)
             return (
-              <button
-                key={n.id}
-                className={`node node-pin${selectedId === n.id ? ' is-sel' : ''}${dropId === n.id ? ' drop-target' : ''}`}
-                aria-current={selectedId === n.id ? 'true' : undefined}
-                onClick={() => select(n.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  e.currentTarget.focus()
-                  setCtx({ x: e.clientX, y: e.clientY, node: n, opener: e.currentTarget })
-                }}
-                title={n.summary || labelFor(def, n.kind)}
-              >
-                <NodeThumbnail
-                  path={pinnedThumbs.get(n.id)}
-                  fallback={
-                    <Icon
-                      name={spriteFor(def, n.kind)}
-                      size="sm"
-                      style={{ color: colorFor(def, n.kind) }}
-                    />
-                  }
-                />
-                <span className="nm">{n.name}</span>
-                <PeerDot who={editedElsewhere.get(n.id)} />
-                <StaleDot state={n.descriptionState} />
-              </button>
+              <Tooltip key={n.id} tip={n.summary || labelFor(def, n.kind)} placement="right">
+                <button
+                  className={`node node-pin${selectedId === n.id ? ' is-sel' : ''}${dropId === n.id ? ' drop-target' : ''}`}
+                  aria-current={selectedId === n.id ? 'true' : undefined}
+                  onClick={() => select(n.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    e.currentTarget.focus()
+                    setCtx({ x: e.clientX, y: e.clientY, node: n, opener: e.currentTarget })
+                  }}
+                >
+                  <NodeThumbnail
+                    path={pinnedThumbs.get(n.id)}
+                    fallback={
+                      <Icon
+                        name={spriteFor(def, n.kind)}
+                        size="sm"
+                        style={{ color: colorFor(def, n.kind) }}
+                      />
+                    }
+                  />
+                  <span className="nm">{n.name}</span>
+                  <PeerDot who={editedElsewhere.get(n.id)} />
+                  <StaleDot state={n.descriptionState} />
+                </button>
+              </Tooltip>
             )
           })}
         </div>
@@ -410,15 +426,31 @@ export function Navigator({
         />
       </div>
 
+      {/*
+        Read-only is the disabled state a user is most likely to meet and least
+        likely to understand: the button is simply grey, in a project that
+        opened normally. Both of these now say which of the two causes it is —
+        the folder's permissions, or someone else holding the write lock.
+      */}
       <div className="nav-actions">
-        <button className="nav-new" onClick={() => onNewNode(null, null)} disabled={readOnly}>
+        <TipButton
+          className="nav-new"
+          onClick={() => onNewNode(null, null)}
+          disabledReason={readOnly ? READ_ONLY_REASON : null}
+          tip="Write a new Markdown file into nodes/"
+        >
           <Icon name="plus" size="sm" />
           New entity
-        </button>
+        </TipButton>
         {onStyleTransfer && (
-          <button className="nav-import" onClick={onStyleTransfer} disabled={readOnly}>
+          <TipButton
+            className="nav-import"
+            onClick={onStyleTransfer}
+            disabledReason={readOnly ? READ_ONLY_REASON : null}
+            tip="Copy a style, or a whole branch, out of another project"
+          >
             Import style/subtree…
-          </button>
+          </TipButton>
         )}
       </div>
 
@@ -495,12 +527,9 @@ export function Navigator({
 function StaleDot({ state }: { state: NodeSummary['descriptionState'] }) {
   if (state !== 'stale') return null
   return (
-    <span
-      className="stale"
-      role="img"
-      aria-label="Description is out of date"
-      title="Notes or an upstream influence changed since this was enhanced"
-    />
+    <Tooltip tip="Notes or an upstream influence changed since this was enhanced">
+      <span className="stale" role="img" aria-label="Description is out of date" />
+    </Tooltip>
   )
 }
 
@@ -520,7 +549,9 @@ function StaleDot({ state }: { state: NodeSummary['descriptionState'] }) {
 function PeerDot({ who }: { who: string | undefined }) {
   if (!who) return null
   return (
-    <span className="peer" role="img" aria-label={editingTitle(who)} title={editingTitle(who)} />
+    <Tooltip tip={editingTitle(who)}>
+      <span className="peer" role="img" aria-label={editingTitle(who)} />
+    </Tooltip>
   )
 }
 
@@ -577,23 +608,25 @@ function NodeMenu({
       <div className="ctx-label" role="presentation">
         {labelFor(def, node.kind)}
       </div>
-      <button
+      <TipButton
         role="menuitem"
-        disabled={readOnly}
+        disabledReason={readOnly ? READ_ONLY_REASON : null}
+        placement="right"
         onClick={pick(() => onNewNode(node.kind, node.parentId))}
       >
         <Icon name="plus" size="sm" />
         New {labelFor(def, node.kind).toLowerCase()}
-      </button>
+      </TipButton>
       {def?.nests && (
-        <button
+        <TipButton
           role="menuitem"
-          disabled={readOnly}
+          disabledReason={readOnly ? READ_ONLY_REASON : null}
+          placement="right"
           onClick={pick(() => onNewNode(node.kind, node.id))}
         >
           <Icon name="plus" size="sm" />
           New child of {node.name}
-        </button>
+        </TipButton>
       )}
       <div className="ctx-sep" role="separator" />
       {/* Never disabled by `readOnly`: a favourite is this reader's shortcut,
@@ -604,23 +637,39 @@ function NodeMenu({
         {favourite ? 'Remove from favourites' : 'Add to favourites'}
       </button>
       <div className="ctx-sep" role="separator" />
-      <button
+      <TipButton
         role="menuitem"
-        disabled={readOnly || def?.singleton || busy}
+        placement="right"
+        disabledReason={
+          readOnly
+            ? READ_ONLY_REASON
+            : def?.singleton
+              ? `A world has one ${labelFor(def, node.kind).toLowerCase()}, so there is nothing to duplicate it into.`
+              : busy
+                ? 'Another change to this node is still being written.'
+                : null
+        }
         onClick={pick(onDuplicate)}
       >
         <Icon name="copy" size="sm" />
         Duplicate
-      </button>
-      <button
+      </TipButton>
+      <TipButton
         role="menuitem"
         className="danger"
-        disabled={readOnly || busy}
+        placement="right"
+        disabledReason={
+          readOnly
+            ? READ_ONLY_REASON
+            : busy
+              ? 'Another change to this node is still being written.'
+              : null
+        }
         onClick={pick(onDelete)}
       >
         <Icon name="trash" size="sm" />
         Delete
-      </button>
+      </TipButton>
     </>
   )
 }
@@ -963,74 +1012,91 @@ const NavigatorNodeRow = memo(function NavigatorNodeRow({
     .join(' ')
 
   return (
-    <button
-      className={cls}
-      aria-current={selected ? 'true' : undefined}
-      style={{ paddingLeft: 12 + tree.depth * 14 }}
-      onClick={() => onSelect(n.id)}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        e.currentTarget.focus()
-        onContext(e.clientX, e.clientY, n, e.currentTarget)
-      }}
-      draggable={!readOnly && inTree}
-      onDragStart={(e) => {
-        e.dataTransfer.setData(DRAG_MIME, n.id)
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart(n.id)
-      }}
-      onDragEnd={onDragEnd}
-      onDragOver={(e) => {
-        if (!inTree || !canDrop(n.id, n.kind)) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        setDropId(n.id)
-      }}
-      onDragLeave={() => setDropId(null)}
-      onDrop={(e) => {
-        if (!inTree || !canDrop(n.id, n.kind)) return
-        e.preventDefault()
-        onDropOn(n.id)
-      }}
-      title={n.summary || n.name}
-    >
-      {hasChildren ? (
-        <span
-          className={open ? 'twist open' : 'twist'}
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggle(n.id)
-          }}
-          role="presentation"
-        >
-          <Icon name="chev" size="sm" style={{ width: 11, height: 11 }} />
-        </span>
-      ) : (
-        <span className="twist" />
-      )}
-      <NodeThumbnail
-        path={thumb}
-        fallback={
-          <Icon name={spriteFor(def, n.kind)} size="sm" style={{ color: colorFor(def, n.kind) }} />
-        }
-      />
-      <span className="nm">{n.name}</span>
-      {/* Invisible until hovered unless it is on, so a thousand rows do not
+    <Tooltip tip={n.summary || null} placement="right">
+      <button
+        className={cls}
+        aria-current={selected ? 'true' : undefined}
+        style={{ paddingLeft: 12 + tree.depth * 14 }}
+        onClick={() => onSelect(n.id)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          e.currentTarget.focus()
+          onContext(e.clientX, e.clientY, n, e.currentTarget)
+        }}
+        draggable={!readOnly && inTree}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(DRAG_MIME, n.id)
+          e.dataTransfer.effectAllowed = 'move'
+          onDragStart(n.id)
+        }}
+        onDragEnd={onDragEnd}
+        onDragOver={(e) => {
+          if (!inTree || !canDrop(n.id, n.kind)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          setDropId(n.id)
+        }}
+        onDragLeave={() => setDropId(null)}
+        onDrop={(e) => {
+          if (!inTree || !canDrop(n.id, n.kind)) return
+          e.preventDefault()
+          onDropOn(n.id)
+        }}
+      >
+        {hasChildren ? (
+          <span
+            className={open ? 'twist open' : 'twist'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle(n.id)
+            }}
+            role="presentation"
+          >
+            {/* Sized by the class, not by a literal: the 11px here was one of the
+              hand-tuned compensations for the sprite being drawn at 150% and
+              cropped, which the `viewBox` in `Icon.tsx` fixed (#128). */}
+            <Icon name="chev" size="sm" />
+          </span>
+        ) : (
+          <span className="twist" />
+        )}
+        <NodeThumbnail
+          path={thumb}
+          fallback={
+            <Icon
+              name={spriteFor(def, n.kind)}
+              size="sm"
+              style={{ color: colorFor(def, n.kind) }}
+            />
+          }
+        />
+        <span className="nm">{n.name}</span>
+        {/* Invisible until hovered unless it is on, so a thousand rows do not
           read as a thousand stars, and the way to make one is still findable
           without opening a menu to look for it. Not a `<button>`, for the same
           reason the twist beside it is not one: the row itself is the button,
-          and the keyboard route to both is the row's context menu. */}
-      <span
-        className={favourite ? 'fav star is-on' : 'fav star'}
-        aria-hidden
-        title={favourite ? `Remove ${n.name} from favourites` : `Add ${n.name} to favourites`}
-        onClick={(e) => {
-          e.stopPropagation()
-          onFavourite(n.id)
-        }}
-      />
-      <PeerDot who={who} />
-      <StaleDot state={n.descriptionState} />
-    </button>
+          and the keyboard route to both is the row's context menu.
+
+          Which is also why this is the one control in the sweep whose tooltip
+          is hover-only. A nested button inside the row button would be invalid,
+          and giving the star its own tab stop would put two of them on every
+          one of a thousand rows. The context menu is the keyboard route, and it
+          says the same words. */}
+        <Tooltip
+          tip={favourite ? `Remove ${n.name} from favourites` : `Add ${n.name} to favourites`}
+        >
+          <span
+            className={favourite ? 'fav star is-on' : 'fav star'}
+            aria-hidden
+            onClick={(e) => {
+              e.stopPropagation()
+              onFavourite(n.id)
+            }}
+          />
+        </Tooltip>
+        <PeerDot who={who} />
+        <StaleDot state={n.descriptionState} />
+      </button>
+    </Tooltip>
   )
 })

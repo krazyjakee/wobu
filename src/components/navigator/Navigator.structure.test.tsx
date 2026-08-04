@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NodeSummary } from '../../lib/api'
 import { useFavourites } from '../../lib/favourites'
@@ -131,15 +131,25 @@ describe('navigator structure at scale', () => {
   })
 })
 
+/**
+ * The star on a row.
+ *
+ * Found by class rather than by name: it is deliberately `aria-hidden` and has
+ * no title of its own — the row is the button, a nested one would be invalid,
+ * and its tooltip is hover-only with the row's context menu as the keyboard
+ * route. See the comment beside it in `Navigator.tsx`.
+ */
+function starOn(name: string): HTMLElement {
+  const row = screen.getAllByRole('button', { name })[0] as HTMLElement
+  const star = row.querySelector('.fav.star')
+  if (!star) throw new Error(`no star on the row for ${name}`)
+  return star as HTMLElement
+}
+
 describe('navigator favourites and recents', () => {
   it('keeps a starred node at the top and lets the star take it back off', () => {
     const view = draw(world(12))
-    const star = () =>
-      within(screen.getAllByRole('button', { name: 'C2' })[0] as HTMLElement).getByTitle(
-        /favourites$/,
-      )
-
-    fireEvent.click(star())
+    fireEvent.click(starOn('C2'))
 
     expect(bandLabels(view)).toEqual(['Favourites'])
     // The shortcut and the row it points at are both on screen, and the
@@ -148,7 +158,7 @@ describe('navigator favourites and recents', () => {
     expect(view.container.querySelectorAll('.node-shortcut')).toHaveLength(1)
     expect(useFavourites.getState().byProject['/project']).toEqual(['n-2'])
 
-    fireEvent.click(star())
+    fireEvent.click(starOn('C2'))
     expect(bandLabels(view)).toEqual([])
     expect(useFavourites.getState().byProject['/project']).toEqual([])
   })
@@ -172,11 +182,7 @@ describe('navigator favourites and recents', () => {
     // Starring is not a ranking. A list that reshuffles under the reader is one
     // they have to re-read every time they add to it.
     const view = draw(world(12))
-    for (const name of ['C2', 'A0', 'B1']) {
-      fireEvent.click(
-        within(screen.getAllByRole('button', { name })[0] as HTMLElement).getByTitle(/favourites$/),
-      )
-    }
+    for (const name of ['C2', 'A0', 'B1']) fireEvent.click(starOn(name))
     expect(rowNames(view).slice(0, 3)).toEqual(['A0', 'B1', 'C2'])
   })
 

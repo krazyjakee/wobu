@@ -6,6 +6,7 @@ import * as api from '../../lib/api'
 import type { MeshOptions, QueueSnapshot, WobuNode } from '../../lib/api'
 import { useAssetThumb } from '../../lib/queries'
 import { report, toast } from '../../store/ui'
+import { TipButton } from '../Tooltip'
 
 /**
  * The review-and-reconstruct half of Concept 3D (#110).
@@ -322,21 +323,22 @@ export function TurnaroundReview({
           </button>
         </div>
       ) : (
-        <button
+        <TipButton
           className="btn btn-primary"
-          type="button"
-          disabled={blocked}
-          title={
-            readOnly
-              ? 'This project is read-only.'
-              : missingRequired.length
-                ? `Still missing: ${missingRequired.join(', ')}`
-                : undefined
+          disabledReason={
+            !blocked
+              ? null
+              : readOnly
+                ? 'This project is read-only, and a reconstruction writes a mesh into it.'
+                : missingRequired.length
+                  ? `A mesh needs every required view first. Still missing: ${missingRequired.join(', ')}.`
+                  : 'Wait for the views to finish.'
           }
+          tip="Send the approved views to the mesh backend"
           onClick={() => void reconstruct()}
         >
           {busy === 'reconstruct' ? 'Queuing…' : 'Reconstruct mesh'}
-        </button>
+        </TipButton>
       )}
 
       {failedJob && !meshJob && (

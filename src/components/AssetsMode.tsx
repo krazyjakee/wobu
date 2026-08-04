@@ -8,6 +8,7 @@ import { useUI } from '../store/ui'
 import { Combobox } from './Combobox'
 import { ConfirmSheet } from './ConfirmSheet'
 import { LazyAssetThumbnail } from './AssetMedia'
+import { TipButton } from './Tooltip'
 import { useVirtualCardWindow } from './useVirtualCardWindow'
 
 const KINDS: AssetKind[] = ['reference', 'generated', 'upload']
@@ -510,14 +511,24 @@ function AssetDetails({
             onChange={(next) => setRole(next as AssetRole)}
           />
         </label>
-        <button
+        <TipButton
           className="btn btn-primary"
-          type="button"
-          disabled={readOnly || !nodeId || alreadyAttached || linkAsset.isPending}
+          disabledReason={
+            readOnly
+              ? 'This project is open read-only, so nothing can be attached to it.'
+              : !nodeId
+                ? 'Choose the node this picture is a reference for.'
+                : alreadyAttached
+                  ? 'This asset is already attached to that node in that role.'
+                  : linkAsset.isPending
+                    ? 'The last attach is still being written.'
+                    : null
+          }
+          tip="Link this asset to the node as a generation reference"
           onClick={() => void attach()}
         >
           {linkAsset.isPending ? 'Attaching…' : alreadyAttached ? 'Already attached' : 'Attach'}
-        </button>
+        </TipButton>
         {error && <p className="asset-library-error inline-error">Attach failed: {error}</p>}
       </section>
 
@@ -525,9 +536,16 @@ function AssetDetails({
         <section className="asset-delete-offer">
           <h4>Delete orphan</h4>
           <p>Permanently removes the original and thumbnail. This cannot be undone.</p>
-          <button className="btn" type="button" disabled={readOnly} onClick={() => onDelete(asset)}>
+          <TipButton
+            className="btn"
+            disabledReason={
+              readOnly ? 'This project is open read-only, so nothing in it can be deleted.' : null
+            }
+            tip="Delete the original and its thumbnail from the project folder"
+            onClick={() => onDelete(asset)}
+          >
             Delete…
-          </button>
+          </TipButton>
         </section>
       ) : usageKnown ? (
         <p className="asset-delete-blocked">

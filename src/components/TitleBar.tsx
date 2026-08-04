@@ -6,6 +6,7 @@ import { useUI } from '../store/ui'
 import { reportProjectCloseFailure } from '../lib/projectClose'
 import { modKey } from '../lib/platform'
 import { Icon } from './Icon'
+import { IconButton, Tooltip } from './Tooltip'
 import { WindowControls } from './WindowControls'
 import { ContextMenu } from './navigator/ContextMenu'
 import { SharingSheet } from './SharingSheet'
@@ -91,10 +92,15 @@ export function TitleBar({
       </div>
 
       {project.readOnly && (
-        <span className="ro-badge" title="This project folder is not writable">
-          <Icon name="lock" size="sm" />
-          read-only
-        </span>
+        <Tooltip
+          tip="Wobu cannot write to this folder, so nothing here can be created, renamed or saved. Check the folder's permissions, or copy the project somewhere writable."
+          placement="bottom"
+        >
+          <span className="ro-badge" tabIndex={0}>
+            <Icon name="lock" size="sm" />
+            read-only
+          </span>
+        </Tooltip>
       )}
 
       <nav className="crumbs" data-tauri-drag-region>
@@ -122,9 +128,14 @@ export function TitleBar({
         Jump to…
         <kbd>{modKey()}K</kbd>
       </button>
-      <button className="ibtn" onClick={() => setMode('settings')} title="Settings">
+      <IconButton
+        className="ibtn"
+        label="Settings"
+        placement="bottom"
+        onClick={() => setMode('settings')}
+      >
         <Icon name="settings" />
-      </button>
+      </IconButton>
 
       <WindowControls />
 

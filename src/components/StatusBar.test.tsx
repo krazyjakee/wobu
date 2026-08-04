@@ -158,7 +158,12 @@ describe('backend and queue facts', () => {
 
   it('does not call a configured address connected when its probe failed', () => {
     open(null, { ...backend, health: { state: 'unavailable', detail: 'connection refused' } })
-    expect(screen.getByText('ComfyUI unavailable')).toHaveProperty('title', 'connection refused')
+    // The detail used to be a `title`, which nothing but a resting mouse could
+    // reach. It is a real tooltip now, so the assertion is that it opens (#129).
+    const health = screen.getByText('ComfyUI unavailable')
+    fireEvent.focusIn(health)
+    expect(screen.getByRole('tooltip')).toHaveTextContent('connection refused')
+    expect(health).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id)
     expect(screen.queryByText('ComfyUI connected')).toBeNull()
   })
 })

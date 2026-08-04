@@ -59,10 +59,6 @@
   border-radius: 8px;
   flex: none;
 }
-.ed-kind .ic {
-  width: 15px;
-  height: 15px;
-}
 .ed-sub {
   display: flex;
   align-items: center;

@@ -22,6 +22,7 @@ import {
 import type { PromptChannel } from '../../lib/prompt'
 import { report, toast } from '../../store/ui'
 import { Icon } from '../Icon'
+import { Tooltip } from '../Tooltip'
 
 /**
  * The compiled prompt, and the account of what did not make it into one.
@@ -42,9 +43,9 @@ import { Icon } from '../Icon'
  *   a browser would refuse to select through.
  * - **Colour is never the only carrier.** Layer colours sit close together by
  *   design (docs/03-ui-layout.md) and some readers cannot tell them apart at
- *   all, so every run also carries its attribution as a `title`, the hover
- *   readout says it in words, and "Show sources" turns the whole thing into a
- *   labelled list.
+ *   all, so every run also carries its attribution in a tooltip that focus
+ *   opens as well as hover (#129), the hover readout says it in words, and
+ *   "Show sources" turns the whole thing into a labelled list.
  * - **`moodboard_only` is not in here.** It is not in the prompt, so it is not
  *   in the box, and it is not in the drop report either — it was not dropped
  *   from anything. See `promptSegments` and `dropGroups`.
@@ -369,31 +370,38 @@ function Span({
   children: string
 }) {
   const linked = fragment.nodeId !== null
+  const attribution = `${fragmentLabel(fragment)} — weight ${formatWeight(fragment.weight)}`
   return (
-    <span
-      className={linked ? 'pfrag is-linked' : 'pfrag'}
-      style={{ ['--lc' as string]: layerColor(fragment.layer) } as CSSProperties}
-      title={`${fragmentLabel(fragment)} — weight ${formatWeight(fragment.weight)}`}
-      role={linked ? 'link' : undefined}
-      tabIndex={linked ? 0 : undefined}
-      onMouseEnter={() => onHover(fragment)}
-      onMouseLeave={() => onHover(null)}
-      onFocus={() => onHover(fragment)}
-      onBlur={() => onHover(null)}
-      onClick={linked ? () => onJump(fragment.nodeId) : undefined}
-      onKeyDown={
-        linked
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onJump(fragment.nodeId)
+    <Tooltip tip={attribution}>
+      <span
+        className={linked ? 'pfrag is-linked' : 'pfrag'}
+        style={{ ['--lc' as string]: layerColor(fragment.layer) } as CSSProperties}
+        // Where the run came from, on the run, always — not only while a
+        // tooltip is open. It is the one string that says which layer painted
+        // this word, and it has to survive a screenshot, a bug report and a
+        // reader who never hovers anything.
+        data-attribution={attribution}
+        role={linked ? 'link' : undefined}
+        tabIndex={linked ? 0 : undefined}
+        onMouseEnter={() => onHover(fragment)}
+        onMouseLeave={() => onHover(null)}
+        onFocus={() => onHover(fragment)}
+        onBlur={() => onHover(null)}
+        onClick={linked ? () => onJump(fragment.nodeId) : undefined}
+        onKeyDown={
+          linked
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onJump(fragment.nodeId)
+                }
               }
-            }
-          : undefined
-      }
-    >
-      {children}
-    </span>
+            : undefined
+        }
+      >
+        {children}
+      </span>
+    </Tooltip>
   )
 }
 

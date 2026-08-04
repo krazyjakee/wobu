@@ -13,6 +13,7 @@ import { sessionsText, sessionsTitle } from '../lib/presence'
 import { relativeTime } from '../lib/time'
 import { useUI } from '../store/ui'
 import { NotificationCentre } from './NotificationCentre'
+import { Tooltip, Truncated } from './Tooltip'
 
 /**
  * Honest by construction: every state here comes from a backend observation.
@@ -50,7 +51,11 @@ export function StatusBar({
     <footer className="status">
       <b>{project.name}</b>
       <span className="sep" />
-      <code title={project.path}>{project.path}</code>
+      {/* `.status code` caps this at 40vw and ellipsises the rest, so on a
+          narrow window the one line that says *which folder on disk* is the
+          line that gets cut. `<Truncated>` measures rather than assumes: the
+          tooltip and the tab stop both appear only while something is hidden. */}
+      <Truncated as="code" text={project.path} placement="top" />
       {project.onNetworkShare && (
         <>
           <span className="sep" />
@@ -90,7 +95,9 @@ export function StatusBar({
       {sessions && (
         <>
           <span className="presence" role="img" aria-label="Other sessions in this project" />
-          <span title={sessionsTitle(peers)}>{sessions}</span>
+          <Tooltip tip={sessionsTitle(peers)}>
+            <span tabIndex={0}>{sessions}</span>
+          </Tooltip>
           <span className="sep" />
         </>
       )}
@@ -105,7 +112,11 @@ export function StatusBar({
       <span className="sep" />
       {backend ? (
         <>
-          <span title={healthTitle(backend)}>{healthText(backend)}</span>
+          {/* Four words that stand for a probe result. The reason the probe
+              said that is the whole content, and it lived in a `title`. */}
+          <Tooltip tip={healthTitle(backend)}>
+            <span tabIndex={0}>{healthText(backend)}</span>
+          </Tooltip>
           {backend.image && <span>· {backend.image.model}</span>}
         </>
       ) : (
@@ -124,7 +135,11 @@ export function StatusBar({
           {backend.text.contextTokens && ` · ${contextText(backend.text.contextTokens)} ctx`}
         </span>
       )}
-      {generation && <span title={generation.label}>· ⏱ {elapsedText(generation.elapsedMs)}</span>}
+      {generation && (
+        <Tooltip tip={`Running: ${generation.label}`}>
+          <span tabIndex={0}>· ⏱ {elapsedText(generation.elapsedMs)}</span>
+        </Tooltip>
+      )}
       {/* The status bar is the one surface present in every mode, which is what
           makes it the right home for a record that has to outlive the pane the
           failure happened in (#142). */}

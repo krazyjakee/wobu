@@ -115,11 +115,17 @@ export function ContextMenu({
   )
 }
 
+/**
+ * The rows the arrow keys move between.
+ *
+ * `[disabled]` is skipped because the platform has already taken it out of the
+ * tab order and it can be neither hovered nor read. `aria-disabled` is *not*
+ * skipped, which is deliberate and is what APG asks for: a refused menu item
+ * that keeps its focus stop is one a keyboard user can land on and be told why
+ * it is refused (#129). Skipping it would hide the explanation from exactly the
+ * people who cannot hover to find it.
+ */
 function menuItems(menu: HTMLElement | null): HTMLElement[] {
   if (!menu) return []
-  return Array.from(
-    menu.querySelectorAll<HTMLElement>(
-      '[role="menuitem"]:not([disabled]):not([aria-disabled="true"])',
-    ),
-  )
+  return Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])'))
 }

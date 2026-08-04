@@ -2,6 +2,7 @@ import { ariaChord, formatChord } from '../lib/keys'
 import { bindingOf, useKeybindings, type CommandId } from '../store/keybindings'
 import { useUI, type Mode } from '../store/ui'
 import { Icon } from './Icon'
+import { IconButton } from './Tooltip'
 
 const MODES: { mode: Mode; icon: string; tip: string; command: CommandId }[] = [
   { mode: 'library', icon: 'library', tip: 'Library', command: 'mode.library' },
@@ -29,21 +30,28 @@ export function ModeRail() {
    * looking at the moment the shortcut would have helped. It is read from the
    * registry rather than written into the label, so a rebound key moves the
    * tooltip with it.
+   *
+   * The rail used to own the only tooltip in Wobu — a `data-tip` attribute and
+   * a `::after` in `shell.css` — which is why #129 exists: nothing else could
+   * have one without copying that pair. It now uses the shared primitive, so
+   * the tooltip reaches the keyboard, dismisses on Escape, and is not clipped
+   * by the rail it is drawn inside.
    */
   const button = (def: (typeof MODES)[number]) => {
     const chord = bindingOf(overrides, def.command)
     return (
-      <button
+      <IconButton
         key={def.mode}
         className={mode === def.mode ? 'rbtn is-active' : 'rbtn'}
-        data-tip={chord ? `${def.tip} · ${formatChord(chord)}` : def.tip}
+        label={def.tip}
+        tip={chord ? `${def.tip} · ${formatChord(chord)}` : def.tip}
+        placement="right"
         onClick={() => setMode(def.mode)}
-        aria-label={def.tip}
         aria-keyshortcuts={ariaChord(chord)}
         aria-current={mode === def.mode ? 'page' : undefined}
       >
         <Icon name={def.icon} />
-      </button>
+      </IconButton>
     )
   }
 

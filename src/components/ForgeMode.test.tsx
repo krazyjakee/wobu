@@ -332,7 +332,7 @@ describe('Forge mode', () => {
     )
     chooseOption('Variant grid', 'Vary seed')
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     fireEvent.click(generate)
     await waitFor(() =>
       expect(h.invoke).toHaveBeenCalledWith(
@@ -351,7 +351,7 @@ describe('Forge mode', () => {
   ])('queues Generate with %s-Enter from the Forge Inspector', async (_platform, modifier) => {
     renderForge()
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
 
     fireEvent.keyDown(window, { key: 'Enter', ...modifier })
 
@@ -372,7 +372,7 @@ describe('Forge mode', () => {
       </QueryClientProvider>,
     )
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
 
     fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
 
@@ -387,7 +387,7 @@ describe('Forge mode', () => {
   it('does not Generate while the shortcut originates in an editable control', async () => {
     renderForge()
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
 
     fireEvent.keyDown(screen.getByLabelText('Extra shot prompt'), {
       key: 'Enter',
@@ -400,7 +400,7 @@ describe('Forge mode', () => {
   it('does not Generate from a read-only project', async () => {
     renderForge({ ...project, readOnly: true })
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeDisabled())
+    await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
 
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
 
@@ -411,7 +411,7 @@ describe('Forge mode', () => {
     imageConfigured = false
     renderForge()
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeDisabled())
+    await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
 
     fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
 
@@ -422,7 +422,7 @@ describe('Forge mode', () => {
     paidGenerationBlocked = true
     renderForge()
     const generate = await screen.findByRole('button', { name: /^Generate · est/ })
-    await waitFor(() => expect(generate).toBeDisabled())
+    await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
 
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
 
@@ -436,7 +436,7 @@ describe('Forge mode', () => {
       spendStatusState = state
       renderForge()
       const generate = await screen.findByRole('button', { name: /^Generate · est/ })
-      await waitFor(() => expect(generate).toBeDisabled())
+      await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
 
       fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
 
@@ -447,12 +447,12 @@ describe('Forge mode', () => {
   it('does not Generate an invalid variant grid', async () => {
     renderForge()
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     chooseOption('Variant grid', 'Vary seed')
     fireEvent.change(screen.getByLabelText('Cell values · comma separated'), {
       target: { value: 'only-one' },
     })
-    await waitFor(() => expect(generate).toBeDisabled())
+    await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
 
     fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
 
@@ -485,7 +485,7 @@ describe('Forge mode', () => {
       ),
     ).toBeInTheDocument()
     const generate = screen.getByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     fireEvent.click(generate)
     await waitFor(() =>
       expect(h.invoke).toHaveBeenCalledWith(
@@ -503,7 +503,7 @@ describe('Forge mode', () => {
       </QueryClientProvider>,
     )
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     chooseOption('Variant grid', 'Vary aspect')
     expect(screen.getByLabelText('Cell values · comma separated')).toHaveValue('1:1, 3:2, 2:3')
 
@@ -515,7 +515,7 @@ describe('Forge mode', () => {
     expect(
       await screen.findByText('3:2 is not supported by the selected image backend.'),
     ).toBeInTheDocument()
-    expect(generate).toBeDisabled()
+    expect(generate).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(generate)
     expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
   })
@@ -534,14 +534,14 @@ describe('Forge mode', () => {
   it('debounces custom model capability probes and keeps queueing disabled while they settle', async () => {
     renderForge()
     const generate = await screen.findByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     h.invoke.mockClear()
 
     const model = screen.getByLabelText('Model')
     fireEvent.change(model, { target: { value: 'custom-a' } })
     fireEvent.change(model, { target: { value: 'custom-ab' } })
     fireEvent.change(model, { target: { value: 'custom-abc' } })
-    expect(generate).toBeDisabled()
+    expect(generate).toHaveAttribute('aria-disabled', 'true')
     expect(h.invoke).not.toHaveBeenCalledWith('image_generation_capabilities', expect.anything())
 
     await waitFor(
@@ -554,7 +554,7 @@ describe('Forge mode', () => {
     expect(
       h.invoke.mock.calls.filter(([command]) => command === 'image_generation_capabilities'),
     ).toHaveLength(1)
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
   })
 
   it('repairs a malformed saved aspect before the queue can receive it', async () => {
@@ -565,7 +565,7 @@ describe('Forge mode', () => {
       await screen.findByText('Malformed saved aspect wide please was replaced with 1:1.'),
     ).toBeInTheDocument()
     const generate = screen.getByRole('button', { name: 'Generate' })
-    await waitFor(() => expect(generate).toBeEnabled())
+    await waitFor(() => expect(generate).not.toHaveAttribute('aria-disabled'))
     fireEvent.click(generate)
     await waitFor(() =>
       expect(h.invoke).toHaveBeenCalledWith(
@@ -594,7 +594,9 @@ describe('Forge mode', () => {
       target: { value: 'Crossing the flooded market' },
     })
     const sceneAspect = screen.getByLabelText('Scene aspect')
-    await waitFor(() => expect(sceneAspect).toBeEnabled())
+    // Refused rather than `disabled` while the provider has not said which
+    // aspects it takes, so that hovering it says why (#129).
+    await waitFor(() => expect(sceneAspect).not.toHaveAttribute('aria-disabled'))
     chooseOption('Scene aspect', '3:2')
     const generateScene = screen.getByRole('button', { name: 'Generate scene' })
     await waitFor(() => expect(generateScene).toBeEnabled())
@@ -696,20 +698,33 @@ describe('Forge mode', () => {
       </QueryClientProvider>,
     )
 
+    /*
+     * Refused, and able to say so. The button carries `aria-disabled` rather
+     * than `disabled` (#129): a `disabled` button fires no pointer events, so
+     * the reason that used to sit in its `title` could never be read — which is
+     * the one moment the user needs it. The reason is asserted through the
+     * tooltip that now carries it, and the refusal through the click that does
+     * not reach the handler.
+     */
     const retrain = await screen.findByRole('button', { name: 'Re-train LoRA for Kael' })
-    expect(retrain).toBeDisabled()
-    expect(retrain).toHaveAttribute('title', 'Training is already active for this entity.')
+    expect(retrain).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.focusIn(retrain)
+    expect(screen.getByRole('tooltip')).toHaveTextContent(
+      'Training is already active for this entity.',
+    )
+    expect(retrain).toHaveAttribute('aria-describedby', screen.getByRole('tooltip').id)
+    fireEvent.click(retrain)
+    expect(h.invoke).not.toHaveBeenCalledWith('lora_train_start', expect.anything())
 
     view.rerender(
       <QueryClientProvider client={client}>
         <Harness openProject={{ ...project, readOnly: true }} />
       </QueryClientProvider>,
     )
-    expect(screen.getByRole('button', { name: 'Re-train LoRA for Kael' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Re-train LoRA for Kael' })).toHaveAttribute(
-      'title',
-      'This project is read-only.',
-    )
+    const refused = screen.getByRole('button', { name: 'Re-train LoRA for Kael' })
+    expect(refused).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.focusIn(refused)
+    expect(screen.getByRole('tooltip')).toHaveTextContent('This project is read-only.')
   })
 
   it('virtualizes receipts and compares selected originals side by side', async () => {

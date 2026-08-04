@@ -152,9 +152,12 @@ describe('the turnaround review', () => {
       missing: ['top'],
     })
     open()
+    // Refused with `aria-disabled` rather than `disabled`, so the reason is
+    // reachable by hover and by focus instead of being unreachable by both.
     const button = await screen.findByRole('button', { name: 'Reconstruct mesh' })
-    expect(button).toBeDisabled()
-    expect(button).toHaveAttribute('title', 'Still missing: top')
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.focusIn(button)
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Still missing: top')
     expect(screen.getByRole('status')).toHaveTextContent('Not rendered yet: top')
   })
 
@@ -164,14 +167,14 @@ describe('the turnaround review', () => {
     // spend ceiling to reserve. Consent is the only honest gate.
     open()
     const button = await screen.findByRole('button', { name: 'Reconstruct mesh' })
-    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('aria-disabled', 'true')
 
     fireEvent.click(screen.getByRole('checkbox', { name: /charges for every submitted job/ }))
     fireEvent.change(screen.getByLabelText('Face count'), { target: { value: '250000' } })
     fireEvent.change(screen.getByLabelText('Reconstruction mode'), {
       target: { value: 'Geometry' },
     })
-    expect(button).toBeEnabled()
+    expect(button).not.toHaveAttribute('aria-disabled')
     fireEvent.click(button)
 
     await waitFor(() => {
@@ -317,12 +320,18 @@ describe('the turnaround review', () => {
     open()
     expect(await screen.findByText(/missing its keys/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('checkbox', { name: /charges for every submitted job/ }))
-    expect(screen.getByRole('button', { name: 'Reconstruct mesh' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reconstruct mesh' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
   })
 
   it('refuses every control on a read-only project', async () => {
     open(emptyQueue, true)
     expect(await screen.findByRole('button', { name: 'Re-roll the back view' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Reconstruct mesh' })).toBeDisabled()
+    const mesh = screen.getByRole('button', { name: 'Reconstruct mesh' })
+    expect(mesh).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.focusIn(mesh)
+    expect(screen.getByRole('tooltip')).toHaveTextContent('read-only')
   })
 })

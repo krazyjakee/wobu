@@ -30,12 +30,21 @@ describe('ModeRail accessibility', () => {
     // so a rebound key does not leave a tooltip lying about it.
     const { rerender } = render(<ModeRail />)
     const forge = () => screen.getByRole('button', { name: 'Forge' })
-    expect(forge()).toHaveAttribute('data-tip', 'Forge · Ctrl+\\')
+    fireEvent.focusIn(forge())
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Forge · Ctrl+\\')
     expect(forge()).toHaveAttribute('aria-keyshortcuts', 'Control+\\')
 
     useKeybindings.getState().setBinding('mode.forge', 'Mod+G')
     rerender(<ModeRail />)
 
-    expect(forge()).toHaveAttribute('data-tip', 'Forge · Ctrl+G')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Forge · Ctrl+G')
+  })
+
+  it('keeps the mode name out of the tooltip alone', () => {
+    // The tooltip is a *description*. If it were the label, a rail with no
+    // pointer on it would be four unnamed buttons.
+    render(<ModeRail />)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Assets' })).toBeInTheDocument()
   })
 })

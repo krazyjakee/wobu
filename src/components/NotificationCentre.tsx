@@ -8,6 +8,7 @@ import {
 } from '../lib/notifications'
 import { relativeTime } from '../lib/time'
 import { Icon } from './Icon'
+import { IconButton, TipButton } from './Tooltip'
 
 /**
  * The reviewable half of the error surface — #142.
@@ -47,9 +48,8 @@ export function NotificationCentre() {
 
   return (
     <>
-      <button
+      <TipButton
         className={owed ? 'status-link notif-bell is-charged' : 'status-link notif-bell'}
-        type="button"
         aria-expanded={open}
         aria-label={
           unread === 0
@@ -58,10 +58,11 @@ export function NotificationCentre() {
               ? `Notifications, ${unread} unread including a billed failure`
               : `Notifications, ${unread} unread`
         }
+        tip={bellTip(entries.length, unread, owed)}
         onClick={() => setOpen(!open)}
       >
         · notifications{unread > 0 && <b className="notif-count">{unread}</b>}
-      </button>
+      </TipButton>
 
       {open && (
         <div
@@ -82,14 +83,13 @@ export function NotificationCentre() {
                 Clear all
               </button>
             )}
-            <button
+            <IconButton
               className="notif-x"
-              type="button"
-              aria-label="Close notifications"
+              label="Close notifications"
               onClick={() => setOpen(false)}
             >
               <Icon name="x" size="sm" />
-            </button>
+            </IconButton>
           </header>
 
           {entries.length === 0 ? (
@@ -110,6 +110,18 @@ export function NotificationCentre() {
   )
 }
 
+/**
+ * What the trigger says on hover, as opposed to what it says to a screen
+ * reader. The label is a count; this is what the count is *for*, which is the
+ * part nobody guesses from the word "notifications" in a status bar.
+ */
+function bellTip(total: number, unread: number, owed: boolean): string {
+  if (owed) return 'Something failed after it had already been billed. Open this and read it.'
+  if (unread > 0) return `${unread} unread. Failures and rejected saves are kept here.`
+  if (total > 0) return `Nothing new. ${total} kept, oldest last.`
+  return 'Failed generations, rejected saves and anything that cost money are kept here.'
+}
+
 function NotificationRow({ entry, onDismiss }: { entry: Notification; onDismiss: () => void }) {
   const [detailOpen, setDetailOpen] = useState(false)
 
@@ -118,14 +130,14 @@ function NotificationRow({ entry, onDismiss }: { entry: Notification; onDismiss:
       <div className="notif-row">
         <b className="notif-title">{entry.title}</b>
         <span className="notif-when">{relativeTime(entry.at)}</span>
-        <button
+        <IconButton
           className="notif-x"
-          type="button"
-          aria-label={`Dismiss: ${entry.title}`}
+          label={`Dismiss: ${entry.title}`}
+          tip="Remove this from the history. It is not retried and nothing is undone."
           onClick={onDismiss}
         >
           <Icon name="x" size="sm" />
-        </button>
+        </IconButton>
       </div>
       {/* The money line is first and unfolded on purpose. It is the one fact a
           user must not have to open anything to discover. */}

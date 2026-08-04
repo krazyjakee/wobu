@@ -15,7 +15,9 @@ import {
   sortPrepared,
   type PreparedOption,
 } from '../lib/comboboxOptions'
+import { useTruncated } from '../hooks/useTruncated'
 import { Icon } from './Icon'
+import { Tooltip } from './Tooltip'
 
 /**
  * One searchable dropdown for every picker in the application.
@@ -166,6 +168,7 @@ export function Combobox({
   label,
   placeholder = 'Choose…',
   disabled = false,
+  disabledReason,
   className,
   sort = 'none',
   emptyMessage = 'No match.',
@@ -180,6 +183,17 @@ export function Combobox({
   label?: string
   placeholder?: string
   disabled?: boolean
+  /**
+   * Why the picker is unavailable, and what would make it available.
+   *
+   * Given this, the field is `aria-disabled` and `readOnly` rather than
+   * `disabled` (#129): a `disabled` input takes no focus and fires no pointer
+   * events, so the one question its greyed-out state provokes has no way to be
+   * answered. Read-only means the user can still tab to it, still hover it, and
+   * still read the value that is in it — but cannot type, and the list never
+   * opens.
+   */
+  disabledReason?: string | null
   className?: string
   /**
    * `'title'` re-sorts alphabetically, ignoring leading articles and accents.
@@ -209,7 +223,7 @@ export function Combobox({
    * live element, and a ref cannot be read while rendering.
    */
   const [field, setField] = useState<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const [open, setOpen] = useState(false)
@@ -233,6 +247,21 @@ export function Combobox({
   const selected = options.find((option) => option.value === value)
   const activeIndex = resolveActive(visibleOptions, active)
   const activeOption = activeIndex >= 0 ? visibleOptions[activeIndex] : undefined
+
+  /*
+   * A closed picker is a fixed-width box showing a name that may be longer than
+   * it. The tooltip is the whole label, and only when the box is actually
+   * cutting it — the field keeps its own ref for focus, so the measuring ref is
+   * merged into it rather than replacing it.
+   */
+  const [measureRef, truncated] = useTruncated<HTMLInputElement>(selected?.label ?? '')
+  const setInput = useCallback(
+    (node: HTMLInputElement | null) => {
+      inputRef.current = node
+      measureRef(node)
+    },
+    [measureRef],
+  )
 
   /*
    * The popup is a portal, positioned from the field's own box.
@@ -545,47 +574,57 @@ export function Combobox({
       ? (field?.closest('[data-modal-host]') ?? document.body)
       : null
 
+  const refused = !!disabledReason
   return (
     <div className={className ? `cbx ${className}` : 'cbx'} ref={setField}>
-      <input
-        ref={inputRef}
-        id={id}
-        className="cbx-input"
-        type="text"
-        role="combobox"
-        aria-label={label}
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
-        aria-autocomplete="list"
-        autoComplete="off"
-        spellCheck={false}
-        disabled={disabled}
-        // Closed, the box states the current value the way a `<select>` does.
-        // Open, it is the search field, and the value moves to the placeholder
-        // so the user can still see what they are about to replace.
-        value={open ? query : (selected?.label ?? '')}
-        placeholder={open ? (selected?.label ?? placeholder) : placeholder}
-        onChange={(event) => {
-          if (!open) openList()
-          setQuery(event.target.value)
-          setActive(0)
-        }}
-        onKeyDown={onKeyDown}
-        onMouseDown={() => {
-          if (open) {
+      <Tooltip tip={disabledReason ?? (truncated ? (selected?.label ?? null) : null)}>
+        <input
+          ref={setInput}
+          id={id}
+          className="cbx-input"
+          type="text"
+          role="combobox"
+          aria-label={label}
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+          aria-autocomplete="list"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={disabled && !refused}
+          aria-disabled={refused || undefined}
+          readOnly={refused}
+          // Closed, the box states the current value the way a `<select>` does.
+          // Open, it is the search field, and the value moves to the placeholder
+          // so the user can still see what they are about to replace.
+          value={open ? query : (selected?.label ?? '')}
+          placeholder={open ? (selected?.label ?? placeholder) : placeholder}
+          onChange={(event) => {
+            if (refused) return
+            if (!open) openList()
+            setQuery(event.target.value)
+            setActive(0)
+          }}
+          onKeyDown={(event) => {
+            if (refused) return
+            onKeyDown(event)
+          }}
+          onMouseDown={() => {
+            if (refused) return
+            if (open) {
+              setOpen(false)
+              setQuery('')
+            } else openList()
+          }}
+          // A click into the box selects what is in it, so the first character
+          // typed replaces the current value instead of appending to it.
+          onFocus={(event) => event.target.select()}
+          onBlur={() => {
             setOpen(false)
             setQuery('')
-          } else openList()
-        }}
-        // A click into the box selects what is in it, so the first character
-        // typed replaces the current value instead of appending to it.
-        onFocus={(event) => event.target.select()}
-        onBlur={() => {
-          setOpen(false)
-          setQuery('')
-        }}
-      />
+          }}
+        />
+      </Tooltip>
       <span className="cbx-chev" aria-hidden>
         <Icon name="chev" size="sm" />
       </span>
