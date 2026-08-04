@@ -48,7 +48,9 @@ jobs:
 
   rust:
     name: Rust — fmt, clippy, tests, dependency and public-surface checks
-    runs-on: ubuntu-latest
+    # Self-hosted: a GitHub-hosted runner cannot fit this workspace's debug
+    # build, and ran out of disk partway through linking the test binaries.
+    runs-on: [self-hosted, Linux, X64]
     env:
       # `cargo test --workspace` links around forty test binaries, and with the
       # default full DWARF for each it filled the runner's disk — "No space left
