@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import * as api from '../lib/api'
 import type {
@@ -97,6 +97,8 @@ function InspectorSession({
   const [gridAxis, setGridAxis] = useState<'none' | api.VariantGrid['axis']>('none')
   const [gridValues, setGridValues] = useState('')
   const [gridNodeId, setGridNodeId] = useState('')
+  const [singleDraft, setSingle] = useState(false)
+  const singleNoteId = useId()
   const [weights, setWeights] = useState<Record<string, number>>({})
   const [muted, setMuted] = useState<Set<string>>(new Set())
   const [shotWeight, setShotWeight] = useState(1)
@@ -171,11 +173,23 @@ function InspectorSession({
     () => parseVariantGrid(gridAxis, gridValues, gridNodeId, aspectChoices),
     [aspectChoices, gridAxis, gridNodeId, gridValues],
   )
+  /*
+   * Derived, not just read off the checkbox.
+   *
+   * A grid and a named-view preset each decide the size of the batch on their
+   * own, and the backend refuses to be told twice — but either can be chosen
+   * *after* the box is ticked, so a raw `singleDraft` would send a request the
+   * planner rejects. Falling back here means the tick survives being parked
+   * while a grid is tried out, and comes back when the grid goes Off.
+   */
+  const varyingPreset = (chosenPreset?.views.length ?? 0) === 0
+  const single = singleDraft && gridAxis === 'none' && varyingPreset
   const imageReport = useImageReferenceReport(selected?.id ?? null, {
     ...options,
     aspect: normalizedAspect,
     model: model.trim() || undefined,
     grid: grid.value,
+    single,
   })
   const lockedSeed = imageReport.isPlaceholderData ? null : (imageReport.data?.lockedSeed ?? null)
   const reportReady = !!imageReport.data && !imageReport.isPlaceholderData
@@ -255,6 +269,7 @@ function InspectorSession({
         model: model.trim() || undefined,
         seed: seedOverride ? seed : undefined,
         grid: grid.value,
+        single,
       })
       toast(`Generation queued · ${job.slice(-6)}`)
       if (lockedSeed === null && gridAxis === 'none') setSeed(randomSeed())
@@ -625,6 +640,25 @@ function InspectorSession({
             </div>
           </div>
           <div className="variant-controls">
+            <label className="variant-single">
+              <input
+                type="checkbox"
+                checked={single}
+                disabled={!varyingPreset || gridAxis !== 'none'}
+                aria-describedby={singleNoteId}
+                onChange={(event) => setSingle(event.target.checked)}
+              />
+              <span>Just one image</span>
+            </label>
+            <small className="variant-single-note" id={singleNoteId}>
+              {!varyingPreset
+                ? 'This preset emits one image per named view, so it always sends the whole sheet.'
+                : gridAxis !== 'none'
+                  ? 'The variant grid is deciding how many images this batch is.'
+                  : single
+                    ? `1 image instead of ${chosenPreset?.images ?? 0} · same preset, same framing`
+                    : `${chosenPreset?.images ?? 0} images · the preset’s whole batch`}
+            </small>
             <label>
               <span>Variant grid</span>
               <Combobox

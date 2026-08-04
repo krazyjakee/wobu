@@ -6,8 +6,8 @@ pinning one is what changes the world.
 ## The controls
 
 At the base of the inspector, under the compiled prompt: **Output preset**, **Aspect**, **Model**,
-an **Extra shot prompt**, **Seed**, the **Variant grid**, the project's spend ceiling, and
-**Generate**.
+an **Extra shot prompt**, **Seed**, **Just one image**, the **Variant grid**, the project's spend
+ceiling, and **Generate**.
 
 The extra shot prompt is the one place to type free text at generation time — framing, action,
 weather, a camera direction. It contributes at the Shot layer and is not saved to the world.
@@ -36,6 +36,17 @@ same entity produces a costume plate one minute and a material study the next.
 
 Presets reweight rather than replace. A material study still inherits your Art Style and World Canon
 — it just promotes `materials` to the front and pushes `silhouette` down.
+
+## Just one image
+
+Tick **Just one image**, above the variant grid, to send one picture instead of the preset's whole
+batch. The framing, the priorities and the aspect are still the preset's — only the count changes,
+and the estimate beside Generate drops to match. The image uses the seed shown in the seed control,
+so locking that seed reproduces exactly what came back.
+
+The tick is unavailable while a variant grid is set, because the grid is already saying how many
+pictures the batch is; it comes back when the grid goes Off. Presets with named views — Turnaround —
+always send the whole sheet, since one image of eight views is not one of anything.
 
 ## Seeds
 

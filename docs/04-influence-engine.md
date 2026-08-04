@@ -137,6 +137,13 @@ lock, a derived member of that family, an explicit re-roll, or a seed-grid cell.
 lock of its own — its participants may each have one and may disagree — so a composition is
 either explicitly re-rolled or random.
 
+A batch may also be trimmed to a single image. The preset still supplies the framing, priorities
+and aspect; only its image count is overridden, and the one cell keeps the seed the request
+carried so locking that seed reproduces it. This is refused alongside a variant grid — both decide
+the size of the batch — and on named-view presets, where the `views` argument is the way to ask
+for less than the whole sheet. Because it narrows the cells rather than the queued jobs, the
+estimate, the spend reservation and the receipt all describe one image.
+
 A variant grid emits one image per explicit cell value. It either varies seed while holding the
 compiled inputs fixed, or holds one seed while varying exactly one of fragment weight, preset,
 or aspect. Named-view presets such as Turnaround are excluded because reducing an eight-view
