@@ -989,15 +989,23 @@ pub mod tests {
             SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
                 .await
                 .unwrap();
-        let session = peer.connect_ticket(&ticket).await.expect("admitted");
+        // Real QUIC over loopback still loses connections when the machine is
+        // busy, and the product calls that failure retryable precisely because
+        // a client's answer to it is to dial again. What this test is about is
+        // the round's termination handshake, not the link's durability, so it
+        // does the same. Anything the product does not call retryable, and any
+        // wrong answer, still fails at once.
+        const ATTEMPTS: u32 = 5;
+        let mut attempt = 0;
+        let (session, exchange, fetched, pushed) = loop {
+            attempt += 1;
+            match one_round(&peer, &ticket, node_id).await {
+                Ok(round) => break round,
+                Err(error) if error.retryable && attempt < ATTEMPTS => {}
+                Err(error) => panic!("a round completes (attempt {attempt}): {error:?}"),
+            }
+        };
 
-        // The peer's half of the manifest exchange: it holds nothing. Under the
-        // rule `wobu-sync` states twice, that is "never had it" and not
-        // "deleted", so the app's side plans to send rather than to remove.
-        let exchange =
-            wobu_sync::manifest::exchange(&session, &[], &[], wobu_sync::manifest::IDLE_TIMEOUT)
-                .await
-                .expect("both sides swap manifests");
         assert!(exchange.is_whole());
         // A fresh project is not empty — `Project::create` seeds it — so this
         // asks whether the node reached the manifest rather than counting.
@@ -1007,6 +1015,49 @@ pub mod tests {
             exchange.nodes
         );
         let announced = exchange.nodes.len();
+
+        assert_eq!(fetched.len(), 1, "the app did not serve exactly what was asked for");
+        assert_eq!(fetched[0].node_id, node_id);
+        assert!(fetched[0].text.contains("Kael Vantris"), "{}", fetched[0].text);
+        assert_eq!(fetched[0].slug, "kael-vantris");
+
+        // Everything the peer announced nothing for. An absence is "never had
+        // it", so the whole project is behind, and the app offers all of it —
+        // that is the same rule that makes an empty manifest safe.
+        assert!(pushed.contains(&node_id), "the app did not push a node the peer lacked");
+        assert_eq!(pushed.len(), announced, "{pushed:?}");
+
+        session.close();
+        manager.shutdown().await;
+        peer.shutdown().await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// One dial, manifest swap and body round against the app, driven by hand
+    /// as the peer.
+    ///
+    /// A function only so that `?` can hand a transport failure back to the
+    /// caller's retry. Every dial gets a fresh session, because a connection
+    /// that was lost is not one to ask a second question on.
+    async fn one_round(
+        peer: &SyncEndpoint,
+        ticket: &Ticket,
+        node_id: Id,
+    ) -> CommandResult<(
+        wobu_sync::Session,
+        wobu_sync::manifest::Exchange,
+        Vec<wobu_store::Outgoing>,
+        Vec<Id>,
+    )> {
+        let session = peer.connect_ticket(ticket).await.map_err(WobuError::from)?;
+
+        // The peer's half of the manifest exchange: it holds nothing. Under the
+        // rule `wobu-sync` states twice, that is "never had it" and not
+        // "deleted", so the app's side plans to send rather than to remove.
+        let exchange =
+            wobu_sync::manifest::exchange(&session, &[], &[], wobu_sync::manifest::IDLE_TIMEOUT)
+                .await
+                .map_err(WobuError::from)?;
 
         let connection = session.connection();
         // Both halves at once, exactly as `round::run` does it — a peer that
@@ -1039,23 +1090,8 @@ pub mod tests {
             }
         };
 
-        let (fetched, pushed) = tokio::try_join!(asking, answering).expect("a round completes");
-
-        assert_eq!(fetched.len(), 1, "the app did not serve exactly what was asked for");
-        assert_eq!(fetched[0].node_id, node_id);
-        assert!(fetched[0].text.contains("Kael Vantris"), "{}", fetched[0].text);
-        assert_eq!(fetched[0].slug, "kael-vantris");
-
-        // Everything the peer announced nothing for. An absence is "never had
-        // it", so the whole project is behind, and the app offers all of it —
-        // that is the same rule that makes an empty manifest safe.
-        assert!(pushed.contains(&node_id), "the app did not push a node the peer lacked");
-        assert_eq!(pushed.len(), announced, "{pushed:?}");
-
-        session.close();
-        manager.shutdown().await;
-        peer.shutdown().await.unwrap();
-        let _ = std::fs::remove_dir_all(&dir);
+        let (fetched, pushed) = tokio::try_join!(asking, answering)?;
+        Ok((session, exchange, fetched, pushed))
     }
 
     /// An endpoint that holds nothing and does nothing with what it accepts.
