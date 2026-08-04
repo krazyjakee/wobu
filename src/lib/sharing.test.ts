@@ -20,9 +20,12 @@ describe('typed sharing command boundary', () => {
     await syncAcceptCancel()
     await syncUnshare('project-id')
 
+    // `call` forwards its optional `args` straight through, so a command with
+    // no payload still reaches `invoke` as a second, undefined argument. That
+    // is invisible to Tauri but not to a recorded call list.
     expect(h.invoke.mock.calls).toEqual([
-      ['sync_status'],
-      ['sync_share'],
+      ['sync_status', undefined],
+      ['sync_share', undefined],
       ['sync_accept', { token: 'wobuproject-ticket', destination: null, cancel: false }],
       ['sync_accept', { token: 'wobuproject-ticket', destination: '/worlds', cancel: false }],
       ['sync_accept', { token: null, destination: null, cancel: true }],
