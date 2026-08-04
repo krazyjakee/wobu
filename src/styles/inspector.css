@@ -288,6 +288,31 @@
 .variant-controls > small.variant-error {
   color: var(--danger);
 }
+/*
+ * The batch-size question, asked above the grid that also answers it.
+ *
+ * A flex row rather than the stacked label-over-field the rest of this panel
+ * uses, because a checkbox reads with its wording beside it — and the explicit
+ * width undoes `.shot-controls input`, which sizes text fields to the column
+ * and would otherwise stretch the box across it.
+ */
+.variant-single {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.variant-single input[type='checkbox'] {
+  width: 15px;
+  min-width: 0;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.variant-single:has(input:disabled) {
+  color: var(--text-faint);
+}
 .spend-panel {
   border: 1px solid var(--border-str);
   border-radius: var(--r-sm);

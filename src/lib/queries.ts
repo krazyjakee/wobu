@@ -472,7 +472,7 @@ export function useImageReferenceReport(
   subjectId: string | null,
   options: Pick<
     api.GenerateOptions,
-    'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid'
+    'preset' | 'sliders' | 'shot' | 'aspect' | 'model' | 'seed' | 'grid' | 'single'
   > = {},
 ): UseQueryResult<api.ImageReferenceReport> {
   return useQuery({
