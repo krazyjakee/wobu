@@ -4,6 +4,7 @@ import { useUndoRunner } from '../lib/queries'
 import { chordFromEvent, isTypingTarget } from '../lib/keys'
 import { modalOpen } from '../lib/modalStack'
 import { FAVOURITES_BAND, RECENT_BAND } from '../components/navigator/navigatorRows'
+import { useGuide } from '../components/GuideContent'
 import {
   resolveCommand,
   useKeybindings,
@@ -78,6 +79,12 @@ export function useKeyboard({ onNewNode, readOnly, navKinds }: Context) {
           if (ui.shortcutsOpen) ui.setShortcutsOpen(false)
           else if (!modalOpen()) ui.setShortcutsOpen(true)
           return
+        case 'guide.show': {
+          const guide = useGuide.getState()
+          if (guide.slug !== null) guide.close()
+          else if (!modalOpen()) guide.open()
+          return
+        }
         case 'nav.filter':
           focusNavigatorFilter()
           return

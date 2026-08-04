@@ -30,7 +30,7 @@ npm start          # build, then preview
 | `legal/privacy-policy.html` | `docs/legal/privacy-policy.md` |
 | `legal/terms.html` | `docs/legal/terms.md` |
 | `legal/licence.html` | `LICENSE` |
-| `guide/**` | copied verbatim from `docs/guide/` |
+| `guide/**` | rendered from the Markdown in `docs/guide/`, the same source the app reads |
 | `CNAME`, `.nojekyll`, `robots.txt`, `styles.css`, `favicon.svg` | `static/` |
 | `sitemap.xml` | generated from the page list |
 

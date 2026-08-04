@@ -9,6 +9,7 @@ import { formatChord } from '../lib/keys'
 import { bindingOf, useKeybindings, type CommandId } from '../store/keybindings'
 import { useUI } from '../store/ui'
 import { NodeThumbnail } from './AssetMedia'
+import { openGuide } from './GuideContent'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 
@@ -188,6 +189,13 @@ function OpenCommandPalette({
         icon: 'settings',
         hint: hint('shortcuts.show'),
         run: () => setShortcutsOpen(true),
+      },
+      {
+        id: 'cmd:guide',
+        label: 'Guide',
+        icon: 'library',
+        hint: hint('guide.show'),
+        run: () => openGuide(),
       },
     ],
     // `hint` changes with the bindings, which is what re-labels these rows.

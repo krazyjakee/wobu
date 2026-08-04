@@ -495,8 +495,13 @@ describe('the machine-local ComfyUI endpoint', () => {
 
     expect(screen.queryByText(/Nothing in this build generates images yet/)).toBeNull()
     expect(screen.getByText(/Generate and Forge use this choice/)).toBeTruthy()
-    expect(screen.getByText(/Concept 3D can view and export completed GLBs/)).toBeTruthy()
-    expect(screen.getAllByText(/cannot start.*local mesh request yet/i)).not.toHaveLength(0)
+    // #110 made reconstruction reachable, so the copy that said otherwise — and
+    // this assertion, which pinned it — were both describing a build that no
+    // longer exists.
+    expect(
+      screen.getByText(/Concept 3D reconstructs a mesh from a reviewed turnaround/),
+    ).toBeTruthy()
+    expect(screen.queryByText(/cannot start.*local mesh request yet/i)).toBeNull()
   })
 })
 

@@ -26,6 +26,7 @@ import { Navigator } from './navigator/Navigator'
 import { Editor } from './editor/Editor'
 import { Inspector } from './Inspector'
 import { CommandPalette } from './CommandPalette'
+import { GuideOverlay } from './GuideOverlay'
 import { ShortcutsSheet } from './ShortcutsSheet'
 import { NewNodeSheet } from './NewNodeSheet'
 import { StyleTransferSheet } from './StyleTransferSheet'
@@ -387,6 +388,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
       />
 
       <ShortcutsSheet />
+      <GuideOverlay />
 
       {newNode && (
         <NewNodeSheet

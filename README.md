@@ -37,8 +37,9 @@ follow the [release guide](docs/12-releasing.md) before bypassing an operating-s
 
 Once Wobu opens, create a project from the Launcher. Start with its **Style Guide** and **World
 Canon**, add broad world layers before individual characters, then configure providers in Settings.
-The included [user guide](docs/guide/index.html) covers the complete workflow and can be opened
-directly in a browser.
+The included [user guide](docs/guide/index.md) covers the complete workflow. It is also read into
+the app itself — press `F1`, or use the Guide button on the mode rail — and published to
+<https://wobu.app/guide/>.
 
 ### Run from source
 

@@ -1,0 +1,355 @@
+/*
+ * The in-app guide (#132).
+ *
+ * A reading surface inside a tool UI, which is a different problem from the
+ * rest of Wobu: everything else here is 12px and dense because it is scanned,
+ * while this is prose that gets read a paragraph at a time. So the type comes
+ * up a size, the measure is capped at something the eye can track, and the
+ * page is the only place in the app with real vertical rhythm.
+ *
+ * It stays inside the panel palette rather than inventing a document theme, so
+ * the guide is legibly part of the app in both themes and a reader never has
+ * the sensation of having left it.
+ */
+
+.sheet.guide {
+  width: min(1080px, 94vw);
+  height: min(780px, 88vh);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.guide-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 16px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.guide-head h2 {
+  margin: 0;
+}
+.sheet.guide .guide-sub {
+  grid-row: 2;
+  margin: 0;
+  font-size: 11.5px;
+}
+.guide-search {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 240px;
+  padding: 7px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color var(--dur-1) var(--ease-out);
+}
+.guide-search:focus {
+  border-color: var(--border-str);
+}
+
+.guide-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 224px 1fr;
+}
+
+/* ── contents ─────────────────────────────────────────────────────────────── */
+
+.guide-nav {
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 12px 8px 20px;
+  background: var(--bg);
+}
+.guide-nav-group {
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 14px 0 5px;
+  padding: 0 8px;
+}
+.guide-nav > div:first-child .guide-nav-group {
+  margin-top: 0;
+}
+.guide-nav-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+.guide-nav-link:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+.guide-nav-link[aria-current='page'] {
+  color: var(--accent);
+  background: var(--bg-raised);
+}
+
+.guide-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  cursor: pointer;
+}
+.guide-result:hover {
+  background: var(--bg-raised);
+}
+.guide-result-title {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.guide-result-section {
+  color: var(--text-faint);
+}
+.guide-result-section::before {
+  content: ' › ';
+}
+.guide-result-excerpt {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── the page ─────────────────────────────────────────────────────────────── */
+
+.guide-page {
+  overflow-y: auto;
+  padding: 26px 34px 34px;
+  outline: none;
+}
+.guide-prose {
+  max-width: 72ch;
+}
+.guide-prose h1 {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+}
+.guide-prose h2 {
+  font-size: 15px;
+  font-weight: 620;
+  margin: 30px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.guide-prose h3 {
+  font-size: 13px;
+  font-weight: 620;
+  margin: 20px 0 6px;
+}
+.sheet.guide .guide-prose p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-dim);
+}
+/* The opening paragraph is the page's promise; it gets the reader's full
+   attention colour and a size the eye lands on before anything else. */
+.guide-prose h1 + p {
+  font-size: 14.5px;
+  color: var(--text);
+}
+.guide-prose strong {
+  color: var(--text);
+  font-weight: 620;
+}
+.guide-prose ul,
+.guide-prose ol {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.guide-prose li {
+  margin-bottom: 5px;
+}
+.guide-prose li::marker {
+  color: var(--text-faint);
+}
+.guide-prose code {
+  font: 11.5px var(--mono);
+  color: var(--l-world);
+  background: var(--bg-input);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.guide-prose pre {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+.guide-prose pre code {
+  background: none;
+  padding: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre;
+}
+.guide-prose table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.guide-prose th {
+  text-align: left;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 0 12px 6px 0;
+  border-bottom: 1px solid var(--border-str);
+}
+.guide-prose td {
+  vertical-align: top;
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.guide-prose td:first-child {
+  color: var(--text);
+  white-space: nowrap;
+}
+.guide-prose table td:first-child:has(+ td + td) {
+  white-space: normal;
+}
+
+.guide-note {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.sheet.guide .guide-note p:last-child {
+  margin-bottom: 0;
+}
+.guide-note-label {
+  font-size: 9.5px !important;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent) !important;
+  margin-bottom: 4px !important;
+}
+
+/* ── links ────────────────────────────────────────────────────────────────── */
+
+/* Everything the guide points at is a button: another page, an app surface, or
+   a URL for the system browser. None of them may be an `<a href>`, because a
+   real navigation inside a Tauri webview replaces the application. */
+.guide-xref,
+.guide-external,
+.guide-action,
+.guide-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--border-str);
+}
+.guide-xref:hover,
+.guide-external:hover,
+.guide-action:hover,
+.guide-link:hover {
+  text-decoration-color: var(--accent);
+}
+.guide-external::after {
+  content: ' ↗';
+  color: var(--text-faint);
+}
+
+/* The contextual affordance, beside the thing it explains. Quiet by default:
+   it must be findable when wanted and invisible when not. */
+.guide-link {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-decoration-color: var(--border);
+}
+.guide-link:hover {
+  color: var(--accent);
+}
+
+.guide-pagenav {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 72ch;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.guide-step {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.guide-step.next {
+  text-align: right;
+}
+.guide-step span {
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.guide-step:hover {
+  color: var(--accent);
+}
+
+/* The rail's help affordance. A glyph rather than a sprite icon, and sized to
+   match the icons either side of it. */
+.rail-guide {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-faint);
+}

@@ -21,6 +21,7 @@ import { persist } from 'zustand/middleware'
 export type CommandId =
   | 'palette.toggle'
   | 'shortcuts.show'
+  | 'guide.show'
   | 'nav.filter'
   | 'mode.library'
   | 'mode.forge'
@@ -92,6 +93,15 @@ export const COMMANDS: CommandDef[] = [
     whileTyping: true,
     whileModal: true,
     note: 'This list.',
+  },
+  {
+    id: 'guide.show',
+    label: 'Guide',
+    group: 'Getting around',
+    chord: 'F1',
+    whileTyping: true,
+    whileModal: true,
+    note: 'The whole guide, in this window, with no network.',
   },
   {
     id: 'nav.filter',

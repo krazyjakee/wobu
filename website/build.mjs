@@ -9,14 +9,14 @@
  *   node build.mjs --out DIR  build somewhere else
  *   node build.mjs --root DIR read repository inputs from somewhere else
  */
-import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { renderPage, useMark } from './lib/layout.mjs'
 import { renderMarkdown } from './lib/markdown.mjs'
-import { site } from './lib/site.mjs'
+import { escapeHtml, site } from './lib/site.mjs'
 import { downloadPage } from './pages/download.mjs'
 import { homePage } from './pages/home.mjs'
 import { legalDocumentPage, legalIndexPage, legalStubPage, licencePage } from './pages/legal.mjs'
@@ -32,6 +32,7 @@ const repoRoot = flag('root', resolve(here, '..'))
 const outDir = flag('out', join(here, 'dist'))
 
 const LEGAL_BLOB_DIR = `${site.repo}/blob/main/docs/legal`
+const GUIDE_BLOB_DIR = `${site.repo}/blob/main/docs/guide`
 
 /**
  * The documents `docs/legal/` owns. They are optional inputs: a checkout that
@@ -123,33 +124,98 @@ async function buildLegal() {
 }
 
 /**
- * The product guide is already a static site, so it is published as-is. Its
- * only site-hostile links are the ones into `docs/*.md`, which exist one
- * directory up in the repository and nowhere at all here; those are pointed at
- * GitHub rather than left to 404.
+ * The product guide is Markdown in `docs/guide/`, and the same files are
+ * compiled into the application (issue #132) — so it is rendered here rather
+ * than maintained twice. `contents.json` supplies the running order; a sibling
+ * `*.md` link resolves to the published page, and a link into `docs/*.md`
+ * points at GitHub rather than 404ing.
+ *
+ * Guide pages link back into the app with a `wobu:` scheme — "open the
+ * shortcuts reference" — which means nothing in a browser. Those links are
+ * flattened to their own text so the sentence still reads.
  */
-async function copyGuide() {
-  const guide = join(repoRoot, 'docs/guide')
-  if (!existsSync(guide)) {
-    console.warn('  ! docs/guide is absent — the site will link to a guide that is not there')
-    return false
-  }
+function guideContents(pages, currentSlug) {
+  const items = pages
+    .map((page) => {
+      const current = page.slug === currentSlug ? ' aria-current="page"' : ''
+      return `<li><a href="${page.slug}.html"${current}>${escapeHtml(page.title)}</a></li>`
+    })
+    .join('\n            ')
 
-  const target = join(outDir, 'guide')
-  await cp(guide, target, { recursive: true })
+  return `<nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">Guide</h2>
+          <ol>
+            ${items}
+          </ol>
+        </nav>`
+}
 
-  for (const entry of await readdir(target, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith('.html')) continue
-    const file = join(target, entry.name)
-    const source = await readFile(file, 'utf8')
-    const rewritten = source.replace(
-      /href="\.\.\/([\w./-]+\.md)(#[^"]*)?"/g,
-      (_match, path, hash = '') => `href="${site.repo}/blob/main/docs/${path}${hash}"`,
+function guideSteps(previous, next) {
+  const steps = []
+  if (previous) {
+    steps.push(
+      `<a class="text-link" href="${previous.slug}.html">← ${escapeHtml(previous.title)}</a>`,
     )
-    if (rewritten !== source) await writeFile(file, rewritten, 'utf8')
+  }
+  if (next) {
+    steps.push(`<a class="text-link" href="${next.slug}.html">${escapeHtml(next.title)} →</a>`)
+  }
+  if (steps.length === 0) return ''
+  return `<p class="doc-source">${steps.join(' &nbsp;·&nbsp; ')}</p>`
+}
+
+async function buildGuide() {
+  const contentsPath = join(repoRoot, 'docs/guide/contents.json')
+  if (!existsSync(contentsPath)) {
+    console.warn('  ! docs/guide is absent — the site will link to a guide that is not there')
+    return []
   }
 
-  return true
+  const contents = JSON.parse(await readFile(contentsPath, 'utf8'))
+  const ordered = contents.groups.flatMap((group) => group.pages)
+  const pages = []
+
+  for (const [index, entry] of ordered.entries()) {
+    const markdown = await readIfPresent(`docs/guide/${entry.slug}.md`)
+    if (markdown === null) {
+      console.warn(`  ! docs/guide/${entry.slug}.md is listed in contents.json but absent`)
+      continue
+    }
+
+    const { title, html } = renderMarkdown(markdown, { sourceBlobDir: GUIDE_BLOB_DIR })
+    const body = html
+      .replace(/<a href="wobu:[^"]*">([\s\S]*?)<\/a>/g, '$1')
+      // A definition table is written with the empty header row GFM demands.
+      // The app's renderer drops it; so does this one, or the page carries a
+      // blank ruled band above every such table.
+      .replace(/<thead>\s*<tr>(?:\s*<th>\s*<\/th>)+\s*<\/tr>\s*<\/thead>/g, '')
+
+    const main = `      <div class="wrap doc-wrap">
+        ${guideContents(ordered, entry.slug)}
+        <article class="doc">
+${body}
+          <hr />
+          ${guideSteps(ordered[index - 1], ordered[index + 1])}
+          <p class="doc-source">
+            This page is rendered from
+            <a href="${GUIDE_BLOB_DIR}/${entry.slug}.md" rel="noopener">its source in the
+            repository</a> — the same file the application reads for its built-in guide.
+          </p>
+        </article>
+      </div>`
+
+    pages.push({
+      path: `guide/${entry.slug}.html`,
+      nav: 'guide',
+      depth: 1,
+      title: entry.slug === 'index' ? title : entry.title,
+      description: entry.summary,
+      main,
+      bodyClass: 'doc-page',
+    })
+  }
+
+  return pages
 }
 
 /**
@@ -199,18 +265,16 @@ async function main() {
   await cp(join(here, 'static'), outDir, { recursive: true })
 
   const branded = await useRepositoryBranding()
-  const pages = [homePage(), downloadPage(), ...(await buildLegal())]
+  const pages = [homePage(), downloadPage(), ...(await buildLegal()), ...(await buildGuide())]
   const written = []
   for (const page of pages) {
     written.push(await writePage(page))
   }
 
-  const guide = await copyGuide()
   await writeSitemap(written)
 
   console.log(`Built ${written.length} pages into ${outDir}`)
   for (const path of written) console.log(`  · ${path}`)
-  if (guide) console.log('  · guide/ (copied from docs/guide)')
   console.log(branded ? '  · branding/ artwork in use' : '  · built-in fallback mark in use')
 }
 

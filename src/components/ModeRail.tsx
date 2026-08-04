@@ -1,6 +1,7 @@
 import { ariaChord, formatChord } from '../lib/keys'
 import { bindingOf, useKeybindings, type CommandId } from '../store/keybindings'
 import { useUI, type Mode } from '../store/ui'
+import { GuideRailButton } from './GuideLink'
 import { Icon } from './Icon'
 import { IconButton } from './Tooltip'
 
@@ -59,6 +60,7 @@ export function ModeRail() {
     <nav className="rail" aria-label="Workspace modes">
       {MODES.map(button)}
       <div className="rspace" />
+      <GuideRailButton />
       {button(SETTINGS)}
     </nav>
   )

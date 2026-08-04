@@ -243,7 +243,7 @@ const CAPABILITIES: CapabilityDef[] = [
     providers: [HUNYUAN3D, COMFYUI_MESH],
     model: false,
     activeNote:
-      'Concept 3D can view and export completed GLBs from the project asset library. Starting reconstruction from this UI is not available yet.',
+      'Concept 3D reconstructs a mesh from a reviewed turnaround, and views and exports completed GLBs from the project asset library.',
   },
 ]
 
@@ -638,10 +638,10 @@ function ComfyEndpointSettings() {
       <p className="set-note" id="comfyui-endpoint-boundary">
         Saved in Wobu&rsquo;s application data on this computer, never in <code>project.json</code>{' '}
         or the project folder. Image generation, scene composition, replay and local mesh requests
-        all use this route; the current Concept 3D UI can only view and export existing GLBs, so it
-        cannot start that local mesh request yet. A non-loopback server receives the prompts and
-        reference images those jobs need, so enter only a server you trust. URL credentials are
-        rejected; an authenticating proxy must be configured outside Wobu.
+        all use this route, including the mesh reconstruction started from a node's 3D tab. A
+        non-loopback server receives the prompts and reference images those jobs need, so enter only
+        a server you trust. URL credentials are rejected; an authenticating proxy must be configured
+        outside Wobu.
       </p>
       {probe && (
         <p className={probe.ok ? 'prov-probe is-ok' : 'prov-probe is-bad'} role="status">
