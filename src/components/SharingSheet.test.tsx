@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectSummary } from '../lib/api'
@@ -48,13 +49,27 @@ beforeEach(() => {
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
 })
 
+function open() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <SharingSheet project={project} onClose={vi.fn()} />
+    </QueryClientProvider>,
+  )
+}
+
 describe('project sharing sheet', () => {
   it('warns about credentials and revocation, then displays and copies the ticket', async () => {
-    render(<SharingSheet project={project} onClose={vi.fn()} />)
+    open()
     expect(screen.getByText(/ticket is an access credential/i)).toBeTruthy()
     expect(screen.getByText(/one ticket cannot be revoked/i)).toBeTruthy()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Share and copy ticket' }))
+    // The button renders immediately but stays disabled until the status read
+    // says sync is running, so finding it is not the same as being able to
+    // press it.
+    const share = screen.getByRole('button', { name: 'Share and copy ticket' })
+    await waitFor(() => expect(share).toBeEnabled())
+    fireEvent.click(share)
     expect(await screen.findByLabelText('Ticket')).toHaveValue('wobuproject-secret')
     expect(h.writeText).toHaveBeenCalledWith('wobuproject-secret')
     expect(screen.getByText(/same local network/i)).toBeTruthy()
@@ -89,7 +104,7 @@ describe('project sharing sheet', () => {
       throw new Error(`unexpected command ${command}`)
     })
 
-    render(<SharingSheet project={project} onClose={vi.fn()} />)
+    open()
     expect(await screen.findByText(/Joined with silver-plover/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Stop sharing…' }))
     expect(screen.getByRole('alertdialog')).toHaveTextContent(/revokes every ticket/i)
