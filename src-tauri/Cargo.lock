@@ -7734,7 +7734,7 @@ dependencies = [
 
 [[package]]
 name = "wobu"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -7763,7 +7763,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "indexmap 2.14.0",
@@ -7775,7 +7775,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-imagine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -7796,7 +7796,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-influence"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -7806,7 +7806,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-jobs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "serde",
@@ -7818,7 +7818,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-llm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "futures-core",
@@ -7831,7 +7831,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "http",
@@ -7848,7 +7848,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blake3",
  "chrono",
@@ -7869,7 +7869,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-sync"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "iroh",

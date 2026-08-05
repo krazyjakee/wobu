@@ -269,6 +269,56 @@ pub fn info(message: impl AsRef<str>) {
     record(Level::Info, message);
 }
 
+/// Route panics into the diagnostics log before the process leaves.
+///
+/// A panic that reaches the top of a thread with the default hook prints to
+/// stderr and is gone — and a shipped Wobu has no stderr anybody reads, so the
+/// visible result is a window that vanishes with nothing in the log to say why.
+/// That was the exact shape of the Windows accept-ticket crash: sync bound, the
+/// log went silent, and the process was simply not there a moment later.
+///
+/// This is recorded at [`Level::Error`], which the default level admits, so it
+/// survives without the user first knowing to raise the level — the log they
+/// hand over already has the line. The previous hook is chained rather than
+/// replaced so a `cargo run` still gets the standard backtrace on stderr.
+///
+/// It does not stop the panic: unwinding continues afterwards exactly as
+/// before. What it buys is that a silent close becomes a located one, which is
+/// the difference between guessing at a crash and reading where it was. A native
+/// fault — an access violation in a system dialog, say — still reaches none of
+/// this, because it is not a Rust panic; that case is what the OS crash log is
+/// for.
+pub fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = match info.location() {
+            Some(at) => format!("{}:{}:{}", at.file(), at.line(), at.column()),
+            None => "<unknown location>".to_owned(),
+        };
+        let thread = std::thread::current();
+        let name = thread.name().unwrap_or("<unnamed>").to_owned();
+        error(panic_line(info.payload(), &location, &name));
+        previous(info);
+    }));
+}
+
+/// The log line for a panic, factored out of the hook so the payload decoding
+/// can be tested without provoking a real panic or touching the global sink.
+///
+/// `PanicHookInfo::message` is still unstable, so the payload is read the long
+/// way: `&str` is what a bare `panic!("literal")` and every `unwrap`/`expect`
+/// carry, `String` is what a formatted `panic!("{x}")` carries, and anything
+/// else — a `panic_any` with some other type — is named rather than dropped, so
+/// the line still says where and on which thread.
+fn panic_line(payload: &(dyn std::any::Any + Send), location: &str, thread_name: &str) -> String {
+    let message = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("<non-string panic payload>");
+    format!("panic at {location} on thread '{thread_name}': {message}")
+}
+
 /// Where the log lives, whether or not it has been created yet.
 pub fn dir() -> PathBuf {
     wobu_store::paths::app_data_dir().join("logs")
@@ -424,5 +474,26 @@ mod tests {
         assert_eq!("  warning ".parse(), Ok(Level::Warn));
         assert_eq!("off".parse(), Ok(Level::Off));
         assert_eq!("".parse::<Level>(), Err(()));
+    }
+
+    #[test]
+    fn a_panic_line_names_where_the_thread_and_the_reason() {
+        // A `panic!("literal")`, an `unwrap`, and an `expect` all carry `&str`.
+        let from_str: Box<dyn std::any::Any + Send> = Box::new("the disc tray is on fire");
+        let line = panic_line(from_str.as_ref(), "src/thing.rs:12:5", "main");
+        assert_eq!(line, "panic at src/thing.rs:12:5 on thread 'main': the disc tray is on fire");
+
+        // A formatted `panic!("{x}")` carries an owned `String`.
+        let from_string: Box<dyn std::any::Any + Send> = Box::new(String::from("code 0x8000ffff"));
+        assert!(
+            panic_line(from_string.as_ref(), "rfd.rs:1:1", "folder-dialog")
+                .ends_with("on thread 'folder-dialog': code 0x8000ffff")
+        );
+
+        // A `panic_any` with some other type is still located, not swallowed.
+        let other: Box<dyn std::any::Any + Send> = Box::new(42u32);
+        let line = panic_line(other.as_ref(), "x.rs:9:9", "worker");
+        assert!(line.contains("<non-string panic payload>"), "{line}");
+        assert!(line.contains("x.rs:9:9") && line.contains("worker"));
     }
 }

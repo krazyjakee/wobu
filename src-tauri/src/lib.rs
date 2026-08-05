@@ -27,6 +27,10 @@ const QUIT_BLOCKED: &str = "share:quit-blocked";
 pub fn run() {
     // Before the builder, so that a failure to start is itself recorded.
     diag::init(diag::dir());
+    // Immediately after the log has a home, so a panic anywhere past this line
+    // lands in the file rather than a stderr nobody reads. See
+    // `diag::install_panic_hook`.
+    diag::install_panic_hook();
     diag::info(format!("wobu {} starting", env!("CARGO_PKG_VERSION")));
 
     tauri::Builder::default()
