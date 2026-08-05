@@ -16,10 +16,10 @@ dependency cannot be added without its notice arriving with it.
 
 | | |
 | --- | --- |
-| Rust crates linked into the binary | 736 |
-| npm packages bundled into the frontend | 12 |
+| Rust crates linked into the binary | 747 |
+| npm packages bundled into the frontend | 14 |
 | npm packages used only to build and test Wobu | 379 |
-| Distinct licence texts reproduced below | 398 |
+| Distinct licence texts reproduced below | 403 |
 
 The build-and-test packages are listed for completeness. Their code is not in
 the installer, so their notices are not reproduced in full.
@@ -28,11 +28,11 @@ the installer, so their notices are not reproduced in full.
 
 | Licence | Packages |
 | --- | --- |
-| MIT OR Apache-2.0 | 352 |
-| MIT | 174 |
-| Apache-2.0 OR MIT | 73 |
-| MIT/Apache-2.0 | 32 |
-| Zlib OR Apache-2.0 OR MIT | 21 |
+| MIT OR Apache-2.0 | 359 |
+| MIT | 176 |
+| Apache-2.0 OR MIT | 75 |
+| MIT/Apache-2.0 | 33 |
+| Zlib OR Apache-2.0 OR MIT | 22 |
 | Unicode-3.0 | 18 |
 | BSD-3-Clause | 6 |
 | MPL-2.0 | 6 |
@@ -112,11 +112,12 @@ one of these and not publishing the patch is not.
 | android_system_properties | 0.1.5 | MIT/Apache-2.0 | [13] [14] |
 | anyhow | 1.0.104 | MIT OR Apache-2.0 | [12] [3] |
 | apple-native-keyring-store | 1.0.1 | MIT OR Apache-2.0 | [15] [16] |
-| arc-swap | 1.9.2 | MIT OR Apache-2.0 | [17] [18] |
-| arrayref | 0.3.9 | BSD-2-Clause | [19] |
-| arrayvec | 0.7.8 | MIT OR Apache-2.0 | [17] [20] |
-| async_io_stream | 0.3.3 | Unlicense | [21] |
-| async-broadcast | 0.7.2 | MIT OR Apache-2.0 | [22] [23] |
+| arbitrary | 1.4.2 | MIT OR Apache-2.0 | [17] [18] |
+| arc-swap | 1.9.2 | MIT OR Apache-2.0 | [17] [19] |
+| arrayref | 0.3.9 | BSD-2-Clause | [20] |
+| arrayvec | 0.7.8 | MIT OR Apache-2.0 | [17] [21] |
+| async_io_stream | 0.3.3 | Unlicense | [22] |
+| async-broadcast | 0.7.2 | MIT OR Apache-2.0 | [23] [24] |
 | async-channel | 2.5.0 | Apache-2.0 OR MIT | [17] [3] |
 | async-executor | 1.14.0 | Apache-2.0 OR MIT | [17] [3] |
 | async-io | 2.6.0 | Apache-2.0 OR MIT | [17] [3] |
@@ -126,332 +127,335 @@ one of these and not publishing the patch is not.
 | async-signal | 0.2.14 | Apache-2.0 OR MIT | [17] [3] |
 | async-task | 4.7.1 | Apache-2.0 OR MIT | [17] [3] |
 | async-trait | 0.1.91 | MIT OR Apache-2.0 | [12] [3] |
-| atk | 0.18.2 | MIT | [24] [25] |
-| atk-sys | 0.18.2 | MIT | [25] |
-| atomic-polyfill | 1.0.3 | MIT OR Apache-2.0 | [17] [26] |
-| atomic-waker | 1.1.2 | Apache-2.0 OR MIT | [17] [3] [27] |
-| attohttpc | 0.30.1 | MPL-2.0 | [28] |
-| autocfg | 1.5.1 | Apache-2.0 OR MIT | [17] [29] |
-| aws-lc-rs | 1.17.3 | ISC AND (Apache-2.0 OR ISC) | [30] |
-| aws-lc-sys | 0.43.0 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | [31] |
-| backon | 1.6.0 | Apache-2.0 | [32] |
-| bao-tree | 0.16.0 | MIT OR Apache-2.0 | [33] [34] |
-| base16ct | 1.0.0 | Apache-2.0 OR MIT | [4] [35] |
-| base64 | 0.21.7 | MIT OR Apache-2.0 | [17] [36] |
-| base64 | 0.22.1 | MIT OR Apache-2.0 | [17] [36] |
-| base64ct | 1.8.3 | Apache-2.0 OR MIT | [4] [37] |
+| atk | 0.18.2 | MIT | [25] [26] |
+| atk-sys | 0.18.2 | MIT | [26] |
+| atomic-polyfill | 1.0.3 | MIT OR Apache-2.0 | [17] [27] |
+| atomic-waker | 1.1.2 | Apache-2.0 OR MIT | [17] [3] [28] |
+| attohttpc | 0.30.1 | MPL-2.0 | [29] |
+| autocfg | 1.5.1 | Apache-2.0 OR MIT | [17] [30] |
+| aws-lc-rs | 1.17.3 | ISC AND (Apache-2.0 OR ISC) | [31] |
+| aws-lc-sys | 0.43.0 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | [32] |
+| backon | 1.6.0 | Apache-2.0 | [33] |
+| bao-tree | 0.16.0 | MIT OR Apache-2.0 | [34] [35] |
+| base16ct | 1.0.0 | Apache-2.0 OR MIT | [4] [36] |
+| base64 | 0.21.7 | MIT OR Apache-2.0 | [17] [37] |
+| base64 | 0.22.1 | MIT OR Apache-2.0 | [17] [37] |
+| base64ct | 1.8.3 | Apache-2.0 OR MIT | [4] [38] |
 | binary-merge | 0.1.2 | MIT OR Apache-2.0 |  |
-| bit-set | 0.8.0 | Apache-2.0 OR MIT | [38] [39] |
-| bit-vec | 0.8.0 | Apache-2.0 OR MIT | [38] [39] |
-| bitflags | 1.3.2 | MIT/Apache-2.0 | [17] [40] |
-| bitflags | 2.13.1 | MIT OR Apache-2.0 | [17] [40] |
-| blake3 | 1.8.5 | CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception | [41] [42] [43] |
-| block-buffer | 0.10.4 | MIT OR Apache-2.0 | [4] [44] |
-| block-buffer | 0.12.1 | MIT OR Apache-2.0 | [4] [45] |
-| block-padding | 0.3.3 | MIT OR Apache-2.0 | [4] [44] |
+| bit-set | 0.8.0 | Apache-2.0 OR MIT | [39] [40] |
+| bit-vec | 0.8.0 | Apache-2.0 OR MIT | [39] [40] |
+| bitflags | 1.3.2 | MIT/Apache-2.0 | [17] [41] |
+| bitflags | 2.13.1 | MIT OR Apache-2.0 | [17] [41] |
+| blake3 | 1.8.5 | CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception | [42] [43] [44] |
+| block-buffer | 0.10.4 | MIT OR Apache-2.0 | [4] [45] |
+| block-buffer | 0.12.1 | MIT OR Apache-2.0 | [4] [46] |
+| block-padding | 0.3.3 | MIT OR Apache-2.0 | [4] [45] |
 | block2 | 0.6.2 | MIT |  |
 | blocking | 1.6.2 | Apache-2.0 OR MIT | [17] [3] |
-| brotli | 8.0.4 | BSD-3-Clause AND MIT | [11] [46] |
+| brotli | 8.0.4 | BSD-3-Clause AND MIT | [11] [47] |
 | brotli-decompressor | 5.0.3 | BSD-3-Clause/MIT | [11] |
-| bs58 | 0.5.1 | MIT/Apache-2.0 | [17] [47] |
-| bumpalo | 3.20.3 | MIT OR Apache-2.0 | [17] [48] |
-| bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | [49] [50] [51] |
+| bs58 | 0.5.1 | MIT/Apache-2.0 | [17] [48] |
+| bumpalo | 3.20.3 | MIT OR Apache-2.0 | [17] [49] |
+| bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | [50] [51] [52] |
 | byteorder | 1.5.0 | Unlicense OR MIT | [8] [9] [10] |
 | byteorder-lite | 0.1.0 | Unlicense OR MIT | [9] [10] |
-| bytes | 1.12.1 | MIT | [52] |
-| cairo-rs | 0.18.5 | MIT | [24] [25] |
-| cairo-sys-rs | 0.18.2 | MIT | [25] |
+| bytes | 1.12.1 | MIT | [53] |
+| cairo-rs | 0.18.5 | MIT | [25] [26] |
+| cairo-sys-rs | 0.18.2 | MIT | [26] |
 | camino | 1.2.5 | MIT OR Apache-2.0 | [17] [3] |
 | cargo_metadata | 0.19.2 | MIT | [3] |
-| cargo_toml | 0.22.3 | Apache-2.0 OR MIT | [53] |
+| cargo_toml | 0.22.3 | Apache-2.0 OR MIT | [54] |
 | cargo-platform | 0.1.9 | MIT OR Apache-2.0 | [2] [3] |
-| cbc | 0.1.2 | MIT OR Apache-2.0 | [4] [54] |
-| cc | 1.4.0 | MIT OR Apache-2.0 | [17] [55] |
-| cesu8 | 1.1.0 | Apache-2.0/MIT | [56] |
-| cfb | 0.7.3 | MIT | [57] |
-| cfg_aliases | 0.2.2 | MIT | [58] |
-| cfg-expr | 0.15.8 | MIT OR Apache-2.0 | [38] [59] |
-| cfg-if | 1.0.4 | MIT OR Apache-2.0 | [17] [55] |
-| chacha20 | 0.10.1 | MIT OR Apache-2.0 | [4] [60] |
-| chrono | 0.4.45 | MIT OR Apache-2.0 | [61] |
-| cipher | 0.4.4 | MIT OR Apache-2.0 | [4] [62] |
-| cmake | 0.1.58 | MIT OR Apache-2.0 | [17] [55] |
-| cmov | 0.5.4 | Apache-2.0 OR MIT | [63] [64] |
-| cobs | 0.3.0 | MIT OR Apache-2.0 | [65] [66] |
-| color_quant | 1.1.0 | MIT | [67] |
-| combine | 4.6.7 | MIT | [68] |
+| cbc | 0.1.2 | MIT OR Apache-2.0 | [4] [55] |
+| cc | 1.4.0 | MIT OR Apache-2.0 | [17] [56] |
+| cesu8 | 1.1.0 | Apache-2.0/MIT | [57] |
+| cfb | 0.7.3 | MIT | [58] |
+| cfg_aliases | 0.2.2 | MIT | [59] |
+| cfg-expr | 0.15.8 | MIT OR Apache-2.0 | [39] [60] |
+| cfg-if | 1.0.4 | MIT OR Apache-2.0 | [17] [56] |
+| chacha20 | 0.10.1 | MIT OR Apache-2.0 | [4] [61] |
+| chrono | 0.4.45 | MIT OR Apache-2.0 | [62] |
+| cipher | 0.4.4 | MIT OR Apache-2.0 | [4] [63] |
+| cmake | 0.1.58 | MIT OR Apache-2.0 | [17] [56] |
+| cmov | 0.5.4 | Apache-2.0 OR MIT | [64] [65] |
+| cobs | 0.3.0 | MIT OR Apache-2.0 | [66] [67] |
+| color_quant | 1.1.0 | MIT | [68] |
+| combine | 4.6.7 | MIT | [69] |
 | concurrent-queue | 2.5.0 | Apache-2.0 OR MIT | [17] [3] |
-| const-oid | 0.10.2 | Apache-2.0 OR MIT | [4] [69] |
-| constant_time_eq | 0.4.2 | CC0-1.0 OR MIT-0 OR Apache-2.0 | [12] [43] [70] |
-| convert_case | 0.10.0 | MIT | [71] |
-| cookie | 0.18.1 | MIT OR Apache-2.0 | [72] [73] |
-| cordyceps | 0.3.5 | MIT | [74] |
-| core-foundation | 0.9.4 | MIT OR Apache-2.0 | [17] [75] |
-| core-foundation | 0.10.1 | MIT OR Apache-2.0 | [17] [75] |
-| core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | [17] [75] |
-| core-graphics | 0.25.0 | MIT OR Apache-2.0 | [76] [17] [75] |
-| core-graphics-types | 0.2.0 | MIT OR Apache-2.0 | [17] [75] |
-| cpufeatures | 0.2.17 | MIT OR Apache-2.0 | [4] [77] |
-| cpufeatures | 0.3.0 | MIT OR Apache-2.0 | [4] [77] |
-| crc32fast | 1.5.0 | MIT OR Apache-2.0 | [65] [78] |
-| critical-section | 1.2.0 | MIT OR Apache-2.0 | [17] [79] |
-| crossbeam-channel | 0.5.16 | MIT OR Apache-2.0 | [17] [80] [81] |
-| crossbeam-epoch | 0.9.20 | MIT OR Apache-2.0 | [17] [80] |
-| crossbeam-utils | 0.8.22 | MIT OR Apache-2.0 | [17] [80] |
-| crypto-common | 0.1.7 | MIT OR Apache-2.0 | [4] [82] |
-| crypto-common | 0.2.2 | MIT OR Apache-2.0 | [4] [83] |
-| cssparser | 0.36.0 | MPL-2.0 | [84] |
-| cssparser-macros | 0.6.1 | MPL-2.0 | [84] |
-| ctor | 0.8.0 | Apache-2.0 OR MIT | [65] [85] |
-| ctor-proc-macro | 0.0.7 | Apache-2.0 OR MIT | [65] [85] |
-| ctr | 0.9.2 | MIT OR Apache-2.0 | [4] [54] |
-| ctutils | 0.4.2 | Apache-2.0 OR MIT | [63] [86] |
-| curve25519-dalek | 5.0.0 | BSD-3-Clause | [87] |
+| const-oid | 0.10.2 | Apache-2.0 OR MIT | [4] [70] |
+| constant_time_eq | 0.4.2 | CC0-1.0 OR MIT-0 OR Apache-2.0 | [12] [44] [71] |
+| convert_case | 0.10.0 | MIT | [72] |
+| cookie | 0.18.1 | MIT OR Apache-2.0 | [73] [74] |
+| cordyceps | 0.3.5 | MIT | [75] |
+| core-foundation | 0.9.4 | MIT OR Apache-2.0 | [17] [76] |
+| core-foundation | 0.10.1 | MIT OR Apache-2.0 | [17] [76] |
+| core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | [17] [76] |
+| core-graphics | 0.25.0 | MIT OR Apache-2.0 | [77] [17] [76] |
+| core-graphics-types | 0.2.0 | MIT OR Apache-2.0 | [17] [76] |
+| cpufeatures | 0.2.17 | MIT OR Apache-2.0 | [4] [78] |
+| cpufeatures | 0.3.0 | MIT OR Apache-2.0 | [4] [78] |
+| crc32fast | 1.5.0 | MIT OR Apache-2.0 | [66] [79] |
+| critical-section | 1.2.0 | MIT OR Apache-2.0 | [17] [80] |
+| crossbeam-channel | 0.5.16 | MIT OR Apache-2.0 | [17] [81] [82] |
+| crossbeam-epoch | 0.9.20 | MIT OR Apache-2.0 | [17] [81] |
+| crossbeam-utils | 0.8.22 | MIT OR Apache-2.0 | [17] [81] |
+| crypto-common | 0.1.7 | MIT OR Apache-2.0 | [4] [83] |
+| crypto-common | 0.2.2 | MIT OR Apache-2.0 | [4] [84] |
+| cssparser | 0.36.0 | MPL-2.0 | [85] |
+| cssparser-macros | 0.6.1 | MPL-2.0 | [85] |
+| ctor | 0.8.0 | Apache-2.0 OR MIT | [66] [86] |
+| ctor-proc-macro | 0.0.7 | Apache-2.0 OR MIT | [66] [86] |
+| ctr | 0.9.2 | MIT OR Apache-2.0 | [4] [55] |
+| ctutils | 0.4.2 | Apache-2.0 OR MIT | [64] [87] |
+| curve25519-dalek | 5.0.0 | BSD-3-Clause | [88] |
 | curve25519-dalek-derive | 0.1.1 | MIT/Apache-2.0 | [17] [3] |
-| darling | 0.23.0 | MIT | [88] |
-| darling_core | 0.23.0 | MIT | [88] |
-| darling_macro | 0.23.0 | MIT | [88] |
-| data-encoding | 2.11.0 | MIT | [89] |
-| data-encoding-macro | 0.1.20 | MIT | [89] |
-| data-encoding-macro-internal | 0.1.18 | MIT | [89] |
-| dbus | 0.9.12 | Apache-2.0/MIT | [90] [91] |
-| der | 0.8.1 | Apache-2.0 OR MIT | [4] [69] |
-| deranged | 0.5.8 | MIT OR Apache-2.0 | [92] [93] |
-| derive_more | 2.1.1 | MIT | [94] |
-| derive_more-impl | 2.1.1 | MIT | [94] |
-| diatomic-waker | 0.2.3 | MIT OR Apache-2.0 | [38] [95] |
-| digest | 0.10.7 | MIT OR Apache-2.0 | [4] [96] |
-| digest | 0.11.3 | MIT OR Apache-2.0 | [4] [97] |
-| directories | 6.0.0 | MIT OR Apache-2.0 | [98] [99] |
-| dirs | 6.0.0 | MIT OR Apache-2.0 | [98] [100] |
-| dirs-sys | 0.5.0 | MIT OR Apache-2.0 | [98] [100] |
+| darling | 0.23.0 | MIT | [89] |
+| darling_core | 0.23.0 | MIT | [89] |
+| darling_macro | 0.23.0 | MIT | [89] |
+| data-encoding | 2.11.0 | MIT | [90] |
+| data-encoding-macro | 0.1.20 | MIT | [90] |
+| data-encoding-macro-internal | 0.1.18 | MIT | [90] |
+| dbus | 0.9.12 | Apache-2.0/MIT | [91] [92] |
+| der | 0.8.1 | Apache-2.0 OR MIT | [4] [70] |
+| deranged | 0.5.8 | MIT OR Apache-2.0 | [93] [94] |
+| derive_arbitrary | 1.4.2 | MIT OR Apache-2.0 | [17] [18] |
+| derive_more | 2.1.1 | MIT | [95] |
+| derive_more-impl | 2.1.1 | MIT | [95] |
+| diatomic-waker | 0.2.3 | MIT OR Apache-2.0 | [39] [96] |
+| digest | 0.10.7 | MIT OR Apache-2.0 | [4] [97] |
+| digest | 0.11.3 | MIT OR Apache-2.0 | [4] [98] |
+| directories | 6.0.0 | MIT OR Apache-2.0 | [99] [100] |
+| dirs | 6.0.0 | MIT OR Apache-2.0 | [99] [101] |
+| dirs-sys | 0.5.0 | MIT OR Apache-2.0 | [99] [101] |
 | dispatch2 | 0.3.1 | Zlib OR Apache-2.0 OR MIT |  |
 | displaydoc | 0.2.7 | MIT OR Apache-2.0 | [17] [3] |
 | dlopen2 | 0.8.2 | MIT |  |
 | dlopen2_derive | 0.4.3 | MIT |  |
-| dom_query | 0.27.0 | MIT | [101] |
-| dpi | 0.1.2 | Apache-2.0 AND MIT | [65] [102] |
+| dom_query | 0.27.0 | MIT | [102] |
+| dpi | 0.1.2 | Apache-2.0 AND MIT | [66] [103] |
 | dtoa | 1.0.11 | MIT OR Apache-2.0 | [12] [3] |
-| dtoa-short | 0.3.5 | MPL-2.0 | [84] |
-| dtor | 0.3.0 | Apache-2.0 OR MIT | [65] [85] |
-| dtor-proc-macro | 0.0.6 | Apache-2.0 OR MIT | [65] [85] |
-| dunce | 1.0.5 | CC0-1.0 OR MIT-0 OR Apache-2.0 | [43] |
+| dtoa-short | 0.3.5 | MPL-2.0 | [85] |
+| dtor | 0.3.0 | Apache-2.0 OR MIT | [66] [86] |
+| dtor-proc-macro | 0.0.6 | Apache-2.0 OR MIT | [66] [86] |
+| dunce | 1.0.5 | CC0-1.0 OR MIT-0 OR Apache-2.0 | [44] |
 | dyn-clone | 1.0.20 | MIT OR Apache-2.0 | [12] [3] |
-| ed25519 | 3.0.0 | Apache-2.0 OR MIT | [103] [104] |
-| ed25519-dalek | 3.0.0 | BSD-3-Clause | [105] |
-| either | 1.17.0 | MIT OR Apache-2.0 | [17] [106] |
-| embed_plist | 1.2.2 | MIT OR Apache-2.0 | [63] [107] |
-| embed-resource | 3.0.11 | MIT | [108] |
-| embedded-io | 0.4.0 | MIT OR Apache-2.0 | [17] [109] |
-| embedded-io | 0.6.1 | MIT OR Apache-2.0 | [17] [110] |
+| ed25519 | 3.0.0 | Apache-2.0 OR MIT | [104] [105] |
+| ed25519-dalek | 3.0.0 | BSD-3-Clause | [106] |
+| either | 1.17.0 | MIT OR Apache-2.0 | [17] [107] |
+| embed_plist | 1.2.2 | MIT OR Apache-2.0 | [64] [108] |
+| embed-resource | 3.0.11 | MIT | [109] |
+| embedded-io | 0.4.0 | MIT OR Apache-2.0 | [17] [110] |
+| embedded-io | 0.6.1 | MIT OR Apache-2.0 | [17] [111] |
 | endi | 1.1.1 | MIT | [3] |
 | enum-assoc | 1.3.0 | MIT OR Apache-2.0 |  |
-| enumflags2 | 0.7.12 | MIT OR Apache-2.0 | [111] [112] |
-| enumflags2_derive | 0.7.12 | MIT OR Apache-2.0 | [113] [114] |
-| equivalent | 1.0.2 | Apache-2.0 OR MIT | [17] [115] |
+| enumflags2 | 0.7.12 | MIT OR Apache-2.0 | [112] [113] |
+| enumflags2_derive | 0.7.12 | MIT OR Apache-2.0 | [114] [115] |
+| equivalent | 1.0.2 | Apache-2.0 OR MIT | [17] [116] |
 | erased-serde | 0.4.10 | MIT OR Apache-2.0 | [12] [3] |
-| errno | 0.3.14 | MIT OR Apache-2.0 | [17] [116] |
+| errno | 0.3.14 | MIT OR Apache-2.0 | [17] [117] |
 | event-listener | 5.4.2 | Apache-2.0 OR MIT | [17] [3] |
 | event-listener-strategy | 0.5.4 | Apache-2.0 OR MIT | [17] [3] |
-| fallible-iterator | 0.3.0 | MIT/Apache-2.0 | [65] [117] |
-| fallible-streaming-iterator | 0.1.9 | MIT/Apache-2.0 | [65] [118] |
+| fallible-iterator | 0.3.0 | MIT/Apache-2.0 | [66] [118] |
+| fallible-streaming-iterator | 0.1.9 | MIT/Apache-2.0 | [66] [119] |
 | fastrand | 2.5.0 | Apache-2.0 OR MIT | [17] [3] |
-| fdeflate | 0.3.7 | MIT OR Apache-2.0 | [119] [120] |
-| fiat-crypto | 0.3.0 | MIT OR Apache-2.0 OR BSD-1-Clause | [121] [122] [123] [124] |
-| field-offset | 0.3.6 | MIT OR Apache-2.0 | [119] [125] |
-| find-msvc-tools | 0.1.9 | MIT OR Apache-2.0 | [17] [55] |
-| flate2 | 1.1.9 | MIT OR Apache-2.0 | [17] [126] |
-| fnv | 1.0.7 | Apache-2.0 / MIT | [17] [127] |
-| foldhash | 0.2.0 | Zlib | [128] |
-| foreign-types | 0.5.0 | MIT/Apache-2.0 | [65] [129] |
-| foreign-types-macros | 0.2.4 | MIT/Apache-2.0 | [65] [129] |
-| foreign-types-shared | 0.3.1 | MIT/Apache-2.0 | [65] [129] |
-| form_urlencoded | 1.2.2 | MIT OR Apache-2.0 | [17] [130] |
-| fs_extra | 1.3.0 | MIT | [131] |
-| fsevent-sys | 4.1.0 | MIT | [132] |
-| futures | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-buffered | 0.2.13 | MIT | [135] |
-| futures-channel | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-core | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-executor | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-io | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-lite | 2.6.1 | Apache-2.0 OR MIT | [17] [3] [27] |
-| futures-macro | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-sink | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-task | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| futures-util | 0.3.33 | MIT OR Apache-2.0 | [133] [134] |
-| gdk | 0.18.2 | MIT | [24] [25] |
-| gdk-pixbuf | 0.18.5 | MIT | [24] [25] |
-| gdk-pixbuf-sys | 0.18.0 | MIT | [25] |
-| gdk-sys | 0.18.2 | MIT | [25] |
-| gdkwayland-sys | 0.18.2 | MIT | [25] |
-| gdkx11 | 0.18.2 | MIT | [24] [25] |
-| gdkx11-sys | 0.18.2 | MIT | [25] |
+| fdeflate | 0.3.7 | MIT OR Apache-2.0 | [120] [121] |
+| fiat-crypto | 0.3.0 | MIT OR Apache-2.0 OR BSD-1-Clause | [122] [123] [124] [125] |
+| field-offset | 0.3.6 | MIT OR Apache-2.0 | [120] [126] |
+| filetime | 0.2.29 | MIT/Apache-2.0 | [17] [56] |
+| find-msvc-tools | 0.1.9 | MIT OR Apache-2.0 | [17] [56] |
+| flate2 | 1.1.9 | MIT OR Apache-2.0 | [17] [127] |
+| fnv | 1.0.7 | Apache-2.0 / MIT | [17] [128] |
+| foldhash | 0.2.0 | Zlib | [129] |
+| foreign-types | 0.5.0 | MIT/Apache-2.0 | [66] [130] |
+| foreign-types-macros | 0.2.4 | MIT/Apache-2.0 | [66] [130] |
+| foreign-types-shared | 0.3.1 | MIT/Apache-2.0 | [66] [130] |
+| form_urlencoded | 1.2.2 | MIT OR Apache-2.0 | [17] [131] |
+| fs_extra | 1.3.0 | MIT | [132] |
+| fsevent-sys | 4.1.0 | MIT | [133] |
+| futures | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-buffered | 0.2.13 | MIT | [136] |
+| futures-channel | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-core | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-executor | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-io | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-lite | 2.6.1 | Apache-2.0 OR MIT | [17] [3] [28] |
+| futures-macro | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-sink | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-task | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| futures-util | 0.3.33 | MIT OR Apache-2.0 | [134] [135] |
+| gdk | 0.18.2 | MIT | [25] [26] |
+| gdk-pixbuf | 0.18.5 | MIT | [25] [26] |
+| gdk-pixbuf-sys | 0.18.0 | MIT | [26] |
+| gdk-sys | 0.18.2 | MIT | [26] |
+| gdkwayland-sys | 0.18.2 | MIT | [26] |
+| gdkx11 | 0.18.2 | MIT | [25] [26] |
+| gdkx11-sys | 0.18.2 | MIT | [26] |
 | genawaiter | 0.99.1 | MIT |  |
 | genawaiter-macro | 0.99.1 | MIT/Apache-2.0 |  |
 | genawaiter-proc-macro | 0.99.1 | MIT/Apache-2.0 |  |
-| generator | 0.8.9 | MIT/Apache-2.0 | [136] [137] |
-| generic-array | 0.14.7 | MIT | [138] |
-| getrandom | 0.2.17 | MIT OR Apache-2.0 | [139] [140] |
-| getrandom | 0.3.4 | MIT OR Apache-2.0 | [139] [141] |
-| getrandom | 0.4.3 | MIT OR Apache-2.0 | [139] [142] |
-| ghash | 0.5.1 | Apache-2.0 OR MIT | [4] [143] |
-| gif | 0.14.2 | MIT OR Apache-2.0 | [17] [144] |
-| gio | 0.18.4 | MIT | [24] [25] |
-| gio-sys | 0.18.1 | MIT | [25] |
-| glib | 0.18.5 | MIT | [24] [25] |
-| glib-macros | 0.18.5 | MIT | [24] [25] |
-| glib-sys | 0.18.1 | MIT | [25] |
-| glob | 0.3.4 | MIT OR Apache-2.0 | [17] [40] |
+| generator | 0.8.9 | MIT/Apache-2.0 | [137] [138] |
+| generic-array | 0.14.7 | MIT | [139] |
+| getrandom | 0.2.17 | MIT OR Apache-2.0 | [140] [141] |
+| getrandom | 0.3.4 | MIT OR Apache-2.0 | [140] [142] |
+| getrandom | 0.4.3 | MIT OR Apache-2.0 | [140] [143] |
+| ghash | 0.5.1 | Apache-2.0 OR MIT | [4] [144] |
+| gif | 0.14.2 | MIT OR Apache-2.0 | [17] [145] |
+| gio | 0.18.4 | MIT | [25] [26] |
+| gio-sys | 0.18.1 | MIT | [26] |
+| glib | 0.18.5 | MIT | [25] [26] |
+| glib-macros | 0.18.5 | MIT | [25] [26] |
+| glib-sys | 0.18.1 | MIT | [26] |
+| glob | 0.3.4 | MIT OR Apache-2.0 | [17] [41] |
 | gloo-timers | 0.3.0 | MIT OR Apache-2.0 |  |
-| gobject-sys | 0.18.0 | MIT | [25] |
-| gtk | 0.18.2 | MIT | [24] [25] |
-| gtk-sys | 0.18.2 | MIT | [25] |
-| gtk3-macros | 0.18.2 | MIT | [24] [25] |
-| h2 | 0.4.15 | MIT | [145] |
-| hash32 | 0.2.1 | MIT OR Apache-2.0 | [17] [146] |
-| hashbrown | 0.12.3 | MIT OR Apache-2.0 | [17] [147] |
-| hashbrown | 0.16.1 | MIT OR Apache-2.0 | [17] [147] |
-| hashbrown | 0.17.1 | MIT OR Apache-2.0 | [17] [147] |
-| hashlink | 0.12.1 | MIT OR Apache-2.0 | [38] [148] |
-| heapless | 0.7.17 | MIT OR Apache-2.0 | [17] [149] |
-| heck | 0.4.1 | MIT OR Apache-2.0 | [17] [150] |
-| heck | 0.5.0 | MIT OR Apache-2.0 | [17] [150] |
+| gobject-sys | 0.18.0 | MIT | [26] |
+| gtk | 0.18.2 | MIT | [25] [26] |
+| gtk-sys | 0.18.2 | MIT | [26] |
+| gtk3-macros | 0.18.2 | MIT | [25] [26] |
+| h2 | 0.4.15 | MIT | [146] |
+| hash32 | 0.2.1 | MIT OR Apache-2.0 | [17] [147] |
+| hashbrown | 0.12.3 | MIT OR Apache-2.0 | [17] [148] |
+| hashbrown | 0.16.1 | MIT OR Apache-2.0 | [17] [148] |
+| hashbrown | 0.17.1 | MIT OR Apache-2.0 | [17] [148] |
+| hashlink | 0.12.1 | MIT OR Apache-2.0 | [39] [149] |
+| heapless | 0.7.17 | MIT OR Apache-2.0 | [17] [150] |
+| heck | 0.4.1 | MIT OR Apache-2.0 | [17] [151] |
+| heck | 0.5.0 | MIT OR Apache-2.0 | [17] [151] |
 | hermit-abi | 0.5.2 | MIT OR Apache-2.0 | [17] [3] |
-| hex | 0.4.3 | MIT OR Apache-2.0 | [65] [151] |
-| hickory-net | 0.26.1 | MIT OR Apache-2.0 | [152] [153] |
-| hickory-proto | 0.26.1 | MIT OR Apache-2.0 | [152] [153] |
-| hickory-resolver | 0.26.1 | MIT OR Apache-2.0 | [152] [153] |
-| hkdf | 0.12.4 | MIT OR Apache-2.0 | [4] [154] |
-| hmac | 0.12.1 | MIT OR Apache-2.0 | [4] [96] |
-| html5ever | 0.38.0 | MIT OR Apache-2.0 | [17] [155] |
-| http | 1.5.0 | MIT OR Apache-2.0 | [156] [157] |
-| http-body | 1.1.0 | MIT | [158] |
-| http-body-util | 0.1.4 | MIT | [158] |
-| http-range | 0.1.5 | MIT | [159] |
-| httparse | 1.10.1 | MIT OR Apache-2.0 | [17] [160] |
-| httpdate | 1.0.3 | MIT OR Apache-2.0 | [161] [162] |
-| hybrid-array | 0.4.14 | MIT OR Apache-2.0 | [4] [64] |
-| hyper | 1.11.0 | MIT | [163] |
-| hyper-rustls | 0.27.9 | Apache-2.0 OR ISC OR MIT | [17] [164] [165] |
-| hyper-util | 0.1.20 | MIT | [166] |
-| iana-time-zone | 0.1.65 | MIT OR Apache-2.0 | [167] [168] |
-| iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 | [167] [168] |
-| ico | 0.5.0 | MIT | [169] |
-| icu_collections | 2.2.0 | Unicode-3.0 | [170] |
-| icu_locale_core | 2.2.0 | Unicode-3.0 | [170] |
-| icu_normalizer | 2.2.0 | Unicode-3.0 | [170] |
-| icu_normalizer_data | 2.2.0 | Unicode-3.0 | [170] |
-| icu_properties | 2.2.0 | Unicode-3.0 | [170] |
-| icu_properties_data | 2.2.0 | Unicode-3.0 | [170] |
-| icu_provider | 2.2.0 | Unicode-3.0 | [170] |
-| ident_case | 1.0.1 | MIT/Apache-2.0 | [171] |
-| identity-hash | 0.1.0 | Apache-2.0 OR MIT | [63] [172] |
-| idna | 1.1.0 | MIT OR Apache-2.0 | [17] [173] |
-| idna_adapter | 1.2.2 | Apache-2.0 OR MIT | [17] [174] |
-| igd-next | 0.17.1 | MIT | [175] |
-| image | 0.25.10 | MIT OR Apache-2.0 | [119] [120] |
-| image-webp | 0.2.4 | MIT OR Apache-2.0 | [119] [120] |
-| indexmap | 1.9.3 | Apache-2.0 OR MIT | [17] [176] |
-| indexmap | 2.14.0 | Apache-2.0 OR MIT | [17] [176] |
-| infer | 0.19.0 | MIT | [177] |
-| inotify | 0.11.4 | ISC | [178] |
-| inotify-sys | 0.1.8 | ISC | [178] |
-| inout | 0.1.4 | MIT OR Apache-2.0 | [4] [179] |
+| hex | 0.4.3 | MIT OR Apache-2.0 | [66] [152] |
+| hickory-net | 0.26.1 | MIT OR Apache-2.0 | [153] [154] |
+| hickory-proto | 0.26.1 | MIT OR Apache-2.0 | [153] [154] |
+| hickory-resolver | 0.26.1 | MIT OR Apache-2.0 | [153] [154] |
+| hkdf | 0.12.4 | MIT OR Apache-2.0 | [4] [155] |
+| hmac | 0.12.1 | MIT OR Apache-2.0 | [4] [97] |
+| html5ever | 0.38.0 | MIT OR Apache-2.0 | [17] [156] |
+| http | 1.5.0 | MIT OR Apache-2.0 | [157] [158] |
+| http-body | 1.1.0 | MIT | [159] |
+| http-body-util | 0.1.4 | MIT | [159] |
+| http-range | 0.1.5 | MIT | [160] |
+| httparse | 1.10.1 | MIT OR Apache-2.0 | [17] [161] |
+| httpdate | 1.0.3 | MIT OR Apache-2.0 | [162] [163] |
+| hybrid-array | 0.4.14 | MIT OR Apache-2.0 | [4] [65] |
+| hyper | 1.11.0 | MIT | [164] |
+| hyper-rustls | 0.27.9 | Apache-2.0 OR ISC OR MIT | [17] [165] [166] |
+| hyper-util | 0.1.20 | MIT | [167] |
+| iana-time-zone | 0.1.65 | MIT OR Apache-2.0 | [168] [169] |
+| iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 | [168] [169] |
+| ico | 0.5.0 | MIT | [170] |
+| icu_collections | 2.2.0 | Unicode-3.0 | [171] |
+| icu_locale_core | 2.2.0 | Unicode-3.0 | [171] |
+| icu_normalizer | 2.2.0 | Unicode-3.0 | [171] |
+| icu_normalizer_data | 2.2.0 | Unicode-3.0 | [171] |
+| icu_properties | 2.2.0 | Unicode-3.0 | [171] |
+| icu_properties_data | 2.2.0 | Unicode-3.0 | [171] |
+| icu_provider | 2.2.0 | Unicode-3.0 | [171] |
+| ident_case | 1.0.1 | MIT/Apache-2.0 | [172] |
+| identity-hash | 0.1.0 | Apache-2.0 OR MIT | [64] [173] |
+| idna | 1.1.0 | MIT OR Apache-2.0 | [17] [174] |
+| idna_adapter | 1.2.2 | Apache-2.0 OR MIT | [17] [175] |
+| igd-next | 0.17.1 | MIT | [176] |
+| image | 0.25.10 | MIT OR Apache-2.0 | [120] [121] |
+| image-webp | 0.2.4 | MIT OR Apache-2.0 | [120] [121] |
+| indexmap | 1.9.3 | Apache-2.0 OR MIT | [17] [177] |
+| indexmap | 2.14.0 | Apache-2.0 OR MIT | [17] [177] |
+| infer | 0.19.0 | MIT | [178] |
+| inotify | 0.11.4 | ISC | [179] |
+| inotify-sys | 0.1.8 | ISC | [179] |
+| inout | 0.1.4 | MIT OR Apache-2.0 | [4] [180] |
 | inplace-vec-builder | 0.1.1 | MIT OR Apache-2.0 |  |
-| ipconfig | 0.3.4 | MIT/Apache-2.0 | [17] [180] |
-| ipnet | 2.12.0 | MIT OR Apache-2.0 | [181] [182] |
-| iroh | 1.0.3 | MIT OR Apache-2.0 | [183] |
+| ipconfig | 0.3.4 | MIT/Apache-2.0 | [17] [181] |
+| ipnet | 2.12.0 | MIT OR Apache-2.0 | [182] [183] |
+| iroh | 1.0.3 | MIT OR Apache-2.0 | [184] |
 | iroh-base | 1.0.3 | MIT OR Apache-2.0 |  |
-| iroh-blobs | 0.103.0 | MIT OR Apache-2.0 | [184] [185] |
+| iroh-blobs | 0.103.0 | MIT OR Apache-2.0 | [185] [186] |
 | iroh-dns | 1.0.3 | MIT OR Apache-2.0 |  |
-| iroh-io | 0.6.2 | Apache-2.0 OR MIT | [17] [186] |
-| iroh-metrics | 1.0.1 | MIT OR Apache-2.0 | [187] [188] |
+| iroh-io | 0.6.2 | Apache-2.0 OR MIT | [17] [187] |
+| iroh-metrics | 1.0.1 | MIT OR Apache-2.0 | [188] [189] |
 | iroh-metrics-derive | 1.0.1 | MIT OR Apache-2.0 |  |
-| iroh-relay | 1.0.3 | MIT OR Apache-2.0 | [189] |
-| iroh-tickets | 1.0.0 | MIT OR Apache-2.0 | [187] [188] |
-| iroh-util | 0.6.0 | MIT OR Apache-2.0 | [33] [34] |
-| irpc | 0.17.0 | Apache-2.0/MIT | [187] [188] |
+| iroh-relay | 1.0.3 | MIT OR Apache-2.0 | [190] |
+| iroh-tickets | 1.0.0 | MIT OR Apache-2.0 | [188] [189] |
+| iroh-util | 0.6.0 | MIT OR Apache-2.0 | [34] [35] |
+| irpc | 0.17.0 | Apache-2.0/MIT | [188] [189] |
 | irpc-derive | 0.17.0 | Apache-2.0/MIT |  |
-| is-docker | 0.2.0 | MIT | [190] |
-| is-wsl | 0.4.0 | MIT | [190] |
+| is-docker | 0.2.0 | MIT | [191] |
+| is-wsl | 0.4.0 | MIT | [191] |
 | itoa | 1.0.18 | MIT OR Apache-2.0 | [12] [3] |
-| javascriptcore-rs | 1.1.2 | MIT | [191] |
-| javascriptcore-rs-sys | 1.1.1 | MIT | [192] |
-| jni | 0.21.1 | MIT/Apache-2.0 | [17] [193] |
+| javascriptcore-rs | 1.1.2 | MIT | [192] |
+| javascriptcore-rs-sys | 1.1.1 | MIT | [193] |
+| jni | 0.21.1 | MIT/Apache-2.0 | [17] [194] |
 | jni | 0.22.4 | MIT OR Apache-2.0 |  |
 | jni-macros | 0.22.4 | MIT OR Apache-2.0 |  |
-| jni-sys | 0.3.1 | MIT OR Apache-2.0 | [65] [194] |
-| jni-sys | 0.4.1 | MIT OR Apache-2.0 | [65] [194] |
+| jni-sys | 0.3.1 | MIT OR Apache-2.0 | [66] [195] |
+| jni-sys | 0.4.1 | MIT OR Apache-2.0 | [66] [195] |
 | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 |  |
-| jobserver | 0.1.35 | MIT OR Apache-2.0 | [17] [55] |
-| js-sys | 0.3.103 | MIT OR Apache-2.0 | [17] [55] |
-| json-patch | 3.0.1 | MIT/Apache-2.0 | [65] [195] |
-| jsonptr | 0.6.3 | MIT OR Apache-2.0 | [196] [197] |
-| keyboard-types | 0.7.0 | MIT OR Apache-2.0 | [17] [198] |
+| jobserver | 0.1.35 | MIT OR Apache-2.0 | [17] [56] |
+| js-sys | 0.3.103 | MIT OR Apache-2.0 | [17] [56] |
+| json-patch | 3.0.1 | MIT/Apache-2.0 | [66] [196] |
+| jsonptr | 0.6.3 | MIT OR Apache-2.0 | [197] [198] |
+| keyboard-types | 0.7.0 | MIT OR Apache-2.0 | [17] [199] |
 | keyring | 4.1.5 | MIT OR Apache-2.0 | [15] [16] |
 | keyring-core | 1.0.0 | MIT OR Apache-2.0 | [15] [16] |
-| kqueue | 1.2.0 | MIT | [199] |
-| kqueue-sys | 1.1.2 | MIT | [199] |
-| lazy_static | 1.5.0 | MIT OR Apache-2.0 | [17] [200] |
-| libappindicator | 0.9.0 | Apache-2.0 OR MIT | [17] [201] |
+| kqueue | 1.2.0 | MIT | [200] |
+| kqueue-sys | 1.1.2 | MIT | [200] |
+| lazy_static | 1.5.0 | MIT OR Apache-2.0 | [17] [201] |
+| libappindicator | 0.9.0 | Apache-2.0 OR MIT | [17] [202] |
 | libappindicator-sys | 0.9.0 | Apache-2.0 OR MIT |  |
-| libc | 0.2.189 | MIT OR Apache-2.0 | [12] [202] |
-| libdbus-sys | 0.2.7 | Apache-2.0/MIT | [90] [91] |
-| libloading | 0.7.4 | ISC | [203] |
-| libredox | 0.1.18 | MIT | [204] |
-| libsqlite3-sys | 0.38.1 | MIT | [205] |
+| libc | 0.2.189 | MIT OR Apache-2.0 | [12] [203] |
+| libdbus-sys | 0.2.7 | Apache-2.0/MIT | [91] [92] |
+| libloading | 0.7.4 | ISC | [204] |
+| libredox | 0.1.18 | MIT | [205] |
+| libsqlite3-sys | 0.38.1 | MIT | [206] |
 | libwebp-sys | 0.9.6 | MIT |  |
-| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [206] [17] [207] [3] |
-| litemap | 0.8.2 | Unicode-3.0 | [170] |
-| lock_api | 0.4.14 | MIT OR Apache-2.0 | [17] [208] |
-| log | 0.4.33 | MIT OR Apache-2.0 | [17] [40] |
-| loom | 0.7.2 | MIT | [209] |
-| lru | 0.18.1 | MIT | [210] |
-| lru-slab | 0.1.2 | MIT OR Apache-2.0 OR Zlib | [63] [211] [212] |
-| mac-addr | 0.3.0 | MIT | [213] |
-| markup5ever | 0.38.0 | MIT OR Apache-2.0 | [17] [155] |
-| matchers | 0.2.0 | MIT | [214] |
+| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [207] [17] [208] [3] |
+| litemap | 0.8.2 | Unicode-3.0 | [171] |
+| lock_api | 0.4.14 | MIT OR Apache-2.0 | [17] [209] |
+| log | 0.4.33 | MIT OR Apache-2.0 | [17] [41] |
+| loom | 0.7.2 | MIT | [210] |
+| lru | 0.18.1 | MIT | [211] |
+| lru-slab | 0.1.2 | MIT OR Apache-2.0 OR Zlib | [64] [212] [213] |
+| mac-addr | 0.3.0 | MIT | [214] |
+| markup5ever | 0.38.0 | MIT OR Apache-2.0 | [17] [156] |
+| matchers | 0.2.0 | MIT | [215] |
 | memchr | 2.8.3 | Unlicense OR MIT | [8] [9] [10] |
-| memoffset | 0.9.1 | MIT | [215] |
-| mime | 0.3.17 | MIT OR Apache-2.0 | [17] [216] |
-| mime_guess | 2.0.5 | MIT | [217] |
-| miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | [218] [119] [219] [220] |
-| mio | 1.2.2 | MIT | [221] |
-| moka | 0.12.15 | (MIT OR Apache-2.0) AND Apache-2.0 | [222] [223] [224] |
-| moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | [225] [226] |
-| muda | 0.19.3 | Apache-2.0 OR MIT | [17] [227] [228] |
-| n0-error | 1.0.0 | MIT OR Apache-2.0 | [187] [188] |
+| memoffset | 0.9.1 | MIT | [216] |
+| mime | 0.3.17 | MIT OR Apache-2.0 | [17] [217] |
+| mime_guess | 2.0.5 | MIT | [218] |
+| minisign-verify | 0.2.5 | MIT | [219] |
+| miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | [220] [120] [221] [222] |
+| mio | 1.2.2 | MIT | [223] |
+| moka | 0.12.15 | (MIT OR Apache-2.0) AND Apache-2.0 | [224] [225] [226] |
+| moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | [227] [228] |
+| muda | 0.19.3 | Apache-2.0 OR MIT | [17] [229] [230] |
+| n0-error | 1.0.0 | MIT OR Apache-2.0 | [188] [189] |
 | n0-error-macros | 1.0.0 | MIT OR Apache-2.0 |  |
-| n0-future | 0.3.2 | MIT OR Apache-2.0 | [184] [185] |
-| n0-watcher | 1.0.0 | MIT OR Apache-2.0 | [187] [188] |
+| n0-future | 0.3.2 | MIT OR Apache-2.0 | [185] [186] |
+| n0-watcher | 1.0.0 | MIT OR Apache-2.0 | [188] [189] |
 | ndk | 0.9.0 | MIT OR Apache-2.0 |  |
 | ndk-context | 0.1.1 | MIT OR Apache-2.0 |  |
 | ndk-sys | 0.6.0+11769913 | MIT OR Apache-2.0 |  |
-| nested_enum_utils | 0.2.3 | MIT OR Apache-2.0 | [184] [185] |
-| netdev | 0.45.0 | MIT | [229] |
-| netlink-packet-core | 0.8.1 | MIT | [230] |
-| netlink-packet-route | 0.31.0 | MIT | [231] |
-| netlink-proto | 0.12.1 | MIT | [230] |
-| netlink-sys | 0.8.8 | MIT | [230] |
+| nested_enum_utils | 0.2.3 | MIT OR Apache-2.0 | [185] [186] |
+| netdev | 0.45.0 | MIT | [231] |
+| netlink-packet-core | 0.8.1 | MIT | [232] |
+| netlink-packet-route | 0.31.0 | MIT | [233] |
+| netlink-proto | 0.12.1 | MIT | [232] |
+| netlink-sys | 0.8.8 | MIT | [232] |
 | netwatch | 0.19.1 | MIT OR Apache-2.0 |  |
-| new_debug_unreachable | 1.0.6 | MIT | [232] |
-| noq | 1.1.1 | MIT OR Apache-2.0 | [233] [234] |
-| noq-proto | 1.1.1 | MIT OR Apache-2.0 | [233] [234] |
-| noq-udp | 1.1.1 | MIT OR Apache-2.0 | [233] [234] |
-| notify | 8.2.0 | CC0-1.0 | [235] |
-| notify-types | 2.1.0 | MIT OR Apache-2.0 | [236] [237] |
-| nu-ansi-term | 0.50.3 | MIT | [238] |
-| num | 0.4.3 | MIT OR Apache-2.0 | [17] [40] |
-| num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | [12] [239] [3] |
-| num_enum_derive | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | [12] [239] [3] |
-| num-bigint | 0.4.8 | MIT OR Apache-2.0 | [17] [40] |
-| num-complex | 0.4.6 | MIT OR Apache-2.0 | [17] [40] |
-| num-conv | 0.2.2 | MIT OR Apache-2.0 | [119] [240] |
-| num-integer | 0.1.46 | MIT OR Apache-2.0 | [17] [40] |
-| num-iter | 0.1.46 | MIT OR Apache-2.0 | [17] [40] |
-| num-rational | 0.4.2 | MIT OR Apache-2.0 | [17] [40] |
-| num-traits | 0.2.19 | MIT OR Apache-2.0 | [17] [40] |
+| new_debug_unreachable | 1.0.6 | MIT | [234] |
+| noq | 1.1.1 | MIT OR Apache-2.0 | [235] [236] |
+| noq-proto | 1.1.1 | MIT OR Apache-2.0 | [235] [236] |
+| noq-udp | 1.1.1 | MIT OR Apache-2.0 | [235] [236] |
+| notify | 8.2.0 | CC0-1.0 | [237] |
+| notify-types | 2.1.0 | MIT OR Apache-2.0 | [238] [239] |
+| nu-ansi-term | 0.50.3 | MIT | [240] |
+| num | 0.4.3 | MIT OR Apache-2.0 | [17] [41] |
+| num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | [12] [241] [3] |
+| num_enum_derive | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | [12] [241] [3] |
+| num-bigint | 0.4.8 | MIT OR Apache-2.0 | [17] [41] |
+| num-complex | 0.4.6 | MIT OR Apache-2.0 | [17] [41] |
+| num-conv | 0.2.2 | MIT OR Apache-2.0 | [120] [242] |
+| num-integer | 0.1.46 | MIT OR Apache-2.0 | [17] [41] |
+| num-iter | 0.1.46 | MIT OR Apache-2.0 | [17] [41] |
+| num-rational | 0.4.2 | MIT OR Apache-2.0 | [17] [41] |
+| num-traits | 0.2.19 | MIT OR Apache-2.0 | [17] [41] |
 | objc2 | 0.6.4 | MIT |  |
 | objc2-app-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
 | objc2-cloud-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
@@ -466,6 +470,7 @@ one of these and not publishing the patch is not.
 | objc2-exception-helper | 0.1.1 | Zlib OR Apache-2.0 OR MIT |  |
 | objc2-foundation | 0.3.2 | MIT |  |
 | objc2-io-surface | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
+| objc2-osa-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
 | objc2-quartz-core | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
 | objc2-security | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
 | objc2-security-foundation | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
@@ -474,109 +479,110 @@ one of these and not publishing the patch is not.
 | objc2-user-notifications | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
 | objc2-web-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |  |
 | once_cell | 1.21.4 | MIT OR Apache-2.0 | [17] [3] |
-| opaque-debug | 0.3.1 | MIT OR Apache-2.0 | [4] [241] |
-| open | 5.4.0 | MIT | [242] |
-| openssl-probe | 0.2.1 | MIT OR Apache-2.0 | [17] [55] |
-| option-ext | 0.2.0 | MPL-2.0 | [243] |
+| opaque-debug | 0.3.1 | MIT OR Apache-2.0 | [4] [243] |
+| open | 5.4.0 | MIT | [244] |
+| openssl-probe | 0.2.1 | MIT OR Apache-2.0 | [17] [56] |
+| option-ext | 0.2.0 | MPL-2.0 | [245] |
 | ordered-stream | 0.2.0 | MIT OR Apache-2.0 | [17] [3] |
-| pango | 0.18.3 | MIT | [24] [25] |
-| pango-sys | 0.18.0 | MIT | [25] |
-| papaya | 0.2.4 | MIT | [171] |
-| parking | 2.2.1 | Apache-2.0 OR MIT | [17] [3] [244] |
-| parking_lot | 0.12.5 | MIT OR Apache-2.0 | [17] [208] |
-| parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | [17] [208] |
+| osakit | 0.3.1 | MIT OR Apache-2.0 | [12] [246] |
+| pango | 0.18.3 | MIT | [25] [26] |
+| pango-sys | 0.18.0 | MIT | [26] |
+| papaya | 0.2.4 | MIT | [172] |
+| parking | 2.2.1 | Apache-2.0 OR MIT | [17] [3] [247] |
+| parking_lot | 0.12.5 | MIT OR Apache-2.0 | [17] [209] |
+| parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | [17] [209] |
 | paste | 1.0.15 | MIT OR Apache-2.0 | [12] [3] |
-| pem-rfc7468 | 1.0.0 | Apache-2.0 OR MIT | [4] [245] |
-| percent-encoding | 2.3.2 | MIT OR Apache-2.0 | [17] [173] |
+| pem-rfc7468 | 1.0.0 | Apache-2.0 OR MIT | [4] [248] |
+| percent-encoding | 2.3.2 | MIT OR Apache-2.0 | [17] [174] |
 | pharos | 0.5.3 | Unlicense |  |
-| phf | 0.13.1 | MIT | [246] |
-| phf_codegen | 0.13.1 | MIT | [246] |
-| phf_generator | 0.13.1 | MIT | [246] |
-| phf_macros | 0.13.1 | MIT | [246] |
-| phf_shared | 0.13.1 | MIT | [246] |
-| pin-project | 1.1.13 | Apache-2.0 OR MIT | [119] [3] |
-| pin-project-internal | 1.1.13 | Apache-2.0 OR MIT | [119] [3] |
-| pin-project-lite | 0.2.17 | Apache-2.0 OR MIT | [119] [3] |
+| phf | 0.13.1 | MIT | [249] |
+| phf_codegen | 0.13.1 | MIT | [249] |
+| phf_generator | 0.13.1 | MIT | [249] |
+| phf_macros | 0.13.1 | MIT | [249] |
+| phf_shared | 0.13.1 | MIT | [249] |
+| pin-project | 1.1.13 | Apache-2.0 OR MIT | [120] [3] |
+| pin-project-internal | 1.1.13 | Apache-2.0 OR MIT | [120] [3] |
+| pin-project-lite | 0.2.17 | Apache-2.0 OR MIT | [120] [3] |
 | piper | 0.2.5 | MIT OR Apache-2.0 | [17] [3] |
-| pkcs8 | 0.11.0 | Apache-2.0 OR MIT | [4] [69] |
-| pkg-config | 0.3.33 | MIT OR Apache-2.0 | [17] [55] |
-| plist | 1.10.0 | MIT | [247] |
-| png | 0.17.16 | MIT OR Apache-2.0 | [17] [248] |
-| png | 0.18.1 | MIT OR Apache-2.0 | [17] [248] |
+| pkcs8 | 0.11.0 | Apache-2.0 OR MIT | [4] [70] |
+| pkg-config | 0.3.33 | MIT OR Apache-2.0 | [17] [56] |
+| plist | 1.10.0 | MIT | [250] |
+| png | 0.17.16 | MIT OR Apache-2.0 | [17] [251] |
+| png | 0.18.1 | MIT OR Apache-2.0 | [17] [251] |
 | polling | 3.11.0 | Apache-2.0 OR MIT | [17] [3] |
-| polyval | 0.6.2 | Apache-2.0 OR MIT | [4] [249] |
-| portable-atomic | 1.14.0 | Apache-2.0 OR MIT | [119] [3] |
+| polyval | 0.6.2 | Apache-2.0 OR MIT | [4] [252] |
+| portable-atomic | 1.14.0 | Apache-2.0 OR MIT | [120] [3] |
 | portmapper | 0.19.1 | MIT OR Apache-2.0 |  |
-| positioned-io | 0.3.5 | MIT | [250] |
-| postcard | 1.1.3 | MIT OR Apache-2.0 | [17] [251] |
-| postcard-derive | 0.2.2 | MIT OR Apache-2.0 | [17] [251] |
-| potential_utf | 0.1.5 | Unicode-3.0 | [170] |
-| powerfmt | 0.2.0 | MIT OR Apache-2.0 | [252] [253] |
-| precomputed-hash | 0.1.1 | MIT | [254] |
-| prefix-trie | 0.8.4 | MIT OR Apache-2.0 | [181] [255] |
+| positioned-io | 0.3.5 | MIT | [253] |
+| postcard | 1.1.3 | MIT OR Apache-2.0 | [17] [254] |
+| postcard-derive | 0.2.2 | MIT OR Apache-2.0 | [17] [254] |
+| potential_utf | 0.1.5 | Unicode-3.0 | [171] |
+| powerfmt | 0.2.0 | MIT OR Apache-2.0 | [255] [256] |
+| precomputed-hash | 0.1.1 | MIT | [257] |
+| prefix-trie | 0.8.4 | MIT OR Apache-2.0 | [182] [258] |
 | proc-macro-crate | 1.3.1 | MIT OR Apache-2.0 | [2] [3] |
 | proc-macro-crate | 2.0.2 | MIT OR Apache-2.0 | [2] [3] |
 | proc-macro-crate | 3.5.0 | MIT OR Apache-2.0 | [2] [3] |
-| proc-macro-error | 0.4.12 | MIT OR Apache-2.0 | [256] [257] |
-| proc-macro-error | 1.0.4 | MIT OR Apache-2.0 | [258] [259] |
-| proc-macro-error-attr | 0.4.12 | MIT OR Apache-2.0 | [258] [259] |
-| proc-macro-error-attr | 1.0.4 | MIT OR Apache-2.0 | [258] [259] |
-| proc-macro-hack | 0.5.20+deprecated | MIT OR Apache-2.0 | [17] [260] |
+| proc-macro-error | 0.4.12 | MIT OR Apache-2.0 | [259] [260] |
+| proc-macro-error | 1.0.4 | MIT OR Apache-2.0 | [261] [262] |
+| proc-macro-error-attr | 0.4.12 | MIT OR Apache-2.0 | [261] [262] |
+| proc-macro-error-attr | 1.0.4 | MIT OR Apache-2.0 | [261] [262] |
+| proc-macro-hack | 0.5.20+deprecated | MIT OR Apache-2.0 | [17] [263] |
 | proc-macro2 | 1.0.107 | MIT OR Apache-2.0 | [12] [3] |
-| pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | [225] [226] |
-| quick-error | 2.0.1 | MIT/Apache-2.0 | [65] [261] |
-| quick-xml | 0.41.0 | MIT | [262] |
-| quinn | 0.11.11 | MIT OR Apache-2.0 | [63] [263] |
-| quinn-proto | 0.11.16 | MIT OR Apache-2.0 | [63] [263] |
-| quinn-udp | 0.5.15 | MIT OR Apache-2.0 | [63] [263] |
+| pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | [227] [228] |
+| quick-error | 2.0.1 | MIT/Apache-2.0 | [66] [264] |
+| quick-xml | 0.41.0 | MIT | [265] |
+| quinn | 0.11.11 | MIT OR Apache-2.0 | [64] [266] |
+| quinn-proto | 0.11.16 | MIT OR Apache-2.0 | [64] [266] |
+| quinn-udp | 0.5.15 | MIT OR Apache-2.0 | [64] [266] |
 | quote | 1.0.47 | MIT OR Apache-2.0 | [12] [3] |
 | r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |  |
 | r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |  |
-| rand | 0.10.2 | MIT OR Apache-2.0 | [264] [265] [266] |
-| rand_core | 0.10.1 | MIT OR Apache-2.0 | [267] [268] [269] |
-| rand_pcg | 0.10.2 | MIT OR Apache-2.0 | [264] [268] [270] |
-| range-collections | 0.4.6 | MIT OR Apache-2.0 | [63] [271] |
-| raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | [119] [272] [273] |
-| redb | 4.1.0 | MIT OR Apache-2.0 | [63] [274] |
-| redox_syscall | 0.5.18 | MIT | [275] |
-| redox_users | 0.5.2 | MIT | [276] |
+| rand | 0.10.2 | MIT OR Apache-2.0 | [267] [268] [269] |
+| rand_core | 0.10.1 | MIT OR Apache-2.0 | [270] [271] [272] |
+| rand_pcg | 0.10.2 | MIT OR Apache-2.0 | [267] [271] [273] |
+| range-collections | 0.4.6 | MIT OR Apache-2.0 | [64] [274] |
+| raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | [120] [275] [276] |
+| redb | 4.1.0 | MIT OR Apache-2.0 | [64] [277] |
+| redox_syscall | 0.5.18 | MIT | [278] |
+| redox_users | 0.5.2 | MIT | [279] |
 | ref-cast | 1.0.26 | MIT OR Apache-2.0 | [12] [3] |
 | ref-cast-impl | 1.0.26 | MIT OR Apache-2.0 | [12] [3] |
 | reflink-copy | 0.1.30 | MIT/Apache-2.0 | [12] [3] |
-| regex | 1.13.1 | MIT OR Apache-2.0 | [17] [40] |
-| regex-automata | 0.4.16 | MIT OR Apache-2.0 | [17] [40] |
-| regex-syntax | 0.8.11 | MIT OR Apache-2.0 | [17] [40] |
-| reqwest | 0.13.4 | MIT OR Apache-2.0 | [277] [278] |
-| resolv-conf | 0.7.6 | MIT OR Apache-2.0 | [65] [279] |
-| rfd | 0.16.0 | MIT | [280] |
-| ring | 0.17.14 | Apache-2.0 AND ISC | [281] [282] [283] |
+| regex | 1.13.1 | MIT OR Apache-2.0 | [17] [41] |
+| regex-automata | 0.4.16 | MIT OR Apache-2.0 | [17] [41] |
+| regex-syntax | 0.8.11 | MIT OR Apache-2.0 | [17] [41] |
+| reqwest | 0.13.4 | MIT OR Apache-2.0 | [280] [281] |
+| resolv-conf | 0.7.6 | MIT OR Apache-2.0 | [66] [282] |
+| rfd | 0.16.0 | MIT | [283] |
+| ring | 0.17.14 | Apache-2.0 AND ISC | [284] [285] [286] |
 | rsqlite-vfs | 0.1.1 | MIT |  |
-| rusqlite | 0.40.1 | MIT | [205] |
-| rustc_version | 0.4.1 | MIT OR Apache-2.0 | [17] [208] |
+| rusqlite | 0.40.1 | MIT | [206] |
+| rustc_version | 0.4.1 | MIT OR Apache-2.0 | [17] [209] |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | [12] [3] |
-| rustix | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [284] [17] [207] [3] |
-| rustls | 0.23.43 | Apache-2.0 OR ISC OR MIT | [17] [164] [165] |
-| rustls-native-certs | 0.8.4 | Apache-2.0 OR ISC OR MIT | [285] [17] [164] [165] |
-| rustls-pki-types | 1.15.1 | MIT OR Apache-2.0 | [286] [287] |
-| rustls-platform-verifier | 0.7.0 | MIT OR Apache-2.0 | [63] [288] |
+| rustix | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [287] [17] [208] [3] |
+| rustls | 0.23.43 | Apache-2.0 OR ISC OR MIT | [17] [165] [166] |
+| rustls-native-certs | 0.8.4 | Apache-2.0 OR ISC OR MIT | [288] [17] [165] [166] |
+| rustls-pki-types | 1.15.1 | MIT OR Apache-2.0 | [289] [290] |
+| rustls-platform-verifier | 0.7.0 | MIT OR Apache-2.0 | [64] [291] |
 | rustls-platform-verifier-android | 0.1.1 | MIT OR Apache-2.0 |  |
-| rustls-webpki | 0.103.13 | ISC | [289] |
+| rustls-webpki | 0.103.13 | ISC | [292] |
 | rustversion | 1.0.23 | MIT OR Apache-2.0 | [12] [3] |
-| ryu | 1.0.23 | Apache-2.0 OR BSL-1.0 | [12] [290] |
-| same-file | 1.0.6 | Unlicense/MIT | [8] [291] [10] |
-| schannel | 0.1.29 | MIT | [292] |
-| schemars | 0.8.22 | MIT | [293] |
-| schemars | 0.9.0 | MIT | [293] |
-| schemars | 1.2.2 | MIT | [293] |
-| schemars_derive | 0.8.22 | MIT | [293] |
-| scoped-tls | 1.0.1 | MIT/Apache-2.0 | [17] [55] |
-| scopeguard | 1.2.0 | MIT OR Apache-2.0 | [17] [294] |
-| secret-service | 5.1.0 | MIT OR Apache-2.0 | [17] [295] |
-| security-framework | 3.7.0 | MIT OR Apache-2.0 | [17] [296] |
-| security-framework-sys | 2.17.0 | MIT OR Apache-2.0 | [17] [296] |
-| seize | 0.5.1 | MIT | [297] |
+| ryu | 1.0.23 | Apache-2.0 OR BSL-1.0 | [12] [293] |
+| same-file | 1.0.6 | Unlicense/MIT | [8] [294] [10] |
+| schannel | 0.1.29 | MIT | [295] |
+| schemars | 0.8.22 | MIT | [296] |
+| schemars | 0.9.0 | MIT | [296] |
+| schemars | 1.2.2 | MIT | [296] |
+| schemars_derive | 0.8.22 | MIT | [296] |
+| scoped-tls | 1.0.1 | MIT/Apache-2.0 | [17] [56] |
+| scopeguard | 1.2.0 | MIT OR Apache-2.0 | [17] [297] |
+| secret-service | 5.1.0 | MIT OR Apache-2.0 | [17] [298] |
+| security-framework | 3.7.0 | MIT OR Apache-2.0 | [17] [299] |
+| security-framework-sys | 2.17.0 | MIT OR Apache-2.0 | [17] [299] |
+| seize | 0.5.1 | MIT | [300] |
 | selectors | 0.36.1 | MPL-2.0 |  |
-| self_cell | 1.3.0 | Apache-2.0 OR GPL-2.0-only | [63] [298] |
+| self_cell | 1.3.0 | Apache-2.0 OR GPL-2.0-only | [64] [301] |
 | semver | 1.0.28 | MIT OR Apache-2.0 | [12] [3] |
 | send_wrapper | 0.6.0 | MIT/Apache-2.0 | [17] [3] |
 | serde | 1.0.229 | MIT OR Apache-2.0 | [12] [3] |
@@ -587,273 +593,280 @@ one of these and not publishing the patch is not.
 | serde_json | 1.0.151 | MIT OR Apache-2.0 | [12] [3] |
 | serde_norway | 0.9.42 | MIT OR Apache-2.0 | [12] [3] |
 | serde_repr | 0.1.21 | MIT OR Apache-2.0 | [12] [3] |
-| serde_spanned | 0.6.9 | MIT OR Apache-2.0 | [65] [299] |
-| serde_spanned | 1.1.1 | MIT OR Apache-2.0 | [65] [299] |
-| serde_with | 3.21.0 | MIT OR Apache-2.0 | [17] [106] |
-| serde_with_macros | 3.21.0 | MIT OR Apache-2.0 | [17] [106] |
+| serde_spanned | 0.6.9 | MIT OR Apache-2.0 | [66] [302] |
+| serde_spanned | 1.1.1 | MIT OR Apache-2.0 | [66] [302] |
+| serde_with | 3.21.0 | MIT OR Apache-2.0 | [17] [107] |
+| serde_with_macros | 3.21.0 | MIT OR Apache-2.0 | [17] [107] |
 | serde-untagged | 0.1.9 | MIT OR Apache-2.0 | [12] [3] |
-| serdect | 0.4.3 | Apache-2.0 OR MIT | [63] [300] |
-| serialize-to-javascript | 0.1.2 | MIT OR Apache-2.0 | [63] [301] |
-| serialize-to-javascript-impl | 0.1.2 | MIT OR Apache-2.0 | [63] [301] |
+| serdect | 0.4.3 | Apache-2.0 OR MIT | [64] [303] |
+| serialize-to-javascript | 0.1.2 | MIT OR Apache-2.0 | [64] [304] |
+| serialize-to-javascript-impl | 0.1.2 | MIT OR Apache-2.0 | [64] [304] |
 | servo_arc | 0.4.3 | MIT OR Apache-2.0 | [17] [3] |
-| sha1 | 0.11.0 | MIT OR Apache-2.0 | [4] [302] |
-| sha1_smol | 1.0.1 | BSD-3-Clause | [303] |
-| sha2 | 0.10.9 | MIT OR Apache-2.0 | [4] [304] |
-| sha2 | 0.11.0 | MIT OR Apache-2.0 | [4] [302] |
-| sharded-slab | 0.1.7 | MIT | [305] |
-| shlex | 2.0.1 | MIT OR Apache-2.0 | [306] [307] |
-| signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 | [17] [308] |
-| signature | 3.0.0 | Apache-2.0 OR MIT | [4] [104] |
+| sha1 | 0.11.0 | MIT OR Apache-2.0 | [4] [305] |
+| sha1_smol | 1.0.1 | BSD-3-Clause | [306] |
+| sha2 | 0.10.9 | MIT OR Apache-2.0 | [4] [307] |
+| sha2 | 0.11.0 | MIT OR Apache-2.0 | [4] [305] |
+| sharded-slab | 0.1.7 | MIT | [308] |
+| shlex | 2.0.1 | MIT OR Apache-2.0 | [309] [310] |
+| signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 | [17] [311] |
+| signature | 3.0.0 | Apache-2.0 OR MIT | [4] [105] |
 | simd_cesu8 | 1.2.0 | Apache-2.0 OR MIT | [17] [3] |
-| simd-adler32 | 0.3.10 | MIT | [309] |
-| simdutf8 | 0.1.5 | MIT OR Apache-2.0 | [119] [171] |
-| simple-dns | 0.11.3 | MIT | [310] |
-| siphasher | 1.0.3 | MIT/Apache-2.0 | [311] |
-| slab | 0.4.12 | MIT | [209] |
-| smallvec | 1.15.2 | MIT OR Apache-2.0 | [17] [312] |
-| socket2 | 0.6.5 | MIT OR Apache-2.0 | [17] [55] |
-| softbuffer | 0.4.8 | MIT OR Apache-2.0 | [313] [314] |
-| sorted-index-buffer | 0.2.1 | MIT OR Apache-2.0 | [33] [34] |
-| soup3 | 0.5.0 | MIT | [192] |
-| soup3-sys | 0.5.0 | MIT | [192] |
-| spez | 0.1.2 | BSD-2-Clause | [315] |
-| spin | 0.9.9 | MIT | [316] |
-| spin | 0.10.1 | MIT | [316] |
-| spki | 0.8.0 | Apache-2.0 OR MIT | [4] [317] |
-| sqlite-wasm-rs | 0.5.5 | MIT | [318] |
-| stable_deref_trait | 1.2.1 | MIT OR Apache-2.0 | [17] [319] |
-| string_cache | 0.9.0 | MIT OR Apache-2.0 | [17] [75] |
-| string_cache_codegen | 0.6.1 | MIT OR Apache-2.0 | [17] [75] |
-| strsim | 0.11.1 | MIT | [320] |
-| strum | 0.28.0 | MIT | [321] |
-| strum_macros | 0.28.0 | MIT | [321] |
-| subtle | 2.6.1 | BSD-3-Clause | [322] |
-| swift-rs | 1.0.7 | MIT OR Apache-2.0 | [323] [324] |
+| simd-adler32 | 0.3.10 | MIT | [312] |
+| simdutf8 | 0.1.5 | MIT OR Apache-2.0 | [120] [172] |
+| simple-dns | 0.11.3 | MIT | [313] |
+| siphasher | 1.0.3 | MIT/Apache-2.0 | [314] |
+| slab | 0.4.12 | MIT | [210] |
+| smallvec | 1.15.2 | MIT OR Apache-2.0 | [17] [315] |
+| socket2 | 0.6.5 | MIT OR Apache-2.0 | [17] [56] |
+| softbuffer | 0.4.8 | MIT OR Apache-2.0 | [316] [317] |
+| sorted-index-buffer | 0.2.1 | MIT OR Apache-2.0 | [34] [35] |
+| soup3 | 0.5.0 | MIT | [193] |
+| soup3-sys | 0.5.0 | MIT | [193] |
+| spez | 0.1.2 | BSD-2-Clause | [318] |
+| spin | 0.9.9 | MIT | [319] |
+| spin | 0.10.1 | MIT | [319] |
+| spki | 0.8.0 | Apache-2.0 OR MIT | [4] [320] |
+| sqlite-wasm-rs | 0.5.5 | MIT | [321] |
+| stable_deref_trait | 1.2.1 | MIT OR Apache-2.0 | [17] [322] |
+| string_cache | 0.9.0 | MIT OR Apache-2.0 | [17] [76] |
+| string_cache_codegen | 0.6.1 | MIT OR Apache-2.0 | [17] [76] |
+| strsim | 0.11.1 | MIT | [323] |
+| strum | 0.28.0 | MIT | [324] |
+| strum_macros | 0.28.0 | MIT | [324] |
+| subtle | 2.6.1 | BSD-3-Clause | [325] |
+| swift-rs | 1.0.7 | MIT OR Apache-2.0 | [326] [327] |
 | syn | 1.0.109 | MIT OR Apache-2.0 | [17] [3] |
 | syn | 2.0.119 | MIT OR Apache-2.0 | [12] [3] |
 | syn | 3.0.3 | MIT OR Apache-2.0 | [12] [3] |
-| syn-mid | 0.5.4 | Apache-2.0 OR MIT | [119] [3] |
-| sync_wrapper | 1.0.2 | Apache-2.0 | [119] |
-| synstructure | 0.13.2 | MIT | [325] |
-| system-configuration | 0.7.0 | MIT OR Apache-2.0 | [17] [326] |
-| system-configuration-sys | 0.6.0 | MIT OR Apache-2.0 | [17] [326] |
+| syn-mid | 0.5.4 | Apache-2.0 OR MIT | [120] [3] |
+| sync_wrapper | 1.0.2 | Apache-2.0 | [120] |
+| synstructure | 0.13.2 | MIT | [328] |
+| system-configuration | 0.7.0 | MIT OR Apache-2.0 | [17] [329] |
+| system-configuration-sys | 0.6.0 | MIT OR Apache-2.0 | [17] [329] |
 | system-deps | 6.2.2 | MIT OR Apache-2.0 | [17] [3] |
-| tagptr | 0.2.0 | MIT/Apache-2.0 | [327] [328] |
-| tao | 0.35.3 | Apache-2.0 | [65] [329] |
-| tao-macros | 0.1.4 | MIT OR Apache-2.0 | [17] [330] [331] |
-| target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | [207] |
-| tauri | 2.11.5 | Apache-2.0 OR MIT | [119] [332] |
-| tauri-build | 2.6.3 | Apache-2.0 OR MIT | [119] [332] |
-| tauri-codegen | 2.6.3 | Apache-2.0 OR MIT | [119] [332] |
-| tauri-macros | 2.6.3 | Apache-2.0 OR MIT | [119] [332] |
+| tagptr | 0.2.0 | MIT/Apache-2.0 | [330] [331] |
+| tao | 0.35.3 | Apache-2.0 | [66] [332] |
+| tao-macros | 0.1.4 | MIT OR Apache-2.0 | [17] [333] [334] |
+| tar | 0.4.46 | MIT OR Apache-2.0 | [17] [335] |
+| target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | [208] |
+| tauri | 2.11.5 | Apache-2.0 OR MIT | [120] [336] |
+| tauri-build | 2.6.3 | Apache-2.0 OR MIT | [120] [336] |
+| tauri-codegen | 2.6.3 | Apache-2.0 OR MIT | [120] [336] |
+| tauri-macros | 2.6.3 | Apache-2.0 OR MIT | [120] [336] |
 | tauri-plugin | 2.6.3 | Apache-2.0 OR MIT |  |
-| tauri-plugin-dialog | 2.7.2 | Apache-2.0 OR MIT | [333] [119] [332] |
-| tauri-plugin-fs | 2.5.1 | Apache-2.0 OR MIT | [333] [119] [332] |
-| tauri-plugin-opener | 2.5.4 | Apache-2.0 OR MIT | [333] [119] [332] |
-| tauri-runtime | 2.11.3 | Apache-2.0 OR MIT | [119] [332] |
-| tauri-runtime-wry | 2.11.4 | Apache-2.0 OR MIT | [119] [332] |
-| tauri-utils | 2.9.3 | Apache-2.0 OR MIT | [119] [332] |
-| tauri-winres | 0.3.6 | MIT | [334] |
-| tempfile | 3.27.0 | MIT OR Apache-2.0 | [17] [335] |
-| tendril | 0.5.1 | MIT OR Apache-2.0 | [17] [336] |
+| tauri-plugin-dialog | 2.7.2 | Apache-2.0 OR MIT | [337] [120] [336] |
+| tauri-plugin-fs | 2.5.1 | Apache-2.0 OR MIT | [337] [120] [336] |
+| tauri-plugin-opener | 2.5.4 | Apache-2.0 OR MIT | [337] [120] [336] |
+| tauri-plugin-process | 2.3.1 | Apache-2.0 OR MIT | [337] [120] [336] |
+| tauri-plugin-updater | 2.10.1 | Apache-2.0 OR MIT | [337] [120] [336] |
+| tauri-runtime | 2.11.3 | Apache-2.0 OR MIT | [120] [336] |
+| tauri-runtime-wry | 2.11.4 | Apache-2.0 OR MIT | [120] [336] |
+| tauri-utils | 2.9.3 | Apache-2.0 OR MIT | [120] [336] |
+| tauri-winres | 0.3.6 | MIT | [338] |
+| tempfile | 3.27.0 | MIT OR Apache-2.0 | [17] [339] |
+| tendril | 0.5.1 | MIT OR Apache-2.0 | [17] [340] |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 | [12] [3] |
 | thiserror | 2.0.19 | MIT OR Apache-2.0 | [12] [3] |
 | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 | [12] [3] |
 | thiserror-impl | 2.0.19 | MIT OR Apache-2.0 | [12] [3] |
-| thread_local | 1.1.10 | MIT OR Apache-2.0 | [17] [208] |
-| time | 0.3.54 | MIT OR Apache-2.0 | [119] [337] |
-| time-core | 0.1.9 | MIT OR Apache-2.0 | [119] [337] |
-| time-macros | 0.2.32 | MIT OR Apache-2.0 | [119] [337] |
-| tinystr | 0.8.3 | Unicode-3.0 | [170] |
-| tinyvec | 1.12.0 | Zlib OR Apache-2.0 OR MIT | [63] [85] [51] |
-| tinyvec_macros | 0.1.1 | MIT OR Apache-2.0 OR Zlib | [338] [339] [340] |
-| tokio | 1.53.1 | MIT | [341] |
-| tokio-macros | 2.7.2 | MIT | [342] |
-| tokio-rustls | 0.26.4 | MIT OR Apache-2.0 | [343] [344] |
-| tokio-stream | 0.1.19 | MIT | [341] |
-| tokio-tungstenite | 0.30.0 | MIT | [345] |
-| tokio-util | 0.7.19 | MIT | [341] |
-| tokio-websockets | 0.13.3 | MIT | [346] |
-| toml | 0.8.2 | MIT OR Apache-2.0 | [65] [299] |
-| toml | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| toml | 1.1.4+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| toml_datetime | 0.6.3 | MIT OR Apache-2.0 | [17] [55] |
-| toml_datetime | 0.7.5+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| toml_datetime | 1.1.1+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| toml_edit | 0.19.15 | MIT OR Apache-2.0 | [65] [299] |
-| toml_edit | 0.20.2 | MIT OR Apache-2.0 | [65] [299] |
-| toml_edit | 0.25.13+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| toml_parser | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| toml_writer | 1.1.2+spec-1.1.0 | MIT OR Apache-2.0 | [65] [299] |
-| tower | 0.5.3 | MIT | [347] |
-| tower-http | 0.6.11 | MIT | [348] |
-| tower-layer | 0.3.3 | MIT | [347] |
-| tower-service | 0.3.3 | MIT | [347] |
-| tracing | 0.1.44 | MIT | [349] |
-| tracing-attributes | 0.1.31 | MIT | [349] |
-| tracing-core | 0.1.36 | MIT | [349] |
-| tracing-log | 0.2.0 | MIT | [349] |
-| tracing-subscriber | 0.3.23 | MIT | [349] |
-| tray-icon | 0.24.2 | MIT OR Apache-2.0 | [17] [227] [350] |
-| try-lock | 0.2.5 | MIT | [351] |
-| tungstenite | 0.30.0 | MIT OR Apache-2.0 | [17] [352] |
+| thread_local | 1.1.10 | MIT OR Apache-2.0 | [17] [209] |
+| time | 0.3.54 | MIT OR Apache-2.0 | [120] [341] |
+| time-core | 0.1.9 | MIT OR Apache-2.0 | [120] [341] |
+| time-macros | 0.2.32 | MIT OR Apache-2.0 | [120] [341] |
+| tinystr | 0.8.3 | Unicode-3.0 | [171] |
+| tinyvec | 1.12.0 | Zlib OR Apache-2.0 OR MIT | [64] [86] [52] |
+| tinyvec_macros | 0.1.1 | MIT OR Apache-2.0 OR Zlib | [342] [343] [344] |
+| tokio | 1.53.1 | MIT | [345] |
+| tokio-macros | 2.7.2 | MIT | [346] |
+| tokio-rustls | 0.26.4 | MIT OR Apache-2.0 | [347] [348] |
+| tokio-stream | 0.1.19 | MIT | [345] |
+| tokio-tungstenite | 0.30.0 | MIT | [349] |
+| tokio-util | 0.7.19 | MIT | [345] |
+| tokio-websockets | 0.13.3 | MIT | [350] |
+| toml | 0.8.2 | MIT OR Apache-2.0 | [66] [302] |
+| toml | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| toml | 1.1.4+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| toml_datetime | 0.6.3 | MIT OR Apache-2.0 | [17] [56] |
+| toml_datetime | 0.7.5+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| toml_datetime | 1.1.1+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| toml_edit | 0.19.15 | MIT OR Apache-2.0 | [66] [302] |
+| toml_edit | 0.20.2 | MIT OR Apache-2.0 | [66] [302] |
+| toml_edit | 0.25.13+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| toml_parser | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| toml_writer | 1.1.2+spec-1.1.0 | MIT OR Apache-2.0 | [66] [302] |
+| tower | 0.5.3 | MIT | [351] |
+| tower-http | 0.6.11 | MIT | [352] |
+| tower-layer | 0.3.3 | MIT | [351] |
+| tower-service | 0.3.3 | MIT | [351] |
+| tracing | 0.1.44 | MIT | [353] |
+| tracing-attributes | 0.1.31 | MIT | [353] |
+| tracing-core | 0.1.36 | MIT | [353] |
+| tracing-log | 0.2.0 | MIT | [353] |
+| tracing-subscriber | 0.3.23 | MIT | [353] |
+| tray-icon | 0.24.2 | MIT OR Apache-2.0 | [17] [229] [354] |
+| try-lock | 0.2.5 | MIT | [355] |
+| tungstenite | 0.30.0 | MIT OR Apache-2.0 | [17] [356] |
 | typeid | 1.0.3 | MIT OR Apache-2.0 | [12] [3] |
-| typenum | 1.20.1 | MIT OR Apache-2.0 | [353] [354] [355] |
-| uds_windows | 1.2.1 | MIT | [356] |
-| ulid | 3.0.0 | MIT | [357] |
+| typenum | 1.20.1 | MIT OR Apache-2.0 | [357] [358] [359] |
+| uds_windows | 1.2.1 | MIT | [360] |
+| ulid | 3.0.0 | MIT | [361] |
 | unic-char-property | 0.9.0 | MIT/Apache-2.0 |  |
 | unic-char-range | 0.9.0 | MIT/Apache-2.0 |  |
 | unic-common | 0.9.0 | MIT/Apache-2.0 |  |
 | unic-ucd-ident | 0.9.0 | MIT/Apache-2.0 |  |
 | unic-ucd-version | 0.9.0 | MIT/Apache-2.0 |  |
-| unicase | 2.9.0 | MIT OR Apache-2.0 | [17] [163] |
-| unicode-ident | 1.0.24 | (MIT OR Apache-2.0) AND Unicode-3.0 | [12] [3] [358] |
-| unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 | [359] [17] [150] |
-| unicode-xid | 0.2.6 | MIT OR Apache-2.0 | [359] [17] [150] |
-| universal-hash | 0.5.1 | MIT OR Apache-2.0 | [4] [360] |
+| unicase | 2.9.0 | MIT OR Apache-2.0 | [17] [164] |
+| unicode-ident | 1.0.24 | (MIT OR Apache-2.0) AND Unicode-3.0 | [12] [3] [362] |
+| unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 | [363] [17] [151] |
+| unicode-xid | 0.2.6 | MIT OR Apache-2.0 | [363] [17] [151] |
+| universal-hash | 0.5.1 | MIT OR Apache-2.0 | [4] [364] |
 | unsafe-libyaml-norway | 0.2.15 | MIT | [3] |
-| untrusted | 0.9.0 | ISC | [361] |
-| url | 2.5.8 | MIT OR Apache-2.0 | [17] [173] |
-| urlpattern | 0.3.0 | MIT | [362] |
-| utf8_iter | 1.0.4 | Apache-2.0 OR MIT | [363] [63] [364] |
-| uuid | 1.24.0 | Apache-2.0 OR MIT | [17] [365] |
+| untrusted | 0.9.0 | ISC | [365] |
+| url | 2.5.8 | MIT OR Apache-2.0 | [17] [174] |
+| urlpattern | 0.3.0 | MIT | [366] |
+| utf8_iter | 1.0.4 | Apache-2.0 OR MIT | [367] [64] [368] |
+| uuid | 1.24.0 | Apache-2.0 OR MIT | [17] [369] |
 | valuable | 0.1.1 | MIT |  |
-| vcpkg | 0.2.15 | MIT/Apache-2.0 | [17] [366] |
-| version_check | 0.9.5 | MIT/Apache-2.0 | [17] [367] |
-| version-compare | 0.2.1 | MIT | [368] |
-| vswhom | 0.1.0 | MIT | [369] |
-| vswhom-sys | 0.1.3 | MIT | [369] |
+| vcpkg | 0.2.15 | MIT/Apache-2.0 | [17] [370] |
+| version_check | 0.9.5 | MIT/Apache-2.0 | [17] [371] |
+| version-compare | 0.2.1 | MIT | [372] |
+| vswhom | 0.1.0 | MIT | [373] |
+| vswhom-sys | 0.1.3 | MIT | [373] |
 | walkdir | 2.5.0 | Unlicense/MIT | [8] [9] [10] |
-| want | 0.3.1 | MIT | [370] |
-| wasi | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [17] [207] [3] |
-| wasip2 | 1.0.4+wasi-0.2.12 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [17] [207] [3] |
-| wasm-bindgen | 0.2.126 | MIT OR Apache-2.0 | [17] [55] |
-| wasm-bindgen-futures | 0.4.76 | MIT OR Apache-2.0 | [17] [55] |
-| wasm-bindgen-macro | 0.2.126 | MIT OR Apache-2.0 | [17] [55] |
-| wasm-bindgen-macro-support | 0.2.126 | MIT OR Apache-2.0 | [17] [55] |
-| wasm-bindgen-shared | 0.2.126 | MIT OR Apache-2.0 | [17] [55] |
+| want | 0.3.1 | MIT | [374] |
+| wasi | 0.11.1+wasi-snapshot-preview1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [17] [208] [3] |
+| wasip2 | 1.0.4+wasi-0.2.12 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [17] [208] [3] |
+| wasm-bindgen | 0.2.126 | MIT OR Apache-2.0 | [17] [56] |
+| wasm-bindgen-futures | 0.4.76 | MIT OR Apache-2.0 | [17] [56] |
+| wasm-bindgen-macro | 0.2.126 | MIT OR Apache-2.0 | [17] [56] |
+| wasm-bindgen-macro-support | 0.2.126 | MIT OR Apache-2.0 | [17] [56] |
+| wasm-bindgen-shared | 0.2.126 | MIT OR Apache-2.0 | [17] [56] |
 | wasm-streams | 0.5.0 | MIT OR Apache-2.0 | [12] [3] |
-| web_atoms | 0.2.5 | MIT OR Apache-2.0 | [17] [155] |
-| web-sys | 0.3.103 | MIT OR Apache-2.0 | [17] [55] |
-| web-time | 1.1.0 | MIT OR Apache-2.0 | [371] [372] |
-| webkit2gtk | 2.0.2 | MIT | [373] |
-| webkit2gtk-sys | 2.0.2 | MIT | [374] |
-| webp | 0.3.1 | MIT OR Apache-2.0 | [375] [63] [376] |
-| webpki-root-certs | 1.0.8 | CDLA-Permissive-2.0 | [377] |
-| webpki-roots | 1.0.9 | CDLA-Permissive-2.0 | [377] |
+| web_atoms | 0.2.5 | MIT OR Apache-2.0 | [17] [156] |
+| web-sys | 0.3.103 | MIT OR Apache-2.0 | [17] [56] |
+| web-time | 1.1.0 | MIT OR Apache-2.0 | [375] [376] |
+| webkit2gtk | 2.0.2 | MIT | [377] |
+| webkit2gtk-sys | 2.0.2 | MIT | [378] |
+| webp | 0.3.1 | MIT OR Apache-2.0 | [379] [64] [380] |
+| webpki-root-certs | 1.0.8 | CDLA-Permissive-2.0 | [381] |
+| webpki-roots | 1.0.9 | CDLA-Permissive-2.0 | [381] |
 | webview2-com | 0.38.2 | MIT |  |
 | webview2-com-macros | 0.8.1 | MIT |  |
 | webview2-com-sys | 0.38.2 | MIT |  |
-| weezl | 0.1.12 | MIT OR Apache-2.0 | [17] [378] |
-| widestring | 1.2.1 | MIT OR Apache-2.0 | [119] [171] |
-| winapi | 0.3.9 | MIT/Apache-2.0 | [65] [379] |
+| weezl | 0.1.12 | MIT OR Apache-2.0 | [17] [382] |
+| widestring | 1.2.1 | MIT OR Apache-2.0 | [120] [172] |
+| winapi | 0.3.9 | MIT/Apache-2.0 | [66] [383] |
 | winapi-i686-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 |  |
-| winapi-util | 0.1.11 | Unlicense OR MIT | [8] [291] [10] |
+| winapi-util | 0.1.11 | Unlicense OR MIT | [8] [294] [10] |
 | winapi-x86_64-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 |  |
-| window-vibrancy | 0.6.0 | Apache-2.0 OR MIT | [17] [380] [381] |
-| windows | 0.61.3 | MIT OR Apache-2.0 | [382] [383] |
-| windows | 0.62.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_aarch64_gnullvm | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_aarch64_gnullvm | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_aarch64_msvc | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_aarch64_msvc | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_aarch64_msvc | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_gnu | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_gnu | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_gnu | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_gnullvm | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_gnullvm | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_msvc | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_msvc | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_i686_msvc | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_gnu | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_gnu | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_gnu | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_gnullvm | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_gnullvm | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_msvc | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows_x86_64_msvc | 0.53.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-collections | 0.2.0 | MIT OR Apache-2.0 | [382] [383] |
-| windows-collections | 0.3.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-core | 0.61.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-core | 0.62.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-future | 0.2.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-future | 0.3.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-implement | 0.60.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-interface | 0.59.3 | MIT OR Apache-2.0 | [382] [383] |
-| windows-link | 0.1.3 | MIT OR Apache-2.0 | [382] [383] |
-| windows-link | 0.2.1 | MIT OR Apache-2.0 | [382] [383] |
+| window-vibrancy | 0.6.0 | Apache-2.0 OR MIT | [17] [384] [385] |
+| windows | 0.61.3 | MIT OR Apache-2.0 | [386] [387] |
+| windows | 0.62.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_aarch64_gnullvm | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_aarch64_gnullvm | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_aarch64_msvc | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_aarch64_msvc | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_aarch64_msvc | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_gnu | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_gnu | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_gnu | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_gnullvm | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_gnullvm | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_msvc | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_msvc | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_i686_msvc | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_gnu | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_gnu | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_gnu | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_gnullvm | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_gnullvm | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_msvc | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows_x86_64_msvc | 0.53.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-collections | 0.2.0 | MIT OR Apache-2.0 | [386] [387] |
+| windows-collections | 0.3.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-core | 0.61.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-core | 0.62.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-future | 0.2.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-future | 0.3.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-implement | 0.60.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-interface | 0.59.3 | MIT OR Apache-2.0 | [386] [387] |
+| windows-link | 0.1.3 | MIT OR Apache-2.0 | [386] [387] |
+| windows-link | 0.2.1 | MIT OR Apache-2.0 | [386] [387] |
 | windows-native-keyring-store | 1.1.0 | MIT OR Apache-2.0 | [15] [16] |
-| windows-numerics | 0.2.0 | MIT OR Apache-2.0 | [382] [383] |
-| windows-numerics | 0.3.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-registry | 0.6.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-result | 0.3.4 | MIT OR Apache-2.0 | [382] [383] |
-| windows-result | 0.4.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-strings | 0.4.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-strings | 0.5.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-sys | 0.45.0 | MIT OR Apache-2.0 | [382] [383] |
-| windows-sys | 0.52.0 | MIT OR Apache-2.0 | [382] [383] |
-| windows-sys | 0.59.0 | MIT OR Apache-2.0 | [382] [383] |
-| windows-sys | 0.60.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-sys | 0.61.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-targets | 0.42.2 | MIT OR Apache-2.0 | [382] [383] |
-| windows-targets | 0.52.6 | MIT OR Apache-2.0 | [382] [383] |
-| windows-targets | 0.53.5 | MIT OR Apache-2.0 | [382] [383] |
-| windows-threading | 0.1.0 | MIT OR Apache-2.0 | [382] [383] |
-| windows-threading | 0.2.1 | MIT OR Apache-2.0 | [382] [383] |
-| windows-version | 0.1.7 | MIT OR Apache-2.0 | [382] [383] |
-| winnow | 0.5.40 | MIT | [384] |
-| winnow | 0.7.15 | MIT | [384] |
-| winnow | 1.0.4 | MIT | [384] |
-| winreg | 0.55.0 | MIT | [385] |
-| wit-bindgen | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [17] [207] [3] |
+| windows-numerics | 0.2.0 | MIT OR Apache-2.0 | [386] [387] |
+| windows-numerics | 0.3.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-registry | 0.6.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-result | 0.3.4 | MIT OR Apache-2.0 | [386] [387] |
+| windows-result | 0.4.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-strings | 0.4.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-strings | 0.5.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-sys | 0.45.0 | MIT OR Apache-2.0 | [386] [387] |
+| windows-sys | 0.52.0 | MIT OR Apache-2.0 | [386] [387] |
+| windows-sys | 0.59.0 | MIT OR Apache-2.0 | [386] [387] |
+| windows-sys | 0.60.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-sys | 0.61.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-targets | 0.42.2 | MIT OR Apache-2.0 | [386] [387] |
+| windows-targets | 0.52.6 | MIT OR Apache-2.0 | [386] [387] |
+| windows-targets | 0.53.5 | MIT OR Apache-2.0 | [386] [387] |
+| windows-threading | 0.1.0 | MIT OR Apache-2.0 | [386] [387] |
+| windows-threading | 0.2.1 | MIT OR Apache-2.0 | [386] [387] |
+| windows-version | 0.1.7 | MIT OR Apache-2.0 | [386] [387] |
+| winnow | 0.5.40 | MIT | [388] |
+| winnow | 0.7.15 | MIT | [388] |
+| winnow | 1.0.4 | MIT | [388] |
+| winreg | 0.55.0 | MIT | [389] |
+| wit-bindgen | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [17] [208] [3] |
 | wmi | 0.18.4 | MIT OR Apache-2.0 | [17] [3] |
-| writeable | 0.6.3 | Unicode-3.0 | [170] |
-| wry | 0.55.1 | Apache-2.0 OR MIT | [17] [386] [387] |
-| ws_stream_wasm | 0.7.5 | Unlicense | [21] |
+| writeable | 0.6.3 | Unicode-3.0 | [171] |
+| wry | 0.55.1 | Apache-2.0 OR MIT | [17] [390] [391] |
+| ws_stream_wasm | 0.7.5 | Unlicense | [22] |
 | x11 | 2.21.0 | MIT | [3] |
 | x11-dl | 2.21.0 | MIT | [3] |
-| xml-rs | 0.8.28 | MIT | [388] |
-| xmltree | 0.10.3 | MIT | [389] |
-| yoke | 0.8.3 | Unicode-3.0 | [170] |
-| yoke-derive | 0.8.2 | Unicode-3.0 | [170] |
-| zbus | 5.18.0 | MIT | [390] |
-| zbus_macros | 5.18.0 | MIT | [390] |
-| zbus_names | 4.3.4 | MIT | [390] |
+| xattr | 1.6.1 | MIT OR Apache-2.0 | [17] [339] |
+| xml-rs | 0.8.28 | MIT | [392] |
+| xmltree | 0.10.3 | MIT | [393] |
+| yoke | 0.8.3 | Unicode-3.0 | [171] |
+| yoke-derive | 0.8.2 | Unicode-3.0 | [171] |
+| zbus | 5.18.0 | MIT | [394] |
+| zbus_macros | 5.18.0 | MIT | [394] |
+| zbus_names | 4.3.4 | MIT | [394] |
 | zbus-secret-service-keyring-store | 1.0.0 | MIT OR Apache-2.0 | [15] [16] |
-| zerofrom | 0.1.8 | Unicode-3.0 | [170] |
-| zerofrom-derive | 0.1.7 | Unicode-3.0 | [170] |
-| zeroize | 1.9.0 | Apache-2.0 OR MIT | [63] [391] |
-| zeroize_derive | 1.5.0 | Apache-2.0 OR MIT | [63] [60] |
-| zerotrie | 0.2.4 | Unicode-3.0 | [170] |
-| zerovec | 0.11.6 | Unicode-3.0 | [170] |
-| zerovec-derive | 0.11.3 | Unicode-3.0 | [170] |
+| zerofrom | 0.1.8 | Unicode-3.0 | [171] |
+| zerofrom-derive | 0.1.7 | Unicode-3.0 | [171] |
+| zeroize | 1.9.0 | Apache-2.0 OR MIT | [64] [395] |
+| zeroize_derive | 1.5.0 | Apache-2.0 OR MIT | [64] [61] |
+| zerotrie | 0.2.4 | Unicode-3.0 | [171] |
+| zerovec | 0.11.6 | Unicode-3.0 | [171] |
+| zerovec-derive | 0.11.3 | Unicode-3.0 | [171] |
+| zip | 4.6.1 | MIT | [396] |
 | zmij | 1.0.23 | MIT | [3] |
-| zune-core | 0.5.1 | MIT OR Apache-2.0 OR Zlib | [63] [392] [393] |
-| zune-jpeg | 0.5.15 | MIT OR Apache-2.0 OR Zlib | [63] [392] [393] |
-| zvariant | 5.13.1 | MIT | [390] |
-| zvariant_derive | 5.13.1 | MIT | [390] |
+| zune-core | 0.5.1 | MIT OR Apache-2.0 OR Zlib | [64] [397] [398] |
+| zune-jpeg | 0.5.15 | MIT OR Apache-2.0 OR Zlib | [64] [397] [398] |
+| zvariant | 5.13.1 | MIT | [394] |
+| zvariant_derive | 5.13.1 | MIT | [394] |
 | zvariant_utils | 3.5.0 | MIT | [3] |
 
 ## npm packages bundled into the frontend
 
 | Package | Version | Licence | Texts |
 | --- | --- | --- | --- |
-| @tanstack/query-core | 5.101.4 | MIT | [394] |
-| @tanstack/react-query | 5.101.4 | MIT | [394] |
-| @tauri-apps/api | 2.11.1 | Apache-2.0 OR MIT | [119] [332] |
-| @tauri-apps/plugin-dialog | 2.7.2 | MIT OR Apache-2.0 | [333] |
-| @tauri-apps/plugin-opener | 2.5.4 | MIT OR Apache-2.0 | [333] |
-| @types/react | 19.2.18 | MIT | [383] |
-| csstype | 3.2.3 | MIT | [395] |
-| react | 19.2.8 | MIT | [396] |
-| react-dom | 19.2.8 | MIT | [396] |
-| scheduler | 0.27.0 | MIT | [396] |
-| three | 0.185.1 | MIT | [397] |
-| zustand | 5.0.14 | MIT | [398] |
+| @tanstack/query-core | 5.101.4 | MIT | [399] |
+| @tanstack/react-query | 5.101.4 | MIT | [399] |
+| @tauri-apps/api | 2.11.1 | Apache-2.0 OR MIT | [120] [336] |
+| @tauri-apps/plugin-dialog | 2.7.2 | MIT OR Apache-2.0 | [337] |
+| @tauri-apps/plugin-opener | 2.5.4 | MIT OR Apache-2.0 | [337] |
+| @tauri-apps/plugin-process | 2.3.1 | MIT OR Apache-2.0 | [337] |
+| @tauri-apps/plugin-updater | 2.10.1 | MIT OR Apache-2.0 | [337] |
+| @types/react | 19.2.18 | MIT | [387] |
+| csstype | 3.2.3 | MIT | [400] |
+| react | 19.2.8 | MIT | [401] |
+| react-dom | 19.2.8 | MIT | [401] |
+| scheduler | 0.27.0 | MIT | [401] |
+| three | 0.185.1 | MIT | [402] |
+| zustand | 5.0.14 | MIT | [403] |
 
 ## npm packages used only to build and test Wobu
 
@@ -1875,7 +1888,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [12] allocator-api2 0.2.21, anyhow 1.0.104, async-trait 0.1.91, constant_time_eq 0.4.2, dtoa 1.0.11, dyn-clone 1.0.20, erased-serde 0.4.10, itoa 1.0.18, and 31 more
+### [12] allocator-api2 0.2.21, anyhow 1.0.104, async-trait 0.1.91, constant_time_eq 0.4.2, dtoa 1.0.11, dyn-clone 1.0.20, erased-serde 0.4.10, itoa 1.0.18, and 32 more
 
 ```
 Apache License
@@ -2335,7 +2348,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [17] arc-swap 1.9.2, arrayvec 0.7.8, async-channel 2.5.0, async-executor 1.14.0, async-io 2.6.0, async-lock 3.4.2, async-process 2.5.0, async-recursion 1.1.1, and 149 more
+### [17] arbitrary 1.4.2, arc-swap 1.9.2, arrayvec 0.7.8, async-channel 2.5.0, async-executor 1.14.0, async-io 2.6.0, async-lock 3.4.2, async-process 2.5.0, and 154 more
 
 ```
 Apache License
@@ -2541,7 +2554,39 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [18] arc-swap 1.9.2
+### [18] arbitrary 1.4.2, derive_arbitrary 1.4.2
+
+```
+MIT License
+
+Copyright (c) 2019 Manish Goregaokar
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
+### [19] arc-swap 1.9.2
 
 ```
 Copyright (c) 2017 arc-swap developers
@@ -2571,7 +2616,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [19] arrayref 0.3.9
+### [20] arrayref 0.3.9
 
 ```
 Copyright (c) 2015 David Roundy <roundyd@physics.oregonstate.edu>
@@ -2602,7 +2647,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [20] arrayvec 0.7.8
+### [21] arrayvec 0.7.8
 
 ```
 Copyright (c) Ulrik Sverdrup "bluss" 2015-2023
@@ -2632,7 +2677,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [21] async_io_stream 0.3.3, ws_stream_wasm 0.7.5
+### [22] async_io_stream 0.3.3, ws_stream_wasm 0.7.5
 
 ```
 This is free and unencumbered software released into the public domain.
@@ -2661,7 +2706,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 ```
 
-### [22] async-broadcast 0.7.2
+### [23] async-broadcast 0.7.2
 
 ```
 Apache License
@@ -2856,7 +2901,7 @@ Apache License
    limitations under the License.
 ```
 
-### [23] async-broadcast 0.7.2
+### [24] async-broadcast 0.7.2
 
 ```
 The MIT License (MIT)
@@ -2882,7 +2927,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [24] atk 0.18.2, cairo-rs 0.18.5, gdk 0.18.2, gdk-pixbuf 0.18.5, gdkx11 0.18.2, gio 0.18.4, glib 0.18.5, glib-macros 0.18.5, and 3 more
+### [25] atk 0.18.2, cairo-rs 0.18.5, gdk 0.18.2, gdk-pixbuf 0.18.5, gdkx11 0.18.2, gio 0.18.4, glib 0.18.5, glib-macros 0.18.5, and 3 more
 
 ```
 The gtk-rs Project is licensed under the MIT license, see the LICENSE file or
@@ -2901,7 +2946,7 @@ LGPL or other licenses. For more information check the license of each GNOME
 library.
 ```
 
-### [25] atk 0.18.2, atk-sys 0.18.2, cairo-rs 0.18.5, cairo-sys-rs 0.18.2, gdk 0.18.2, gdk-pixbuf 0.18.5, gdk-pixbuf-sys 0.18.0, gdk-sys 0.18.2, and 14 more
+### [26] atk 0.18.2, atk-sys 0.18.2, cairo-rs 0.18.5, cairo-sys-rs 0.18.2, gdk 0.18.2, gdk-pixbuf 0.18.5, gdk-pixbuf-sys 0.18.0, gdk-sys 0.18.2, and 14 more
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2923,7 +2968,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [26] atomic-polyfill 1.0.3
+### [27] atomic-polyfill 1.0.3
 
 ```
 Copyright (c) 2020 Dario Nieuwenhuis
@@ -2953,7 +2998,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [27] atomic-waker 1.1.2, futures-lite 2.6.1
+### [28] atomic-waker 1.1.2, futures-lite 2.6.1
 
 ```
 ===============================================================================
@@ -3003,7 +3048,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [28] attohttpc 0.30.1
+### [29] attohttpc 0.30.1
 
 ```
 Mozilla Public License Version 2.0
@@ -3381,7 +3426,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 defined by the Mozilla Public License, v. 2.0.
 ```
 
-### [29] autocfg 1.5.1
+### [30] autocfg 1.5.1
 
 ```
 Copyright (c) 2018 Josh Stone
@@ -3411,7 +3456,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [30] aws-lc-rs 1.17.3
+### [31] aws-lc-rs 1.17.3
 
 ```
 SPDX-License-Identifier: ISC AND (Apache-2.0 OR ISC)
@@ -3618,7 +3663,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### [31] aws-lc-sys 0.43.0
+### [32] aws-lc-sys 0.43.0
 
 ````
 AWS Libcrypto (AWS-LC)
@@ -3939,7 +3984,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### [32] backon 1.6.0
+### [33] backon 1.6.0
 
 ```
 Apache License
@@ -4145,7 +4190,7 @@ Apache License
    limitations under the License.
 ```
 
-### [33] bao-tree 0.16.0, iroh-util 0.6.0, sorted-index-buffer 0.2.1
+### [34] bao-tree 0.16.0, iroh-util 0.6.0, sorted-index-buffer 0.2.1
 
 ```
 Apache License
@@ -4351,7 +4396,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [34] bao-tree 0.16.0, iroh-util 0.6.0, sorted-index-buffer 0.2.1
+### [35] bao-tree 0.16.0, iroh-util 0.6.0, sorted-index-buffer 0.2.1
 
 ```
 Copyright 2025 N0, INC.
@@ -4381,7 +4426,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [35] base16ct 1.0.0
+### [36] base16ct 1.0.0
 
 ```
 Copyright (c) 2014 Steve "Sc00bz" Thomas (steve at tobtu dot com)
@@ -4412,7 +4457,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [36] base64 0.21.7, base64 0.22.1
+### [37] base64 0.21.7, base64 0.22.1
 
 ```
 The MIT License (MIT)
@@ -4438,7 +4483,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [37] base64ct 1.8.3
+### [38] base64ct 1.8.3
 
 ```
 Copyright (c) 2014 Steve "Sc00bz" Thomas (steve at tobtu dot com)
@@ -4469,7 +4514,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [38] bit-set 0.8.0, bit-vec 0.8.0, cfg-expr 0.15.8, diatomic-waker 0.2.3, hashlink 0.12.1
+### [39] bit-set 0.8.0, bit-vec 0.8.0, cfg-expr 0.15.8, diatomic-waker 0.2.3, hashlink 0.12.1
 
 ```
 Apache License
@@ -4675,7 +4720,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [39] bit-set 0.8.0, bit-vec 0.8.0
+### [40] bit-set 0.8.0, bit-vec 0.8.0
 
 ```
 Copyright (c) 2023 The Rust Project Developers
@@ -4705,7 +4750,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [40] bitflags 1.3.2, bitflags 2.13.1, glob 0.3.4, log 0.4.33, num 0.4.3, num-bigint 0.4.8, num-complex 0.4.6, num-integer 0.1.46, and 6 more
+### [41] bitflags 1.3.2, bitflags 2.13.1, glob 0.3.4, log 0.4.33, num 0.4.3, num-bigint 0.4.8, num-complex 0.4.6, num-integer 0.1.46, and 6 more
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -4735,7 +4780,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [41] blake3 1.8.5
+### [42] blake3 1.8.5
 
 ```
 Apache License
@@ -4941,7 +4986,7 @@ Apache License
    limitations under the License.
 ```
 
-### [42] blake3 1.8.5
+### [43] blake3 1.8.5
 
 ```
 Apache License
@@ -5164,7 +5209,7 @@ the License, but only in their entirety and only with respect to the Combined
 Software.
 ```
 
-### [43] blake3 1.8.5, constant_time_eq 0.4.2, dunce 1.0.5
+### [44] blake3 1.8.5, constant_time_eq 0.4.2, dunce 1.0.5
 
 ```
 Creative Commons Legal Code
@@ -5290,7 +5335,7 @@ express Statement of Purpose.
     this CC0 or use of the Work.
 ```
 
-### [44] block-buffer 0.10.4, block-padding 0.3.3
+### [45] block-buffer 0.10.4, block-padding 0.3.3
 
 ```
 Copyright (c) 2018-2019 The RustCrypto Project Developers
@@ -5320,7 +5365,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [45] block-buffer 0.12.1
+### [46] block-buffer 0.12.1
 
 ```
 Copyright (c) 2018-2025 The RustCrypto Project Developers
@@ -5350,7 +5395,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [46] brotli 8.0.4
+### [47] brotli 8.0.4
 
 ```
 Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
@@ -5374,7 +5419,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [47] bs58 0.5.1
+### [48] bs58 0.5.1
 
 ```
 MIT License
@@ -5399,7 +5444,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [48] bumpalo 3.20.3
+### [49] bumpalo 3.20.3
 
 ```
 Copyright (c) 2019 Nick Fitzgerald
@@ -5429,7 +5474,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [49] bytemuck 1.25.2
+### [50] bytemuck 1.25.2
 
 ```
 Apache License
@@ -5495,7 +5540,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [50] bytemuck 1.25.2
+### [51] bytemuck 1.25.2
 
 ```
 MIT License
@@ -5509,7 +5554,7 @@ The above copyright notice and this permission notice (including the next paragr
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [51] bytemuck 1.25.2, tinyvec 1.12.0
+### [52] bytemuck 1.25.2, tinyvec 1.12.0
 
 ```
 Copyright (c) 2019 Daniel "Lokathor" Gee.
@@ -5525,7 +5570,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [52] bytes 1.12.1
+### [53] bytes 1.12.1
 
 ```
 Copyright (c) 2018 Carl Lerche
@@ -5555,7 +5600,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [53] cargo_toml 0.22.3
+### [54] cargo_toml 0.22.3
 
 ```
 © Kornel Lesiński
@@ -5762,7 +5807,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [54] cbc 0.1.2, ctr 0.9.2
+### [55] cbc 0.1.2, ctr 0.9.2
 
 ```
 Copyright (c) 2018-2022 RustCrypto Developers
@@ -5793,7 +5838,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [55] cc 1.4.0, cfg-if 1.0.4, cmake 0.1.58, find-msvc-tools 0.1.9, jobserver 0.1.35, js-sys 0.3.103, openssl-probe 0.2.1, pkg-config 0.3.33, and 9 more
+### [56] cc 1.4.0, cfg-if 1.0.4, cmake 0.1.58, filetime 0.2.29, find-msvc-tools 0.1.9, jobserver 0.1.35, js-sys 0.3.103, openssl-probe 0.2.1, and 10 more
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -5823,7 +5868,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [56] cesu8 1.1.0
+### [57] cesu8 1.1.0
 
 ```
 Short version for non-lawyers:
@@ -6250,7 +6295,7 @@ their own copyright notices and license terms:
   copyright itself, held by the contributor.
 ```
 
-### [57] cfb 0.7.3
+### [58] cfb 0.7.3
 
 ```
 MIT License
@@ -6276,7 +6321,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [58] cfg_aliases 0.2.2
+### [59] cfg_aliases 0.2.2
 
 ```
 MIT License
@@ -6290,7 +6335,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [59] cfg-expr 0.15.8
+### [60] cfg-expr 0.15.8
 
 ```
 Copyright (c) 2019 Embark Studios
@@ -6320,7 +6365,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [60] chacha20 0.10.1, zeroize_derive 1.5.0
+### [61] chacha20 0.10.1, zeroize_derive 1.5.0
 
 ```
 Copyright (c) 2019-2026 The RustCrypto Project Developers
@@ -6350,7 +6395,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [61] chrono 0.4.45
+### [62] chrono 0.4.45
 
 ```
 Rust-chrono is dual-licensed under The MIT License [1] and
@@ -6594,7 +6639,7 @@ limitations under the License.
 ~~~~
 ```
 
-### [62] cipher 0.4.4
+### [63] cipher 0.4.4
 
 ```
 Copyright (c) 2016-2020 RustCrypto Developers
@@ -6624,7 +6669,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [63] cmov 0.5.4, ctutils 0.4.2, embed_plist 1.2.2, identity-hash 0.1.0, lru-slab 0.1.2, quinn 0.11.11, quinn-proto 0.11.16, quinn-udp 0.5.15, and 14 more
+### [64] cmov 0.5.4, ctutils 0.4.2, embed_plist 1.2.2, identity-hash 0.1.0, lru-slab 0.1.2, quinn 0.11.11, quinn-proto 0.11.16, quinn-udp 0.5.15, and 14 more
 
 ```
 Apache License
@@ -6830,7 +6875,7 @@ Apache License
    limitations under the License.
 ```
 
-### [64] cmov 0.5.4, hybrid-array 0.4.14
+### [65] cmov 0.5.4, hybrid-array 0.4.14
 
 ```
 Copyright (c) 2022-2026 The RustCrypto Project Developers
@@ -6860,7 +6905,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [65] cobs 0.3.0, crc32fast 1.5.0, ctor 0.8.0, ctor-proc-macro 0.0.7, dpi 0.1.2, dtor 0.3.0, dtor-proc-macro 0.0.6, fallible-iterator 0.3.0, and 24 more
+### [66] cobs 0.3.0, crc32fast 1.5.0, ctor 0.8.0, ctor-proc-macro 0.0.7, dpi 0.1.2, dtor 0.3.0, dtor-proc-macro 0.0.6, fallible-iterator 0.3.0, and 24 more
 
 ```
 Apache License
@@ -7066,7 +7111,7 @@ Apache License
    limitations under the License.
 ```
 
-### [66] cobs 0.3.0
+### [67] cobs 0.3.0
 
 ```
 Copyright (c) 2015 The cobs.rs Developers
@@ -7090,7 +7135,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [67] color_quant 1.1.0
+### [68] color_quant 1.1.0
 
 ```
 The MIT License (MIT)
@@ -7116,7 +7161,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [68] combine 4.6.7
+### [69] combine 4.6.7
 
 ```
 The MIT License (MIT)
@@ -7142,7 +7187,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [69] const-oid 0.10.2, der 0.8.1, pkcs8 0.11.0
+### [70] const-oid 0.10.2, der 0.8.1, pkcs8 0.11.0
 
 ```
 Copyright (c) 2020-2026 The RustCrypto Project Developers
@@ -7172,7 +7217,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [70] constant_time_eq 0.4.2
+### [71] constant_time_eq 0.4.2
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a
@@ -7191,7 +7236,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [71] convert_case 0.10.0
+### [72] convert_case 0.10.0
 
 ```
 MIT License
@@ -7217,7 +7262,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [72] cookie 0.18.1
+### [73] cookie 0.18.1
 
 ```
 Apache License
@@ -7424,7 +7469,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [73] cookie 0.18.1
+### [74] cookie 0.18.1
 
 ```
 Copyright (c) 2017 Sergio Benitez
@@ -7455,7 +7500,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [74] cordyceps 0.3.5
+### [75] cordyceps 0.3.5
 
 ```
 MIT License
@@ -7481,7 +7526,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [75] core-foundation 0.9.4, core-foundation 0.10.1, core-foundation-sys 0.8.7, core-graphics 0.25.0, core-graphics-types 0.2.0, string_cache 0.9.0, string_cache_codegen 0.6.1
+### [76] core-foundation 0.9.4, core-foundation 0.10.1, core-foundation-sys 0.8.7, core-graphics 0.25.0, core-graphics-types 0.2.0, string_cache 0.9.0, string_cache_codegen 0.6.1
 
 ```
 Copyright (c) 2012-2013 Mozilla Foundation
@@ -7511,7 +7556,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [76] core-graphics 0.25.0
+### [77] core-graphics 0.25.0
 
 ```
 Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -7521,7 +7566,7 @@ option. All files in the project carrying such notice may not be
 copied, modified, or distributed except according to those terms.
 ```
 
-### [77] cpufeatures 0.2.17, cpufeatures 0.3.0
+### [78] cpufeatures 0.2.17, cpufeatures 0.3.0
 
 ```
 Copyright (c) 2020-2025 The RustCrypto Project Developers
@@ -7551,7 +7596,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [78] crc32fast 1.5.0
+### [79] crc32fast 1.5.0
 
 ```
 MIT License
@@ -7577,7 +7622,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [79] critical-section 1.2.0
+### [80] critical-section 1.2.0
 
 ```
 Copyright (c) 2022 The critical-section authors
@@ -7607,7 +7652,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [80] crossbeam-channel 0.5.16, crossbeam-epoch 0.9.20, crossbeam-utils 0.8.22
+### [81] crossbeam-channel 0.5.16, crossbeam-epoch 0.9.20, crossbeam-utils 0.8.22
 
 ```
 The MIT License (MIT)
@@ -7639,7 +7684,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [81] crossbeam-channel 0.5.16
+### [82] crossbeam-channel 0.5.16
 
 ```
 ===============================================================================
@@ -8237,7 +8282,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [82] crypto-common 0.1.7
+### [83] crypto-common 0.1.7
 
 ```
 Copyright (c) 2021 RustCrypto Developers
@@ -8267,7 +8312,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [83] crypto-common 0.2.2
+### [84] crypto-common 0.2.2
 
 ```
 Copyright (c) 2021-2026 RustCrypto Developers
@@ -8297,7 +8342,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [84] cssparser 0.36.0, cssparser-macros 0.6.1, dtoa-short 0.3.5
+### [85] cssparser 0.36.0, cssparser-macros 0.6.1, dtoa-short 0.3.5
 
 ```
 Mozilla Public License Version 2.0
@@ -8675,7 +8720,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   defined by the Mozilla Public License, v. 2.0.
 ```
 
-### [85] ctor 0.8.0, ctor-proc-macro 0.0.7, dtor 0.3.0, dtor-proc-macro 0.0.6, tinyvec 1.12.0
+### [86] ctor 0.8.0, ctor-proc-macro 0.0.7, dtor 0.3.0, dtor-proc-macro 0.0.6, tinyvec 1.12.0
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -8685,7 +8730,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [86] ctutils 0.4.2
+### [87] ctutils 0.4.2
 
 ```
 Copyright (c) 2025-2026 The RustCrypto Project Developers
@@ -8715,7 +8760,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [87] curve25519-dalek 5.0.0
+### [88] curve25519-dalek 5.0.0
 
 ```
 Copyright (c) 2016-2021 isis agora lovecruft. All rights reserved.
@@ -8749,7 +8794,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [88] darling 0.23.0, darling_core 0.23.0, darling_macro 0.23.0
+### [89] darling 0.23.0, darling_core 0.23.0, darling_macro 0.23.0
 
 ```
 MIT License
@@ -8775,7 +8820,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [89] data-encoding 2.11.0, data-encoding-macro 0.1.20, data-encoding-macro-internal 0.1.18
+### [90] data-encoding 2.11.0, data-encoding-macro 0.1.20, data-encoding-macro-internal 0.1.18
 
 ```
 The MIT License (MIT)
@@ -8802,7 +8847,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [90] dbus 0.9.12, libdbus-sys 0.2.7
+### [91] dbus 0.9.12, libdbus-sys 0.2.7
 
 ```
 Apache License
@@ -9008,7 +9053,7 @@ Apache License
    limitations under the License.
 ```
 
-### [91] dbus 0.9.12, libdbus-sys 0.2.7
+### [92] dbus 0.9.12, libdbus-sys 0.2.7
 
 ```
 Copyright (c) 2014-2018 David Henningsson <diwic@ubuntu.com> and other contributors
@@ -9032,7 +9077,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [92] deranged 0.5.8
+### [93] deranged 0.5.8
 
 ```
 Apache License
@@ -9238,7 +9283,7 @@ Apache License
    limitations under the License.
 ```
 
-### [93] deranged 0.5.8
+### [94] deranged 0.5.8
 
 ```
 Copyright (c) 2024 Jacob Pratt et al.
@@ -9262,7 +9307,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [94] derive_more 2.1.1, derive_more-impl 2.1.1
+### [95] derive_more 2.1.1, derive_more-impl 2.1.1
 
 ```
 The MIT License (MIT)
@@ -9288,7 +9333,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [95] diatomic-waker 0.2.3
+### [96] diatomic-waker 0.2.3
 
 ```
 The MIT License (MIT)
@@ -9314,7 +9359,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [96] digest 0.10.7, hmac 0.12.1
+### [97] digest 0.10.7, hmac 0.12.1
 
 ```
 Copyright (c) 2017 Artyom Pavlov
@@ -9344,7 +9389,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [97] digest 0.11.3
+### [98] digest 0.11.3
 
 ```
 Copyright (c) 2017-2025 RustCrypto Developers
@@ -9375,7 +9420,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [98] directories 6.0.0, dirs 6.0.0, dirs-sys 0.5.0
+### [99] directories 6.0.0, dirs 6.0.0, dirs-sys 0.5.0
 
 ```
 Apache License
@@ -9554,7 +9599,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    of your accepting any such warranty or additional liability.
 ```
 
-### [99] directories 6.0.0
+### [100] directories 6.0.0
 
 ```
 Copyright (c) 2018 directories-rs contributors
@@ -9578,7 +9623,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [100] dirs 6.0.0, dirs-sys 0.5.0
+### [101] dirs 6.0.0, dirs-sys 0.5.0
 
 ```
 Copyright (c) 2018-2019 dirs-rs contributors
@@ -9602,7 +9647,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [101] dom_query 0.27.0
+### [102] dom_query 0.27.0
 
 ```
 MIT License
@@ -9634,7 +9679,7 @@ derived from the "nipper" project (https://github.com/importcjj/nipper),
 developed by Chen Jiaju, licensed under the MIT License and the Apache License 2.0 (dual licensed).
 ```
 
-### [102] dpi 0.1.2
+### [103] dpi 0.1.2
 
 ```
 rust-lang/libm as a whole is available for use under the MIT license:
@@ -9690,7 +9735,7 @@ have been licensed under extremely permissive terms.
 ------------------------------------------------------------------------------
 ```
 
-### [103] ed25519 3.0.0
+### [104] ed25519 3.0.0
 
 ```
 Apache License
@@ -9896,7 +9941,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [104] ed25519 3.0.0, signature 3.0.0
+### [105] ed25519 3.0.0, signature 3.0.0
 
 ```
 Copyright (c) 2018-2026 RustCrypto Developers
@@ -9926,7 +9971,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [105] ed25519-dalek 3.0.0
+### [106] ed25519-dalek 3.0.0
 
 ```
 Copyright (c) 2017-2019 isis agora lovecruft. All rights reserved.
@@ -9959,7 +10004,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [106] either 1.17.0, serde_with 3.21.0, serde_with_macros 3.21.0
+### [107] either 1.17.0, serde_with 3.21.0, serde_with_macros 3.21.0
 
 ```
 Copyright (c) 2015
@@ -9989,7 +10034,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [107] embed_plist 1.2.2
+### [108] embed_plist 1.2.2
 
 ```
 MIT License
@@ -10015,7 +10060,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [108] embed-resource 3.0.11
+### [109] embed-resource 3.0.11
 
 ```
 The MIT License (MIT)
@@ -10041,7 +10086,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [109] embedded-io 0.4.0
+### [110] embedded-io 0.4.0
 
 ```
 Copyright (c) 2022 The embedded-io authors
@@ -10071,7 +10116,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [110] embedded-io 0.6.1
+### [111] embedded-io 0.6.1
 
 ```
 Copyright (c) 2023 The embedded-io authors
@@ -10101,7 +10146,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [111] enumflags2 0.7.12
+### [112] enumflags2 0.7.12
 
 ```
 Apache License
@@ -10174,7 +10219,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [112] enumflags2 0.7.12
+### [113] enumflags2 0.7.12
 
 ```
 Copyright (c) 2017-2023 Maik Klein, Maja Kądziołka
@@ -10204,7 +10249,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [113] enumflags2_derive 0.7.12
+### [114] enumflags2_derive 0.7.12
 
 ```
 Apache License
@@ -10277,7 +10322,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [114] enumflags2_derive 0.7.12
+### [115] enumflags2_derive 0.7.12
 
 ```
 Copyright (c) 2017 Maik Klein
@@ -10307,7 +10352,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [115] equivalent 1.0.2
+### [116] equivalent 1.0.2
 
 ```
 Copyright (c) 2016--2023
@@ -10337,7 +10382,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [116] errno 0.3.14
+### [117] errno 0.3.14
 
 ```
 Copyright (c) 2014 Chris Wong
@@ -10367,7 +10412,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [117] fallible-iterator 0.3.0
+### [118] fallible-iterator 0.3.0
 
 ```
 Copyright (c) 2015 The rust-openssl-verify Developers
@@ -10391,7 +10436,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [118] fallible-streaming-iterator 0.1.9
+### [119] fallible-streaming-iterator 0.1.9
 
 ```
 Copyright (c) 2016 The fallible-streaming-iterator Developers
@@ -10415,7 +10460,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [119] fdeflate 0.3.7, field-offset 0.3.6, image 0.25.10, image-webp 0.2.4, miniz_oxide 0.8.9, num-conv 0.2.2, pin-project 1.1.13, pin-project-internal 1.1.13, and 21 more
+### [120] fdeflate 0.3.7, field-offset 0.3.6, image 0.25.10, image-webp 0.2.4, miniz_oxide 0.8.9, num-conv 0.2.2, pin-project 1.1.13, pin-project-internal 1.1.13, and 23 more
 
 ```
 Apache License
@@ -10596,7 +10641,7 @@ Apache License
    END OF TERMS AND CONDITIONS
 ```
 
-### [120] fdeflate 0.3.7, image 0.25.10, image-webp 0.2.4
+### [121] fdeflate 0.3.7, image 0.25.10, image-webp 0.2.4
 
 ```
 MIT License
@@ -10626,7 +10671,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [121] fiat-crypto 0.3.0
+### [122] fiat-crypto 0.3.0
 
 ```
 SPDX-License-Identifier: MIT OR Apache-2.0 OR BSD-1-Clause
@@ -10638,7 +10683,7 @@ the BSD 1-Clause License <LICENSE-BSD-1> or
 <https://spdx.org/licenses/BSD-1-Clause.html>, at your option.
 ```
 
-### [122] fiat-crypto 0.3.0
+### [123] fiat-crypto 0.3.0
 
 ```
 The Apache License, Version 2.0 (Apache-2.0)
@@ -10658,7 +10703,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [123] fiat-crypto 0.3.0
+### [124] fiat-crypto 0.3.0
 
 ```
 The BSD 1-Clause License (BSD-1-Clause)
@@ -10686,7 +10731,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [124] fiat-crypto 0.3.0
+### [125] fiat-crypto 0.3.0
 
 ```
 The MIT License (MIT)
@@ -10712,7 +10757,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [125] field-offset 0.3.6
+### [126] field-offset 0.3.6
 
 ```
 MIT License
@@ -10738,7 +10783,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [126] flate2 1.1.9
+### [127] flate2 1.1.9
 
 ```
 Copyright (c) 2014-2026 Alex Crichton
@@ -10768,7 +10813,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [127] fnv 1.0.7
+### [128] fnv 1.0.7
 
 ```
 Copyright (c) 2017 Contributors
@@ -10798,7 +10843,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [128] foldhash 0.2.0
+### [129] foldhash 0.2.0
 
 ```
 Copyright (c) 2024 Orson Peters
@@ -10822,7 +10867,7 @@ the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [129] foreign-types 0.5.0, foreign-types-macros 0.2.4, foreign-types-shared 0.3.1
+### [130] foreign-types 0.5.0, foreign-types-macros 0.2.4, foreign-types-shared 0.3.1
 
 ```
 Copyright (c) 2017 The foreign-types Developers
@@ -10846,7 +10891,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [130] form_urlencoded 1.2.2
+### [131] form_urlencoded 1.2.2
 
 ```
 Copyright (c) 2013-2016 The rust-url developers
@@ -10876,7 +10921,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [131] fs_extra 1.3.0
+### [132] fs_extra 1.3.0
 
 ```
 MIT License
@@ -10902,7 +10947,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [132] fsevent-sys 4.1.0
+### [133] fsevent-sys 4.1.0
 
 ```
 The MIT License (MIT)
@@ -10928,7 +10973,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [133] futures 0.3.33, futures-channel 0.3.33, futures-core 0.3.33, futures-executor 0.3.33, futures-io 0.3.33, futures-macro 0.3.33, futures-sink 0.3.33, futures-task 0.3.33, and 1 more
+### [134] futures 0.3.33, futures-channel 0.3.33, futures-core 0.3.33, futures-executor 0.3.33, futures-io 0.3.33, futures-macro 0.3.33, futures-sink 0.3.33, futures-task 0.3.33, and 1 more
 
 ```
 Apache License
@@ -11135,7 +11180,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [134] futures 0.3.33, futures-channel 0.3.33, futures-core 0.3.33, futures-executor 0.3.33, futures-io 0.3.33, futures-macro 0.3.33, futures-sink 0.3.33, futures-task 0.3.33, and 1 more
+### [135] futures 0.3.33, futures-channel 0.3.33, futures-core 0.3.33, futures-executor 0.3.33, futures-io 0.3.33, futures-macro 0.3.33, futures-sink 0.3.33, futures-task 0.3.33, and 1 more
 
 ```
 Copyright (c) 2016 Alex Crichton
@@ -11166,7 +11211,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [135] futures-buffered 0.2.13
+### [136] futures-buffered 0.2.13
 
 ```
 The MIT License (MIT)
@@ -11192,7 +11237,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [136] generator 0.8.9
+### [137] generator 0.8.9
 
 ```
 Apache License
@@ -11398,7 +11443,7 @@ Apache License
    limitations under the License.
 ```
 
-### [137] generator 0.8.9
+### [138] generator 0.8.9
 
 ```
 Copyright (c) 2017 Xudong Huang
@@ -11428,7 +11473,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [138] generic-array 0.14.7
+### [139] generic-array 0.14.7
 
 ```
 The MIT License (MIT)
@@ -11454,7 +11499,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [139] getrandom 0.2.17, getrandom 0.3.4, getrandom 0.4.3
+### [140] getrandom 0.2.17, getrandom 0.3.4, getrandom 0.4.3
 
 ```
 Apache License
@@ -11660,7 +11705,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [140] getrandom 0.2.17
+### [141] getrandom 0.2.17
 
 ```
 Copyright (c) 2018-2024 The rust-random Project Developers
@@ -11691,7 +11736,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [141] getrandom 0.3.4
+### [142] getrandom 0.3.4
 
 ```
 Copyright (c) 2018-2025 The rust-random Project Developers
@@ -11722,7 +11767,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [142] getrandom 0.4.3
+### [143] getrandom 0.4.3
 
 ```
 Copyright (c) 2018-2026 The rust-random Project Developers
@@ -11753,7 +11798,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [143] ghash 0.5.1
+### [144] ghash 0.5.1
 
 ```
 Copyright (c) 2019 RustCrypto Developers
@@ -11783,7 +11828,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [144] gif 0.14.2
+### [145] gif 0.14.2
 
 ```
 The MIT License (MIT)
@@ -11809,7 +11854,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [145] h2 0.4.15
+### [146] h2 0.4.15
 
 ```
 Copyright (c) 2017 h2 authors
@@ -11839,7 +11884,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [146] hash32 0.2.1
+### [147] hash32 0.2.1
 
 ```
 Copyright (c) 2018 Jorge Aparicio
@@ -11869,7 +11914,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [147] hashbrown 0.12.3, hashbrown 0.16.1, hashbrown 0.17.1
+### [148] hashbrown 0.12.3, hashbrown 0.16.1, hashbrown 0.17.1
 
 ```
 Copyright (c) 2016 Amanieu d'Antras
@@ -11899,7 +11944,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [148] hashlink 0.12.1
+### [149] hashlink 0.12.1
 
 ```
 This work is derived in part from the `linked-hash-map` crate, Copyright (c)
@@ -11930,7 +11975,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [149] heapless 0.7.17
+### [150] heapless 0.7.17
 
 ```
 Copyright (c) 2017 Jorge Aparicio
@@ -11960,7 +12005,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [150] heck 0.4.1, heck 0.5.0, unicode-segmentation 1.13.3, unicode-xid 0.2.6
+### [151] heck 0.4.1, heck 0.5.0, unicode-segmentation 1.13.3, unicode-xid 0.2.6
 
 ```
 Copyright (c) 2015 The Rust Project Developers
@@ -11990,7 +12035,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [151] hex 0.4.3
+### [152] hex 0.4.3
 
 ```
 Copyright (c) 2013-2014 The Rust Project Developers.
@@ -12015,7 +12060,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [152] hickory-net 0.26.1, hickory-proto 0.26.1, hickory-resolver 0.26.1
+### [153] hickory-net 0.26.1, hickory-proto 0.26.1, hickory-resolver 0.26.1
 
 ```
 Apache License
@@ -12221,7 +12266,7 @@ Apache License
    limitations under the License.
 ```
 
-### [153] hickory-net 0.26.1, hickory-proto 0.26.1, hickory-resolver 0.26.1
+### [154] hickory-net 0.26.1, hickory-proto 0.26.1, hickory-resolver 0.26.1
 
 ```
 Copyright (c) 2015 The Hickory DNS Developers
@@ -12246,7 +12291,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [154] hkdf 0.12.4
+### [155] hkdf 0.12.4
 
 ```
 Copyright (c) 2015-2018 Vlad Filippov
@@ -12277,7 +12322,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [155] html5ever 0.38.0, markup5ever 0.38.0, web_atoms 0.2.5
+### [156] html5ever 0.38.0, markup5ever 0.38.0, web_atoms 0.2.5
 
 ```
 Copyright (c) 2014 The html5ever Project Developers
@@ -12307,7 +12352,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [156] http 1.5.0
+### [157] http 1.5.0
 
 ```
 Apache License
@@ -12513,7 +12558,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [157] http 1.5.0
+### [158] http 1.5.0
 
 ```
 Copyright (c) 2017 http-rs authors
@@ -12543,7 +12588,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [158] http-body 1.1.0, http-body-util 0.1.4
+### [159] http-body 1.1.0, http-body-util 0.1.4
 
 ```
 Copyright (c) 2019-2026 Sean McArthur & Hyper Contributors
@@ -12573,7 +12618,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [159] http-range 0.1.5
+### [160] http-range 0.1.5
 
 ```
 MIT License
@@ -12599,7 +12644,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [160] httparse 1.10.1
+### [161] httparse 1.10.1
 
 ```
 Copyright (c) 2015-2025 Sean McArthur
@@ -12623,7 +12668,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [161] httpdate 1.0.3
+### [162] httpdate 1.0.3
 
 ```
 Apache License
@@ -12829,7 +12874,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [162] httpdate 1.0.3
+### [163] httpdate 1.0.3
 
 ```
 Copyright (c) 2016 Pyfisch
@@ -12853,7 +12898,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [163] hyper 1.11.0, unicase 2.9.0
+### [164] hyper 1.11.0, unicase 2.9.0
 
 ```
 Copyright (c) 2014-2026 Sean McArthur
@@ -12877,7 +12922,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [164] hyper-rustls 0.27.9, rustls 0.23.43, rustls-native-certs 0.8.4
+### [165] hyper-rustls 0.27.9, rustls 0.23.43, rustls-native-certs 0.8.4
 
 ```
 ISC License (ISC)
@@ -12897,7 +12942,7 @@ ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### [165] hyper-rustls 0.27.9, rustls 0.23.43, rustls-native-certs 0.8.4
+### [166] hyper-rustls 0.27.9, rustls 0.23.43, rustls-native-certs 0.8.4
 
 ```
 Copyright (c) 2016 Joseph Birr-Pixton <jpixton@gmail.com>
@@ -12927,7 +12972,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [166] hyper-util 0.1.20
+### [167] hyper-util 0.1.20
 
 ```
 Copyright (c) 2023-2025 Sean McArthur
@@ -12951,7 +12996,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [167] iana-time-zone 0.1.65, iana-time-zone-haiku 0.1.2
+### [168] iana-time-zone 0.1.65, iana-time-zone-haiku 0.1.2
 
 ```
 Apache License
@@ -13157,7 +13202,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [168] iana-time-zone 0.1.65, iana-time-zone-haiku 0.1.2
+### [169] iana-time-zone 0.1.65, iana-time-zone-haiku 0.1.2
 
 ```
 Copyright (c) 2020 Andrew D. Straw
@@ -13187,7 +13232,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [169] ico 0.5.0
+### [170] ico 0.5.0
 
 ```
 MIT License
@@ -13213,7 +13258,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [170] icu_collections 2.2.0, icu_locale_core 2.2.0, icu_normalizer 2.2.0, icu_normalizer_data 2.2.0, icu_properties 2.2.0, icu_properties_data 2.2.0, icu_provider 2.2.0, litemap 0.8.2, and 10 more
+### [171] icu_collections 2.2.0, icu_locale_core 2.2.0, icu_normalizer 2.2.0, icu_normalizer_data 2.2.0, icu_properties 2.2.0, icu_properties_data 2.2.0, icu_provider 2.2.0, litemap 0.8.2, and 10 more
 
 ```
 UNICODE LICENSE V3
@@ -13264,7 +13309,7 @@ Portions of ICU4X may have been adapted from ICU4C and/or ICU4J.
 ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation and others.
 ```
 
-### [171] ident_case 1.0.1, papaya 0.2.4, simdutf8 0.1.5, widestring 1.2.1
+### [172] ident_case 1.0.1, papaya 0.2.4, simdutf8 0.1.5, widestring 1.2.1
 
 ```
 MIT License
@@ -13288,7 +13333,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [172] identity-hash 0.1.0
+### [173] identity-hash 0.1.0
 
 ```
 Copyright 2018 Parity Technologies (UK) Ltd.
@@ -13312,7 +13357,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [173] idna 1.1.0, percent-encoding 2.3.2, url 2.5.8
+### [174] idna 1.1.0, percent-encoding 2.3.2, url 2.5.8
 
 ```
 Copyright (c) 2013-2025 The rust-url developers
@@ -13342,7 +13387,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [174] idna_adapter 1.2.2
+### [175] idna_adapter 1.2.2
 
 ```
 Copyright (c) The rust-url developers
@@ -13372,7 +13417,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [175] igd-next 0.17.1
+### [176] igd-next 0.17.1
 
 ```
 The MIT License (MIT)
@@ -13398,7 +13443,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [176] indexmap 1.9.3, indexmap 2.14.0
+### [177] indexmap 1.9.3, indexmap 2.14.0
 
 ```
 Copyright (c) 2016--2017
@@ -13428,7 +13473,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [177] infer 0.19.0
+### [178] infer 0.19.0
 
 ```
 MIT License
@@ -13454,7 +13499,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [178] inotify 0.11.4, inotify-sys 0.1.8
+### [179] inotify 0.11.4, inotify-sys 0.1.8
 
 ```
 Copyright (c) Hanno Braun and contributors
@@ -13472,7 +13517,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ```
 
-### [179] inout 0.1.4
+### [180] inout 0.1.4
 
 ```
 Copyright (c) 2022 The RustCrypto Project Developers
@@ -13503,7 +13548,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [180] ipconfig 0.3.4
+### [181] ipconfig 0.3.4
 
 ```
 Copyright (c) 2017 Liran Ringel
@@ -13533,7 +13578,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [181] ipnet 2.12.0, prefix-trie 0.8.4
+### [182] ipnet 2.12.0, prefix-trie 0.8.4
 
 ```
 Apache License
@@ -13739,7 +13784,7 @@ Apache License
    limitations under the License.
 ```
 
-### [182] ipnet 2.12.0
+### [183] ipnet 2.12.0
 
 ```
 Copyright 2017 Juniper Networks, Inc.
@@ -13751,7 +13796,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [183] iroh 1.0.3
+### [184] iroh 1.0.3
 
 ```
 Parts of the code has been derived from tailscale, which is under the following license.
@@ -13789,7 +13834,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [184] iroh-blobs 0.103.0, n0-future 0.3.2, nested_enum_utils 0.2.3
+### [185] iroh-blobs 0.103.0, n0-future 0.3.2, nested_enum_utils 0.2.3
 
 ```
 Apache License
@@ -13995,7 +14040,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [185] iroh-blobs 0.103.0, n0-future 0.3.2, nested_enum_utils 0.2.3
+### [186] iroh-blobs 0.103.0, n0-future 0.3.2, nested_enum_utils 0.2.3
 
 ```
 Copyright 2023 N0, INC.
@@ -14025,7 +14070,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [186] iroh-io 0.6.2
+### [187] iroh-io 0.6.2
 
 ```
 Copyright (c) 2023
@@ -14055,7 +14100,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [187] iroh-metrics 1.0.1, iroh-tickets 1.0.0, irpc 0.17.0, n0-error 1.0.0, n0-watcher 1.0.0
+### [188] iroh-metrics 1.0.1, iroh-tickets 1.0.0, irpc 0.17.0, n0-error 1.0.0, n0-watcher 1.0.0
 
 ```
 Apache License
@@ -14261,7 +14306,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [188] iroh-metrics 1.0.1, iroh-tickets 1.0.0, irpc 0.17.0, n0-error 1.0.0, n0-watcher 1.0.0
+### [189] iroh-metrics 1.0.1, iroh-tickets 1.0.0, irpc 0.17.0, n0-error 1.0.0, n0-watcher 1.0.0
 
 ```
 Copyright 2026 N0, INC.
@@ -14291,7 +14336,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [189] iroh-relay 1.0.3
+### [190] iroh-relay 1.0.3
 
 ```
 Parts of the code has been derived from tailscale, which is under the following license.
@@ -14326,7 +14371,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [190] is-docker 0.2.0, is-wsl 0.4.0
+### [191] is-docker 0.2.0, is-wsl 0.4.0
 
 ```
 MIT License
@@ -14352,7 +14397,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [191] javascriptcore-rs 1.1.2
+### [192] javascriptcore-rs 1.1.2
 
 ```
 The MIT License (MIT)
@@ -14379,7 +14424,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [192] javascriptcore-rs-sys 1.1.1, soup3 0.5.0, soup3-sys 0.5.0
+### [193] javascriptcore-rs-sys 1.1.1, soup3 0.5.0, soup3-sys 0.5.0
 
 ```
 The MIT License (MIT)
@@ -14405,7 +14450,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [193] jni 0.21.1
+### [194] jni 0.21.1
 
 ```
 The MIT License (MIT)
@@ -14431,7 +14476,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [194] jni-sys 0.3.1, jni-sys 0.4.1
+### [195] jni-sys 0.3.1, jni-sys 0.4.1
 
 ```
 Copyright (c) 2015 The rust-jni-sys Developers
@@ -14455,7 +14500,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [195] json-patch 3.0.1
+### [196] json-patch 3.0.1
 
 ```
 MIT License
@@ -14481,7 +14526,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [196] jsonptr 0.6.3
+### [197] jsonptr 0.6.3
 
 ```
 Apache License
@@ -14687,7 +14732,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [197] jsonptr 0.6.3
+### [198] jsonptr 0.6.3
 
 ```
 MIT License
@@ -14713,7 +14758,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [198] keyboard-types 0.7.0
+### [199] keyboard-types 0.7.0
 
 ```
 Copyright (c) 2017 Pyfisch
@@ -14737,7 +14782,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [199] kqueue 1.2.0, kqueue-sys 1.1.2
+### [200] kqueue 1.2.0, kqueue-sys 1.1.2
 
 ```
 Copyright (c) 2016 William Orr <will@worrbase.com>
@@ -14761,7 +14806,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [200] lazy_static 1.5.0
+### [201] lazy_static 1.5.0
 
 ```
 Copyright (c) 2010 The Rust Project Developers
@@ -14791,7 +14836,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [201] libappindicator 0.9.0
+### [202] libappindicator 0.9.0
 
 ```
 MIT License
@@ -14818,7 +14863,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [202] libc 0.2.189
+### [203] libc 0.2.189
 
 ```
 Copyright (c) The Rust Project Developers
@@ -14848,7 +14893,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [203] libloading 0.7.4
+### [204] libloading 0.7.4
 
 ```
 Copyright © 2015, Simonas Kazlauskas
@@ -14865,7 +14910,7 @@ NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE US
 THIS SOFTWARE.
 ```
 
-### [204] libredox 0.1.18
+### [205] libredox 0.1.18
 
 ```
 MIT License
@@ -14891,7 +14936,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [205] libsqlite3-sys 0.38.1, rusqlite 0.40.1
+### [206] libsqlite3-sys 0.38.1, rusqlite 0.40.1
 
 ```
 Copyright (c) 2014 The rusqlite developers
@@ -14915,7 +14960,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [206] linux-raw-sys 0.12.1
+### [207] linux-raw-sys 0.12.1
 
 ```
 Short version for non-lawyers:
@@ -14949,7 +14994,7 @@ is licensed under:
 at your option.
 ```
 
-### [207] linux-raw-sys 0.12.1, rustix 1.1.4, target-lexicon 0.12.16, wasi 0.11.1+wasi-snapshot-preview1, wasip2 1.0.4+wasi-0.2.12, wit-bindgen 0.57.1
+### [208] linux-raw-sys 0.12.1, rustix 1.1.4, target-lexicon 0.12.16, wasi 0.11.1+wasi-snapshot-preview1, wasip2 1.0.4+wasi-0.2.12, wit-bindgen 0.57.1
 
 ```
 Apache License
@@ -15172,7 +15217,7 @@ the License, but only in their entirety and only with respect to the Combined
 Software.
 ```
 
-### [208] lock_api 0.4.14, parking_lot 0.12.5, parking_lot_core 0.9.12, rustc_version 0.4.1, thread_local 1.1.10
+### [209] lock_api 0.4.14, parking_lot 0.12.5, parking_lot_core 0.9.12, rustc_version 0.4.1, thread_local 1.1.10
 
 ```
 Copyright (c) 2016 The Rust Project Developers
@@ -15202,7 +15247,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [209] loom 0.7.2, slab 0.4.12
+### [210] loom 0.7.2, slab 0.4.12
 
 ```
 Copyright (c) 2019 Carl Lerche
@@ -15232,7 +15277,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [210] lru 0.18.1
+### [211] lru 0.18.1
 
 ```
 MIT License
@@ -15258,7 +15303,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [211] lru-slab 0.1.2
+### [212] lru-slab 0.1.2
 
 ```
 Copyright (c) 2024 The lru-slab Developers
@@ -15270,7 +15315,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [212] lru-slab 0.1.2
+### [213] lru-slab 0.1.2
 
 ```
 Copyright (c) 2024 The lru-slab Developers
@@ -15294,7 +15339,7 @@ the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [213] mac-addr 0.3.0
+### [214] mac-addr 0.3.0
 
 ```
 MIT License
@@ -15320,7 +15365,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [214] matchers 0.2.0
+### [215] matchers 0.2.0
 
 ```
 Copyright (c) 2019 Eliza Weisman
@@ -15344,7 +15389,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [215] memoffset 0.9.1
+### [216] memoffset 0.9.1
 
 ```
 Copyright (c) 2017 Gilad Naaman
@@ -15368,7 +15413,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [216] mime 0.3.17
+### [217] mime 0.3.17
 
 ```
 Copyright (c) 2014 Sean McArthur
@@ -15392,7 +15437,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [217] mime_guess 2.0.5
+### [218] mime_guess 2.0.5
 
 ```
 The MIT License (MIT)
@@ -15418,66 +15463,130 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [218] miniz_oxide 0.8.9
+### [219] minisign-verify 0.2.5
 
 ```
-MIT License
+Copyright (c) 2019-2025 Frank Denis
 
-Copyright 2013-2014 RAD Game Tools and Valve Software
-Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
-Copyright (c) 2017 Frommi
-Copyright (c) 2017-2024 oyvindln
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
 
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+--
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+Code in the src/crypto folder is derived from the rust-crypto project:
+https://github.com/DaGenix/rust-crypto
 
-### [219] miniz_oxide 0.8.9
+Original ISC license follows:
 
-```
-MIT License
+Copyright (c) 2006-2009 Graydon Hoare
+Copyright (c) 2009-2013 Mozilla Foundation
 
-Copyright 2013-2014 RAD Game Tools and Valve Software
-Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
-Copyright (c) 2017 Frommi
-Copyright (c) 2017-2024 oyvindln
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 ```
 
 ### [220] miniz_oxide 0.8.9
+
+```
+MIT License
+
+Copyright 2013-2014 RAD Game Tools and Valve Software
+Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
+Copyright (c) 2017 Frommi
+Copyright (c) 2017-2024 oyvindln
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### [221] miniz_oxide 0.8.9
+
+```
+MIT License
+
+Copyright 2013-2014 RAD Game Tools and Valve Software
+Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
+Copyright (c) 2017 Frommi
+Copyright (c) 2017-2024 oyvindln
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### [222] miniz_oxide 0.8.9
 
 ```
 Copyright 2013-2014 RAD Game Tools and Valve Software
@@ -15496,7 +15605,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [221] mio 1.2.2
+### [223] mio 1.2.2
 
 ```
 Copyright (c) 2014 Carl Lerche and other MIO contributors
@@ -15520,7 +15629,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [222] moka 0.12.15
+### [224] moka 0.12.15
 
 ```
 Apache License
@@ -15726,7 +15835,7 @@ Apache License
    limitations under the License.
 ```
 
-### [223] moka 0.12.15
+### [225] moka 0.12.15
 
 ```
 MIT License
@@ -15752,7 +15861,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [224] moka 0.12.15
+### [226] moka 0.12.15
 
 ```
 Additional Notices for Moka
@@ -15771,7 +15880,7 @@ These files were ported from the Java Caffeine library and are not dual-licensed
 Please refer to the LICENSE-APACHE file for more details on the Apache License 2.0.
 ```
 
-### [225] moxcms 0.8.1, pxfm 0.1.30
+### [227] moxcms 0.8.1, pxfm 0.1.30
 
 ```
 Apache License
@@ -15977,7 +16086,7 @@ Apache License
    limitations under the License.
 ```
 
-### [226] moxcms 0.8.1, pxfm 0.1.30
+### [228] moxcms 0.8.1, pxfm 0.1.30
 
 ```
 Copyright (c) Radzivon Bartoshyk. All rights reserved.
@@ -16008,7 +16117,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [227] muda 0.19.3, tray-icon 0.24.2
+### [229] muda 0.19.3, tray-icon 0.24.2
 
 ```
 MIT License
@@ -16034,7 +16143,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [228] muda 0.19.3
+### [230] muda 0.19.3
 
 ```
 SPDXVersion: SPDX-2.1
@@ -16058,7 +16167,7 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/muda.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [229] netdev 0.45.0
+### [231] netdev 0.45.0
 
 ```
 MIT License
@@ -16084,7 +16193,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [230] netlink-packet-core 0.8.1, netlink-proto 0.12.1, netlink-sys 0.8.8
+### [232] netlink-packet-core 0.8.1, netlink-proto 0.12.1, netlink-sys 0.8.8
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -16114,7 +16223,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [231] netlink-packet-route 0.31.0
+### [233] netlink-packet-route 0.31.0
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -16136,7 +16245,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [232] new_debug_unreachable 1.0.6
+### [234] new_debug_unreachable 1.0.6
 
 ```
 Copyright (c) 2015 Jonathan Reem
@@ -16166,7 +16275,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [233] noq 1.1.1, noq-proto 1.1.1, noq-udp 1.1.1
+### [235] noq 1.1.1, noq-proto 1.1.1, noq-udp 1.1.1
 
 ```
 Apache License
@@ -16373,7 +16482,7 @@ Apache License
    limitations under the License.
 ```
 
-### [234] noq 1.1.1, noq-proto 1.1.1, noq-udp 1.1.1
+### [236] noq 1.1.1, noq-proto 1.1.1, noq-udp 1.1.1
 
 ```
 Copyright (c) 2018-2025 The quinn Developers
@@ -16386,7 +16495,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [235] notify 8.2.0
+### [237] notify 8.2.0
 
 ```
 Creative Commons CC0 1.0 Universal
@@ -16432,7 +16541,7 @@ For these and/or other purposes and motivations, and without any expectation of 
      d. Affirmer understands and acknowledges that Creative Commons is not a party to this document and has no duty or obligation with respect to this CC0 or use of the Work.
 ```
 
-### [236] notify-types 2.1.0
+### [238] notify-types 2.1.0
 
 ```
 Apache License
@@ -16638,7 +16747,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [237] notify-types 2.1.0
+### [239] notify-types 2.1.0
 
 ```
 Copyright (c) 2023 Notify Contributors
@@ -16668,7 +16777,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [238] nu-ansi-term 0.50.3
+### [240] nu-ansi-term 0.50.3
 
 ```
 The MIT License (MIT)
@@ -16695,7 +16804,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [239] num_enum 0.7.6, num_enum_derive 0.7.6
+### [241] num_enum 0.7.6, num_enum_derive 0.7.6
 
 ```
 Copyright (c) 2018, Daniel Wagner-Hall
@@ -16727,7 +16836,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [240] num-conv 0.2.2
+### [242] num-conv 0.2.2
 
 ```
 Copyright (c) Jacob Pratt
@@ -16751,7 +16860,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [241] opaque-debug 0.3.1
+### [243] opaque-debug 0.3.1
 
 ```
 Copyright (c) 2018-2024 The RustCrypto Project Developers
@@ -16781,7 +16890,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [242] open 5.4.0
+### [244] open 5.4.0
 
 ```
 The MIT License (MIT)
@@ -16811,7 +16920,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [243] option-ext 0.2.0
+### [245] option-ext 0.2.0
 
 ```
 Mozilla Public License Version 2.0
@@ -17189,7 +17298,37 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   defined by the Mozilla Public License, v. 2.0.
 ```
 
-### [244] parking 2.2.1
+### [246] osakit 0.3.1
+
+```
+Copyright (c) 2024 Marat Dulin
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
+### [247] parking 2.2.1
 
 ```
 ===============================================================================
@@ -17203,7 +17342,7 @@ option. All files in the project carrying such notice may not be
 copied, modified, or distributed except according to those terms.
 ```
 
-### [245] pem-rfc7468 1.0.0
+### [248] pem-rfc7468 1.0.0
 
 ```
 Copyright (c) 2021-2025 The RustCrypto Project Developers
@@ -17233,7 +17372,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [246] phf 0.13.1, phf_codegen 0.13.1, phf_generator 0.13.1, phf_macros 0.13.1, phf_shared 0.13.1
+### [249] phf 0.13.1, phf_codegen 0.13.1, phf_generator 0.13.1, phf_macros 0.13.1, phf_shared 0.13.1
 
 ```
 The MIT License (MIT)
@@ -17258,7 +17397,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [247] plist 1.10.0
+### [250] plist 1.10.0
 
 ```
 Copyright (c) 2015 Edward Barnard
@@ -17282,7 +17421,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [248] png 0.17.16, png 0.18.1
+### [251] png 0.17.16, png 0.18.1
 
 ```
 Copyright (c) 2015 nwin
@@ -17312,7 +17451,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [249] polyval 0.6.2
+### [252] polyval 0.6.2
 
 ```
 Copyright (c) 2019-2023 RustCrypto Developers
@@ -17342,7 +17481,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [250] positioned-io 0.3.5
+### [253] positioned-io 0.3.5
 
 ```
 The MIT License (MIT)
@@ -17368,7 +17507,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [251] postcard 1.1.3, postcard-derive 0.2.2
+### [254] postcard 1.1.3, postcard-derive 0.2.2
 
 ```
 Copyright (c) 2019 Anthony James Munns
@@ -17398,7 +17537,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [252] powerfmt 0.2.0
+### [255] powerfmt 0.2.0
 
 ```
 Apache License
@@ -17604,7 +17743,7 @@ Apache License
    limitations under the License.
 ```
 
-### [253] powerfmt 0.2.0
+### [256] powerfmt 0.2.0
 
 ```
 Copyright (c) 2023 Jacob Pratt et al.
@@ -17628,7 +17767,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [254] precomputed-hash 0.1.1
+### [257] precomputed-hash 0.1.1
 
 ```
 MIT License
@@ -17654,7 +17793,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [255] prefix-trie 0.8.4
+### [258] prefix-trie 0.8.4
 
 ```
 Copyright 2022 Tibor Schneider
@@ -17666,7 +17805,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [256] proc-macro-error 0.4.12
+### [259] proc-macro-error 0.4.12
 
 ```
 Apache License
@@ -17872,7 +18011,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [257] proc-macro-error 0.4.12
+### [260] proc-macro-error 0.4.12
 
 ```
 MIT License
@@ -17898,7 +18037,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [258] proc-macro-error 1.0.4, proc-macro-error-attr 0.4.12, proc-macro-error-attr 1.0.4
+### [261] proc-macro-error 1.0.4, proc-macro-error-attr 0.4.12, proc-macro-error-attr 1.0.4
 
 ```
 Apache License
@@ -18104,7 +18243,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [259] proc-macro-error 1.0.4, proc-macro-error-attr 0.4.12, proc-macro-error-attr 1.0.4
+### [262] proc-macro-error 1.0.4, proc-macro-error-attr 0.4.12, proc-macro-error-attr 1.0.4
 
 ```
 MIT License
@@ -18130,7 +18269,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [260] proc-macro-hack 0.5.20+deprecated
+### [263] proc-macro-hack 0.5.20+deprecated
 
 ```
 Copyright (c) 2018 David Tolnay
@@ -18160,7 +18299,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [261] quick-error 2.0.1
+### [264] quick-error 2.0.1
 
 ```
 Copyright (c) 2015 The quick-error Developers
@@ -18184,7 +18323,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [262] quick-xml 0.41.0
+### [265] quick-xml 0.41.0
 
 ```
 The MIT License (MIT)
@@ -18212,7 +18351,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [263] quinn 0.11.11, quinn-proto 0.11.16, quinn-udp 0.5.15
+### [266] quinn 0.11.11, quinn-proto 0.11.16, quinn-udp 0.5.15
 
 ```
 Copyright (c) 2018 The quinn Developers
@@ -18224,7 +18363,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [264] rand 0.10.2, rand_pcg 0.10.2
+### [267] rand 0.10.2, rand_pcg 0.10.2
 
 ```
 Copyrights in the Rand project are retained by their contributors. No
@@ -18241,7 +18380,7 @@ The Rand project includes code from the Rust project
 published under these same licenses.
 ```
 
-### [265] rand 0.10.2
+### [268] rand 0.10.2
 
 ```
 Apache License
@@ -18422,7 +18561,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 ```
 
-### [266] rand 0.10.2
+### [269] rand 0.10.2
 
 ```
 Copyright 2018 Developers of the Rand project
@@ -18453,7 +18592,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [267] rand_core 0.10.1
+### [270] rand_core 0.10.1
 
 ```
 Copyrights in the Rand project are retained by their contributors. No
@@ -18467,7 +18606,7 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
 ```
 
-### [268] rand_core 0.10.1, rand_pcg 0.10.2
+### [271] rand_core 0.10.1, rand_pcg 0.10.2
 
 ```
 Apache License
@@ -18659,7 +18798,7 @@ APPENDIX: How to apply the Apache License to your work.
    identification within third-party archives.
 ```
 
-### [269] rand_core 0.10.1
+### [272] rand_core 0.10.1
 
 ```
 Copyright (c) 2018-2026 The Rand Project Developers
@@ -18689,7 +18828,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [270] rand_pcg 0.10.2
+### [273] rand_pcg 0.10.2
 
 ```
 Copyright (c) 2014-2017 Melissa O'Neill and PCG Project contributors
@@ -18720,7 +18859,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [271] range-collections 0.4.6
+### [274] range-collections 0.4.6
 
 ```
 MIT License
@@ -18746,7 +18885,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [272] raw-window-handle 0.6.2
+### [275] raw-window-handle 0.6.2
 
 ```
 MIT License
@@ -18772,7 +18911,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [273] raw-window-handle 0.6.2
+### [276] raw-window-handle 0.6.2
 
 ```
 Copyright (c) 2020 Osspial
@@ -18788,7 +18927,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [274] redb 4.1.0
+### [277] redb 4.1.0
 
 ```
 Copyright (c) 2021 Christopher Berner
@@ -18812,7 +18951,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [275] redox_syscall 0.5.18
+### [278] redox_syscall 0.5.18
 
 ```
 Copyright (c) 2017 Redox OS Developers
@@ -18839,7 +18978,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [276] redox_users 0.5.2
+### [279] redox_users 0.5.2
 
 ```
 The MIT License (MIT)
@@ -18865,7 +19004,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [277] reqwest 0.13.4
+### [280] reqwest 0.13.4
 
 ```
 Apache License
@@ -19071,7 +19210,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [278] reqwest 0.13.4
+### [281] reqwest 0.13.4
 
 ```
 Copyright (c) 2016-2026 Sean McArthur
@@ -19095,7 +19234,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [279] resolv-conf 0.7.6
+### [282] resolv-conf 0.7.6
 
 ```
 Copyright (c) 2015-2016 The resolv-conf Developers
@@ -19119,7 +19258,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [280] rfd 0.16.0
+### [283] rfd 0.16.0
 
 ```
 MIT License
@@ -19145,7 +19284,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [281] ring 0.17.14
+### [284] ring 0.17.14
 
 ```
 *ring* uses an "ISC" license, like BoringSSL used to use, for new code
@@ -19159,7 +19298,7 @@ See src/polyfill/once_cell/LICENSE-APACHE and src/polyfill/once_cell/LICENSE-MIT
 for the license to code that was sourced from the once_cell project.
 ```
 
-### [282] ring 0.17.14
+### [285] ring 0.17.14
 
 ```
 Apache License
@@ -19435,7 +19574,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [283] ring 0.17.14
+### [286] ring 0.17.14
 
 ```
 Copyright 2015-2025 Brian Smith.
@@ -19453,7 +19592,7 @@ OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### [284] rustix 1.1.4
+### [287] rustix 1.1.4
 
 ```
 Short version for non-lawyers:
@@ -19487,7 +19626,7 @@ is licensed under:
 at your option.
 ```
 
-### [285] rustls-native-certs 0.8.4
+### [288] rustls-native-certs 0.8.4
 
 ```
 Rustls is distributed under the following three licenses:
@@ -19501,7 +19640,7 @@ respectively.  You may use this software under the terms of any
 of these licenses, at your option.
 ```
 
-### [286] rustls-pki-types 1.15.1
+### [289] rustls-pki-types 1.15.1
 
 ```
 Apache License
@@ -19707,7 +19846,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [287] rustls-pki-types 1.15.1
+### [290] rustls-pki-types 1.15.1
 
 ```
 Copyright (c) 2023 Dirkjan Ochtman <dirkjan@ochtman.nl>
@@ -19737,7 +19876,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [288] rustls-platform-verifier 0.7.0
+### [291] rustls-platform-verifier 0.7.0
 
 ```
 MIT License
@@ -19763,7 +19902,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [289] rustls-webpki 0.103.13
+### [292] rustls-webpki 0.103.13
 
 ```
 Except as otherwise noted, this project is licensed under the following
@@ -19787,7 +19926,7 @@ The files under third-party/chromium are licensed as described in
 third-party/chromium/LICENSE.
 ```
 
-### [290] ryu 1.0.23
+### [293] ryu 1.0.23
 
 ```
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -19815,7 +19954,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [291] same-file 1.0.6, winapi-util 0.1.11
+### [294] same-file 1.0.6, winapi-util 0.1.11
 
 ```
 The MIT License (MIT)
@@ -19841,7 +19980,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [292] schannel 0.1.29
+### [295] schannel 0.1.29
 
 ```
 Copyright (c) 2015 steffengy
@@ -19853,7 +19992,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [293] schemars 0.8.22, schemars 0.9.0, schemars 1.2.2, schemars_derive 0.8.22
+### [296] schemars 0.8.22, schemars 0.9.0, schemars 1.2.2, schemars_derive 0.8.22
 
 ```
 MIT License
@@ -19879,7 +20018,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [294] scopeguard 1.2.0
+### [297] scopeguard 1.2.0
 
 ```
 Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
@@ -19909,7 +20048,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [295] secret-service 5.1.0
+### [298] secret-service 5.1.0
 
 ```
 Copyright (c) 2025 secret-service Developers
@@ -19939,7 +20078,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [296] security-framework 3.7.0, security-framework-sys 2.17.0
+### [299] security-framework 3.7.0, security-framework-sys 2.17.0
 
 ```
 The MIT License (MIT)
@@ -19964,7 +20103,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [297] seize 0.5.1
+### [300] seize 0.5.1
 
 ```
 MIT License
@@ -19990,7 +20129,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [298] self_cell 1.3.0
+### [301] self_cell 1.3.0
 
 ```
 GNU GENERAL PUBLIC LICENSE
@@ -20334,7 +20473,7 @@ library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.
 ```
 
-### [299] serde_spanned 0.6.9, serde_spanned 1.1.1, toml 0.8.2, toml 0.9.12+spec-1.1.0, toml 1.1.4+spec-1.1.0, toml_datetime 0.7.5+spec-1.1.0, toml_datetime 1.1.1+spec-1.1.0, toml_edit 0.19.15, and 4 more
+### [302] serde_spanned 0.6.9, serde_spanned 1.1.1, toml 0.8.2, toml 0.9.12+spec-1.1.0, toml 1.1.4+spec-1.1.0, toml_datetime 0.7.5+spec-1.1.0, toml_datetime 1.1.1+spec-1.1.0, toml_edit 0.19.15, and 4 more
 
 ```
 Copyright (c) Individual contributors
@@ -20358,7 +20497,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [300] serdect 0.4.3
+### [303] serdect 0.4.3
 
 ```
 MIT License
@@ -20384,7 +20523,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [301] serialize-to-javascript 0.1.2, serialize-to-javascript-impl 0.1.2
+### [304] serialize-to-javascript 0.1.2, serialize-to-javascript-impl 0.1.2
 
 ```
 MIT License
@@ -20410,7 +20549,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [302] sha1 0.11.0, sha2 0.11.0
+### [305] sha1 0.11.0, sha2 0.11.0
 
 ```
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -20443,7 +20582,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [303] sha1_smol 1.0.1
+### [306] sha1_smol 1.0.1
 
 ```
 BSD 3-Clause License
@@ -20508,7 +20647,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [304] sha2 0.10.9
+### [307] sha2 0.10.9
 
 ```
 Copyright (c) 2006-2009 Graydon Hoare
@@ -20540,7 +20679,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [305] sharded-slab 0.1.7
+### [308] sharded-slab 0.1.7
 
 ```
 Copyright (c) 2019 Eliza Weisman
@@ -20564,7 +20703,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [306] shlex 2.0.1
+### [309] shlex 2.0.1
 
 ```
 Copyright 2015 Nicholas Allegra (comex).
@@ -20582,7 +20721,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [307] shlex 2.0.1
+### [310] shlex 2.0.1
 
 ```
 The MIT License (MIT)
@@ -20608,7 +20747,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [308] signal-hook-registry 1.4.8
+### [311] signal-hook-registry 1.4.8
 
 ```
 Copyright (c) 2017 tokio-jsonrpc developers
@@ -20638,7 +20777,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [309] simd-adler32 0.3.10
+### [312] simd-adler32 0.3.10
 
 ```
 MIT License
@@ -20664,7 +20803,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [310] simple-dns 0.11.3
+### [313] simple-dns 0.11.3
 
 ```
 MIT License
@@ -20690,7 +20829,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [311] siphasher 1.0.3
+### [314] siphasher 1.0.3
 
 ```
 Copyright 2012-2016 The Rust Project Developers.
@@ -20702,7 +20841,7 @@ http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 option.
 ```
 
-### [312] smallvec 1.15.2
+### [315] smallvec 1.15.2
 
 ```
 Copyright (c) 2018 The Servo Project Developers
@@ -20732,7 +20871,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [313] softbuffer 0.4.8
+### [316] softbuffer 0.4.8
 
 ```
 Apache License
@@ -20938,7 +21077,7 @@ Apache License
    limitations under the License.
 ```
 
-### [314] softbuffer 0.4.8
+### [317] softbuffer 0.4.8
 
 ```
 Copyright 2022 Kirill Chibisov
@@ -20962,7 +21101,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [315] spez 0.1.2
+### [318] spez 0.1.2
 
 ```
 BSD 2-Clause License
@@ -20991,7 +21130,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [316] spin 0.9.9, spin 0.10.1
+### [319] spin 0.9.9, spin 0.10.1
 
 ```
 The MIT License (MIT)
@@ -21017,7 +21156,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [317] spki 0.8.0
+### [320] spki 0.8.0
 
 ```
 Copyright (c) 2021-2026 The RustCrypto Project Developers
@@ -21047,7 +21186,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [318] sqlite-wasm-rs 0.5.5
+### [321] sqlite-wasm-rs 0.5.5
 
 ```
 MIT License
@@ -21073,7 +21212,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [319] stable_deref_trait 1.2.1
+### [322] stable_deref_trait 1.2.1
 
 ```
 Copyright (c) 2017 Robert Grosse
@@ -21103,7 +21242,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [320] strsim 0.11.1
+### [323] strsim 0.11.1
 
 ```
 The MIT License (MIT)
@@ -21131,7 +21270,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [321] strum 0.28.0, strum_macros 0.28.0
+### [324] strum 0.28.0, strum_macros 0.28.0
 
 ```
 MIT License
@@ -21157,7 +21296,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [322] subtle 2.6.1
+### [325] subtle 2.6.1
 
 ```
 Copyright (c) 2016-2017 Isis Agora Lovecruft, Henry de Valence. All rights reserved.
@@ -21191,7 +21330,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### [323] swift-rs 1.0.7
+### [326] swift-rs 1.0.7
 
 ```
 Apache License
@@ -21397,7 +21536,7 @@ Apache License
    limitations under the License.
 ```
 
-### [324] swift-rs 1.0.7
+### [327] swift-rs 1.0.7
 
 ```
 Copyright (c) 2023 The swift-rs Developers
@@ -21421,7 +21560,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [325] synstructure 0.13.2
+### [328] synstructure 0.13.2
 
 ```
 Copyright 2016 Nika Layzell
@@ -21433,7 +21572,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [326] system-configuration 0.7.0, system-configuration-sys 0.6.0
+### [329] system-configuration 0.7.0, system-configuration-sys 0.6.0
 
 ```
 Copyright (c) 2024 Mullvad VPN AB
@@ -21463,7 +21602,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [327] tagptr 0.2.0
+### [330] tagptr 0.2.0
 
 ```
 Copyright 2021 Oliver Giersch
@@ -21481,7 +21620,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [328] tagptr 0.2.0
+### [331] tagptr 0.2.0
 
 ```
 MIT License
@@ -21507,7 +21646,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [329] tao 0.35.3
+### [332] tao 0.35.3
 
 ```
 SPDXVersion: SPDX-2.1
@@ -21530,7 +21669,7 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tao.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [330] tao-macros 0.1.4
+### [333] tao-macros 0.1.4
 
 ```
 MIT License
@@ -21556,7 +21695,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [331] tao-macros 0.1.4
+### [334] tao-macros 0.1.4
 
 ```
 SPDXVersion: SPDX-2.1
@@ -21580,7 +21719,37 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tao.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [332] tauri 2.11.5, tauri-build 2.6.3, tauri-codegen 2.6.3, tauri-macros 2.6.3, tauri-plugin-dialog 2.7.2, tauri-plugin-fs 2.5.1, tauri-plugin-opener 2.5.4, tauri-runtime 2.11.3, and 3 more
+### [335] tar 0.4.46
+
+```
+Copyright (c) The tar-rs Project Contributors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
+
+### [336] tauri 2.11.5, tauri-build 2.6.3, tauri-codegen 2.6.3, tauri-macros 2.6.3, tauri-plugin-dialog 2.7.2, tauri-plugin-fs 2.5.1, tauri-plugin-opener 2.5.4, tauri-plugin-process 2.3.1, and 5 more
 
 ```
 MIT License
@@ -21606,7 +21775,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [333] tauri-plugin-dialog 2.7.2, tauri-plugin-fs 2.5.1, tauri-plugin-opener 2.5.4, @tauri-apps/plugin-dialog 2.7.2, @tauri-apps/plugin-opener 2.5.4
+### [337] tauri-plugin-dialog 2.7.2, tauri-plugin-fs 2.5.1, tauri-plugin-opener 2.5.4, tauri-plugin-process 2.3.1, tauri-plugin-updater 2.10.1, @tauri-apps/plugin-dialog 2.7.2, @tauri-apps/plugin-opener 2.5.4, @tauri-apps/plugin-process 2.3.1, and 1 more
 
 ```
 SPDXVersion: SPDX-2.1
@@ -21631,7 +21800,7 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [334] tauri-winres 0.3.6
+### [338] tauri-winres 0.3.6
 
 ```
 The MIT License (MIT)
@@ -21664,7 +21833,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [335] tempfile 3.27.0
+### [339] tempfile 3.27.0, xattr 1.6.1
 
 ```
 Copyright (c) 2015 Steven Allen
@@ -21694,7 +21863,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [336] tendril 0.5.1
+### [340] tendril 0.5.1
 
 ```
 Copyright (c) 2015 Keegan McAllister
@@ -21724,7 +21893,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [337] time 0.3.54, time-core 0.1.9, time-macros 0.2.32
+### [341] time 0.3.54, time-core 0.1.9, time-macros 0.2.32
 
 ```
 Copyright (c) Jacob Pratt et al.
@@ -21748,7 +21917,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [338] tinyvec_macros 0.1.1
+### [342] tinyvec_macros 0.1.1
 
 ```
 Apache License
@@ -21954,7 +22123,7 @@ Apache License
    limitations under the License.
 ```
 
-### [339] tinyvec_macros 0.1.1
+### [343] tinyvec_macros 0.1.1
 
 ```
 MIT License
@@ -21980,7 +22149,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [340] tinyvec_macros 0.1.1
+### [344] tinyvec_macros 0.1.1
 
 ```
 zlib License
@@ -22004,7 +22173,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [341] tokio 1.53.1, tokio-stream 0.1.19, tokio-util 0.7.19
+### [345] tokio 1.53.1, tokio-stream 0.1.19, tokio-util 0.7.19
 
 ```
 MIT License
@@ -22030,7 +22199,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [342] tokio-macros 2.7.2
+### [346] tokio-macros 2.7.2
 
 ```
 MIT License
@@ -22057,7 +22226,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [343] tokio-rustls 0.26.4
+### [347] tokio-rustls 0.26.4
 
 ```
 Apache License
@@ -22263,7 +22432,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [344] tokio-rustls 0.26.4
+### [348] tokio-rustls 0.26.4
 
 ```
 Copyright (c) 2017 quininer kel
@@ -22293,7 +22462,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [345] tokio-tungstenite 0.30.0
+### [349] tokio-tungstenite 0.30.0
 
 ```
 Copyright (c) 2017 Daniel Abramov
@@ -22318,7 +22487,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [346] tokio-websockets 0.13.3
+### [350] tokio-websockets 0.13.3
 
 ```
 Copyright (c) 2021 Jens Reidel
@@ -22342,7 +22511,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [347] tower 0.5.3, tower-layer 0.3.3, tower-service 0.3.3
+### [351] tower 0.5.3, tower-layer 0.3.3, tower-service 0.3.3
 
 ```
 Copyright (c) 2019 Tower Contributors
@@ -22372,7 +22541,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [348] tower-http 0.6.11
+### [352] tower-http 0.6.11
 
 ```
 Copyright (c) 2019-2021 Tower Contributors
@@ -22402,7 +22571,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [349] tracing 0.1.44, tracing-attributes 0.1.31, tracing-core 0.1.36, tracing-log 0.2.0, tracing-subscriber 0.3.23
+### [353] tracing 0.1.44, tracing-attributes 0.1.31, tracing-core 0.1.36, tracing-log 0.2.0, tracing-subscriber 0.3.23
 
 ```
 Copyright (c) 2019 Tokio Contributors
@@ -22432,7 +22601,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [350] tray-icon 0.24.2
+### [354] tray-icon 0.24.2
 
 ```
 SPDXVersion: SPDX-2.1
@@ -22456,7 +22625,7 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tray-icon.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [351] try-lock 0.2.5
+### [355] try-lock 0.2.5
 
 ```
 Copyright (c) 2018-2023 Sean McArthur
@@ -22481,7 +22650,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [352] tungstenite 0.30.0
+### [356] tungstenite 0.30.0
 
 ```
 Copyright (c) 2017 Alexey Galakhov
@@ -22506,13 +22675,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [353] typenum 1.20.1
+### [357] typenum 1.20.1
 
 ```
 MIT OR Apache-2.0
 ```
 
-### [354] typenum 1.20.1
+### [358] typenum 1.20.1
 
 ```
 Apache License
@@ -22718,7 +22887,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### [355] typenum 1.20.1
+### [359] typenum 1.20.1
 
 ```
 The MIT License (MIT)
@@ -22744,7 +22913,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [356] uds_windows 1.2.1
+### [360] uds_windows 1.2.1
 
 ```
 MIT License
@@ -22770,7 +22939,7 @@ MIT License
     SOFTWARE
 ```
 
-### [357] ulid 3.0.0
+### [361] ulid 3.0.0
 
 ```
 MIT License
@@ -22796,7 +22965,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [358] unicode-ident 1.0.24
+### [362] unicode-ident 1.0.24
 
 ```
 UNICODE LICENSE V3
@@ -22840,7 +23009,7 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ```
 
-### [359] unicode-segmentation 1.13.3, unicode-xid 0.2.6
+### [363] unicode-segmentation 1.13.3, unicode-xid 0.2.6
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -22852,7 +23021,7 @@ notice may not be copied, modified, or distributed except
 according to those terms.
 ```
 
-### [360] universal-hash 0.5.1
+### [364] universal-hash 0.5.1
 
 ```
 Copyright (c) 2019-2020 RustCrypto Developers
@@ -22882,7 +23051,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [361] untrusted 0.9.0
+### [365] untrusted 0.9.0
 
 ```
 // Copyright 2015-2016 Brian Smith.
@@ -22900,7 +23069,7 @@ DEALINGS IN THE SOFTWARE.
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### [362] urlpattern 0.3.0
+### [366] urlpattern 0.3.0
 
 ```
 MIT License
@@ -22926,7 +23095,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [363] utf8_iter 1.0.4
+### [367] utf8_iter 1.0.4
 
 ```
 Copyright Mozilla Foundation
@@ -22973,7 +23142,7 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
 ```
 
-### [364] utf8_iter 1.0.4
+### [368] utf8_iter 1.0.4
 
 ```
 Copyright Mozilla Foundation
@@ -23003,7 +23172,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [365] uuid 1.24.0
+### [369] uuid 1.24.0
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -23034,7 +23203,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [366] vcpkg 0.2.15
+### [370] vcpkg 0.2.15
 
 ```
 Copyright (c) 2017 Jim McGrath
@@ -23064,7 +23233,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [367] version_check 0.9.5
+### [371] version_check 0.9.5
 
 ```
 The MIT License (MIT)
@@ -23088,7 +23257,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [368] version-compare 0.2.1
+### [372] version-compare 0.2.1
 
 ```
 Copyright (c) 2017 Tim Visée
@@ -23112,7 +23281,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [369] vswhom 0.1.0, vswhom-sys 0.1.3
+### [373] vswhom 0.1.0, vswhom-sys 0.1.3
 
 ```
 The MIT License (MIT)
@@ -23138,7 +23307,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [370] want 0.3.1
+### [374] want 0.3.1
 
 ```
 Copyright (c) 2018-2019 Sean McArthur
@@ -23162,7 +23331,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [371] web-time 1.1.0
+### [375] web-time 1.1.0
 
 ```
 Apache License
@@ -23368,7 +23537,7 @@ Apache License
    limitations under the License.
 ```
 
-### [372] web-time 1.1.0
+### [376] web-time 1.1.0
 
 ```
 MIT License
@@ -23394,7 +23563,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [373] webkit2gtk 2.0.2
+### [377] webkit2gtk 2.0.2
 
 ```
 Copyright (c) 2016 Boucher, Antoni <bouanto@zoho.com>
@@ -23419,7 +23588,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [374] webkit2gtk-sys 2.0.2
+### [378] webkit2gtk-sys 2.0.2
 
 ```
 Copyright (c) 2016 Boucher, Antoni <bouanto@zoho.com>
@@ -23442,7 +23611,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [375] webp 0.3.1
+### [379] webp 0.3.1
 
 ```
 Copyright 2020 Jared Forth.
@@ -23453,7 +23622,7 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
 ```
 
-### [376] webp 0.3.1
+### [380] webp 0.3.1
 
 ```
 MIT License
@@ -23479,7 +23648,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [377] webpki-root-certs 1.0.8, webpki-roots 1.0.9
+### [381] webpki-root-certs 1.0.8, webpki-roots 1.0.9
 
 ```
 # Community Data License Agreement - Permissive - Version 2.0
@@ -23545,7 +23714,7 @@ of Data, including for example machine learning models and models'
 insights.
 ```
 
-### [378] weezl 0.1.12
+### [382] weezl 0.1.12
 
 ```
 The MIT License (MIT)
@@ -23571,7 +23740,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [379] winapi 0.3.9
+### [383] winapi 0.3.9
 
 ```
 Copyright (c) 2015-2018 The winapi-rs Developers
@@ -23595,7 +23764,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [380] window-vibrancy 0.6.0
+### [384] window-vibrancy 0.6.0
 
 ```
 MIT License
@@ -23621,7 +23790,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [381] window-vibrancy 0.6.0
+### [385] window-vibrancy 0.6.0
 
 ```
 SPDXVersion: SPDX-2.1
@@ -23645,7 +23814,7 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/window-vibrancy.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [382] windows 0.61.3, windows 0.62.2, windows_aarch64_gnullvm 0.42.2, windows_aarch64_gnullvm 0.52.6, windows_aarch64_gnullvm 0.53.1, windows_aarch64_msvc 0.42.2, windows_aarch64_msvc 0.52.6, windows_aarch64_msvc 0.53.1, and 45 more
+### [386] windows 0.61.3, windows 0.62.2, windows_aarch64_gnullvm 0.42.2, windows_aarch64_gnullvm 0.52.6, windows_aarch64_gnullvm 0.53.1, windows_aarch64_msvc 0.42.2, windows_aarch64_msvc 0.52.6, windows_aarch64_msvc 0.53.1, and 45 more
 
 ```
 Apache License
@@ -23851,7 +24020,7 @@ Apache License
    limitations under the License.
 ```
 
-### [383] windows 0.61.3, windows 0.62.2, windows_aarch64_gnullvm 0.42.2, windows_aarch64_gnullvm 0.52.6, windows_aarch64_gnullvm 0.53.1, windows_aarch64_msvc 0.42.2, windows_aarch64_msvc 0.52.6, windows_aarch64_msvc 0.53.1, and 46 more
+### [387] windows 0.61.3, windows 0.62.2, windows_aarch64_gnullvm 0.42.2, windows_aarch64_gnullvm 0.52.6, windows_aarch64_gnullvm 0.53.1, windows_aarch64_msvc 0.42.2, windows_aarch64_msvc 0.52.6, windows_aarch64_msvc 0.53.1, and 46 more
 
 ```
 MIT License
@@ -23877,7 +24046,7 @@ MIT License
     SOFTWARE
 ```
 
-### [384] winnow 0.5.40, winnow 0.7.15, winnow 1.0.4
+### [388] winnow 0.5.40, winnow 0.7.15, winnow 1.0.4
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining
@@ -23900,7 +24069,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [385] winreg 0.55.0
+### [389] winreg 0.55.0
 
 ```
 Copyright (c) 2015 Igor Shaula
@@ -23924,7 +24093,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [386] wry 0.55.1
+### [390] wry 0.55.1
 
 ```
 MIT License
@@ -23950,7 +24119,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [387] wry 0.55.1
+### [391] wry 0.55.1
 
 ```
 SPDXVersion: SPDX-2.1
@@ -23975,7 +24144,7 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/wry.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-### [388] xml-rs 0.8.28
+### [392] xml-rs 0.8.28
 
 ```
 The MIT License (MIT)
@@ -24001,7 +24170,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [389] xmltree 0.10.3
+### [393] xmltree 0.10.3
 
 ```
 MIT License
@@ -24014,7 +24183,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### [390] zbus 5.18.0, zbus_macros 5.18.0, zbus_names 4.3.4, zvariant 5.13.1, zvariant_derive 5.13.1
+### [394] zbus 5.18.0, zbus_macros 5.18.0, zbus_names 4.3.4, zvariant 5.13.1, zvariant_derive 5.13.1
 
 ```
 Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
@@ -24044,7 +24213,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [391] zeroize 1.9.0
+### [395] zeroize 1.9.0
 
 ```
 Copyright (c) 2018-2026 The RustCrypto Project Developers
@@ -24074,7 +24243,36 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [392] zune-core 0.5.1, zune-jpeg 0.5.15
+### [396] zip 4.6.1
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2014 Mathijs van de Nes
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Some files in the "tests/data" subdirectory of this repository are under other
+licences; see files named LICENSE.*.txt for details.
+```
+
+### [397] zune-core 0.5.1, zune-jpeg 0.5.15
 
 ```
 MIT License
@@ -24100,7 +24298,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [393] zune-core 0.5.1, zune-jpeg 0.5.15
+### [398] zune-core 0.5.1, zune-jpeg 0.5.15
 
 ```
 zlib License
@@ -24124,7 +24322,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### [394] @tanstack/query-core 5.101.4, @tanstack/react-query 5.101.4
+### [399] @tanstack/query-core 5.101.4, @tanstack/react-query 5.101.4
 
 ```
 MIT License
@@ -24150,7 +24348,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [395] csstype 3.2.3
+### [400] csstype 3.2.3
 
 ```
 Copyright (c) 2017-2018 Fredrik Nicol
@@ -24174,7 +24372,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [396] react 19.2.8, react-dom 19.2.8, scheduler 0.27.0
+### [401] react 19.2.8, react-dom 19.2.8, scheduler 0.27.0
 
 ```
 MIT License
@@ -24200,7 +24398,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### [397] three 0.185.1
+### [402] three 0.185.1
 
 ```
 The MIT License
@@ -24226,7 +24424,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [398] zustand 5.0.14
+### [403] zustand 5.0.14
 
 ```
 MIT License

@@ -85,21 +85,44 @@ jobs:
       - name: Reject source maps from packaged frontend assets
         run: node .github/scripts/verify-no-source-maps.mjs dist
 
-      # This intentionally has no Apple/Windows signing credentials and no
-      # TAURI_SIGNING_PRIVATE_KEY. See docs/12-releasing.md: beta releases are
-      # unsigned manual downloads, not updater payloads.
+      # Deliberately still no Apple/Windows *code*-signing credentials: bundles
+      # remain unsigned manual downloads and Gatekeeper/SmartScreen still warn.
+      # The updater keypair below is a separate, narrower trust root — it signs
+      # only update payloads, and its public half is committed in
+      # `tauri.conf.json`, so a client refuses anything this key did not sign.
+      # See docs/12-releasing.md.
+      - name: Fail fast when the updater signing key is missing
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          # Without this the action silently produces a release with no
+          # signatures, which every installed client then rejects.
+          if [ -z "$KEY" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY is not set; updates would be unsignable." >&2
+            exit 1
+          fi
+
       - name: Build and upload bundles to a draft GitHub release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Wobu ${{ github.ref_name }}
           releaseBody: |
-            Wobu beta bundles are currently unsigned and must be downloaded manually.
-            Read the platform install instructions and security warning in
+            Already running Wobu? **Settings → Updates → Check for updates** installs this
+            release in place (AppImage, macOS and Windows builds; `.deb` and `.msi` are
+            updated by downloading again).
+
+            For a first install, Wobu beta bundles are not code-signed and must be downloaded
+            manually. Read the platform install instructions and security warning in
             [the release guide](https://github.com/${{ github.repository }}/blob/main/docs/12-releasing.md#installing-an-unsigned-beta).
           generateReleaseNotes: true
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          includeUpdaterJson: false
+          # `latest.json` is what installed copies poll. It must be attached to the
+          # published release for the endpoint in `tauri.conf.json` to resolve.
+          includeUpdaterJson: true

@@ -286,8 +286,8 @@ export function GenerationDetail({
       </div>
       {imageOpen && imageSrc && (
         <Modal
-          className="generation-image-viewer"
-          scrimClassName="generation-image-viewer-scrim"
+          className="image-viewer"
+          scrimClassName="image-viewer-scrim"
           titleId="generation-image-viewer-title"
           descriptionId="generation-image-viewer-description"
           onClose={() => setImageOpen(false)}
@@ -300,7 +300,7 @@ export function GenerationDetail({
           </p>
           <img src={imageSrc} alt={generation.compiledPrompt} />
           <button
-            className="ibtn generation-image-viewer-close"
+            className="ibtn image-viewer-close"
             type="button"
             onClick={() => setImageOpen(false)}
             aria-label="Close full-size image"

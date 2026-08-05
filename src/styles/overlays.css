@@ -300,6 +300,45 @@
   justify-items: center;
   padding-top: 13vh;
 }
+/* ── full-size image viewer ───────────────────────────────────────────────
+   One original over the top of whatever opened it — a concept receipt, the
+   asset library — and the same geometry in both places, which is why it lives
+   here rather than in either feature's file.
+
+   The image is bounded by the window, never by its own pixel count: the ceiling
+   is the viewport minus this surface's own padding, so a 6000px scan lands
+   whole on screen instead of overflowing a scrim that cannot scroll. `contain`
+   then does the rest, and a picture smaller than the window is left at its
+   natural size rather than stretched.
+
+   Its arrival is worth a fade — it is decoded from disk after the modal is
+   already open. The tiles in the grids get none: there an image "arriving" only
+   means the user scrolled. */
+.image-viewer-scrim {
+  background: var(--scrim-strong);
+}
+.image-viewer {
+  display: grid;
+  padding: 24px;
+  place-items: center;
+}
+.image-viewer img {
+  display: block;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  animation: wb-fade var(--dur-3) var(--ease-out);
+}
+.image-viewer-close {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 1;
+  color: var(--on-scrim);
+  font-size: 28px;
+}
 .modal-sr-only {
   position: absolute;
   width: 1px;

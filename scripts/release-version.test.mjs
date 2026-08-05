@@ -31,7 +31,17 @@ async function fixture(overrides = {}) {
   )
   await writeFile(
     path.join(root, 'src-tauri/tauri.conf.json'),
-    `${JSON.stringify({ version, bundle: { active: true, targets: 'all', createUpdaterArtifacts: false, icon: [] } }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        version,
+        plugins: {
+          updater: { endpoints: ['https://example.invalid/latest.json'], pubkey: 'dGVzdA==' },
+        },
+        bundle: { active: true, targets: 'all', createUpdaterArtifacts: true, icon: [] },
+      },
+      null,
+      2,
+    )}\n`,
   )
   await writeFile(
     path.join(root, 'release/versions.json'),
@@ -79,15 +89,41 @@ test('stamping updates every app package but never schema versions or unrelated 
   assert.match(lock, /name = "wobu-core"\nversion = "1\.2\.3-beta\.1"/)
 })
 
-test('manual downloads require updater artifacts to remain disabled', async () => {
+test('in-place updates require updater artifacts to stay enabled', async () => {
   const root = await fixture()
   const configFile = path.join(root, 'src-tauri/tauri.conf.json')
   const config = JSON.parse(await readFile(configFile, 'utf8'))
-  config.bundle.createUpdaterArtifacts = true
+  config.bundle.createUpdaterArtifacts = false
   await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
 
   const { errors } = await checkRelease(root)
   assert.ok(errors.some((error) => error.includes('updater artifacts')))
+})
+
+// A client with no key verifies nothing, and one reached over plain HTTP is a
+// payload an intermediary chooses. Both are quiet: the app still builds, still
+// finds an update, and still installs it.
+test('an updater without a public key or with an insecure endpoint is refused', async () => {
+  const root = await fixture()
+  const configFile = path.join(root, 'src-tauri/tauri.conf.json')
+  const config = JSON.parse(await readFile(configFile, 'utf8'))
+  config.plugins.updater = { endpoints: ['http://example.invalid/latest.json'], pubkey: '  ' }
+  await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
+
+  const { errors } = await checkRelease(root)
+  assert.ok(errors.some((error) => error.includes('must be HTTPS')))
+  assert.ok(errors.some((error) => error.includes('public key')))
+})
+
+test('an updater with no endpoint at all is refused', async () => {
+  const root = await fixture()
+  const configFile = path.join(root, 'src-tauri/tauri.conf.json')
+  const config = JSON.parse(await readFile(configFile, 'utf8'))
+  delete config.plugins
+  await writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`)
+
+  const { errors } = await checkRelease(root)
+  assert.ok(errors.some((error) => error.includes('no endpoint')))
 })
 
 test('a publication failure restores every prior version instead of leaving mixed stamps', async () => {

@@ -66,6 +66,7 @@ export async function inspectRelease(root) {
       one(index, /pub const INDEX_VERSION: u32 = (\d+);/, 'index schema version'),
     ),
     bundle: tauri.bundle,
+    updater: tauri.plugins?.updater,
     iconPaths: (tauri.bundle?.icon ?? []).map((icon) => path.join(root, 'src-tauri', icon)),
   }
 }
@@ -99,10 +100,21 @@ export async function checkRelease(root) {
   }
   if (state.bundle?.active !== true) errors.push('Tauri bundle.active must be true')
   if (state.bundle?.targets !== 'all') errors.push('Tauri bundle.targets must be "all"')
-  if (state.bundle?.createUpdaterArtifacts !== false) {
-    errors.push(
-      'Tauri updater artifacts must remain explicitly disabled for manual-download releases',
-    )
+  // The three halves of a working update, checked together because any one of
+  // them alone ships a client that either cannot be updated or — worse — has
+  // nothing to verify a payload against.
+  if (state.bundle?.createUpdaterArtifacts !== true) {
+    errors.push('Tauri updater artifacts must be enabled so a release can be installed in place')
+  }
+  const endpoints = state.updater?.endpoints ?? []
+  if (endpoints.length === 0) errors.push('the updater has no endpoint to check')
+  for (const endpoint of endpoints) {
+    if (!endpoint.startsWith('https://')) {
+      errors.push(`updater endpoint must be HTTPS: ${endpoint}`)
+    }
+  }
+  if (typeof state.updater?.pubkey !== 'string' || state.updater.pubkey.trim() === '') {
+    errors.push('the updater has no public key, so it would accept an unsigned payload')
   }
   for (const icon of state.iconPaths) {
     try {
@@ -244,7 +256,7 @@ async function main(argv) {
   const { state, errors } = await checkRelease(root)
   if (errors.length) throw new Error(`Release check failed:\n- ${errors.join('\n- ')}`)
   process.stdout.write(
-    `release ${state.declared.appVersion}; project schema ${state.projectSchemaVersion}; index schema ${state.indexSchemaVersion}; updater manual\n`,
+    `release ${state.declared.appVersion}; project schema ${state.projectSchemaVersion}; index schema ${state.indexSchemaVersion}; updater signed\n`,
   )
 }
 

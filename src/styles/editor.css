@@ -1082,33 +1082,8 @@
 .concept-empty p {
   margin: 0 0 7px;
 }
-.concept-viewer {
-  padding: 34px;
-}
-/* A full-size original, decoded from disk after the viewer is already open, so
-   this is the one image in the app whose arrival is worth a fade: without it a
-   3 megapixel concept slams into an empty frame a beat after the modal opens.
-   The cards in the grids get no such treatment on purpose — they are inside
-   virtualized windows, where an image "arriving" only means the user scrolled.
-   `--dur-3` matches the modal it lands in. */
-.concept-viewer img {
-  max-width: 94vw;
-  max-height: 90vh;
-  object-fit: contain;
-  box-shadow: var(--shadow-2);
-  animation: wb-fade var(--dur-3) var(--ease-out);
-}
-.concept-viewer-close {
-  position: fixed;
-  top: 14px;
-  right: 18px;
-  z-index: 1;
-  border: 0;
-  color: var(--text);
-  background: transparent;
-  font-size: 28px;
-  cursor: pointer;
-}
+/* A concept opened full size is `.image-viewer` in `overlays.css`, shared with
+   the asset library so the same picture is framed the same way in both. */
 
 /* ── conflicts ────────────────────────────────────────────────────────────
    The card sits above the editor rather than inside it. A conflict is about

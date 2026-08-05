@@ -54,6 +54,7 @@ import { KeybindingsSection } from './KeybindingsSection'
 import { LegalSection } from './LegalSection'
 import { LicencesSection } from './LicencesSection'
 import McpSection from './McpSection'
+import { UpdateSection } from './UpdateSection'
 import { WikiExportSection } from './WikiExportSection'
 
 /**
@@ -92,6 +93,10 @@ export function Settings({ project }: { project?: ProjectSummary }) {
         {project && <WikiExportSection project={project} />}
         <Diagnostics />
         <About />
+        {/* Directly under About: the version shown there is the thing this pane
+            changes, and "which version am I on" is the question that sends
+            someone looking for an update in the first place. */}
+        <UpdateSection />
         <LicencesSection />
       </div>
     </div>

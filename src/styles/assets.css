@@ -329,35 +329,6 @@
   border-radius: var(--r-sm);
 }
 
-/* The original over the library, bounded by the window rather than by its own
-   pixel count — a 6000px scan has to fit on screen without the scrim scrolling.
-   It is decoded from disk after the modal is already open, so its arrival is
-   worth a fade; the grid tiles get none, because there an image "arriving" only
-   means the user scrolled. */
-.asset-viewer-scrim {
-  background: var(--scrim-strong);
-}
-.asset-viewer {
-  padding: 34px;
-}
-.asset-viewer img {
-  display: block;
-  max-width: 94vw;
-  max-height: 90vh;
-  object-fit: contain;
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow-2);
-  animation: wb-fade var(--dur-3) var(--ease-out);
-}
-.asset-viewer-close {
-  position: fixed;
-  top: 14px;
-  right: 18px;
-  z-index: 1;
-  color: var(--on-scrim);
-  font-size: 28px;
-}
-
 @media (max-width: 1040px) {
   .asset-filters {
     grid-template-columns: repeat(2, minmax(120px, 1fr));

@@ -601,8 +601,8 @@ function AssetDetails({
 
       {fullSize && (
         <Modal
-          className="asset-viewer"
-          scrimClassName="asset-viewer-scrim"
+          className="image-viewer"
+          scrimClassName="image-viewer-scrim"
           titleId="asset-viewer-title"
           descriptionId="asset-viewer-description"
           onClose={() => setFullSize(null)}
@@ -616,7 +616,7 @@ function AssetDetails({
           </p>
           <img src={fullSize} alt={`Asset ${asset.id} at full size`} />
           <button
-            className="ibtn asset-viewer-close"
+            className="ibtn image-viewer-close"
             type="button"
             onClick={() => setFullSize(null)}
             aria-label="Close full-size image"

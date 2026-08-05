@@ -16,27 +16,71 @@ signed ones. macOS Gatekeeper and Windows SmartScreen will warn, and users must 
 download came from this repository's GitHub Releases page before bypassing a warning. Do not copy
 an unsigned bundle to another download host.
 
-The app also uses **manual updates**. There is no Tauri updater plugin, endpoint, updater JSON, or
-updater signing keypair. The release action explicitly disables `latest.json`; because no updater
-plugin or signing key is configured, no signed updater bundle is produced. Users install a newer
-release over the old one; projects are ordinary folders and are not stored inside the application
-bundle.
+Updates, by contrast, **are** signed. Wobu ships the Tauri updater plugin, and the release workflow
+signs each updater payload with an offline keypair whose public half is committed in
+`src-tauri/tauri.conf.json`. The two are separate trust roots and should not be conflated: code
+signing would establish publisher identity to the *operating system* at install time, which Wobu
+still does not have; updater signing establishes that a payload came from this repository's key,
+which it does. A client refuses any update it cannot verify against the committed public key, so a
+replaced `latest.json`, a hostile mirror or a tampered release asset produces a refusal rather than
+an install.
 
-Before calling releases stable, revisit both decisions together:
+Before calling releases stable, the remaining decision is code signing:
 
 1. Obtain Apple Developer ID and Windows code-signing credentials, put them in GitHub Actions
    encrypted secrets, sign Windows installers, and sign plus notarise macOS bundles.
-2. Add and permission the Tauri updater plugin, generate an offline updater signing keypair, store
-   only the private key and password in Actions secrets, commit the public key and HTTPS endpoint,
-   and enable signed updater artifacts in the release workflow.
-3. Test upgrade and rollback behaviour on every supported platform. Never enable an updater that
-   accepts unsigned payloads or commit its private key.
+2. Test upgrade and rollback behaviour on every supported platform. Never accept an unsigned
+   updater payload or commit the updater private key.
+
+## The updater
+
+Installed copies check **only when a user presses the button** in Settings → Updates. Nothing runs
+at startup and nothing polls: opening Wobu is not consent to contact GitHub, which is the same
+promise the privacy policy makes about every other network destination.
+
+The moving parts, all of which `npm run release:check` verifies together:
+
+- `bundle.createUpdaterArtifacts: true` in `src-tauri/tauri.conf.json` — produces the signed
+  payload beside each bundle.
+- `plugins.updater.endpoints` — a single HTTPS URL,
+  `https://github.com/krazyjakee/wobu/releases/latest/download/latest.json`. `releases/latest`
+  excludes prereleases by design, so a tag containing `-` never offers itself to stable users.
+- `plugins.updater.pubkey` — the public half of the signing keypair. Committed on purpose; it is
+  what makes the trust root this repository rather than the HTTPS connection.
+- `includeUpdaterJson: true` in the release workflow — attaches `latest.json` to the release. An
+  update is only offered once the draft is **published**.
+- `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` as repository Actions
+  secrets. The workflow fails fast if the private key is absent rather than publishing a release
+  whose payloads every installed client would then reject.
+
+Only self-replacing bundle formats update in place: AppImage on Linux, `.app`/`.dmg` on macOS, and
+NSIS on Windows. A `.deb` or `.msi` is owned by its installer, and the Settings pane says so and
+points at the releases page instead.
+
+### Rotating or regenerating the signing key
+
+Generate a keypair outside the repository and never commit the private half:
+
+```sh
+npm run tauri signer generate -- -w ~/.wobu/updater.key
+```
+
+Put the contents of `~/.wobu/updater.key` in the `TAURI_SIGNING_PRIVATE_KEY` repository secret and
+its password (empty if none) in `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, then commit the contents of
+`~/.wobu/updater.key.pub` as `plugins.updater.pubkey`.
+
+Rotation is a **breaking** operation: already-installed copies carry the old public key and will
+reject anything signed with the new one. They are not broken, but they will stop finding updates
+and their users must download a new bundle by hand. Losing the private key has the same effect and
+cannot be undone. Rotate only in response to a suspected compromise, and say plainly in the release
+notes that a manual reinstall is required.
 
 ## Installing an unsigned beta
 
 Only download assets attached to a release at
 `https://github.com/krazyjakee/wobu/releases`. Compare the release tag with the version shown in
-Wobu's About panel.
+Wobu's About panel. This applies to a *first* install; once Wobu is running, **Settings → Updates**
+installs later releases in place and verifies each one's signature first.
 
 - **Linux:** prefer the package for your distribution. For an AppImage, make it executable with
   `chmod +x Wobu_*.AppImage`, then run it. Linux packages are not repository-signed, so the package
@@ -130,7 +174,8 @@ leave mixed versions. Always run it from a clean git checkout; after an interrup
 the JavaScript, Tauri, Cargo and lockfile app versions together, but never edits either schema
 constant. For an intentional schema change, edit the corresponding Rust constant and
 `release/versions.json` in the same reviewed change. `npm run release:check` prints all three numbers
-and refuses drift, missing icons, disabled bundling, or accidental updater activation. Its focused
+and refuses drift, missing icons, disabled bundling, or an updater that has lost its artifacts,
+its HTTPS endpoint, or its public key. Its focused
 static tests are available as `npm run release:tool:test`.
 
 ## Local fallback release procedure
@@ -150,7 +195,10 @@ prerequisites](https://v2.tauri.app/start/prerequisites/). Then:
 6. Create a manual GitHub Release named `v<appVersion>`, attach artifacts and checksums, and state
    prominently that the bundles are unsigned.
 
-Tauri writes artifacts below `src-tauri/target/release/bundle/`.
+Tauri writes artifacts below `src-tauri/target/release/bundle/`. The `--no-sign` in each command
+below is what lets a local build proceed without the updater private key; those artifacts therefore
+carry no update signature and must not be published as an update — a diagnostic build is not a
+release.
 
 ### Linux
 

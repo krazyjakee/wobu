@@ -36,10 +36,19 @@
       }
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/krazyjakee/wobu/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVCRTIzM0JERUMwMDE3MDkKUldRSkZ3RHN2VFBpNnlibXpRMHNrc0NreGJXSjg2bC9TbFpVM1I2SlJJYm80US9hWFJJN2dnOU0K",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": false,
+    "createUpdaterArtifacts": true,
     "publisher": "Wobu contributors",
     "homepage": "https://github.com/krazyjakee/wobu",
     "category": "GraphicsAndDesign",

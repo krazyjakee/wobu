@@ -39,6 +39,15 @@ pub fn run() {
         // `capabilities/default.json` already grants it, but the plugin still
         // has to be initialised on this side or every pick fails.
         .plugin(tauri_plugin_dialog::init())
+        // Checking for an update is driven from Settings, never on startup: a
+        // world builder opening Wobu to work is not asking to talk to GitHub.
+        // The plugin verifies every payload against the public key in
+        // `tauri.conf.json` before it writes anything, so an endpoint that has
+        // been tampered with produces a refusal rather than an install.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Only so the user can take the freshly installed version now rather
+        // than on their next launch.
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
         // Raw pasted-image chunks are staged outside the project until their
         // declared length arrives. Separate managed state lets Cancel and
