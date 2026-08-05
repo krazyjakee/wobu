@@ -39,7 +39,7 @@ Once Wobu opens, create a project from the Launcher. Start with its **Style Guid
 Canon**, add broad world layers before individual characters, then configure providers in Settings.
 The included [user guide](docs/guide/index.md) covers the complete workflow. It is also read into
 the app itself — press `F1`, or use the Guide button on the mode rail — and published to
-<https://krazyjakee.github.io/wobu/guide/>.
+<https://wobu.app/guide/>.
 
 ### Run from source
 

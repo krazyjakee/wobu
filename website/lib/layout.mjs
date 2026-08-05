@@ -2,8 +2,8 @@ import { escapeHtml, relativePrefix, site } from './site.mjs'
 
 /**
  * Every link on the site is page-relative rather than root-relative, so the
- * built output works unchanged from the project-path GitHub Pages URL, from
- * `npx serve`, and from `file://`.
+ * built output works unchanged from `wobu.app`, from a project-path GitHub
+ * Pages URL, from `npx serve`, and from `file://`.
  */
 const NAV = [
   { id: 'home', href: 'index.html', label: 'Overview' },

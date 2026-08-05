@@ -53,9 +53,8 @@ jobs:
         working-directory: website
         run: npm run build
 
-      # Cheap insurance against publishing an empty tree. There is deliberately
-      # no `CNAME`: the site is served from the project path on github.io, and
-      # publishing one would re-bind a custom domain nobody asked for.
+      # Cheap insurance against publishing an empty or CNAME-less tree, which
+      # is how a custom domain silently unbinds itself.
       - name: Check the output
         working-directory: website
         run: |
@@ -63,7 +62,7 @@ jobs:
           test -s dist/download.html
           test -s dist/legal.html
           test -f dist/.nojekyll
-          test ! -e dist/CNAME
+          grep -qx 'wobu.app' dist/CNAME
 
       # A plain force-push rather than a third-party action: the branch is a
       # build artefact with no history worth keeping, and this is the whole

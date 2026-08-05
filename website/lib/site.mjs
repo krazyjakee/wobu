@@ -5,9 +5,10 @@
  */
 export const site = {
   name: 'Wobu',
-  // The GitHub Pages project path, not a custom domain. Every link the site
-  // writes is page-relative, so only the canonical URLs below depend on this.
-  url: 'https://krazyjakee.github.io/wobu',
+  // The custom domain bound in Pages settings, kept in step with
+  // `static/CNAME`. Every link the site writes is page-relative, so only the
+  // canonical URLs and the sitemap depend on this.
+  url: 'https://wobu.app',
   tagline: 'world building for concept art',
   description:
     'Wobu is a desktop app for building a world and making concept art that stays consistent. ' +
