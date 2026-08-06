@@ -491,6 +491,15 @@ pub async fn sync_accept(
         sync.cancel_accept();
         return Ok(None);
     }
+    // Three breadcrumbs bracket this command, and they are here for #149: on
+    // Windows the process dies during accept leaving a log that stops at
+    // startup, and every branch below used to be able to return without
+    // recording anything. Which of these lines is *last* in a crash log says
+    // where the process got to — the probe is the only step between the click
+    // and the folder picker, so "read" but no "asking where to put it" means it
+    // died decoding the ticket, and the reverse means it died after this
+    // command had already returned. Never the token itself: it is a credential.
+    diag::info("sync: a ticket was pasted; reading it");
     let manager = sync.manager()?;
     let token = token.ok_or_else(|| WobuError::new(Code::Invalid, "Paste a Wobu share link."))?;
     let ticket: Ticket = token.parse().map_err(WobuError::from)?;
@@ -504,8 +513,12 @@ pub async fn sync_accept(
     }
 
     let Some(destination) = destination else {
+        diag::info(format!(
+            "sync: {project} from {alias} is not on this machine; asking where to put it"
+        ));
         return Ok(Some(Accepted { project, alias, joined: false, root: None }));
     };
+    diag::info(format!("sync: cloning {project} from {alias} into {destination}"));
     // The lease is RAII: every return path, including scaffold validation,
     // releases the operation slot. A Cancel during this synchronous step is a
     // stored Notify permit when the network wait starts.

@@ -78,7 +78,7 @@ jobs:
       - run: npm ci
 
       # Tauri packages `dist` as-is. Check it before tauri-action can publish a
-      # draft containing source maps; the action's repeated build is deterministic.
+      # release containing source maps; the action's repeated build is deterministic.
       - name: Build frontend release assets
         run: npm run build
 
@@ -103,7 +103,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build and upload bundles to a draft GitHub release
+      - name: Build and upload bundles to a published GitHub release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -121,8 +121,23 @@ jobs:
             manually. Read the platform install instructions and security warning in
             [the release guide](https://github.com/${{ github.repository }}/blob/main/docs/12-releasing.md#installing-an-unsigned-beta).
           generateReleaseNotes: true
-          releaseDraft: true
+          # Published, not drafted. `releases/latest/download/latest.json` — the
+          # endpoint in `tauri.conf.json` — does not resolve against a draft, so
+          # a release left unpublished is one every installed copy polls and
+          # silently finds nothing at. A tag is the release request; leaving the
+          # result needing a second manual act is what let v0.1.1 sit invisible.
+          #
+          # What the draft used to buy was a maintainer's look at the assets
+          # before anyone could reach them. The gates above replace that with
+          # ones that cannot be forgotten: the tag must match every committed
+          # manifest, `dist` must carry no source maps, and the signing key must
+          # be present. What they do not replace is noticing that a matrix leg
+          # failed — `fail-fast: false` means a broken platform now yields a
+          # release missing that platform's installer. That degrades to "no
+          # update offered there" rather than a bad one, because a client only
+          # updates to what `latest.json` actually lists.
+          releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           # `latest.json` is what installed copies poll. It must be attached to the
-          # published release for the endpoint in `tauri.conf.json` to resolve.
+          # release for the endpoint in `tauri.conf.json` to resolve.
           includeUpdaterJson: true

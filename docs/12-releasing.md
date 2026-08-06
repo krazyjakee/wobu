@@ -1,8 +1,9 @@
 # Packaging and releases
 
 Wobu's beta releases are built by GitHub Actions from a version tag. A valid tag produces native
-Tauri bundles on Linux, macOS, and Windows and uploads them to a **draft** GitHub release. A
-maintainer inspects the three jobs and their assets before publishing the draft.
+Tauri bundles on Linux, macOS, and Windows and uploads them to a **published** GitHub release. The
+tag is the whole release request: there is no second manual act, because a release that needs one
+is a release that installed copies poll and silently find nothing at.
 
 ## Distribution and signing decision
 
@@ -47,8 +48,8 @@ The moving parts, all of which `npm run release:check` verifies together:
   excludes prereleases by design, so a tag containing `-` never offers itself to stable users.
 - `plugins.updater.pubkey` — the public half of the signing keypair. Committed on purpose; it is
   what makes the trust root this repository rather than the HTTPS connection.
-- `includeUpdaterJson: true` in the release workflow — attaches `latest.json` to the release. An
-  update is only offered once the draft is **published**.
+- `includeUpdaterJson: true` in the release workflow — attaches `latest.json` to the release.
+  `releases/latest` does not resolve against a draft, which is why the workflow publishes outright.
 - `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` as repository Actions
   secrets. The workflow fails fast if the private key is absent rather than publishing a release
   whose payloads every installed client would then reject.
@@ -124,9 +125,13 @@ git push origin v0.2.0
 ```
 
 The workflow rejects malformed tags and any tag that disagrees with a committed application
-version. It creates a draft even after successful builds. Before publishing, confirm that all three
-matrix jobs passed, the draft contains installers from all three operating systems, and its
-unsigned-install warning is intact.
+version, and publishes the release as soon as the bundles are built. Pushing the tag is therefore
+the irreversible step — check the version stamps before it, not the assets after.
+
+Afterwards, confirm that all three matrix jobs passed and that the release carries installers from
+all three operating systems. `fail-fast: false` means a single broken platform still publishes,
+just without that platform's installer; a client only updates to what `latest.json` lists, so the
+result is no update offered there rather than a bad one. Fix it by re-tagging a patch version.
 
 ## Implementation and documentation close-out
 
