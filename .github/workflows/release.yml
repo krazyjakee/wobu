@@ -73,7 +73,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: release-${{ matrix.os }}
+          # Deliberately CI's key, not one of this workflow's own. rust-cache
+          # composes `v0-rust-<key>-<job id>-<os>-<arch>-<env>-<lockfiles>`, and
+          # this job and CI's are both called `bundle`, so matching the `key` is
+          # the whole of what makes a tag run restore what CI's bundle job
+          # already built on `main` — which a tag run is allowed to do,
+          # since a cache created on the default branch is in scope for it.
+          # Under its own key it never matched anything: every leg of v0.1.1 and
+          # v0.1.2 logged "No cache found" and compiled the graph from scratch,
+          # ten to fifteen minutes a platform, where CI's warm bundle takes four.
+          #
+          # A prefix hit, not a full one — the restore key stops before the
+          # lockfile hash — so third-party crates come from the cache and the
+          # nine wobu crates rebuild. That is the shape of the win regardless:
+          # rust-cache strips workspace artifacts before saving.
+          key: bundle
+          # Never saves. What it reads is `main`'s cache, and a release writing
+          # its own copy under the same key would only crowd out the thing it
+          # depends on — the repo already sits near the 10 GiB cache ceiling,
+          # where saving evicts by last use. It also puts the 15-40s save on the
+          # critical path of the one workflow a person is waiting on.
+          save-if: false
 
       - run: npm ci
 

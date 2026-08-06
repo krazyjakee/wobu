@@ -109,6 +109,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Only `main` writes. This is the largest cache in the repo at 1.2 GiB
+          # and it was being written twice per commit — once for the push, once
+          # for the pull request — against a 10 GiB ceiling the repo had reached,
+          # so every branch push evicted somebody's entry by last use. Branch
+          # runs still *restore* `main`'s, which is the half that saves time.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install the pinned direct-dependency checker
         run: cargo install cargo-machete --version 0.9.2 --locked
@@ -167,6 +173,9 @@ jobs:
           # Its own key: this job compiles nothing, and sharing `rust`'s cache
           # would mean each run evicting the other's.
           key: licences
+          # And, for the same reason as the `rust` job, only `main` writes it:
+          # four copies of this 170 MiB cache accumulated on 2026-08-05 alone.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # Unpacks every crate in `Cargo.lock`, including the ones this runner will
       # never build. Without it the notices are missing the macOS and Windows
@@ -249,4 +258,13 @@ jobs:
       # `tauri.conf.json` points `beforeBuildCommand` at `npm run build`, so the
       # frontend is typechecked and bundled as part of this. Nothing here signs
       # or notarises: that needs secrets, and it belongs to a release workflow.
-      - run: npm run tauri build
+      #
+      # Which is what the config patch is for. `createUpdaterArtifacts` plus a
+      # committed `pubkey` makes the bundler refuse to finish without
+      # `TAURI_SIGNING_PRIVATE_KEY` — and it refuses at the very end, after
+      # every installer is already built, so the job burned ten minutes to fail
+      # on a step it was never meant to run. The patch drops the update payloads
+      # this job cannot sign and keeps the installers, which are the thing it
+      # exists to prove still package. A failure here also skipped the cache
+      # save, so a red bundle job left the next one with nothing to restore.
+      - run: npm run tauri build -- --config src-tauri/tauri.ci.conf.json
