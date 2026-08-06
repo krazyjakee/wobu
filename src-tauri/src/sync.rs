@@ -487,6 +487,21 @@ pub async fn sync_accept(
     cancel: Option<bool>,
     sync: State<'_, SyncState>,
 ) -> CommandResult<Option<Accepted>> {
+    accept_ticket(&sync, token, destination, cancel).await
+}
+
+/// The body of [`sync_accept`], taking a plain reference.
+///
+/// Split out so its future can be *measured*, which
+/// [`the_accept_future_fits_a_windows_stack`](tests::the_accept_future_fits_a_windows_stack)
+/// does: `tauri::State` has no public constructor, so a test cannot build the
+/// command's own future, and the size of this one is the thing #149 turned on.
+async fn accept_ticket(
+    sync: &SyncState,
+    token: Option<String>,
+    destination: Option<String>,
+    cancel: Option<bool>,
+) -> CommandResult<Option<Accepted>> {
     if cancel.unwrap_or(false) {
         sync.cancel_accept();
         return Ok(None);
@@ -519,16 +534,51 @@ pub async fn sync_accept(
         return Ok(Some(Accepted { project, alias, joined: false, root: None }));
     };
     diag::info(format!("sync: cloning {project} from {alias} into {destination}"));
+    // Boxed, and this is #149's fix rather than a tidy-up.
+    //
+    // An `async fn`'s future is sized for its largest branch, whichever branch
+    // actually runs. Inlined, `clone_into`'s dominates — it holds the whole
+    // transfer, and `run_ticket`'s state machine alone measures ~130 KB — so
+    // *every* call to this command built that much on the stack, including the
+    // destination-less probe that returns without touching any of it.
+    //
+    // The stack it was built on is the main thread's: a command is invoked from
+    // a WebView2 callback, and Tauri constructs the future there before handing
+    // it to the runtime. Windows reserves 1 MiB for a main thread against
+    // Linux's 8 MiB, which is exactly why this only ever died on Windows, and
+    // why it died with `STATUS_STACK_OVERFLOW` — a fault no panic hook can see,
+    // leaving a log that just stops.
+    //
+    // `Box::pin` puts the transfer on the heap, and it is allocated when this
+    // future is first *polled* — by then execution is on a runtime worker with
+    // a stack of its own, so the main thread never carries it at all.
+    Box::pin(clone_into(sync, &manager, &ticket, destination, project, alias)).await
+}
+
+/// Create the folder, pull the world into it, and undo both if that fails.
+///
+/// Deliberately its own function so the caller can box it; see the comment at
+/// the call site. Kept whole rather than split further because the scaffold and
+/// the cleanup are two halves of one guarantee: a clone that fails leaves
+/// nothing behind that a retry would trip over.
+async fn clone_into(
+    sync: &SyncState,
+    manager: &Arc<SyncManager>,
+    ticket: &Ticket,
+    destination: String,
+    project: Id,
+    alias: String,
+) -> CommandResult<Option<Accepted>> {
     // The lease is RAII: every return path, including scaffold validation,
     // releases the operation slot. A Cancel during this synchronous step is a
     // stored Notify permit when the network wait starts.
     let accept = sync.begin_accept()?;
     let scaffold = create_clone_scaffold(Path::new(&destination), project)?;
     let root = scaffold.root.clone();
-    manager.accept_clone(&ticket, &root);
+    manager.accept_clone(ticket, &root);
 
     let downloaded = tokio::select! {
-        result = manager.run_ticket(project, &ticket) => result,
+        result = manager.run_ticket(project, ticket) => result,
         () = accept.cancelled() => Err(WobuError::new(Code::Cancelled, "Accepting the shared project was cancelled.")),
     };
     match downloaded {
@@ -543,7 +593,7 @@ pub async fn sync_accept(
             }))
         }
         Err(error) => {
-            cleanup_clone(&manager, project, &root);
+            cleanup_clone(manager, project, &root);
             Err(error)
         }
     }
@@ -1121,5 +1171,39 @@ pub mod tests {
         async fn opened(&self, session: wobu_sync::Session) {
             session.close();
         }
+    }
+
+    /// #149, stated as a number.
+    ///
+    /// Accepting a ticket killed the Windows build outright — exception
+    /// `0xc00000fd`, `STATUS_STACK_OVERFLOW`, faulting in `wobu.exe` — with no
+    /// panic hook line and no wind-down, because a stack overflow is not a
+    /// panic and nothing in the process survives to write one.
+    ///
+    /// The cause was the size of this future. An `async fn` is sized for its
+    /// largest branch whichever branch runs, so the clone transfer inside
+    /// `clone_into` — `run_ticket`'s state machine is ~130 KB on its own — was
+    /// built on the stack even by the destination-less probe that never touches
+    /// it. Tauri constructs a command's future on the main thread, and Windows
+    /// gives a main thread 1 MiB against Linux's 8 MiB, which is the whole
+    /// reason this reproduced on one platform and not the other.
+    ///
+    /// The budget is far below what would actually overflow. That is the point:
+    /// this asserts the transfer is *boxed*, not that it currently fits, so
+    /// inlining it again fails here rather than on somebody's machine.
+    #[test]
+    fn the_accept_future_fits_a_windows_stack() {
+        const BUDGET: usize = 4 * 1024;
+
+        let sync = SyncState::default();
+        // Never polled — constructing it is what the size is about.
+        let future = accept_ticket(&sync, None, None, None);
+        let size = std::mem::size_of_val(&future);
+
+        assert!(
+            size <= BUDGET,
+            "the accept future is {size} bytes, over the {BUDGET}-byte budget; \
+             something large is inlined into it again — box it, as `clone_into` is"
+        );
     }
 }
