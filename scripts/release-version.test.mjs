@@ -15,7 +15,7 @@ async function fixture(overrides = {}) {
   for (const dir of [
     'release',
     'src-tauri/crates/wobu-core/src',
-    'src-tauri/crates/wobu-store/src',
+    'src-tauri/crates/wobu-store/src/index',
   ]) {
     await mkdir(path.join(root, dir), { recursive: true })
   }
@@ -60,7 +60,7 @@ async function fixture(overrides = {}) {
     'pub const SCHEMA_VERSION: u32 = 1;\n',
   )
   await writeFile(
-    path.join(root, 'src-tauri/crates/wobu-store/src/index.rs'),
+    path.join(root, 'src-tauri/crates/wobu-store/src/index/mod.rs'),
     'pub const INDEX_VERSION: u32 = 9;\n',
   )
   return root

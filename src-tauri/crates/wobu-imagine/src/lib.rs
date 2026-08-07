@@ -161,6 +161,9 @@ mod mesh;
 mod negotiate;
 pub mod tencent;
 
+#[cfg(test)]
+mod testing;
+
 pub use aspect::{AspectRatio, Resolution};
 pub use backend::{
     Discard, GeneratedImage, ImageBackend, ImageOutcome, ImageRequest, ImageUsage, LoraWeight,

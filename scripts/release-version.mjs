@@ -34,7 +34,10 @@ export async function inspectRelease(root) {
   const cargoToml = await readFile(path.join(root, 'src-tauri/Cargo.toml'), 'utf8')
   const cargoLock = await readFile(path.join(root, 'src-tauri/Cargo.lock'), 'utf8')
   const core = await readFile(path.join(root, 'src-tauri/crates/wobu-core/src/lib.rs'), 'utf8')
-  const index = await readFile(path.join(root, 'src-tauri/crates/wobu-store/src/index.rs'), 'utf8')
+  const index = await readFile(
+    path.join(root, 'src-tauri/crates/wobu-store/src/index/mod.rs'),
+    'utf8',
+  )
 
   const cargoVersion = one(
     cargoToml,

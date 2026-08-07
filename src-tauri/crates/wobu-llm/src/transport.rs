@@ -8,7 +8,10 @@ use std::time::Duration;
 
 use reqwest::{RequestBuilder, Response};
 use serde::Serialize;
+use serde_json::Value;
 
+use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest};
+use crate::stream::{SseConsumer, read_sse};
 use crate::{Cancel, Error};
 
 /// Every remote provider uses the same connection timeout. There is no whole
@@ -106,6 +109,70 @@ where
     let retry_after = retry_after(&response);
     let body = text_or_empty(response, cancel).await.map_err(text_failure)?;
     Err(status_error(status, &body, retry_after))
+}
+
+/// The provider-shaped half of a streaming enhance.
+///
+/// Everything an adapter has to decide for itself and nothing it does not:
+/// where to send, how to authenticate, what the body looks like, how a status
+/// maps to an error, and what reads the events back.
+pub(crate) trait SseEnhance {
+    type Consumer: SseConsumer;
+
+    fn client(&self) -> &reqwest::Client;
+
+    fn base_url(&self) -> &str;
+
+    /// Authentication, and any header only this provider's API asks for.
+    /// `content-type` and `accept` are added by [`enhance_over_sse`].
+    fn authenticate(&self, request: RequestBuilder) -> RequestBuilder;
+
+    fn request_body(request: &EnhanceRequest) -> Value;
+
+    fn error_for_status(status: u16, body: &str, retry_after: Option<Duration>) -> Error;
+
+    fn consumer() -> Self::Consumer;
+}
+
+/// The half of `TextProvider::enhance` that is the same for every adapter.
+///
+/// The pre-cancel check, serialising the body, opening the stream and handing
+/// it to the SSE reader are provider-neutral, and the two adapters that had a
+/// copy each differed only in their authentication headers. One copy means the
+/// rule that an unbilled failure stays unbilled is stated once.
+pub(crate) async fn enhance_over_sse<P: SseEnhance>(
+    provider: &P,
+    request: &EnhanceRequest,
+    deltas: &mut dyn DeltaSink,
+    cancel: &Cancel,
+) -> EnhanceOutcome {
+    // A job cancelled while it was queued should not open a connection at all.
+    // Everything before the first byte of response is unbilled.
+    if cancel.is_cancelled() {
+        return EnhanceOutcome::unbilled(Error::Cancelled);
+    }
+
+    let body = match json_body(&P::request_body(request)) {
+        Ok(body) => body,
+        // Only reachable if the generated schema is not serialisable, which is
+        // our bug in the same way a rejected schema is.
+        Err(error) => return EnhanceOutcome::unbilled(error),
+    };
+
+    let send = provider
+        .authenticate(provider.client().post(provider.base_url()))
+        .header("content-type", "application/json")
+        // Streaming is asked for in the body; this only stops a proxy deciding
+        // to buffer the response into one lump.
+        .header("accept", "text/event-stream")
+        .body(body);
+
+    let response = match text_stream(send, cancel, P::error_for_status).await {
+        Ok(response) => response,
+        Err(error) => return EnhanceOutcome::unbilled(error),
+    };
+
+    read_sse(request.kind, response.bytes_stream(), deltas, cancel, P::consumer()).await
 }
 
 fn text_failure(failure: Failure) -> Error {

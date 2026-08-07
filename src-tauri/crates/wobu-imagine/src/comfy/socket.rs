@@ -344,34 +344,13 @@ where
 mod tests {
     use super::*;
     use std::collections::VecDeque;
-    use std::future::Future;
+
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::task::{Wake, Waker};
 
     use serde_json::json;
 
-    /// A one-thread executor, so this loop is exercised without a runtime.
-    /// `wobu-imagine` names none — it runs on Tauri's.
-    fn block_on<F: Future>(future: F) -> F::Output {
-        struct Unparker(std::thread::Thread);
-        impl Wake for Unparker {
-            fn wake(self: Arc<Self>) {
-                self.0.unpark();
-            }
-        }
-
-        let waker = Waker::from(Arc::new(Unparker(std::thread::current())));
-        let mut cx = Context::from_waker(&waker);
-        let mut future = Box::pin(future);
-        loop {
-            if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
-                return value;
-            }
-            std::thread::park();
-        }
-    }
-
+    use crate::testing::block_on;
     /// Stands in for the websocket. Counts its own polls, because "the render
     /// stopped" and "the reporting stopped" are the difference between
     /// cancellation working and cancellation being a lie.

@@ -630,37 +630,15 @@ impl KeyCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::future::Future;
+
     use std::sync::Arc;
-    use std::task::{Context, Poll, Wake, Waker};
 
     use wobu_influence::{RefBucket, Refs};
 
     use crate::backend::Discard;
     use crate::negotiate::negotiate;
 
-    /// A one-thread executor, so the adapter's async surface is exercised without
-    /// a runtime. `wobu-imagine` names none — it runs on Tauri's — and pulling
-    /// tokio in to prove that would undo the claim.
-    fn block_on<F: Future>(future: F) -> F::Output {
-        struct Unparker(std::thread::Thread);
-        impl Wake for Unparker {
-            fn wake(self: Arc<Self>) {
-                self.0.unpark();
-            }
-        }
-
-        let waker = Waker::from(Arc::new(Unparker(std::thread::current())));
-        let mut cx = Context::from_waker(&waker);
-        let mut future = Box::pin(future);
-        loop {
-            if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
-                return value;
-            }
-            std::thread::park();
-        }
-    }
-
+    use crate::testing::block_on;
     fn backend() -> GeminiBackend {
         GeminiBackend::new("AIza-not-a-real-key")
             .unwrap()

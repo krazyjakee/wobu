@@ -3,6 +3,10 @@
 @import './shell.css';
 @import './navigator.css';
 @import './editor.css';
+@import './concepts.css';
+@import './conflicts.css';
+@import './relations.css';
+@import './concept3d.css';
 @import './inspector.css';
 @import './prompt.css';
 @import './settings.css';

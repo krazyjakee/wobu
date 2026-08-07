@@ -149,6 +149,26 @@ pub fn project_is_present(root: &Path) -> bool {
     root.join("project.json").is_file()
 }
 
+/// Narrow a file this machine writes to its owner alone.
+///
+/// A no-op on Windows, where the equivalent is an ACL edit and the default ACL
+/// on a per-user AppData directory already excludes other users. Doing nothing
+/// there is correct; pretending to do something would be worse.
+///
+/// Three callers in the shell had a copy each — machine settings, agent access
+/// and the share list — which is three places for the Unix mode to be widened
+/// and only one of them to be noticed.
+#[cfg(unix)]
+pub fn restrict(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+pub fn restrict(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,0 +1,162 @@
+/* ── conflicts ────────────────────────────────────────────────────────────
+   The card sits above the editor rather than inside it. A conflict is about
+   the file, not about the node being edited, and it has to stay put while the
+   user scrolls the notes they are comparing it against. */
+.editor-region {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-region > .editor {
+  flex: 1;
+  min-height: 0;
+}
+/* Mounted when a conflict is found, above the editor and pushing it down. Same
+   reasoning as the banner row in `overlays.css`: the block takes its height at
+   once and only its contents drop in, so the notes the user is comparing it
+   against do not slide for the duration of the animation. */
+.conflicts {
+  flex: none;
+  max-height: 46%;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  animation: wb-drop var(--dur-2) var(--ease-out);
+}
+.conflict {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.conflict:last-child {
+  border-bottom: 0;
+}
+.conflict-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.conflict-title {
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conflict-when {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 11px;
+}
+.conflict-note,
+.conflict-same {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.conflict-diff {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  font: 11.5px/1.6 var(--mono);
+}
+/* Same four-column track as the rows, so the two headings sit over the columns
+   they name rather than over the gutters. */
+.conflict-cols,
+.conflict-row {
+  display: grid;
+  grid-template-columns: 3.2em 1fr 3.2em 1fr;
+}
+.conflict-cols {
+  background: var(--bg-raised);
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 0;
+}
+.conflict-cols > span:first-child {
+  grid-column: 1 / 3;
+  padding-left: 8px;
+}
+.conflict-cols > span:last-child {
+  grid-column: 3 / 5;
+  padding-left: 8px;
+}
+.conflict-no {
+  text-align: right;
+  padding-right: 7px;
+  color: var(--text-faint);
+  opacity: 0.6;
+  user-select: none;
+}
+.conflict-cell {
+  /* `pre-wrap`, never `pre`: a long line has to wrap rather than scroll the
+     card sideways, or half of somebody's paragraph is off screen at the moment
+     they are deciding whether to keep it. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-right: 10px;
+  min-width: 0;
+}
+/* Tinted by side rather than by position: `nth-of-type` would count the line
+   number gutters, which are spans too. */
+.conflict-row.is-removed .conflict-l,
+.conflict-row.is-changed .conflict-l {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+.conflict-row.is-added .conflict-r,
+.conflict-row.is-changed .conflict-r {
+  background: color-mix(in srgb, var(--l-species) 16%, transparent);
+}
+.conflict-row.is-gap {
+  display: block;
+  background: var(--bg-raised);
+  text-align: center;
+}
+.conflict-gap {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.conflict-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.btn-mini.is-on {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.conflict-else {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 16px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.conflict-jump {
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

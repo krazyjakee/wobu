@@ -1,0 +1,360 @@
+/* ── concept 3D ───────────────────────────────────────────────────────── */
+.mesh-pane {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 420px;
+}
+.mesh-history {
+  width: 170px;
+  overflow-y: auto;
+  padding: 10px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.mesh-history button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px;
+  border-radius: var(--r-sm);
+  color: var(--text-faint);
+  text-align: left;
+}
+.mesh-history button.is-active {
+  background: var(--bg-raised);
+  color: var(--text-dim);
+}
+.mesh-history b {
+  font-size: 11px;
+}
+.mesh-history span {
+  font: 10px var(--mono);
+}
+.mesh-workbench {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(230px, 0.36fr);
+  min-width: 0;
+  min-height: 0;
+}
+.mesh-viewer {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+.mesh-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.mesh-toolbar .is-on {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.mesh-scale,
+.mesh-size {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.mesh-scale {
+  margin-left: 4px;
+}
+.mesh-size {
+  margin-left: auto;
+  font-family: var(--mono);
+}
+.mesh-stage {
+  position: relative;
+  display: grid;
+  flex: 1;
+  min-height: 360px;
+  place-items: center;
+  overflow: hidden;
+  background: var(--media-bg);
+  color: var(--on-scrim-dim);
+}
+.mesh-canvas,
+.mesh-canvas canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.mesh-canvas {
+  position: absolute;
+  inset: 0;
+}
+.mesh-error {
+  margin: 0;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-panel));
+  color: var(--danger);
+  font-size: 11px;
+}
+.mesh-sheet {
+  overflow-y: auto;
+  padding: 12px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.mesh-sheet > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.mesh-sheet h3 {
+  font-size: 12px;
+}
+.mesh-sheet > div > span,
+.mesh-sheet > p {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.mesh-sheet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.mesh-sheet figure {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+}
+.mesh-sheet figure > img,
+.mesh-sheet figure > span {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.mesh-sheet figcaption {
+  padding: 4px 5px;
+  color: var(--text-faint);
+  font-size: 9px;
+  text-transform: capitalize;
+}
+.mesh-empty {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  gap: 6px;
+  padding: 24px;
+  color: var(--text-faint);
+  text-align: center;
+}
+.mesh-empty h3 {
+  color: var(--text-dim);
+}
+
+@media (max-width: 1240px) {
+  .relations-pane {
+    grid-template-columns: 1fr;
+  }
+  .relations-section {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .mesh-workbench {
+    grid-template-columns: minmax(0, 1fr) 230px;
+  }
+}
+
+/* ── concept 3D · reconstruction (#110) ───────────────────────────────── */
+/*
+ * The viewer keeps the room it had. The review panel is a full-width row under
+ * it rather than a third column, because eight square views and a set of
+ * provider options do not fit beside a turntable at any width this app is used
+ * at — and a mesh is judged in the viewer, not in the sheet.
+ */
+.mesh-pane {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.mesh-history,
+.mesh-workbench {
+  grid-row: 1;
+}
+.mesh-pane > .mesh-make {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  max-height: 46%;
+}
+.mesh-pane.is-empty {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.mesh-make {
+  display: flex;
+  overflow-y: auto;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.mesh-workbench > .mesh-make {
+  border-top: 0;
+  border-left: 1px solid var(--border);
+}
+.mesh-make > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mesh-make h3 {
+  font-size: 12px;
+}
+.mesh-make > header span,
+.mesh-make-sending,
+.mesh-make-missing,
+.mesh-make-blocked,
+.mesh-make-empty p {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.mesh-make-empty {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.mesh-make-batches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mesh-make-batches .is-on {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.mesh-make-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 7px;
+}
+.mesh-make-tile {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+}
+.mesh-make-tile.is-empty {
+  border-style: dashed;
+}
+/* Views a single-image backend will not receive stay visible and stay legible;
+ * hiding them would make the sheet look incomplete for the wrong reason. */
+.mesh-make-tile.is-unused {
+  opacity: 0.55;
+}
+.mesh-make-tile .asset-media-frame {
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+.mesh-make-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mesh-make-tile figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 5px;
+}
+.mesh-make-tile figcaption b {
+  font-size: 9.5px;
+  text-transform: capitalize;
+}
+.mesh-make-tile figcaption span {
+  color: var(--text-faint);
+  font: 9px var(--mono);
+}
+.mesh-make-tile-actions {
+  display: flex;
+  gap: 4px;
+  padding: 0 4px 4px;
+}
+.mesh-make-tile-actions .btn-mini {
+  flex: 1;
+  font-size: 9.5px;
+}
+.mesh-make-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.mesh-make-options > label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.mesh-make-options input[type='number'] {
+  width: 92px;
+}
+.mesh-make-options small {
+  color: var(--text-faint);
+  font: 9px var(--mono);
+}
+.mesh-make-options .mesh-make-sending {
+  flex-basis: 100%;
+}
+.mesh-make-consent {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--warn, var(--accent)) 45%, var(--border));
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.mesh-make-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.mesh-make-missing {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.mesh-make-error {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-panel));
+  color: var(--danger);
+  font-size: 10.5px;
+}
+
+@media (max-width: 1240px) {
+  .mesh-pane > .mesh-make {
+    max-height: 52%;
+  }
+}

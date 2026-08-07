@@ -22,7 +22,7 @@ const [packageJson, packageLock, tauriConfig, cargoToml, cargoLock, core, index]
     read('src-tauri/Cargo.toml'),
     read('src-tauri/Cargo.lock'),
     read('src-tauri/crates/wobu-core/src/lib.rs'),
-    read('src-tauri/crates/wobu-store/src/index.rs'),
+    read('src-tauri/crates/wobu-store/src/index/mod.rs'),
   ])
 
 const cargoVersion = cargoToml.match(/\[workspace\.package\][\s\S]*?^version\s*=\s*"([^"]+)"/m)?.[1]

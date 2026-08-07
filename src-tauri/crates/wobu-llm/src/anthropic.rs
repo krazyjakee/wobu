@@ -28,7 +28,6 @@ use async_trait::async_trait;
 use crate::cancel::Cancel;
 use crate::error::{Error, Result};
 use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, TextProvider};
-use crate::stream::read_sse;
 use crate::transport;
 
 use wire::Incoming;
@@ -128,36 +127,39 @@ impl TextProvider for AnthropicProvider {
         deltas: &mut dyn DeltaSink,
         cancel: &Cancel,
     ) -> EnhanceOutcome {
-        // A job cancelled while it was queued should not open a connection at
-        // all. Everything before the first byte of response is unbilled.
-        if cancel.is_cancelled() {
-            return EnhanceOutcome::unbilled(Error::Cancelled);
-        }
+        transport::enhance_over_sse(self, request, deltas, cancel).await
+    }
+}
 
-        let body = match transport::json_body(&wire::request_body(request)) {
-            Ok(body) => body,
-            // Only reachable if the generated schema is not serialisable, which
-            // is our bug in the same way a rejected schema is.
-            Err(error) => return EnhanceOutcome::unbilled(error),
-        };
+impl transport::SseEnhance for AnthropicProvider {
+    type Consumer = Incoming;
 
-        let send = self
-            .client
-            .post(&self.base_url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", API_VERSION)
-            .header("content-type", "application/json")
-            // Streaming is asked for in the body; this only stops a proxy
-            // deciding to buffer the response into one lump.
-            .header("accept", "text/event-stream")
-            .body(body);
+    fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
 
-        let response = match transport::text_stream(send, cancel, wire::error_for_status).await {
-            Ok(response) => response,
-            Err(error) => return EnhanceOutcome::unbilled(error),
-        };
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
 
-        read_sse(request.kind, response.bytes_stream(), deltas, cancel, Incoming::new()).await
+    fn authenticate(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request.header("x-api-key", &self.api_key).header("anthropic-version", API_VERSION)
+    }
+
+    fn request_body(request: &EnhanceRequest) -> serde_json::Value {
+        wire::request_body(request)
+    }
+
+    fn error_for_status(
+        status: u16,
+        body: &str,
+        retry_after: Option<std::time::Duration>,
+    ) -> Error {
+        wire::error_for_status(status, body, retry_after)
+    }
+
+    fn consumer() -> Incoming {
+        Incoming::new()
     }
 }
 

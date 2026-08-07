@@ -163,30 +163,8 @@ impl Drop for Cancelled<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::task::Wake;
 
-    /// A one-thread executor, so the crate's async surface can be tested without
-    /// pulling in a runtime. Everything here has to work under Tauri's runtime,
-    /// and depending on tokio to prove that would be circular.
-    fn block_on<F: Future>(future: F) -> F::Output {
-        struct Unparker(std::thread::Thread);
-        impl Wake for Unparker {
-            fn wake(self: Arc<Self>) {
-                self.0.unpark();
-            }
-        }
-
-        let waker = Waker::from(Arc::new(Unparker(std::thread::current())));
-        let mut cx = Context::from_waker(&waker);
-        let mut future = Box::pin(future);
-        loop {
-            if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {
-                return value;
-            }
-            std::thread::park();
-        }
-    }
-
+    use crate::stream::testing::block_on;
     #[test]
     fn a_clone_sees_the_cancellation() {
         // The whole point: the flag is set on the UI thread and read on the one

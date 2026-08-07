@@ -1,0 +1,223 @@
+/* ── concepts ───────────────────────────────────────────────────────────── */
+.concepts {
+  min-height: 100%;
+  padding: 16px;
+  overflow: auto;
+}
+.concept-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+.concept-grid-viewport {
+  position: relative;
+  height: min(650px, 70vh);
+  min-height: 320px;
+  margin-top: 12px;
+  overflow: auto;
+  padding: 12px;
+}
+.concept-grid-virtual {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.concept-grid-virtual .concept-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.concept-more {
+  display: block;
+  margin: 12px auto;
+}
+.concept-tile {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg-panel);
+}
+.concept-open {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  cursor: zoom-in;
+}
+.concept-open:disabled {
+  cursor: default;
+}
+.concept-image {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.concept-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.concept-hover {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 32px 10px 10px;
+  color: var(--on-scrim);
+  background: linear-gradient(transparent, var(--scrim-strong));
+  opacity: 0;
+  transform: translateY(var(--rise));
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+  text-align: left;
+  line-height: 1.35;
+}
+.concept-open:hover .concept-hover,
+.concept-open:focus-visible .concept-hover {
+  opacity: 1;
+  transform: none;
+}
+.concept-hover code {
+  color: var(--on-scrim-dim);
+  font: 10px var(--mono);
+}
+.concept-caption time {
+  color: var(--text-faint);
+  font: 10px var(--mono);
+}
+.concept-count {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  border-radius: 20px;
+  background: var(--scrim);
+  color: var(--on-scrim);
+}
+.concept-pinned {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 60px);
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  border-radius: 20px;
+  background: var(--scrim);
+  color: var(--accent-on-scrim);
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.concept-caption,
+.concept-live-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.concept-caption span,
+.concept-caption time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.concept-caption .concept-seed-source {
+  color: var(--accent);
+  font-size: 9px;
+}
+.concept-pin-controls {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px 10px;
+}
+.concept-pin-action {
+  display: flex;
+  align-items: end;
+  gap: 7px;
+}
+.concept-pin-action label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+.concept-pin-action select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.concept-pin-action .btn-mini {
+  min-width: 48px;
+  padding: 5px 7px;
+}
+.concept-pin-action .btn-mini.is-pinned {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+}
+.concept-pin-consequence {
+  margin: 7px 0 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.concept-delete {
+  margin: 0 10px 10px auto;
+  color: var(--danger-text);
+}
+.concept-progress {
+  height: 3px;
+  background: var(--bg-input);
+}
+.concept-progress span {
+  display: block;
+  height: 100%;
+  background: var(--ai);
+  transition: width var(--dur-bar) linear;
+}
+.concept-failure,
+.concept-error {
+  margin: 0;
+  padding: 9px 10px;
+  color: var(--danger-text);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.concept-error {
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
+  border-radius: var(--r-sm);
+}
+.concept-empty {
+  padding: 30px;
+  color: var(--text-faint);
+  text-align: center;
+}
+.concept-empty h3,
+.concept-empty p {
+  margin: 0 0 7px;
+}
+/* A concept opened full size is `.image-viewer` in `overlays.css`, shared with
+   the asset library so the same picture is framed the same way in both. */

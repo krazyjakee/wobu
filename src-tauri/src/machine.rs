@@ -350,7 +350,7 @@ fn save(path: &Path, stored: &Stored) -> CommandResult<()> {
     }
     let json = serde_json::to_string_pretty(stored).expect("machine settings contain one string");
     std::fs::write(path, json).map_err(|error| io_error("write", path, error))?;
-    restrict(path).map_err(|error| io_error("protect", path, error))
+    paths::restrict(path).map_err(|error| io_error("protect", path, error))
 }
 
 fn io_error(action: &str, path: &Path, error: std::io::Error) -> WobuError {
@@ -360,17 +360,6 @@ fn io_error(action: &str, path: &Path, error: std::io::Error) -> WobuError {
 
 fn default_path() -> PathBuf {
     paths::app_data_dir().join("settings.json")
-}
-
-#[cfg(unix)]
-fn restrict(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-#[cfg(not(unix))]
-fn restrict(_path: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 #[cfg(test)]

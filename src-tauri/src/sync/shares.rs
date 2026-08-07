@@ -178,28 +178,12 @@ impl Shares {
         let json = serde_json::to_string_pretty(&self.entries)
             .expect("a share is ids, paths and canonical ticket strings");
         std::fs::write(&self.path, json)?;
-        restrict(&self.path)
+        paths::restrict(&self.path)
     }
 }
 
 fn default_path() -> PathBuf {
     paths::app_data_dir().join("sync").join("shares.json")
-}
-
-/// Owner-only, on the platforms that have a word for it.
-///
-/// A no-op on Windows, where the equivalent is an ACL edit and the default ACL
-/// on a per-user AppData directory already excludes other users. Doing nothing
-/// there is correct; pretending to do something would be worse.
-#[cfg(unix)]
-fn restrict(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-#[cfg(not(unix))]
-fn restrict(_path: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 #[cfg(test)]
