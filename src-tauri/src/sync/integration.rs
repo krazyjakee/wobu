@@ -243,12 +243,9 @@ fn empty_clone(from: &Path, to: &Path) {
 /// A PNG header is enough for the store's import probe, and gives this test
 /// real content-addressed bytes without checking a binary fixture into source.
 fn png(width: u32, height: u32) -> Vec<u8> {
-    let mut out = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-    out.extend_from_slice(&13u32.to_be_bytes());
-    out.extend_from_slice(b"IHDR");
-    out.extend_from_slice(&width.to_be_bytes());
-    out.extend_from_slice(&height.to_be_bytes());
-    out.extend_from_slice(&[8, 6, 0, 0, 0]);
+    let mut out = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\0\0\0\0\0\x08\x06\0\0\0".to_vec();
+    out[16..20].copy_from_slice(&width.to_be_bytes());
+    out[20..24].copy_from_slice(&height.to_be_bytes());
     out
 }
 

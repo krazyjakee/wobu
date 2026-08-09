@@ -509,6 +509,21 @@ pub struct Blobs {
     cache: PathBuf,
 }
 
+fn canonical_project_root(root: &Path) -> Result<PathBuf> {
+    let root = root.canonicalize().map_err(|source| Error::BlobStore {
+        source: Box::new(std::io::Error::new(
+            source.kind(),
+            "the project root is not an existing directory",
+        )),
+    })?;
+    if !root.is_dir() {
+        return Err(Error::BlobStore {
+            source: Box::new(std::io::Error::other("the project root is not a directory")),
+        });
+    }
+    Ok(root)
+}
+
 impl Blobs {
     /// Open the store for one project.
     ///
@@ -527,18 +542,7 @@ impl Blobs {
     /// no longer true of the process, so [`Blobs::shutdown`] is not optional
     /// housekeeping — it is how those threads stop.
     pub async fn open(root: impl AsRef<Path>, cache: impl AsRef<Path>) -> Result<Blobs> {
-        let root = root.as_ref();
-        let root = root.canonicalize().map_err(|source| Error::BlobStore {
-            source: Box::new(std::io::Error::new(
-                source.kind(),
-                "the project root is not an existing directory",
-            )),
-        })?;
-        if !root.is_dir() {
-            return Err(Error::BlobStore {
-                source: Box::new(std::io::Error::other("the project root is not a directory")),
-            });
-        }
+        let root = canonical_project_root(root.as_ref())?;
 
         let cache = cache.as_ref();
         fs::create_dir_all(cache)
@@ -568,18 +572,7 @@ impl Blobs {
     /// into one sync round, and every path validation is performed against that
     /// round's root.
     pub fn with_root(&self, root: impl AsRef<Path>) -> Result<Blobs> {
-        let root = root.as_ref();
-        let root = root.canonicalize().map_err(|source| Error::BlobStore {
-            source: Box::new(std::io::Error::new(
-                source.kind(),
-                "the project root is not an existing directory",
-            )),
-        })?;
-        if !root.is_dir() {
-            return Err(Error::BlobStore {
-                source: Box::new(std::io::Error::other("the project root is not a directory")),
-            });
-        }
+        let root = canonical_project_root(root.as_ref())?;
         if self.cache.starts_with(&root) {
             return Err(Error::BlobStore {
                 source: Box::new(std::io::Error::other(
