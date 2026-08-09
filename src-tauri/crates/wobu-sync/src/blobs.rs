@@ -493,7 +493,7 @@ pub struct Fetched {
 
 /* ── the store ────────────────────────────────────────────────────────────── */
 
-/// A project's blob store, and the project root it serves and fills.
+/// A verified content store, scoped to the project root it currently reads and fills.
 ///
 /// Cheap to clone — `FsStore` is a handle to an actor — and the clones share one
 /// store. [`crate::Config`] takes one so that [`crate::SyncEndpoint::bind`] can
@@ -504,6 +504,9 @@ pub struct Blobs {
     /// Canonical, so that [`place`]'s containment check is against a path the
     /// filesystem agrees with rather than one with a `..` or a symlink in it.
     root: PathBuf,
+    /// Canonical store location, retained so a project-scoped clone cannot
+    /// accidentally put the local blob database inside the project it syncs.
+    cache: PathBuf,
 }
 
 impl Blobs {
@@ -554,7 +557,37 @@ impl Blobs {
         let store = FsStore::load(&canonical_cache)
             .await
             .map_err(|source| Error::BlobStore { source: Box::new(source) })?;
-        Ok(Blobs { store, root })
+        Ok(Blobs { store, root, cache: canonical_cache })
+    }
+
+    /// Reuse this content store for another project root.
+    ///
+    /// Serving is by verified content hash, so one machine-wide store can
+    /// safely answer for every project whose admitted manifest imported bytes
+    /// into it. Placement remains project-scoped: callers take this cheap clone
+    /// into one sync round, and every path validation is performed against that
+    /// round's root.
+    pub fn with_root(&self, root: impl AsRef<Path>) -> Result<Blobs> {
+        let root = root.as_ref();
+        let root = root.canonicalize().map_err(|source| Error::BlobStore {
+            source: Box::new(std::io::Error::new(
+                source.kind(),
+                "the project root is not an existing directory",
+            )),
+        })?;
+        if !root.is_dir() {
+            return Err(Error::BlobStore {
+                source: Box::new(std::io::Error::other("the project root is not a directory")),
+            });
+        }
+        if self.cache.starts_with(&root) {
+            return Err(Error::BlobStore {
+                source: Box::new(std::io::Error::other(
+                    "the blob store must not live inside the project folder",
+                )),
+            });
+        }
+        Ok(Blobs { store: self.store.clone(), root, cache: self.cache.clone() })
     }
 
     /// The project folder every path is joined onto.

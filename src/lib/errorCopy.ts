@@ -54,6 +54,8 @@ const REPLACEMENTS: Record<string, string> = {
     'The project folder is read-only, so nothing can be saved into it. Change the folder’s permissions, or copy the project somewhere you can write to, and open it again.',
   'share.unmounted':
     'Wobu cannot reach the project folder. If it is on a network share or a removable drive, reconnect it — Wobu keeps trying and carries on where it left off.',
+  'sync.unreachable':
+    'Wobu could not reach the other machine. Check that Wobu is open there and both machines are online, then try again.',
   'io.failed':
     'Wobu could not read or write a file in the project folder. Check there is free disk space and that the folder is still writable, then try again.',
 

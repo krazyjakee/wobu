@@ -29,6 +29,15 @@ describe('replacing a message that only made sense to the code', () => {
     expect(plainError(fail({ code: 'provider.no_key' }))).toMatch(/Settings → Providers and models/)
   })
 
+  it('does not turn a sync connection failure into disk-space advice', () => {
+    const text = plainError(
+      fail({ code: 'sync.unreachable', message: 'Could not reach the other machine.' }),
+    )
+    expect(text).toMatch(/other machine/)
+    expect(text).toMatch(/online/)
+    expect(text).not.toMatch(/disk space|project folder/)
+  })
+
   it('rebuilds a conflict from its own field rather than the sentence', () => {
     const text = plainError(
       fail({

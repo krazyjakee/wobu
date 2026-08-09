@@ -100,6 +100,13 @@ pub enum Code {
     /// expected, recoverable, and worth a banner rather than a toast.
     #[serde(rename = "share.unmounted")]
     ShareUnmounted,
+    /// A sync peer could not be reached or the connection broke.
+    ///
+    /// This must not share `io.failed`: that code is local filesystem trouble
+    /// and its UI copy tells somebody to check disk space and folder
+    /// permissions, neither of which can repair a peer-to-peer connection.
+    #[serde(rename = "sync.unreachable")]
+    SyncUnreachable,
 
     // ── provider ─────────────────────────────────────────────────────────
     //
@@ -214,6 +221,7 @@ impl Code {
             self,
             Code::Io
                 | Code::ShareUnmounted
+                | Code::SyncUnreachable
                 | Code::ProviderRateLimited
                 | Code::ProviderUnavailable
                 | Code::ProviderBadResponse
@@ -396,6 +404,7 @@ mod tests {
             (Code::NoSuchAsset, "asset.not_found"),
             (Code::AssetInUse, "asset.in_use"),
             (Code::ShareUnmounted, "share.unmounted"),
+            (Code::SyncUnreachable, "sync.unreachable"),
             (Code::ProviderNoKey, "provider.no_key"),
             (Code::ProviderKeychainUnavailable, "provider.keychain_unavailable"),
             (Code::ProviderBillingRequired, "provider.billing_required"),
@@ -411,6 +420,7 @@ mod tests {
     #[test]
     fn retryable_is_true_only_where_trying_again_could_work() {
         assert!(Code::ShareUnmounted.retryable());
+        assert!(Code::SyncUnreachable.retryable());
         assert!(Code::ProviderRateLimited.retryable());
         assert!(Code::Io.retryable());
         // The one this list was actually missing. `wobu-llm` and `wobu-imagine`

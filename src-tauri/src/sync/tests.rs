@@ -5,7 +5,7 @@ use wobu_core::new_id;
 use wobu_store::Project;
 use wobu_sync::{Grant, Projects, SyncEndpoint};
 
-use super::clone::{accept_ticket, create_clone_scaffold};
+use super::clone::{accept_ticket, clone_into, create_clone_scaffold};
 use super::*;
 use crate::state::Handover;
 use bodies::Request;
@@ -17,6 +17,14 @@ pub fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("wobu-{name}-{}", new_id()));
     std::fs::create_dir_all(&dir).expect("a temp directory");
     dir
+}
+
+#[test]
+fn a_peer_connection_failure_is_not_reported_as_local_file_io() {
+    let error = WobuError::from(wobu_sync::Error::ProjectNotHeld);
+    assert_eq!(error.code, Code::SyncUnreachable);
+    assert!(error.retryable);
+    assert!(error.message.contains("other machine"));
 }
 
 #[test]
@@ -72,6 +80,44 @@ fn a_verified_partial_clone_can_resume_without_deleting_downloaded_files() {
     assert_eq!(std::fs::read_to_string(recovered).unwrap(), "recoverable");
 
     let _ = std::fs::remove_dir_all(parent);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_retryable_first_round_failure_opens_the_scaffold_and_keeps_the_ticket() {
+    let dir = scratch("partial-clone-opens");
+    let destination = dir.join("destination");
+    std::fs::create_dir(&destination).unwrap();
+    let state = AppState::default();
+    let manager = manager(&state, &dir).await;
+
+    let peer =
+        SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
+            .await
+            .unwrap();
+    let project = new_id();
+    let ticket = peer.ticket(project, Grant::generate());
+    let alias = ticket.alias();
+
+    let accepted = clone_into(
+        &SyncState::default(),
+        &manager,
+        &ticket,
+        destination.to_string_lossy().into_owned(),
+        project,
+        alias,
+    )
+    .await
+    .expect("an offline peer leaves an openable partial replica")
+    .unwrap();
+
+    let root = PathBuf::from(accepted.root.unwrap());
+    assert!(root.join("project.json").is_file());
+    assert!(!root.join(".wobu/accepting.json").exists());
+    assert!(manager.shares().iter().any(|share| share.project == project));
+
+    manager.shutdown().await;
+    peer.shutdown().await.unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Counts `world:changed` instead of emitting it, because an `AppHandle`

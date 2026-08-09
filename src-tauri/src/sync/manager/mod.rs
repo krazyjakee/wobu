@@ -94,7 +94,7 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use wobu_core::Id;
 use wobu_store::Project;
-use wobu_sync::{Config, Identity, Reach, SyncEndpoint};
+use wobu_sync::{Blobs, Config, Identity, Reach, SyncEndpoint};
 
 use self::membership::Accepts;
 use crate::diag;
@@ -342,6 +342,9 @@ pub struct SyncManager {
     /// second struct holding everything except the endpoint, which is the same
     /// cycle with more names in it.
     endpoint: OnceLock<SyncEndpoint>,
+    /// One machine-wide verified content store. A round scopes a cheap clone
+    /// to its replica root before it reads or places any project path.
+    blobs: Option<Blobs>,
     shares: Mutex<Shares>,
     replicas: Mutex<BTreeMap<Id, Arc<Replica>>>,
     /// Ephemeral connectivity plus the last completed round for each peer.
@@ -407,7 +410,7 @@ impl Handover for SyncManager {
 /// A `wobu-sync` failure, as something the webview can read.
 ///
 /// Everything the transport can raise is either "the other machine is not
-/// answering" or "the link broke", and both are `io.failed`, which is retryable
+/// answering" or "the link broke", and both are `sync.unreachable`, which is retryable
 /// — a peer coming back is the expected outcome of a peer-to-peer share with no
 /// seed node. `NotATicket` is the one exception and it is the user's paste, not
 /// the network's fault, so it lands on `node.invalid` where the UI will show the
@@ -422,13 +425,16 @@ impl From<wobu_sync::Error> for WobuError {
             )
             .with_detail(message),
             wobu_sync::Error::ProjectNotHeld => WobuError::new(
-                Code::Io,
+                Code::SyncUnreachable,
                 "The other machine no longer has this project. \
                  A share cannot be taken back, so this means they removed it.",
             ),
-            _ => {
-                WobuError::new(Code::Io, "Could not reach the other machine.").with_detail(message)
+            wobu_sync::Error::BlobStore { .. } => {
+                WobuError::new(Code::Io, "Wobu could not prepare local storage for synced images.")
+                    .with_detail(message)
             }
+            _ => WobuError::new(Code::SyncUnreachable, "Could not reach the other machine.")
+                .with_detail(message),
         }
     }
 }
@@ -462,11 +468,42 @@ impl SyncManager {
                     .with_detail(error.to_string())
             })?;
         }
+        // The content database is local cache, never project data. Tests place
+        // it beside their private index directory; production places it in app
+        // data. `service-root` only supplies the endpoint's serving clone with
+        // a valid root — project rounds replace it with their own root before
+        // any path is read or written.
+        let blob_home = setup
+            .index_dir
+            .as_deref()
+            .and_then(Path::parent)
+            .map(Path::to_path_buf)
+            .unwrap_or_else(wobu_store::paths::app_data_dir);
+        let service_root = blob_home.join("sync-blob-root");
+        let blobs = match std::fs::create_dir_all(&service_root) {
+            Err(error) => {
+                diag::error(format!(
+                    "sync: image transfer is unavailable; text sync will continue: {error}"
+                ));
+                None
+            }
+            Ok(()) => match Blobs::open(&service_root, blob_home.join("sync-blob-cache")).await {
+                Ok(blobs) => Some(blobs),
+                Err(error) => {
+                    diag::error(format!(
+                        "sync: image transfer is unavailable; text sync will continue: {error}"
+                    ));
+                    None
+                }
+            },
+        };
+
         let manager = Arc::new(SyncManager {
             state,
             wake,
             identity: setup.identity.clone(),
             endpoint: OnceLock::new(),
+            blobs: blobs.clone(),
             shares: Mutex::new(setup.shares),
             replicas: Mutex::new(BTreeMap::new()),
             runtime: Mutex::new(BTreeMap::new()),
@@ -477,8 +514,12 @@ impl SyncManager {
         });
 
         let accepts: Arc<Accepts> = Arc::new(Accepts(Arc::downgrade(&manager)));
-        let config =
-            Config { identity: Some(setup.identity), reach: setup.reach, ..Config::default() };
+        let config = Config {
+            identity: Some(setup.identity),
+            reach: setup.reach,
+            blobs,
+            ..Config::default()
+        };
         let endpoint = SyncEndpoint::bind(config, accepts.clone(), accepts)
             .await
             .map_err(|e| WobuError::from(e).with_detail("binding the sync endpoint"))?;
@@ -511,6 +552,14 @@ impl SyncManager {
 
     pub fn endpoint(&self) -> &SyncEndpoint {
         self.endpoint.get().expect("`start` fills this before it returns")
+    }
+
+    /// The shared content store, scoped to this replica's project folder.
+    pub fn blobs_for(&self, replica: &Replica) -> CommandResult<Option<Blobs>> {
+        self.blobs
+            .as_ref()
+            .map(|blobs| blobs.with_root(&replica.root).map_err(WobuError::from))
+            .transpose()
     }
 
     /// Where a round says the folder moved.
@@ -605,6 +654,13 @@ impl SyncManager {
             Ok(Ok(())) => diag::info("sync: endpoint closed"),
             Ok(Err(e)) => diag::error(format!("sync: endpoint shutdown failed: {e}")),
             Err(_elapsed) => diag::error("sync: endpoint shutdown timed out; dropping it"),
+        }
+        if let Some(blobs) = &self.blobs {
+            match tokio::time::timeout(SHUTDOWN_BUDGET, blobs.shutdown()).await {
+                Ok(Ok(())) => diag::info("sync: blob store closed"),
+                Ok(Err(e)) => diag::error(format!("sync: blob store shutdown failed: {e}")),
+                Err(_elapsed) => diag::error("sync: blob store shutdown timed out; dropping it"),
+            }
         }
     }
 }

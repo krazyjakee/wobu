@@ -101,6 +101,8 @@ pub struct Outcome {
     pub pushed: usize,
     /// Nodes this side handed over because the peer asked.
     pub served: usize,
+    /// Immutable asset files fetched and placed from the peer.
+    pub blobs: usize,
     /// Whether the project folder moved, either half.
     pub changed: bool,
     /// Whether the peer's manifest crossed entire. `false` means a cap bit
@@ -117,7 +119,7 @@ impl Outcome {
     /// and be here again — reporting `false` every time, which walks the
     /// interval down to its cap instead of polling hot for ever.
     pub fn did_something(&self) -> bool {
-        self.applied > 0 || self.pushed > 0 || self.served > 0
+        self.applied > 0 || self.pushed > 0 || self.served > 0 || self.blobs > 0
     }
 
     /// Whether both sides completed the exchange without leaving a version
@@ -142,11 +144,51 @@ pub async fn run(
     // optimisation.
     replica.reconcile()?;
 
-    let nodes = replica.with(|project| Ok(project.manifest()?))?;
-    let announce = blobs::announce();
+    let (nodes, mut announce) = replica.with(|project| {
+        let nodes = project.manifest()?;
+        let blobs: Vec<Blob> = project
+            .list_assets()?
+            .into_iter()
+            .map(|asset| Blob { rel_path: asset.rel_path, hash: asset.hash })
+            .collect();
+        Ok((nodes, blobs))
+    })?;
+    let blobs = manager.blobs_for(replica)?;
+    if let Some(blobs) = &blobs {
+        let offered = blobs.offer(&announce).await?;
+        if offered.refused > 0 || offered.missing > 0 || offered.stale > 0 {
+            crate::diag::error(format!(
+                "sync: could not offer {} local blobs ({} refused, {} missing, {} stale)",
+                offered.refused + offered.missing + offered.stale,
+                offered.refused,
+                offered.missing,
+                offered.stale
+            ));
+        }
+    } else {
+        // Never announce content this endpoint cannot serve.
+        announce.clear();
+    }
 
     let exchange = manifest::exchange(session, &nodes, &announce, manifest::IDLE_TIMEOUT).await?;
-    blobs::received(&exchange.blobs);
+    let fetched = match blobs {
+        Some(blobs) => {
+            blobs
+                .fetch(
+                    manager.endpoint().endpoint(),
+                    session.addr(),
+                    &exchange.blobs,
+                    wobu_sync::blobs::BLOB_TIMEOUT,
+                )
+                .await?
+        }
+        None => wobu_sync::Fetched::default(),
+    };
+    if !fetched.placed.is_empty() {
+        // Make newly arrived originals visible to the asset library before a
+        // `world:changed` refetch reaches the frontend.
+        replica.reconcile()?;
+    }
 
     let plan = replica.with(|project| Ok(project.plan_against_peer(&peer, &exchange.nodes)?))?;
 
@@ -168,11 +210,12 @@ pub async fn run(
     let outcome = Outcome {
         applied: ours.applied + theirs.applied,
         parked: ours.parked + theirs.parked,
-        refused: ours.refused + theirs.refused,
+        refused: ours.refused + theirs.refused + exchange.refused + fetched.refused,
         pushed: ours.pushed,
         served: theirs.served,
-        changed: ours.changed || theirs.changed,
-        whole: exchange.is_whole(),
+        blobs: fetched.placed.len(),
+        changed: ours.changed || theirs.changed || !fetched.placed.is_empty(),
+        whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 
     // Once per round rather than once per node. Two hundred nodes firing two
@@ -385,48 +428,6 @@ fn absorb(half: &mut Half, report: &ApplyReport) {
     }
 }
 
-/// The blob half of a round, which is #81's.
-///
-/// It is a pair of functions rather than a `todo!()` or a missing call, and that
-/// is deliberate: the manifest exchange is symmetric and takes both lists in one
-/// call, so there is exactly one place blobs enter and exactly one place they
-/// leave, and naming both now means #81 is a diff to two function bodies rather
-/// than a change to the shape of a round.
-///
-/// **What this currently says on the wire is "I hold no blobs", and that is
-/// safe** for precisely the reason `wobu-sync` writes down twice: an absence in
-/// a manifest means "never had it", never "deleted it". A peer reading our empty
-/// blob list concludes it has some files we do not and offers them; it does not
-/// conclude we removed anything, and nothing anywhere deletes an asset because a
-/// peer failed to mention it. The cost of the seam being empty is that assets do
-/// not sync yet, which is the true state of M3.
-mod blobs {
-    use super::Blob;
-
-    /// What this replica announces it holds.
-    ///
-    /// #81 fills this in by walking `assets/` and `generations/` and pairing
-    /// each file with the BLAKE3 hex the index already has. It is not done here
-    /// because hashing the asset tree on every round is a decision about I/O
-    /// budget that belongs with the transfer that needs it.
-    pub fn announce() -> Vec<Blob> {
-        Vec::new()
-    }
-
-    /// What the peer announced.
-    ///
-    /// #81 turns this into fetches: a hash we do not have is a file we do not
-    /// have. Every entry has already been through
-    /// `wobu_sync::manifest::is_syncable_rel_path`, which is a *syntax* check
-    /// and not a permission — the validation still has to happen on the near
-    /// side of whatever join places the file, because a check performed in a
-    /// different crate is one that stops being performed the day somebody adds a
-    /// second caller.
-    pub fn received(blobs: &[Blob]) {
-        let _ = blobs;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -491,6 +492,7 @@ mod tests {
         assert!(Outcome { applied: 1, ..Outcome::default() }.did_something());
         assert!(Outcome { pushed: 1, ..Outcome::default() }.did_something());
         assert!(Outcome { served: 1, ..Outcome::default() }.did_something());
+        assert!(Outcome { blobs: 1, ..Outcome::default() }.did_something());
         assert!(!Outcome::default().did_something());
     }
 
@@ -506,15 +508,5 @@ mod tests {
             !Outcome { whole: true, refused: 1, ..Outcome::default() }.converged(),
             "a refused node was not accepted by this replica"
         );
-    }
-
-    #[test]
-    fn an_empty_blob_manifest_is_an_absence_and_absences_are_never_deletions() {
-        // The seam #81 fills, pinned so that "we send nothing" stays a stated
-        // position rather than an oversight somebody later reads as a bug. The
-        // safety of it is `wobu-sync`'s rule, not this file's: a peer reading an
-        // empty list concludes it has files we do not, and offers them.
-        assert!(blobs::announce().is_empty());
-        blobs::received(&[]);
     }
 }

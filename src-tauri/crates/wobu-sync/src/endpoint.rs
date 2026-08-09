@@ -70,7 +70,7 @@ pub struct Config {
     /// struct that ever holds a `Config`.
     pub identity: Option<Identity>,
     pub reach: Reach,
-    /// The project's blob store, if this endpoint is to move file content.
+    /// The machine's blob store, if this endpoint is to move file content.
     ///
     /// `None` binds `wobu/sync/1` alone: the opening exchange and the manifest
     /// swap work, and a peer that tries to fetch a blob is refused by TLS for
@@ -83,9 +83,10 @@ pub struct Config {
     /// added afterwards is not expressible, and an `Option` that has to be
     /// supplied before the router exists is exactly what a config field is.
     ///
-    /// One store per project, and the same one for the whole life of the
-    /// endpoint: it is what serves peers *and* what receives from them, and two
-    /// would be two answers to "do I have this hash".
+    /// One store for the whole life of the endpoint: it is what serves peers
+    /// and what receives from them, and two would be two answers to "do I have
+    /// this hash". The app scopes cheap clones of the handle to each project
+    /// root before it reads or places a path.
     pub blobs: Option<Blobs>,
     /// How long a peer gets to complete the opening exchange.
     ///
@@ -312,7 +313,7 @@ impl SyncEndpoint {
         Ok(SyncEndpoint { router, open_timeout, blobs: config.blobs })
     }
 
-    /// This project's blob store, if one was configured.
+    /// This machine's blob store, if one was configured.
     ///
     /// The fetching half of #81. The serving half needs no method — it is inside
     /// the router, answering peers, from the moment [`SyncEndpoint::bind`]

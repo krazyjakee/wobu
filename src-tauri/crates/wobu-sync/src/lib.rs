@@ -211,14 +211,14 @@
 //!   Content is verified by `iroh-blobs` as it arrives and staged through
 //!   `.wobu/tmp`, so a reader never sees half a file and an interrupted transfer
 //!   leaves nothing at a real path.
-//!   What is *not* done is the wiring, for the same reason as #76 and #79, plus
-//!   two things that are somebody else's by construction: **the policy** — #81
-//!   wants `assets/thumbs/` eagerly and originals on demand, and [`Blobs::fetch`]
-//!   takes a list precisely so that the caller decides — and **the generations
-//!   half of the list**, because `wobu-store` has a lister for
-//!   `assets/originals` and nothing at all for `generations/<YYYY-MM>/<ULID>.json`.
-//!   [`Blobs::describe`] closes the hash half of that gap; the directory listing
-//!   is still owed.
+//!   The shell now announces and fetches every indexed original during a round,
+//!   then reconciles those arrivals into the local asset index before waking the
+//!   window. Thumbnails remain local derived data and are drawn on demand from
+//!   the received original. What is not yet assembled by the shell is the
+//!   generations half of the list: `wobu-store` has a lister for indexed
+//!   originals and no public lister for
+//!   `generations/<YYYY-MM>/<ULID>.json`. [`Blobs::describe`] closes the hash
+//!   half of that gap; the directory listing is still owed.
 //! - **#82 `SyncManager`** — [`Sessions`] is the trait it implements, and the
 //!   `Router`'s abort-on-drop is why it must exist.
 //! - **#83 status and presence** — [`Session::is_relayed`] now,

@@ -58,11 +58,11 @@
 //!
 //! This is also why nothing here has its own [`Code`](crate::error::Code).
 //! `error.rs` owns that taxonomy and every string in it appears in
-//! `src/lib/api.ts`; a sync error is either "could not reach the other machine"
-//! (`io.failed`, retryable, which is true — they may come back) or "that is not
-//! a share link" (`node.invalid`). Adding `sync.*` codes is a change to the
-//! frontend contract and belongs with #83's status UI, which is the first thing
-//! that will actually branch on one.
+//! `src/lib/api/call.ts`; a sync error is either "could not reach the other
+//! machine" (`sync.unreachable`, retryable, which is true — they may come back)
+//! or "that is not a share link" (`node.invalid`). Keeping transport failures
+//! out of `io.failed` matters because that code's UI guidance is specifically
+//! about local disk space and project-folder permissions.
 
 pub mod bodies;
 

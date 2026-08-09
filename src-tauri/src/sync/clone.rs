@@ -77,7 +77,7 @@ pub(super) async fn accept_ticket(
 /// the call site. Kept whole rather than split further because the scaffold and
 /// the cleanup are two halves of one guarantee: a clone that fails leaves
 /// nothing behind that a retry would trip over.
-async fn clone_into(
+pub(super) async fn clone_into(
     sync: &SyncState,
     manager: &Arc<SyncManager>,
     ticket: &Ticket,
@@ -99,6 +99,26 @@ async fn clone_into(
     };
     match downloaded {
         Ok(()) => {
+            scaffold.complete();
+            manager.start_poller(project);
+            Ok(Some(Accepted {
+                project,
+                alias,
+                joined: false,
+                root: Some(root.to_string_lossy().into_owned()),
+            }))
+        }
+        // A peer going offline during the first round does not make the local
+        // project unusable. The scaffold is a valid project, every node write
+        // is atomic, and every blob is verified and renamed individually. Open
+        // what arrived and let the retained ticket's poller carry on later.
+        // Returning an error here used to strand the newly created folder on
+        // the launcher and force the user to find and open it by hand.
+        Err(error) if error.retryable => {
+            diag::error(format!(
+                "sync: initial clone round did not finish; opening the partial replica: {}",
+                error.message
+            ));
             scaffold.complete();
             manager.start_poller(project);
             Ok(Some(Accepted {

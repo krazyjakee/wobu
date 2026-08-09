@@ -31,6 +31,7 @@ export type ErrorCode =
   | 'asset.not_found'
   | 'asset.in_use'
   | 'share.unmounted'
+  | 'sync.unreachable'
   | 'provider.no_key'
   | 'provider.keychain_unavailable'
   | 'provider.bad_key'

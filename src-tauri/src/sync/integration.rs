@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;
-use wobu_core::{Id, NodeKind, new_id};
+use wobu_core::{AssetKind, Id, NodeKind, new_id};
 use wobu_store::{Project, SaveOutcome};
 use wobu_sync::{
     Config, Disposition, Grant, Identity, Projects, Reach, Session, Sessions, SyncEndpoint, Ticket,
@@ -240,6 +240,18 @@ fn empty_clone(from: &Path, to: &Path) {
     fs::copy(from.join("project.json"), to.join("project.json")).unwrap();
 }
 
+/// A PNG header is enough for the store's import probe, and gives this test
+/// real content-addressed bytes without checking a binary fixture into source.
+fn png(width: u32, height: u32) -> Vec<u8> {
+    let mut out = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    out.extend_from_slice(&13u32.to_be_bytes());
+    out.extend_from_slice(b"IHDR");
+    out.extend_from_slice(&width.to_be_bytes());
+    out.extend_from_slice(&height.to_be_bytes());
+    out.extend_from_slice(&[8, 6, 0, 0, 0]);
+    out
+}
+
 fn node_path(root: &Path, id: Id, index: &Path) -> PathBuf {
     let project = Project::open_at_index(root, index).unwrap();
     let rel = project.index().rel_path_of(id).unwrap().unwrap();
@@ -360,6 +372,34 @@ fn a_fresh_clone_opens_cleanly_and_matches_the_source_after_one_round() {
         pair.a.sync(pair.project).await;
         assert_eq!(pair.a.manifest(pair.project), pair.b.manifest(pair.project));
         assert_eq!(pair.a.notes(pair.project, pair.node), pair.b.notes(pair.project, pair.node));
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn a_fresh_clone_receives_image_bytes_and_indexes_them_after_one_round() {
+    run_async(async {
+        let pair = Pair::new(true).await;
+        let bytes = png(37, 19);
+        let asset = pair
+            .a
+            .manager()
+            .replica(pair.project)
+            .unwrap()
+            .with(|project| Ok(project.import_asset(&bytes, AssetKind::Reference)?.asset))
+            .unwrap();
+
+        pair.a.sync(pair.project).await;
+
+        assert_eq!(fs::read(pair.b.root.join(&asset.rel_path)).unwrap(), bytes);
+        let received = pair
+            .b
+            .manager()
+            .replica(pair.project)
+            .unwrap()
+            .with(|project| Ok(project.list_assets()?))
+            .unwrap();
+        assert!(received.iter().any(|candidate| candidate.id == asset.id));
         pair.stop().await;
     });
 }
