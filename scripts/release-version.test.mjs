@@ -76,6 +76,8 @@ test('check names every drifted app stamp and keeps schemas separate', async () 
 
 test('stamping updates every app package but never schema versions or unrelated crates', async () => {
   const root = await fixture()
+  const tauriFile = path.join(root, 'src-tauri/tauri.conf.json')
+  const tauriBefore = await readFile(tauriFile, 'utf8')
   await stampAppVersion(root, '1.2.3-beta.1')
   const { errors } = await checkRelease(root)
   assert.deepEqual(errors, [])
@@ -87,6 +89,12 @@ test('stamping updates every app package but never schema versions or unrelated 
   const lock = await readFile(path.join(root, 'src-tauri/Cargo.lock'), 'utf8')
   assert.match(lock, /name = "not-wobu"\nversion = "0\.1\.0"/)
   assert.match(lock, /name = "wobu-core"\nversion = "1\.2\.3-beta\.1"/)
+  const tauriAfter = await readFile(tauriFile, 'utf8')
+  assert.equal(
+    tauriAfter.replace('1.2.3-beta.1', '0.1.0'),
+    tauriBefore,
+    'stamping the version must not reformat unrelated Tauri configuration',
+  )
 })
 
 test('in-place updates require updater artifacts to stay enabled', async () => {

@@ -206,7 +206,7 @@ export async function stampAppVersion(root, version, options = {}) {
   const release = await readJson(releaseFile)
   const packageJson = await readJson(packageFile)
   const packageLock = await readJson(packageLockFile)
-  const tauri = await readJson(tauriFile)
+  let tauri = await readFile(tauriFile, 'utf8')
   let cargo = await readFile(cargoFile, 'utf8')
   let cargoLock = await readFile(cargoLockFile, 'utf8')
 
@@ -215,7 +215,12 @@ export async function stampAppVersion(root, version, options = {}) {
   packageLock.version = version
   if (!packageLock.packages?.['']) throw new Error('package-lock.json has no root package')
   packageLock.packages[''].version = version
-  tauri.version = version
+  tauri = replaceOnce(
+    tauri,
+    /("version"\s*:\s*")[^"]+(")/,
+    `$1${version}$2`,
+    'Tauri application version',
+  )
   cargo = replaceOnce(
     cargo,
     /(\[workspace\.package\][\s\S]*?\nversion = ")[^"]+(")/,
@@ -239,7 +244,7 @@ export async function stampAppVersion(root, version, options = {}) {
       { target: releaseFile, data: json(release) },
       { target: packageFile, data: json(packageJson) },
       { target: packageLockFile, data: json(packageLock) },
-      { target: tauriFile, data: json(tauri) },
+      { target: tauriFile, data: tauri },
       { target: cargoFile, data: cargo },
       { target: cargoLockFile, data: cargoLock },
     ],
