@@ -218,6 +218,15 @@ pub async fn run(
         whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 
+    // A whole exchange with nothing parked or refused is the first moment a
+    // clone can be called complete, and it is the same bar the UI uses to say
+    // "last synced" — nothing weaker will do. A round that moved every node but
+    // capped a manifest page has not seen the whole world and must not claim to
+    // have received it.
+    if outcome.converged() {
+        manager.mark_arrived(replica.project(), replica.root());
+    }
+
     // Once per round rather than once per node. Two hundred nodes firing two
     // hundred refetches would be worse than not refetching at all, and
     // `wobu-store` cannot emit — it has no `AppHandle` and must not learn how.

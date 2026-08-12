@@ -105,6 +105,13 @@ making a second one. If that copy has been deleted, or lives on a drive that is 
 asks where to put a fresh one — so deleting a half-finished copy and pasting the ticket again is a
 way out rather than a dead end.
 
+> **A copy that stops half way is kept, not thrown away** If the sender goes offline part way
+> through, Wobu opens what arrived and keeps trying — and the status bar says **this copy has not
+> finished arriving**. Pictures travel before the pages that use them, so a half-arrived world looks
+> like a full assets tab and no characters. That is the transfer being unfinished, not the world
+> being broken: leave it open with the other person's Wobu running and the rest follows. The line
+> goes away by itself on the first complete round.
+
 > **A ticket is a key to your world** Send it privately. Tickets do not expire, and you cannot take
 > one back on its own. **Stop sharing…** cancels every ticket this installation ever made for this
 > world and forgets the machines it was talking to — but it cannot delete copies people have already

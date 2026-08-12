@@ -18,6 +18,13 @@ export interface ProjectSyncStatus {
   project: string
   state: SyncPhase
   peers: SyncPeerStatus[]
+  /**
+   * A copy whose first round never finished, which is a fact about the folder
+   * and not about the connection — it survives a restart and is cleared only by
+   * a complete round. A round sends every asset before any entity, so this is
+   * exactly the state where the assets tab is full and the world looks empty.
+   */
+  arriving: boolean
 }
 
 export interface SharedProjectStatus {

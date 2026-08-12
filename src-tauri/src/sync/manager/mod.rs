@@ -164,6 +164,10 @@ impl RuntimeProject {
             project,
             state: self.state,
             peers: self.peers.values().cloned().collect(),
+            // Filled in by the two callers that know the folder, because this
+            // struct is the *runtime* half of the status and whether a clone
+            // finished arriving is a fact about a directory.
+            arriving: false,
         }
     }
 }
@@ -226,6 +230,10 @@ impl Replica {
 
     pub fn project(&self) -> Id {
         self.project
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     /// Do one thing with this project, whoever is holding it.

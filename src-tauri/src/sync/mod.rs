@@ -335,6 +335,13 @@ pub struct ProjectSyncStatus {
     pub project: Id,
     pub state: SyncPhase,
     pub peers: Vec<SyncPeerStatus>,
+    /// Whether this replica is a clone whose first round never finished.
+    ///
+    /// Separate from [`SyncPhase`] because it is not a phase: it outlives the
+    /// connection, outlives the app, and is true of a folder rather than of a
+    /// moment. A world that is half here reads as `idle · offline` otherwise —
+    /// which is the truth about the socket and a lie about the world.
+    pub arriving: bool,
 }
 
 /// This installation, as a person reads it.

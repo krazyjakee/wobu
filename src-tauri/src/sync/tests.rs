@@ -5,7 +5,7 @@ use wobu_core::new_id;
 use wobu_store::Project;
 use wobu_sync::{Grant, Projects, SyncEndpoint};
 
-use super::clone::{accept_ticket, clone_into, create_clone_scaffold};
+use super::clone::{accept_ticket, clone_into, create_clone_scaffold, still_arriving};
 use super::*;
 use crate::state::Handover;
 use bodies::Request;
@@ -111,9 +111,26 @@ async fn a_retryable_first_round_failure_opens_the_scaffold_and_keeps_the_ticket
     .unwrap();
 
     let root = PathBuf::from(accepted.root.unwrap());
-    assert!(root.join("project.json").is_file());
-    assert!(!root.join(".wobu/accepting.json").exists());
+    assert!(root.join("project.json").is_file(), "the partial replica is a project and opens");
+    // …and it says so. A round sends every asset before any node body, so the
+    // folder this leaves behind has a full assets tab and an empty world, which
+    // reads as broken rather than unfinished — the reason somebody deleted one
+    // and could not then re-accept the ticket. The marker outlives a restart
+    // and only a converged round clears it.
+    assert!(still_arriving(&root), "an unfinished clone forgot that it was unfinished");
+    assert!(
+        manager
+            .project_statuses()
+            .iter()
+            .any(|status| status.project == project && status.arriving),
+        "the status bar was not told the copy is still arriving"
+    );
     assert!(manager.shares().iter().any(|share| share.project == project));
+
+    // The same round that first says "last synced" is the one that clears it.
+    manager.mark_arrived(project, &root);
+    assert!(!still_arriving(&root));
+    assert!(manager.project_statuses().iter().all(|status| !status.arriving));
 
     manager.shutdown().await;
     peer.shutdown().await.unwrap();

@@ -18,7 +18,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }))
 
 function snapshot(state: ProjectSyncStatus['state']): ProjectSyncStatus {
-  return { project: 'p1', state, peers: [] }
+  return { project: 'p1', state, peers: [], arriving: false }
 }
 
 function Probe() {

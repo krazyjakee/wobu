@@ -3,6 +3,7 @@ use wobu_core::Id;
 use wobu_sync::Ticket;
 
 use super::*;
+use crate::sync::clone;
 use crate::sync::{ProjectSyncStatus, SyncPeerStatus, SyncPhase};
 
 impl SyncManager {
@@ -18,10 +19,12 @@ impl SyncManager {
                         project: share.project,
                         state: SyncPhase::Idle,
                         peers: Vec::new(),
+                        arriving: false,
                     },
                     |status| status.snapshot(share.project),
                 );
 
+                snapshot.arriving = clone::still_arriving(&share.root);
                 Self::add_known_peers(&mut snapshot, share.peers);
                 snapshot
             })
@@ -64,9 +67,38 @@ impl SyncManager {
 
     pub(super) fn with_known_peers(&self, mut snapshot: ProjectSyncStatus) -> ProjectSyncStatus {
         if let Some(share) = self.shares.lock().get(snapshot.project).cloned() {
+            // One `is_file` on a local path, per status emission rather than per
+            // node, and it is read here rather than cached because the thing it
+            // describes is a file another part of this process deletes.
+            snapshot.arriving = clone::still_arriving(&share.root);
             Self::add_known_peers(&mut snapshot, share.peers);
         }
         snapshot
+    }
+
+    /// The first round finished: this replica is no longer half a world.
+    ///
+    /// Removing the marker is what makes that durable, and announcing is what
+    /// takes "still arriving" off the status bar without waiting for the next
+    /// phase change — a round that converges and then finds nothing to do would
+    /// otherwise leave the sentence up until somebody edited something.
+    pub(in crate::sync) fn mark_arrived(&self, project: Id, root: &std::path::Path) {
+        let marker = clone::clone_marker(root);
+        if !marker.is_file() {
+            return;
+        }
+        match std::fs::remove_file(&marker) {
+            Ok(()) => diag::info(format!("sync: {project} finished arriving")),
+            // Left for the next converged round rather than propagated: the
+            // world is complete either way, and failing a round that succeeded
+            // over a note this machine keeps for itself would be the tail
+            // wagging the dog.
+            Err(error) => {
+                diag::error(format!("sync: could not clear the clone marker: {error}"));
+                return;
+            }
+        }
+        self.announce_project(project);
     }
 
     pub(super) fn set_phase(&self, project: Id, state: SyncPhase) {

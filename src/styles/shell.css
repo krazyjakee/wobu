@@ -287,6 +287,12 @@
 .status .sync-caveat {
   color: var(--text-dim);
 }
+/* Louder than the rest of the bar on purpose: it is the one line that explains
+   a world which looks broken, and it is only ever up until the first complete
+   round. */
+.status .sync-arriving {
+  color: var(--warn);
+}
 .status-link {
   border: 0;
   padding: 0;

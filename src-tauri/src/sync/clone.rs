@@ -119,7 +119,16 @@ pub(super) async fn clone_into(
                 "sync: initial clone round did not finish; opening the partial replica: {}",
                 error.message
             ));
-            scaffold.complete();
+            // The marker deliberately stays, which is the difference between
+            // this arm and the one above. A round transfers every asset before
+            // any node body — see `round::run` — so a first round that stops
+            // early leaves the assets tab full and the world empty, and that
+            // reads as a broken project rather than an unfinished one. The
+            // person who reported it deleted the folder to start over. Left in
+            // place the marker outlives a restart, which is what lets
+            // [`still_arriving`] keep saying so on the status bar until a round
+            // converges and [`SyncManager::mark_arrived`] clears it.
+            std::mem::drop(scaffold);
             manager.start_poller(project);
             Ok(Some(Accepted {
                 project,
@@ -145,6 +154,25 @@ struct CloneMarker {
 pub(super) struct CloneScaffold {
     pub(super) root: PathBuf,
     pub(super) marker: PathBuf,
+}
+
+/// Where a clone records that it has not finished arriving.
+///
+/// Inside `.wobu/`, with the tmp and session directories, because it is this
+/// machine's note to itself about a transfer and not part of the world: it must
+/// never travel to a peer, and a person looking at the folder in Obsidian must
+/// never see it.
+pub(super) fn clone_marker(root: &Path) -> PathBuf {
+    root.join(".wobu/accepting.json")
+}
+
+/// Whether a folder is a clone whose first round never finished.
+///
+/// The marker is the only durable record of that. Counting nodes would not do:
+/// a world can legitimately be small, and a replica that arrived whole and was
+/// then emptied by its owner is not the same thing as one that never arrived.
+pub(super) fn still_arriving(root: &Path) -> bool {
+    clone_marker(root).is_file()
 }
 
 impl CloneScaffold {
@@ -180,7 +208,7 @@ pub(super) fn create_clone_scaffold(parent: &Path, project: Id) -> CommandResult
             "The clone destination is not a regular folder.",
         ));
     }
-    let marker = root.join(".wobu/accepting.json");
+    let marker = clone_marker(&root);
     let created = (|| -> wobu_store::Result<()> {
         let path = root.join("project.json");
         if !created_root {

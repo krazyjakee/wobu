@@ -20,6 +20,7 @@ function status(over: Partial<ProjectSyncStatus> = {}): ProjectSyncStatus {
     project: 'p1',
     state: 'idle',
     peers: [],
+    arriving: false,
     ...over,
   }
 }
@@ -90,6 +91,23 @@ describe('peer sync in the status bar', () => {
     expect(screen.getByText('sync · catching up')).toBeTruthy()
     expect(screen.getByText('· amber-heron connected')).toBeTruthy()
     expect(screen.queryByText(/last synced/)).toBeNull()
+  })
+
+  it('says a copy is still arriving rather than letting it read as a broken world', () => {
+    // The state somebody deleted a folder over: a round sends every asset
+    // before any entity, so an interrupted first clone has a full assets tab
+    // and nothing that owns them. `offline` is the truth about the socket and
+    // a lie about the world, so it cannot be the only thing on the bar.
+    open(status({ state: 'offline', arriving: true }))
+
+    expect(screen.getByText(/this copy has not finished arriving/)).toBeTruthy()
+    expect(screen.getByText(/entities may still be missing/)).toBeTruthy()
+  })
+
+  it('drops the arriving line once the copy is whole, even while offline', () => {
+    open(status({ state: 'offline', arriving: false }))
+    expect(screen.queryByText(/has not finished arriving/)).toBeNull()
+    expect(screen.getByText('sync · offline')).toBeTruthy()
   })
 
   it('does not show a sync claim for a project this installation has not shared', () => {

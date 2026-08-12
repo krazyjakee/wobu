@@ -80,6 +80,15 @@ export function StatusBar({
           />
           <span>sync · {syncStateLabel(sync.state)}</span>
           {connectedText(sync.peers) && <span>· {connectedText(sync.peers)}</span>}
+          {/* Ahead of "last synced", because it is the more important sentence
+              and there is never both: `arriving` is cleared by the same
+              converged round that first writes a `lastConvergedAt`. */}
+          {sync.arriving && (
+            <span className="sync-arriving">
+              · this copy has not finished arriving — assets come first, so entities may still be
+              missing
+            </span>
+          )}
           {last && (
             <span>
               · last synced with {last.alias} · {relativeTime(last.at, now)}
