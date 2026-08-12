@@ -142,6 +142,37 @@ impl SyncManager {
             // `Clone` means.
             return Disposition::Clone;
         };
+        // A share records where this machine *last* put a world, and nothing
+        // tells it when somebody deletes that folder in a file manager. The
+        // entry outlives the directory, is registered as a replica at every
+        // startup, and so made `present` answer yes — and joining then handed
+        // the launcher a path with no `project.json` in it. The dead end that
+        // reported this: sync half-finished behind a firewall, the user deleted
+        // the clone to start again, and every subsequent paste of the same
+        // ticket returned the folder they had just deleted. Only editing
+        // `shares.json` by hand got out of it.
+        //
+        // Cloning again is the honest answer, and the stale replica has to go
+        // with it: `register` never replaces an entry that already exists, so
+        // leaving it would point the new clone's first round at the folder that
+        // is not there. Removing it also winds down its poller, which returns
+        // when the replica it was spawned for disappears. The *share* stays —
+        // it holds the grant every ticket this machine ever minted for the
+        // project names, and `invite` moves its root when the clone lands.
+        //
+        // `project_is_present` probes `project.json` rather than the directory
+        // because an unmounted drive usually leaves its mountpoint behind. That
+        // makes this fire for a world that is merely offline too, which is the
+        // right trade: the alternative is joining a replica no round can read,
+        // and somebody who just pasted a ticket is asking for a local copy.
+        if !wobu_store::paths::project_is_present(&root) {
+            diag::error(format!(
+                "sync: the folder recorded for {project} is gone ({}); offering to clone it again",
+                root.display()
+            ));
+            self.replicas.lock().remove(&project);
+            return Disposition::Clone;
+        }
 
         let mut shares = self.shares.lock();
         shares.invite(project, &root, ticket.clone());

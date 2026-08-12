@@ -100,6 +100,11 @@ it to you and copies it. The other person chooses **Accept ticket…** on the op
 the whole ticket in, and picks where their copy should live. Wobu shows the transfer happening, lets
 them cancel, and opens the copy when it is ready.
 
+Pasting a ticket for a world that machine already has opens the copy it already has instead of
+making a second one. If that copy has been deleted, or lives on a drive that is not plugged in, Wobu
+asks where to put a fresh one — so deleting a half-finished copy and pasting the ticket again is a
+way out rather than a dead end.
+
 > **A ticket is a key to your world** Send it privately. Tickets do not expire, and you cannot take
 > one back on its own. **Stop sharing…** cancels every ticket this installation ever made for this
 > world and forgets the machines it was talking to — but it cannot delete copies people have already

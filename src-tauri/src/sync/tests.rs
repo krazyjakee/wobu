@@ -201,7 +201,11 @@ async fn a_ticket_for_a_project_already_here_joins_rather_than_cloning() {
 
     let mine = new_id();
     let theirs = new_id();
-    manager.share(mine, &dir.join("Ashfall.wobu"));
+    // A folder that is really there, because "already held" means a replica
+    // whose `project.json` can still be found — see
+    // [`a_ticket_for_a_share_whose_folder_was_deleted_offers_to_clone_again`].
+    let held_root = create_clone_scaffold(&dir, mine).expect("a folder for the held project").root;
+    manager.share(mine, &held_root);
 
     let peer =
         SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
@@ -227,6 +231,48 @@ async fn a_ticket_for_a_project_already_here_joins_rather_than_cloning() {
     let reloaded = Shares::load_from(dir.join("shares.json"));
     assert_eq!(reloaded.all().len(), 1);
     assert_eq!(reloaded.get(mine).unwrap().peers.len(), 1);
+
+    manager.shutdown().await;
+    peer.shutdown().await.unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_ticket_for_a_share_whose_folder_was_deleted_offers_to_clone_again() {
+    // The dead end this is written against: sync half-finished behind a
+    // firewall, the user deleted the clone in Explorer to start over, and every
+    // subsequent paste of the same ticket returned the folder they had just
+    // deleted — "… is not a Wobu project (no project.json)" — with no folder
+    // picker in between, because the share outlived the directory and made the
+    // ticket look like a join. Nothing in the app could clear it.
+    let dir = scratch("sync-vanished");
+    let state = AppState::default();
+    let manager = manager(&state, &dir).await;
+
+    let project = new_id();
+    let root = create_clone_scaffold(&dir, project).expect("a cloned folder").root;
+    manager.share(project, &root);
+
+    let peer =
+        SyncEndpoint::bind(wobu_sync::Config::loopback(), Arc::new(Nothing), Arc::new(Nothing))
+            .await
+            .unwrap();
+    let ticket = peer.ticket(project, Grant::generate());
+    assert_eq!(manager.accept(&ticket), Disposition::Join, "the folder is still there");
+
+    std::fs::remove_dir_all(&root).unwrap();
+
+    assert_eq!(manager.accept(&ticket), Disposition::Clone);
+    // The replica goes with the folder, because `register` never replaces one
+    // that already exists: leaving it would point the new clone's first round
+    // at the directory that is not there.
+    assert!(manager.replica(project).is_none(), "the stale replica outlived its folder");
+    // The share does not, because it holds the grant every ticket this machine
+    // ever minted for the project names. `invite` moves its root when the new
+    // clone lands.
+    let shares = manager.shares();
+    assert_eq!(shares.len(), 1, "{shares:?}");
+    assert_eq!(shares[0].project, project);
 
     manager.shutdown().await;
     peer.shutdown().await.unwrap();
