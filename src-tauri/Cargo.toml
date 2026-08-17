@@ -2,7 +2,7 @@
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 # Inherited by every crate rather than written eight times. `cargo metadata`
 # reads this, which is what keeps Wobu's own crates out of the third-party
