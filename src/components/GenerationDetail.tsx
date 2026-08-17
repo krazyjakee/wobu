@@ -12,6 +12,7 @@ import { layerLabel } from '../lib/kinds'
 import { sectionLabel } from '../lib/prompt'
 import { loraStateLabel } from '../lib/stateLabels'
 import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
+import { ImageViewer } from './ImageViewer'
 import { Modal } from './Modal'
 
 export function GenerationDetail({
@@ -285,30 +286,13 @@ export function GenerationDetail({
         </section>
       </div>
       {imageOpen && imageSrc && (
-        <Modal
-          className="image-viewer"
-          scrimClassName="image-viewer-scrim"
-          titleId="generation-image-viewer-title"
-          descriptionId="generation-image-viewer-description"
+        <ImageViewer
+          src={imageSrc}
+          alt={generation.compiledPrompt}
+          title="Full-size generated image"
+          description="The original generated image. Press Escape, or use Close, to go back to the details."
           onClose={() => setImageOpen(false)}
-        >
-          <h2 id="generation-image-viewer-title" className="modal-sr-only">
-            Full-size generated image
-          </h2>
-          <p id="generation-image-viewer-description" className="modal-sr-only">
-            The original generated image. Press Escape, or use Close, to go back to the details.
-          </p>
-          <img src={imageSrc} alt={generation.compiledPrompt} />
-          <button
-            className="ibtn image-viewer-close"
-            type="button"
-            onClick={() => setImageOpen(false)}
-            aria-label="Close full-size image"
-            data-modal-initial-focus
-          >
-            ×
-          </button>
-        </Modal>
+        />
       )}
     </Modal>
   )

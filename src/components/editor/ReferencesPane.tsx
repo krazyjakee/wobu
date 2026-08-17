@@ -10,6 +10,7 @@ import { useAssets, useLinkAsset, useSetCoverAsset } from '../../lib/queries'
 import { Combobox } from '../Combobox'
 import { ContextMenu, MenuItem, MenuLabel, MenuSeparator } from '../ContextMenu'
 import { Icon } from '../Icon'
+import { ReferenceDetail } from './ReferenceDetail'
 
 type Autosave = ReturnType<typeof useAutosaveNode>
 type ImportState = 'queued' | 'importing' | 'linking' | 'done' | 'failed' | 'cancelled'
@@ -24,6 +25,12 @@ type ImportItem = {
 }
 type ImportInput =
   { source: 'path'; name: string; path: string } | { source: 'file'; name: string; file: File }
+type ReferenceViewer = {
+  link: AssetLink
+  position: number
+  cover: boolean
+  thumbnailSrc: string | null
+}
 
 const DEFAULT_ROLE: AssetRole = 'full_ref'
 const TILE_MIN = 196
@@ -53,6 +60,7 @@ export function ReferencesPane({
   const [imports, setImports] = useState<ImportItem[]>([])
   const [importedAssets, setImportedAssets] = useState<Record<string, Asset>>({})
   const [draggingFiles, setDraggingFiles] = useState(false)
+  const [viewer, setViewer] = useState<ReferenceViewer | null>(null)
   const importId = useRef(0)
   const importChain = useRef<Promise<void>>(Promise.resolve())
   const importAborts = useRef(new Set<AbortController>())
@@ -228,6 +236,7 @@ export function ReferencesPane({
   const importActive = imports.some(
     (item) => item.state === 'queued' || item.state === 'importing' || item.state === 'linking',
   )
+  const viewerAsset = viewer ? assetIndex.get(viewer.link.assetId) : undefined
 
   return (
     <section
@@ -306,7 +315,22 @@ export function ReferencesPane({
         readOnly={readOnly || importActive}
         onChange={updateLinks}
         onCover={(assetId) => setCover.mutate({ nodeId: node.id, assetId })}
+        onOpen={setViewer}
       />
+
+      {viewer && (
+        <ReferenceDetail
+          asset={viewerAsset}
+          link={viewer.link}
+          nodeName={node.name}
+          position={viewer.position}
+          cover={viewer.cover}
+          thumbnailSrc={viewer.thumbnailSrc}
+          roleName={roleLabel(viewer.link.role)}
+          sizeLabel={viewerAsset ? formatBytes(viewerAsset.bytes) : null}
+          onClose={() => setViewer(null)}
+        />
+      )}
 
       {!readOnly && draggingFiles && (
         <div className="references-drop">Drop images to import and attach</div>
@@ -366,6 +390,7 @@ function VirtualReferenceGrid({
   readOnly,
   onChange,
   onCover,
+  onOpen,
 }: {
   links: AssetLink[]
   assets: Map<string, Asset>
@@ -373,6 +398,7 @@ function VirtualReferenceGrid({
   readOnly: boolean
   onChange: (links: AssetLink[]) => void
   onCover: (assetId: string | null) => void
+  onOpen: (viewer: ReferenceViewer) => void
 }) {
   const viewport = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 800, height: 600 })
@@ -488,6 +514,16 @@ function VirtualReferenceGrid({
               onUpdate={(patch) => update(index, patch)}
               onRemove={() => removeAt(index)}
               onCover={() => coverAt(index)}
+              onOpen={() =>
+                onOpen({
+                  link,
+                  position: index + 1,
+                  cover: coverAssetId === link.assetId,
+                  thumbnailSrc: thumbs.get(link.assetId)
+                    ? convertFileSrc(thumbs.get(link.assetId) as string)
+                    : null,
+                })
+              }
               onMove={(to) => move(index, to)}
               onDragStart={() => setDragged(index)}
               onDrop={() => {
@@ -682,6 +718,7 @@ function ReferenceTile({
   onUpdate,
   onRemove,
   onCover,
+  onOpen,
   onMove,
   onDragStart,
   onDrop,
@@ -703,6 +740,7 @@ function ReferenceTile({
   onUpdate: (patch: Partial<AssetLink>) => void
   onRemove: () => void
   onCover: () => void
+  onOpen: () => void
   onMove: (index: number) => void
   onDragStart: () => void
   onDrop: () => void
@@ -736,14 +774,20 @@ function ReferenceTile({
         onDrop()
       }}
     >
-      <div className="reference-image">
+      <button
+        className="reference-image"
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open reference ${index + 1} details`}
+      >
         {thumb ? (
           <img src={convertFileSrc(thumb)} alt={`${roleLabel(link.role)} reference`} />
         ) : (
           <span>{thumb === null ? 'Preview failed' : 'Loading preview…'}</span>
         )}
         {isCover && <b>Cover</b>}
-      </div>
+        <span className="reference-open-hint">View details</span>
+      </button>
       <div className="reference-controls">
         {/*
           A role already spoken for on another reference is drawn and announced

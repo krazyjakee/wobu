@@ -8,8 +8,8 @@ import { useAssets, useAssetUsages, useDeleteAsset, useLinkAsset } from '../lib/
 import { useUI } from '../store/ui'
 import { Combobox } from './Combobox'
 import { ConfirmSheet } from './ConfirmSheet'
+import { ImageViewer } from './ImageViewer'
 import { LazyAssetThumbnail } from './AssetMedia'
-import { Modal } from './Modal'
 import { TipButton } from './Tooltip'
 import { useVirtualCardWindow } from './useVirtualCardWindow'
 
@@ -600,31 +600,13 @@ function AssetDetails({
       ) : null}
 
       {fullSize && (
-        <Modal
-          className="image-viewer"
-          scrimClassName="image-viewer-scrim"
-          titleId="asset-viewer-title"
-          descriptionId="asset-viewer-description"
+        <ImageViewer
+          src={fullSize}
+          alt={`Asset ${asset.id} at full size`}
+          title="Full-size asset"
+          description={`The original image for asset ${asset.id}. Press Escape, or use Close, to go back to the library.`}
           onClose={() => setFullSize(null)}
-        >
-          <h2 id="asset-viewer-title" className="modal-sr-only">
-            Full-size asset
-          </h2>
-          <p id="asset-viewer-description" className="modal-sr-only">
-            The original image for asset {asset.id}. Press Escape, or use Close, to go back to the
-            library.
-          </p>
-          <img src={fullSize} alt={`Asset ${asset.id} at full size`} />
-          <button
-            className="ibtn image-viewer-close"
-            type="button"
-            onClick={() => setFullSize(null)}
-            aria-label="Close full-size image"
-            data-modal-initial-focus
-          >
-            ×
-          </button>
-        </Modal>
+        />
       )}
     </aside>
   )

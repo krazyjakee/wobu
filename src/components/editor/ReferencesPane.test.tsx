@@ -56,6 +56,9 @@ function renderPane(node: WobuNode, assets: Asset[], readOnly = false) {
   h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
     if (command === 'asset_list') return Promise.resolve(assets)
     if (command === 'asset_thumb_batch') return Promise.resolve(thumbPage(args))
+    if (command === 'asset_original') {
+      return Promise.resolve(`/original/${String(args?.assetId)}.png`)
+    }
     if (command === 'asset_set_cover') {
       return Promise.resolve({ ...node, coverAssetId: args?.assetId as string | null })
     }
@@ -144,6 +147,39 @@ describe('ReferencesPane', () => {
     )
 
     expect(await screen.findByText('Preview failed')).toBeInTheDocument()
+  })
+
+  it('opens reference details, then a screen-fitted original, and closes each layer', async () => {
+    const reference = link('one', 'palette')
+    const node = buildNode({ id: 'kael', assetLinks: [reference], coverAssetId: 'one' })
+    renderPane(node, [asset('one')])
+
+    const openDetails = await screen.findByRole('button', { name: 'Open reference 1 details' })
+    expect(h.invoke).not.toHaveBeenCalledWith('asset_original', expect.anything())
+    fireEvent.click(openDetails)
+    const details = await screen.findByRole('dialog', { name: 'Reference details' })
+    expect(details).toHaveAccessibleDescription(/kael · Palette · reference 1/)
+    expect(within(details).getByText('100%')).toBeInTheDocument()
+    expect(within(details).getByText('Active')).toBeInTheDocument()
+    expect(within(details).getByText('Yes')).toBeInTheDocument()
+    expect(within(details).getByText('1200×800')).toBeInTheDocument()
+    await waitFor(() => expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'one' }))
+
+    const fullSizeButton = within(details).getByRole('button', {
+      name: 'View reference image full size',
+    })
+    await waitFor(() => expect(fullSizeButton).toBeEnabled())
+    expect(
+      within(details).getByRole('img', { name: 'Palette reference for kael' }),
+    ).toHaveAttribute('src', 'asset:///original/one.png')
+    fireEvent.click(fullSizeButton)
+
+    const fullSize = screen.getByRole('dialog', { name: 'Full-size reference image' })
+    expect(within(fullSize).getByRole('img')).toHaveAttribute('src', 'asset:///original/one.png')
+    fireEvent.click(within(fullSize).getByRole('button', { name: 'Close full-size image' }))
+    expect(screen.getByRole('dialog', { name: 'Reference details' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Close reference details' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('edits role and weight, reorders, removes, and chooses a cover', async () => {

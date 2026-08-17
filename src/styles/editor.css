@@ -728,12 +728,14 @@
 .reference-image {
   position: relative;
   display: grid;
+  width: 100%;
   place-items: center;
   height: 158px;
   overflow: hidden;
   background: var(--bg-raised);
   color: var(--text-faint);
   font-size: 11px;
+  cursor: zoom-in;
 }
 .reference-image img {
   width: 100%;
@@ -749,6 +751,24 @@
   background: color-mix(in srgb, var(--accent-fill) 82%, #000);
   color: var(--on-accent);
   font-size: 9.5px;
+}
+.reference-open-hint {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 24px 9px 8px;
+  color: var(--on-scrim);
+  background: linear-gradient(transparent, var(--scrim-strong));
+  font-size: 10px;
+  opacity: 0;
+  transform: translateY(var(--rise));
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+.reference-image:hover .reference-open-hint,
+.reference-image:focus-visible .reference-open-hint {
+  opacity: 1;
+  transform: none;
 }
 .reference-controls {
   display: flex;
@@ -809,6 +829,100 @@
   font: 8.5px var(--mono);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The reference card opens the same two layers as a concept card: a bounded
+   details surface first, then the shared viewport-contained original. */
+.reference-detail-body {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.5fr) minmax(260px, 0.5fr);
+  flex: 1;
+  min-height: 0;
+}
+.reference-detail-body > section {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.reference-detail-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-right: 1px solid var(--border);
+}
+.reference-detail-image {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 240px;
+  flex: 1;
+  overflow: hidden;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  color: var(--text-faint);
+  cursor: zoom-in;
+}
+.reference-detail-image:disabled,
+.reference-detail-image.is-missing {
+  cursor: default;
+}
+.reference-detail-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain;
+}
+.reference-detail-image > span {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 28px 10px 9px;
+  color: var(--on-scrim);
+  background: linear-gradient(transparent, var(--scrim-strong));
+  font-size: 10px;
+}
+.reference-detail-meta h3 + dl {
+  margin-top: 2px;
+}
+.reference-detail-meta h3:not(:first-child) {
+  margin-top: 22px;
+}
+.reference-detail-meta dl {
+  display: grid;
+  gap: 7px;
+}
+.reference-detail-meta dl > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+}
+.reference-detail-meta dt {
+  color: var(--text-faint);
+}
+.reference-detail-meta dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+}
+@media (max-width: 760px) {
+  .reference-detail-body {
+    display: block;
+    overflow: auto;
+  }
+  .reference-detail-body > section {
+    overflow: visible;
+  }
+  .reference-detail-preview {
+    height: min(440px, 55vh);
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
 }
 .references-empty {
   display: grid;

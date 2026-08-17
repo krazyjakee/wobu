@@ -53,12 +53,12 @@ export function IconSprite() {
           <path d="M21 11.4l-3.5-3.4-4.5 4.4" />
           <path d="M16 17.5a2.5 2.5 0 01-2.5 2.5h-8A2.5 2.5 0 013 17.5V9" />
         </g>
-        {/* Brought inside 3–21. The spokes reached 2 and 22, which made the
-            rail's Settings button visibly larger than the three above it while
-            every box in the rail was the same size. */}
+        {/* A toothed cog rather than a centre circle with bare spokes, which
+            read as the sun used for a light/dark-theme control. It stays inside
+            3–21 so its optical size matches the other rail icons. */}
         <g id="i-settings">
           <circle cx="12" cy="12" r="3" />
-          <path d="M12 3v2.5M12 18.5V21M5.2 5.2L7 7M17 17l1.8 1.8M3 12h2.5M18.5 12H21M5.2 18.8L7 17M17 7l1.8-1.8" />
+          <path d="M10 3h4l.4 2.3L16 6l2-1.3L20.3 7l-1.6 2 .8 1.5 1.5.3v2.4l-1.5.3-.8 1.5 1.6 2-2.3 2.3-2-1.3-1.6.7L14 21h-4l-.4-2.3L8 18l-2 1.3L3.7 17l1.6-2-.8-1.5-1.5-.3v-2.4l1.5-.3.8-1.5-1.6-2L6 4.7 8 6l1.6-.7z" />
         </g>
         <g id="i-search">
           <circle cx="11" cy="11" r="7" />

@@ -219,5 +219,220 @@
 .concept-empty p {
   margin: 0 0 7px;
 }
-/* A concept opened full size is `.image-viewer` in `overlays.css`, shared with
-   the asset library so the same picture is framed the same way in both. */
+/* ── generation receipt ────────────────────────────────────────────────────────────────── */
+/* A concept first opens its receipt, where the original is deliberately a
+   bounded preview. The preview can then open `.image-viewer` from
+   `overlays.css`; keeping these as two visibly different sizes makes the two
+   layers legible and prevents a large original from defining the dialog. */
+.generation-detail-scrim {
+  padding: clamp(12px, 3vw, 28px);
+}
+.generation-detail {
+  display: flex;
+  width: min(1180px, 100%);
+  height: min(820px, 100%);
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-str);
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: var(--shadow-2);
+  animation: wb-lift var(--dur-3) var(--ease-out);
+}
+.generation-detail-head,
+.generation-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.generation-detail-head {
+  flex: none;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.generation-detail-head h2 {
+  font-size: 17px;
+}
+.generation-detail-head p {
+  margin-top: 4px;
+}
+.generation-detail-head p,
+.generation-replay-note,
+.generation-drift-basis {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.generation-detail-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr) minmax(260px, 0.8fr);
+  flex: 1;
+  min-height: 0;
+}
+.generation-detail-body > section {
+  min-width: 0;
+  overflow: auto;
+  padding: 16px;
+  border-right: 1px solid var(--border);
+}
+.generation-detail-body > section:last-child {
+  border-right: 0;
+}
+.generation-detail h3 {
+  margin-bottom: 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.generation-receipt-image {
+  display: block;
+  width: 100%;
+  margin-bottom: 14px;
+  cursor: zoom-in;
+}
+.generation-receipt-image img {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  border-radius: var(--r-sm);
+  object-fit: contain;
+  background: var(--bg-input);
+}
+.generation-receipt-image:focus-visible {
+  border-radius: var(--r-sm);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.generation-receipt dl {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 10.5px;
+}
+.generation-receipt dt {
+  color: var(--text-faint);
+}
+.generation-receipt dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+}
+.generation-lora-receipt {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.generation-lora-receipt > div + div {
+  margin-top: 10px;
+}
+.generation-lora-receipt > div > b {
+  color: var(--text-faint);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.generation-lora-receipt ul {
+  display: grid;
+  gap: 5px;
+  margin-top: 5px;
+  list-style: none;
+}
+.generation-lora-receipt li {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bg-panel);
+}
+.generation-lora-receipt li strong {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.generation-lora-receipt li span,
+.generation-lora-receipt li small {
+  overflow-wrap: anywhere;
+  color: var(--text-faint);
+  font: 9px/1.35 var(--mono);
+}
+.generation-detail pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font: 10px/1.5 var(--mono);
+}
+.generation-layer {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-panel);
+}
+.generation-layer header,
+.generation-drift li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+}
+.generation-layer header span,
+.generation-layer li > span,
+.generation-drift li span,
+.generation-drift small {
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+.generation-layer ul,
+.generation-drift ul {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 8px;
+  list-style: none;
+}
+.generation-layer li {
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+.generation-layer li p {
+  margin-top: 3px;
+  color: var(--text-dim);
+  font: 10px/1.4 var(--mono);
+}
+.generation-drift li {
+  flex-wrap: wrap;
+  padding: 8px;
+  border-left: 2px solid var(--border-str);
+  background: var(--bg-panel);
+}
+.generation-drift li.is-changed,
+.generation-drift li.is-added,
+.generation-drift li.is-removed,
+.generation-drift .is-drifted {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.generation-drift small {
+  flex-basis: 100%;
+}
+.generation-drift details {
+  margin-top: 12px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.generation-drift details pre {
+  margin-top: 8px;
+  color: var(--text-dim);
+}
+
+@media (max-width: 900px) {
+  .generation-detail-body {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .generation-detail-body > section {
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}

@@ -188,7 +188,24 @@ describe('generation history', () => {
     expect(dialog).toHaveAccessibleDescription(/Kael · portrait/)
     expect(within(dialog).getByRole('button', { name: 'Close generation details' })).toHaveFocus()
     expect(h.invoke).toHaveBeenCalledWith('asset_original', { assetId: 'asset-1' })
-    expect(within(dialog).getByRole('img').getAttribute('src')).toBe('asset:///original-asset-1')
+    const preview = within(dialog).getByRole('img')
+    expect(preview.getAttribute('src')).toBe('asset:///original-asset-1')
+  })
+
+  it('returns from the full-size image to a usable, closable details dialog', async () => {
+    history = [generation({ id: 'nested-viewer' })]
+    open()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open generation from/ }))
+    const details = await screen.findByRole('dialog', { name: 'Generation details' })
+    fireEvent.click(within(details).getByRole('button', { name: 'View generated image full size' }))
+
+    const fullSize = screen.getByRole('dialog', { name: 'Full-size generated image' })
+    fireEvent.click(within(fullSize).getByRole('button', { name: 'Close full-size image' }))
+
+    expect(screen.getByRole('dialog', { name: 'Generation details' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Close generation details' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('opens the exact snapshot and replays its immutable receipt', async () => {
