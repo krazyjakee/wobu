@@ -243,10 +243,21 @@ pub async fn give(connection: &Connection, nodes: &[Outgoing]) -> CommandResult<
 /// side's *server* loop runs until the peer says this, not until its own client
 /// half is finished. So a peer that still has bodies to ask for is still being
 /// answered, and both loops end exactly once both sides have stopped asking.
-pub async fn done(connection: &Connection) -> CommandResult<()> {
+///
+/// `before_finished` runs after [`Ask::Done`] is on the wire but before this
+/// side accepts [`Answer::Finished`]. This narrow seam lets the round wait until
+/// its answering half has also seen the peer's `Done`, apply blob tombstones,
+/// and only then let either caller return. Keeping the existing messages makes
+/// that completion barrier compatible with peers from before tombstones were
+/// introduced.
+pub async fn done_after(
+    connection: &Connection,
+    before_finished: impl Future<Output = CommandResult<()>>,
+) -> CommandResult<()> {
     let (mut send, mut recv) = open(connection).await?;
     write_line(&mut send, &Ask::Done).await?;
     finish(&mut send)?;
+    before_finished.await?;
     let mut lines = Lines::new(&mut recv);
     while let Some(answer) = lines.next::<Answer>().await? {
         if !matches!(answer, Answer::Finished) {
@@ -254,6 +265,12 @@ pub async fn done(connection: &Connection) -> CommandResult<()> {
         }
     }
     Ok(())
+}
+
+/// Finish a round with no work between announcing and accepting completion.
+#[cfg(test)]
+pub async fn done(connection: &Connection) -> CommandResult<()> {
+    done_after(connection, std::future::ready(Ok(()))).await
 }
 
 /* ── answering ────────────────────────────────────────────────────────────── */
@@ -324,7 +341,12 @@ pub async fn agreed(send: &mut SendStream, ids: &[Id]) -> CommandResult<()> {
 /// Answer a [`Request::Done`].
 pub async fn finished(send: &mut SendStream) -> CommandResult<()> {
     write_line(send, &Answer::Finished).await?;
-    finish(send)
+    finish(send)?;
+    // This is the final stream in the round. The tombstone completion barrier
+    // can make our own asking half finish at the same moment this is queued;
+    // wait until the peer has read it so the caller cannot close the connection
+    // and turn a successful round into a truncated final acknowledgement.
+    within(async { send.stopped().await.map(|_| ()).map_err(|e| transport(&e.to_string())) }).await
 }
 
 /* ── plumbing ─────────────────────────────────────────────────────────────── */
@@ -356,12 +378,10 @@ async fn write_line<T: Serialize>(send: &mut SendStream, message: &T) -> Command
 
 /// Finish the send half, which is this protocol's end-of-message.
 ///
-/// Not followed by `stopped()`. The manifest exchange waits for one because it
-/// hands the connection straight on and a prompt `Connection::close` can discard
-/// data the peer's stack has received but not delivered. Here every reader reads
-/// its stream to end-of-stream before the round finishes, and the round finishes
-/// before anything closes, so the wait would buy nothing and would be one more
-/// place to hang.
+/// Usually not followed by `stopped()`: body requests keep the connection open
+/// for later streams, and their readers finish before the next request begins.
+/// [`finished`] is the exception because it is the final acknowledgement and a
+/// caller may close the connection as soon as it returns.
 fn finish(send: &mut SendStream) -> CommandResult<()> {
     send.finish().map_err(|e| transport(&e.to_string()))
 }

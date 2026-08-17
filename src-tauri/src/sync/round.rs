@@ -214,26 +214,24 @@ pub async fn run(
         replica.with(|project| Ok(project.record_agreed(&peer, &plan.settled)?))?;
     }
 
-    let connection = session.connection();
-    let (ours, theirs) = tokio::try_join!(
-        ask(manager, replica, &peer, connection, &plan),
-        answer(manager, replica, &peer, connection),
-    )?;
-
-    // An archived generation is a tombstone, not merely another immutable
-    // blob. Apply it after node bodies so a pin or cover arriving in this same
-    // round protects the output asset before unclaimed-output cleanup runs.
     let mut archives = local_archives;
     archives.extend(
         fetched.placed.iter().filter(|path| path.starts_with("generations/.deleted/")).cloned(),
     );
     archives.sort();
     archives.dedup();
-    let archives_changed = if archives.is_empty() {
-        false
-    } else {
-        replica.with(|project| Ok(project.apply_generation_archives(&archives)?))?
-    };
+
+    // `Done` is also the post-apply barrier for immutable tombstones. The
+    // asking half puts its own `Done` on the wire, waits until the answering
+    // half has seen the peer's, applies archives, and then permits that half to
+    // acknowledge. A caller therefore cannot return while its peer is still
+    // removing a concept it just received.
+    let completion = Completion::default();
+    let connection = session.connection();
+    let (ours, theirs) = tokio::try_join!(
+        ask(manager, replica, &peer, connection, &plan, &archives, &completion),
+        answer(manager, replica, &peer, connection, &completion),
+    )?;
 
     let outcome = Outcome {
         applied: ours.applied + theirs.applied,
@@ -242,7 +240,7 @@ pub async fn run(
         pushed: ours.pushed,
         served: theirs.served,
         blobs: fetched.placed.len(),
-        changed: ours.changed || theirs.changed || !fetched.placed.is_empty() || archives_changed,
+        changed: ours.changed || theirs.changed || !fetched.placed.is_empty(),
         whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 
@@ -275,6 +273,12 @@ struct Half {
     changed: bool,
 }
 
+#[derive(Default)]
+struct Completion {
+    peer_done: tokio::sync::Notify,
+    archives_applied: tokio::sync::Notify,
+}
+
 /// This side's half: fetch what the plan wants, then push what the peer is
 /// behind on, then say we are finished.
 async fn ask(
@@ -283,6 +287,8 @@ async fn ask(
     peer: &str,
     connection: &iroh::endpoint::Connection,
     plan: &Plan,
+    archives: &[String],
+    completion: &Completion,
 ) -> CommandResult<Half> {
     let mut half = Half::default();
 
@@ -345,7 +351,21 @@ async fn ask(
         }
     }
 
-    bodies::done(connection).await?;
+    bodies::done_after(connection, async {
+        // The peer's `Done` arrives only after every body it asked for or
+        // pushed has been handled by our answering half. Our own body work is
+        // already complete here, so this is the first point at which every
+        // node from the round is safely in place. A pin or cover can therefore
+        // protect an output before its generation tombstone cleans it up.
+        completion.peer_done.notified().await;
+        if !archives.is_empty() {
+            half.changed |=
+                replica.with(|project| Ok(project.apply_generation_archives(archives)?))?;
+        }
+        completion.archives_applied.notify_one();
+        Ok(())
+    })
+    .await?;
     Ok(half)
 }
 
@@ -355,6 +375,7 @@ async fn answer(
     replica: &Replica,
     peer: &str,
     connection: &iroh::endpoint::Connection,
+    completion: &Completion,
 ) -> CommandResult<Half> {
     let mut half = Half::default();
 
@@ -386,6 +407,8 @@ async fn answer(
                 bodies::agreed(&mut send, &agreed(&report)).await?;
             }
             Request::Done => {
+                completion.peer_done.notify_one();
+                completion.archives_applied.notified().await;
                 bodies::finished(&mut send).await?;
                 return Ok(half);
             }
@@ -407,7 +430,11 @@ pub(super) async fn answer_until_cut(
     peer: &str,
     connection: &iroh::endpoint::Connection,
 ) -> CommandResult<()> {
-    answer(manager, replica, peer, connection).await.map(|_| ())
+    let completion = Completion::default();
+    // This fault injector never reaches `Done`; pre-authorising the completion
+    // barrier keeps the wrapper honest if that setup changes later.
+    completion.archives_applied.notify_one();
+    answer(manager, replica, peer, connection, &completion).await.map(|_| ())
 }
 
 /// The round was told to stop.
