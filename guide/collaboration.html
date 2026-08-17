@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sharing a project — Wobu</title>
+    <meta name="description" content="Several people in one folder, or two copies that keep each other up to date." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/guide/collaboration.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Sharing a project — Wobu" />
+    <meta property="og:description" content="Several people in one folder, or two copies that keep each other up to date." />
+    <meta property="og:url" content="https://wobu.app/guide/collaboration.html" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="../index.html">Overview</a>
+          <a href="../guide/index.html" aria-current="page">Guide</a>
+          <a href="../download.html">Download</a>
+          <a href="../legal.html">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <div class="wrap doc-wrap">
+        <nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">Guide</h2>
+          <ol>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Your first project</a></li>
+            <li><a href="workspace.html">The workspace</a></li>
+            <li><a href="world-model.html">Entities and hierarchy</a></li>
+            <li><a href="notes-and-enhance.html">Notes and Enhance</a></li>
+            <li><a href="references.html">References and assets</a></li>
+            <li><a href="influence.html">The influence stack</a></li>
+            <li><a href="generating.html">Generating</a></li>
+            <li><a href="concept-3d.html">Concept 3D</a></li>
+            <li><a href="providers.html">Providers and keys</a></li>
+            <li><a href="collaboration.html" aria-current="page">Sharing a project</a></li>
+            <li><a href="agent-access.html">Agent access (MCP)</a></li>
+            <li><a href="reference.html">Keyboard, settings and files</a></li>
+          </ol>
+        </nav>
+        <article class="doc">
+<h1>Sharing a project</h1>
+<p>Two ways to work with other people: everyone in one folder, or everyone with their own copy, catching
+each other up machine to machine. Neither needs a server, an account, or anything we run for you.</p>
+<blockquote>
+<p><strong>Expectations first</strong> Wobu is not real-time collaboration. There are no live cursors and no
+typing in the same page at once. It is built for the realistic case: two or three people who
+mostly work on different corners of a world, occasionally at the same time, and who must never
+silently lose each other&#39;s work.</p>
+</blockquote>
+<h2 id="one-folder-several-people">One folder, several people</h2>
+<p>Put the world on a shared drive, a NAS, or a synced folder, and anybody who can see it can open it.
+Nothing about the world lives outside that folder. Everyone uses their own keys, on their own
+computer, on the same world.</p>
+<h3 id="most-of-the-folder-cannot-clash">Most of the folder cannot clash</h3>
+<p>That is on purpose, and it is why any of this works:</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>How it is written</th>
+<th>Chance of clashing</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Pictures</td>
+<td>Filed by contents, written once</td>
+<td><strong>None</strong> — the same picture, the same place</td>
+</tr>
+<tr>
+<td>Records of what you made</td>
+<td>Written once, never touched again</td>
+<td><strong>None</strong></td>
+</tr>
+<tr>
+<td>The world&#39;s settings file</td>
+<td>Rarely written, tiny</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>Your notes and descriptions</td>
+<td>Edited constantly</td>
+<td><strong>The only real risk</strong></td>
+</tr>
+</tbody></table>
+<p>So everything below exists to protect exactly one sort of file.</p>
+<h3 id="it-tells-you-it-does-not-lock-you-out">It tells you, it does not lock you out</h3>
+<p>When you open a world, Wobu leaves a note in the folder saying you are here and refreshes it every
+20 seconds. It reads everybody else&#39;s every 10 seconds and tells you about them: a line when you
+open the world, a quiet dot on the row in the list, a count in the bottom bar, and a banner if you
+open a page somebody else has open. Somebody whose note goes quiet for a minute is treated as gone.</p>
+<p>That banner is worth reading once, because it explains the whole approach: nothing is locked,
+nothing is switched off, and if you both save, the later save is put beside the file for you to sort
+out rather than being written over the top of anything.</p>
+<p>This is <strong>a warning rather than a lock, on purpose</strong>. Real locks over a shared drive strand files
+every time somebody&#39;s laptop goes to sleep or a VPN drops, and digging yourself out is worse than
+the problem. Wobu warns; it never blocks.</p>
+<h3 id="every-save-looks-before-it-lands">Every save looks before it lands</h3>
+<ol>
+<li>Write to a temporary file <strong>on the same drive</strong>, so swapping it into place happens in one go.</li>
+<li>Check the file being replaced — its date, its size, its contents — against what was loaded.</li>
+<li>Unchanged: swap it in. Done.</li>
+<li>Changed: <strong>that is a clash</strong>, handled below.</li>
+</ol>
+<h3 id="you-get-both-versions-never-a-merge">You get both versions, never a merge</h3>
+<p>Wobu does not attempt to blend two people&#39;s writing together. The other version is written alongside
+yours:</p>
+<pre><code>nodes/character/kael-vantris.md
+nodes/character/kael-vantris.conflict-jake-20260731T142211Z.md
+</code></pre>
+<p>and a card appears above the editor showing the two side by side — headed <strong>On disk now</strong> and
+<em>theirs</em> — with three choices: <strong>Keep mine</strong>, <strong>Keep theirs</strong>, or <strong>Open both</strong>, plus <strong>Show in
+folder</strong>. Identical runs of lines are folded away, and if the two turn out to be word for word the
+same, it says so.</p>
+<p>There is deliberately no merge button. Both files are sitting in the folder and nothing is deleted
+until you choose; the one you did not keep goes at that moment, and that is the only place in Wobu
+a second version is ever deleted.</p>
+<p>Enhance and Generate count as ordinary edits, so accepting an enhance after somebody else has saved
+raises the same card rather than trampling their work.</p>
+<h3 id="it-notices-changes-differently-on-a-shared-drive">It notices changes differently on a shared drive</h3>
+<p>The usual way of watching for changes does <strong>not</strong> see writes made by other computers over a network
+drive — relying on it alone would leave a colleague&#39;s work invisible until you restarted. So Wobu
+works out what sort of drive it is on and picks its method: watching directly on your own disk,
+checking every so often on a network one. The bottom bar tells you which, and how often.</p>
+<h3 id="speed-on-a-shared-drive">Speed on a shared drive</h3>
+<p>Reading several hundred small files over a network is genuinely slow, and it is the thing most
+likely to make Wobu feel sluggish on a NAS. Four things soften it:</p>
+<ul>
+<li><strong>The search index takes the strain.</strong> After the first open, the screen is drawn from Wobu&#39;s own
+local copy; the folder is only touched for files that actually changed.</li>
+<li><strong>Thumbnails live in the world folder</strong>, not on your machine — so whoever adds a picture pays for
+making them once and everybody else gets them free.</li>
+<li><strong>Grids only load thumbnails.</strong> Full-size pictures are fetched one at a time, when you ask.</li>
+<li><strong>3D shapes are fetched only when you open the 3D tab.</strong></li>
+</ul>
+<p>Anything slow shows progress and can be cancelled. A stalled NAS must never look like a frozen app.
+If typing feels heavy, raise the save delay in Settings → Editor.</p>
+<h2 id="copies-that-catch-each-other-up">Copies that catch each other up</h2>
+<p>Open the world menu in the title bar and choose <strong>Share this project…</strong>. Wobu makes a ticket, shows
+it to you and copies it. The other person chooses <strong>Accept ticket…</strong> on the opening screen, pastes
+the whole ticket in, and picks where their copy should live. Wobu shows the transfer happening, lets
+them cancel, and opens the copy when it is ready.</p>
+<p>Pasting a ticket for a world that machine already has opens the copy it already has instead of
+making a second one. If that copy has been deleted, or lives on a drive that is not plugged in, Wobu
+asks where to put a fresh one — so deleting a half-finished copy and pasting the ticket again is a
+way out rather than a dead end.</p>
+<blockquote>
+<p><strong>A copy that stops half way is kept, not thrown away</strong> If the sender goes offline part way
+through, Wobu opens what arrived and keeps trying — and the status bar says <strong>this copy has not
+finished arriving</strong>. Pictures travel before the pages that use them, so a half-arrived world looks
+like a full assets tab and no characters. That is the transfer being unfinished, not the world
+being broken: leave it open with the other person&#39;s Wobu running and the rest follows. The line
+goes away by itself on the first complete round.</p>
+</blockquote>
+<p>Generated concepts travel as one complete change: the image and its immutable receipt (prompt,
+seed, provider parameters, cost metadata, and influence snapshot) are both announced to peers.
+Deleting a concept sends its archived receipt as a tombstone, so every replica removes it from
+Concepts while preserving an output that a node still uses as a reference or cover. If one client
+learns about a change from another, it immediately fans the enlarged manifest out to the rest of
+its connected peers rather than waiting for the idle polling interval.</p>
+<blockquote>
+<p><strong>A ticket is a key to your world</strong> Send it privately. Tickets do not expire, and you cannot take
+one back on its own. <strong>Stop sharing…</strong> cancels every ticket this installation ever made for this
+world and forgets the machines it was talking to — but it cannot delete copies people have already
+downloaded.</p>
+</blockquote>
+<blockquote>
+<p><strong>You both have to be running Wobu at once</strong> Nothing is parked on a server in between. Somebody
+else&#39;s offline edits arrive the next time you are both running the app — the same as Syncthing or
+Resilio. The bottom bar says exactly that: edits arrive only while both of you have Wobu open.</p>
+</blockquote>
+<h3 id="how-the-two-copies-work-it-out">How the two copies work it out</h3>
+<p>No clever merging algorithms, and <strong>no change to the files themselves</strong> — they stay hand-editable
+and other apps keep working. Wobu already knows a fingerprint for each page; syncing also remembers,
+for each person, the last version you both agreed on. That gives a three-way comparison with nothing
+new added to your files:</p>
+<table>
+<thead>
+<tr>
+<th>Yours vs agreed</th>
+<th>Theirs vs agreed</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Same</td>
+<td>Changed</td>
+<td>Take theirs</td>
+</tr>
+<tr>
+<td>Changed</td>
+<td>Same</td>
+<td>Send yours, nothing to apply</td>
+</tr>
+<tr>
+<td>Changed</td>
+<td>Changed the same way</td>
+<td>Agree, and move on</td>
+</tr>
+<tr>
+<td>Changed</td>
+<td>Changed differently</td>
+<td><strong>Both versions kept</strong>, exactly as above</td>
+</tr>
+</tbody></table>
+<p>Pictures and records skip all of this: written once and filed by contents means a missing file is
+only ever <em>fetched</em>, never merged.</p>
+<h3 id="two-limits-worth-knowing-up-front">Two limits worth knowing up front</h3>
+<ul>
+<li><strong>Deleting does not travel.</strong> A file you have and they do not could mean &quot;they deleted it&quot; or &quot;they
+never had it&quot;, and Wobu takes the reading that cannot destroy work. So deleting something on your
+copy does not delete it on theirs.</li>
+<li><strong>A ticket cannot be taken back on its own.</strong> Once you have shared it, you have shared it.</li>
+</ul>
+<h2 id="read-only-worlds">Read-only worlds</h2>
+<p>Whether Wobu can write to a folder is decided once, when the world opens, by trying it. If it
+cannot, you get one banner saying so, a badge on the title bar and on the opening screen, and
+everything that writes is switched off: making, renaming, moving, deleting and copying pages,
+editing notes, saving, undo and redo, Enhance, Generate, and choosing services for the world.</p>
+<p>The world stays entirely readable, and the website export still works — it only reads.</p>
+<h2 id="when-things-go-wrong">When things go wrong</h2>
+<table>
+<thead>
+<tr>
+<th>What happened</th>
+<th>What Wobu does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>The shared drive vanishes mid-session</td>
+<td>Notices, shows a banner, keeps trying, holds your saves — and keeps the whole app readable from its local copy. A held save goes through when the drive comes back.</td>
+</tr>
+<tr>
+<td>The drive is read-only</td>
+<td>Noticed when the world opens, as above.</td>
+</tr>
+<tr>
+<td>Two people generate for the same page</td>
+<td>No clash at all. Separate records, both results appear.</td>
+</tr>
+<tr>
+<td>A sync app mangles a file</td>
+<td>It is listed at the top of the world list with the actual error and a <strong>Show in folder</strong> button. It is never quietly skipped and never written over.</td>
+</tr>
+<tr>
+<td>Your clocks disagree</td>
+<td>Wobu compares how long ago things happened against your own clock, not absolute times.</td>
+</tr>
+</tbody></table>
+<h2 id="if-you-outgrow-this">If you outgrow this</h2>
+<p>Real-time co-editing, a server, and proper locking are all deliberately out of scope. If a team
+outgrows the gentle version, the honest answer is <strong>put the world folder in git</strong> — which works
+today, because the format was chosen with exactly that in mind.</p>
+
+          <hr />
+          <p class="doc-source"><a class="text-link" href="providers.html">← Providers and keys</a> &nbsp;·&nbsp; <a class="text-link" href="agent-access.html">Agent access (MCP) →</a></p>
+          <p class="doc-source">
+            This page comes from
+            <a href="https://github.com/krazyjakee/wobu/blob/main/docs/guide/collaboration.md" rel="noopener">a file in the source
+            code</a> — the very same one the app shows you in its own built-in guide.
+          </p>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="../index.html">Overview</a></li>
+              <li><a href="../guide/index.html">User guide</a></li>
+              <li><a href="../download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="../legal.html">Legal overview</a></li>
+              <li><a href="../legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="../legal/terms.html">Terms of use</a></li>
+              <li><a href="../legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="../legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

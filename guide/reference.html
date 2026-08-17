@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keyboard, settings and files — Wobu</title>
+    <meta name="description" content="Every shortcut and setting, what is in the folder, what to try when something is wrong, and a glossary." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/guide/reference.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Keyboard, settings and files — Wobu" />
+    <meta property="og:description" content="Every shortcut and setting, what is in the folder, what to try when something is wrong, and a glossary." />
+    <meta property="og:url" content="https://wobu.app/guide/reference.html" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="../index.html">Overview</a>
+          <a href="../guide/index.html" aria-current="page">Guide</a>
+          <a href="../download.html">Download</a>
+          <a href="../legal.html">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <div class="wrap doc-wrap">
+        <nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">Guide</h2>
+          <ol>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Your first project</a></li>
+            <li><a href="workspace.html">The workspace</a></li>
+            <li><a href="world-model.html">Entities and hierarchy</a></li>
+            <li><a href="notes-and-enhance.html">Notes and Enhance</a></li>
+            <li><a href="references.html">References and assets</a></li>
+            <li><a href="influence.html">The influence stack</a></li>
+            <li><a href="generating.html">Generating</a></li>
+            <li><a href="concept-3d.html">Concept 3D</a></li>
+            <li><a href="providers.html">Providers and keys</a></li>
+            <li><a href="collaboration.html">Sharing a project</a></li>
+            <li><a href="agent-access.html">Agent access (MCP)</a></li>
+            <li><a href="reference.html" aria-current="page">Keyboard, settings and files</a></li>
+          </ol>
+        </nav>
+        <article class="doc">
+<h1>Keyboard, settings and files</h1>
+<p>Shortcuts, every setting, what is in the folder, what to try when something is wrong, and a
+glossary.</p>
+<h2 id="keyboard">Keyboard</h2>
+<p>Every key Wobu listens for is in one list, and <strong>all of them are yours to change</strong>. Settings →
+Keyboard shows them, lets you press a new combination onto any row, shows what it shipped as beside
+anything you have changed, and offers <strong>Reset every shortcut</strong>. The same list, read-only, is one
+keypress away from anywhere — the shortcuts reference.</p>
+<p>So treat the table below as <em>what this version came with</em>, not as the truth about your copy. It is
+also why tooltips throughout the app tell you the keys instead of this page doing it: a tooltip
+reads the real list, so it follows you when you change something.</p>
+<p><code>Mod</code> is Command on macOS and Control everywhere else. Your shortcuts are stored once, not per
+computer; only the way they are written on screen changes.</p>
+<table>
+<thead>
+<tr>
+<th>Default</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Mod+K</code></td>
+<td>Command palette</td>
+</tr>
+<tr>
+<td><code>Mod+/</code></td>
+<td>Keyboard shortcuts</td>
+</tr>
+<tr>
+<td><code>Mod+F</code></td>
+<td>Filter the navigator</td>
+</tr>
+<tr>
+<td><code>Mod+Shift+L</code></td>
+<td>Library</td>
+</tr>
+<tr>
+<td><code>Mod+\</code></td>
+<td>Forge, and back</td>
+</tr>
+<tr>
+<td><code>Mod+Shift+A</code></td>
+<td>Assets</td>
+</tr>
+<tr>
+<td><code>Mod+,</code></td>
+<td>Settings</td>
+</tr>
+<tr>
+<td><code>[</code></td>
+<td>Toggle the navigator</td>
+</tr>
+<tr>
+<td><code>]</code></td>
+<td>Toggle the inspector</td>
+</tr>
+<tr>
+<td><code>Mod+Shift+C</code></td>
+<td>Collapse or expand everything</td>
+</tr>
+<tr>
+<td><code>Mod+1</code> … <code>Mod+5</code></td>
+<td>Notes, References, Concepts, 3D, Relations</td>
+</tr>
+<tr>
+<td><code>Mod+N</code></td>
+<td>New entity</td>
+</tr>
+<tr>
+<td><code>Mod+Z</code>, <code>Mod+Shift+Z</code></td>
+<td>Undo, redo</td>
+</tr>
+<tr>
+<td><code>Mod+E</code></td>
+<td>Enhance the open entity</td>
+</tr>
+<tr>
+<td><code>Mod+Enter</code></td>
+<td>Generate</td>
+</tr>
+</tbody></table>
+<p>Three things cannot be changed, because an app where they could would be broken rather than
+flexible: <strong>Escape</strong> closes whatever is on top, <strong>Tab</strong> and <strong>Shift+Tab</strong> move around inside a
+dialog and stay inside it, and the <strong>arrow keys and Enter</strong> choose things in a list or a menu.</p>
+<p>Most shortcuts stand down while you are typing, so <code>[</code> in your notes is just a bracket. The
+exceptions are deliberate and named in the list — <strong>Jump to…</strong> works mid-sentence, because it is how
+you leave where you are.</p>
+<p>Undo is the interesting one: inside a text box, <code>Mod+Z</code> belongs to the box, not to your world.
+Taking it would rewind an entire save every time somebody tried to take back a word.</p>
+<blockquote>
+<p><strong>Two commands, one shortcut</strong> You are allowed to use a combination that is already taken, and
+Wobu tells you what happened rather than letting you find out by pressing it: the first command
+wins, the others do nothing, and both the editor and the shortcuts list name the winner and offer
+to put things back. Combinations your system already uses — copy, paste, quit, reload — are
+allowed too, with a warning that the system will act as well.</p>
+</blockquote>
+<h2 id="settings">Settings</h2>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>What is in it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Providers and models</td>
+<td>What this world uses, and the keys on this computer. See <a href="providers.html">Providers and keys</a>.</td>
+</tr>
+<tr>
+<td>Legal</td>
+<td>The terms and the privacy policy, read from the files that came with the app, and what you agreed to.</td>
+</tr>
+<tr>
+<td>Introduction</td>
+<td>Runs the opening tour again. It never re-asks you to agree to anything.</td>
+</tr>
+<tr>
+<td>Agent access (MCP)</td>
+<td>Letting an AI assistant read or change your world. See <a href="agent-access.html">Agent access</a>.</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>Where the search index is, how big it is, and <strong>Rebuild search index</strong>.</td>
+</tr>
+<tr>
+<td>Editor</td>
+<td>How long Wobu waits before saving. Raise it on a slow shared drive.</td>
+</tr>
+<tr>
+<td>Appearance</td>
+<td>Theme — <em>Match system</em>, <em>Light</em> or <em>Dark</em> — and how big everything is.</td>
+</tr>
+<tr>
+<td>Keyboard</td>
+<td>Every shortcut, changeable, with clashes named.</td>
+</tr>
+<tr>
+<td>Static world wiki</td>
+<td>Exports your world as a browsable website. Only appears with a world open.</td>
+</tr>
+<tr>
+<td>Diagnostics</td>
+<td>Where the log file is and how big, how much it records, a button to show it in your file manager, and the last of it readable in the app.</td>
+</tr>
+<tr>
+<td>About</td>
+<td>Which version of everything you are running.</td>
+</tr>
+<tr>
+<td>Licences</td>
+<td>Wobu&#39;s own licence, and everything it is built on.</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>Rebuilding the search index is always safe</strong> It holds no original of anything — it is made from
+your files. Delete it or rebuild it and nothing is lost; the next open just takes longer. If
+search misses something, or a file seems stuck, rebuild before you go looking anywhere else.</p>
+</blockquote>
+<h3 id="the-website-export">The website export</h3>
+<p><strong>Export static wiki…</strong> writes out a plain website — no clever machinery, nothing to install — with
+a page per entity carrying its notes, description, facts, pictures, concepts and connections, an
+index grouped by sort, and a diagram of how everything influences everything else. It only reads
+your world, so it works on a read-only folder, and it refuses to write into a folder that already
+exists or that sits inside your world.</p>
+<h2 id="what-is-in-the-folder">What is in the folder</h2>
+<p>A world is a self-contained folder, not one big database file. Put it on a NAS, a USB stick, or in
+version control.</p>
+<pre><code>Ashfall.wobu/
+├── project.json                  name, id, which services it uses, spending limit
+├── nodes/
+│   ├── style-guide/              the Art Style page
+│   ├── world-bible/              the World Canon page
+│   ├── species/vashk.md          settings at the top, then notes, then description
+│   ├── culture/ember-guild.md
+│   ├── setting/cinder-bay.md
+│   ├── character/kael-vantris.md
+│   └── creature/  prop/  environment/  vehicle/
+├── assets/
+│   ├── originals/a3/a3f9…c1.png  filed by contents, in folders by the first two characters
+│   ├── thumbs/a3/a3f9…c1.webp
+│   ├── loras/7d/7d42…9e.safetensors
+│   └── meshes/7b/7b21…04.glb
+├── generations/2026-07/&lt;ulid&gt;.json
+└── .wobu/
+    ├── sessions/&lt;session-id&gt;.json  who else has this open right now
+    ├── spend/                      what has been spent
+    └── tmp/                        where saves are staged
+</code></pre>
+<p><strong>The text files are the real thing.</strong> Everything else can be rebuilt from them. You get version
+history on your world, the ability to edit it in any other app, backups that just work, and no
+dread about upgrading.</p>
+<h3 id="rules-that-keep-the-folder-portable">Rules that keep the folder portable</h3>
+<table>
+
+<tbody><tr>
+<td>Nothing knows where it lives</td>
+<td>The same shared drive has one address on your machine and a different one on somebody else&#39;s, so nothing inside ever writes an address down.</td>
+</tr>
+<tr>
+<td>Pictures filed by contents</td>
+<td>Two people adding the same reference end up with the same one file. Duplicates cost nothing and pictures never clash.</td>
+</tr>
+<tr>
+<td>Cautious filenames</td>
+<td>Lowercase, plain, nothing Windows or a shared drive would reject, and not nested deeply enough to hit a length limit.</td>
+</tr>
+<tr>
+<td>No shortcuts or links</td>
+<td>They do not survive shared drives, zip files, or most sync apps.</td>
+</tr>
+<tr>
+<td>Records are written once</td>
+<td>Never changed afterwards, so there is nothing to clash over.</td>
+</tr>
+<tr>
+<td>No keys, ever</td>
+<td>Those are in your computer&#39;s password store. The world file only records which service it prefers.</td>
+</tr>
+</tbody></table>
+<h3 id="what-is-deliberately-not-in-the-folder">What is deliberately <em>not</em> in the folder</h3>
+<p>The search index, your shortcuts, your favourites, your theme, where your ComfyUI is, the assistant
+password and the fact that you agreed to the terms all live on this computer instead — because each
+one is a fact about you or your machine, not about the world. Put any of them in the folder and they
+become everybody&#39;s.</p>
+<p>The search index in particular lives with the app, filed by the world&#39;s id rather than its location,
+so it survives the shared drive being remounted somewhere else. That sort of file is known to get
+quietly corrupted on network drives, which is exactly why it is kept off them. Copy a world folder
+to a computer that has never seen it and nothing is lost — the first open rebuilds.</p>
+<h2 id="when-something-is-wrong">When something is wrong</h2>
+<table>
+<thead>
+<tr>
+<th>What you see</th>
+<th>What to try</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Search misses something you know is there</td>
+<td>Settings → Storage → Rebuild search index.</td>
+</tr>
+<tr>
+<td>A page shows as broken</td>
+<td>Show it in the folder and open the file in a text editor — usually a hand edit or a sync app that broke the settings block at the top. Wobu will not write over it until it makes sense again.</td>
+</tr>
+<tr>
+<td>Everything has gone read-only</td>
+<td>Check the folder&#39;s permissions. Wobu decides this once, when the world opens.</td>
+</tr>
+<tr>
+<td>A banner says the drive is offline</td>
+<td>Wobu is trying again, waiting longer each time. The app stays readable from its own copy, and held saves go through when the drive comes back.</td>
+</tr>
+<tr>
+<td>Enhance or Generate is greyed out</td>
+<td>No key on this computer for the service chosen, or the folder is read-only. Settings → Providers and models.</td>
+</tr>
+<tr>
+<td>Generate fails on a Gemini key that works</td>
+<td>Image models need billing turned on; text is free. See <a href="providers.html">Providers and keys</a>.</td>
+</tr>
+<tr>
+<td>3D says your credentials are wrong for no reason</td>
+<td>Check your computer&#39;s clock — signatures expire after a few minutes of drift.</td>
+</tr>
+<tr>
+<td>A job failed and you missed the message</td>
+<td>The notifications panel in the bottom bar keeps every failure, with what it cost.</td>
+</tr>
+<tr>
+<td>Reference pictures seem to do nothing</td>
+<td>Check the job you gave them, and check what the service accepts — the panel reports every picture it did not send.</td>
+</tr>
+<tr>
+<td>Typing feels laggy on a NAS</td>
+<td>Raise the save delay in Settings → Editor.</td>
+</tr>
+<tr>
+<td>Something needs reporting</td>
+<td>Settings → Diagnostics. Turn the detail up, make it happen again, then read the log in the app before you send it — keys are blanked out, but you should still see what you are handing over.</td>
+</tr>
+</tbody></table>
+<h2 id="glossary">Glossary</h2>
+<p><strong>These are the words the app itself uses.</strong> One thing, one word: if a term is in here, that is what
+every label, tooltip, empty screen and error message says, and what this guide says too.</p>
+<h3 id="your-world">Your world</h3>
+<table>
+
+<tbody><tr>
+<td>World</td>
+<td>Everything in one project: the tree, its pictures, and everything made from it.</td>
+</tr>
+<tr>
+<td>Entity</td>
+<td>Any page in the world — a species, a character, a prop, and the two pinned ones all work the same way.</td>
+</tr>
+<tr>
+<td>Kind</td>
+<td>What sort of page something is. It decides the icon, the colour, where it sits in a prompt, which sections its description has, and what it can be joined to.</td>
+</tr>
+<tr>
+<td>Singleton</td>
+<td>Art Style and World Canon — one of each per world, pinned above the line.</td>
+</tr>
+<tr>
+<td>Nesting</td>
+<td>A page inside another of the same sort: a district in a city, a region in a region.</td>
+</tr>
+<tr>
+<td>Link</td>
+<td>A connection from one page to another, with a job and a strength. Links go between sorts; nesting does not.</td>
+</tr>
+<tr>
+<td>Attributes</td>
+<td>The short facts on a page — height, era, a colour — as opposed to the writing.</td>
+</tr>
+<tr>
+<td>Stale</td>
+<td>A description whose notes, or something above it, changed since it was last enhanced.</td>
+</tr>
+</tbody></table>
+<h3 id="turning-a-world-into-a-prompt">Turning a world into a prompt</h3>
+<table>
+
+<tbody><tr>
+<td>Influence stack</td>
+<td>Everything feeding the picture you are about to make, in order.</td>
+</tr>
+<tr>
+<td>Layer</td>
+<td>One rung of that: style, world, ancestry, culture, place, subject, shot.</td>
+</tr>
+<tr>
+<td>Fragment</td>
+<td>One line of text, or one picture, put in by a layer — with a strength and somewhere to go.</td>
+</tr>
+<tr>
+<td>Compiled prompt</td>
+<td>The finished prompt, with every part of it traceable to the page that wrote it.</td>
+</tr>
+<tr>
+<td>Enhance</td>
+<td>Turning your rough notes into a description in named sections. Nothing is saved until you have read it.</td>
+</tr>
+<tr>
+<td>Preset</td>
+<td>What sort of picture you want: which parts to lean on, how it is framed, what shape, how many.</td>
+</tr>
+<tr>
+<td>Influence snapshot</td>
+<td>Exactly what went into a picture, saved with it, so the same thing can be made again later.</td>
+</tr>
+</tbody></table>
+<h3 id="pictures">Pictures</h3>
+<table>
+
+<tbody><tr>
+<td>Reference</td>
+<td>A picture attached to a page to steer what it looks like.</td>
+</tr>
+<tr>
+<td>Role</td>
+<td>What a reference is <em>for</em> — silhouette, palette, material, mood, pose, costume, or full reference.</td>
+</tr>
+<tr>
+<td>Cover</td>
+<td>The picture shown on a page&#39;s card and its row in the list.</td>
+</tr>
+<tr>
+<td>Asset</td>
+<td>Any file in the world&#39;s own store: a reference, a picture you made, a 3D shape, a trained look.</td>
+</tr>
+<tr>
+<td>Unused</td>
+<td>An asset nothing points at and nothing uses as a cover. The only kind Wobu offers to delete.</td>
+</tr>
+<tr>
+<td>Concept</td>
+<td>A picture you made, kept on the page you made it for.</td>
+</tr>
+<tr>
+<td>Pinning</td>
+<td>Turning a concept into a reference on its page, so it feeds the next picture.</td>
+</tr>
+<tr>
+<td>Seed</td>
+<td>The number that decides the random part of a picture. Lock it to get the same one again.</td>
+</tr>
+<tr>
+<td>Turnaround</td>
+<td>Eight views of one thing, on one locked seed — what a 3D shape is built from.</td>
+</tr>
+<tr>
+<td>Take</td>
+<td>One attempt at a single turnaround view. Every attempt is kept.</td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td>A small trained file that teaches an image model what one particular thing looks like.</td>
+</tr>
+</tbody></table>
+<h3 id="getting-things-made-and-what-it-costs">Getting things made, and what it costs</h3>
+<table>
+
+<tbody><tr>
+<td>Provider</td>
+<td>A service that does the work — Anthropic, Gemini, a ComfyUI you run, Tencent. You bring your own key for each.</td>
+</tr>
+<tr>
+<td>Model</td>
+<td>The particular model at a service. One service usually offers several.</td>
+</tr>
+<tr>
+<td>Job</td>
+<td>One thing Wobu has asked a service for: a picture, an enhance, a 3D shape.</td>
+</tr>
+<tr>
+<td>Queue</td>
+<td>The jobs that have not finished yet. How many is in the bottom bar.</td>
+</tr>
+<tr>
+<td>Receipt</td>
+<td>What Wobu keeps of a finished picture: the prompt, the settings, everything that went into it and what it cost. Written once and never changed.</td>
+</tr>
+<tr>
+<td>Spending ceiling</td>
+<td>A limit, shared through the world folder, at which Wobu stops rather than spending more.</td>
+</tr>
+</tbody></table>
+<h3 id="files-folders-and-other-people">Files, folders and other people</h3>
+<table>
+
+<tbody><tr>
+<td>Project</td>
+<td>One folder holding a whole world. Not a database file.</td>
+</tr>
+<tr>
+<td>Search index</td>
+<td>Wobu&#39;s own quick copy of the world, for searching and for reading fast. It holds no original of anything, so rebuilding it is always safe.</td>
+</tr>
+<tr>
+<td>Read-only</td>
+<td>A world folder Wobu cannot write to. Everything is readable; everything that saves is switched off.</td>
+</tr>
+<tr>
+<td>Two versions</td>
+<td>What you get when somebody else saved the same file first. Wobu keeps both and asks which you want; it never merges and never overwrites.</td>
+</tr>
+<tr>
+<td>Ticket</td>
+<td>What lets somebody else&#39;s Wobu join this world. Made from the world menu, accepted on the opening screen, and to be shared privately.</td>
+</tr>
+</tbody></table>
+<h2 id="for-the-curious">For the curious</h2>
+<p>This guide describes what Wobu does. Why it does it that way — and what forced each decision — is
+written up in the design documents that live with the source code: <a href="https://github.com/krazyjakee/wobu/blob/main/docs/01-vision.md">Vision</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/02-data-model.md">Data
+model</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/03-ui-layout.md">UI layout</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/04-influence-engine.md">Influence
+engine</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/05-architecture.md">Architecture</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/07-file-shares.md">File
+shares</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/08-providers.md">Providers</a>, <a href="https://github.com/krazyjakee/wobu/blob/main/docs/16-mcp.md">MCP</a>,
+<a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md">Roadmap</a>.</p>
+
+          <hr />
+          <p class="doc-source"><a class="text-link" href="agent-access.html">← Agent access (MCP)</a></p>
+          <p class="doc-source">
+            This page comes from
+            <a href="https://github.com/krazyjakee/wobu/blob/main/docs/guide/reference.md" rel="noopener">a file in the source
+            code</a> — the very same one the app shows you in its own built-in guide.
+          </p>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="../index.html">Overview</a></li>
+              <li><a href="../guide/index.html">User guide</a></li>
+              <li><a href="../download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="../legal.html">Legal overview</a></li>
+              <li><a href="../legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="../legal/terms.html">Terms of use</a></li>
+              <li><a href="../legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="../legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

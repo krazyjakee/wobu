@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Providers and keys — Wobu</title>
+    <meta name="description" content="Which AI service does what, where your keys are kept, and why they never leave your machine." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/guide/providers.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Providers and keys — Wobu" />
+    <meta property="og:description" content="Which AI service does what, where your keys are kept, and why they never leave your machine." />
+    <meta property="og:url" content="https://wobu.app/guide/providers.html" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="../index.html">Overview</a>
+          <a href="../guide/index.html" aria-current="page">Guide</a>
+          <a href="../download.html">Download</a>
+          <a href="../legal.html">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <div class="wrap doc-wrap">
+        <nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">Guide</h2>
+          <ol>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Your first project</a></li>
+            <li><a href="workspace.html">The workspace</a></li>
+            <li><a href="world-model.html">Entities and hierarchy</a></li>
+            <li><a href="notes-and-enhance.html">Notes and Enhance</a></li>
+            <li><a href="references.html">References and assets</a></li>
+            <li><a href="influence.html">The influence stack</a></li>
+            <li><a href="generating.html">Generating</a></li>
+            <li><a href="concept-3d.html">Concept 3D</a></li>
+            <li><a href="providers.html" aria-current="page">Providers and keys</a></li>
+            <li><a href="collaboration.html">Sharing a project</a></li>
+            <li><a href="agent-access.html">Agent access (MCP)</a></li>
+            <li><a href="reference.html">Keyboard, settings and files</a></li>
+          </ol>
+        </nav>
+        <article class="doc">
+<h1>Providers and keys</h1>
+<p>Wobu does no AI work of its own, and sells you nothing. You paste in a key you got yourself, and
+Wobu talks to that company directly on your behalf. Nothing is set up in advance, and there is no
+account to make here.</p>
+<h2 id="three-jobs-not-one-setting">Three jobs, not one setting</h2>
+<p>You pick a service for each <em>job</em>, not one for everything. Enhancing with one company, making
+pictures on your own graphics card, and making 3D shapes through a third is a perfectly ordinary
+setup.</p>
+<table>
+<thead>
+<tr>
+<th>Job</th>
+<th>Used by</th>
+<th>Services</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Text</td>
+<td>Enhance</td>
+<td>Anthropic, Gemini</td>
+</tr>
+<tr>
+<td>Images</td>
+<td>Generate</td>
+<td>ComfyUI, Gemini</td>
+</tr>
+<tr>
+<td>3D</td>
+<td>Concept 3D</td>
+<td>Tencent Hunyuan3D, Local 2.1 (ComfyUI)</td>
+</tr>
+</tbody></table>
+<p>Text also has a <strong>Model</strong> box you can type into, because model names change faster than apps do.
+Leave it blank for the company&#39;s default.</p>
+<h2 id="two-halves-because-they-belong-to-different-people">Two halves, because they belong to different people</h2>
+<p>Settings → Providers and models is split down the middle, and the split is the whole point.</p>
+<p><strong>What this project uses</strong> is saved in the world folder and travels with it. Open a world somebody
+else built and you can see the choices they made — which service, which model, which region, the
+spending limit. It is tagged <code>shared</code>.</p>
+<p><strong>Keys on this computer</strong> never travel. They are tagged <code>local</code>, and they are listed once per
+company rather than once per job, because a key is not tied to a job — the same Gemini key writes
+text and makes pictures. Where your ComfyUI is running lives in this half too, for the same reason:
+it describes this computer, not the world.</p>
+<h2 id="how-keys-are-stored">How keys are stored</h2>
+<p>Keys go into your computer&#39;s own password store — Secret Service on Linux, Keychain on macOS,
+Credential Manager on Windows. Only the part of Wobu that talks to the internet ever sees them: they
+never reach the part that draws the screen, are never written to a log file, and are blanked out of
+error messages before you can read them. A key already set up in your environment is used too, and
+Settings tells you which of the two a key came from.</p>
+<blockquote>
+<p><strong>Keys never go in the world folder</strong> World folders are meant to live on shared drives. A key in
+there would be a key handed to everybody with access to that drive — and to your version history,
+and to whoever the folder eventually gets emailed to. So the world only records the <em>choice</em>:
+which service, which model, which region, and the default settings.</p>
+</blockquote>
+<p>That means <strong>keys belong to your installation, not to a world</strong>. Opening somebody else&#39;s world uses
+<em>your</em> keys. A collaborator without one sees <code>Gemini selected — no key on this machine</code> and an <strong>Add
+key</strong> button, rather than a failure halfway through a job.</p>
+<p>Where a company allows it, <strong>Check this key</strong> asks for one short description and stops after a few
+dozen words — a fraction of a penny, and nothing at all if the key is refused.</p>
+<h3 id="missing-keys-are-not-a-disaster">Missing keys are not a disaster</h3>
+<p>Open a world whose chosen service you have no key for and just that one job goes quiet, with a
+button right there to fix it. You can still read, write and organise the whole world — only Enhance
+or Generate stops. On Linux, a locked login keyring is reported as exactly that, rather than as a
+failed save.</p>
+<h2 id="anthropic">Anthropic</h2>
+<p>Keys come from the Claude Console. Anthropic is the default for text: a world that has not chosen
+anything uses it, and Settings says so rather than leaving the box looking empty.</p>
+<h2 id="google-gemini">Google Gemini</h2>
+<p>Keys come from AI Studio. Gemini can do both the text and the pictures.</p>
+<h3 id="text-for-enhance">Text — for Enhance</h3>
+<p>A fast, cheap model by default. Descriptions are asked for in a fixed shape, so what comes back
+fits neatly into sections rather than being prose somebody has to unpick.</p>
+<blockquote>
+<p><strong>The thing most likely to catch you out</strong> <strong>Gemini image generation has no free tier.</strong> Text is
+free; every image model needs billing. So if you paste in a working key, enhance a species
+perfectly happily, and then hit an error on Generate — nothing is broken. You need billing turned
+on in your Google account. Wobu spots this exact case and says so plainly instead of showing you a
+raw error.</p>
+</blockquote>
+<h3 id="images-for-generate">Images — for Generate</h3>
+<p>Several tiers, from a cheap small model up to a good one that takes the most reference pictures.
+Pictures come back directly rather than as links, and everything carries an invisible SynthID
+watermark.</p>
+<p>Two things worth knowing before you plan around them:</p>
+<ul>
+<li><strong>How many reference pictures a model takes varies</strong>, and it varies by type — objects, characters
+and style. Wobu respects those limits. See <a href="references.html">References</a>.</li>
+<li><strong>Gemini image models take no &quot;never draw this&quot; list.</strong> Every <em>Never</em> line is held back and
+reported as held back, rather than being quietly pasted into the prompt, where it would summon
+the very thing you banned.</li>
+</ul>
+<h2 id="comfyui-on-your-own-machine">ComfyUI (on your own machine)</h2>
+<p>Point Wobu at a running ComfyUI and pictures are made on your own graphics card. No key, no
+estimate, no bill, and nothing leaves the machine. The usual address is <code>http://127.0.0.1:8188</code>;
+<strong>Save and check</strong> confirms it is really there. It is remembered on this computer, never in the
+world folder.</p>
+<p>If you point it at a machine other than your own, that machine receives your prompts and reference
+pictures — so only ever use a server you trust. Passwords in the address are refused; anything
+needing a login has to be set up outside Wobu.</p>
+<p>Wobu drives ComfyUI rather than replacing it. Your node graph stays exactly where it is, and Wobu
+stays a document editor.</p>
+<blockquote>
+<p><strong>Two limits worth knowing</strong> The setups that ship with Wobu take no picture input, so <strong>reference
+pictures are not sent to ComfyUI at all</strong> — they are reported as not sent rather than quietly
+ignored. And Flux-family models have no way to take a &quot;never draw this&quot; list, so those lines are
+held back for them too. On the plus side, ComfyUI shows you a live preview while it works, which
+the paid services do not.</p>
+</blockquote>
+<h2 id="tencent-hunyuan3d-3d-shapes">Tencent Hunyuan3D (3D shapes)</h2>
+<p>The paid 3D service, and the one that genuinely takes some setting up. Settings walks you through it
+in three linked steps — switch on the service, open the users page, make a limited key — and it is
+worth knowing why before you start:</p>
+<table>
+
+<tbody><tr>
+<td>There is no simple API key</td>
+<td>It uses an id and a secret together, with each request signed. Wobu does the signing; you paste in both halves.</td>
+</tr>
+<tr>
+<td>Make a limited key, not a master one</td>
+<td>The account-level secret unlocks your whole account, not just this one service — a lot more dangerous to have lying around than a normal key. Make a sub-account key limited to 3D instead of pasting in your main credentials.</td>
+</tr>
+<tr>
+<td>A region is required</td>
+<td>Only three work: Singapore, Silicon Valley and Frankfurt. Concept 3D stays off until the world records one, because Wobu will not guess where to send your pictures — and it always asks about a job in the same region it sent it to.</td>
+</tr>
+<tr>
+<td>Switch the service on first</td>
+<td>A brand new account fails until you explicitly turn the 3D service on in their console. Wobu treats that as a setup step with a link, not as an error.</td>
+</tr>
+<tr>
+<td>Check your computer&#39;s clock</td>
+<td>Signatures expire after a few minutes of drift. Desktop clocks do drift, so Wobu turns that particular failure into &quot;check your system clock&quot; rather than a baffling authentication error.</td>
+</tr>
+</tbody></table>
+<h2 id="wobu-asks-first-rather-than-finding-out-the-hard-way">Wobu asks first, rather than finding out the hard way</h2>
+<p>Each service says up front what it can do, and Wobu uses that before sending anything rather than
+discovering it from an error:</p>
+<ul>
+<li>The list of shapes comes from the service you chose; a saved shape it will not accept is fixed
+first, and you are shown the size it settled on.</li>
+<li>A service that takes no shape references shows yours as downgraded to mood-board-only.</li>
+<li>Limits on reference pictures are respected, so the panel can say <code>3/3 style refs</code> and name what
+got left out.</li>
+<li>A service with no &quot;never draw this&quot; list has yours held back, and says so.</li>
+<li>Services that require billing are marked as such before you spend anything.</li>
+</ul>
+<h2 id="keeping-a-lid-on-spending">Keeping a lid on spending</h2>
+<ul>
+<li>An estimate on the Generate button for paid services; nothing at all for your own machine.</li>
+<li>A <strong>spending limit</strong> per world, with a hard stop, saved in the folder so it applies to everyone
+who opens it.</li>
+<li>Every picture is saved with the service, model and settings that made it, so what a world really
+cost can be worked out from the folder — you never have to log into anybody&#39;s billing page to find
+out.</li>
+<li>3D is the exception, and sits behind a tick box instead: that service does not report what it
+charged. See <a href="concept-3d.html">Concept 3D</a>.</li>
+</ul>
+
+          <hr />
+          <p class="doc-source"><a class="text-link" href="concept-3d.html">← Concept 3D</a> &nbsp;·&nbsp; <a class="text-link" href="collaboration.html">Sharing a project →</a></p>
+          <p class="doc-source">
+            This page comes from
+            <a href="https://github.com/krazyjakee/wobu/blob/main/docs/guide/providers.md" rel="noopener">a file in the source
+            code</a> — the very same one the app shows you in its own built-in guide.
+          </p>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="../index.html">Overview</a></li>
+              <li><a href="../guide/index.html">User guide</a></li>
+              <li><a href="../download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="../legal.html">Legal overview</a></li>
+              <li><a href="../legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="../legal/terms.html">Terms of use</a></li>
+              <li><a href="../legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="../legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

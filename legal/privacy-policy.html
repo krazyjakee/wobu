@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wobu Privacy Policy — Wobu</title>
+    <meta name="description" content="Wobu's privacy policy: no servers, no account, no tracking, and a plain list of the only times the app talks to anything at all." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/legal/privacy-policy.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Wobu Privacy Policy — Wobu" />
+    <meta property="og:description" content="Wobu's privacy policy: no servers, no account, no tracking, and a plain list of the only times the app talks to anything at all." />
+    <meta property="og:url" content="https://wobu.app/legal/privacy-policy.html" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="../index.html">Overview</a>
+          <a href="../guide/index.html">Guide</a>
+          <a href="../download.html">Download</a>
+          <a href="../legal.html" aria-current="page">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <div class="wrap doc-wrap">
+        <nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">On this page</h2>
+          <ol>
+            <li><a href="#summary">Summary</a></li>
+            <li><a href="#1-data-controller-and-contact">1. Data controller and contact</a></li>
+            <li><a href="#2-what-stays-on-your-machine">2. What stays on your machine</a></li>
+            <li><a href="#3-what-leaves-your-machine-and-to-whom">3. What leaves your machine, and to whom</a></li>
+            <li><a href="#4-what-is-never-collected">4. What is never collected</a></li>
+            <li><a href="#5-how-api-keys-are-stored">5. How API keys are stored</a></li>
+            <li><a href="#6-children">6. Children</a></li>
+            <li><a href="#7-your-control-over-your-data">7. Your control over your data</a></li>
+            <li><a href="#8-security">8. Security</a></li>
+            <li><a href="#9-changes-to-this-policy">9. Changes to this policy</a></li>
+            <li><a href="#10-complaints">10. Complaints</a></li>
+          </ol>
+        </nav>
+        <article class="doc">
+<h1>Wobu Privacy Policy</h1>
+<p><strong>Last updated:</strong> 3 August 2026 · Applies to Wobu 0.1.0 and later.</p>
+<p>Wobu is a local-first desktop application published by Jake Cattrall (&quot;we&quot;, &quot;us&quot;). It is
+distributed as a binary and as source under the MIT licence.</p>
+<p>This policy describes exactly what Wobu does with your data. It is written against the source
+code, not against an intention: every destination named below corresponds to a literal address in
+the repository, and every store named below corresponds to a path the application actually writes.</p>
+<h2 id="summary">Summary</h2>
+<ul>
+<li><strong>We operate no servers.</strong> There is no Wobu account, no Wobu inference proxy, no Wobu sync
+service and no Wobu storage. We never receive your worlds, your prompts, your images or your
+keys, because there is nowhere for them to arrive.</li>
+<li><strong>There is no telemetry.</strong> No analytics, no usage metrics, no crash or error reporting, no
+version or update check, no &quot;phone home&quot; of any kind. The application does not contact us, and
+contains no code or dependency that could.</li>
+<li><strong>Your project stays in your project folder.</strong> Notes stay as readable Markdown, assets stay as
+files, and the derived search index stays outside the project on your own machine.</li>
+<li><strong>Content leaves your machine only when you ask it to</strong>, and only to a provider you configured
+yourself or to a peer you shared with yourself.</li>
+<li><strong>API keys go to the operating-system keychain</strong>, never into a project folder and never back out
+to the interface.</li>
+<li><strong>Nothing listens for connections, and no other program is run, unless you switch it on.</strong> Agent
+access over MCP is off by default, binds only to your own machine when enabled, and needs a further
+separate switch before an agent can change anything. See section 3.5 — and note that an MCP server
+you configure yourself is a program of someone else&#39;s, which this policy cannot speak for.</li>
+</ul>
+<h2 id="1-data-controller-and-contact">1. Data controller and contact</h2>
+<p>Jake Cattrall. Contact via the project repository:
+<a href="https://github.com/krazyjakee/wobu">https://github.com/krazyjakee/wobu</a>. Because we hold no data about you, there is nothing for us to
+disclose, correct, export or erase on request — the equivalent actions are all performed by you, on
+your own filesystem, as described in section 7.</p>
+<h2 id="2-what-stays-on-your-machine">2. What stays on your machine</h2>
+<h3 id="21-project-folders">2.1 Project folders</h3>
+<p>A Wobu project is an ordinary, self-contained <code>&lt;Name&gt;.wobu</code> directory that you choose the location
+of. Wobu reads and writes it in place, and never copies it anywhere else. It contains:</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>project.json</code></td>
+<td>Project metadata and the provider/model <em>selection</em> — never a credential</td>
+</tr>
+<tr>
+<td><code>nodes/&lt;kind&gt;/&lt;slug&gt;.md</code></td>
+<td>Your world&#39;s notes, as plain Markdown</td>
+</tr>
+<tr>
+<td><code>assets/originals/</code></td>
+<td>Imported and generated images and meshes</td>
+</tr>
+<tr>
+<td><code>.wobu/tmp</code></td>
+<td>Staging area for atomic writes</td>
+</tr>
+<tr>
+<td><code>.wobu/sessions</code></td>
+<td>Presence markers, so collaborators on a shared folder can see each other</td>
+</tr>
+<tr>
+<td><code>.wobu/accepting.json</code></td>
+<td>Marker written while the project is accepting a peer-to-peer share</td>
+</tr>
+</tbody></table>
+<h3 id="22-application-data">2.2 Application data</h3>
+<p>Machine-local data lives in the standard per-user application data directory — <code>~/.local/share/wobu</code>
+on Linux, <code>~/Library/Application Support/wobu</code> on macOS, <code>%APPDATA%\wobu</code> on Windows:</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>index/&lt;project-id&gt;.sqlite</code></td>
+<td>The SQLite search index. Entirely derived from your project folder; it holds no canonical data and deleting it is always safe</td>
+</tr>
+<tr>
+<td><code>recent.json</code></td>
+<td>The list of recently opened projects</td>
+</tr>
+<tr>
+<td><code>settings.json</code></td>
+<td>Per-installation settings, including your ComfyUI endpoint</td>
+</tr>
+<tr>
+<td><code>sync/shares.json</code></td>
+<td>Records of shares you created or accepted</td>
+</tr>
+<tr>
+<td><code>mesh-cache/</code></td>
+<td>Decoded 3D meshes, cached for display</td>
+</tr>
+<tr>
+<td><code>logs/wobu.log</code>, <code>logs/wobu.1.log</code></td>
+<td>Diagnostic log, two rolling files of 2 MiB each</td>
+</tr>
+<tr>
+<td><code>logs/level</code></td>
+<td>The diagnostic level you selected</td>
+</tr>
+</tbody></table>
+<p>During a project transfer Wobu also writes a temporary database to your system temporary directory
+(<code>wobu-transfer-&lt;id&gt;.sqlite</code>), which it removes when the transfer finishes.</p>
+<h3 id="23-the-diagnostic-log">2.3 The diagnostic log</h3>
+<p>The log is written only to the application data directory — never inside a project folder, so it
+cannot be synced to a collaborator by accident. Every line passes through a redactor before it is
+written, so credentials do not reach the file. It is never transmitted anywhere. If you want to
+send it to us to accompany a bug report you must find it and attach it yourself; Settings ›
+Diagnostics will reveal it in your file manager and show its contents.</p>
+<h2 id="3-what-leaves-your-machine-and-to-whom">3. What leaves your machine, and to whom</h2>
+<p>Wobu is &quot;bring your own key&quot; (BYOK). When you configure a provider, the application talks to that
+provider <strong>directly from your machine</strong>, using your credentials, under your account. There is no
+intermediary. Each of the following happens only when you have configured the provider in question
+and then invoked the feature that uses it.</p>
+<p>Requests honour your operating system&#39;s proxy configuration.</p>
+<h3 id="31-text-providers-the-enhance-feature">3.1 Text providers — the Enhance feature</h3>
+<table>
+<thead>
+<tr>
+<th>Destination</th>
+<th>Operator</th>
+<th>Sent</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>https://api.anthropic.com/v1/messages</code></td>
+<td>Anthropic PBC</td>
+<td>The compiled prompt, the standing system instructions, the model id and a token limit, plus your Anthropic API key as an <code>x-api-key</code> header</td>
+</tr>
+<tr>
+<td><code>https://generativelanguage.googleapis.com/v1beta/interactions</code></td>
+<td>Google LLC</td>
+<td>The same request shape, plus your Google AI API key</td>
+</tr>
+</tbody></table>
+<p>The &quot;compiled prompt&quot; is the text you are working on together with whatever the influence stack
+contributed to it — that is, other notes from your own project. These requests carry text only; no
+images are attached.</p>
+<h3 id="32-image-and-3d-providers">3.2 Image and 3D providers</h3>
+<table>
+<thead>
+<tr>
+<th>Destination</th>
+<th>Operator</th>
+<th>Sent</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>https://generativelanguage.googleapis.com/v1beta</code></td>
+<td>Google LLC</td>
+<td><code>POST /interactions</code> to generate: the prompt, the negative prompt, generation parameters, and any reference images inline as base64. <code>GET /models/&lt;model&gt;</code> to check that a key works</td>
+</tr>
+<tr>
+<td><code>https://hunyuan.intl.tencentcloudapi.com</code></td>
+<td>Tencent Cloud</td>
+<td>3D mesh jobs: a text prompt, or a single reference image or a set of rendered turnaround views, base64-encoded, plus mesh parameters. Requests are signed with your Tencent SecretId/SecretKey (TC3-HMAC-SHA256); the secret itself is not transmitted</td>
+</tr>
+<tr>
+<td>Tencent COS result URLs</td>
+<td>Tencent Cloud</td>
+<td>Nothing is uploaded. Wobu downloads the finished mesh and preview from the time-limited URLs the Hunyuan API returns. The host is whatever that response names</td>
+</tr>
+<tr>
+<td><code>http://127.0.0.1:8188</code> (default, editable)</td>
+<td>You</td>
+<td>ComfyUI: prompts, generation parameters and reference-image bytes over HTTP, plus a WebSocket to <code>…/ws</code> for progress</td>
+</tr>
+</tbody></table>
+<p>Notes on the two that need them:</p>
+<ul>
+<li><strong>Tencent region.</strong> Wobu picks between the <code>ap-singapore</code>, <code>na-siliconvalley</code> and <code>eu-frankfurt</code>
+endpoints using your computer&#39;s UTC offset, and you can change the choice in Settings. It does
+not perform a geo-IP lookup or read your location.</li>
+<li><strong>ComfyUI.</strong> The default endpoint is your own loopback address, so by default nothing leaves the
+machine at all. If you change it to a LAN or internet address you are authorising Wobu to send
+prompts and reference-image bytes to that server, and its operator&#39;s policies then apply.</li>
+</ul>
+<h3 id="33-peer-to-peer-sync">3.3 Peer-to-peer sync</h3>
+<p>Sync is off until you create or accept a share. When it is running, Wobu uses the <code>iroh</code> QUIC
+transport to move project content directly between peers. Transfers are content-addressed and
+verified with BLAKE3, and a share is authorised by a ticket you pass to the other person yourself —
+there is no directory, index or rendezvous service that lists your projects.</p>
+<p>Two pieces of third-party infrastructure are nevertheless involved, and we do not operate either of
+them. Both are run by <strong>Number Zero, Inc. (n0)</strong>, the authors of <code>iroh</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Destination</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>https://dns.iroh.link/pkarr</code> and DNS queries under <code>dns.iroh.link</code></td>
+<td>Address discovery. Your machine <strong>publishes</strong> its endpoint public key, its relay URL and its direct IP addresses here so a peer holding your ticket can find you, and resolves the same records for peers</td>
+</tr>
+<tr>
+<td><code>use1-1.relay.n0.iroh.link</code>, <code>usw1-1.relay.n0.iroh.link</code>, <code>euc1-1.relay.n0.iroh.link</code>, <code>aps1-1.relay.n0.iroh.link</code></td>
+<td>Relays, over HTTPS on port 443 plus QUIC address discovery on port 7842. Used to make the initial connection through NAT, and to carry traffic if a direct path cannot be established</td>
+</tr>
+</tbody></table>
+<p>Wobu selects the nearest relay by latency. Connections upgrade to a direct peer-to-peer path when
+one is available, but a relay may carry project content for the whole session if it is not. If you
+do not want your addresses published to, or your content routed through, infrastructure operated by
+a third party, do not use peer-to-peer sync; shared-folder collaboration over a filesystem you
+control has no such dependency.</p>
+<h3 id="34-links-you-click">3.4 Links you click</h3>
+<p>Buttons in Settings open pages in your normal web browser rather than fetching them:
+<code>https://console.tencentcloud.com/hunyuan</code>, <code>https://console.tencentcloud.com/cam</code>,
+<code>https://console.tencentcloud.com/cam/capi</code> and <code>https://github.com/krazyjakee/wobu</code>. Once your
+browser is open, its own privacy behaviour applies.</p>
+<p>Wobu also prints <code>https://aistudio.google.com/apikey</code> in the error it shows when Google reports a
+billing problem with your key. That address is text on screen for you to follow if you want to; the
+application never requests it.</p>
+<h3 id="35-agent-access-mcp-off-unless-you-turn-it-on">3.5 Agent access (MCP) — off unless you turn it on</h3>
+<p>Wobu can expose your open project to an AI agent over the Model Context Protocol, and can run MCP
+servers you configure. <strong>All of it is off by default</strong>, and nothing here starts until you turn it on
+in Settings → Agent access. This is the only part of Wobu that listens for connections or launches
+another program, so it is described in full:</p>
+<ul>
+<li><strong>A local listener.</strong> When you enable the server, Wobu binds <code>127.0.0.1:9628</code> (the port is
+configurable; the address is not). It accepts connections only from your own machine. Requests must
+carry a bearer token that is generated the first time you enable it; any request arriving with an
+<code>Origin</code> header is refused before authentication, and no CORS header is ever sent, so a web page you
+visit cannot reach it. Nothing is sent anywhere by the server — it answers, it does not call out.</li>
+<li><strong>What an agent can read.</strong> Nine read-only tools covering your entities, search, links, the
+resolved influence stack, compiled prompts and generation receipts. That is your project content,
+disclosed to whichever agent you connected.</li>
+<li><strong>What an agent can change</strong> is a second, separate switch, also off by default. Until you grant it,
+the write tools are not merely refused — they are not advertised at all.</li>
+<li><strong>Programs Wobu runs.</strong> If you configure MCP servers of your own, Wobu launches them directly (never
+through a shell), talks to them over stdin/stdout, and stops them when you disable them or quit. A
+newly added server is added switched off. What those programs do, and where they send anything, is
+governed by whoever wrote them, not by this policy.</li>
+<li><strong>What is stored.</strong> <code>mcp.json</code> in the application data folder, readable only by your user account,
+holds the bearer token and any environment overrides you set for a configured server.</li>
+<li><strong>A record of use.</strong> Every call, including refused ones, is timestamped into an in-app activity
+list and the local diagnostic log. That record stays on your machine.</li>
+</ul>
+<p>Turning any switch off takes effect at once: the socket is dropped and configured servers are killed,
+rather than a flag being consulted on the next request.</p>
+<h3 id="36-providers39-own-handling-of-what-you-send">3.6 Providers&#39; own handling of what you send</h3>
+<p>Once your content reaches a provider, that provider&#39;s privacy policy and terms — not this one —
+govern what happens to it, including whether it may be retained, reviewed by humans, or used for
+model training. Those decisions belong to your account with them. Please read them:</p>
+<ul>
+<li>Anthropic — <a href="https://www.anthropic.com/legal/privacy">https://www.anthropic.com/legal/privacy</a></li>
+<li>Google AI — <a href="https://policies.google.com/privacy">https://policies.google.com/privacy</a></li>
+<li>Tencent Cloud — <a href="https://www.tencentcloud.com/document/product/301/17345">https://www.tencentcloud.com/document/product/301/17345</a></li>
+<li>ComfyUI — self-hosted; the operator of the endpoint you configured is responsible</li>
+<li>n0 (<code>iroh</code> relays and DNS) — <a href="https://n0.computer/privacy">https://n0.computer/privacy</a></li>
+</ul>
+<h2 id="4-what-is-never-collected">4. What is never collected</h2>
+<p>We want this to be unambiguous. Wobu contains <strong>no</strong>:</p>
+<ul>
+<li>analytics or product-usage tracking of any kind;</li>
+<li>crash, error or exception reporting;</li>
+<li>performance or metrics collection, and no OpenTelemetry or similar exporter;</li>
+<li>automatic update check, version ping or licence check — the application never contacts a Wobu
+endpoint, because none exists;</li>
+<li>advertising, advertising identifier, cookie, or fingerprinting;</li>
+<li>account, sign-in, activation or registration;</li>
+<li>remote fonts, scripts, stylesheets or images. The interface loads nothing from a CDN.</li>
+</ul>
+<p>We collect no personal data, so we do not sell, share or disclose personal data, and we do not
+transfer it internationally. Any international transfer that occurs is one you initiate, directly
+between your machine and a provider you chose.</p>
+<p>The application&#39;s webview is additionally locked down by a content security policy that permits no
+external origin, so the interface itself cannot make a network request off the device. All provider
+traffic is made by the native process, from the code paths listed in section 3.</p>
+<h2 id="5-how-api-keys-are-stored">5. How API keys are stored</h2>
+<p>Credentials you enter are stored per installation in the operating system&#39;s own credential store —
+Keychain on macOS, Credential Manager on Windows, and the Secret Service (GNOME Keyring, KWallet)
+on Linux — under the service name <code>wobu</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Credential</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wobu/anthropic</code></td>
+<td>Anthropic API key</td>
+</tr>
+<tr>
+<td><code>wobu/gemini</code></td>
+<td>Google AI API key</td>
+</tr>
+<tr>
+<td><code>wobu/tencent-secret-id</code></td>
+<td>Tencent SecretId</td>
+</tr>
+<tr>
+<td><code>wobu/tencent-secret-key</code></td>
+<td>Tencent SecretKey</td>
+</tr>
+<tr>
+<td><code>wobu/sync</code></td>
+<td>Your peer identity secret key, generated locally</td>
+</tr>
+</tbody></table>
+<p>ComfyUI has no entry because it needs no key.</p>
+<p>Consequences of that design, all of them deliberate:</p>
+<ul>
+<li><strong>Keys are never written into a project folder.</strong> A key in <code>project.json</code> would be a key handed
+to everyone the folder is shared with. The project file records only the <em>selection</em> — provider
+id, model id, default parameters.</li>
+<li><strong>Keys never travel back to the interface.</strong> A key passes from the entry field into the native
+process once. After that the interface can ask whether a provider is configured, but cannot read
+the value.</li>
+<li><strong>Keys are excluded from logs and error output.</strong> The credential type has no serialisation and
+prints as a mask; provider adapters print <code>&lt;redacted&gt;</code> in place of the key.</li>
+<li><strong>Release builds have no plaintext fallback.</strong> Development builds may read a key from an
+environment variable or a <code>.env</code> file at a fixed, compile-time path; that path can never point
+inside a project folder, and the whole mechanism is compiled out of release builds.</li>
+<li><strong>If the keychain is unavailable</strong> — a locked login keyring, a headless session — Wobu reports the
+provider as unconfigured rather than writing the key somewhere less safe.</li>
+</ul>
+<p>You can delete any credential from Settings › Providers, which removes the keychain entry.</p>
+<h2 id="6-children">6. Children</h2>
+<p>Wobu is not directed at children and collects no data from anyone, including children. Providers
+you configure may impose their own minimum-age requirements.</p>
+<h2 id="7-your-control-over-your-data">7. Your control over your data</h2>
+<p>Because everything is local, you exercise your rights directly rather than by asking us:</p>
+<ul>
+<li><strong>Access and portability</strong> — your world is Markdown and ordinary image files in a folder you
+chose. Copy it, back it up, put it in version control, or open it in any other editor.</li>
+<li><strong>Erasure</strong> — delete the project folder. To remove everything else, delete the application data
+directory listed in section 2.2; the search index and mesh cache are derived and safe to delete at
+any time.</li>
+<li><strong>Withdrawing a provider</strong> — delete its key in Settings › Providers and no further request can be
+made to it. Content already sent to a provider is subject to that provider&#39;s retention policy, and
+must be deleted through them.</li>
+<li><strong>Stopping sync</strong> — stop sharing, and Wobu stops publishing addresses and stops connecting to
+relays.</li>
+</ul>
+<h2 id="8-security">8. Security</h2>
+<p>Wobu keeps credentials in the OS keychain, redacts them from logs and error paths, writes project
+files atomically through a staging directory, and verifies peer-to-peer transfers cryptographically.
+It cannot, however, protect data on a machine that is itself compromised, and current beta bundles
+are unsigned — download them only from the project&#39;s GitHub Releases page.</p>
+<h2 id="9-changes-to-this-policy">9. Changes to this policy</h2>
+<p>The current version of this policy is the one in the release you are running; it ships beside the
+binary in the installer and is shown in Settings › Legal. When the set of destinations in section 3
+changes, this document changes with it in the same release. The history of every change is public in
+the repository.</p>
+<h2 id="10-complaints">10. Complaints</h2>
+<p>If you believe Wobu is sending data somewhere this document does not list, please open an issue at
+<a href="https://github.com/krazyjakee/wobu/issues">https://github.com/krazyjakee/wobu/issues</a>. If you are in the UK or the EU and are dissatisfied
+with our response, you may complain to your national data protection authority — in the UK, the
+Information Commissioner&#39;s Office at <a href="https://ico.org.uk">https://ico.org.uk</a>.</p>
+
+          <hr />
+          <p class="doc-source">
+            This page comes from
+            <a href="https://github.com/krazyjakee/wobu/blob/main/docs/legal/privacy-policy.md" rel="noopener">the original document in the source code</a> — the
+            same file that comes with the app.
+          </p>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="../index.html">Overview</a></li>
+              <li><a href="../guide/index.html">User guide</a></li>
+              <li><a href="../download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="../legal.html">Legal overview</a></li>
+              <li><a href="../legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="../legal/terms.html">Terms of use</a></li>
+              <li><a href="../legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="../legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
