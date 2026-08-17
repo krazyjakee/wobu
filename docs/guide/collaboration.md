@@ -112,6 +112,13 @@ way out rather than a dead end.
 > being broken: leave it open with the other person's Wobu running and the rest follows. The line
 > goes away by itself on the first complete round.
 
+Generated concepts travel as one complete change: the image and its immutable receipt (prompt,
+seed, provider parameters, cost metadata, and influence snapshot) are both announced to peers.
+Deleting a concept sends its archived receipt as a tombstone, so every replica removes it from
+Concepts while preserving an output that a node still uses as a reference or cover. If one client
+learns about a change from another, it immediately fans the enlarged manifest out to the rest of
+its connected peers rather than waiting for the idle polling interval.
+
 > **A ticket is a key to your world** Send it privately. Tickets do not expire, and you cannot take
 > one back on its own. **Stop sharing…** cancels every ticket this installation ever made for this
 > world and forgets the machines it was talking to — but it cannot delete copies people have already

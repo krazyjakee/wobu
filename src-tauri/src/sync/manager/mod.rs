@@ -207,6 +207,9 @@ pub struct Replica {
     /// How many consecutive outbound rounds have found nothing to do, which is
     /// what [`BACKOFF`] is indexed by.
     idle: AtomicU64,
+    /// Interrupts a backed-off outbound poll when an inbound round changed the
+    /// local replica and those bytes now need fanning out to its other peers.
+    changed: tokio::sync::Notify,
 }
 
 impl Replica {
@@ -225,7 +228,13 @@ impl Replica {
             held: Mutex::new(if open { Held::Open } else { Held::Detached(None) }),
             round: tokio::sync::Mutex::new(()),
             idle: AtomicU64::new(0),
+            changed: tokio::sync::Notify::new(),
         }
+    }
+
+    fn expedite(&self) {
+        self.idle.store(0, Ordering::Relaxed);
+        self.changed.notify_one();
     }
 
     pub fn project(&self) -> Id {

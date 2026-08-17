@@ -58,20 +58,26 @@ impl Sessions for Accepts {
 
         let outcome =
             tokio::time::timeout(SESSION_BUDGET, round::run(&manager, &replica, &session));
-        let converged = match outcome.await {
-            Ok(Ok(outcome)) => outcome.converged(),
+        let (converged, changed) = match outcome.await {
+            Ok(Ok(outcome)) => (outcome.converged(), outcome.changed),
             Ok(Err(e)) => {
                 diag::error(format!("sync: inbound round failed: {}", e.message));
-                false
+                (false, false)
             }
             Err(_elapsed) => {
                 diag::error("sync: inbound round ran out of time");
-                false
+                (false, false)
             }
         };
         drop(gate);
         session.close();
         manager.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
+        if changed {
+            // The peer that dialled us is current; every other online peer may
+            // now be behind. Do not leave that fan-out waiting at the two-minute
+            // end of the ordinary idle backoff.
+            replica.expedite();
+        }
     }
 }
 

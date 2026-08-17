@@ -62,48 +62,76 @@ impl SyncManager {
 
         let mut worked = false;
         let mut answered = false;
-        for ticket in &share.peers {
-            if self.stopping() {
-                return worked;
-            }
-            self.set_phase(project, SyncPhase::Connecting);
-            let session = match self.endpoint().connect_ticket(ticket).await {
-                Ok(session) => session,
-                Err(e) => {
-                    // A peer that is not online is the ordinary state of a
-                    // peer-to-peer share with no seed node, so this is a debug
-                    // line and not an error: raising a toast every time a
-                    // collaborator's laptop is shut would make the app unusable.
-                    diag::record(
-                        diag::Level::Debug,
-                        format!("sync: {} is not answering: {e}", ticket.alias()),
-                    );
-                    continue;
+        // A change can arrive from the last peer in the list after the first
+        // peer has already been visited. One convergence pass makes that newly
+        // enlarged manifest reach every connected peer in this same poll.
+        for pass in 0..3 {
+            let mut local_changed = false;
+            let mut retry_convergence = false;
+            for ticket in &share.peers {
+                if self.stopping() {
+                    return worked;
                 }
-            };
-            answered = true;
+                self.set_phase(project, SyncPhase::Connecting);
+                let session = match self.endpoint().connect_ticket(ticket).await {
+                    Ok(session) => session,
+                    Err(e) => {
+                        // A peer that is not online is the ordinary state of a
+                        // peer-to-peer share with no seed node, so this is a debug
+                        // line and not an error: raising a toast every time a
+                        // collaborator's laptop is shut would make the app unusable.
+                        diag::record(
+                            diag::Level::Debug,
+                            format!("sync: {} is not answering: {e}", ticket.alias()),
+                        );
+                        continue;
+                    }
+                };
+                answered = true;
 
-            let gate = replica.round.lock().await;
-            let endpoint_id = ticket.peer().to_string();
-            let alias = ticket.alias();
-            self.set_peer(
-                project,
-                endpoint_id.clone(),
-                alias.clone(),
-                true,
-                false,
-                SyncPhase::Syncing,
-            );
-            let outcome = round::run(self, &replica, &session).await;
-            drop(gate);
-            session.close();
+                let gate = replica.round.lock().await;
+                let endpoint_id = ticket.peer().to_string();
+                let alias = ticket.alias();
+                self.set_peer(
+                    project,
+                    endpoint_id.clone(),
+                    alias.clone(),
+                    true,
+                    false,
+                    SyncPhase::Syncing,
+                );
+                let outcome = round::run(self, &replica, &session).await;
+                drop(gate);
+                session.close();
 
-            let converged = outcome.as_ref().is_ok_and(|outcome| outcome.converged());
-            self.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
+                let converged = outcome.as_ref().is_ok_and(|outcome| outcome.converged());
+                self.set_peer(project, endpoint_id, alias, false, converged, SyncPhase::Idle);
 
-            match outcome {
-                Ok(outcome) => worked |= outcome.did_something(),
-                Err(e) => diag::error(format!("sync: round with a peer failed: {}", e.message)),
+                match outcome {
+                    Ok(outcome) => {
+                        worked |= outcome.did_something();
+                        local_changed |= outcome.changed;
+                    }
+                    Err(e) => {
+                        retry_convergence |= pass > 0;
+                        diag::error(format!("sync: round with a peer failed: {}", e.message));
+                    }
+                }
+            }
+            if pass == 0 && !local_changed {
+                break;
+            }
+            if pass > 0 && !retry_convergence {
+                break;
+            }
+            if pass < 2 {
+                // `Session::close` is intentionally fire-and-forget. Give the
+                // remote accept tasks time to observe it and drop their
+                // per-replica round gates before the convergence pass
+                // reconnects to an earlier peer. A busy peer deliberately
+                // refuses instead of queueing, so this is part of that retry
+                // contract rather than transport backoff.
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
         self.set_phase(project, if answered { SyncPhase::Idle } else { SyncPhase::Offline });
@@ -132,7 +160,16 @@ impl SyncManager {
                     // reference across the sleep would keep the endpoint alive
                     // through a shutdown for up to two minutes.
                 };
-                tokio::time::sleep(wait).await;
+                let Some(strong) = manager.upgrade() else { return };
+                let Some(replica) = strong.replica(project) else {
+                    return;
+                };
+                let changed = replica.changed.notified();
+                drop(strong);
+                tokio::select! {
+                    () = tokio::time::sleep(wait) => {}
+                    () = changed => {}
+                }
 
                 let Some(manager) = manager.upgrade() else { return };
                 if manager.stopping() {

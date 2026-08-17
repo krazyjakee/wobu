@@ -113,7 +113,20 @@ fn archived_paths(root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-fn read_archived(root: &Path, path: &Path) -> Result<Option<Generation>> {
+/// Every valid archived receipt path, for replication as a deletion tombstone.
+///
+/// The visible ledger is indexed, but archives deliberately are not. Sync still
+/// has to announce them: the move into `.deleted` is the canonical record that
+/// a concept was removed, and an absence from a manifest is never a deletion.
+pub(crate) fn archived_sync_paths(root: &Path) -> Vec<String> {
+    archived_paths(root)
+        .into_iter()
+        .filter(|path| read_archived(root, path).ok().flatten().is_some())
+        .filter_map(|path| path.strip_prefix(root).ok().map(paths::to_rel_string))
+        .collect()
+}
+
+pub(crate) fn read_archived(root: &Path, path: &Path) -> Result<Option<Generation>> {
     let Some((text, _)) = atomic::read_stamped(path)? else { return Ok(None) };
     let generation: Generation = serde_json::from_str(&text).map_err(|error| {
         Error::MalformedGeneration { path: path.to_path_buf(), reason: error.to_string() }

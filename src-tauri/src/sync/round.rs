@@ -144,17 +144,30 @@ pub async fn run(
     // optimisation.
     replica.reconcile()?;
 
-    let (nodes, mut announce) = replica.with(|project| {
+    let (nodes, mut announce, generation_paths) = replica.with(|project| {
         let nodes = project.manifest()?;
         let blobs: Vec<Blob> = project
             .list_assets()?
             .into_iter()
             .map(|asset| Blob { rel_path: asset.rel_path, hash: asset.hash })
             .collect();
-        Ok((nodes, blobs))
+        Ok((nodes, blobs, project.generation_sync_paths()?))
     })?;
+    let local_archives: Vec<String> = generation_paths
+        .iter()
+        .filter(|path| path.starts_with("generations/.deleted/"))
+        .cloned()
+        .collect();
     let blobs = manager.blobs_for(replica)?;
     if let Some(blobs) = &blobs {
+        // Generation receipts are canonical project content just like their
+        // output assets. They have no content hash in the index, so import each
+        // immutable file to obtain the hash before the manifest crosses.
+        for rel_path in generation_paths {
+            if let Some(blob) = blobs.describe(&rel_path).await? {
+                announce.push(blob);
+            }
+        }
         let offered = blobs.offer(&announce).await?;
         if offered.refused > 0 || offered.missing > 0 || offered.stale > 0 {
             crate::diag::error(format!(
@@ -207,6 +220,21 @@ pub async fn run(
         answer(manager, replica, &peer, connection),
     )?;
 
+    // An archived generation is a tombstone, not merely another immutable
+    // blob. Apply it after node bodies so a pin or cover arriving in this same
+    // round protects the output asset before unclaimed-output cleanup runs.
+    let mut archives = local_archives;
+    archives.extend(
+        fetched.placed.iter().filter(|path| path.starts_with("generations/.deleted/")).cloned(),
+    );
+    archives.sort();
+    archives.dedup();
+    let archives_changed = if archives.is_empty() {
+        false
+    } else {
+        replica.with(|project| Ok(project.apply_generation_archives(&archives)?))?
+    };
+
     let outcome = Outcome {
         applied: ours.applied + theirs.applied,
         parked: ours.parked + theirs.parked,
@@ -214,7 +242,7 @@ pub async fn run(
         pushed: ours.pushed,
         served: theirs.served,
         blobs: fetched.placed.len(),
-        changed: ours.changed || theirs.changed || !fetched.placed.is_empty(),
+        changed: ours.changed || theirs.changed || !fetched.placed.is_empty() || archives_changed,
         whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 

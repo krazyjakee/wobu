@@ -13,6 +13,54 @@ use crate::error::{Error, Result};
 use crate::generations;
 
 impl Project {
+    /// Every immutable generation record that peers must see.
+    ///
+    /// Visible receipts come from the disposable index, which reconciliation
+    /// has just brought current. Archived receipts are not indexed by design,
+    /// but are included as tombstones so deleting a concept reaches every
+    /// replica instead of looking like an ordinary manifest absence.
+    pub fn generation_sync_paths(&self) -> Result<Vec<String>> {
+        let mut paths: Vec<_> = self.index.generation_paths()?.into_iter().collect();
+        paths.extend(generations::archived_sync_paths(&self.root));
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
+    }
+
+    /// Apply archived receipts received from a peer.
+    ///
+    /// Blob transfer places the immutable tombstone first. The round calls this
+    /// only after node bodies have landed, so a simultaneously arriving pin or
+    /// cover can protect its asset before cleanup decides whether it is still
+    /// unclaimed.
+    pub fn apply_generation_archives(&mut self, rel_paths: &[String]) -> Result<bool> {
+        let mut changed = false;
+        for archived_rel in rel_paths {
+            let archived = crate::paths::from_rel_string(&self.root, archived_rel);
+            let Some(generation) = generations::read_archived(&self.root, &archived)? else {
+                continue;
+            };
+            let visible_rel = generation.rel_path();
+            let visible = crate::paths::from_rel_string(&self.root, &visible_rel);
+            if !visible.is_file() {
+                continue;
+            }
+
+            std::fs::remove_file(&visible).map_err(|error| Error::io(&visible, error))?;
+            self.index.remove_generation_by_rel_path(&visible_rel)?;
+            generations::invalidate_spend_aggregate(&self.root);
+            changed = true;
+
+            let mut seen = std::collections::BTreeSet::new();
+            for asset_id in &generation.output_asset_ids {
+                if seen.insert(*asset_id) {
+                    let _ = self.delete_unclaimed_output(*asset_id);
+                }
+            }
+        }
+        Ok(changed)
+    }
+
     /// Append one immutable generation record to the project.
     ///
     /// The JSON lands before the index row. If local SQLite is unavailable at

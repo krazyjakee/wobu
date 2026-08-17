@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use tokio::sync::mpsc;
-use wobu_core::{AssetKind, Id, NodeKind, new_id};
+use wobu_core::{AssetKind, Generation, Id, InfluenceSnapshot, NodeKind, new_id};
 use wobu_store::{Project, SaveOutcome};
 use wobu_sync::{
     Config, Disposition, Grant, Identity, Projects, Reach, Session, Sessions, SyncEndpoint, Ticket,
@@ -108,6 +109,49 @@ impl Peer {
 
     fn manifest(&self, project: Id) -> Vec<(Id, String)> {
         self.manager().replica(project).unwrap().with(|project| Ok(project.manifest()?)).unwrap()
+    }
+
+    fn create_concept(&self, project: Id, node: Id, bytes: &[u8]) -> (Generation, String) {
+        self.manager()
+            .replica(project)
+            .unwrap()
+            .with(|project| {
+                let asset = project.import_asset(bytes, AssetKind::Generated)?.asset;
+                let generation = project.record_generation(Generation {
+                    id: new_id(),
+                    node_id: node,
+                    created_at: Utc::now(),
+                    preset: "portrait".into(),
+                    view_type: None,
+                    user_prompt: "at dusk".into(),
+                    compiled_prompt: "a complete concept prompt".into(),
+                    negative_prompt: "watermark".into(),
+                    backend: "test".into(),
+                    model: "fixture".into(),
+                    seed: 42,
+                    params: Default::default(),
+                    output_asset_ids: vec![asset.id],
+                    influence_snapshot: InfluenceSnapshot { layers: Vec::new() },
+                })?;
+                Ok((generation, asset.rel_path))
+            })
+            .unwrap()
+    }
+
+    fn generation(&self, project: Id, generation: Id) -> Option<Generation> {
+        self.manager()
+            .replica(project)
+            .unwrap()
+            .with(|project| Ok(project.get_generation(generation)?))
+            .unwrap()
+    }
+
+    fn delete_concept(&self, project: Id, generation: Id) {
+        self.manager()
+            .replica(project)
+            .unwrap()
+            .with(|project| Ok(project.delete_generation(generation)?))
+            .unwrap();
     }
 
     fn drop_sync_table(&self, project: Id) {
@@ -398,6 +442,74 @@ fn a_fresh_clone_receives_image_bytes_and_indexes_them_after_one_round() {
             .unwrap();
         assert!(received.iter().any(|candidate| candidate.id == asset.id));
         pair.stop().await;
+    });
+}
+
+#[test]
+fn a_generated_concept_syncs_its_image_and_complete_receipt() {
+    run_async(async {
+        let pair = Pair::new(false).await;
+        let bytes = png(53, 31);
+        let (generation, asset_rel) =
+            pair.a.create_concept(pair.project, pair.node, bytes.as_slice());
+
+        pair.a.sync(pair.project).await;
+
+        assert_eq!(pair.b.generation(pair.project, generation.id), Some(generation));
+        assert_eq!(fs::read(pair.b.root.join(asset_rel)).unwrap(), bytes);
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn deleting_a_concept_reaches_the_peer_as_a_tombstone() {
+    run_async(async {
+        let pair = Pair::new(false).await;
+        let (generation, asset_rel) = pair.a.create_concept(pair.project, pair.node, &png(47, 29));
+        pair.a.sync(pair.project).await;
+        assert!(pair.b.generation(pair.project, generation.id).is_some());
+
+        pair.a.delete_concept(pair.project, generation.id);
+        pair.a.sync(pair.project).await;
+
+        assert!(pair.b.generation(pair.project, generation.id).is_none());
+        assert!(!pair.b.root.join(asset_rel).exists());
+        assert!(
+            pair.b
+                .root
+                .join("generations/.deleted")
+                .join(generation.created_at.format("%Y-%m").to_string())
+                .join(format!("{}.json", generation.id))
+                .is_file()
+        );
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn a_concept_received_from_the_last_peer_is_fanned_out_to_every_connected_peer() {
+    run_async(async {
+        let base = Pair::new(false).await;
+        let c_home = scratch("concept-c-machine");
+        let c_root = c_home.join(base.a.root.file_name().unwrap());
+        copy_tree(&base.a.root, &c_root);
+        let mut c = Peer::start(c_home, c_root, base.project).await;
+        c.invite(&base.a.ticket);
+        base.a.invite(&c.ticket); // B remains first; C is deliberately last.
+
+        let bytes = png(61, 37);
+        let (generation, asset_rel) = c.create_concept(base.project, base.node, &bytes);
+
+        // One poll by A visits B, then receives C's change, then performs the
+        // convergence pass that must carry A's enlarged manifest back to B.
+        base.a.sync(base.project).await;
+
+        assert_eq!(base.a.generation(base.project, generation.id), Some(generation.clone()));
+        assert_eq!(base.b.generation(base.project, generation.id), Some(generation));
+        assert_eq!(fs::read(base.b.root.join(asset_rel)).unwrap(), bytes);
+
+        c.stop().await;
+        base.stop().await;
     });
 }
 
