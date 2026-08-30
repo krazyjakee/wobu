@@ -189,6 +189,69 @@ fn overlapping_full_requests_coalesce_into_one_followup_observation() {
     );
 }
 
+/// Records what sync would have been told, so the wiring can be asserted
+/// without an `AppHandle` the unit tests have no way to mint.
+#[derive(Default)]
+struct SpyHandover {
+    changed: Mutex<Vec<Id>>,
+}
+
+impl Handover for SpyHandover {
+    fn opening(&self, _project: Id, _root: &Path) {}
+    fn closing(&self, _project: Id) {}
+    fn changed_locally(&self, project: Id) {
+        self.changed.lock().push(project);
+    }
+}
+
+fn bump_mtime(path: &Path) {
+    let meta = std::fs::metadata(path).unwrap();
+    let later = meta.modified().unwrap() + Duration::from_secs(2);
+    let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    f.set_modified(later).unwrap();
+}
+
+#[test]
+fn an_edit_this_machine_made_nudges_sync_rather_than_waiting_for_its_backoff() {
+    // The Obsidian case, followed one step further than the store tests take
+    // it: the folder is canonical, so an edit made outside the app still has to
+    // reach the collaborators. Reconciling it into the index is only half of
+    // that — without the nudge the bytes then sit until the outbound poller's
+    // backoff happens to come round, which at its far end is two minutes.
+    let (_dir, root, state) = open_test_state("Nudge");
+    let spy = Arc::new(SpyHandover::default());
+    state.observe(Arc::downgrade(&spy) as Weak<dyn Handover>);
+    let project = state.open_id().expect("open_test_state installs a project");
+
+    state
+        .with(|p| Ok(p.create_node(wobu_core::NodeKind::Species, "Vashk", None)?))
+        .expect("a node in an open project");
+    // Everything so far went through the index, so there is nothing outstanding
+    // and a reload has nothing to announce.
+    assert!(!state.reconcile_now().unwrap());
+    assert!(spy.changed.lock().is_empty(), "an unchanged reload is not an edit");
+
+    let path = root.join("nodes/species/vashk.md");
+    let text = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Vashk-Prime");
+    std::fs::write(&path, text).unwrap();
+    bump_mtime(&path);
+
+    assert!(state.reconcile_now().unwrap(), "the external edit was not observed");
+    assert_eq!(&*spy.changed.lock(), &[project], "sync was not told to fan the edit out");
+}
+
+#[test]
+fn a_nudge_with_no_project_open_is_not_an_error() {
+    // `announce_local_change` runs on the watcher callback, which can fire
+    // against a project the user closed a moment ago.
+    let state = AppState::default();
+    let spy = Arc::new(SpyHandover::default());
+    state.observe(Arc::downgrade(&spy) as Weak<dyn Handover>);
+
+    state.announce_local_change();
+    assert!(spy.changed.lock().is_empty());
+}
+
 #[test]
 fn every_string_on_a_job_failure_is_scrubbed_before_it_leaves_the_process() {
     // `job:error` is the one route to the webview that does not pass through

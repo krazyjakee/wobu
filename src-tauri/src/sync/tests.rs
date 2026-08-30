@@ -393,6 +393,43 @@ async fn opening_a_project_takes_the_folder_off_sync_and_closing_gives_it_back()
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_local_edit_interrupts_the_backoff_instead_of_waiting_out_two_minutes() {
+    // The half of the wake that was missing. `expedite` was only ever reached
+    // from the inbound accept path, so a peer that dialled us — already current
+    // by definition — could shorten our next poll, while the machine whose user
+    // had just typed something could not. With the backoff at its far end that
+    // is a two-minute wait before anybody else sees the edit, which is what
+    // "it synced once and then never again" actually looks like.
+    let dir = scratch("sync-local-edit");
+    let state = AppState::default();
+    let manager = manager(&state, &dir).await;
+
+    let project = Project::create(&dir, "Ashfall").expect("a project in a temp directory");
+    let id = project.id();
+    let root = project.root().to_path_buf();
+    drop(project);
+    manager.share(id, &root);
+
+    let replica = manager.replica(id).expect("sharing registered a replica");
+    // Past the end of the backoff list, which is where a pair that has been
+    // quiet for a few minutes sits: the next dial is 120 seconds out.
+    replica.go_idle_for_test(99);
+    assert!(!replica.took_wake_for_test().await, "nothing has happened yet");
+
+    manager.changed_locally(id);
+
+    assert_eq!(replica.idle_steps(), 0, "the next poll is still minutes away");
+    assert!(replica.took_wake_for_test().await, "a sleeping poller was not woken");
+
+    // A project this machine does not hold is the ordinary case on any
+    // installation with more than one world, and must not panic.
+    manager.changed_locally(new_id());
+
+    manager.shutdown().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_round_serves_what_a_peer_asks_for_and_pushes_what_it_is_behind_on() {
     // The one test that runs a whole round against real QUIC, and the only
     // thing standing between this milestone and a protocol bug that appears

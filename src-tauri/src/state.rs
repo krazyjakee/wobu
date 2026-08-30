@@ -194,6 +194,19 @@ pub trait Handover: Send + Sync + 'static {
     fn opening(&self, project: Id, root: &Path);
     /// The open project is about to be dropped. Sync may take it again.
     fn closing(&self, project: Id);
+    /// This project's folder moved under this machine's own hand.
+    ///
+    /// The outbound poller walks a backoff that ends at two minutes, and until
+    /// now only an *inbound* round could interrupt it. That is the wrong half:
+    /// a peer that dialled us is by definition already current, while the
+    /// machine whose user just typed something is the one with bytes nobody
+    /// else has. Without this, a local edit waits out whatever the backoff had
+    /// climbed to — which reads, from the other side, as a world that synced
+    /// once and then stopped.
+    ///
+    /// Called with no lock held, and implementations must not block: this runs
+    /// on the watcher callback and on command paths the editor is waiting on.
+    fn changed_locally(&self, project: Id);
 }
 
 impl AppState {
@@ -210,7 +223,15 @@ impl AppState {
     /// it to finish without holding the project mutex.
     pub fn reconcile_now(&self) -> CommandResult<bool> {
         let project = self.open_id().ok_or_else(WobuError::no_project_open)?;
-        self.reconcile_project_now(project)
+        let changed = self.reconcile_project_now(project)?;
+        if changed {
+            // The window's own nudge, which can beat the watcher's debounce to
+            // the same write and leave its event with nothing left to report.
+            // Hooked here rather than in `reconcile_project_now` so that sync's
+            // own `Replica::reconcile` does not read as a local edit.
+            self.announce_local_change();
+        }
+        Ok(changed)
     }
 
     /// Identity-checked form used by sync, whose round was planned for one
@@ -321,6 +342,21 @@ impl AppState {
     /// keep impossible.
     fn handover(&self) -> Option<Arc<dyn Handover>> {
         self.handover.lock().as_ref().and_then(Weak::upgrade)
+    }
+
+    /// Tell sync that this machine's own folder moved, so the fan-out does not
+    /// wait out the idle backoff. See [`Handover::changed_locally`].
+    ///
+    /// The project is read after the work rather than captured before it, and
+    /// that is deliberate: the id only selects which replica polls sooner, so
+    /// the worst a close-and-open race can do here is bring one poll forward.
+    /// This is the one handover call that does *not* need the identity check
+    /// [`with_project`](Self::with_project) exists for, because it moves no
+    /// bytes.
+    fn announce_local_change(&self) {
+        if let (Some(project), Some(handover)) = (self.open_id(), self.handover()) {
+            handover.changed_locally(project);
+        }
     }
 
     pub fn is_offline(&self) -> bool {
@@ -526,6 +562,10 @@ impl AppState {
         match outcome {
             Outcome::Reconciled(true) => {
                 let _ = app.emit(WORLD_CHANGED, ());
+                // Every local write lands in the canonical folder, so this one
+                // point covers every command that makes one without any of them
+                // having to know sync exists.
+                self.announce_local_change();
                 true
             }
             Outcome::Reconciled(false) => false,
