@@ -19,6 +19,7 @@ use crate::diag;
 use crate::enhance::Pending;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::state::{AppState, WORLD_CHANGED};
+use crate::sync::SyncState;
 
 /// Static, and the frontend caches it forever (`staleTime: Infinity`).
 #[tauri::command]
@@ -35,14 +36,24 @@ pub fn preset_list(kind: NodeKind) -> Vec<&'static Preset> {
 
 /* ── project ──────────────────────────────────────────────────────────────── */
 
+/// Create a project folder and adopt it.
+///
+/// `async` only so it can wait for [`SyncState::wait_until_named`] — see there
+/// for why nothing may adopt a folder before this installation has its alias.
+/// The creation itself is filesystem work and stays off the runtime.
 #[tauri::command]
-pub fn project_create(
+pub async fn project_create(
     app: AppHandle,
     state: State<'_, AppState>,
+    sync: State<'_, SyncState>,
     parent_dir: String,
     name: String,
 ) -> CommandResult<ProjectSummary> {
-    let project = Project::create(&PathBuf::from(parent_dir), &name)?;
+    sync.wait_until_named().await;
+    let root = PathBuf::from(parent_dir);
+    let project =
+        blocking("The create thread stopped unexpectedly.", move || Project::create(&root, &name))
+            .await??;
     Ok(adopt(&app, &state, project))
 }
 
@@ -63,8 +74,13 @@ pub const OPEN_PROGRESS: &str = "project:open-progress";
 pub async fn project_open(
     app: AppHandle,
     state: State<'_, AppState>,
+    sync: State<'_, SyncState>,
     path: String,
 ) -> CommandResult<ProjectSummary> {
+    // Before `begin_open`, so a scan that is about to write a conflict sibling
+    // cannot start under a name this installation is not going to keep. See
+    // `SyncState::wait_until_named`.
+    sync.wait_until_named().await;
     let cancel = state.begin_open();
     let emitter = app.clone();
     let root = PathBuf::from(path);

@@ -19,6 +19,51 @@ pub fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+/* ── knowing our own name ─────────────────────────────────────────────────── */
+
+#[tokio::test]
+async fn nothing_adopts_a_project_folder_before_this_installation_has_a_name() {
+    // The ordering `SyncState::start` used to keep by blocking the main thread
+    // through the keychain read, which on a locked Linux keyring never came
+    // back. `peer::install` latches, so a conflict sibling written before the
+    // alias lands is stamped with a name this installation will never use again
+    // and can never be attributed to this person.
+    let state = SyncState::default();
+
+    // Nothing has settled, so a would-be `project_open` is still waiting.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), state.wait_until_named()).await.is_err(),
+        "a project could have been adopted before the peer had a name"
+    );
+
+    state.named.settle();
+    tokio::time::timeout(Duration::from_millis(50), state.wait_until_named())
+        .await
+        .expect("settling released the gate");
+}
+
+#[tokio::test]
+async fn a_settled_name_never_makes_anybody_wait_again() {
+    // Every project open in the session goes through this, not just the first,
+    // so the gate has to stay open rather than consuming a permit — the second
+    // open would otherwise block for ever behind the first.
+    let state = SyncState::default();
+    state.named.settle();
+
+    for _ in 0..8 {
+        tokio::time::timeout(Duration::from_millis(50), state.wait_until_named())
+            .await
+            .expect("the gate closed behind a caller");
+    }
+
+    // And a second settle is not an error: `start` runs once, but nothing about
+    // closing an already-closed semaphore may panic if that ever changes.
+    state.named.settle();
+    tokio::time::timeout(Duration::from_millis(50), state.wait_until_named())
+        .await
+        .expect("settling twice shut the gate");
+}
+
 #[test]
 fn a_peer_connection_failure_is_not_reported_as_local_file_io() {
     let error = WobuError::from(wobu_sync::Error::ProjectNotHeld);

@@ -38,6 +38,22 @@
 //! status UI is expected to say so. An app that refused to open a project
 //! because a credential store was locked would be a worse app.
 //!
+//! ### A store that will not answer *at all* is the same failure
+//!
+//! That paragraph used to describe only a store that answers with an error, and
+//! the gap was load bearing. On Linux a *locked* collection does not refuse a
+//! read: `org.freedesktop.Secret.Service.Unlock` hands back a prompt object and
+//! the client waits for the `Completed` signal that follows it. Where nothing
+//! services that prompt — no `gcr-prompter`, a session the daemon cannot draw
+//! on, a keyring daemon wedged mid-unlock — the signal never comes and the
+//! D-Bus call never returns. The degradation this module promises could not
+//! fire, because nothing had failed yet; the caller was simply parked for ever.
+//!
+//! So the wait is bounded. [`STORE_DEADLINE`] is how long the platform gets to
+//! produce *something*, and a store still thinking after that is treated as one
+//! that would not answer — [`Origin::Ephemeral`], same as a refusal, because
+//! from the user's side it is the same event and has the same remedy.
+//!
 //! ## Nothing here carries the key anywhere
 //!
 //! No `Serialize`, no `Display`, a hand-written [`Debug`] that prints the alias,
@@ -53,6 +69,9 @@
 //! It never crosses the Tauri bridge, because there is no shape here that could.
 
 use std::fmt;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use iroh::{EndpointId, SecretKey};
 
@@ -66,6 +85,20 @@ const SERVICE: &str = "wobu";
 /// person can look to see everything Wobu has put in their keychain, and one
 /// place to delete it all from.
 const ENTRY: &str = "sync";
+
+/// How long the OS credential store gets to answer before this process decides
+/// it is not going to.
+///
+/// Ten seconds because that is roughly what a person needs to notice an unlock
+/// prompt and type into it — the case worth waiting for — and because a machine
+/// where the prompt will never appear should not be indistinguishable from a
+/// hung app. The same number as `sync::ONLINE_WAIT` in the shell, for the same
+/// reason: wait for the good outcome, then carry on without it rather than for
+/// ever.
+///
+/// It is a ceiling and not a delay. A store that answers in the ordinary two
+/// milliseconds is not waited on at all.
+const STORE_DEADLINE: Duration = Duration::from_secs(10);
 
 /// Where this process's identity came from.
 ///
@@ -101,11 +134,39 @@ pub struct Identity {
 impl Identity {
     /// The identity this machine syncs as, read from the keychain or created.
     ///
-    /// Infallible by construction; see the module documentation. Call it once
-    /// per process and keep the result — every call reaches the credential
-    /// store, and on Linux a locked one prompts the user each time.
+    /// Infallible by construction and bounded by [`STORE_DEADLINE`]; see the
+    /// module documentation for both. Call it once per process and keep the
+    /// result — every call reaches the credential store, and on Linux a locked
+    /// one prompts the user each time.
+    ///
+    /// Blocking, still: it is bounded rather than asynchronous, because the
+    /// wait belongs to whichever thread the caller is willing to spend and this
+    /// crate should not be the one deciding that. The shell calls it off the
+    /// main thread for exactly that reason.
     pub fn load() -> Identity {
-        Identity::resolve(&OsStore)
+        Identity::within(STORE_DEADLINE, || Identity::resolve(&OsStore))
+    }
+
+    /// Run `load` on its own thread and take the answer, or give up.
+    ///
+    /// The thread is deliberately abandoned on expiry rather than joined, and
+    /// there is no way around that: it is parked inside a platform call with no
+    /// timeout and no cancellation, so a join is the hang this function exists
+    /// to remove. One leaked thread that is asleep on a socket costs a stack;
+    /// what it buys is a window.
+    ///
+    /// If it does wake up — the user finds the prompt a minute later and unlocks
+    /// — it will have minted and stored a key that this run is not using. That
+    /// is the good case, not a leak: the *next* launch reads that key back and
+    /// gets a stable name, which is the outcome the whole module is for.
+    fn within(deadline: Duration, load: impl FnOnce() -> Identity + Send + 'static) -> Identity {
+        // Capacity one so the abandoned thread's send never blocks on a receiver
+        // that has already gone; it finishes and exits instead of parking again.
+        let (tx, rx) = mpsc::sync_channel(1);
+        thread::spawn(move || {
+            let _ = tx.send(load());
+        });
+        rx.recv_timeout(deadline).unwrap_or_else(|_| Identity::ephemeral())
     }
 
     /// A fresh identity that is not stored anywhere.
@@ -242,12 +303,14 @@ fn hex(bytes: &[u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
+    use std::time::Instant;
 
     use super::*;
 
     /// A store in memory, or one that refuses everything.
     ///
-    /// `RefCell` rather than a lock: nothing in these tests is threaded, and a
+    /// `RefCell` rather than a lock: no test that reaches a store crosses a
+    /// thread — the two that do spawn one drive `within` directly — and a
     /// `Mutex` here would only be ceremony.
     struct FakeStore {
         entry: RefCell<Option<String>>,
@@ -361,6 +424,45 @@ mod tests {
         assert_eq!(identity.origin(), Origin::Ephemeral);
         assert!(!identity.alias().is_empty());
         assert!(store.stored().is_none(), "a refusing store was written to anyway");
+    }
+
+    /* ── a store that will not answer ─────────────────────────────────────── */
+
+    #[test]
+    fn a_store_that_never_answers_does_not_hold_the_process() {
+        // The Linux failure this bound exists for: a locked collection answers a
+        // read with a prompt object rather than with an error, and where nothing
+        // draws that prompt the D-Bus call never returns. `resolve` is not
+        // reached and `Origin::Ephemeral` cannot fire — the caller is simply
+        // parked, and on the main thread that is an app with no window.
+        let started = Instant::now();
+        let identity = Identity::within(Duration::from_millis(50), || {
+            thread::sleep(Duration::from_secs(60));
+            unreachable!("the deadline should have expired long before this")
+        });
+
+        assert_eq!(identity.origin(), Origin::Ephemeral);
+        assert!(!identity.alias().is_empty(), "an abandoned wait still names the peer");
+        assert!(started.elapsed() < Duration::from_secs(5), "the deadline did not bound the wait");
+    }
+
+    #[test]
+    fn a_store_that_answers_is_not_waited_on() {
+        // The bound is a ceiling and not a delay: the ordinary case is a store
+        // that replies in microseconds, and it must not be slowed down or, worse,
+        // have its answer discarded in favour of a throwaway identity.
+        let secret = SecretKey::generate();
+        let expected = secret.public();
+
+        let started = Instant::now();
+        let identity = Identity::within(Duration::from_secs(60), move || Identity {
+            secret,
+            origin: Origin::Keychain,
+        });
+
+        assert_eq!(identity.origin(), Origin::Keychain);
+        assert_eq!(identity.id(), expected, "the store's answer was thrown away");
+        assert!(started.elapsed() < Duration::from_secs(5), "a ready answer was waited on");
     }
 
     /* ── the key does not leave ───────────────────────────────────────────── */

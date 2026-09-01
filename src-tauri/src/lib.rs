@@ -86,12 +86,15 @@ pub fn run() {
             // until here. `state.rs` says why it sits beside `AppState` rather
             // than inside it.
             app.manage(state::Jobs::start(app.handle()));
-            // Loads the peer identity and names this installation *before*
-            // returning — a conflict sibling written before the alias is in
-            // place carries `wobu-store`'s per-process fallback name, and
-            // `peer::install` refuses a second value rather than replacing the
-            // first. Binding the endpoint is the slow half and happens on a
-            // task; every sync command answers "still starting" until it lands.
+            // Starts sync and returns; nothing here touches the credential
+            // store. It used to load the peer identity before returning, so
+            // that no conflict sibling could be written under `wobu-store`'s
+            // per-process fallback name — and a locked login keyring turned
+            // that into a process with no window at all, because a Secret
+            // Service read against one never returns. The ordering is kept by
+            // `SyncState::wait_until_named`, which the two commands that adopt
+            // a project folder await; this line must stay non-blocking, because
+            // the window does not exist until `setup` is done with it.
             let state = app.state::<AppState>().handle();
             app.state::<sync::SyncState>().start(app.handle(), state);
             // Hands the MCP module the project slot and the handle it emits
