@@ -49,7 +49,7 @@
 //! D-Bus call never returns. The degradation this module promises could not
 //! fire, because nothing had failed yet; the caller was simply parked for ever.
 //!
-//! So the wait is bounded. [`STORE_DEADLINE`] is how long the platform gets to
+//! So the wait is bounded. `STORE_DEADLINE` is how long the platform gets to
 //! produce *something*, and a store still thinking after that is treated as one
 //! that would not answer — [`Origin::Ephemeral`], same as a refusal, because
 //! from the user's side it is the same event and has the same remedy.
@@ -134,7 +134,7 @@ pub struct Identity {
 impl Identity {
     /// The identity this machine syncs as, read from the keychain or created.
     ///
-    /// Infallible by construction and bounded by [`STORE_DEADLINE`]; see the
+    /// Infallible by construction and bounded by `STORE_DEADLINE`; see the
     /// module documentation for both. Call it once per process and keep the
     /// result — every call reaches the credential store, and on Linux a locked
     /// one prompts the user each time.
