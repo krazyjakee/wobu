@@ -4,12 +4,12 @@ import type { Capability } from '../../lib/api'
  * One credential a provider needs before it will answer.
  *
  * A list rather than a string because Tencent's is a SecretId/SecretKey *pair*
- * signed together, not a bearer token — `keys.rs` registers it as two keychain
+ * signed together, not a bearer token — `keys.rs` registers it as two credential
  * entries for that reason, and a pane that assumed one field per provider would
  * have nowhere to put the second.
  */
 export interface Credential {
-  /** The `wobu/<id>` keychain entry, and the id every command here takes. */
+  /** The `wobu/<id>` credential entry, and the id every command here takes. */
   id: string
   label: string
 }

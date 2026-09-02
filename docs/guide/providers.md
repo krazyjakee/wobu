@@ -56,8 +56,8 @@ dozen words — a fraction of a penny, and nothing at all if the key is refused.
 
 Open a world whose chosen service you have no key for and just that one job goes quiet, with a
 button right there to fix it. You can still read, write and organise the whole world — only Enhance
-or Generate stops. On Linux, a locked login keyring is reported as exactly that, rather than as a
-failed save.
+or Generate stops. On Linux, a locked login keyring does not disable Add or Save: Wobu reports the
+condition and uses its owner-only local credential store instead.
 
 ## Anthropic
 

@@ -26,11 +26,10 @@
 //! ## An absent or locked keychain is normal
 //!
 //! Headless Linux, a CI box, a session whose login keyring has not been
-//! unlocked: none of those are errors and none of them stop the app. A store
-//! that will not answer degrades to "unconfigured", which is a state the UI
-//! already has to render for a provider nobody has set up. The only place it is
-//! reported as a failure is a *write*, because silently not saving a key the
-//! user just pasted is worse than saying so.
+//! unlocked: none of those are errors and none of them stop the app. Reads and
+//! writes fall back to owner-only files under Wobu's application-data directory,
+//! never under a project. The UI reports that source but never disables the
+//! action; a pasted key succeeds unless both stores are unwritable.
 //!
 //! "Will not answer" includes a platform call that never returns. Linux Secret
 //! Service can wait indefinitely for an unlock prompt nobody can draw, so every
@@ -41,8 +40,9 @@
 //! See `docs/08-providers.md`.
 
 use std::collections::HashMap;
-#[cfg(debug_assertions)]
-use std::path::PathBuf;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
@@ -54,6 +54,7 @@ use serde::Serialize;
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::redact;
+use wobu_store::paths;
 
 /// The service half of the keychain entry, so a provider's key lives at
 /// `wobu/<provider>`. The other half is `TextProvider::id`, which documents the
@@ -66,9 +67,9 @@ const SERVICE: &str = "wobu";
 /// Linux Secret Service can wait forever for an unlock prompt that no process
 /// is able to draw. Provider keys are read from commands the user is waiting
 /// on, so an unbounded platform call turns an Enhance click into an apparent
-/// application hang. Ten seconds leaves room for a real prompt while making a
-/// missing prompter an ordinary unavailable-keychain result.
-const STORE_DEADLINE: Duration = Duration::from_secs(10);
+/// application hang. Half a second is enough for a healthy local service and
+/// short enough that Settings remains usable before the fallback takes over.
+const STORE_DEADLINE: Duration = Duration::from_millis(500);
 
 /* ── the secret ───────────────────────────────────────────────────────────── */
 
@@ -79,8 +80,8 @@ pub struct Secret(String);
 impl Secret {
     /// `pub(crate)` so that `enhance.rs`'s tests can build an adapter without a
     /// real credential. Nothing outside this crate can mint one, which is the
-    /// property that matters: a `Secret` in the wild has come from the keychain
-    /// or from the development-time fallback and from nowhere else.
+    /// property that matters: a `Secret` in the wild has come from one of this
+    /// machine's credential stores or the development fallback and nowhere else.
     pub(crate) fn new(value: impl Into<String>) -> Secret {
         Secret(value.into())
     }
@@ -115,6 +116,9 @@ impl std::fmt::Debug for Secret {
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     Keychain,
+    /// Wobu's owner-only fallback under the application-data directory. Used
+    /// only when the operating-system store cannot answer.
+    Local,
     /// The development-time fallback: a process variable, or the repo-root
     /// `.env`.
     ///
@@ -131,8 +135,8 @@ pub enum Source {
 pub enum Keychain {
     Ready,
     /// No Secret Service, a locked login keyring, a headless session. Not a
-    /// failure: it means keys cannot be *stored* on this machine, and the UI
-    /// says so instead of offering a field that will not work.
+    /// failure: Wobu's private local fallback remains writable and the UI keeps
+    /// offering the field.
     Unavailable,
 }
 
@@ -144,9 +148,8 @@ pub struct KeyStatus {
     /// `None` is "no key on this machine", which is a state rather than an
     /// error — a collaborator opening a shared project is in it by default.
     pub source: Option<Source>,
-    /// A property of the machine, reported per provider because the pane that
-    /// renders one of these is exactly where "you cannot save a key here" has
-    /// to be said.
+    /// A property of the native OS store, reported per provider so Settings can
+    /// explain why a key is using Wobu's private local fallback.
     pub keychain: Keychain,
 }
 
@@ -154,7 +157,7 @@ pub struct KeyStatus {
 ///
 /// A shape rather than a bare `bool` because two outcomes are easy to confuse
 /// and both are ordinary. "There was nothing stored" is not a failure. And on a
-/// developer's machine, removing the keychain entry can leave the provider
+/// developer's machine, removing a stored entry can leave the provider
 /// *still configured* — the repo-root `.env` answers next. Returning the fresh
 /// status makes that visible in the same round trip instead of as a mystery.
 #[derive(Debug, Clone, Serialize)]
@@ -224,6 +227,110 @@ impl Store for OsStore {
     }
 }
 
+/// Durable fallback when the operating-system credential service cannot be
+/// used. Each value is a separate owner-only file under Wobu's application
+/// data directory, never under an open project.
+struct LocalStore {
+    root: PathBuf,
+    io: Mutex<()>,
+}
+
+impl LocalStore {
+    fn new(root: PathBuf) -> LocalStore {
+        LocalStore { root, io: Mutex::new(()) }
+    }
+
+    fn path(&self, provider: &str, suffix: &str) -> Result<PathBuf, Unavailable> {
+        if provider.is_empty() || !provider.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(Unavailable("invalid provider credential id".into()));
+        }
+        Ok(self.root.join(format!("{provider}{suffix}")))
+    }
+
+    fn prepare(&self) -> Result<(), Unavailable> {
+        std::fs::create_dir_all(&self.root).map_err(local_error)?;
+        restrict_dir(&self.root).map_err(local_error)
+    }
+
+    fn write(&self, path: &Path, value: &[u8]) -> Result<(), Unavailable> {
+        self.prepare()?;
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(path).map_err(local_error)?;
+        file.write_all(value).map_err(local_error)?;
+        file.sync_all().map_err(local_error)?;
+        paths::restrict(path).map_err(local_error)
+    }
+
+    fn ignores_keychain(&self, provider: &str) -> Result<bool, Unavailable> {
+        let _guard = self.io.lock();
+        Ok(self.path(provider, ".ignore-keychain")?.is_file())
+    }
+
+    fn ignore_keychain(&self, provider: &str) -> Result<(), Unavailable> {
+        let _guard = self.io.lock();
+        let path = self.path(provider, ".ignore-keychain")?;
+        self.write(&path, b"")
+    }
+
+    fn trust_keychain(&self, provider: &str) -> Result<(), Unavailable> {
+        let _guard = self.io.lock();
+        remove_if_present(&self.path(provider, ".ignore-keychain")?).map_err(local_error)?;
+        Ok(())
+    }
+}
+
+impl Store for LocalStore {
+    fn get(&self, provider: &str) -> Result<Option<Secret>, Unavailable> {
+        let _guard = self.io.lock();
+        let path = self.path(provider, ".key")?;
+        match std::fs::read_to_string(path) {
+            Ok(value) => Ok(Some(Secret::new(value))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(local_error(error)),
+        }
+    }
+
+    fn set(&self, provider: &str, secret: &str) -> Result<(), Unavailable> {
+        let _guard = self.io.lock();
+        let path = self.path(provider, ".key")?;
+        self.write(&path, secret.as_bytes())
+    }
+
+    fn delete(&self, provider: &str) -> Result<bool, Unavailable> {
+        let _guard = self.io.lock();
+        remove_if_present(&self.path(provider, ".key")?).map_err(local_error)
+    }
+}
+
+fn local_error(error: std::io::Error) -> Unavailable {
+    Unavailable(format!("private local credential store: {error}"))
+}
+
+fn remove_if_present(path: &Path) -> std::io::Result<bool> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(unix)]
+fn restrict_dir(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn restrict_dir(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 /* ── resolution ───────────────────────────────────────────────────────────── */
 
 /// What a resolution found.
@@ -267,6 +374,7 @@ type ReadVar = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 #[derive(Clone)]
 pub struct Keys {
     store: Arc<dyn Store>,
+    local: Arc<LocalStore>,
     /// One platform call at a time. A timed-out Secret Service read may still
     /// be waiting for an unlock prompt because the platform API offers no
     /// cancellation; this gate stops every click made behind it from spawning
@@ -293,6 +401,7 @@ impl Default for Keys {
     fn default() -> Keys {
         Keys {
             store: Arc::new(OsStore),
+            local: Arc::new(LocalStore::new(paths::app_data_dir().join("credentials"))),
             access: Arc::default(),
             var: Arc::new(dev_var),
             cache: Arc::default(),
@@ -364,15 +473,43 @@ impl Keys {
         let store = Arc::clone(&self.store);
         let provider_owned = provider.to_owned();
         let key_owned = key.to_owned();
-        self.within(move || store.set(&provider_owned, &key_owned))
-            .map_err(|e| unavailable("Your key was not saved.", e))?;
-
-        // We know exactly what was just written, so reading it back would only
-        // create a second chance for a locked keyring to stall this command.
-        let found = Lookup {
-            source: Some(Source::Keychain),
-            secret: Some(Secret::new(key)),
-            keychain: Keychain::Ready,
+        let found = match self.within(move || store.set(&provider_owned, &key_owned)) {
+            Ok(()) => {
+                // Prefer the native store whenever it answers. A successful
+                // replacement also retires any fallback and its tombstone.
+                if let Err(error) = self.local.delete(provider) {
+                    diag::info(format!(
+                        "could not retire local credential for {provider}: {}",
+                        error.0
+                    ));
+                }
+                if let Err(error) = self.local.trust_keychain(provider) {
+                    diag::info(format!(
+                        "could not retire credential tombstone for {provider}: {}",
+                        error.0
+                    ));
+                }
+                Lookup {
+                    source: Some(Source::Keychain),
+                    secret: Some(Secret::new(key)),
+                    keychain: Keychain::Ready,
+                }
+            }
+            Err(error) => {
+                // The user's action still succeeds. This local value wins over
+                // any native write that completes after its timeout; Remove
+                // writes the tombstone that keeps such a value from returning.
+                diag::info(format!(
+                    "using private local credential store for {provider}: {}",
+                    error.0
+                ));
+                self.local.set(provider, key).map_err(local_save_failed)?;
+                Lookup {
+                    source: Some(Source::Local),
+                    secret: Some(Secret::new(key)),
+                    keychain: Keychain::Unavailable,
+                }
+            }
         };
         self.cache.lock().insert(provider.to_owned(), found.clone());
         Ok(Self::status_of(provider, &found))
@@ -387,35 +524,80 @@ impl Keys {
     }
 
     fn delete_blocking(&self, provider: &str) -> CommandResult<KeyRemoval> {
+        let cached = self.cache.lock().get(provider).cloned();
+        let local_removed = self.local.delete(provider).map_err(local_remove_failed)?;
         let store = Arc::clone(&self.store);
         let provider_owned = provider.to_owned();
-        let removed = self
-            .within(move || store.delete(&provider_owned))
-            .map_err(|e| unavailable("The key was not removed.", e))?;
+        let (keychain, native_removed) = match self.within(move || store.delete(&provider_owned)) {
+            Ok(removed) => {
+                self.local.trust_keychain(provider).map_err(local_remove_failed)?;
+                (Keychain::Ready, removed)
+            }
+            Err(error) => {
+                diag::info(format!(
+                    "could not remove native credential for {provider}: {}",
+                    error.0
+                ));
+                // Make deletion effective for Wobu even if the OS service is
+                // unavailable or completes an earlier write after its timeout.
+                self.local.ignore_keychain(provider).map_err(local_remove_failed)?;
+                (Keychain::Unavailable, false)
+            }
+        };
+        let removed = local_removed
+            || native_removed
+            || cached.is_some_and(|found| {
+                matches!(found.source, Some(Source::Keychain | Source::Local))
+            });
         self.forget(provider);
         // A successful delete definitively means there is no stored value. Use
         // the development fallback directly instead of immediately asking the
         // same credential store to prove the deletion happened.
         let found = match self.env_secret(provider) {
-            Some(secret) => Lookup {
-                source: Some(Source::Environment),
-                secret: Some(secret),
-                keychain: Keychain::Ready,
-            },
-            None => Lookup::unconfigured(Keychain::Ready),
+            Some(secret) => {
+                Lookup { source: Some(Source::Environment), secret: Some(secret), keychain }
+            }
+            None => Lookup::unconfigured(keychain),
         };
         self.cache.lock().insert(provider.to_owned(), found.clone());
         Ok(KeyRemoval { removed, status: Self::status_of(provider, &found) })
     }
 
-    /// Keychain, then environment, then unconfigured — and that order is the
-    /// specification rather than an implementation detail. The keychain winning
-    /// is what lets a developer keep a `.env` around while still exercising the
-    /// path a user is on.
+    /// Existing local fallback, then keychain, environment, unconfigured. A
+    /// fallback wins after creation so Enhance never retries a native service
+    /// already known to hang.
     fn lookup(&self, provider: &str) -> Lookup {
         let cached = self.cache.lock().get(provider).cloned();
         if let Some(hit) = cached {
             return hit;
+        }
+
+        // A local fallback is deliberately first. It exists only because an OS
+        // call already failed, so retrying that call on every Enhance would
+        // put the stall straight back into the user's workflow.
+        match self.local.get(provider) {
+            Ok(Some(secret)) => {
+                let found = Lookup {
+                    source: Some(Source::Local),
+                    secret: Some(secret),
+                    keychain: Keychain::Unavailable,
+                };
+                self.cache.lock().insert(provider.to_owned(), found.clone());
+                return found;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                diag::info(format!(
+                    "could not read private local credential for {provider}: {}",
+                    error.0
+                ));
+            }
+        }
+
+        if self.local.ignores_keychain(provider).unwrap_or(false) {
+            let found = self.cached_or_fallback(provider, Keychain::Unavailable);
+            self.cache.lock().insert(provider.to_owned(), found.clone());
+            return found;
         }
 
         let store = Arc::clone(&self.store);
@@ -481,6 +663,9 @@ impl Keys {
         if let Some(found) = self.cache.lock().get(provider).cloned() {
             return found;
         }
+        if let Ok(Some(secret)) = self.local.get(provider) {
+            return Lookup { source: Some(Source::Local), secret: Some(secret), keychain };
+        }
         match self.env_secret(provider) {
             Some(secret) => {
                 Lookup { source: Some(Source::Environment), secret: Some(secret), keychain }
@@ -519,8 +704,8 @@ impl Keys {
         });
         rx.recv_timeout(self.store_deadline).unwrap_or_else(|_| {
             Err(Unavailable(format!(
-                "credential store did not answer within {} seconds",
-                self.store_deadline.as_secs()
+                "credential store did not answer within {} milliseconds",
+                self.store_deadline.as_millis()
             )))
         })
     }
@@ -566,21 +751,20 @@ impl Keys {
     }
 }
 
-/// The one failure this module reports to a person.
-///
-/// Not `Code::Internal`: `error.rs` reserves that for bugs, and a locked login
-/// keyring is not one. Not retryable either — pressing "Try again" without
-/// unlocking anything fails identically, so the instruction goes in the message
-/// where the user can act on it instead of behind a button that repeats itself.
-fn unavailable(what_happened: &str, e: Unavailable) -> WobuError {
+fn local_save_failed(error: Unavailable) -> WobuError {
     WobuError::new(
         Code::ProviderKeychainUnavailable,
-        format!(
-            "{what_happened} This computer's credential store did not answer. \
-             On Linux that usually means the login keyring is locked."
-        ),
+        "The key could not be saved to either this computer's credential store or Wobu's private local store.",
     )
-    .with_detail(e.0)
+    .with_detail(error.0)
+}
+
+fn local_remove_failed(error: Unavailable) -> WobuError {
+    WobuError::new(
+        Code::ProviderKeychainUnavailable,
+        "The stored key could not be removed from this computer.",
+    )
+    .with_detail(error.0)
 }
 
 fn task_lost(error: impl std::fmt::Display) -> WobuError {
@@ -613,10 +797,9 @@ fn env_names(provider: &str) -> Vec<String> {
 /// repo-root `.env`.
 ///
 /// Compiled out of release builds entirely, and the `.env` reader below with it.
-/// A shipped Wobu reads credentials from the keychain and from nowhere else,
-/// because the moment a *file* can supply a key the next question is which file
-/// — and the answer a user would reach for is one inside their project folder,
-/// on the share, which is the leak the keychain rule exists to prevent.
+/// A shipped Wobu has one fixed owner-only fallback directory under application
+/// data. This development exception reads a human-edited file, so its path is
+/// compile-time fixed and can never be redirected into a project on a share.
 fn dev_var(name: &str) -> Option<String> {
     #[cfg(debug_assertions)]
     {
@@ -744,10 +927,22 @@ mod tests {
     /// `Keys` over a fake store and a fixed environment, so nothing in this
     /// module's tests touches the machine running them.
     fn keys(store: FakeStore, env: &[(&str, &str)]) -> Keys {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "wobu-local-credentials-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        keys_at(store, env, root)
+    }
+
+    fn keys_at(store: FakeStore, env: &[(&str, &str)], local_root: PathBuf) -> Keys {
         let env: HashMap<String, String> =
             env.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
         Keys {
             store: Arc::new(store),
+            local: Arc::new(LocalStore::new(local_root)),
             access: Arc::default(),
             var: Arc::new(move |name| env.get(name).cloned()),
             cache: Arc::default(),
@@ -798,12 +993,12 @@ mod tests {
         assert!(!serialised.contains("leakleakleak"), "{serialised}");
         assert!(serialised.contains("401"), "still diagnosable: {serialised}");
 
-        // 3. The failure this module raises itself, where the platform's own
-        //    wording lands in `detail` unread.
+        // 3. A native-store failure takes the private local route, whose status
+        //    is still safe to send across the bridge.
         let refusing = keys(FakeStore::refusing(&format!("store rejected api_key={KEY}")), &[]);
-        let refused = refusing.set_blocking("anthropic", KEY).expect_err("the store refused");
-        let serialised = json(&refused).to_string();
-        assert!(!serialised.contains(KEY), "a key reached the webview in an error: {serialised}");
+        let fallback = refusing.set_blocking("anthropic", KEY).unwrap();
+        let serialised = json(&fallback).to_string();
+        assert!(!serialised.contains(KEY), "a key reached the webview in a status: {serialised}");
 
         // 4. Everything this module hands the UI, whatever a future field on it
         //    might hold.
@@ -894,13 +1089,15 @@ mod tests {
         assert!(started.elapsed() < Duration::from_millis(80));
 
         let started = std::time::Instant::now();
-        let set = keys.set_blocking("anthropic", "sk-ant-api03-real").unwrap_err();
-        assert_eq!(json(&set)["code"], "provider.keychain_unavailable");
+        let set = keys.set_blocking("anthropic", "sk-ant-api03-real").unwrap();
+        assert_eq!(set.source, Some(Source::Local));
+        assert_eq!(set.keychain, Keychain::Unavailable);
         assert!(started.elapsed() < Duration::from_millis(80));
 
         let started = std::time::Instant::now();
-        let delete = keys.delete_blocking("anthropic").unwrap_err();
-        assert_eq!(json(&delete)["code"], "provider.keychain_unavailable");
+        let delete = keys.delete_blocking("anthropic").unwrap();
+        assert!(delete.removed);
+        assert_eq!(delete.status.source, None);
         assert!(started.elapsed() < Duration::from_millis(80));
 
         assert_eq!(
@@ -1052,18 +1249,76 @@ mod tests {
     }
 
     #[test]
-    fn failing_to_save_is_reported_rather_than_silently_dropped() {
-        // The one place an unusable credential store is an error: the user
-        // pasted a key and pressed Save, and pretending that worked is worse
-        // than a dialog.
-        let keys = keys(FakeStore::refusing("the collection is locked"), &[]);
-        let e = keys.set_blocking("anthropic", "sk-ant-api03-real").expect_err("the store refused");
+    fn a_refused_keychain_saves_to_the_private_local_store_and_survives_restart() {
+        let root = std::env::temp_dir()
+            .join(format!("wobu-local-credentials-restart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let keys = keys_at(FakeStore::refusing("the collection is locked"), &[], root.clone());
 
-        assert_eq!(json(&e)["code"], "provider.keychain_unavailable");
-        // Not retryable: pressing "Try again" without unlocking anything fails
-        // identically, so the instruction is in the message instead.
-        assert_eq!(json(&e)["retryable"], false);
-        assert!(e.message.contains("credential store"), "{}", e.message);
+        let status = keys.set_blocking("gemini", "gemini-token-real").unwrap();
+        assert_eq!(status.source, Some(Source::Local));
+        assert_eq!(status.keychain, Keychain::Unavailable);
+
+        let store = FakeStore::refusing("still locked");
+        let native_calls = Arc::clone(&store.calls);
+        let restarted = keys_at(store, &[], root.clone());
+        let found = restarted.lookup("gemini");
+        assert_eq!(found.source, Some(Source::Local));
+        assert_eq!(found.secret.unwrap().expose(), "gemini-token-real");
+        assert_eq!(native_calls.load(Ordering::Relaxed), 0);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(root.join("gemini.key")).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+            assert_eq!(std::fs::metadata(&root).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn removing_a_fallback_keeps_a_late_native_value_from_reappearing() {
+        let root = std::env::temp_dir()
+            .join(format!("wobu-local-credentials-delete-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let keys = keys_at(FakeStore::refusing("locked"), &[], root.clone());
+        keys.set_blocking("gemini", "new-local-value").unwrap();
+        assert!(keys.delete_blocking("gemini").unwrap().removed);
+
+        // Models a native write that completed after Wobu's timeout. The
+        // delete tombstone is authoritative until a later explicit Save can
+        // reach the native store and clear it.
+        let restarted =
+            keys_at(FakeStore::holding("gemini", "late-or-stale-native-value"), &[], root.clone());
+        assert!(restarted.lookup("gemini").secret.is_none());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn saving_reports_failure_only_when_both_stores_are_unwritable() {
+        let root = std::env::temp_dir()
+            .join(format!("wobu-local-credentials-blocked-{}", std::process::id()));
+        let _ = std::fs::remove_file(&root);
+        std::fs::write(&root, "not a directory").unwrap();
+        let keys = keys_at(FakeStore::refusing("locked"), &[], root.clone());
+
+        let error = keys.set_blocking("gemini", "never-serialised").unwrap_err();
+        assert_eq!(json(&error)["code"], "provider.keychain_unavailable");
+        assert!(!json(&error).to_string().contains("never-serialised"));
+        let _ = std::fs::remove_file(root);
+    }
+
+    #[test]
+    fn a_provider_id_cannot_escape_the_private_credential_directory() {
+        let root = std::env::temp_dir()
+            .join(format!("wobu-local-credentials-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let local = LocalStore::new(root.clone());
+        assert!(local.set("../outside", "secret").is_err());
+        assert!(!root.parent().unwrap().join("outside.key").exists());
     }
 
     /* ── the development-time fallback ────────────────────────────────────── */

@@ -79,7 +79,7 @@ const GUIDANCE: Record<string, string> = {
   'provider.bad_key':
     'The provider rejected the key Wobu is using. Open Settings → Providers and models and paste the key again — a key that has been revoked or copied with a stray space fails exactly like this.',
   'provider.keychain_unavailable':
-    'Your operating system would not open its keychain, so the saved key could not be read. Unlock the keychain — logging out and back in is usually enough — then start the job again.',
+    'Wobu could not use either machine-local credential store. Check free disk space and permissions for Wobu’s application-data directory, save the key again in Settings → Providers and models, then start the job again.',
   'provider.clock_skew':
     "Your computer's clock is too far from real time for the provider to accept the request. Turn on automatic time in your system settings, then start the job again.",
   'provider.billing_required':

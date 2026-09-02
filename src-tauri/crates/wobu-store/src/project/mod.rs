@@ -48,7 +48,7 @@ fn default_spend_ceiling() -> Option<u64> {
 }
 
 /// `project.json`. Records *which* provider a project prefers, never a key —
-/// keys live in the OS keychain, because project folders get shared.
+/// keys live in machine-local credential storage, because project folders get shared.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectMeta {

@@ -117,15 +117,13 @@ pub enum Code {
     /// `enhance_start`, before anything is submitted or spent.
     #[serde(rename = "provider.no_key")]
     ProviderNoKey,
-    /// The OS credential store could not be reached: a locked login keyring, a
-    /// headless Linux session, no Secret Service on the bus.
+    /// Neither credential route could complete the requested mutation: the OS
+    /// store was unavailable and Wobu's private app-data fallback could not be
+    /// written or removed.
     ///
     /// Distinct from `provider.no_key`, which says the user has not set one up,
-    /// and from `internal`, which this file reserves for bugs — a locked keyring
-    /// is neither. It is raised only when *storing* a key, because a lookup that
-    /// finds nothing is an ordinary unconfigured state and `keys.rs` degrades to
-    /// it silently rather than putting a dialog in front of someone who has not
-    /// asked for a provider yet.
+    /// and from `internal`, which this file reserves for bugs. A native-store
+    /// failure alone is no longer enough to raise it; `keys.rs` falls back.
     #[serde(rename = "provider.keychain_unavailable")]
     ProviderKeychainUnavailable,
     /// The key is present and rejected.

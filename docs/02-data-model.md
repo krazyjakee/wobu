@@ -187,8 +187,9 @@ These are constraints on the writer, and each one exists because something break
   Markdown file is removed. Each child keeps its stable `nodes/<kind>/<slug>.md` path and has its
   `parent` frontmatter rewritten; links pointing at the deleted id are removed. This avoids both
   silently deleting a subtree and leaving dead influence edges behind.
-- **Secrets are never written to the project folder.** API keys live in the OS keychain;
-  `project.json` records only *which* provider and model a project prefers. This matters
+- **Secrets are never written to the project folder.** API keys live in machine-local credential
+  storage (the OS keychain or its owner-only app-data fallback); `project.json` records only
+  *which* provider and model a project prefers. This matters
   enormously now that folders are shared — see [08 — Providers & BYOK](08-providers.md).
 
 ### Where the index lives — and why it is not in the folder

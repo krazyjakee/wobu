@@ -223,7 +223,7 @@ describe('a project whose provider has no key here', () => {
 })
 
 describe('where a key came from', () => {
-  it('reads differently for the environment than for the keychain, and offers no Remove', async () => {
+  it('distinguishes every store and only offers Remove for stores Wobu controls', async () => {
     // A developer who sees "configured" without being told it came from a
     // `.env` deletes the key and finds nothing changed. The keychain entry and
     // the development fallback are two different things and only one of them is
@@ -231,33 +231,49 @@ describe('where a key came from', () => {
     keyStatuses = [
       { provider: 'anthropic', source: 'environment', keychain: 'ready' },
       { provider: 'gemini', source: 'keychain', keychain: 'ready' },
-      unconfigured('tencent-secret-id'),
+      { provider: 'tencent-secret-id', source: 'local', keychain: 'unavailable' },
       unconfigured('tencent-secret-key'),
     ]
     await open()
 
     expect(screen.getByText('from the environment')).toBeTruthy()
     expect(screen.getByText('in the keychain')).toBeTruthy()
+    expect(screen.getByText('in Wobu’s private local store')).toBeTruthy()
     expect(screen.getByText(/There is nothing in the keychain behind it/)).toBeTruthy()
-    // One Remove, for the one key that is actually stored here.
-    expect(screen.getAllByRole('button', { name: /Remove/ })).toHaveLength(1)
+    // The environment is the only source this pane does not control.
+    expect(screen.getAllByRole('button', { name: /Remove/ })).toHaveLength(2)
   })
 })
 
 describe('a machine with no credential store', () => {
-  it('explains itself beside the disabled fields instead of raising anything', async () => {
-    // A locked login keyring or a headless session is an ordinary machine, not
-    // a failure. A toast would be dismissible and would leave the user pressing
-    // a Save that silently cannot work.
+  it('keeps Add and Save usable through the private local fallback', async () => {
     keyStatuses = keyStatuses.map((s) => ({ ...s, keychain: 'unavailable' as const }))
     await open()
 
-    expect(screen.getByText(/the login keyring is locked/)).toBeTruthy()
-    for (const button of screen.getAllByRole('button', { name: 'Add key' })) {
-      expect((button as HTMLButtonElement).disabled).toBe(true)
-    }
-    expect(useUI.getState().toasts).toHaveLength(0)
-    expect(useUI.getState().banners).toHaveLength(0)
+    expect(screen.getByText(/Add, replace and remove still work/)).toBeTruthy()
+    fireEvent.click(addKey())
+    const field = (await screen.findByPlaceholderText('Paste the api key')) as HTMLInputElement
+    expect(field.disabled).toBe(false)
+    fireEvent.change(field, { target: { value: 'gemini-token-through-fallback' } })
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('provider_key_set', {
+        provider: 'anthropic',
+        key: 'gemini-token-through-fallback',
+      }),
+    )
+  })
+
+  it('renders usable key controls without waiting for the OS status call', async () => {
+    h.invoke.mockImplementation((cmd: string, args?: Record<string, unknown>) =>
+      cmd === 'provider_key_status' ? new Promise(() => {}) : Promise.resolve(backend(cmd, args)),
+    )
+    await open()
+
+    fireEvent.click(addKey())
+    expect(await screen.findByPlaceholderText('Paste the api key')).toBeEnabled()
   })
 })
 
@@ -370,15 +386,15 @@ describe('the shared selection', () => {
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
   })
 
-  it('explains a locked credential store instead of offering a dead Add key shortcut', async () => {
+  it('offers the direct Add key shortcut even when the OS credential store is locked', async () => {
     selections = { providers: { text: { provider: 'anthropic' } }, readOnly: false }
     keyStatuses = keyStatuses.map((status) => ({ ...status, keychain: 'unavailable' }))
     await open()
 
     const text = within(screen.getByRole('group', { name: 'Text — Enhance' }))
-    expect(text.queryByRole('button', { name: 'Add key' })).toBeNull()
-    expect(text.getByText(/Unlock this computer’s credential store before adding one/)).toBeTruthy()
-    expect(screen.getByText(/credential store is not answering/)).toBeTruthy()
+    fireEvent.click(text.getByRole('button', { name: 'Add key' }))
+    expect(await screen.findByPlaceholderText('Paste the api key')).toBeEnabled()
+    expect(screen.getByText(/owner-only local credential store/)).toBeTruthy()
   })
 
   it('is the only thing a read-only project disables — keys are still this machine’s', async () => {
@@ -625,7 +641,7 @@ describe('the legal pane', () => {
     const summary = pane().textContent ?? ''
     expect(summary).toContain('None. Nothing is reported back to us, ever.')
     expect(summary).toContain('Stays in the project folder you chose.')
-    expect(summary).toContain("In this machine's keychain, never in a project.")
+    expect(summary).toContain("In this machine's credential storage, never in a project.")
     // Neither document is on screen until it is asked for.
     expect(summary).not.toContain('Wobu Privacy Policy')
     expect(summary).not.toContain('End User Licence Agreement')

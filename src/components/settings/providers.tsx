@@ -20,7 +20,7 @@ import type { CapabilityDef, ProviderDef } from './providerDefs'
  * whole design rather than a layout choice. A project's *selection* lives in
  * `project.json` and goes wherever the folder goes: open a world from a shared
  * drive and you are looking at somebody else's decision. A *key* is per
- * installation, sits in this machine's keychain, and goes nowhere at all. Those
+ * installation, sits in this machine's credential storage, and goes nowhere at all. Those
  * two facts are what BYOK means, they are the two facts users get wrong, and a
  * sentence explaining them is worth much less than a layout in which they are
  * obviously separate things — so the pane keeps them apart, labels each band
@@ -36,12 +36,16 @@ export function Providers() {
   // fresh closure per render would re-run all of them on every render.
   const clearFocus = useCallback(() => setFocus(null), [])
 
-  const statuses = keys.data
+  // Key status is an enhancement, not a gate on the action. The native lookup
+  // may be waiting on a broken Linux Secret Service, so render usable empty
+  // rows immediately and let the query fill in their actual sources.
+  const statuses: KeyStatus[] =
+    keys.data ?? CREDENTIAL_IDS.map((provider) => ({ provider, source: null, keychain: 'ready' }))
   const selected = selections.data
 
   // Both are one round trip on mount and neither is worth a spinner; the
   // sections around this one take the same line.
-  if (!statuses || !selected) return null
+  if (!selected) return null
   const chosen = selected.providers
 
   const status = (id: string): KeyStatus | undefined => statuses.find((s) => s.provider === id)
@@ -62,7 +66,8 @@ export function Providers() {
         Two different things live here and they belong to different people. What this project uses
         is written into the project folder and travels with it, so opening a shared world shows you
         the choices whoever built it made. Your keys never travel: they stay in this
-        computer&rsquo;s keychain, and everyone who opens the same world runs it on their own.
+        computer&rsquo;s credential storage, and everyone who opens the same world runs it on their
+        own.
       </p>
 
       <div className="prov-band prov-band-shared">
@@ -83,7 +88,6 @@ export function Providers() {
             selection={chosen[def.capability] ?? {}}
             readOnly={selected.readOnly}
             configured={configured}
-            keychainDown={keychainDown}
             onAddKey={setFocus}
           />
         ))}
@@ -104,9 +108,9 @@ export function Providers() {
         <ComfyEndpointSettings />
         {keychainDown && (
           <p className="prov-alert">
-            This computer&rsquo;s credential store is not answering. On Linux that usually means the
-            login keyring is locked; a headless session has none at all. Keys cannot be saved until
-            it is unlocked — a key already in the environment still works.
+            This computer&rsquo;s OS credential store is not answering. Add, replace and remove
+            still work: Wobu uses its owner-only local credential store until the OS service is
+            available.
           </p>
         )}
         {KEYED.map((provider) => (
@@ -115,7 +119,6 @@ export function Providers() {
             provider={provider}
             statuses={statuses}
             model={chosen.text?.provider === provider.id ? chosen.text?.model : undefined}
-            keychainDown={keychainDown}
             focus={focus}
             onFocused={clearFocus}
           />
@@ -140,14 +143,12 @@ export function CapabilityRow({
   selection,
   readOnly,
   configured,
-  keychainDown,
   onAddKey,
 }: {
   def: CapabilityDef
   selection: ProviderSelection
   readOnly: boolean
   configured: (provider: ProviderDef) => boolean
-  keychainDown: boolean
   onAddKey: (credentialId: string) => void
 }) {
   const select = useSelectProvider()
@@ -249,16 +250,12 @@ export function CapabilityRow({
         <p className="prov-gap">
           <b>{chosen.label} selected — no key on this machine.</b> {def.used} stays off until one is
           added, rather than failing once a job is already running.
-          {keychainDown ? (
-            <span> Unlock this computer&rsquo;s credential store before adding one.</span>
-          ) : (
-            <button
-              className="btn-mini"
-              onClick={() => onAddKey(chosen.credentials[0]?.id ?? chosen.id)}
-            >
-              Add key
-            </button>
-          )}
+          <button
+            className="btn-mini"
+            onClick={() => onAddKey(chosen.credentials[0]?.id ?? chosen.id)}
+          >
+            Add key
+          </button>
         </p>
       )}
 

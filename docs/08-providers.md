@@ -27,8 +27,10 @@ normal, not exotic.
 a shared drive ([07](07-file-shares.md)), so a key in `project.json` is a key leaked to
 everyone with share access — and to git history, and to whoever the folder gets zipped to.
 
-- Keys live in the **OS keychain** via the `keyring` crate — Secret Service on Linux, Keychain
-  on macOS, Credential Manager on Windows — under `wobu/<provider>`.
+- Keys prefer the **OS keychain** via the `keyring` crate — Secret Service on Linux, Keychain on
+  macOS, Credential Manager on Windows — under `wobu/<provider>`. If that service refuses or takes
+  longer than 500 ms, Wobu writes an owner-only fallback under its fixed application-data
+  `credentials/` directory and keeps every key control usable.
 - Keys are **per-installation, not per-project**. Opening a shared project uses *your* keys.
 - `project.json` stores only the *selection*: provider id, model id, and default params. It is
   safe to share, and a collaborator without a key sees "Gemini selected — no key on this
@@ -39,9 +41,14 @@ everyone with share access — and to git history, and to whoever the folder get
 Opening a project whose selected provider has no key on this machine drops that capability
 into a disabled state with a direct "add key" affordance, rather than failing at generate time.
 
-**Development-time exception.** For local work, `wobu-llm`/`wobu-imagine` may fall back to
+The fallback is plain text protected by the OS account boundary (`0700` directory and `0600` files
+on Unix; per-user AppData ACL on Windows), not by independent encryption. It never lives in a
+project and Settings names its source. Once present it resolves before the OS keychain, preventing
+an already-known native hang from delaying Enhance, generation or Settings again.
+
+**Development-time exception.** For local work, `wobu-llm`/`wobu-imagine` may also fall back to
 environment variables (a repo-root `.env`, e.g. `TencentSecretId` / `TencentSecretKey`) when
-the keychain has no entry. Resolution order is **keychain → environment → unconfigured**, and
+the stored routes have no entry. Resolution order is **local fallback → keychain → environment → unconfigured**, and
 the env path is compiled out of release builds. `.env` is gitignored; `.env.example` documents
 the variable names with empty values. This fallback must never read from inside a *project*
 folder — that is the shared-folder leak the keychain rule exists to prevent.
@@ -569,7 +576,8 @@ discovered:
   [international quick-start](https://intl.cloud.tencent.com/ind/document/product/1284/75287)
   instructs the primary account to create/authorise a CAM sub-account with the managed
   **`QcloudAI3DFullAccess`** policy, then create that sub-account's SecretId/SecretKey. That is the
-  verified recommendation shown in Settings, and the pair remains in the OS keychain.
+  verified recommendation shown in Settings, and the pair remains in machine-local credential
+  storage.
 - **Do not publish a guessed two-action custom policy.** Tencent's public quick-start names the
   managed policy, but its current
   [CAM product catalogue](https://intl.cloud.tencent.com/document/product/598/10588) does not list

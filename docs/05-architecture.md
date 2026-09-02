@@ -132,8 +132,9 @@ recoverable; the exporter never cleans up or deletes user data.
 
 ## Concerns worth naming early
 
-- **Secrets**: BYOK API keys go in the OS keychain via `keyring`, never in `project.json`.
-  This is non-negotiable now that project folders are meant to be shared — see
+- **Secrets**: BYOK API keys prefer the OS keychain via `keyring`; an owner-only app-data fallback
+  keeps the UX usable when it is unavailable. Neither route ever enters `project.json`. This is
+  non-negotiable now that project folders are meant to be shared — see
   [08 — Providers & BYOK](08-providers.md).
 - **Thumbnails**: generate WebP thumbs on import off the UI thread; grids bind to thumbs only.
 - **Cancellation**: every job must be genuinely cancellable, including in-flight ComfyUI

@@ -1,7 +1,8 @@
 //! Provider API keys, and proving one works before it is relied on.
 //!
-//! The keys themselves live in the OS keychain (`crate::keys`); what is here is
-//! the command surface over it plus the probe. The probe sends the smallest
+//! The keys themselves live in the OS keychain or Wobu's private app-data
+//! fallback (`crate::keys`); what is here is the command surface over them plus
+//! the probe. The probe sends the smallest
 //! real request the provider will accept rather than hitting a `/models`
 //! endpoint, because a key that lists models and cannot generate is exactly the
 //! failure the Settings panel exists to catch.
@@ -28,9 +29,9 @@ use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 /// the pane that renders these renders every row at once, and a call per row
 /// would be a credential-store round trip per row.
 ///
-/// A machine with no keychain, or a locked one, is an ordinary machine, and the
-/// answer for it is "unconfigured" rather than a credential-store failure. The
-/// `Result` only preserves an unexpected failure of the blocking worker.
+/// A machine with no keychain, or a locked one, is an ordinary machine. Existing
+/// fallback keys resolve and missing keys remain addable. The `Result` only
+/// preserves an unexpected failure of the blocking worker.
 #[tauri::command]
 pub async fn provider_key_status(
     keys: State<'_, Keys>,
