@@ -28,11 +28,15 @@ use crate::keys::{KeyRemoval, KeyStatus, Keys, Secret};
 /// the pane that renders these renders every row at once, and a call per row
 /// would be a credential-store round trip per row.
 ///
-/// No `Result`: a machine with no keychain, or a locked one, is an ordinary
-/// machine, and the answer for it is "unconfigured" rather than a failure.
+/// A machine with no keychain, or a locked one, is an ordinary machine, and the
+/// answer for it is "unconfigured" rather than a credential-store failure. The
+/// `Result` only preserves an unexpected failure of the blocking worker.
 #[tauri::command]
-pub fn provider_key_status(keys: State<'_, Keys>, providers: Vec<String>) -> Vec<KeyStatus> {
-    providers.iter().map(|p| keys.status(p)).collect()
+pub async fn provider_key_status(
+    keys: State<'_, Keys>,
+    providers: Vec<String>,
+) -> CommandResult<Vec<KeyStatus>> {
+    keys.statuses(providers).await
 }
 
 /// Store a key for a provider.
@@ -45,12 +49,12 @@ pub fn provider_key_status(keys: State<'_, Keys>, providers: Vec<String>) -> Vec
 /// a mistake here would be masked rather than published — but the rule is that
 /// nothing in this function mentions `key` at all.
 #[tauri::command]
-pub fn provider_key_set(
+pub async fn provider_key_set(
     keys: State<'_, Keys>,
     provider: String,
     key: String,
 ) -> CommandResult<KeyStatus> {
-    keys.set(&provider, &key)
+    keys.set(provider, key).await
 }
 
 /// Remove this machine's stored key for a provider.
@@ -58,8 +62,11 @@ pub fn provider_key_set(
 /// The result tells "removed" and "there was nothing to remove" apart, because
 /// they are different sentences and only one of them is worth showing.
 #[tauri::command]
-pub fn provider_key_delete(keys: State<'_, Keys>, provider: String) -> CommandResult<KeyRemoval> {
-    keys.delete(&provider)
+pub async fn provider_key_delete(
+    keys: State<'_, Keys>,
+    provider: String,
+) -> CommandResult<KeyRemoval> {
+    keys.delete(provider).await
 }
 
 /* ── the provider selection ───────────────────────────────────────────────── */
@@ -132,7 +139,7 @@ pub async fn provider_probe(
     provider: String,
     model: Option<String>,
 ) -> CommandResult<ProbeResult> {
-    let secret = keys.secret(&provider).ok_or_else(|| {
+    let secret = keys.secret(&provider).await?.ok_or_else(|| {
         WobuError::new(
             Code::ProviderNoKey,
             "There is no key for this provider on this machine, so there is nothing to check.",

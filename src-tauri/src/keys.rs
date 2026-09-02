@@ -32,11 +32,21 @@
 //! reported as a failure is a *write*, because silently not saving a key the
 //! user just pasted is worse than saying so.
 //!
+//! "Will not answer" includes a platform call that never returns. Linux Secret
+//! Service can wait indefinitely for an unlock prompt nobody can draw, so every
+//! operation is run on a disposable thread behind [`STORE_DEADLINE`]. Public
+//! operations then await that blocking work away from Tauri's command threads:
+//! a wedged keyring can delay an answer, but it cannot freeze the application.
+//!
 //! See `docs/08-providers.md`.
 
 use std::collections::HashMap;
 #[cfg(debug_assertions)]
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -50,6 +60,15 @@ use crate::redact;
 /// same pairing from the adapter's side — renaming an id orphans every key
 /// already stored under the old one, on every machine.
 const SERVICE: &str = "wobu";
+
+/// How long the OS credential store gets to answer one operation.
+///
+/// Linux Secret Service can wait forever for an unlock prompt that no process
+/// is able to draw. Provider keys are read from commands the user is waiting
+/// on, so an unbounded platform call turns an Enhance click into an apparent
+/// application hang. Ten seconds leaves room for a real prompt while making a
+/// missing prompter an ordinary unavailable-keychain result.
+const STORE_DEADLINE: Duration = Duration::from_secs(10);
 
 /* ── the secret ───────────────────────────────────────────────────────────── */
 
@@ -226,7 +245,7 @@ impl Lookup {
 }
 
 /// How a development-time variable is read.
-type ReadVar = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
+type ReadVar = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 /// The process-wide answer to "what is this provider's key".
 ///
@@ -234,8 +253,9 @@ type ReadVar = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
 /// project and never will: a key belongs to the installation, and a type that
 /// could see a project folder is a type that could one day read a key out of
 /// one.
+#[derive(Clone)]
 pub struct Keys {
-    store: Box<dyn Store>,
+    store: Arc<dyn Store>,
     /// A field rather than a direct call so the fallback can be tested without
     /// the test depending on the environment of whoever runs it — which would
     /// make it pass or fail based on whether the developer happens to have a
@@ -249,12 +269,18 @@ pub struct Keys {
     /// Cleared for a provider whenever this process changes its key; a key
     /// changed by some *other* program is picked up on the next run, which is
     /// the trade being made.
-    cache: Mutex<HashMap<String, Lookup>>,
+    cache: Arc<Mutex<HashMap<String, Lookup>>>,
+    store_deadline: Duration,
 }
 
 impl Default for Keys {
     fn default() -> Keys {
-        Keys { store: Box::new(OsStore), var: Box::new(dev_var), cache: Mutex::default() }
+        Keys {
+            store: Arc::new(OsStore),
+            var: Arc::new(dev_var),
+            cache: Arc::default(),
+            store_deadline: STORE_DEADLINE,
+        }
     }
 }
 
@@ -264,18 +290,45 @@ impl Keys {
     /// The only way a [`Secret`] leaves this module, and it goes to an adapter
     /// constructor — `AnthropicProvider::new(key)` — rather than into a struct
     /// the UI can see.
-    pub fn secret(&self, provider: &str) -> Option<Secret> {
-        self.lookup(provider).secret
+    pub async fn secret(&self, provider: &str) -> CommandResult<Option<Secret>> {
+        let keys = self.clone();
+        let provider = provider.to_owned();
+        tauri::async_runtime::spawn_blocking(move || keys.lookup(&provider).secret)
+            .await
+            .map_err(task_lost)
     }
 
     /// Everything the UI is allowed to know.
-    pub fn status(&self, provider: &str) -> KeyStatus {
-        let found = self.lookup(provider);
-        KeyStatus { provider: provider.to_owned(), source: found.source, keychain: found.keychain }
+    pub async fn statuses(&self, providers: Vec<String>) -> CommandResult<Vec<KeyStatus>> {
+        let keys = self.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut store_unavailable = false;
+            providers
+                .into_iter()
+                .map(|provider| {
+                    let found = if store_unavailable {
+                        keys.cached_or_fallback(&provider, Keychain::Unavailable)
+                    } else {
+                        keys.lookup(&provider)
+                    };
+                    store_unavailable |= found.keychain == Keychain::Unavailable;
+                    Self::status_of(&provider, &found)
+                })
+                .collect()
+        })
+        .await
+        .map_err(task_lost)
     }
 
     /// Store a key for a provider, replacing any entry already there.
-    pub fn set(&self, provider: &str, key: &str) -> CommandResult<KeyStatus> {
+    pub async fn set(&self, provider: String, key: String) -> CommandResult<KeyStatus> {
+        let keys = self.clone();
+        tauri::async_runtime::spawn_blocking(move || keys.set_blocking(&provider, &key))
+            .await
+            .map_err(task_lost)?
+    }
+
+    fn set_blocking(&self, provider: &str, key: &str) -> CommandResult<KeyStatus> {
         // A pasted key arrives with a trailing newline more often than not, and
         // a key with one on the end is a 401 that reads exactly like a wrong
         // key — which sends the user back to the console for a replacement that
@@ -285,17 +338,51 @@ impl Keys {
             return Err(WobuError::new(Code::Invalid, "A key cannot be empty."));
         }
 
-        self.store.set(provider, key).map_err(|e| unavailable("Your key was not saved.", e))?;
-        self.forget(provider);
-        Ok(self.status(provider))
+        let store = Arc::clone(&self.store);
+        let provider_owned = provider.to_owned();
+        let key_owned = key.to_owned();
+        self.within(move || store.set(&provider_owned, &key_owned))
+            .map_err(|e| unavailable("Your key was not saved.", e))?;
+
+        // We know exactly what was just written, so reading it back would only
+        // create a second chance for a locked keyring to stall this command.
+        let found = Lookup {
+            source: Some(Source::Keychain),
+            secret: Some(Secret::new(key)),
+            keychain: Keychain::Ready,
+        };
+        self.cache.lock().insert(provider.to_owned(), found.clone());
+        Ok(Self::status_of(provider, &found))
     }
 
     /// Remove this machine's stored key for a provider.
-    pub fn delete(&self, provider: &str) -> CommandResult<KeyRemoval> {
-        let removed =
-            self.store.delete(provider).map_err(|e| unavailable("The key was not removed.", e))?;
+    pub async fn delete(&self, provider: String) -> CommandResult<KeyRemoval> {
+        let keys = self.clone();
+        tauri::async_runtime::spawn_blocking(move || keys.delete_blocking(&provider))
+            .await
+            .map_err(task_lost)?
+    }
+
+    fn delete_blocking(&self, provider: &str) -> CommandResult<KeyRemoval> {
+        let store = Arc::clone(&self.store);
+        let provider_owned = provider.to_owned();
+        let removed = self
+            .within(move || store.delete(&provider_owned))
+            .map_err(|e| unavailable("The key was not removed.", e))?;
         self.forget(provider);
-        Ok(KeyRemoval { removed, status: self.status(provider) })
+        // A successful delete definitively means there is no stored value. Use
+        // the development fallback directly instead of immediately asking the
+        // same credential store to prove the deletion happened.
+        let found = match self.env_secret(provider) {
+            Some(secret) => Lookup {
+                source: Some(Source::Environment),
+                secret: Some(secret),
+                keychain: Keychain::Ready,
+            },
+            None => Lookup::unconfigured(Keychain::Ready),
+        };
+        self.cache.lock().insert(provider.to_owned(), found.clone());
+        Ok(KeyRemoval { removed, status: Self::status_of(provider, &found) })
     }
 
     /// Keychain, then environment, then unconfigured — and that order is the
@@ -308,7 +395,9 @@ impl Keys {
             return hit;
         }
 
-        let (keychain, stored) = match self.store.get(provider) {
+        let store = Arc::clone(&self.store);
+        let provider_owned = provider.to_owned();
+        let (keychain, stored) = match self.within(move || store.get(&provider_owned)) {
             Ok(found) => (Keychain::Ready, found),
             Err(e) => {
                 // Info, not error. A machine without a credential store is an
@@ -339,6 +428,52 @@ impl Keys {
             self.cache.lock().insert(provider.to_owned(), found.clone());
         }
         found
+    }
+
+    #[cfg(test)]
+    fn status_blocking(&self, provider: &str) -> KeyStatus {
+        let found = self.lookup(provider);
+        Self::status_of(provider, &found)
+    }
+
+    /// Resolve without touching the OS store, used for the remaining rows of a
+    /// batched status request after the first row proves the store unavailable.
+    fn cached_or_fallback(&self, provider: &str, keychain: Keychain) -> Lookup {
+        if let Some(found) = self.cache.lock().get(provider).cloned() {
+            return found;
+        }
+        match self.env_secret(provider) {
+            Some(secret) => {
+                Lookup { source: Some(Source::Environment), secret: Some(secret), keychain }
+            }
+            None => Lookup::unconfigured(keychain),
+        }
+    }
+
+    fn status_of(provider: &str, found: &Lookup) -> KeyStatus {
+        KeyStatus { provider: provider.to_owned(), source: found.source, keychain: found.keychain }
+    }
+
+    /// Run one platform operation on a disposable thread and stop waiting for
+    /// it after the credential-store deadline.
+    ///
+    /// The platform API has no cancellation. On timeout the thread is detached;
+    /// if an unlock prompt is eventually answered it exits normally, while the
+    /// command that started it has already degraded to an unavailable store.
+    fn within<T: Send + 'static>(
+        &self,
+        operation: impl FnOnce() -> Result<T, Unavailable> + Send + 'static,
+    ) -> Result<T, Unavailable> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        thread::spawn(move || {
+            let _ = tx.send(operation());
+        });
+        rx.recv_timeout(self.store_deadline).unwrap_or_else(|_| {
+            Err(Unavailable(format!(
+                "credential store did not answer within {} seconds",
+                self.store_deadline.as_secs()
+            )))
+        })
     }
 
     fn env_secret(&self, provider: &str) -> Option<Secret> {
@@ -375,6 +510,11 @@ fn unavailable(what_happened: &str, e: Unavailable) -> WobuError {
         ),
     )
     .with_detail(e.0)
+}
+
+fn task_lost(error: impl std::fmt::Display) -> WobuError {
+    WobuError::new(Code::Internal, "The credential-store task stopped unexpectedly.")
+        .with_detail(error.to_string())
 }
 
 /* ── the development-time fallback ────────────────────────────────────────── */
@@ -477,6 +617,7 @@ mod tests {
     struct FakeStore {
         entries: Mutex<HashMap<String, String>>,
         fails_with: Option<String>,
+        delay: Duration,
     }
 
     impl FakeStore {
@@ -490,7 +631,14 @@ mod tests {
             store
         }
 
+        fn stalling(delay: Duration) -> FakeStore {
+            FakeStore { delay, ..FakeStore::default() }
+        }
+
         fn refuse(&self) -> Option<Unavailable> {
+            if !self.delay.is_zero() {
+                thread::sleep(self.delay);
+            }
             self.fails_with.as_ref().map(|m| Unavailable(m.clone()))
         }
     }
@@ -525,9 +673,10 @@ mod tests {
         let env: HashMap<String, String> =
             env.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
         Keys {
-            store: Box::new(store),
-            var: Box::new(move |name| env.get(name).cloned()),
-            cache: Mutex::default(),
+            store: Arc::new(store),
+            var: Arc::new(move |name| env.get(name).cloned()),
+            cache: Arc::default(),
+            store_deadline: STORE_DEADLINE,
         }
     }
 
@@ -577,16 +726,16 @@ mod tests {
         // 3. The failure this module raises itself, where the platform's own
         //    wording lands in `detail` unread.
         let refusing = keys(FakeStore::refusing(&format!("store rejected api_key={KEY}")), &[]);
-        let refused = refusing.set("anthropic", KEY).expect_err("the store refused");
+        let refused = refusing.set_blocking("anthropic", KEY).expect_err("the store refused");
         let serialised = json(&refused).to_string();
         assert!(!serialised.contains(KEY), "a key reached the webview in an error: {serialised}");
 
         // 4. Everything this module hands the UI, whatever a future field on it
         //    might hold.
         let configured = keys(FakeStore::holding("anthropic", KEY), &[]);
-        let status = json(&configured.status("anthropic")).to_string();
+        let status = json(&configured.status_blocking("anthropic")).to_string();
         assert!(!status.contains(KEY), "a key reached the webview in a status: {status}");
-        let removal = json(&configured.delete("anthropic").unwrap()).to_string();
+        let removal = json(&configured.delete_blocking("anthropic").unwrap()).to_string();
         assert!(!removal.contains(KEY), "a key reached the webview in a removal: {removal}");
 
         // 5. The log on disk, which is the file a user pastes into an issue.
@@ -607,7 +756,7 @@ mod tests {
         // Whoever adds one has to come here and say what it is, which is the
         // moment to notice that it holds key material.
         let configured = keys(FakeStore::holding("anthropic", "sk-ant-api03-real"), &[]);
-        let status = json(&configured.status("anthropic"));
+        let status = json(&configured.status_blocking("anthropic"));
 
         let mut fields: Vec<&str> =
             status.as_object().expect("an object").keys().map(String::as_str).collect();
@@ -630,16 +779,16 @@ mod tests {
             FakeStore::holding("anthropic", "from-keychain"),
             &[("ANTHROPIC_API_KEY", "from-env")],
         );
-        assert_eq!(both.status("anthropic").source, Some(Source::Keychain));
-        assert_eq!(both.secret("anthropic").unwrap().expose(), "from-keychain");
+        assert_eq!(both.status_blocking("anthropic").source, Some(Source::Keychain));
+        assert_eq!(both.lookup("anthropic").secret.unwrap().expose(), "from-keychain");
 
         let env_only = keys(FakeStore::default(), &[("ANTHROPIC_API_KEY", "from-env")]);
-        assert_eq!(env_only.status("anthropic").source, Some(Source::Environment));
-        assert_eq!(env_only.secret("anthropic").unwrap().expose(), "from-env");
+        assert_eq!(env_only.status_blocking("anthropic").source, Some(Source::Environment));
+        assert_eq!(env_only.lookup("anthropic").secret.unwrap().expose(), "from-env");
 
         let neither = keys(FakeStore::default(), &[]);
-        assert_eq!(neither.status("gemini").source, None);
-        assert!(neither.secret("gemini").is_none());
+        assert_eq!(neither.status_blocking("gemini").source, None);
+        assert!(neither.lookup("gemini").secret.is_none());
     }
 
     #[test]
@@ -648,10 +797,34 @@ mod tests {
         // key has no `Result` at all, so there is no path from here to a dialog.
         let headless = keys(FakeStore::refusing("no Secret Service on the session bus"), &[]);
 
-        let status = headless.status("gemini");
+        let status = headless.status_blocking("gemini");
         assert_eq!(status.keychain, Keychain::Unavailable);
         assert_eq!(status.source, None);
-        assert!(headless.secret("gemini").is_none());
+        assert!(headless.lookup("gemini").secret.is_none());
+    }
+
+    #[test]
+    fn a_keychain_that_never_answers_is_bounded_for_reads_writes_and_deletes() {
+        // Linux Secret Service can wait forever for a prompt's `Completed`
+        // signal. Use a store much slower than this test's deadline to prove
+        // that no provider operation waits for the platform call to return.
+        let mut keys = keys(FakeStore::stalling(Duration::from_millis(100)), &[]);
+        keys.store_deadline = Duration::from_millis(10);
+
+        let started = std::time::Instant::now();
+        let status = keys.status_blocking("anthropic");
+        assert_eq!(status.keychain, Keychain::Unavailable);
+        assert!(started.elapsed() < Duration::from_millis(80));
+
+        let started = std::time::Instant::now();
+        let set = keys.set_blocking("anthropic", "sk-ant-api03-real").unwrap_err();
+        assert_eq!(json(&set)["code"], "provider.keychain_unavailable");
+        assert!(started.elapsed() < Duration::from_millis(80));
+
+        let started = std::time::Instant::now();
+        let delete = keys.delete_blocking("anthropic").unwrap_err();
+        assert_eq!(json(&delete)["code"], "provider.keychain_unavailable");
+        assert!(started.elapsed() < Duration::from_millis(80));
     }
 
     #[test]
@@ -662,7 +835,7 @@ mod tests {
             FakeStore::refusing("no Secret Service on the session bus"),
             &[("ANTHROPIC_API_KEY", "from-env")],
         );
-        let status = ci.status("anthropic");
+        let status = ci.status_blocking("anthropic");
         assert_eq!(status.keychain, Keychain::Unavailable);
         assert_eq!(status.source, Some(Source::Environment));
     }
@@ -674,11 +847,11 @@ mod tests {
         // the rest of the session and look like the unlock did nothing.
         let store = FakeStore::refusing("locked");
         let mut keys = keys(store, &[]);
-        assert_eq!(keys.status("anthropic").keychain, Keychain::Unavailable);
+        assert_eq!(keys.status_blocking("anthropic").keychain, Keychain::Unavailable);
 
-        keys.store = Box::new(FakeStore::holding("anthropic", "unlocked-now"));
-        assert_eq!(keys.status("anthropic").keychain, Keychain::Ready);
-        assert_eq!(keys.status("anthropic").source, Some(Source::Keychain));
+        keys.store = Arc::new(FakeStore::holding("anthropic", "unlocked-now"));
+        assert_eq!(keys.status_blocking("anthropic").keychain, Keychain::Ready);
+        assert_eq!(keys.status_blocking("anthropic").source, Some(Source::Keychain));
     }
 
     /* ── writing and removing ─────────────────────────────────────────────── */
@@ -687,11 +860,11 @@ mod tests {
     fn deleting_a_key_is_told_apart_from_there_never_having_been_one() {
         let keys = keys(FakeStore::holding("anthropic", "sk-ant-api03-real"), &[]);
 
-        let first = keys.delete("anthropic").unwrap();
+        let first = keys.delete_blocking("anthropic").unwrap();
         assert!(first.removed, "an entry existed and should report as removed");
         assert_eq!(first.status.source, None);
 
-        let second = keys.delete("anthropic").unwrap();
+        let second = keys.delete_blocking("anthropic").unwrap();
         assert!(!second.removed, "a second delete removed nothing and must say so");
         // And it is still not a failure — the UI must not raise anything for it.
         assert_eq!(second.status.source, None);
@@ -708,7 +881,7 @@ mod tests {
             &[("ANTHROPIC_API_KEY", "from-env")],
         );
 
-        let removal = keys.delete("anthropic").unwrap();
+        let removal = keys.delete_blocking("anthropic").unwrap();
         assert!(removal.removed);
         assert_eq!(removal.status.source, Some(Source::Environment));
     }
@@ -718,14 +891,14 @@ mod tests {
         // The cache is the thing being guarded: a save that the next read does
         // not see would show the user their old state and read as a failed save.
         let keys = keys(FakeStore::default(), &[]);
-        assert_eq!(keys.status("anthropic").source, None);
+        assert_eq!(keys.status_blocking("anthropic").source, None);
 
-        let status = keys.set("anthropic", "sk-ant-api03-first").unwrap();
+        let status = keys.set_blocking("anthropic", "sk-ant-api03-first").unwrap();
         assert_eq!(status.source, Some(Source::Keychain));
-        assert_eq!(keys.secret("anthropic").unwrap().expose(), "sk-ant-api03-first");
+        assert_eq!(keys.lookup("anthropic").secret.unwrap().expose(), "sk-ant-api03-first");
 
-        keys.set("anthropic", "sk-ant-api03-second").unwrap();
-        assert_eq!(keys.secret("anthropic").unwrap().expose(), "sk-ant-api03-second");
+        keys.set_blocking("anthropic", "sk-ant-api03-second").unwrap();
+        assert_eq!(keys.lookup("anthropic").secret.unwrap().expose(), "sk-ant-api03-second");
     }
 
     #[test]
@@ -734,8 +907,8 @@ mod tests {
         // key, which sends the user back to the console for a replacement that
         // fails identically.
         let keys = keys(FakeStore::default(), &[]);
-        keys.set("anthropic", "  sk-ant-api03-pasted\n").unwrap();
-        assert_eq!(keys.secret("anthropic").unwrap().expose(), "sk-ant-api03-pasted");
+        keys.set_blocking("anthropic", "  sk-ant-api03-pasted\n").unwrap();
+        assert_eq!(keys.lookup("anthropic").secret.unwrap().expose(), "sk-ant-api03-pasted");
     }
 
     #[test]
@@ -743,9 +916,9 @@ mod tests {
         // Storing one would report the provider as configured and then fail
         // every request, which is the worst of both states.
         let keys = keys(FakeStore::default(), &[]);
-        let e = keys.set("anthropic", "   \n").expect_err("an empty key is not a key");
+        let e = keys.set_blocking("anthropic", "   \n").expect_err("an empty key is not a key");
         assert_eq!(json(&e)["code"], "node.invalid");
-        assert_eq!(keys.status("anthropic").source, None);
+        assert_eq!(keys.status_blocking("anthropic").source, None);
     }
 
     #[test]
@@ -754,7 +927,7 @@ mod tests {
         // it without filling anything in must read as unconfigured rather than
         // as configured-and-broken.
         let keys = keys(FakeStore::default(), &[("ANTHROPIC_API_KEY", "  ")]);
-        assert_eq!(keys.status("anthropic").source, None);
+        assert_eq!(keys.status_blocking("anthropic").source, None);
     }
 
     #[test]
@@ -763,7 +936,7 @@ mod tests {
         // pasted a key and pressed Save, and pretending that worked is worse
         // than a dialog.
         let keys = keys(FakeStore::refusing("the collection is locked"), &[]);
-        let e = keys.set("anthropic", "sk-ant-api03-real").expect_err("the store refused");
+        let e = keys.set_blocking("anthropic", "sk-ant-api03-real").expect_err("the store refused");
 
         assert_eq!(json(&e)["code"], "provider.keychain_unavailable");
         // Not retryable: pressing "Try again" without unlocking anything fails

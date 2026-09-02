@@ -278,7 +278,7 @@ fn provider_unavailable(error: ImageError) -> WobuError {
 /// legitimately disagree about — see [`image_backend`] and
 /// [`unprobed_image_backend`] — while the hosted arms are identical everywhere
 /// and were previously spelled out three times.
-fn hosted_image_backend(
+async fn hosted_image_backend(
     provider: &str,
     purpose: BackendPurpose<'_>,
 ) -> CommandResult<Arc<dyn ImageBackend>> {
@@ -288,6 +288,7 @@ fn hosted_image_backend(
     let key = match purpose.credential() {
         Some((keys, missing)) => keys
             .secret(gemini::ID)
+            .await?
             .ok_or_else(|| WobuError::new(Code::ProviderNoKey, missing))?
             .expose()
             .to_owned(),
@@ -309,7 +310,7 @@ async fn image_backend(
     if provider == comfy::ID {
         return Ok(Arc::new(machine.connect_comfy_image().await.map_err(provider_unavailable)?));
     }
-    hosted_image_backend(provider, purpose)
+    hosted_image_backend(provider, purpose).await
 }
 
 /// The same adapter for the one caller that cannot await: the synchronous
@@ -329,7 +330,21 @@ fn unprobed_image_backend(
     if provider == comfy::ID {
         return Ok(Arc::new(machine.comfy_image().map_err(provider_unavailable)?));
     }
-    hosted_image_backend(provider, purpose)
+    if provider != gemini::ID {
+        return Err(purpose.unsupported(provider));
+    }
+    // This synchronous path is capability-only and therefore never reads a
+    // credential. Any executing caller belongs on `image_backend`, whose
+    // keychain work is bounded and runs off the async runtime's worker threads.
+    match purpose {
+        BackendPurpose::Preview => {
+            Ok(Arc::new(GeminiBackend::new("capability-preview").map_err(provider_unavailable)?))
+        }
+        BackendPurpose::Generate(_) | BackendPurpose::Replay(_) => Err(WobuError::new(
+            Code::Internal,
+            "An executing image backend cannot be built by the preview path.",
+        )),
+    }
 }
 
 /// Everything planning reads from the open project.

@@ -265,7 +265,7 @@ pub async fn status_bar_backend(
             },
             Err(error) => BackendHealth::Unavailable { detail: error.to_string() },
         },
-        image_gemini::ID => match keys.secret(image_gemini::ID) {
+        image_gemini::ID => match keys.secret(image_gemini::ID).await? {
             None => BackendHealth::Unconfigured {
                 detail: "Gemini is selected for images, but this machine has no Gemini key.".into(),
             },
