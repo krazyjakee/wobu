@@ -209,7 +209,14 @@ export function CredentialRow({
   // request stays active until this field closes, so no reset render is needed.
   useEffect(() => {
     if (!editing) return
-    field.current?.focus()
+    const input = field.current
+    // The shortcut lives in the shared-project band, while the key field is in
+    // the machine-local band below it. Focusing normally scrolls in browsers,
+    // but WebKit does not consistently move a nested overflow container when a
+    // node appeared in the same render. Make the navigation explicit so the
+    // click cannot open a field off-screen and look like it did nothing.
+    input?.scrollIntoView?.({ block: 'center' })
+    input?.focus()
   }, [editing])
 
   async function submit() {

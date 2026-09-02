@@ -83,6 +83,7 @@ export function Providers() {
             selection={chosen[def.capability] ?? {}}
             readOnly={selected.readOnly}
             configured={configured}
+            keychainDown={keychainDown}
             onAddKey={setFocus}
           />
         ))}
@@ -139,12 +140,14 @@ export function CapabilityRow({
   selection,
   readOnly,
   configured,
+  keychainDown,
   onAddKey,
 }: {
   def: CapabilityDef
   selection: ProviderSelection
   readOnly: boolean
   configured: (provider: ProviderDef) => boolean
+  keychainDown: boolean
   onAddKey: (credentialId: string) => void
 }) {
   const select = useSelectProvider()
@@ -246,12 +249,16 @@ export function CapabilityRow({
         <p className="prov-gap">
           <b>{chosen.label} selected — no key on this machine.</b> {def.used} stays off until one is
           added, rather than failing once a job is already running.
-          <button
-            className="btn-mini"
-            onClick={() => onAddKey(chosen.credentials[0]?.id ?? chosen.id)}
-          >
-            Add key
-          </button>
+          {keychainDown ? (
+            <span> Unlock this computer&rsquo;s credential store before adding one.</span>
+          ) : (
+            <button
+              className="btn-mini"
+              onClick={() => onAddKey(chosen.credentials[0]?.id ?? chosen.id)}
+            >
+              Add key
+            </button>
+          )}
         </p>
       )}
 

@@ -353,6 +353,34 @@ describe('the shared selection', () => {
     expect(text.getByText('Anthropic', { selector: 'b' })).toBeTruthy()
   })
 
+  it('moves the selected provider’s key field into view when the shared-band shortcut is used', async () => {
+    selections = { providers: { text: { provider: 'anthropic' } }, readOnly: false }
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    await open()
+
+    const text = within(screen.getByRole('group', { name: 'Text — Enhance' }))
+    fireEvent.click(text.getByRole('button', { name: 'Add key' }))
+
+    const field = await screen.findByPlaceholderText('Paste the api key')
+    expect(field).toHaveFocus()
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('explains a locked credential store instead of offering a dead Add key shortcut', async () => {
+    selections = { providers: { text: { provider: 'anthropic' } }, readOnly: false }
+    keyStatuses = keyStatuses.map((status) => ({ ...status, keychain: 'unavailable' }))
+    await open()
+
+    const text = within(screen.getByRole('group', { name: 'Text — Enhance' }))
+    expect(text.queryByRole('button', { name: 'Add key' })).toBeNull()
+    expect(text.getByText(/Unlock this computer’s credential store before adding one/)).toBeTruthy()
+    expect(screen.getByText(/credential store is not answering/)).toBeTruthy()
+  })
+
   it('is the only thing a read-only project disables — keys are still this machine’s', async () => {
     // Keys are per installation. Locking the whole pane because somebody else's
     // folder is read-only would stop the user configuring their own computer.

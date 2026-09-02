@@ -152,8 +152,9 @@ async fn mesh_readiness(
 ) -> CommandResult<(bool, String)> {
     match selection.provider.as_str() {
         tencent::ID => {
-            let has_id = keys.secret(TENCENT_SECRET_ID).await?.is_some();
-            let has_key = keys.secret(TENCENT_SECRET_KEY).await?.is_some();
+            let secrets = tencent_secrets(keys).await?;
+            let has_id = secrets[0].is_some();
+            let has_key = secrets[1].is_some();
             if has_id && has_key {
                 Ok((true, String::new()))
             } else {
@@ -192,8 +193,9 @@ pub(super) async fn execution_backend(
                      SecretId/SecretKey pair. Add both in Settings.",
                 )
             };
-            let secret_id = keys.secret(TENCENT_SECRET_ID).await?.ok_or_else(missing)?;
-            let secret_key = keys.secret(TENCENT_SECRET_KEY).await?.ok_or_else(missing)?;
+            let mut secrets = tencent_secrets(keys).await?.into_iter();
+            let secret_id = secrets.next().flatten().ok_or_else(missing)?;
+            let secret_key = secrets.next().flatten().ok_or_else(missing)?;
             let credentials = tencent::Credentials::new(
                 secret_id.expose(),
                 tencent::SecretKey::new(secret_key.expose()),
@@ -207,6 +209,10 @@ pub(super) async fn execution_backend(
             Err(WobuError::new(Code::Invalid, format!("This build has no 3D adapter for {other}.")))
         }
     }
+}
+
+async fn tencent_secrets(keys: &Keys) -> CommandResult<Vec<Option<crate::keys::Secret>>> {
+    keys.secrets(vec![TENCENT_SECRET_ID.into(), TENCENT_SECRET_KEY.into()]).await
 }
 
 /* ── starting one ─────────────────────────────────────────────────────────── */

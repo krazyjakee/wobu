@@ -46,9 +46,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use serde::Serialize;
 
 use crate::diag;
@@ -244,6 +244,17 @@ impl Lookup {
     }
 }
 
+struct StoreAccess {
+    active_since: Mutex<Option<Instant>>,
+    idle: Condvar,
+}
+
+impl Default for StoreAccess {
+    fn default() -> Self {
+        Self { active_since: Mutex::new(None), idle: Condvar::new() }
+    }
+}
+
 /// How a development-time variable is read.
 type ReadVar = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
@@ -256,6 +267,11 @@ type ReadVar = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 #[derive(Clone)]
 pub struct Keys {
     store: Arc<dyn Store>,
+    /// One platform call at a time. A timed-out Secret Service read may still
+    /// be waiting for an unlock prompt because the platform API offers no
+    /// cancellation; this gate stops every click made behind it from spawning
+    /// another permanently parked thread.
+    access: Arc<StoreAccess>,
     /// A field rather than a direct call so the fallback can be tested without
     /// the test depending on the environment of whoever runs it — which would
     /// make it pass or fail based on whether the developer happens to have a
@@ -277,6 +293,7 @@ impl Default for Keys {
     fn default() -> Keys {
         Keys {
             store: Arc::new(OsStore),
+            access: Arc::default(),
             var: Arc::new(dev_var),
             cache: Arc::default(),
             store_deadline: STORE_DEADLINE,
@@ -298,22 +315,28 @@ impl Keys {
             .map_err(task_lost)
     }
 
+    /// Several credentials resolved as one user action.
+    ///
+    /// Tencent signs with a SecretId/SecretKey pair. If the first lookup proves
+    /// the store unavailable, the rest use their environment fallbacks without
+    /// asking the same locked store again, so one click has one deadline.
+    pub async fn secrets(&self, providers: Vec<String>) -> CommandResult<Vec<Option<Secret>>> {
+        let keys = self.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            keys.lookups_blocking(providers).into_iter().map(|found| found.secret).collect()
+        })
+        .await
+        .map_err(task_lost)
+    }
+
     /// Everything the UI is allowed to know.
     pub async fn statuses(&self, providers: Vec<String>) -> CommandResult<Vec<KeyStatus>> {
         let keys = self.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            let mut store_unavailable = false;
             providers
-                .into_iter()
-                .map(|provider| {
-                    let found = if store_unavailable {
-                        keys.cached_or_fallback(&provider, Keychain::Unavailable)
-                    } else {
-                        keys.lookup(&provider)
-                    };
-                    store_unavailable |= found.keychain == Keychain::Unavailable;
-                    Self::status_of(&provider, &found)
-                })
+                .iter()
+                .zip(keys.lookups_blocking(providers.clone()))
+                .map(|(provider, found)| Self::status_of(provider, &found))
                 .collect()
         })
         .await
@@ -430,6 +453,22 @@ impl Keys {
         found
     }
 
+    fn lookups_blocking(&self, providers: Vec<String>) -> Vec<Lookup> {
+        let mut store_unavailable = false;
+        providers
+            .into_iter()
+            .map(|provider| {
+                let found = if store_unavailable {
+                    self.cached_or_fallback(&provider, Keychain::Unavailable)
+                } else {
+                    self.lookup(&provider)
+                };
+                store_unavailable |= found.keychain == Keychain::Unavailable;
+                found
+            })
+            .collect()
+    }
+
     #[cfg(test)]
     fn status_blocking(&self, provider: &str) -> KeyStatus {
         let found = self.lookup(provider);
@@ -464,9 +503,19 @@ impl Keys {
         &self,
         operation: impl FnOnce() -> Result<T, Unavailable> + Send + 'static,
     ) -> Result<T, Unavailable> {
+        self.claim_store()?;
+
         let (tx, rx) = mpsc::sync_channel(1);
+        let access = Arc::clone(&self.access);
         thread::spawn(move || {
-            let _ = tx.send(operation());
+            // A store implementation should not panic, but leaving `active`
+            // latched forever if one does would turn one platform bug into a
+            // permanent process-wide outage.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation))
+                .unwrap_or_else(|_| Err(Unavailable("credential store operation panicked".into())));
+            *access.active_since.lock() = None;
+            access.idle.notify_all();
+            let _ = tx.send(result);
         });
         rx.recv_timeout(self.store_deadline).unwrap_or_else(|_| {
             Err(Unavailable(format!(
@@ -474,6 +523,28 @@ impl Keys {
                 self.store_deadline.as_secs()
             )))
         })
+    }
+
+    /// Claim the single platform-call slot, sharing the original deadline with
+    /// callers that arrive while a healthy operation is still finishing.
+    fn claim_store(&self) -> Result<(), Unavailable> {
+        let mut active = self.access.active_since.lock();
+        loop {
+            let Some(started) = *active else {
+                *active = Some(Instant::now());
+                return Ok(());
+            };
+            let Some(remaining) = self.store_deadline.checked_sub(started.elapsed()) else {
+                return Err(Unavailable(
+                    "credential store is still waiting for an earlier operation".into(),
+                ));
+            };
+            if self.access.idle.wait_for(&mut active, remaining).timed_out() && active.is_some() {
+                return Err(Unavailable(
+                    "credential store is still waiting for an earlier operation".into(),
+                ));
+            }
+        }
     }
 
     fn env_secret(&self, provider: &str) -> Option<Secret> {
@@ -607,6 +678,7 @@ fn dot_env(text: &str, name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A store that lives in memory, or refuses to answer at all.
     ///
@@ -618,6 +690,7 @@ mod tests {
         entries: Mutex<HashMap<String, String>>,
         fails_with: Option<String>,
         delay: Duration,
+        calls: Arc<AtomicUsize>,
     }
 
     impl FakeStore {
@@ -636,6 +709,7 @@ mod tests {
         }
 
         fn refuse(&self) -> Option<Unavailable> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
             if !self.delay.is_zero() {
                 thread::sleep(self.delay);
             }
@@ -674,6 +748,7 @@ mod tests {
             env.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
         Keys {
             store: Arc::new(store),
+            access: Arc::default(),
             var: Arc::new(move |name| env.get(name).cloned()),
             cache: Arc::default(),
             store_deadline: STORE_DEADLINE,
@@ -808,7 +883,9 @@ mod tests {
         // Linux Secret Service can wait forever for a prompt's `Completed`
         // signal. Use a store much slower than this test's deadline to prove
         // that no provider operation waits for the platform call to return.
-        let mut keys = keys(FakeStore::stalling(Duration::from_millis(100)), &[]);
+        let store = FakeStore::stalling(Duration::from_millis(100));
+        let calls = Arc::clone(&store.calls);
+        let mut keys = keys(store, &[]);
         keys.store_deadline = Duration::from_millis(10);
 
         let started = std::time::Instant::now();
@@ -825,6 +902,50 @@ mod tests {
         let delete = keys.delete_blocking("anthropic").unwrap_err();
         assert_eq!(json(&delete)["code"], "provider.keychain_unavailable");
         assert!(started.elapsed() < Duration::from_millis(80));
+
+        assert_eq!(
+            calls.load(Ordering::Relaxed),
+            1,
+            "the clicks behind the timed-out read must not spawn more blocked platform calls"
+        );
+    }
+
+    #[test]
+    fn concurrent_healthy_lookups_wait_for_the_shared_store_slot() {
+        // Settings and the status bar can refresh together. A healthy lookup
+        // already in progress must serialize the second one instead of making
+        // the second surface falsely report that the keychain is unavailable.
+        let store = FakeStore::stalling(Duration::from_millis(20));
+        let calls = Arc::clone(&store.calls);
+        let mut keys = keys(store, &[]);
+        keys.store_deadline = Duration::from_millis(100);
+
+        let first_keys = keys.clone();
+        let first = thread::spawn(move || first_keys.status_blocking("anthropic"));
+        while calls.load(Ordering::Relaxed) == 0 {
+            thread::yield_now();
+        }
+
+        let second = keys.status_blocking("gemini");
+        assert_eq!(first.join().unwrap().keychain, Keychain::Ready);
+        assert_eq!(second.keychain, Keychain::Ready);
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn a_multi_key_lookup_stops_asking_after_the_store_is_unavailable() {
+        let store = FakeStore::refusing("locked");
+        let calls = Arc::clone(&store.calls);
+        let keys = keys(
+            store,
+            &[("TencentSecretId", "id-from-env"), ("TencentSecretKey", "key-from-env")],
+        );
+
+        let found =
+            keys.lookups_blocking(vec!["tencent-secret-id".into(), "tencent-secret-key".into()]);
+        assert_eq!(found[0].secret.as_ref().map(Secret::expose), Some("id-from-env"));
+        assert_eq!(found[1].secret.as_ref().map(Secret::expose), Some("key-from-env"));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
     }
 
     #[test]
