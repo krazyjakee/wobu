@@ -22,7 +22,6 @@ use super::plan::{
     FragmentKey, GenerationPlanRequest, fragments_for_cell, prepare_generation_plan,
     resolve_generation_stack, snapshot,
 };
-use super::spend::image_price;
 use super::task::{GenerateTask, PlannedBatch, PlannedImage};
 use super::{ReceiptPreparation, ReferenceLoader, ReferenceScope, load_references};
 use crate::error::{Code, CommandResult, WobuError};
@@ -104,8 +103,6 @@ pub(super) fn plan_batch(input: BatchPlan<'_>) -> CommandResult<PlannedBatch> {
             .chain(negotiated.downgrades().iter().map(|drop| FragmentKey::of(drop.fragment)))
             .collect();
         let resolution = negotiated.resolution();
-        let price = image_price(input.provider, input.model, resolution);
-        let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
         let reference_asset_ids =
             references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>();
         let mut params = ReceiptPreparation {
@@ -116,11 +113,9 @@ pub(super) fn plan_batch(input: BatchPlan<'_>) -> CommandResult<PlannedBatch> {
             resolution,
             negative_prompt_supported: caps.negative_prompt,
             seed_source: cell.seed_source,
-            cost_usd_micros,
             reference_asset_ids: &reference_asset_ids,
             loras: &loras.receipts,
             lora_downgrades: &loras.downgrades,
-            price,
             controls: plan.controls.receipt_controls(&cell.slider_values),
         }
         .params();
@@ -151,7 +146,6 @@ pub(super) fn plan_batch(input: BatchPlan<'_>) -> CommandResult<PlannedBatch> {
         .with_loras(loras.weights.clone());
         plans.push(PlannedImage {
             request,
-            cost_usd_micros,
             generation: Generation {
                 id: new_id(),
                 node_id: plan.subject_id,

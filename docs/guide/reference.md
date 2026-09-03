@@ -88,7 +88,7 @@ version control.
 
 ```
 Ashfall.wobu/
-├── project.json                  name, id, which services it uses, spending limit
+├── project.json                  name, id, which services it uses
 ├── nodes/
 │   ├── style-guide/              the Art Style page
 │   ├── world-bible/              the World Canon page
@@ -105,7 +105,6 @@ Ashfall.wobu/
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
     ├── sessions/<session-id>.json  who else has this open right now
-    ├── spend/                      what has been spent
     └── tmp/                        where saves are staged
 ```
 
@@ -207,7 +206,6 @@ every label, tooltip, empty screen and error message says, and what this guide s
 | Job | One thing Wobu has asked a service for: a picture, an enhance, a 3D shape. |
 | Queue | The jobs that have not finished yet. How many is in the bottom bar. |
 | Receipt | What Wobu keeps of a finished picture: the prompt, the settings, everything that went into it and what it cost. Written once and never changed. |
-| Spending ceiling | A limit, shared through the world folder, at which Wobu stops rather than spending more. |
 
 ### Files, folders and other people
 

@@ -9,6 +9,13 @@
 This is the note that closes it ([#68](https://github.com/krazyjakee/wobu/issues/68)). It is a
 record of what was **fetched and read**, not a design and not a recollection.
 
+> ⚠️ **Sections 7 and 11 describe a spend ceiling that no longer exists.** The per-project ceiling
+> and the cost estimate it enforced were removed: metering a local model of published prices tells
+> the user about a number Wobu derived rather than the account that actually holds their money, and
+> the two can disagree in either direction. What survives is the consent gate — Hunyuan3D charges
+> per submitted job and never reports the amount, so `accept_cost` is the only honest gate — and
+> everything below about *what Tencent actually charges*, which is still the best record we have.
+
 > ✅ **Verified against Tencent's own documentation, 2026-08-01.** Every credit count, price
 > and free-tier figure below was read off a Tencent page fetched on that date, and each row
 > carries the page's own "Last updated" stamp so a re-check is a diff rather than a re-reading.

@@ -770,24 +770,17 @@ silently replaying without the weights.
 
 ## Cost and consent
 
-BYOK means the user pays per call, so the app must never surprise them:
+BYOK means the user pays per call. **Wobu does not meter, estimate or cap that spending** — the
+provider's own dashboard is the only thing that knows an account's balance, and a local model of
+published prices went stale the moment a vendor moved one. What the app owes the user instead is
+honesty about what it is about to do and what it just did:
 
-- The Generate button shows the paid batch's **indicative output cost**. Current known Gemini
-  prices are $0.0336–$0.24 per output depending on model and size; an unknown paid Gemini model
-  is conservatively reserved at the highest known $0.24 rate until its price table is updated.
-- Local ComfyUI has no provider cost and therefore creates no spend reservation.
-- `project.json` stores the shared `spendCeilingUsdMicros` guardrail. New and older projects
-  default to $10; explicit `null` disables paid generation rather than meaning unlimited.
-- Admission holds the shared spend ledger lock while it sums all pending reservations and
-  atomically publishes the whole batch reservation. Concurrent Generate clicks, queued batches,
-  and another Wobu process therefore cannot each spend the same remaining allowance.
-- Running spend is reconstructed from immutable generation receipts. New receipts record
-  `estimatedCostUsdMicros` plus the pricing source/check date; older Gemini receipts are priced
-  from their recorded model and dimensions. A provider-reported billed failure also gets an
-  immutable receipt, so failure does not make a real charge disappear.
-- Reservations are write-once and replaced before their predecessor is retired, so a crash can
-  only stop early by over-reserving. They are never stolen merely because a network-share lock
-  looks old. The Inspector exposes pending/locked state and a deliberate recovery action that
-  first refuses while this window has queued or running generation, requires confirmation that
-  other Wobu instances have stopped, and archives the old ledger under `.wobu/` rather than
-  deleting the evidence.
+- A model whose backend reports `Capabilities::requires_billing` is marked as paid before the
+  user generates. Local ComfyUI reports `false` on every model, and that asymmetry is the point.
+- Hunyuan3D reconstruction sits behind an explicit `accept_cost` confirmation: it bills per
+  submitted job, including a cancelled one, and its international API never reports the amount.
+- Every generation writes an immutable receipt naming the provider, model and settings, so what a
+  project cost can be reconstructed from the folder alongside the provider's billing page.
+- A provider-reported billed failure also gets an immutable receipt, and `ImageUsage`/`Usage`
+  ride out of every adapter beside the error rather than behind a `?`, so a call that was charged
+  for and produced nothing is never reported as free.

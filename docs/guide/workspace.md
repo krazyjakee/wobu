@@ -131,7 +131,7 @@ else, and it has no tabs — just three things stacked in a column:
 2. **Compiled prompt** — the exact words that will be sent, with a **Show sources** switch that
    tints every phrase by the page it came from.
 3. **The shot controls** — what sort of sheet, what shape, which model, an extra line of direction,
-   the seed, the variant grid, the world's spending limit, and **Generate**.
+   the seed, the variant grid, and **Generate**.
 
 Each layer card shows a thumbnail or a coloured dot, which page it is, how many bits of text and
 how many pictures it put in (and how many did not fit), a strength slider, a mute switch and an

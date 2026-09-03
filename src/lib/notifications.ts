@@ -111,7 +111,6 @@ const SETTINGS_CODES = new Set([
   'provider.keychain_unavailable',
   'provider.billing_required',
   'provider.rate_limited',
-  'billing.ceiling_exceeded',
 ])
 
 /**

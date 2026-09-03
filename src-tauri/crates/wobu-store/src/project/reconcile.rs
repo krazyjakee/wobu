@@ -292,7 +292,6 @@ impl Project {
         // one transaction, so a malformed row or SQLite failure restores the
         // previous complete read model rather than exposing a partial rebuild.
         self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken)?;
-        generations::invalidate_spend_aggregate(&self.root);
         on_progress(ScanProgress { done: total, total });
         Ok(())
     }
@@ -406,7 +405,6 @@ impl Project {
             generation_ledger_changed = true;
         }
         if generation_ledger_changed {
-            generations::invalidate_spend_aggregate(&self.root);
         }
         Ok(Some(changed))
     }

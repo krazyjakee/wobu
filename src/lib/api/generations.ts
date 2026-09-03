@@ -265,7 +265,7 @@ export const meshStart = (
 export const generationGet = (generationId: string) =>
   call<Generation | null>('generation_get', { generationId })
 
-/** Remove one visible concept receipt while retaining its archived spend record. */
+/** Remove one visible concept receipt while retaining its archived copy. */
 export const generationDelete = (generationId: string) =>
   call<void>('generation_delete', { generationId })
 

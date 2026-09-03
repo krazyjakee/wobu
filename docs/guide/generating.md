@@ -6,8 +6,7 @@ default; pinning one is the thing that changes your world.
 ## The controls
 
 At the bottom of the right-hand panel, under the prompt: **Output preset**, **Aspect**, **Model**,
-an **Extra shot prompt**, **Seed**, the **Variant grid**, the world's spending limit, and
-**Generate**.
+an **Extra shot prompt**, **Seed**, the **Variant grid**, and **Generate**.
 
 The extra shot prompt is the one place to type something off the cuff — framing, an action, the
 weather, a camera angle. It counts as part of the shot and is not saved into your world.
@@ -119,20 +118,17 @@ than squinting at a narrow column.
 
 ## What it costs
 
-Because everything runs on your own account, Wobu is built not to surprise you:
+Everything runs on your own account and is billed there. Wobu does not meter it, cap it, or
+guess at what you have left — your provider's own dashboard is the only place that knows.
 
-- The Generate button shows an **estimate** for the batch on paid services, and the panel shows what
-  you have already spent and what is still set aside.
-- Making pictures on your own machine with ComfyUI shows **no cost at all**. That difference is the
-  point.
-- A **spending limit** is saved in the world folder, so it applies to everyone who opens it, and it
-  stops things dead. A turnaround loop is exactly the sort of thing that quietly runs two hundred
-  pictures while you are making tea.
+- Making pictures on your own machine with ComfyUI costs nothing at a provider. Paid services are
+  marked as such before you generate.
 - Every picture is saved with the service, model and settings that made it — so what a world cost
-  can be worked out from the folder itself, without logging into anybody's billing page.
+  can be worked out from the folder itself, alongside your provider's billing page.
+- If a job is charged for and produces nothing, Wobu says so rather than quietly calling it free.
 
-The estimate is a guide to the price of what comes out. What goes in, and any optional extras, are
-not in it, and the panel says so.
+A turnaround loop is exactly the sort of thing that quietly runs two hundred pictures while you are
+making tea, so set a budget alert with your provider if that matters to you.
 
 > **A note on Google's watermarks** Pictures made through Google's models carry an invisible SynthID
 > watermark. Worth knowing, since this is concept art heading into real work.

@@ -90,8 +90,6 @@ const GUIDANCE: Record<string, string> = {
     'The provider answered, but not with anything Wobu could use. Starting the job again with a new seed usually works — if it keeps happening, the prompt may be being refused rather than failing.',
   'provider.context_too_long':
     'The prompt sent to the provider was longer than the model accepts. Shorten the description, or mute a layer or two in the inspector, then start the job again.',
-  'billing.ceiling_exceeded':
-    "This project's spending ceiling has been reached, so Wobu stopped before spending more. Raise the ceiling in Settings → Providers and models if you meant to continue.",
   'write.read_only':
     'The result could not be written because the project folder is read-only. Fix the folder permissions, or copy the project somewhere writable, then start the job again.',
   'share.unmounted':

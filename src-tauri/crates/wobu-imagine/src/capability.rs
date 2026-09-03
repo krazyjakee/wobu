@@ -186,17 +186,17 @@ pub struct Capabilities {
 
     /// Whether a call to this backend, with this model, moves money.
     ///
-    /// The input to [#55](https://github.com/krazyjakee/wobu/issues/55)'s spend
-    /// ceiling and to the cost estimate on the Generate button. Three things it
-    /// deliberately does not mean:
+    /// What a failed job reads to decide whether an attempt that produced
+    /// nothing may still have been charged for. Three things it deliberately
+    /// does not mean:
     ///
     /// - **Not "is the account able to pay".** A key whose account has no
     ///   billing enabled is `Error::BillingRequired` at call time; it cannot be
     ///   known when capabilities are read.
     /// - **Not "is this free".** A local ComfyUI declares `false` and still
     ///   costs the user electricity and twenty minutes of their GPU. `false`
-    ///   means *there is nothing here for a spend ceiling to meter*, which is
-    ///   the question #55 is asking.
+    ///   means *no money moves at the provider*, which is the only question
+    ///   this flag answers.
     /// - **Not a price.** Prices are per model, per size, and they move
     ///   (`docs/08-providers.md`); a number here would be wrong the week after
     ///   somebody changed a model id.
@@ -408,10 +408,9 @@ mod tests {
     }
 
     #[test]
-    fn a_local_backend_costs_nothing_a_spend_ceiling_can_meter() {
-        // `requires_billing` is the input to #55, and the asymmetry is the
-        // point: the Generate button shows an estimate for one of these and
-        // nothing at all for the other.
+    fn only_a_remote_backend_requires_billing() {
+        // `requires_billing` is what tells a failed job whether the provider
+        // may have charged for an attempt that produced nothing.
         assert!(remote().requires_billing);
         assert!(!local().requires_billing);
     }

@@ -1,10 +1,4 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query'
+import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query'
 import * as api from '../api'
 import type {
   CompiledPrompt,
@@ -106,40 +100,3 @@ export function useImageGenerationCapabilities(
     retry: false,
   })
 }
-
-/**
- * Spend changes while paid jobs run, even when no Inspector control changes.
- * Poll only while a paid estimate is visible; local ComfyUI has no provider
- * charge and should not repeatedly reopen the shared project ledger.
- */
-export function useSpendStatus(project: string, enabled: boolean): UseQueryResult<api.SpendStatus> {
-  return useQuery({
-    queryKey: qk.spendStatus(project),
-    queryFn: api.spendStatus,
-    enabled,
-    refetchInterval: 5_000,
-    retry: false,
-  })
-}
-
-export function useSetSpendCeiling(project: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: api.spendCeilingSet,
-    onSuccess: (status) => {
-      qc.setQueryData(qk.spendStatus(project), status)
-    },
-  })
-}
-
-export function useRecoverSpendLedger(project: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: api.spendRecoveryReset,
-    onSuccess: (status) => {
-      qc.setQueryData(qk.spendStatus(project), status)
-    },
-  })
-}
-
-/* ── project mutations ────────────────────────────────────────────────────── */

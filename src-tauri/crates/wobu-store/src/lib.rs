@@ -42,7 +42,7 @@ pub use error::{Error, Result};
 pub use index::{CorruptFile, GenerationPage, GenerationPageRequest, GenerationSummary, Index};
 pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{
-    AssetUsage, AssetUsageRole, DEFAULT_SPEND_CEILING_USD_MICROS, Enhanced, Project, ProjectMeta,
+    AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta,
     ProjectSummary, ReconcileObservation, ReconcilePlan, SaveOutcome,
 };
 pub use recent::RecentProject;

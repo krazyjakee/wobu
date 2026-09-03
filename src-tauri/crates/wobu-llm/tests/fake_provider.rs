@@ -216,8 +216,7 @@ fn a_truncated_response_is_a_failure_even_though_most_of_it_arrived() {
 #[test]
 fn a_stream_that_dies_partway_still_reports_what_the_prompt_cost() {
     // The provider charged for the input the moment it read it. A failure that
-    // reported zero would let the spend ceiling drift low exactly when a flaky
-    // connection is making the user retry.
+    // reported zero would tell the user a flaky connection was free.
     let provider = FakeProvider::new(Ending::Dropped);
     let outcome = block_on(provider.enhance(&request(), &mut Discard, &Cancel::new()));
 

@@ -16,15 +16,6 @@ use crate::paths;
 
 pub const GENERATIONS_DIR: &str = "generations";
 const ARCHIVE_DIR: &str = ".deleted";
-const SPEND_AGGREGATE: &str = ".wobu/spend/aggregate.json";
-
-/// The shell may keep a disposable aggregate of this canonical ledger for
-/// display polling. Receipt changes invalidate it; failure to remove a cache is
-/// deliberately ignored because paid admission never trusts it.
-pub(crate) fn invalidate_spend_aggregate(root: &Path) {
-    let path = root.join(SPEND_AGGREGATE);
-    let _ = std::fs::remove_file(path);
-}
 
 /// Persist one complete generation, refusing to reuse its id forever.
 pub fn write(root: &Path, generation: &Generation) -> Result<(String, Stamp)> {
@@ -33,15 +24,14 @@ pub fn write(root: &Path, generation: &Generation) -> Result<(String, Stamp)> {
     let mut bytes = serde_json::to_vec_pretty(generation)?;
     bytes.push(b'\n');
     let stamp = atomic::write_once(root, &target, &bytes)?;
-    invalidate_spend_aggregate(root);
     Ok((rel, stamp))
 }
 
-/// Remove a receipt from the visible ledger without erasing its accounting record.
+/// Remove a receipt from the visible ledger without erasing it.
 ///
 /// Receipt bytes remain unchanged below `generations/.deleted/`; Concepts and
-/// History scan only the month shards, while strict spend reconstruction reads
-/// both locations. Generated assets have their own lifecycle and are untouched.
+/// History scan only the month shards, while a strict full read covers both
+/// locations. Generated assets have their own lifecycle and are untouched.
 pub fn archive(root: &Path, generation: &Generation) -> Result<String> {
     let rel = generation.rel_path();
     let source = paths::from_rel_string(root, &rel);
@@ -158,11 +148,12 @@ pub(crate) fn scan(root: &Path) -> Vec<(Generation, String, Stamp)> {
         .collect()
 }
 
-/// Read every canonical receipt and fail closed on a malformed one.
+/// Read every canonical receipt, archived ones included, and fail closed on a
+/// malformed one.
 ///
 /// Concepts can skip a file while a sync client is copying it and catch it on
-/// the next reconcile. A spend ceiling cannot: silently omitting a paid receipt
-/// would authorise more work than the project allows.
+/// the next reconcile. A wiki export cannot: silently omitting a receipt would
+/// publish a history with a hole in it.
 pub(crate) fn read_all_strict(root: &Path) -> Result<Vec<Generation>> {
     let mut receipts = Vec::new();
     for (_, path) in list_paths(root) {
@@ -234,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn archiving_removes_a_receipt_from_galleries_but_not_spend_history() {
+    fn archiving_removes_a_receipt_from_galleries_but_not_the_strict_read() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".wobu/tmp")).unwrap();
         let generation = record("01ARZ3NDEKTSV4RRFFQ69G5FAV");

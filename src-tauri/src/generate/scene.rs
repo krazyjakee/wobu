@@ -26,7 +26,6 @@ use super::plan::{
     FragmentKey, SeedIntent, SeedSource, normalize_aspect, normalize_prompt, normalize_weight,
     resolve_seed, snapshot,
 };
-use super::spend::image_price;
 use super::task::{GenerateTask, PlannedBatch, PlannedImage};
 use super::{
     BackendPurpose, PlanningInputs, ReceiptPreparation, ReferenceLoader, ReferenceScope,
@@ -87,7 +86,7 @@ pub async fn scene_generate_start(
     // A composition has no locked seed of its own: its participants may each
     // have one and they may disagree, so there is nothing to inherit.
     let (seed, seed_source) = resolve_seed(seed, None, SeedIntent::Execute);
-    let mut plan = prepare_blocking("Scene preparation stopped unexpectedly.", move || {
+    let plan = prepare_blocking("Scene preparation stopped unexpectedly.", move || {
         prepare_scene(ScenePrepare {
             root,
             project_id,
@@ -105,7 +104,6 @@ pub async fn scene_generate_start(
         })
     })
     .await?;
-    plan.reserve_spend()?;
     let id = jobs.queue().submit(plan);
     Ok(id.to_string())
 }
@@ -258,8 +256,6 @@ pub(super) fn plan_scene(input: ScenePlan<'_>) -> CommandResult<PlannedBatch> {
         .chain(negotiated.downgrades().iter().map(|drop| FragmentKey::of(drop.fragment)))
         .collect();
     let resolution = negotiated.resolution();
-    let price = image_price(input.provider, input.model, resolution);
-    let cost_usd_micros = price.map_or(0, |price| price.per_image_usd_micros);
     let reference_asset_ids =
         references.iter().map(|reference| reference.asset_id).collect::<Vec<_>>();
     let mut params = ReceiptPreparation {
@@ -270,11 +266,9 @@ pub(super) fn plan_scene(input: ScenePlan<'_>) -> CommandResult<PlannedBatch> {
         resolution,
         negative_prompt_supported: caps.negative_prompt,
         seed_source: input.seed_source,
-        cost_usd_micros,
         reference_asset_ids: &reference_asset_ids,
         loras: &loras.receipts,
         lora_downgrades: &loras.downgrades,
-        price,
         controls: controls.receipt_controls(),
     }
     .params();
@@ -318,7 +312,7 @@ pub(super) fn plan_scene(input: ScenePlan<'_>) -> CommandResult<PlannedBatch> {
     Ok(PlannedBatch {
         label: format!("Compose scene · {}", names.join(" + ")),
         subject_id: primary,
-        plans: vec![PlannedImage { request, cost_usd_micros, generation }],
+        plans: vec![PlannedImage { request, generation }],
         requires_billing: caps.requires_billing,
         archival_replay: false,
     })

@@ -104,9 +104,10 @@ already several hundred words you never had to type.
    which then feeds into everything below it. That is the flywheel. Your world gets more consistent
    every time you use it.
 
-> **About money** Everything is billed to your own account, so the Generate button shows an estimate
-> before a paid batch runs, and a world can carry a spending limit that stops it dead. Making
-> pictures on your own machine with ComfyUI shows no cost at all — that difference is deliberate.
+> **About money** Everything is billed to your own account. Wobu marks which services are paid
+> before you generate and records what every picture was made with, but it does not meter your
+> spending — your provider's dashboard is the only place that knows. Making pictures on your own
+> machine with ComfyUI costs nothing at a provider; that difference is deliberate.
 
 ## Habits that pay off
 

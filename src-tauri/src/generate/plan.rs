@@ -140,7 +140,7 @@ pub(super) enum SeedIntent {
     /// but a *random* seed here would make two identical previews of the same
     /// controls disagree, so the unseeded case is pinned to zero instead. Only
     /// the seed differs, and nothing the report returns depends on it: the
-    /// budget and the price are decided by fragments, aspect and resolution.
+    /// reference budget is decided by fragments, aspect and resolution.
     Estimate,
 }
 

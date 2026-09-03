@@ -581,8 +581,8 @@ impl ImageBackend for ComfyBackend {
         // Free on every path, success or failure, and stated once here rather
         // than at each return. A local render costs the user electricity and
         // twenty minutes of their GPU, which `capability.rs` is explicit is not
-        // what `requires_billing` and `ImageUsage` measure: `free` means there
-        // is nothing here for a spend ceiling to meter.
+        // what `requires_billing` and `ImageUsage` measure: `free` means no
+        // money moved at a provider.
         ImageOutcome::new(ImageUsage::free(), self.render(request, progress, cancel).await)
     }
 }

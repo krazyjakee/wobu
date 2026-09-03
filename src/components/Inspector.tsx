@@ -18,10 +18,7 @@ import {
   useImageReferenceReport,
   useInfluenceStack,
   usePresets,
-  useRecoverSpendLedger,
-  useSetSpendCeiling,
   useSetLockedSeed,
-  useSpendStatus,
   useStatusBarBackend,
 } from '../lib/queries'
 import { report, toast } from '../store/ui'
@@ -33,7 +30,7 @@ import { Combobox } from './Combobox'
 import { ContextMenu, MenuItem, MenuLabel } from './ContextMenu'
 import { GenerationAspectSelect } from './GenerationAspectSelect'
 import { Icon } from './Icon'
-import { TipButton, Tooltip } from './Tooltip'
+import { TipButton } from './Tooltip'
 import { PromptBox } from './inspector/PromptBox'
 
 /** The one axis a batch may vary, in the order the panel reads: off, outwards. */
@@ -103,10 +100,6 @@ function InspectorSession({
   const [shotMuted, setShotMuted] = useState(false)
   const [shotPrompt, setShotPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [ceilingDraft, setCeilingDraft] = useState<{
-    source: number | null | undefined
-    value: string
-  } | null>(null)
 
   const chosenPreset =
     presets.data?.find((preset) => preset.id === presetId) ??
@@ -182,19 +175,7 @@ function InspectorSession({
   const seedOverride = seedOverrideDraft || (reportReady && lockedSeed === null)
   const seed = lockedSeed !== null && !seedOverrideDraft ? lockedSeed : seedDraft
   const usesLockedSeed = lockedSeed !== null && !seedOverride && gridAxis !== 'seed'
-  const paidEstimate = imageReport.data?.cost ?? null
-  const spendQuery = useSpendStatus(project.id, paidEstimate !== null)
-  const setSpendCeiling = useSetSpendCeiling(project.id)
-  const recoverSpendLedger = useRecoverSpendLedger(project.id)
   const setLockedSeed = useSetLockedSeed()
-  const spend = spendQuery.data
-  const ceilingSource = spend?.ceilingUsdMicros
-  const ceilingDollars =
-    ceilingDraft && ceilingDraft.source === ceilingSource
-      ? ceilingDraft.value
-      : ceilingSource === null || ceilingSource === undefined
-        ? ''
-        : microsAsInput(ceilingSource)
   /*
    * The stack is short — a subject and the handful of things it inherits from —
    * and it is resolved as one document, so the whole of it goes in one call.
@@ -258,7 +239,6 @@ function InspectorSession({
       })
       toast(`Generation queued · ${job.slice(-6)}`)
       if (lockedSeed === null && gridAxis === 'none') setSeed(randomSeed())
-      void spendQuery.refetch()
     } catch (error) {
       report(error, 'Could not start generation')
     } finally {
@@ -306,48 +286,6 @@ function InspectorSession({
     }
   }
 
-  const saveCeiling = async () => {
-    const trimmed = ceilingDollars.trim()
-    const dollars = trimmed === '' ? null : Number(trimmed)
-    if (dollars !== null && (!Number.isFinite(dollars) || dollars < 0)) {
-      report(
-        new Error(
-          'Enter an amount in dollars, or leave it blank to switch off anything that costs money.',
-        ),
-      )
-      return
-    }
-    try {
-      await setSpendCeiling.mutateAsync(
-        dollars === null
-          ? null
-          : Math.min(Number.MAX_SAFE_INTEGER, Math.round(dollars * 1_000_000)),
-      )
-      toast(dollars === null ? 'Paid generation disabled' : 'Shared spend ceiling saved')
-    } catch (error) {
-      report(error, 'Could not save the spend ceiling')
-    }
-  }
-
-  const recoverReservations = async () => {
-    const confirmed = window.confirm(
-      'Only do this once every Wobu window using this project has stopped generating. The old spending record is kept, not deleted. Continue?',
-    )
-    if (!confirmed) return
-    try {
-      await recoverSpendLedger.mutateAsync(true)
-      toast('The stuck spending record was put aside')
-    } catch (error) {
-      report(error, 'Could not put the spending record aside')
-    }
-  }
-
-  const costBlocked =
-    paidEstimate !== null &&
-    (!spend ||
-      spend.ledgerLocked === true ||
-      spend.remainingUsdMicros === null ||
-      paidEstimate.batchUsdMicros > spend.remainingUsdMicros)
   const gridBlocked = gridAxis !== 'none' && (!grid.value || (chosenPreset?.views.length ?? 0) > 0)
 
   /*
@@ -385,7 +323,6 @@ function InspectorSession({
     !chosenPreset ||
     generating ||
     project.readOnly ||
-    costBlocked ||
     gridBlocked ||
     !aspectReady ||
     !imageReport.data ||
@@ -395,11 +332,11 @@ function InspectorSession({
   /*
    * Why Generate is refused, in the order the user can act on.
    *
-   * Generate is the primary action of the whole application and it has eight
-   * separate preconditions, any of which greys it out identically. A user who
-   * has met one of the middle three — a spend cap, a grid axis that clashes
-   * with the preset's views, an aspect the provider has not confirmed — cannot
-   * work out which from looking, because looking is all `disabled` allows.
+   * Generate is the primary action of the whole application and it has a stack
+   * of separate preconditions, any of which greys it out identically. A user
+   * who has met one of the middle two — a grid axis that clashes with the
+   * preset's views, an aspect the provider has not confirmed — cannot work out
+   * which from looking, because looking is all `disabled` allows.
    */
   const generateReason = !generateDisabled
     ? null
@@ -411,11 +348,9 @@ function InspectorSession({
           ? 'This batch is already being queued.'
           : !chosenPreset
             ? 'Choose an output preset.'
-            : costBlocked
-              ? 'This batch would go past the spending cap left on this project. Raise the cap in Settings, or generate fewer images.'
-              : gridBlocked
-                ? 'The variant grid and this preset would both decide what each picture shows. Set the grid back to Off, or choose a preset that does not fix its own views.'
-                : 'Waiting for the image provider to say what it accepts. Check it is connected in Settings.'
+            : gridBlocked
+              ? 'The variant grid and this preset would both decide what each picture shows. Set the grid back to Off, or choose a preset that does not fix its own views.'
+              : 'Waiting for the image provider to say what it accepts. Check it is connected in Settings.'
 
   const inspector = (
     <>
@@ -660,80 +595,6 @@ function InspectorSession({
               </small>
             )}
           </div>
-          {paidEstimate && spend && (
-            <div className="spend-panel" aria-label="Generation cost and project spend ceiling">
-              <div className="spend-estimate">
-                <b>Estimated {formatUsd(paidEstimate.batchUsdMicros)} batch</b>
-                <span>
-                  {paidEstimate.images}
-                  {paidEstimate.variesByCell
-                    ? ' images · each one priced separately'
-                    : ` × ${formatUsd(paidEstimate.perImageUsdMicros)} output`}
-                  {paidEstimate.conservativeFallback
-                    ? ' · a cautious guess, not the provider’s own price'
-                    : ''}
-                </span>
-              </div>
-              <div className="spend-running">
-                <span>
-                  Spent {formatUsd(spend.spentUsdMicros)}
-                  {spend.reservedUsdMicros > 0
-                    ? ` · ${formatUsd(spend.reservedUsdMicros)} pending`
-                    : ''}
-                </span>
-                <span>
-                  {spend.ceilingUsdMicros === null
-                    ? 'Paid generation disabled'
-                    : `${formatUsd(spend.remainingUsdMicros ?? 0)} remaining`}
-                </span>
-              </div>
-              <div className="spend-ceiling">
-                <label>
-                  <span>Spending ceiling, shared (USD)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={ceilingDollars}
-                    placeholder="Disabled"
-                    onChange={(event) =>
-                      setCeilingDraft({ source: ceilingSource, value: event.target.value })
-                    }
-                    disabled={project.readOnly || setSpendCeiling.isPending}
-                  />
-                </label>
-                <button
-                  className="btn-mini"
-                  disabled={project.readOnly || setSpendCeiling.isPending}
-                  onClick={() => void saveCeiling()}
-                >
-                  {setSpendCeiling.isPending ? 'Saving…' : 'Save ceiling'}
-                </button>
-              </div>
-              {(spend.ledgerLocked || spend.pendingReservations > 0) && (
-                <div className="spend-recovery">
-                  <span>
-                    {spend.ledgerLocked
-                      ? 'The spending record is stuck, most likely after a crash.'
-                      : `${spend.pendingReservations} batch${spend.pendingReservations === 1 ? '' : 'es'} is still counted as money set aside.`}
-                  </span>
-                  <button
-                    className="btn-mini"
-                    disabled={project.readOnly || recoverSpendLedger.isPending}
-                    onClick={() => void recoverReservations()}
-                  >
-                    Recover…
-                  </button>
-                </div>
-              )}
-              <Tooltip tip={`Pricing checked ${paidEstimate.checkedAt}`}>
-                <small tabIndex={0}>
-                  A guide to the price of the pictures only. Whatever the provider charges for
-                  reading the prompt, or for any search it does, is not counted.
-                </small>
-              </Tooltip>
-            </div>
-          )}
           <TipButton
             className="btn-primary shot-generate"
             disabledReason={generateReason}
@@ -742,11 +603,7 @@ function InspectorSession({
             onClick={() => void generate()}
           >
             <Icon name="image" size="sm" />
-            {generating
-              ? 'Queuing…'
-              : paidEstimate
-                ? `Generate · est. ${formatUsd(paidEstimate.batchUsdMicros)}`
-                : 'Generate'}
+            {generating ? 'Queuing…' : 'Generate'}
           </TipButton>
         </div>
       </aside>
@@ -760,19 +617,6 @@ function InspectorSession({
   ) : (
     inspector
   )
-}
-
-function formatUsd(micros: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(micros / 1_000_000)
-}
-
-function microsAsInput(micros: number): string {
-  return (micros / 1_000_000).toFixed(6).replace(/\.?0+$/, '')
 }
 
 function randomSeed(): number {

@@ -135,7 +135,7 @@ path. Nothing about a project is stored in a global application database.
 
 ```
 Ashfall.wobu/
-├── project.json                  id, name, schema version, providers, shared spend ceiling
+├── project.json                  id, name, schema version, providers
 ├── nodes/
 │   ├── species/vashk.md          YAML frontmatter + notes + description
 │   ├── setting/cinder-bay.md
@@ -148,7 +148,6 @@ Ashfall.wobu/
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
     ├── sessions/<session-id>.json  heartbeat locks — who else has this open
-    ├── spend/reservations/*.json   paid batches admitted but not fully receipted
     └── tmp/                        staging for atomic writes (same filesystem)
 ```
 

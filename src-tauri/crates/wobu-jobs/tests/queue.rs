@@ -499,7 +499,7 @@ async fn cancelling_a_job_that_has_not_started_means_it_never_runs() {
 async fn a_task_that_honours_its_token_stops_itself_and_gets_to_say_so() {
     // The graceful path, and the reason for the grace at all: an adapter that
     // notices the token still has to unwind far enough to report what the
-    // provider charged, and #55's spend ceiling only counts what it is told.
+    // provider charged, or a cancelled job is reported as free on no evidence.
     let (queue, recorder) = queue_with(Config::default());
     let task = Fake::new("polite", [Step::AwaitCancel]);
     let log = task.log();

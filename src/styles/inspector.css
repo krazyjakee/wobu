@@ -224,7 +224,6 @@
 .aspect-preview,
 .seed-controls,
 .variant-controls,
-.spend-panel,
 .shot-generate {
   grid-column: 1 / -1;
 }
@@ -287,50 +286,6 @@
 }
 .variant-controls > small.variant-error {
   color: var(--danger);
-}
-.spend-panel {
-  border: 1px solid var(--border-str);
-  border-radius: var(--r-sm);
-  background: var(--bg-raised);
-  padding: 8px;
-  display: grid;
-  gap: 7px;
-  font-size: 10px;
-  color: var(--text-dim);
-}
-.spend-estimate,
-.spend-running,
-.spend-recovery {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.spend-estimate b {
-  color: var(--text);
-  font-size: 11px;
-}
-.spend-ceiling {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 6px;
-}
-.spend-ceiling label {
-  min-width: 0;
-}
-.spend-ceiling .btn-mini,
-.spend-recovery .btn-mini {
-  white-space: nowrap;
-}
-.spend-recovery {
-  border-top: 1px solid var(--border);
-  padding-top: 7px;
-  color: var(--warn, var(--text-dim));
-}
-.spend-panel small {
-  line-height: 1.35;
-  color: var(--text-faint);
 }
 .shot-generate {
   min-height: 30px;
