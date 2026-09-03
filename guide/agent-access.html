@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent access (MCP) — Wobu</title>
+    <meta name="description" content="Letting an AI assistant read your world, and exactly what it can and cannot do." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/guide/agent-access.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Agent access (MCP) — Wobu" />
+    <meta property="og:description" content="Letting an AI assistant read your world, and exactly what it can and cannot do." />
+    <meta property="og:url" content="https://wobu.app/guide/agent-access.html" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="../index.html">Overview</a>
+          <a href="../guide/index.html" aria-current="page">Guide</a>
+          <a href="../download.html">Download</a>
+          <a href="../legal.html">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <div class="wrap doc-wrap">
+        <nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">Guide</h2>
+          <ol>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Your first project</a></li>
+            <li><a href="workspace.html">The workspace</a></li>
+            <li><a href="world-model.html">Entities and hierarchy</a></li>
+            <li><a href="notes-and-enhance.html">Notes and Enhance</a></li>
+            <li><a href="references.html">References and assets</a></li>
+            <li><a href="influence.html">The influence stack</a></li>
+            <li><a href="generating.html">Generating</a></li>
+            <li><a href="concept-3d.html">Concept 3D</a></li>
+            <li><a href="providers.html">Providers and keys</a></li>
+            <li><a href="collaboration.html">Sharing a project</a></li>
+            <li><a href="agent-access.html" aria-current="page">Agent access (MCP)</a></li>
+            <li><a href="reference.html">Keyboard, settings and files</a></li>
+          </ol>
+        </nav>
+        <article class="doc">
+<h1>Agent access (MCP)</h1>
+<p>Wobu can let an AI assistant running on your computer — a coding assistant, a writing assistant —
+read the world you have open, and, if you say so a second time, change it. Wobu can also use tools
+you run yourself. All of it is switched off until you turn it on, and it lives in Settings → Agent
+access (MCP).</p>
+<blockquote>
+<p><strong>Off by default, in both directions</strong> Until you tick something here, Wobu is not listening for
+anything and is not running anything. Nothing on this page sends anything to anyone: both switches
+are about programs on this computer.</p>
+</blockquote>
+<h2 id="three-separate-switches">Three separate switches</h2>
+<ol>
+<li><strong>Let an assistant on this computer read the open world.</strong> Starts listening. Reading only.</li>
+<li><strong>Let a connected assistant change this world.</strong> Only appears once the first is on, and asks you
+to confirm, because it means another program can write files in your world folder.</li>
+<li><strong>Let Wobu use tools you run.</strong> The other way round entirely: Wobu doing the asking.</li>
+</ol>
+<h2 id="letting-an-assistant-in">Letting an assistant in</h2>
+<p>Wobu listens <strong>only to this computer</strong> — that cannot be changed, on purpose — on a port number you
+can pick. Every request has to carry a password, and Settings gives you three things:</p>
+<ul>
+<li><strong>Show token</strong>, since it is hidden until you ask.</li>
+<li><strong>Copy connection details</strong>, which puts a ready-made setup on your clipboard.</li>
+<li><strong>New token</strong>, which is also how you shut everything out: making a new one disconnects every
+assistant you had set up.</li>
+</ul>
+<p>A few guards explain why something might be refused. Requests that look like they came from a web
+page are turned away before the password is even checked, there is no way to stream data out, and
+requests have a size limit. A website in your browser cannot reach Wobu — only a program running on
+your own machine can.</p>
+<h3 id="what-an-assistant-can-read">What an assistant can read</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>world_overview</code></td>
+<td>The shape of the world</td>
+</tr>
+<tr>
+<td><code>list_nodes</code></td>
+<td>Everything in it, by sort</td>
+</tr>
+<tr>
+<td><code>get_node</code></td>
+<td>One page, with its notes and description</td>
+</tr>
+<tr>
+<td><code>search_nodes</code></td>
+<td>The same search <strong>Jump to…</strong> uses</td>
+</tr>
+<tr>
+<td><code>get_node_links</code></td>
+<td>What one page is joined to</td>
+</tr>
+<tr>
+<td><code>resolve_influence</code></td>
+<td>Everything that would feed a picture of it</td>
+</tr>
+<tr>
+<td><code>compile_prompt</code></td>
+<td>The prompt that would come out</td>
+</tr>
+<tr>
+<td><code>list_generations</code>, <code>get_generation</code></td>
+<td>Records of pictures you have made</td>
+</tr>
+</tbody></table>
+<p>It can also fetch the world itself, the list of pages, and any single page.</p>
+<h3 id="what-it-cannot-do">What it cannot do</h3>
+<p>There is <strong>no deleting and no generating</strong>. An assistant connected to Wobu cannot destroy anything
+and cannot start a job, so nothing it does can spend your money. Even with writing switched on, all
+it can do is make a page, update a page, and join two pages together — and it cannot write the
+machine&#39;s description. An assistant contributing writing puts it in the notes column, where your own
+words go, and Enhance stays something a person presses.</p>
+<p>When writing is off, those tools are not offered at all, so it does not try and then fail.</p>
+<h3 id="what-has-been-going-on">What has been going on</h3>
+<p>The panel keeps the recent requests — each marked <code>ok</code> or <code>refused</code>, with the name of the tool and,
+for a refusal, why. It is the quickest way to find out that an assistant is asking for something you
+have not allowed. Older ones are in the diagnostics log.</p>
+<h2 id="letting-wobu-use-your-tools">Letting Wobu use your tools</h2>
+<p>Switch on <strong>Let Wobu use MCP servers you run</strong> and add them by name, command and arguments. Each one
+is a program on this computer that Wobu will start as you, with exactly the arguments you gave —
+nothing in between interpreting them. A newly added one starts switched off; you turn it on when you
+are ready. <strong>Check it works</strong> starts it, asks what it can do, and tells you.</p>
+<p>Those programs are stopped when you switch one off, edit it, remove it, or quit Wobu, and every
+request has a time limit.</p>
+<h2 id="where-these-settings-live">Where these settings live</h2>
+<p>In a file called <code>mcp.json</code> in Wobu&#39;s own application folder, next to your other settings, readable
+only by you because it holds the password. It belongs to this installation and is never inside a
+world, so switching this on for yourself does not switch it on for everybody who opens your world.
+Delete the file and everything here is off and the password is forgotten.</p>
+<p>The full detail, including exactly when a request is refused, is in <code>docs/16-mcp.md</code> with the source
+code.</p>
+
+          <hr />
+          <p class="doc-source"><a class="text-link" href="collaboration.html">← Sharing a project</a> &nbsp;·&nbsp; <a class="text-link" href="reference.html">Keyboard, settings and files →</a></p>
+          <p class="doc-source">
+            This page comes from
+            <a href="https://github.com/krazyjakee/wobu/blob/main/docs/guide/agent-access.md" rel="noopener">a file in the source
+            code</a> — the very same one the app shows you in its own built-in guide.
+          </p>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="../index.html">Overview</a></li>
+              <li><a href="../guide/index.html">User guide</a></li>
+              <li><a href="../download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="../legal.html">Legal overview</a></li>
+              <li><a href="../legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="../legal/terms.html">Terms of use</a></li>
+              <li><a href="../legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="../legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

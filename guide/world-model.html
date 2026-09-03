@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entities and hierarchy — Wobu</title>
+    <meta name="description" content="The ten sorts of page, what goes inside what, and how they are joined up." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/guide/world-model.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Entities and hierarchy — Wobu" />
+    <meta property="og:description" content="The ten sorts of page, what goes inside what, and how they are joined up." />
+    <meta property="og:url" content="https://wobu.app/guide/world-model.html" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body class="doc-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="../index.html">Overview</a>
+          <a href="../guide/index.html" aria-current="page">Guide</a>
+          <a href="../download.html">Download</a>
+          <a href="../legal.html">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <div class="wrap doc-wrap">
+        <nav class="toc" aria-labelledby="toc-heading">
+          <h2 id="toc-heading">Guide</h2>
+          <ol>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="getting-started.html">Your first project</a></li>
+            <li><a href="workspace.html">The workspace</a></li>
+            <li><a href="world-model.html" aria-current="page">Entities and hierarchy</a></li>
+            <li><a href="notes-and-enhance.html">Notes and Enhance</a></li>
+            <li><a href="references.html">References and assets</a></li>
+            <li><a href="influence.html">The influence stack</a></li>
+            <li><a href="generating.html">Generating</a></li>
+            <li><a href="concept-3d.html">Concept 3D</a></li>
+            <li><a href="providers.html">Providers and keys</a></li>
+            <li><a href="collaboration.html">Sharing a project</a></li>
+            <li><a href="agent-access.html">Agent access (MCP)</a></li>
+            <li><a href="reference.html">Keyboard, settings and files</a></li>
+          </ol>
+        </nav>
+        <article class="doc">
+<h1>Entities and hierarchy</h1>
+<p>Species, characters, places, props, cultures, vehicles — and the Art Style and World Canon pages
+themselves — are all the same thing underneath. Wobu calls each one an <strong>entity</strong>, and they differ
+only in <strong>kind</strong>. A kind picks the icon, the colour, where it sits in a prompt, which sections its
+description has, and what it can be joined to.</p>
+<p>That is why there is only one editor to learn. It is also why adding &quot;Factions&quot; or &quot;Technologies&quot;
+later is a small job rather than a whole new feature.</p>
+<h2 id="the-ten-kinds">The ten kinds</h2>
+<p>Wobu never invents a kind that is not on this list. <em>Nests</em> means one can go inside another of the
+same kind — a region inside a region. Nesting never crosses kinds; joining things up across kinds is
+what links are for.</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Nests</th>
+<th>Description sections</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Art Style</td>
+<td>one per world</td>
+<td>Medium, Rendering, Line quality, Lighting model, Palette, Never</td>
+</tr>
+<tr>
+<td>World Canon</td>
+<td>one per world</td>
+<td>Era, Tone, Tech &amp; magic level, Materials, Palette, Never</td>
+</tr>
+<tr>
+<td>Species</td>
+<td>yes</td>
+<td>Silhouette, Anatomy, Materials, Palette, Signature details, Never</td>
+</tr>
+<tr>
+<td>Culture</td>
+<td>yes</td>
+<td>Costume, Ornament, Iconography, Weapon language, Materials, Palette, Never</td>
+</tr>
+<tr>
+<td>Setting</td>
+<td>yes</td>
+<td>Climate, Architecture, Ambient light, Wear &amp; age, Materials, Palette, Never</td>
+</tr>
+<tr>
+<td>Character</td>
+<td>no</td>
+<td>Silhouette, Anatomy, Costume, Materials, Palette, Signature details, Never</td>
+</tr>
+<tr>
+<td>Creature</td>
+<td>no</td>
+<td>Silhouette, Anatomy, Materials, Palette, Signature details, Never</td>
+</tr>
+<tr>
+<td>Prop</td>
+<td>yes</td>
+<td>Silhouette, Materials, Wear &amp; age, Palette, Signature details, Never</td>
+</tr>
+<tr>
+<td>Environment</td>
+<td>no</td>
+<td>Architecture, Ambient light, Climate, Materials, Palette, Signature details, Never</td>
+</tr>
+<tr>
+<td>Vehicle</td>
+<td>no</td>
+<td>Silhouette, Materials, Wear &amp; age, Palette, Signature details, Never</td>
+</tr>
+</tbody></table>
+<p>Every kind has a <strong>Never</strong> section, because anything can have something it should never look like.
+<em>Palette</em>, <em>Signature details</em> and <em>Never</em> are lists; the rest is ordinary writing.</p>
+<p>Those sections are what make Enhance worth having. Because the description has a <em>Silhouette</em> field
+and a <em>Materials</em> field, Wobu can lean on the right ones for a full-body shot and different ones for
+a close study of fabric. A single lump of prose could not do that.</p>
+<p>Kinds also carry a few short facts you fill in yourself rather than have written for you — <em>Era</em>,
+<em>Scale</em>, <em>Biome</em> and <em>Primary material</em>, on the kinds where they make sense. They sit under your
+notes, and a kind with none of them shows nothing.</p>
+<h2 id="two-ways-things-connect">Two ways things connect</h2>
+<p>Wobu keeps <strong>nesting</strong> and <strong>linking</strong> apart, and the difference matters.</p>
+<h3 id="nesting-inside-the-same-kind">Nesting — inside the same kind</h3>
+<p>What something sits inside is always the same kind as itself. Ember Coast holds Cinder Bay holds the
+Kiln Quarter. Vashk has a sub-species. A lantern belongs to a set of props. This is the shape the
+list on the left draws, and you change it by dragging. Only Species, Culture, Setting and Prop nest;
+the other six are flat.</p>
+<p>Whatever something sits inside counts fully towards it. The Kiln Quarter inherits everything Cinder
+Bay says, which inherits everything Ember Coast says.</p>
+<h3 id="linking-across-kinds">Linking — across kinds</h3>
+<p>Links are how influence travels between different sorts of thing. Each one has a job and a strength,
+and can be switched off. You set them on the <strong>Relations</strong> tab, which also lists everything pointing
+back <em>at</em> this page — which is how you find out what you are about to break before you go editing a
+species.</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Shown as</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>styled_by</code></td>
+<td>Styled by</td>
+<td>Drawn in this art style. Art Style is included in everything anyway.</td>
+</tr>
+<tr>
+<td><code>species_of</code></td>
+<td>Species</td>
+<td>This character or creature is one of those. Feeds the Ancestry layer.</td>
+</tr>
+<tr>
+<td><code>member_of</code></td>
+<td>Member of</td>
+<td>Belongs to that culture, guild or faction.</td>
+</tr>
+<tr>
+<td><code>located_in</code></td>
+<td>Located in</td>
+<td>Lives in, or is found in, that place.</td>
+</tr>
+<tr>
+<td><code>related_to</code></td>
+<td>Related to</td>
+<td>A sideways connection — a rival, a matching prop, a sister design. It adds to the subject rather than getting a layer of its own.</td>
+</tr>
+</tbody></table>
+<h2 id="what-a-page-holds">What a page holds</h2>
+<table>
+
+<tbody><tr>
+<td>Name and summary</td>
+<td>The summary is one line, shown on rows in the list and on layer cards.</td>
+</tr>
+<tr>
+<td>Raw notes</td>
+<td>Yours. Never machine-written.</td>
+</tr>
+<tr>
+<td>Description</td>
+<td>The tidied sections from Enhance. You can edit them.</td>
+</tr>
+<tr>
+<td>Description state</td>
+<td><code>none · enhancing · fresh · edited · stale</code></td>
+</tr>
+<tr>
+<td>Attributes</td>
+<td>The short facts for this kind — era, scale, biome, main material.</td>
+</tr>
+<tr>
+<td>Tags</td>
+<td>Whatever you like, for filtering your pictures and the website export.</td>
+</tr>
+<tr>
+<td>Cover picture</td>
+<td>The image shown on cards, on list rows and in the right-hand panel.</td>
+</tr>
+<tr>
+<td>References</td>
+<td>Pictures attached here, each with a job and a strength.</td>
+</tr>
+<tr>
+<td>Links</td>
+<td>The connections above.</td>
+</tr>
+<tr>
+<td>Locked seed and LoRA</td>
+<td>Picture-making settings that belong to this page — see <a href="generating.html">Generating</a>.</td>
+</tr>
+</tbody></table>
+<h3 id="going-stale">Going stale</h3>
+<p>A description goes <strong>stale</strong> when your notes changed, or when something above it changed, since the
+last time you enhanced. Wobu shows a quiet dot and offers to redo it — it never quietly redoes it
+itself, because that would spend your money and might throw away an edit you made by hand.</p>
+<p><strong>Edited by you</strong> means you changed the machine&#39;s description yourself. That is completely fine.
+Enhancing over it shows you a comparison first and refuses to write anything until you agree.</p>
+<h2 id="making-and-organising">Making and organising</h2>
+<ul>
+<li><strong>New entity</strong> at the bottom of the list, from <strong>Jump to…</strong>, or right-click → <strong>New</strong>. You choose
+a kind, a name, and — for kinds that nest — what it goes inside.</li>
+<li><strong>Duplicate</strong> copies the notes, description and links. It is the quickest way to make the second
+of anything. Art Style and World Canon cannot be duplicated.</li>
+<li><strong>Drag to move</strong>, within a kind. This changes what a page inherits, so it will often mark things
+below it as stale. Dropping onto a group heading puts it back at the top level — always allowed,
+so anything filed in the wrong place always has a way out.</li>
+<li><strong>Delete</strong> asks first, then removes one text file. <strong>Anything that was inside it moves up</strong> rather
+than being deleted too, and links pointing at it are cleaned out of the other files. Pictures made
+from it stay where they are — that history is never rewritten.</li>
+<li><strong>Undo</strong> covers all of this. It only lasts for as long as the app is open, on purpose: between one
+session and the next the folder may have been edited elsewhere, synced or restored from a backup,
+and replaying a week-old undo over that would not be undo. One thing is said out loud when you
+undo a delete — the links that pointed at it were removed by the delete, and they do not come
+back.</li>
+</ul>
+<blockquote>
+<p><strong>Getting the level right</strong> The single most common mistake is writing something in the wrong
+place. If it is true of every Vashk, it belongs on the species. If it is true only of guild
+members, it belongs on the culture. If it is true only of Kael, it belongs on Kael.</p>
+<p>Too low and you repeat yourself and drift. Too high and it leaks into everything. When you are not
+sure, ask: <em>would this be wrong for the one next to it?</em> If yes, it is too high.</p>
+</blockquote>
+
+          <hr />
+          <p class="doc-source"><a class="text-link" href="workspace.html">← The workspace</a> &nbsp;·&nbsp; <a class="text-link" href="notes-and-enhance.html">Notes and Enhance →</a></p>
+          <p class="doc-source">
+            This page comes from
+            <a href="https://github.com/krazyjakee/wobu/blob/main/docs/guide/world-model.md" rel="noopener">a file in the source
+            code</a> — the very same one the app shows you in its own built-in guide.
+          </p>
+        </article>
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="../index.html">Overview</a></li>
+              <li><a href="../guide/index.html">User guide</a></li>
+              <li><a href="../download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="../legal.html">Legal overview</a></li>
+              <li><a href="../legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="../legal/terms.html">Terms of use</a></li>
+              <li><a href="../legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="../legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
