@@ -483,6 +483,20 @@ fn variant_grids_and_scene_composition_share_control_normalization() {
 /* ── what the three callers plan ──────────────────────────────────────── */
 
 #[test]
+fn an_unspecified_preset_plans_one_image() {
+    let world = PlanWorld::new();
+    let mut request = world.request("character_sheet", 100);
+    request.preset_id = None;
+    let planned = world.plan(request).unwrap();
+
+    assert_eq!(planned.plans.len(), 1);
+    let generation = &planned.plans[0].generation;
+    assert_eq!(generation.preset, "single_image");
+    assert_eq!(generation.params["batchSize"], json!(1));
+    assert_eq!(generation.seed, 100);
+}
+
+#[test]
 fn a_batch_plans_one_receipt_and_one_request_per_cell() {
     let world = PlanWorld::new();
     let mut request = world.request("character_sheet", 100);

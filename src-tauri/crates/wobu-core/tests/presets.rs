@@ -17,6 +17,8 @@ fn the_inspector_can_build_its_dropdown_for_every_kind() {
     for kind in NodeKind::ALL {
         let offered = presets_for(kind);
         let default = default_preset(kind);
+        assert_eq!(default.id, "single_image", "{kind} should default to a single image");
+        assert_eq!(default.generations(42).len(), 1);
         assert!(
             offered.iter().any(|p| p.id == default.id),
             "{kind} defaults to {} but is not offered it",
