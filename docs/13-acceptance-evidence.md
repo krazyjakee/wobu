@@ -1,7 +1,7 @@
 # Acceptance evidence
 
 This page records what the repository can prove about the M1 and M6 acceptance
-passes. It deliberately separates repeatable contract evidence from checks that
+passes and subsequent patch regressions. It separates repeatable contract evidence from checks that
 need a running desktop app, a configured external application, or live provider
 credentials. Passing a unit test is not described as having clicked through a
 real provider.
@@ -46,3 +46,22 @@ the culture layer, replay the receipt, and cancel a second ComfyUI job while the
 sampler is active. Those observations are credential-, model-, and host-specific,
 so release notes should record the versions used rather than pretending the
 repository can prove them offline.
+
+## v0.1.11 — local sync and concept defaults
+
+[PR #150](https://github.com/krazyjakee/wobu/pull/150) adds these repeatable contracts:
+
+| Acceptance claim | Repeatable evidence |
+| --- | --- |
+| Indexed local saves wake sync even when reconciliation finds nothing new. | `state::tests::indexed_saves_wake_sync_but_reads_and_sync_writes_do_not` covers saves, reads, sync writes, partial failures, and the unlocked observer callback. Ticket tests cover successful commits and stale-session rejection. |
+| External edits and completed jobs can wake the correct replica. | State tests cover external-file reconciliation and notifications after the window closes. Image, mesh, and LoRA completion paths notify the originating project by ID. |
+| A backed-off poller actually runs after a local wake. | `sync::tests::a_local_change_runs_the_sleeping_poller` drives the production poller at maximum backoff. The adjacent wake-permit test covers notifications delivered before a waiter exists. |
+| Concept generation defaults to one image for every node type. | `wobu-core/tests/presets.rs` checks every kind; `generate::tests::an_unspecified_preset_plans_one_image` checks the resulting request and receipt. Explicit character-sheet and turnaround tests retain their multi-image contracts. |
+
+The reviewed implementation passed 1,437 Rust tests (five ignored), 825 frontend tests,
+formatting, Clippy, public API documentation, dependency, licence, and code-health checks locally.
+The release manifests keep project schema 1 and index schema 10.
+
+Manual boundary: a packaged desktop session with two physical peers and live image providers was
+not run for this patch. The loopback sync and fake-provider evidence does not replace that check.
+Existing milestone acceptance statuses and unrelated Settings/help/shortcut flows are not affected.

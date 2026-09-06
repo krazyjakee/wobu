@@ -62,6 +62,10 @@ far harder than starting there. Every milestone after this gets the write path f
 Ticket-based direct sync, last-agreed-hash reconciliation, blob transfer, conflicts, background
 projects, status, authorization, and the Share/Accept/manage workflow are implemented.
 
+Local saves and completed jobs wake the outbound poller in
+[PR #150](https://github.com/krazyjakee/wobu/pull/150), with repeatable coverage recorded in
+[the v0.1.11 evidence](13-acceptance-evidence.md#v0111--local-sync-and-concept-defaults).
+
 ### M4 — References
 
 Image import via drag/paste, content-addressed hashing, thumbnails, the reference grid, per-image
@@ -79,6 +83,9 @@ the adapter boundary is real instead of one vendor's request shape wearing a tra
 Inspector panel, the ComfyUI adapter plus Gemini image, output presets for
 character/prop/environment, capability negotiation, the job queue with live previews, and the
 Concepts grid. **This is the first complete loop.**
+
+Concepts default to one image for every node type; larger presets remain selectable
+([PR #150](https://github.com/krazyjakee/wobu/pull/150)).
 
 The per-project spend ceiling and cost estimate shipped here and were retired: they metered a local
 model of published prices rather than the account that actually holds the money, so the number they
