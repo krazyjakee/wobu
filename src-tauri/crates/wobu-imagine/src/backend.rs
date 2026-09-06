@@ -290,7 +290,7 @@ impl ProgressSink for Discard {
 /// request, so the only fact the outcome has to add is how many were made.
 ///
 /// A struct with one field rather than a bare `u32`, for the reason `Usage` is
-/// one: this is what the spend ceiling reads, it will grow the day a provider
+/// one: this is what a failed job reads, it will grow the day a provider
 /// reports its own charge back, and a `u32` in a signature is a number anybody
 /// can pass anything to.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -301,8 +301,8 @@ pub struct ImageUsage {
     /// Zero means "nothing we know of was billed", which is not the same as
     /// "nothing was billed": a call cancelled after the provider started
     /// generating may still be paid for. Adapters report the last figure they
-    /// have rather than waiting for a clean finish, because #55's ceiling is
-    /// only a ceiling if it counts those.
+    /// have rather than waiting for a clean finish, because telling somebody a
+    /// cancelled render was free is a claim nothing supports.
     pub billed_images: u32,
 }
 
@@ -331,8 +331,8 @@ impl ImageUsage {
 /// it is worth more here: `?` on a `Result<_, E>` would carry the error out and
 /// leave the usage behind, and "the call failed so nothing was charged" is false
 /// often enough — a refusal after generation, a cancellation mid-render, a
-/// response we could not decode — that the spend ceiling would drift low
-/// precisely when the user is hitting limits. Destructuring is the only way past
+/// response we could not decode — that the user would be told their money was
+/// safe on no evidence. Destructuring is the only way past
 /// this type, and destructuring puts [`ImageUsage`] in front of whoever wrote
 /// the call.
 #[derive(Debug)]
@@ -601,7 +601,7 @@ mod tests {
     #[test]
     fn an_unbilled_failure_says_zero_rather_than_saying_nothing() {
         // `usage` is not optional, so "we do not know" and "nothing was charged"
-        // have to be the same value; the spend ceiling reads it either way.
+        // have to be the same value; `Billed` grades it either way.
         let outcome = ImageOutcome::unbilled(Error::NoKey { backend: "Gemini" });
         assert_eq!(outcome.usage, ImageUsage::free());
         assert!(!outcome.usage.is_billed());
@@ -650,9 +650,9 @@ mod tests {
     }
 
     #[test]
-    fn usage_serialises_camel_case_for_the_spend_meter() {
-        // #55 reads this over the bridge, and every other wire form in the
-        // workspace is camelCase.
+    fn usage_serialises_camel_case_over_the_bridge() {
+        // The shell reads this over the bridge, and every other wire form in
+        // the workspace is camelCase.
         let json = serde_json::to_value(ImageUsage::billed(3)).unwrap();
         assert_eq!(json["billedImages"], 3);
         assert_eq!(

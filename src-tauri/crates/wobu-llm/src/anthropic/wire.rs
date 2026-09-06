@@ -226,8 +226,7 @@ impl Incoming {
         // Cache *writes* are folded in with fresh input rather than with cache
         // reads. Anthropic bills a write above the base input rate and a read at
         // a tenth of it, so counting a write as cached input would understate a
-        // long prompt's first call by an order of magnitude — and #55's spend
-        // ceiling is only a ceiling if it errs the other way.
+        // long prompt's first call by an order of magnitude.
         let fresh = count("input_tokens");
         let written = count("cache_creation_input_tokens");
         if fresh.is_some() || written.is_some() {
@@ -554,8 +553,7 @@ mod tests {
     fn cache_writes_count_as_fresh_input_and_cache_reads_do_not() {
         // The two are priced an order of magnitude apart — a write above the
         // base rate, a read at a tenth of it — so putting a write in the cheap
-        // column makes the spend ceiling read low on exactly the first call of
-        // a long prompt.
+        // column understates exactly the first call of a long prompt.
         let events = [json!({"type": "message_start", "message": {"usage": {
             "input_tokens": 100, "cache_creation_input_tokens": 900,
             "cache_read_input_tokens": 4000, "output_tokens": 1}}})

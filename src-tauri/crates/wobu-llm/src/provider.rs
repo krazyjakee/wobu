@@ -202,8 +202,7 @@ impl DeltaSink for Discard {
 /// was billed": a call cancelled before the provider reported anything may still
 /// have run. Adapters report the last figures they saw rather than waiting for a
 /// clean finish, because a request that is cancelled or truncated has been paid
-/// for either way and [#55](https://github.com/krazyjakee/wobu/issues/55)'s
-/// spend ceiling is only a ceiling if it counts those.
+/// for either way, and telling the user otherwise is a claim nothing supports.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Usage {
@@ -232,8 +231,8 @@ impl Usage {
 /// Not a `Result`, on purpose. `?` on a `Result<_, E>` would carry the error out
 /// and leave the usage behind, and "the call failed so nothing was charged" is
 /// false often enough — a rate limit mid-stream, a cancellation, a truncation —
-/// that the spend ceiling would drift low precisely when the user is hitting
-/// limits. Destructuring is the only way past this type, and destructuring puts
+/// that the user would be told their money was safe on no evidence.
+/// Destructuring is the only way past this type, and destructuring puts
 /// [`Usage`] in front of whoever wrote the call.
 #[derive(Debug)]
 pub struct EnhanceOutcome {
@@ -393,7 +392,7 @@ mod tests {
     #[test]
     fn an_unbilled_failure_says_zero_rather_than_saying_nothing() {
         // `usage` is not optional, so "we do not know" and "nothing was charged"
-        // have to be the same value; the spend ceiling reads it either way.
+        // have to be the same value; `Billed` grades it either way.
         let outcome = EnhanceOutcome::unbilled(Error::NoKey { provider: "Anthropic" });
         assert_eq!(outcome.usage, Usage::default());
         assert!(!outcome.is_ok());

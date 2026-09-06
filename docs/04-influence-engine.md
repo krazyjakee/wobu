@@ -114,13 +114,12 @@ The live reference report in the Inspector, a batch, a variant grid and a scene 
 one planning path with four entry points, not four pipelines. A request is normalized once —
 provider and model, seed and its provenance, preset, Shot controls, sliders and aspect — and then
 expanded into one *cell* per image, each carrying its own preset, aspect, seed and slider values.
-Everything after that reads those cells: the compiled prompt, the reference budget, the price, the
-spend reservation and the receipt.
+Everything after that reads those cells: the compiled prompt, the reference budget and the receipt.
 
-The estimate is therefore not a second opinion. It negotiates the same first cell the batch would
+The report is therefore not a second opinion. It negotiates the same first cell the batch would
 send first, so a grid that silences a reference in its opening cell reports that reference as
 withheld rather than counting one the image would not carry. Two things about it are deliberately
-different, because the panel is advisory and free: an unseeded estimate uses seed zero rather than
+different, because the panel is advisory and free: an unseeded report uses seed zero rather than
 minting a random one, so nudging a slider twice gives the same answer twice; and it reads a local
 ComfyUI's *declared* capabilities rather than probing the server, so a machine that is switched
 off leaves the panel optimistic instead of turning it into an error. Generation itself always
@@ -145,8 +144,7 @@ compiled inputs fixed, or holds one seed while varying exactly one of fragment w
 or aspect. Named-view presets such as Turnaround are excluded because reducing an eight-view
 contract to one cell would destroy its meaning. Every receipt stores a typed `variation` object
 under `Generation.params`: grid id, cell index/total, axis, and the axis-specific value. This is
-enough to regroup and reconstruct the grid without parsing prompts. The full cell count and each
-cell's negotiated resolution feed the paid estimate and spend reservation before any job queues.
+enough to regroup and reconstruct the grid without parsing prompts.
 
 Forge exposes this same Inspector state rather than maintaining a second generation form. It pairs
 the controls and visible compiled prompt with a virtualized receipt grid for the chosen subject;

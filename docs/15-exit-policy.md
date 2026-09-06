@@ -106,8 +106,9 @@ Stated so they are decisions rather than surprises.
   3 s. Closing the interval entirely would mean writing on every keystroke — one guarded
   `write`+`rename` per character, over SMB — which trades a bounded loss nobody has hit for a
   latency problem everybody would.
-- **A cancelled paid job is not refunded.** Cancelling stops the request and reports what was billed
-  so #55's ceiling stays accurate; it cannot un-bill it. The warning says so in those words.
+- **A cancelled paid job is not refunded.** Cancelling stops the request and reports what was
+  billed, so the user is told rather than left to assume; it cannot un-bill it. The warning says so
+  in those words.
 - **An enhance result that has come back but not been accepted** is dropped on project close and on
   quit — `Pending` is in-memory and per installation. It is a re-runnable text call, and holding
   unaccepted suggestions across sessions would mean showing the user a proposal about a world they

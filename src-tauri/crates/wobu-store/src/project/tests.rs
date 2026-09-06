@@ -842,47 +842,6 @@ fn nothing_absolute_is_written_into_the_folder() {
 }
 
 #[test]
-fn spend_ceiling_is_shared_and_preserves_unknown_metadata() {
-    let (_dir, mut project) = new_project();
-    assert_eq!(project.meta().spend_ceiling_usd_micros, Some(DEFAULT_SPEND_CEILING_USD_MICROS));
-    let path = project.root().join(PROJECT_FILE);
-    let mut meta: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    meta.as_object_mut()
-        .unwrap()
-        .insert("futureMetadata".into(), serde_json::json!({ "kept": true }));
-    std::fs::write(&path, serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
-
-    project.set_spend_ceiling(Some(2_500_000)).unwrap();
-    let saved: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    assert_eq!(saved["spendCeilingUsdMicros"], 2_500_000);
-    assert_eq!(saved["futureMetadata"]["kept"], true);
-    assert_eq!(project.meta().spend_ceiling_usd_micros, Some(2_500_000));
-
-    project.set_spend_ceiling(None).unwrap();
-    assert!(
-        serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path).unwrap())
-            .unwrap()["spendCeilingUsdMicros"]
-            .is_null()
-    );
-}
-
-#[test]
-fn project_without_a_ceiling_gets_the_default_guardrail() {
-    let (_dir, project) = new_project();
-    let path = project.root().join(PROJECT_FILE);
-    let mut meta: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    meta.as_object_mut().unwrap().remove("spendCeilingUsdMicros");
-    std::fs::write(&path, serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
-    let root = project.root().to_path_buf();
-    drop(project);
-    let reopened = Project::open(&root).unwrap();
-    assert_eq!(reopened.meta().spend_ceiling_usd_micros, Some(DEFAULT_SPEND_CEILING_USD_MICROS));
-}
-
-#[test]
 fn transfer_reports_a_guarded_write_race_with_pending_ids() {
     let source_dir = tempfile::tempdir().unwrap();
     let mut source = Project::create(source_dir.path(), "Source").unwrap();

@@ -179,7 +179,7 @@ impl Resolution {
     }
 
     /// `u64`, because 4K square is 16.7 million and a backend that grows a
-    /// bigger ceiling should not silently overflow the number #55 prices with.
+    /// bigger maximum should not silently overflow the product.
     pub fn pixels(self) -> u64 {
         u64::from(self.width) * u64::from(self.height)
     }
@@ -327,9 +327,8 @@ mod tests {
 
     #[test]
     fn a_resolution_reports_its_own_size_without_overflowing() {
-        // #55 prices batches off this. A `u32` product overflows above 4K
-        // square, and a spend estimate that wraps is wrong in the direction
-        // nobody notices until the bill.
+        // A `u32` product overflows above 4K square, and a size that wraps is
+        // wrong in the direction nobody notices.
         assert_eq!(Resolution::new(4096, 4096).pixels(), 16_777_216);
         assert_eq!(Resolution::new(u32::MAX, u32::MAX).pixels(), 18_446_744_065_119_617_025);
         assert!((Resolution::new(1000, 1000).megapixels() - 1.0).abs() < 1e-6);

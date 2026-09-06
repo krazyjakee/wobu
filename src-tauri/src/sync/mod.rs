@@ -31,10 +31,8 @@
 //! do across a network step. Putting these there would put the file's one
 //! obvious pattern next to five functions that must not follow it.
 //!
-//! ## Startup order, and the one thing that has to happen synchronously
+//! ## Startup order, and the one thing that has to happen before a project opens
 //!
-//! [`SyncState::start`] loads the identity and installs the alias *before* it
-//! returns, and only then spawns the bind. That order is load bearing:
 //! `wobu_store::peer::install` refuses a second value rather than replacing the
 //! first, deliberately — a folder where one conflict sibling says
 //! `amber-heron-4f1a` and the next says something else, in one session, is a
@@ -42,11 +40,28 @@
 //! project opens, and binding an endpoint takes a network round trip. One is
 //! allowed to be slow; the other is not allowed to be late.
 //!
-//! Reading the keychain on the main thread at startup is the cost, and on Linux
-//! a locked login keyring can put a prompt in front of the user there. That is
-//! the trade [`wobu_sync::Identity`] already documents — it is infallible and
-//! degrades to an ephemeral identity — and the alternative is worse: an app that
-//! is briefly nobody, writing conflict files under a name it will not use again.
+//! [`SyncState::start`] used to satisfy that by loading the identity on the main
+//! thread before returning from `setup`, and the cost was stated as a prompt in
+//! front of the user. The real cost was worse. Reading the keychain is not
+//! merely slow on Linux — against a locked collection it can never return at
+//! all (`wobu_sync::identity` sets out why), and every millisecond of it was
+//! spent on the thread that has not yet created the window. The result was not a
+//! slow start or a prompt; it was a process with no UI, no diagnostic past
+//! `wobu <version> starting`, and nothing for the user to click. Reported as a
+//! crash on startup, which from the outside is exactly what it was.
+//!
+//! So the load happens on a blocking thread now and the window comes up without
+//! it. What replaces the ordering is [`SyncState::wait_until_named`]: the two
+//! commands that can adopt a project folder await it first, so nothing can write
+//! a conflict sibling before this installation knows its own name. The
+//! invariant is unchanged — it is enforced at the point that needs it rather
+//! than by freezing everything until it holds. Bounded, too, because
+//! `Identity::load` is: the gate opens within `STORE_DEADLINE` of launch
+//! whatever the credential store does.
+//!
+//! What is *not* done is opening the window first and naming the peer later
+//! without a gate. An app that is briefly nobody, writing conflict files under a
+//! name it will not use again, is the bug #76 exists to fix.
 //!
 //! ## Sync failures do not raise anything
 //!
@@ -88,7 +103,7 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 use wobu_core::{Id, SCHEMA_VERSION};
 use wobu_store::ProjectMeta;
 use wobu_sync::{Disposition, Identity, Origin, Reach, Ticket};
@@ -135,6 +150,35 @@ const ONLINE_WAIT: Duration = Duration::from_secs(10);
 pub struct SyncState {
     manager: Arc<Mutex<Option<Arc<SyncManager>>>>,
     accepting: Arc<Mutex<Option<Arc<Notify>>>>,
+    named: Arc<Named>,
+}
+
+/// Whether this installation knows its own name yet.
+///
+/// A semaphore that is closed rather than a flag beside a `Notify`, and the
+/// difference is a race: a flag has to be checked and then awaited, and a
+/// settle landing between those two is a wake nobody receives. `acquire` on a
+/// closed semaphore fails immediately and for ever, which is the exact shape of
+/// "settled once, never again" with no window to fall into.
+struct Named(Semaphore);
+
+impl Default for Named {
+    fn default() -> Named {
+        // Zero permits, and none are ever added. Closing is the whole signal.
+        Named(Semaphore::new(0))
+    }
+}
+
+impl Named {
+    fn settle(&self) {
+        self.0.close();
+    }
+
+    async fn wait(&self) {
+        // Always `Err(AcquireError)` — there is no permit to acquire and the
+        // close is what ends the wait.
+        let _ = self.0.acquire().await;
+    }
 }
 
 struct AcceptLease {
@@ -160,28 +204,46 @@ impl Drop for AcceptLease {
 impl SyncState {
     /// Load the identity, name this installation, and start binding.
     ///
-    /// See the module documentation for why the first two are synchronous and
-    /// the third is not.
+    /// Returns immediately; none of the three has happened yet. See the module
+    /// documentation for why that is safe — [`Self::wait_until_named`] is what
+    /// carries the ordering the synchronous version used to carry by blocking.
     pub fn start(&self, app: &AppHandle, state: AppState) {
-        let identity = Identity::load();
-        let alias = identity.alias();
-        match identity.origin() {
-            Origin::Ephemeral => diag::error(format!(
-                "sync: the credential store would not answer; syncing as {alias} for this run only"
-            )),
-            origin => diag::info(format!("sync: this installation is {alias} ({origin:?})")),
-        }
-        // #76's wiring, and the whole reason the alias is loaded before anything
-        // else. A `false` means somebody already installed one — two calls in
-        // one process is either a bug or the app being started twice inside it,
-        // and both are worth a line.
-        if !wobu_store::peer::install(&alias) {
-            diag::error("sync: an alias was already installed; conflict siblings may be misnamed");
-        }
-
         let slot = Arc::clone(&self.manager);
+        let named = Arc::clone(&self.named);
         let wake: Arc<dyn Wake> = Arc::new(Window { app: app.clone(), state: state.handle() });
         tauri::async_runtime::spawn(async move {
+            // `spawn_blocking` and not an ordinary await point: `Identity::load`
+            // talks to the OS credential store on the calling thread, and a
+            // locked Linux keyring can hold it for the full `STORE_DEADLINE`.
+            // On a runtime worker that would stall every other task the app has,
+            // which at startup is most of them.
+            let identity = tauri::async_runtime::spawn_blocking(Identity::load)
+                .await
+                // The pool thread died, which is not a reason to have no name.
+                // The ephemeral identity is the same answer a refusing store
+                // would have produced, and the line below already says so.
+                .unwrap_or_else(|_| Identity::ephemeral());
+            let alias = identity.alias();
+            match identity.origin() {
+                Origin::Ephemeral => diag::error(format!(
+                    "sync: the credential store would not answer; syncing as {alias} for this run only"
+                )),
+                origin => diag::info(format!("sync: this installation is {alias} ({origin:?})")),
+            }
+            // #76's wiring, and the whole reason a project open waits on this
+            // task. A `false` means somebody already installed one — two calls
+            // in one process is either a bug or the app being started twice
+            // inside it, and both are worth a line.
+            if !wobu_store::peer::install(&alias) {
+                diag::error(
+                    "sync: an alias was already installed; conflict siblings may be misnamed",
+                );
+            }
+            // Before the bind rather than after it, and that is the whole point
+            // of the split: naming this installation is the part a project open
+            // has to wait for, and binding an endpoint is the part it must not.
+            named.settle();
+
             let setup = Setup {
                 identity,
                 reach: Reach::Internet,
@@ -206,6 +268,24 @@ impl SyncState {
                 Err(e) => diag::error(format!("sync: could not start: {}", e.message)),
             }
         });
+    }
+
+    /// Wait until this installation has a peer alias installed.
+    ///
+    /// Every command that can adopt a project folder calls this first, and that
+    /// is the ordering the module documentation describes: `peer::install`
+    /// latches, so a conflict sibling written before it lands would be stamped
+    /// with `wobu-store`'s per-process fallback name and could never be
+    /// attributed to this person again.
+    ///
+    /// Not a hang risk even where the credential store is one. `Identity::load`
+    /// is bounded, so [`Self::start`]'s task always reaches `settle` — the
+    /// ceiling on this wait is `STORE_DEADLINE` after launch, and only for a
+    /// user who reaches a project folder inside it.
+    ///
+    /// Returns immediately once settled, for ever after.
+    pub async fn wait_until_named(&self) {
+        self.named.wait().await;
     }
 
     fn get(&self) -> Option<Arc<SyncManager>> {

@@ -10,6 +10,7 @@ import type { Credential, ProviderDef } from './providerDefs'
 /** How a key's provenance reads, and the colour it reads in. */
 const SOURCE_LABEL = {
   keychain: 'in the keychain',
+  local: 'in Wobu’s private local store',
   environment: 'from the environment',
 } as const
 
@@ -17,7 +18,6 @@ export function ProviderKeys({
   provider,
   statuses,
   model,
-  keychainDown,
   focus,
   onFocused,
 }: {
@@ -25,7 +25,6 @@ export function ProviderKeys({
   statuses: KeyStatus[]
   /** The model this project selected, so a check tests what Enhance would run. */
   model: string | undefined
-  keychainDown: boolean
   focus: string | null
   onFocused: () => void
 }) {
@@ -68,7 +67,6 @@ export function ProviderKeys({
           credential={credential}
           multiple={provider.credentials.length > 1}
           status={statuses.find((s) => s.provider === credential.id)}
-          keychainDown={keychainDown}
           focus={focus}
           onFocused={onFocused}
           onChanged={() => setProbe(null)}
@@ -182,7 +180,6 @@ export function CredentialRow({
   credential,
   multiple,
   status,
-  keychainDown,
   focus,
   onFocused,
   onChanged,
@@ -191,7 +188,6 @@ export function CredentialRow({
   /** Whether the label has to be shown — a lone "API key" row does not need it. */
   multiple: boolean
   status: KeyStatus | undefined
-  keychainDown: boolean
   focus: string | null
   onFocused: () => void
   onChanged: () => void
@@ -209,7 +205,14 @@ export function CredentialRow({
   // request stays active until this field closes, so no reset render is needed.
   useEffect(() => {
     if (!editing) return
-    field.current?.focus()
+    const input = field.current
+    // The shortcut lives in the shared-project band, while the key field is in
+    // the machine-local band below it. Focusing normally scrolls in browsers,
+    // but WebKit does not consistently move a nested overflow container when a
+    // node appeared in the same render. Make the navigation explicit so the
+    // click cannot open a field off-screen and look like it did nothing.
+    input?.scrollIntoView?.({ block: 'center' })
+    input?.focus()
   }, [editing])
 
   async function submit() {
@@ -224,7 +227,7 @@ export function CredentialRow({
       await save(credential.id, key)
       close()
       onChanged()
-      toast('Key saved to this computer’s keychain.')
+      toast('Key saved on this computer.')
     } catch (e) {
       report(e, 'Could not save that key')
     }
@@ -250,8 +253,8 @@ export function CredentialRow({
       onChanged()
       toast(
         removal.status.source
-          ? 'Removed from the keychain — this provider is still configured from the environment.'
-          : 'Key removed from this computer.',
+          ? 'Removed the stored key — this provider is still configured from the environment.'
+          : 'Stored key removed from this computer.',
       )
     } catch (e) {
       report(e, 'Could not remove that key')
@@ -273,7 +276,6 @@ export function CredentialRow({
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
-            disabled={keychainDown}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void submit()
               if (e.key === 'Escape') close()
@@ -282,7 +284,7 @@ export function CredentialRow({
           <button
             className="btn-mini"
             onClick={() => void submit()}
-            disabled={keychainDown || saving === credential.id}
+            disabled={saving === credential.id}
           >
             {saving === credential.id ? 'Saving…' : 'Save'}
           </button>
@@ -294,19 +296,21 @@ export function CredentialRow({
         <>
           <span className={source ? 'prov-cred-state' : 'prov-cred-state is-absent'}>
             <span
-              className={source === 'keychain' ? 'dot dot-ok' : source ? 'dot dot-warn' : 'dot'}
+              className={
+                source && source !== 'environment' ? 'dot dot-ok' : source ? 'dot dot-warn' : 'dot'
+              }
             />
             {source ? SOURCE_LABEL[source] : 'no key on this machine'}
           </span>
           <div className="set-acts prov-cred-acts">
-            <button className="btn-mini" onClick={() => setEditing(true)} disabled={keychainDown}>
-              {source === 'keychain' ? 'Replace' : 'Add key'}
+            <button className="btn-mini" onClick={() => setEditing(true)}>
+              {source && source !== 'environment' ? 'Replace' : 'Add key'}
             </button>
             {/* Only for a key this pane can actually remove. An environment
-                key has no keychain entry behind it, so a Remove button here
+                key has no stored entry behind it, so a Remove button here
                 would report "nothing was removed" and change nothing — which
                 reads as the app ignoring the click. */}
-            {source === 'keychain' && (
+            {source && source !== 'environment' && (
               <button
                 className="btn-mini"
                 onClick={() => void discard()}

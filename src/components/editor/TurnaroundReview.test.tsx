@@ -163,8 +163,8 @@ describe('the turnaround review', () => {
 
   it('holds a paid reconstruction behind an explicit consent, then sends the reviewed views', async () => {
     // Hunyuan3D charges per submitted job and the international API does not
-    // report the amount back, so there is no price to show and nothing for the
-    // spend ceiling to reserve. Consent is the only honest gate.
+    // report the amount back, so there is nothing to show the user up front.
+    // Consent is the only honest gate.
     open()
     const button = await screen.findByRole('button', { name: 'Reconstruct mesh' })
     expect(button).toHaveAttribute('aria-disabled', 'true')

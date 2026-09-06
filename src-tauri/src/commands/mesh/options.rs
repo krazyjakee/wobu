@@ -56,7 +56,7 @@ pub struct MeshOptions {
 /// separately, because "this model takes eight views" is true whether or not
 /// this machine has a key.
 #[tauri::command]
-pub fn mesh_options(
+pub async fn mesh_options(
     state: State<'_, AppState>,
     keys: State<'_, Keys>,
     machine: State<'_, MachineSettings>,
@@ -81,7 +81,7 @@ pub fn mesh_options(
     };
 
     let (label, model, caps) = describe_backend(&selection)?;
-    let (ready, detail) = mesh_readiness(&selection, &keys, &machine);
+    let (ready, detail) = mesh_readiness(&selection, &keys, &machine).await?;
     Ok(MeshOptions {
         provider: Some(selection.provider.clone()),
         label: label.to_owned(),
@@ -145,31 +145,32 @@ fn region_of(selection: &ProviderChoice) -> tencent::Region {
         .unwrap_or(tencent::Region::ApSingapore)
 }
 
-fn mesh_readiness(
+async fn mesh_readiness(
     selection: &ProviderChoice,
     keys: &Keys,
     machine: &MachineSettings,
-) -> (bool, String) {
+) -> CommandResult<(bool, String)> {
     match selection.provider.as_str() {
         tencent::ID => {
-            let has_id = keys.secret(TENCENT_SECRET_ID).is_some();
-            let has_key = keys.secret(TENCENT_SECRET_KEY).is_some();
+            let secrets = tencent_secrets(keys).await?;
+            let has_id = secrets[0].is_some();
+            let has_key = secrets[1].is_some();
             if has_id && has_key {
-                (true, String::new())
+                Ok((true, String::new()))
             } else {
-                (
+                Ok((
                     false,
                     "Tencent Hunyuan3D is selected for 3D, but this machine is missing its \
                      SecretId/SecretKey pair. Add both in Settings."
                         .into(),
-                )
+                ))
             }
         }
         comfy::ID => match machine.comfy_mesh() {
-            Ok(_) => (true, String::new()),
-            Err(error) => (false, error.to_string()),
+            Ok(_) => Ok((true, String::new())),
+            Err(error) => Ok((false, error.to_string())),
         },
-        other => (false, format!("This build has no 3D adapter for {other}.")),
+        other => Ok((false, format!("This build has no 3D adapter for {other}."))),
     }
 }
 
@@ -192,8 +193,9 @@ pub(super) async fn execution_backend(
                      SecretId/SecretKey pair. Add both in Settings.",
                 )
             };
-            let secret_id = keys.secret(TENCENT_SECRET_ID).ok_or_else(missing)?;
-            let secret_key = keys.secret(TENCENT_SECRET_KEY).ok_or_else(missing)?;
+            let mut secrets = tencent_secrets(keys).await?.into_iter();
+            let secret_id = secrets.next().flatten().ok_or_else(missing)?;
+            let secret_key = secrets.next().flatten().ok_or_else(missing)?;
             let credentials = tencent::Credentials::new(
                 secret_id.expose(),
                 tencent::SecretKey::new(secret_key.expose()),
@@ -207,6 +209,10 @@ pub(super) async fn execution_backend(
             Err(WobuError::new(Code::Invalid, format!("This build has no 3D adapter for {other}.")))
         }
     }
+}
+
+async fn tencent_secrets(keys: &Keys) -> CommandResult<Vec<Option<crate::keys::Secret>>> {
+    keys.secrets(vec![TENCENT_SECRET_ID.into(), TENCENT_SECRET_KEY.into()]).await
 }
 
 /* ── starting one ─────────────────────────────────────────────────────────── */

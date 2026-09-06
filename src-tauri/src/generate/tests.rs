@@ -1,10 +1,8 @@
-//! The planning chain end to end, and the spend ledger under contention.
+//! The planning chain end to end.
 //!
 //! One harness for the whole of `generate` rather than one per submodule: what
 //! these assert is that the four surfaces in [`super`] agree, which is a claim
 //! about the seam between the modules and cannot be made from inside one.
-
-use std::time::Duration;
 
 use chrono::Utc;
 use wobu_core::{
@@ -22,46 +20,14 @@ use super::plan::{
 use super::preview::{ImageReferenceReport, aspect_capability_view, reference_report_for_plan};
 use super::replay::replay_plan;
 use super::scene::{ScenePlan, normalize_scene_controls, plan_scene};
-use super::spend::{
-    Price, SPEND_AGGREGATE, SPEND_DIR, SpendReservation, cost_estimate, cost_estimate_prices,
-    image_price, read_cached_spend_status_locked_with, receipt_cost, spend_status_for,
-    spend_status_for_report,
-};
 use super::task::PlannedBatch;
 use super::*;
 
-struct TestProject {
-    parent: PathBuf,
-    root: PathBuf,
-    node_id: Id,
-}
-
-impl TestProject {
-    fn new(ceiling_usd_micros: u64) -> TestProject {
-        let parent = std::env::temp_dir().join(format!("wobu-spend-test-{}", new_id()));
-        std::fs::create_dir(&parent).unwrap();
-        let mut project = Project::create(&parent, "Ledger").unwrap();
-        project.set_spend_ceiling(Some(ceiling_usd_micros)).unwrap();
-        let node_id = project.create_node(wobu_core::NodeKind::Character, "Kael", None).unwrap().id;
-        let root = project.root().to_path_buf();
-        drop(project);
-        TestProject { parent, root, node_id }
-    }
-}
-
-impl Drop for TestProject {
-    fn drop(&mut self) {
-        // The parent is a unique path minted by this test, never a caller
-        // supplied directory or a workspace root.
-        let _ = std::fs::remove_dir_all(&self.parent);
-    }
-}
-
 /* ── the planning fixture ─────────────────────────────────────────────── */
 
-/// The model every planning test below prices against. Pinned rather than
-/// defaulted: a default that moved would silently rewrite every expected
-/// cost in this file.
+/// The model every planning test below runs against. Pinned rather than
+/// defaulted: a default that moved would silently rewrite what these
+/// tests assert.
 const MODEL: &str = "gemini-3.1-flash-image";
 
 /// A world with files in it: a house style, two characters, and one
@@ -190,7 +156,7 @@ impl PlanWorld {
 
     fn preview(&self, request: GenerationPlanRequest) -> CommandResult<ImageReferenceReport> {
         let backend = PlanWorld::backend();
-        reference_report_for_plan(&self.nodes, gemini::ID, MODEL, &backend, request)
+        reference_report_for_plan(&self.nodes, MODEL, &backend, request)
     }
 }
 
@@ -273,38 +239,6 @@ fn sixteen_cell_batch_reads_each_reference_once_and_shares_its_buffer() {
 }
 
 #[test]
-fn google_standard_output_prices_are_exact_usd_micros() {
-    let cases = [
-        ("gemini-3.1-flash-lite-image", 1_024, 33_600),
-        ("gemini-3.1-flash-image", 512, 45_000),
-        ("gemini-3.1-flash-image", 1_024, 67_000),
-        ("gemini-3.1-flash-image", 2_048, 101_000),
-        ("gemini-3.1-flash-image", 4_096, 151_000),
-        ("gemini-3-pro-image", 1_024, 134_000),
-        ("gemini-3-pro-image", 4_096, 240_000),
-        ("gemini-2.5-flash-image", 1_024, 39_000),
-    ];
-    for (model, side, expected) in cases {
-        assert_eq!(
-            image_price(gemini::ID, model, Resolution::new(side, side))
-                .unwrap()
-                .per_image_usd_micros,
-            expected,
-            "{model} at {side}px"
-        );
-    }
-}
-
-#[test]
-fn local_is_free_and_unknown_paid_models_fail_high() {
-    assert!(image_price(comfy::ID, "anything", Resolution::new(4_096, 4_096)).is_none());
-    let unknown =
-        image_price(gemini::ID, "gemini-future-image", Resolution::new(1_024, 1_024)).unwrap();
-    assert_eq!(unknown.per_image_usd_micros, 240_000);
-    assert!(unknown.conservative_fallback);
-}
-
-#[test]
 fn aspect_preview_exposes_ordered_choices_and_the_negotiated_substitution() {
     let mut caps = GeminiBackend::new("test-key").unwrap().capabilities("gemini-3.1-flash-image");
     caps.max_resolution = Resolution::new(1_024, 1_024);
@@ -371,28 +305,11 @@ fn lora_triggers_are_deduplicated_and_scene_identity_stays_last() {
 }
 
 #[test]
-fn batch_estimate_and_old_receipts_use_recorded_model_and_size() {
-    let estimate =
-        cost_estimate(gemini::ID, "gemini-3.1-flash-image", Resolution::new(2_048, 2_048), 8)
-            .unwrap();
-    assert_eq!(estimate.batch_usd_micros, 808_000);
-
-    let old = receipt(new_id(), gemini::ID, "gemini-3-pro-image", 4_096, 4_096);
-    assert_eq!(receipt_cost(&old), 240_000);
-    let local = receipt(new_id(), comfy::ID, "local", 4_096, 4_096);
-    assert_eq!(receipt_cost(&local), 0);
-    let mut explicit = old;
-    explicit.params.insert("estimatedCostUsdMicros".into(), json!(123_456));
-    assert_eq!(receipt_cost(&explicit), 123_456);
-}
-
-#[test]
-fn replay_plan_uses_recorded_request_and_current_price_without_compiling() {
+fn replay_plan_uses_the_recorded_request_without_compiling() {
     let mut original = receipt(new_id(), gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
     original.compiled_prompt = "the immutable positive".into();
     original.negative_prompt = "the immutable negative".into();
     original.seed = 77;
-    original.params.insert("estimatedCostUsdMicros".into(), json!(12_345));
     let original_id = original.id;
     let original_snapshot = original.influence_snapshot.clone();
 
@@ -405,12 +322,6 @@ fn replay_plan_uses_recorded_request_and_current_price_without_compiling() {
     assert_eq!(plan.request.resolution, Resolution::new(1_024, 1_024));
     assert_eq!(plan.generation.influence_snapshot, original_snapshot);
     assert_eq!(plan.generation.params.get("replayOf"), Some(&json!(original_id)));
-    assert_eq!(
-        plan.generation.params.get("replayOriginalEstimatedCostUsdMicros"),
-        Some(&json!(12_345))
-    );
-    assert_eq!(plan.cost_usd_micros, 67_000);
-    assert_eq!(plan.generation.params.get("estimatedCostUsdMicros"), Some(&json!(67_000)));
 }
 
 #[test]
@@ -489,17 +400,6 @@ fn variant_cells_change_one_axis_and_report_the_real_output_count() {
     )
     .unwrap();
     assert_eq!(seeds.iter().map(|cell| cell.item.seed).collect::<Vec<_>>(), [11, 22, 33, 44, 55]);
-
-    let estimate = cost_estimate_prices(
-        seeds
-            .iter()
-            .map(|_| Price { per_image_usd_micros: 67_000, conservative_fallback: false })
-            .collect(),
-        seeds.len(),
-    )
-    .unwrap();
-    assert_eq!(estimate.images, 5);
-    assert_eq!(estimate.batch_usd_micros, 335_000);
 }
 
 #[test]
@@ -526,8 +426,7 @@ fn preview_and_execution_prepare_the_same_normalized_plan() {
         grid: None,
     };
 
-    let preview =
-        reference_report_for_plan(&nodes, gemini::ID, model, &backend, request.clone()).unwrap();
+    let preview = reference_report_for_plan(&nodes, model, &backend, request.clone()).unwrap();
     let execution = prepare_generation_plan(&nodes, request, &caps).unwrap();
     assert_eq!(execution.controls.shot_label, "low angle");
     assert_eq!(execution.controls.shot_weight, 1.0);
@@ -537,14 +436,14 @@ fn preview_and_execution_prepare_the_same_normalized_plan() {
     assert_eq!(execution.cells[0].slider_values, [(subject_id, 0.75)]);
     assert_eq!(execution.cells[0].aspect, AspectRatio::parse("3:4").unwrap());
 
+    // The report is about the cell execution sends first, negotiated the
+    // same way, so the two cannot drift apart silently.
     let execution_stack = resolve_generation_stack(&nodes, &execution).unwrap();
     let execution_fragments =
         fragments_for_cell(&execution_stack, &execution.cells[0], &execution.controls.user_prompt);
     let negotiated = negotiate(&execution_fragments, execution.cells[0].aspect, &caps);
-    let execution_price = image_price(gemini::ID, model, negotiated.resolution()).unwrap();
-    let preview_cost = preview.cost.unwrap();
-    assert_eq!(preview_cost.images, execution.cells.len());
-    assert_eq!(preview_cost.per_image_usd_micros, execution_price.per_image_usd_micros);
+    let kept: usize = preview.buckets.iter().map(|bucket| bucket.kept).sum();
+    assert_eq!(kept, negotiated.images().kept().count());
 }
 
 #[test]
@@ -619,16 +518,11 @@ fn a_batch_plans_one_receipt_and_one_request_per_cell() {
             "batchIndex",
             "batchSize",
             "controls",
-            "estimatedCostUsdMicros",
             "height",
             "lockedSeed",
             "loraDowngrades",
             "loras",
             "negativePromptSupported",
-            "pricingCheckedAt",
-            "pricingConservativeFallback",
-            "pricingIndicative",
-            "pricingSource",
             "referenceAssetIds",
             "requestedAspect",
             "seedSource",
@@ -665,12 +559,9 @@ fn a_batch_plans_one_receipt_and_one_request_per_cell() {
     assert_eq!(planned.plans[0].request.references.len(), 1);
     assert_eq!(planned.plans[0].request.references[0].asset_id, world.kael_costume);
 
-    // Only the first cell is the lock, and every cell is priced.
+    // Only the first cell is the lock; the rest derive from it.
     assert_eq!(planned.plans[1].generation.params["usedLockedSeed"], json!(false));
     assert_eq!(planned.plans[1].generation.params["seedSource"], json!("locked_derived"));
-    let cost = planned.plans[0].cost_usd_micros;
-    assert!(cost > 0);
-    assert!(planned.plans.iter().all(|plan| plan.cost_usd_micros == cost));
 }
 
 #[test]
@@ -763,20 +654,11 @@ fn a_composition_plans_one_receipt_naming_every_participant() {
 }
 
 #[test]
-fn the_preview_prices_and_budgets_exactly_what_the_batch_would_send() {
+fn the_preview_budgets_exactly_what_the_batch_would_send() {
     let world = PlanWorld::new();
     let request = world.request("character_sheet", 3);
     let planned = world.plan(request.clone()).unwrap();
     let preview = world.preview(request).unwrap();
-
-    let cost = preview.cost.unwrap();
-    assert_eq!(cost.images, planned.plans.len());
-    assert_eq!(cost.per_image_usd_micros, planned.plans[0].cost_usd_micros);
-    assert_eq!(
-        cost.batch_usd_micros,
-        planned.plans.iter().map(|plan| plan.cost_usd_micros).sum::<u64>()
-    );
-    assert!(!cost.varies_by_cell);
 
     let kept: usize = preview.buckets.iter().map(|bucket| bucket.kept).sum();
     assert_eq!(kept, planned.plans[0].request.references.len());
@@ -815,7 +697,7 @@ fn the_preview_budgets_the_first_view_of_a_named_view_preset() {
 
     let kept: usize = preview.buckets.iter().map(|bucket| bucket.kept).sum();
     assert_eq!(kept, planned.plans[0].request.references.len());
-    assert_eq!(preview.cost.unwrap().images, 8);
+    assert_eq!(planned.plans.len(), 8);
 }
 
 #[test]
@@ -836,114 +718,4 @@ fn named_view_presets_are_refused_as_variant_grids() {
     )
     .unwrap_err();
     assert_eq!(error.code, Code::Invalid);
-}
-
-#[test]
-fn competing_reservations_cannot_consume_the_same_remaining_ceiling() {
-    let project = TestProject::new(100_000);
-    let first = SpendReservation::create(&project.root, 60_000).unwrap();
-    let second = SpendReservation::create(&project.root, 50_000).unwrap_err();
-    assert_eq!(second.code, Code::SpendCeilingExceeded);
-
-    let held = spend_status_for(&project.root).unwrap();
-    assert_eq!(held.spent_usd_micros, 0);
-    assert_eq!(held.reserved_usd_micros, 60_000);
-    assert_eq!(held.remaining_usd_micros, Some(40_000));
-    drop(first);
-    assert_eq!(spend_status_for(&project.root).unwrap().reserved_usd_micros, 0);
-}
-
-#[test]
-fn committed_receipt_and_reduced_reservation_are_not_double_counted() {
-    let project = TestProject::new(200_000);
-    let mut reservation = SpendReservation::create(&project.root, 134_000).unwrap();
-    let mut generation =
-        receipt(project.node_id, gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
-    generation.params.insert("estimatedCostUsdMicros".into(), json!(67_000));
-    let mut store = Project::open(&project.root).unwrap();
-    store.record_generation(generation).unwrap();
-    drop(store);
-    reservation.commit(67_000).unwrap();
-
-    let status = spend_status_for(&project.root).unwrap();
-    assert_eq!(status.spent_usd_micros, 67_000);
-    assert_eq!(status.reserved_usd_micros, 67_000);
-    assert_eq!(status.remaining_usd_micros, Some(66_000));
-}
-
-#[test]
-fn unchanged_poll_skips_four_thousand_artificially_slow_receipts() {
-    let project = TestProject::new(500_000_000);
-    std::fs::create_dir_all(project.root.join(SPEND_DIR).join("reservations")).unwrap();
-    let receipts: Vec<_> = (0..4_000)
-        .map(|_| {
-            let mut generation =
-                receipt(project.node_id, gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
-            generation.params.insert("estimatedCostUsdMicros".into(), json!(67_000));
-            generation
-        })
-        .collect();
-    let opened = std::cell::Cell::new(0_usize);
-    let rebuild_started = std::time::Instant::now();
-    let rebuilt = read_cached_spend_status_locked_with(&project.root, || {
-        for _ in &receipts {
-            opened.set(opened.get() + 1);
-            // Models the fixed per-file cost of opening a receipt over a
-            // shared mount without making the test depend on one.
-            std::thread::sleep(Duration::from_micros(25));
-        }
-        Ok((Some(500_000_000), receipts))
-    })
-    .unwrap();
-    let rebuild_elapsed = rebuild_started.elapsed();
-    assert_eq!(opened.get(), 4_000);
-    assert_eq!(rebuilt.spent_usd_micros, 268_000_000);
-
-    opened.set(0);
-    let poll_started = std::time::Instant::now();
-    let unchanged = read_cached_spend_status_locked_with(&project.root, || {
-        opened.set(usize::MAX);
-        panic!("an unchanged poll reopened the canonical receipt ledger")
-    })
-    .unwrap();
-    let poll_elapsed = poll_started.elapsed();
-
-    assert_eq!(unchanged.spent_usd_micros, rebuilt.spent_usd_micros);
-    assert_eq!(opened.get(), 0, "the cached poll opened no receipt files");
-    assert!(
-        poll_elapsed < rebuild_elapsed,
-        "cached poll {poll_elapsed:?} did not beat artificial receipt latency {rebuild_elapsed:?}",
-    );
-}
-
-#[test]
-fn cache_loss_reconstructs_from_canonical_receipts() {
-    let project = TestProject::new(200_000);
-    let mut generation =
-        receipt(project.node_id, gemini::ID, "gemini-3.1-flash-image", 1_024, 1_024);
-    generation.params.insert("estimatedCostUsdMicros".into(), json!(67_000));
-    let mut store = Project::open(&project.root).unwrap();
-    store.record_generation(generation).unwrap();
-    drop(store);
-
-    let aggregate = project.root.join(SPEND_DIR).join(SPEND_AGGREGATE);
-    let _ = std::fs::remove_file(&aggregate);
-    let rebuilt = spend_status_for_report(&project.root).unwrap();
-    assert_eq!(rebuilt.spent_usd_micros, 67_000);
-    assert!(aggregate.is_file(), "the disposable aggregate was reconstructed");
-}
-
-#[test]
-fn malformed_canonical_receipt_fails_closed() {
-    let project = TestProject::new(200_000);
-    // Establish a plausible cache first. Admission must ignore it rather
-    // than letting it hide a malformed receipt that arrives afterwards.
-    assert_eq!(spend_status_for_report(&project.root).unwrap().spent_usd_micros, 0);
-    let month = project.root.join("generations/2026-08");
-    std::fs::create_dir_all(&month).unwrap();
-    std::fs::write(month.join(format!("{}.json", new_id())), b"{not-json").unwrap();
-
-    let error = spend_status_for(&project.root).unwrap_err();
-    assert_eq!(error.code, Code::Malformed);
-    assert!(SpendReservation::create(&project.root, 1).is_err());
 }

@@ -135,7 +135,7 @@ path. Nothing about a project is stored in a global application database.
 
 ```
 Ashfall.wobu/
-├── project.json                  id, name, schema version, providers, shared spend ceiling
+├── project.json                  id, name, schema version, providers
 ├── nodes/
 │   ├── species/vashk.md          YAML frontmatter + notes + description
 │   ├── setting/cinder-bay.md
@@ -148,7 +148,6 @@ Ashfall.wobu/
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
     ├── sessions/<session-id>.json  heartbeat locks — who else has this open
-    ├── spend/reservations/*.json   paid batches admitted but not fully receipted
     └── tmp/                        staging for atomic writes (same filesystem)
 ```
 
@@ -187,8 +186,9 @@ These are constraints on the writer, and each one exists because something break
   Markdown file is removed. Each child keeps its stable `nodes/<kind>/<slug>.md` path and has its
   `parent` frontmatter rewritten; links pointing at the deleted id are removed. This avoids both
   silently deleting a subtree and leaving dead influence edges behind.
-- **Secrets are never written to the project folder.** API keys live in the OS keychain;
-  `project.json` records only *which* provider and model a project prefers. This matters
+- **Secrets are never written to the project folder.** API keys live in machine-local credential
+  storage (the OS keychain or its owner-only app-data fallback); `project.json` records only
+  *which* provider and model a project prefers. This matters
   enormously now that folders are shared — see [08 — Providers & BYOK](08-providers.md).
 
 ### Where the index lives — and why it is not in the folder

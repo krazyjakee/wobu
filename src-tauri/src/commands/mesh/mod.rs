@@ -24,12 +24,9 @@
 //! **It does not price the job.** `mesh.rs` in `wobu-imagine` explains why:
 //! Hunyuan3D bills per job and the international `Query` response omits the
 //! credit figure the mainland one returns, so there is no number to read back.
-//! `generate.rs`'s spend reservation is built on a per-image price and would be
-//! reserving zero here, which is worse than not reserving — a ceiling that
-//! silently permits an unpriced paid call is a ceiling the user believes in and
-//! does not have. Instead the caller must pass `accept_cost` when the backend
-//! reports [`MeshCapabilities::requires_billing`], and the receipt records the
-//! job count the provider admits to.
+//! Instead the caller must pass `accept_cost` when the backend reports
+//! [`MeshCapabilities::requires_billing`], and the receipt records the job
+//! count the provider admits to.
 //!
 //! **It does not count concurrent jobs.** `wobu-jobs` already defaults its
 //! concurrency to three and names Hunyuan3D as the reason.
@@ -188,10 +185,8 @@ pub async fn mesh_start(
     params.insert("enablePbr".into(), json!(enable_pbr));
     params.insert("generateType".into(), json!(generate_type.to_string()));
     params.insert("meshViews".into(), json!(view_names));
-    // Deliberately no `estimatedCostUsdMicros`. The spend ledger reads that
-    // field as a figure somebody stood behind, and zero here would be a claim
-    // that a billed Hunyuan3D job was free. `billedJobs`, written when the
-    // provider answers, is the only cost fact this pipeline has.
+    // `billedJobs`, written when the provider answers, is the only cost fact
+    // this pipeline has: Hunyuan3D bills per job and never reports the amount.
     if let Some(region) = selection.setting("region") {
         params.insert("region".into(), json!(region));
     }

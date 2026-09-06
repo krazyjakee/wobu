@@ -26,4 +26,5 @@ Two constraints shape most of the above and are worth knowing up front:
 - **A project is a self-contained directory** meant to live on a file share, so several people
   can open it. Nothing canonical is stored outside it.
 - **All inference is bring-your-own-key.** Wobu operates no proxy and no inference of its own;
-  keys live in the OS keychain, never in the shared project folder.
+  keys prefer the OS keychain and use an owner-only app-data fallback when needed, never the shared
+  project folder.

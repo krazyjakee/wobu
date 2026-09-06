@@ -244,9 +244,6 @@ pub(super) fn create_clone_scaffold(parent: &Path, project: Id) -> CommandResult
             schema_version: SCHEMA_VERSION,
             created_at: chrono::Utc::now(),
             providers: serde_json::Map::new(),
-            // Match the store's default for a newly created project. The
-            // canonical metadata is not part of the node-sync protocol yet.
-            spend_ceiling_usd_micros: Some(10_000_000),
         };
         if created_root {
             use std::io::Write as _;

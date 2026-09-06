@@ -35,8 +35,6 @@ const project: ProjectSummary = {
 const queue: QueueSnapshot = { jobs: [], queued: 0, running: 0, retrying: 0 }
 let lora: LoraStatus
 let imageConfigured: boolean
-let paidGenerationBlocked: boolean
-let spendStatusState: 'ready' | 'pending' | 'failed'
 let aspectRatios: string[]
 let aspectFallback: string
 let aspectDimensions: [number, number]
@@ -145,8 +143,6 @@ beforeEach(() => {
   h.invoke.mockReset()
   useUI.setState({ selectedId: 'kael' })
   imageConfigured = true
-  paidGenerationBlocked = false
-  spendStatusState = 'ready'
   aspectRatios = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
   aspectFallback = '1:1'
   aspectDimensions = [2048, 2048]
@@ -229,21 +225,7 @@ beforeEach(() => {
       })
     if (command === 'image_reference_report') {
       if (!imageConfigured) return Promise.resolve(null)
-      return Promise.resolve({
-        buckets: [],
-        layers: [],
-        cost: paidGenerationBlocked
-          ? {
-              perImageUsdMicros: 25_000,
-              batchUsdMicros: 25_000,
-              images: 1,
-              variesByCell: false,
-              conservativeFallback: false,
-              checkedAt: '2026-08-01T12:00:00Z',
-            }
-          : null,
-        lockedSeed: null,
-      })
+      return Promise.resolve({ buckets: [], layers: [], lockedSeed: null })
     }
     if (command === 'image_generation_capabilities') {
       if (!imageConfigured) return Promise.reject(new Error('No image provider'))
@@ -265,19 +247,6 @@ beforeEach(() => {
             substituted: requestedAspect !== actualAspect,
           }
         }),
-      })
-    }
-    if (command === 'spend_status') {
-      if (spendStatusState === 'pending') return new Promise(() => {})
-      if (spendStatusState === 'failed') return Promise.reject(new Error('ledger unavailable'))
-      return Promise.resolve({
-        ceilingUsdMicros: null,
-        spentUsdMicros: 0,
-        reservedUsdMicros: 0,
-        remainingUsdMicros: null,
-        pendingReservations: 0,
-        oldestReservationAt: null,
-        ledgerLocked: false,
       })
     }
     if (command === 'generation_list') {
@@ -417,32 +386,6 @@ describe('Forge mode', () => {
 
     expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
   })
-
-  it('does not Generate until paid-provider cost consent is available', async () => {
-    paidGenerationBlocked = true
-    renderForge()
-    const generate = await screen.findByRole('button', { name: /^Generate · est/ })
-    await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
-
-    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
-
-    expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
-  })
-
-  it.each(['pending', 'failed'] as const)(
-    'keeps paid Generate disabled while spend status is %s',
-    async (state) => {
-      paidGenerationBlocked = true
-      spendStatusState = state
-      renderForge()
-      const generate = await screen.findByRole('button', { name: /^Generate · est/ })
-      await waitFor(() => expect(generate).toHaveAttribute('aria-disabled', 'true'))
-
-      fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
-
-      expect(h.invoke).not.toHaveBeenCalledWith('generate_start', expect.anything())
-    },
-  )
 
   it('does not Generate an invalid variant grid', async () => {
     renderForge()

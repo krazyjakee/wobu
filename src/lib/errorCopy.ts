@@ -66,7 +66,7 @@ const REPLACEMENTS: Record<string, string> = {
   'provider.bad_key':
     'The provider rejected the key Wobu is using. Open Settings → Providers and models and paste the key again — a key that has been revoked or copied with a stray space fails exactly like this.',
   'provider.keychain_unavailable':
-    'Your operating system would not open its keychain, so the key could not be read or saved. Unlock the keychain — logging out and back in is usually enough — then try again.',
+    'Wobu could not save the key to either the operating-system credential store or its private local store. Check free disk space and permissions for Wobu’s application-data directory, then try again.',
   'provider.clock_skew':
     'Your computer’s clock is too far from real time for the provider to accept the request. Turn on automatic time in your system settings, then try again.',
   'provider.billing_required':
@@ -79,9 +79,6 @@ const REPLACEMENTS: Record<string, string> = {
     'The provider answered, but not with anything Wobu could use. Trying again usually works.',
   'provider.context_too_long':
     'What Wobu sent the provider was longer than the model accepts. Shorten the notes, or mute a layer or two in the inspector, then try again.',
-  'billing.ceiling_exceeded':
-    'This project’s spending ceiling has been reached, so Wobu stopped before spending any more. Raise the ceiling in Settings → Providers and models if you meant to carry on.',
-
   internal:
     'Something went wrong inside Wobu itself, rather than in anything you did. Settings → Diagnostics has the log, if you would like to report it.',
 }

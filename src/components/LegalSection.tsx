@@ -23,7 +23,7 @@ type DocId = keyof typeof DOCS
  * that had drifted from the document it claims to be would be worse than none.
  *
  * That is also why the summary rows below state only things that cannot go
- * stale — that there is no telemetry, that keys live in the keychain — and the
+ * stale — that there is no telemetry, that keys stay on this machine — and the
  * list of network destinations is left to the policy itself. A second,
  * hand-maintained copy of that list in TSX is a promise to keep two things in
  * step, and the one that gets forgotten is the one nobody reads while adding a
@@ -73,7 +73,9 @@ export function LegalSection() {
       </div>
       <div className="set-row">
         <span className="set-label">API keys</span>
-        <span className="set-value">In this machine&apos;s keychain, never in a project.</span>
+        <span className="set-value">
+          In this machine&apos;s credential storage, never in a project.
+        </span>
       </div>
       <div className="set-row">
         <span className="set-label">Generated work</span>

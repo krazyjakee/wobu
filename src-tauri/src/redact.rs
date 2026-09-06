@@ -1,6 +1,6 @@
 //! Stripping credentials out of anything on its way to the webview.
 //!
-//! Keys live in the Rust process and the OS keychain. They are never sent to
+//! Keys live in the Rust process and machine-local credential storage. They are never sent to
 //! the webview — but an error string is a side channel that carries them
 //! anyway: a provider SDK that fails a request will happily put the full
 //! `Authorization` header, or the request URL with `?key=…` still on it, into

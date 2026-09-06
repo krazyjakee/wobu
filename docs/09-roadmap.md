@@ -77,8 +77,13 @@ the adapter boundary is real instead of one vendor's request shape wearing a tra
 
 `wobu-influence` (resolution, fragments, text *and* per-role image budgets, attribution), the
 Inspector panel, the ComfyUI adapter plus Gemini image, output presets for
-character/prop/environment, capability negotiation, cost estimation and the spend ceiling, the job
-queue with live previews, and the Concepts grid. **This is the first complete loop.**
+character/prop/environment, capability negotiation, the job queue with live previews, and the
+Concepts grid. **This is the first complete loop.**
+
+The per-project spend ceiling and cost estimate shipped here and were retired: they metered a local
+model of published prices rather than the account that actually holds the money, so the number they
+enforced could disagree with the provider's own balance in either direction. Paid models are marked
+as paid; the provider's dashboard is the only thing that knows what is left.
 
 Aspect choices come from the selected image backend. Unsupported or malformed saved values are
 replaced before queueing, the UI previews the negotiated dimensions, and flexible backends use
@@ -99,8 +104,8 @@ and export for a modeller.
 
 The 3D tab is the whole of it: it surfaces every rendered turnaround view, re-rolls a bad one as a
 single image on its own seed, gates a paid reconstruction behind an explicit confirmation — the
-hosted backend bills per job and does not report the amount back, so there is nothing for the image
-spend ceiling to reserve — and queues the job beside the image ones. The finished GLB appears in the
+hosted backend bills per job and does not report the amount back, so consent is the only honest
+gate — and queues the job beside the image ones. The finished GLB appears in the
 viewer without a reload ([#110](https://github.com/krazyjakee/wobu/issues/110)).
 
 ### M9 — Later, if earned

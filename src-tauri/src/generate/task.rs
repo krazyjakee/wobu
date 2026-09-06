@@ -1,10 +1,9 @@
 //! Running a planned batch on the job queue.
 //!
 //! Step 5 of the chain in [`super`], and the only route to the queue: batch,
-//! scene and replay all arrive as a [`PlannedBatch`], which is where the spend
-//! reservation and the billing flag are stated once. The task owns an immutable
-//! request and a project path — it never holds the open-project mutex across a
-//! provider call.
+//! scene and replay all arrive as a [`PlannedBatch`], which is where the billing
+//! flag is stated once. The task owns an immutable request and a project path —
+//! it never holds the open-project mutex across a provider call.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,7 +19,6 @@ use wobu_jobs::{Billed, Failure, JobContext, JobKind, Outcome, Preview, Progress
 use wobu_store::Project;
 
 use super::GENERATION_RECORDED;
-use super::spend::SpendReservation;
 use crate::error::{Code, CommandResult, WobuError};
 
 pub(super) struct GenerateTask {
@@ -34,14 +32,12 @@ pub(super) struct GenerateTask {
     pub(super) completed: Vec<GenerateReady>,
     pub(super) app: AppHandle,
     pub(super) requires_billing: bool,
-    pub(super) reservation: Option<SpendReservation>,
     /// Replay can legitimately outlive the node its immutable receipt names.
     pub(super) archival_replay: bool,
 }
 
 pub(super) struct PlannedImage {
     pub(super) request: ImageRequest,
-    pub(super) cost_usd_micros: u64,
     pub(super) generation: Generation,
 }
 
@@ -51,8 +47,8 @@ pub(super) struct PlannedImage {
 /// This is the single output of planning. Batch generation ([`plan_batch`]),
 /// scene composition ([`plan_scene`]) and replay ([`replay_plan`]) all produce
 /// one, and [`PlannedBatch::into_task`] is the only way any of them reaches the
-/// queue — so spend reservation, billing and the archival-replay exemption are
-/// stated once rather than three times.
+/// queue — so billing and the archival-replay exemption are stated once rather
+/// than three times.
 pub(super) struct PlannedBatch {
     pub(super) label: String,
     pub(super) subject_id: Id,
@@ -81,39 +77,8 @@ impl PlannedBatch {
             completed: Vec::new(),
             app,
             requires_billing: self.requires_billing,
-            reservation: None,
             archival_replay: self.archival_replay,
         }
-    }
-}
-
-impl GenerateTask {
-    pub(super) fn reserve_spend(&mut self) -> CommandResult<()> {
-        let total = self.plans.iter().try_fold(0_u64, |total, plan| {
-            total.checked_add(plan.cost_usd_micros).ok_or_else(|| {
-                WobuError::new(Code::Invalid, "The estimated batch cost is too large.")
-            })
-        })?;
-        if total > 0 {
-            self.reservation = Some(SpendReservation::create(&self.root, total)?);
-        }
-        Ok(())
-    }
-
-    fn commit_spend(&mut self, cost_usd_micros: u64) -> CommandResult<()> {
-        if cost_usd_micros == 0 {
-            return Ok(());
-        }
-        let reservation = self.reservation.as_mut().ok_or_else(|| {
-            WobuError::new(Code::Internal, "Paid generation started without a spend reservation.")
-        })?;
-        if let Err(error) = reservation.commit(cost_usd_micros) {
-            // A receipt was already persisted. Retaining the remaining
-            // reservation fails closed until the project can be inspected.
-            reservation.release_on_drop = false;
-            return Err(error);
-        }
-        Ok(())
     }
 }
 
@@ -151,7 +116,6 @@ impl Task for GenerateTask {
         while self.next < self.plans.len() {
             let batch_index = self.next;
             let batch_total = self.plans.len();
-            let cost_usd_micros = self.plans[batch_index].cost_usd_micros;
             let base_generation = self.plans[batch_index].generation.clone();
             let archival_replay = self.archival_replay;
             let mut progress = JobProgress { ctx: ctx.clone(), batch_index, batch_total };
@@ -185,9 +149,6 @@ impl Task for GenerateTask {
                     .await;
                     match recorded {
                         Ok(Ok(generation)) => {
-                            if let Err(save_error) = self.commit_spend(cost_usd_micros) {
-                                return Outcome::failed(command_failure(save_error));
-                            }
                             let _ = self.app.emit(
                                 GENERATION_RECORDED,
                                 json!({
@@ -198,15 +159,9 @@ impl Task for GenerateTask {
                             );
                         }
                         Ok(Err(save_error)) => {
-                            if let Some(reservation) = self.reservation.as_mut() {
-                                reservation.release_on_drop = false;
-                            }
                             return Outcome::failed(command_failure(save_error));
                         }
                         Err(join_error) => {
-                            if let Some(reservation) = self.reservation.as_mut() {
-                                reservation.release_on_drop = false;
-                            }
                             return Outcome::failed(
                                 Failure::new(
                                     "internal",
@@ -228,11 +183,6 @@ impl Task for GenerateTask {
                 }
                 Err(ImageError::Cancelled) => return Outcome::Cancelled,
                 Err(error) => {
-                    if billing_may_be_unknown(&error, outcome.usage, self.requires_billing)
-                        && let Some(reservation) = self.reservation.as_mut()
-                    {
-                        reservation.release_on_drop = false;
-                    }
                     return Outcome::failed(image_failure(
                         &error,
                         outcome.usage,
@@ -277,9 +227,6 @@ impl Task for GenerateTask {
                 .await;
             match saved {
                 Ok(Ok(ready)) => {
-                    if let Err(error) = self.commit_spend(cost_usd_micros) {
-                        return Outcome::failed(command_failure(error));
-                    }
                     // Per-image, not merely at batch completion: a later failure
                     // or cancellation must not hide work already persisted.
                     let _ = self.app.emit(GENERATION_RECORDED, &ready);
@@ -287,15 +234,9 @@ impl Task for GenerateTask {
                     self.next += 1;
                 }
                 Ok(Err(error)) => {
-                    if let Some(reservation) = self.reservation.as_mut() {
-                        reservation.release_on_drop = false;
-                    }
                     return Outcome::failed(command_failure(error));
                 }
                 Err(error) => {
-                    if let Some(reservation) = self.reservation.as_mut() {
-                        reservation.release_on_drop = false;
-                    }
                     return Outcome::failed(
                         Failure::new("internal", "The generated image could not be saved.")
                             .with_detail(error.to_string())
@@ -373,19 +314,6 @@ fn image_failure(error: &ImageError, usage: ImageUsage, requires_billing: bool) 
         failure = failure.after(*wait);
     }
     failure
-}
-
-fn billing_may_be_unknown(error: &ImageError, usage: ImageUsage, requires_billing: bool) -> bool {
-    !usage.is_billed()
-        && requires_billing
-        && matches!(
-            error,
-            ImageError::Refused { .. }
-                | ImageError::NoImage
-                | ImageError::NotAnImage { .. }
-                | ImageError::NoMesh
-                | ImageError::NotAMesh { .. }
-        )
 }
 
 fn command_failure(error: WobuError) -> Failure {

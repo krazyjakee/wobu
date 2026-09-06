@@ -44,7 +44,6 @@ export const qk = {
     ['image_reference_report', id, opts] as const,
   imageGenerationCapabilities: (project: string, model?: string) =>
     ['image_generation_capabilities', project, model] as const,
-  spendStatus: (project: string) => ['spend_status', project] as const,
   // Not part of `invalidateWorld`: a description waiting to be accepted is not
   // in the world yet, and a collaborator's edit does not change what a provider
   // already sent us.

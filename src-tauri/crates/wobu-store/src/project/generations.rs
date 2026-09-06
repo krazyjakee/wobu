@@ -48,7 +48,6 @@ impl Project {
 
             std::fs::remove_file(&visible).map_err(|error| Error::io(&visible, error))?;
             self.index.remove_generation_by_rel_path(&visible_rel)?;
-            generations::invalidate_spend_aggregate(&self.root);
             changed = true;
 
             let mut seen = std::collections::BTreeSet::new();
@@ -124,7 +123,7 @@ impl Project {
         self.index.generation(id)
     }
 
-    /// Remove a receipt from user-facing history while retaining it for spend accounting.
+    /// Remove a receipt from user-facing history while retaining the receipt itself.
     ///
     /// The pictures go with it. A deleted concept that left its image in the
     /// Asset Library would only be deleted from the one view the user happened

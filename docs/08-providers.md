@@ -27,8 +27,10 @@ normal, not exotic.
 a shared drive ([07](07-file-shares.md)), so a key in `project.json` is a key leaked to
 everyone with share access — and to git history, and to whoever the folder gets zipped to.
 
-- Keys live in the **OS keychain** via the `keyring` crate — Secret Service on Linux, Keychain
-  on macOS, Credential Manager on Windows — under `wobu/<provider>`.
+- Keys prefer the **OS keychain** via the `keyring` crate — Secret Service on Linux, Keychain on
+  macOS, Credential Manager on Windows — under `wobu/<provider>`. If that service refuses or takes
+  longer than 500 ms, Wobu writes an owner-only fallback under its fixed application-data
+  `credentials/` directory and keeps every key control usable.
 - Keys are **per-installation, not per-project**. Opening a shared project uses *your* keys.
 - `project.json` stores only the *selection*: provider id, model id, and default params. It is
   safe to share, and a collaborator without a key sees "Gemini selected — no key on this
@@ -39,9 +41,14 @@ everyone with share access — and to git history, and to whoever the folder get
 Opening a project whose selected provider has no key on this machine drops that capability
 into a disabled state with a direct "add key" affordance, rather than failing at generate time.
 
-**Development-time exception.** For local work, `wobu-llm`/`wobu-imagine` may fall back to
+The fallback is plain text protected by the OS account boundary (`0700` directory and `0600` files
+on Unix; per-user AppData ACL on Windows), not by independent encryption. It never lives in a
+project and Settings names its source. Once present it resolves before the OS keychain, preventing
+an already-known native hang from delaying Enhance, generation or Settings again.
+
+**Development-time exception.** For local work, `wobu-llm`/`wobu-imagine` may also fall back to
 environment variables (a repo-root `.env`, e.g. `TencentSecretId` / `TencentSecretKey`) when
-the keychain has no entry. Resolution order is **keychain → environment → unconfigured**, and
+the stored routes have no entry. Resolution order is **local fallback → keychain → environment → unconfigured**, and
 the env path is compiled out of release builds. `.env` is gitignored; `.env.example` documents
 the variable names with empty values. This fallback must never read from inside a *project*
 folder — that is the shared-folder leak the keychain rule exists to prevent.
@@ -569,7 +576,8 @@ discovered:
   [international quick-start](https://intl.cloud.tencent.com/ind/document/product/1284/75287)
   instructs the primary account to create/authorise a CAM sub-account with the managed
   **`QcloudAI3DFullAccess`** policy, then create that sub-account's SecretId/SecretKey. That is the
-  verified recommendation shown in Settings, and the pair remains in the OS keychain.
+  verified recommendation shown in Settings, and the pair remains in machine-local credential
+  storage.
 - **Do not publish a guessed two-action custom policy.** Tencent's public quick-start names the
   managed policy, but its current
   [CAM product catalogue](https://intl.cloud.tencent.com/document/product/598/10588) does not list
@@ -762,24 +770,17 @@ silently replaying without the weights.
 
 ## Cost and consent
 
-BYOK means the user pays per call, so the app must never surprise them:
+BYOK means the user pays per call. **Wobu does not meter, estimate or cap that spending** — the
+provider's own dashboard is the only thing that knows an account's balance, and a local model of
+published prices went stale the moment a vendor moved one. What the app owes the user instead is
+honesty about what it is about to do and what it just did:
 
-- The Generate button shows the paid batch's **indicative output cost**. Current known Gemini
-  prices are $0.0336–$0.24 per output depending on model and size; an unknown paid Gemini model
-  is conservatively reserved at the highest known $0.24 rate until its price table is updated.
-- Local ComfyUI has no provider cost and therefore creates no spend reservation.
-- `project.json` stores the shared `spendCeilingUsdMicros` guardrail. New and older projects
-  default to $10; explicit `null` disables paid generation rather than meaning unlimited.
-- Admission holds the shared spend ledger lock while it sums all pending reservations and
-  atomically publishes the whole batch reservation. Concurrent Generate clicks, queued batches,
-  and another Wobu process therefore cannot each spend the same remaining allowance.
-- Running spend is reconstructed from immutable generation receipts. New receipts record
-  `estimatedCostUsdMicros` plus the pricing source/check date; older Gemini receipts are priced
-  from their recorded model and dimensions. A provider-reported billed failure also gets an
-  immutable receipt, so failure does not make a real charge disappear.
-- Reservations are write-once and replaced before their predecessor is retired, so a crash can
-  only stop early by over-reserving. They are never stolen merely because a network-share lock
-  looks old. The Inspector exposes pending/locked state and a deliberate recovery action that
-  first refuses while this window has queued or running generation, requires confirmation that
-  other Wobu instances have stopped, and archives the old ledger under `.wobu/` rather than
-  deleting the evidence.
+- A model whose backend reports `Capabilities::requires_billing` is marked as paid before the
+  user generates. Local ComfyUI reports `false` on every model, and that asymmetry is the point.
+- Hunyuan3D reconstruction sits behind an explicit `accept_cost` confirmation: it bills per
+  submitted job, including a cancelled one, and its international API never reports the amount.
+- Every generation writes an immutable receipt naming the provider, model and settings, so what a
+  project cost can be reconstructed from the folder alongside the provider's billing page.
+- A provider-reported billed failure also gets an immutable receipt, and `ImageUsage`/`Usage`
+  ride out of every adapter beside the error rather than behind a `?`, so a call that was charged
+  for and produced nothing is never reported as free.

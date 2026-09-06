@@ -1,6 +1,6 @@
 # Wobu Privacy Policy
 
-**Last updated:** 3 August 2026 · Applies to Wobu 0.1.0 and later.
+**Last updated:** 2 September 2026 · Applies to Wobu 0.1.10 and later.
 
 Wobu is a local-first desktop application published by Jake Cattrall ("we", "us"). It is
 distributed as a binary and as source under the MIT licence.
@@ -21,8 +21,9 @@ the repository, and every store named below corresponds to a path the applicatio
   files, and the derived search index stays outside the project on your own machine.
 - **Content leaves your machine only when you ask it to**, and only to a provider you configured
   yourself or to a peer you shared with yourself.
-- **API keys go to the operating-system keychain**, never into a project folder and never back out
-  to the interface.
+- **API keys prefer the operating-system keychain.** If it cannot answer, Wobu uses an owner-only
+  file in its application-data directory. Keys never enter a project folder or travel back to the
+  interface.
 - **Nothing listens for connections, and no other program is run, unless you switch it on.** Agent
   access over MCP is off by default, binds only to your own machine when enabled, and needs a further
   separate switch before an agent can change anything. See section 3.5 — and note that an MCP server
@@ -61,6 +62,7 @@ on Linux, `~/Library/Application Support/wobu` on macOS, `%APPDATA%\wobu` on Win
 | `index/<project-id>.sqlite` | The SQLite search index. Entirely derived from your project folder; it holds no canonical data and deleting it is always safe |
 | `recent.json` | The list of recently opened projects |
 | `settings.json` | Per-installation settings, including your ComfyUI endpoint |
+| `credentials/*.key` | Provider credentials used only when the OS credential store cannot answer; owner-only (`0600` files inside a `0700` directory on Unix, per-user AppData permissions on Windows) |
 | `sync/shares.json` | Records of shares you created or accepted |
 | `mesh-cache/` | Decoded 3D meshes, cached for display |
 | `logs/wobu.log`, `logs/wobu.1.log` | Diagnostic log, two rolling files of 2 MiB each |
@@ -211,9 +213,9 @@ traffic is made by the native process, from the code paths listed in section 3.
 
 ## 5. How API keys are stored
 
-Credentials you enter are stored per installation in the operating system's own credential store —
-Keychain on macOS, Credential Manager on Windows, and the Secret Service (GNOME Keyring, KWallet)
-on Linux — under the service name `wobu`:
+Credentials you enter are stored per installation. Wobu first tries the operating system's own
+credential store — Keychain on macOS, Credential Manager on Windows, and the Secret Service (GNOME
+Keyring, KWallet) on Linux — under the service name `wobu`:
 
 | Entry | Credential |
 | --- | --- |
@@ -225,6 +227,14 @@ on Linux — under the service name `wobu`:
 
 ComfyUI has no entry because it needs no key.
 
+If the OS store refuses or does not answer within half a second, Wobu stores the provider key as
+plain text under `credentials/<provider>.key` in the application-data directory described in
+section 2.2. On Unix the directory is mode `0700` and each key file is mode `0600`; on Windows the
+file inherits the per-user AppData ACL. This fallback is not encrypted independently of the user
+account. It exists so a locked or missing Linux Secret Service cannot make key entry impossible.
+Settings identifies a key held there as “in Wobu's private local store.” Once a fallback exists,
+Wobu reads it first and does not retry the unresponsive OS service during Enhance or Generate.
+
 Consequences of that design, all of them deliberate:
 
 - **Keys are never written into a project folder.** A key in `project.json` would be a key handed
@@ -235,13 +245,15 @@ Consequences of that design, all of them deliberate:
   the value.
 - **Keys are excluded from logs and error output.** The credential type has no serialisation and
   prints as a mask; provider adapters print `<redacted>` in place of the key.
-- **Release builds have no plaintext fallback.** Development builds may read a key from an
-  environment variable or a `.env` file at a fixed, compile-time path; that path can never point
-  inside a project folder, and the whole mechanism is compiled out of release builds.
-- **If the keychain is unavailable** — a locked login keyring, a headless session — Wobu reports the
-  provider as unconfigured rather than writing the key somewhere less safe.
+- **Release builds never read credentials from a project or arbitrary file.** The private local
+  fallback has one fixed application-data path. Development builds may additionally read a key
+  from an environment variable or repo-root `.env`; that mechanism is compiled out of releases.
+- **If the keychain is unavailable** — a locked login keyring, a headless session — Add, Replace,
+  Save and Remove remain usable through the private local fallback.
 
-You can delete any credential from Settings › Providers, which removes the keychain entry.
+You can delete any credential from Settings › Providers. Wobu removes the local entry and asks the
+OS store to remove its entry; if that service is still unavailable, a local tombstone prevents an
+older native value from becoming active later.
 
 ## 6. Children
 
@@ -265,8 +277,9 @@ Because everything is local, you exercise your rights directly rather than by as
 
 ## 8. Security
 
-Wobu keeps credentials in the OS keychain, redacts them from logs and error paths, writes project
-files atomically through a staging directory, and verifies peer-to-peer transfers cryptographically.
+Wobu prefers the OS keychain and otherwise restricts fallback credential files to the current OS
+user, redacts keys from logs and error paths, writes project files atomically through a staging
+directory, and verifies peer-to-peer transfers cryptographically.
 It cannot, however, protect data on a machine that is itself compromised, and current beta bundles
 are unsigned — download them only from the project's GitHub Releases page.
 

@@ -219,9 +219,9 @@ impl Pending {
 
 /// Start an Enhance and return its job id, before any of the work happens.
 ///
-/// Everything that can fail *without spending money* fails here, synchronously,
-/// so that the failure arrives as an error the user can act on rather than as a
-/// job that appears in the status bar and immediately dies:
+/// Everything that can fail *without spending money* fails here before a job is
+/// queued, so that the failure arrives as an error the user can act on rather
+/// than as a job that appears in the status bar and immediately dies:
 ///
 /// - no project, or one that is read-only — a paid call whose answer could never
 ///   be saved;
@@ -234,7 +234,7 @@ impl Pending {
 ///   it is not retryable, because pressing "Try again" without pasting a key
 ///   fails identically.
 #[tauri::command]
-pub fn enhance_start(
+pub async fn enhance_start(
     app: AppHandle,
     state: State<'_, AppState>,
     jobs: State<'_, Jobs>,
@@ -267,7 +267,8 @@ pub fn enhance_start(
         ))
     })?;
 
-    let secret = keys.secret(&selection.provider).ok_or_else(|| no_key(&selection.provider))?;
+    let secret =
+        keys.secret(&selection.provider).await?.ok_or_else(|| no_key(&selection.provider))?;
     let provider = text_provider(&selection.provider, &secret)?;
     let model = selection.model.unwrap_or_else(|| provider.default_model().to_owned());
     diag::info(format!("enhance {node_id} with {} {model}", provider.label()));

@@ -60,7 +60,7 @@
 //! - **Closing is cancelling.** [`Queue::close`] cancels every unfinished job
 //!   through the same token a Stop button uses, so every adapter's existing
 //!   cancellation path runs — including ComfyUI's `/interrupt` and the
-//!   `Billed` report that #55's spend ceiling counts.
+//!   `Billed` report that tells the user whether they were charged.
 //! - **A closed queue cannot be re-armed.** A command racing the teardown could
 //!   otherwise start a paid call during shutdown. A job submitted after `close`
 //!   is born cancelled: it is admitted, recorded and finished as `cancelled`
@@ -100,10 +100,10 @@ pub struct Config {
     /// aborted.
     ///
     /// Not zero, and the reason is money: an adapter that notices its token
-    /// still has to unwind far enough to report what the provider charged, and
-    /// #55's spend ceiling only counts what it is told about. Not long either —
-    /// past a couple of seconds the user has pressed Stop twice and started
-    /// wondering what the button does.
+    /// still has to unwind far enough to report what the provider charged, or
+    /// the user is told a cancelled job cost nothing on no evidence. Not long
+    /// either — past a couple of seconds the user has pressed Stop twice and
+    /// started wondering what the button does.
     pub cancel_grace: Duration,
     /// How many finished jobs to keep in the snapshot.
     ///

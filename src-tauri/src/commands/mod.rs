@@ -63,8 +63,9 @@ fn absolute(project: &Project, rel: &str) -> Option<String> {
 
 /// Run `f` on a blocking thread, turning a lost thread into a command error.
 ///
-/// Shared by the thumbnail commands so that "the pool went away" reads the same
-/// from all of them; `project_open` predates it and spells its own out inline.
+/// Shared by the thumbnail commands and `project_create` so that "the pool went
+/// away" reads the same from all of them; `project_open` predates it and spells
+/// its own out inline.
 async fn blocking<T: Send + 'static>(
     lost: &'static str,
     f: impl FnOnce() -> T + Send + 'static,

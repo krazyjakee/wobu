@@ -22,7 +22,6 @@ use wobu_imagine::{
 use wobu_influence::RefBucket;
 
 use super::loras::{ReceiptLora, safe_lora_name, safe_trigger_token};
-use super::spend::{apply_pricing_metadata, image_price};
 use super::task::{PlannedBatch, PlannedImage};
 use super::{BackendPurpose, ReferenceLoader, image_backend, prepare_blocking};
 use crate::error::{Code, CommandResult, WobuError};
@@ -75,14 +74,8 @@ pub async fn generation_replay(
         replay_plan(&replay_root, &assets, generation, &capabilities, replay_backend.as_ref())
     })
     .await?;
-    if requires_billing && plan.cost_usd_micros == 0 {
-        return Err(WobuError::new(
-            Code::Invalid,
-            "This paid historical model has no current safe price, so replay cannot reserve the spend ceiling.",
-        ));
-    }
     let subject_id = plan.generation.node_id;
-    let mut task = PlannedBatch {
+    let task = PlannedBatch {
         label: format!("Replay {subject_name}"),
         subject_id,
         plans: vec![plan],
@@ -90,7 +83,6 @@ pub async fn generation_replay(
         archival_replay: true,
     }
     .into_task(root, project_id, backend, app);
-    task.reserve_spend()?;
     let id = jobs.queue().submit(task);
     Ok(id.to_string())
 }
@@ -101,7 +93,7 @@ pub async fn generation_replay(
 /// receipt and patches the handful of fields that are about *this* attempt,
 /// because preparing a fresh one would re-derive values from today's
 /// capabilities and today's registry. It joins the shared path at
-/// [`PlannedBatch::into_task`], which is where spend reservation lives.
+/// [`PlannedBatch::into_task`], which is the only route to the queue.
 pub(super) fn replay_plan(
     root: &Path,
     assets: &[Asset],
@@ -201,30 +193,18 @@ pub(super) fn replay_plan(
         references,
         loras,
     };
-    let current_price = image_price(&original.backend, &original.model, resolution);
-    let current_cost = current_price.map_or(0, |price| price.per_image_usd_micros);
     let mut generation = original.clone();
     generation.id = new_id();
     generation.created_at = Utc::now();
     generation.output_asset_ids.clear();
     generation.params.remove("outcome");
     generation.params.remove("errorCode");
-    if let Some(original_cost) =
-        generation.params.get("estimatedCostUsdMicros").and_then(Value::as_u64)
-    {
-        generation
-            .params
-            .insert("replayOriginalEstimatedCostUsdMicros".into(), json!(original_cost));
-    }
     generation.params.insert("replayOf".into(), json!(original.id));
-    generation.params.insert("replayPriceBasis".into(), json!("current"));
     generation.params.insert("batchIndex".into(), json!(0));
     generation.params.insert("batchSize".into(), json!(1));
     generation.params.insert("seedSource".into(), json!("replay"));
-    generation.params.insert("estimatedCostUsdMicros".into(), json!(current_cost));
-    apply_pricing_metadata(&mut generation.params, current_price);
 
-    Ok(PlannedImage { request, cost_usd_micros: current_cost, generation })
+    Ok(PlannedImage { request, generation })
 }
 
 fn replay_param_str<'a>(generation: &'a Generation, key: &str) -> CommandResult<&'a str> {

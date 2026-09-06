@@ -5,31 +5,26 @@ import type { ErrorCode } from './call'
 /**
  * Where a provider's key came from.
  *
- * `environment` only ever appears in a development build — a repo-root `.env`,
- * or a variable exported into the process. A shipped Wobu reads keys from the
- * OS keychain and from nowhere else.
+ * `local` is Wobu's owner-only app-data fallback when the OS credential store
+ * cannot answer. `environment` only appears in a development build.
  */
-export type KeySource = 'keychain' | 'environment'
+export type KeySource = 'keychain' | 'local' | 'environment'
 
 /**
  * Whether this computer has a credential store that answers.
  *
  * `unavailable` is not a failure: a headless Linux box or a session whose login
- * keyring is locked has no store, and the app still runs. What it means is that
- * a key cannot be *saved* here, which is worth saying beside the field rather
- * than discovering when Save fails.
+ * keyring is locked has no native store, and the app still runs. Wobu's private
+ * local store remains available, so this state never disables key controls.
  */
 export type KeychainState = 'ready' | 'unavailable'
 
 /**
  * Presence, never value.
  *
- * Keys live in the Rust process and in this machine's keychain; none of them
- * ever crosses the bridge, which is why there is no field here that could carry
- * one. Keys are per *installation*, so a project shared from a drive opens with
- * *your* keys — `project.json` records only which provider and model were
- * chosen, and a collaborator without a key gets `source: null` rather than an
- * error.
+ * Keys live in the Rust process and one of this machine's native/private local
+ * stores; none ever crosses the bridge, which is why there is no field here
+ * that could carry one. Keys are per *installation*, never per project.
  */
 export interface KeyStatus {
   provider: string
@@ -47,8 +42,8 @@ export const providerKeyStatus = (providers: string[]) =>
  * pasted it into a field, so it is already in the webview and the only question
  * is where it goes next. Nothing sends one back.
  *
- * Rejects with `provider.keychain_unavailable` when there is no store to save
- * into — the message says to unlock the login keyring.
+ * Falls back to Wobu's owner-only app-data store if the OS keychain cannot
+ * answer. It rejects only when neither local store can persist the value.
  */
 export const providerKeySet = (provider: string, key: string) =>
   call<KeyStatus>('provider_key_set', { provider, key })

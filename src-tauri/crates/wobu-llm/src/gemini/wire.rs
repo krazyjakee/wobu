@@ -264,9 +264,9 @@ impl Incoming {
         // figure beside it — the opposite of Anthropic, where the two are
         // disjoint. Subtracting keeps `Usage::total_tokens` equal to Google's
         // own `total_tokens` instead of billing the cached part twice, and keeps
-        // the split honest: cached input is a tenth of the price of fresh, and
-        // #55's estimate is wrong in the frightening direction if that is
-        // ignored. Saturating because a provider figure we cannot make sense of
+        // the split honest: cached input is a tenth of the price of fresh, so
+        // folding the two together overstates what a call cost by an order of
+        // magnitude. Saturating because a provider figure we cannot make sense of
         // must not panic a running job.
         let cached = count("total_cached_tokens");
         if let Some(cached) = cached {
@@ -735,7 +735,7 @@ mod tests {
         // event, and it is the only figure that exists before
         // `interaction.completed`. Reading it only from the completion would
         // report zero for every cancelled and every dropped call — which is
-        // exactly when #55's ceiling needs to move.
+        // exactly when the user needs to be told what it cost.
         let events = [
             json!({"event_type": "step.delta", "index": 0, "delta": {"type": "text", "text": "x"},
                    "metadata": {"total_usage": {"total_input_tokens": 900,
