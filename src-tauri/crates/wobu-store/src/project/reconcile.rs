@@ -49,7 +49,6 @@ pub struct ReconcileObservation {
     seen_assets: HashSet<String>,
     generations: Vec<(Generation, String, Stamp)>,
     seen_generations: HashSet<String>,
-    generation_ledger_changed: bool,
 }
 
 impl ReconcilePlan {
@@ -105,13 +104,11 @@ impl ReconcilePlan {
 
         let mut generations_seen = HashSet::new();
         let mut generation_updates = Vec::new();
-        let mut generation_ledger_changed = false;
         for (rel, path) in generations::list_paths(&self.root) {
             generations_seen.insert(rel.clone());
             if self.generations.contains(&rel) {
                 continue;
             }
-            generation_ledger_changed = true;
             if let Ok(Some(record)) = generations::read_at(&self.root, &path) {
                 generation_updates.push(record);
             }
@@ -132,7 +129,6 @@ impl ReconcilePlan {
             seen_assets: assets_seen,
             generations: generation_updates,
             seen_generations: generations_seen,
-            generation_ledger_changed,
         })
     }
 }
@@ -346,7 +342,6 @@ impl Project {
             seen_assets,
             generations,
             seen_generations,
-            mut generation_ledger_changed,
         } = observation;
 
         if self.id() != plan.project_id
@@ -402,9 +397,6 @@ impl Project {
         for rel in plan.generations.iter().filter(|rel| !seen_generations.contains(*rel)) {
             self.index.remove_generation_by_rel_path(rel)?;
             changed = true;
-            generation_ledger_changed = true;
-        }
-        if generation_ledger_changed {
         }
         Ok(Some(changed))
     }
