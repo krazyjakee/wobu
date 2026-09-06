@@ -9,10 +9,8 @@
 //! it. Two reasons, and the second is the one that matters. A job outlives the
 //! project it was started for — a paid call whose project has since closed is
 //! still in flight and still has to be able to report what it cost. And a queue
-//! that could reach the `Mutex` below would be the likeliest place in this
-//! codebase to end up holding it across an await, which is exactly what the
-//! next section says must never happen. It cannot, because there is no path
-//! from a job to it.
+//! must not hold the project mutex across a provider call. Completed jobs can
+//! notify the handover observer by project id without taking that mutex.
 //!
 //! ## Why a `Mutex` and not an `RwLock`
 //!
@@ -196,13 +194,8 @@ pub trait Handover: Send + Sync + 'static {
     fn closing(&self, project: Id);
     /// This project's folder moved under this machine's own hand.
     ///
-    /// The outbound poller walks a backoff that ends at two minutes, and until
-    /// now only an *inbound* round could interrupt it. That is the wrong half:
-    /// a peer that dialled us is by definition already current, while the
-    /// machine whose user just typed something is the one with bytes nobody
-    /// else has. Without this, a local edit waits out whatever the backoff had
-    /// climbed to — which reads, from the other side, as a world that synced
-    /// once and then stopped.
+    /// Reset the outbound poller's idle backoff and wake it to send these
+    /// changes. Otherwise a quiet project can wait up to two minutes.
     ///
     /// Called with no lock held, and implementations must not block: this runs
     /// on the watcher callback and on command paths the editor is waiting on.
@@ -212,9 +205,32 @@ pub trait Handover: Send + Sync + 'static {
 impl AppState {
     /// Run `f` against the open project, or fail with `no_project_open`.
     pub fn with<T>(&self, f: impl FnOnce(&mut Project) -> CommandResult<T>) -> CommandResult<T> {
-        let mut guard = self.slot.lock();
-        let open = guard.as_mut().ok_or_else(WobuError::no_project_open)?;
-        f(&mut open.project)
+        self.with_local_project(|_| Ok(()), f)
+    }
+
+    /// Observe local commands before releasing their project lock. A command
+    /// may publish some writes and then fail, so inspect changes on both paths.
+    /// Sync uses `with_project` instead and must never call its observer while
+    /// holding a replica lock.
+    fn with_local_project<T>(
+        &self,
+        validate: impl FnOnce(&Open) -> CommandResult<()>,
+        f: impl FnOnce(&mut Project) -> CommandResult<T>,
+    ) -> CommandResult<T> {
+        let (result, changed) = {
+            let mut guard = self.slot.lock();
+            let open = guard.as_mut().ok_or_else(WobuError::no_project_open)?;
+            validate(open)?;
+            let project = open.project.id();
+            let before = open.project.index().change_count();
+            let result = f(&mut open.project);
+            let changed = (open.project.index().change_count() != before).then_some(project);
+            (result, changed)
+        };
+        if let Some(project) = changed {
+            self.announce_local_change(project);
+        }
+        result
     }
 
     /// Re-read the complete project folder without holding the project mutex
@@ -229,7 +245,7 @@ impl AppState {
             // the same write and leave its event with nothing left to report.
             // Hooked here rather than in `reconcile_project_now` so that sync's
             // own `Replica::reconcile` does not read as a local edit.
-            self.announce_local_change();
+            self.announce_local_change(project);
         }
         Ok(changed)
     }
@@ -303,18 +319,21 @@ impl AppState {
         ticket: &ProjectTicket,
         f: impl FnOnce(&mut Project) -> CommandResult<T>,
     ) -> CommandResult<T> {
-        let mut guard = self.slot.lock();
-        let current_generation = self.generation.load(Ordering::SeqCst);
-        let open = guard.as_mut().filter(|open| {
-            current_generation == ticket.generation
-                && open.project.id() == ticket.project
-                && open.project.root() == ticket.root
-        });
-        let open = open.ok_or_else(WobuError::no_project_open)?;
-        if open.offline {
-            return Err(StoreError::Disconnected.into());
-        }
-        f(&mut open.project)
+        self.with_local_project(
+            |open| {
+                if self.generation.load(Ordering::SeqCst) != ticket.generation
+                    || open.project.id() != ticket.project
+                    || open.project.root() != ticket.root
+                {
+                    return Err(WobuError::no_project_open());
+                }
+                if open.offline {
+                    return Err(StoreError::Disconnected.into());
+                }
+                Ok(())
+            },
+            f,
+        )
     }
 
     /// Like [`with`](Self::with), but for callers that are fine with there
@@ -347,14 +366,11 @@ impl AppState {
     /// Tell sync that this machine's own folder moved, so the fan-out does not
     /// wait out the idle backoff. See [`Handover::changed_locally`].
     ///
-    /// The project is read after the work rather than captured before it, and
-    /// that is deliberate: the id only selects which replica polls sooner, so
-    /// the worst a close-and-open race can do here is bring one poll forward.
-    /// This is the one handover call that does *not* need the identity check
-    /// [`with_project`](Self::with_project) exists for, because it moves no
-    /// bytes.
-    fn announce_local_change(&self) {
-        if let (Some(project), Some(handover)) = (self.open_id(), self.handover()) {
+    /// The id belongs to the write, even if the user has since switched worlds.
+    /// Background jobs can also finish after their project has been closed.
+    /// Call only after releasing project and replica locks.
+    pub(crate) fn announce_local_change(&self, project: Id) {
+        if let Some(handover) = self.handover() {
             handover.changed_locally(project);
         }
     }
@@ -562,10 +578,11 @@ impl AppState {
         match outcome {
             Outcome::Reconciled(true) => {
                 let _ = app.emit(WORLD_CHANGED, ());
-                // Every local write lands in the canonical folder, so this one
-                // point covers every command that makes one without any of them
-                // having to know sync exists.
-                self.announce_local_change();
+                if let Some(project) =
+                    self.peek(|open| open.filter(|project| project.root() == root).map(Project::id))
+                {
+                    self.announce_local_change(project);
+                }
                 true
             }
             Outcome::Reconciled(false) => false,

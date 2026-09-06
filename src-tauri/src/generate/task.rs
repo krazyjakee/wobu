@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::Serialize;
 use serde_json::{Value, json};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use wobu_core::{Asset, AssetKind, Generation, Id};
 use wobu_imagine::{Error as ImageError, ImageBackend, ImageRequest, ImageUsage, ProgressSink};
 use wobu_jobs::{Billed, Failure, JobContext, JobKind, Outcome, Preview, Progress, Task};
@@ -20,6 +20,7 @@ use wobu_store::Project;
 
 use super::GENERATION_RECORDED;
 use crate::error::{Code, CommandResult, WobuError};
+use crate::state::AppState;
 
 pub(super) struct GenerateTask {
     pub(super) label: String,
@@ -147,6 +148,7 @@ impl Task for GenerateTask {
                         }
                     })
                     .await;
+                    self.app.state::<AppState>().announce_local_change(project_id);
                     match recorded {
                         Ok(Ok(generation)) => {
                             let _ = self.app.emit(
@@ -225,6 +227,9 @@ impl Task for GenerateTask {
                     Ok(GenerateReady { subject_id, generation, asset: imported.asset })
                 })
                 .await;
+            // Persistence uses its own Project handle and can outlive the open
+            // window. Wake its replica even if only part of the write landed.
+            self.app.state::<AppState>().announce_local_change(project_id);
             match saved {
                 Ok(Ok(ready)) => {
                     // Per-image, not merely at batch completion: a later failure

@@ -102,6 +102,14 @@ pub struct Index {
 }
 
 impl Index {
+    /// A cheap change token for this connection. Compare around a local command
+    /// to detect writes that reconciliation will skip because they are already
+    /// indexed. Cache-only writes can also advance it; scheduling an extra sync
+    /// round for those is harmless. Reads do not advance it.
+    pub fn change_count(&self) -> u64 {
+        self.conn.total_changes()
+    }
+
     /// Open (or create) the index for a project, rebuilding from scratch if the
     /// schema version has moved.
     pub fn open_for(project_id: &Id) -> Result<Index> {

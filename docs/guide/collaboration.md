@@ -119,6 +119,10 @@ Concepts while preserving an output that a node still uses as a reference or cov
 learns about a change from another, it immediately fans the enlarged manifest out to the rest of
 its connected peers rather than waiting for the idle polling interval.
 
+Saving in Wobu, importing a reference, or finishing a generation also wakes that project's sync
+poller immediately. Edits made in another app wake it when Wobu detects them. A quiet project can
+back off to a two-minute polling interval, but local work does not have to wait for that timer.
+
 > **A ticket is a key to your world** Send it privately. Tickets do not expire, and you cannot take
 > one back on its own. **Stop sharing…** cancels every ticket this installation ever made for this
 > world and forgets the machines it was talking to — but it cannot delete copies people have already

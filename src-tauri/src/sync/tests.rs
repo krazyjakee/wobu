@@ -203,6 +203,10 @@ impl Wake for Counter {
 /// selection, and a network where the relay is blocked. Those need two
 /// machines.
 async fn manager(state: &AppState, dir: &Path) -> Arc<SyncManager> {
+    manager_with_poll(state, dir, false).await
+}
+
+async fn manager_with_poll(state: &AppState, dir: &Path, poll: bool) -> Arc<SyncManager> {
     SyncManager::start(
         state.handle(),
         Arc::new(Counter::default()),
@@ -210,10 +214,7 @@ async fn manager(state: &AppState, dir: &Path) -> Arc<SyncManager> {
             identity: Identity::ephemeral(),
             reach: Reach::Loopback,
             shares: Shares::load_from(dir.join("shares.json")),
-            // No dialling: these tests are about the manager, and a poller
-            // reaching for a ticket nobody minted is a task to shut down for
-            // no reason and noise in the log.
-            poll: false,
+            poll,
             index_dir: Some(dir.join("index")),
         },
     )
@@ -469,6 +470,41 @@ async fn a_local_edit_interrupts_the_backoff_instead_of_waiting_out_two_minutes(
     // A project this machine does not hold is the ordinary case on any
     // installation with more than one world, and must not panic.
     manager.changed_locally(new_id());
+
+    manager.shutdown().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_local_change_runs_the_sleeping_poller() {
+    let dir = scratch("sync-poller-wake");
+    let state = AppState::default();
+    let manager = manager_with_poll(&state, &dir, true).await;
+    let project = Project::create(&dir, "Ashfall").unwrap();
+    let id = project.id();
+    let root = project.root().to_path_buf();
+    drop(project);
+
+    // Register without starting the timer, then park at maximum backoff
+    // before share starts the actual production poller.
+    manager.opening(id, &root);
+    manager.closing(id);
+    let replica = manager.replica(id).unwrap();
+    replica.go_idle_for_test(99);
+    manager.share(id, &root);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(replica.idle_steps(), 99);
+
+    state.announce_local_change(id);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        // With no peers, one completed round advances idle from 0 to 1.
+        // Resetting idle alone cannot satisfy this assertion.
+        while replica.idle_steps() != 1 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the poller stayed asleep after a local change");
 
     manager.shutdown().await;
     let _ = std::fs::remove_dir_all(&dir);
