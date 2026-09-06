@@ -481,12 +481,15 @@ mod tests {
 
     #[tokio::test]
     async fn a_process_that_says_nothing_is_given_up_on_rather_than_waited_on_forever() {
-        // `true` exits immediately, closing stdout, which is the ordinary shape
-        // of "that is not an MCP server". The handshake has to end, and it has
-        // to end without the 30-second deadline being what ends it.
+        // Consume the initialize message, then exit without answering. An
+        // immediately exiting process can close stdin before Wobu writes,
+        // which tests a broken pipe instead of the closed-stdout path here.
         let registry = Registry::new();
         let began = std::time::Instant::now();
-        let error = registry.tools(&spec("true", &[])).await.expect_err("no handshake");
+        let error = registry
+            .tools(&spec("sh", &["-c", "read -r request"]))
+            .await
+            .expect_err("no handshake");
         assert!(began.elapsed() < HANDSHAKE_TIMEOUT, "waited {:?}", began.elapsed());
         assert!(error.to_string().contains("stopped before answering"), "{error}");
     }
