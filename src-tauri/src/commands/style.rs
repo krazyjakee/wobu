@@ -55,9 +55,8 @@ pub async fn style_transfer_apply(
     source_path: String,
     root_id: Id,
 ) -> CommandResult<TransferOutcome> {
-    let destination = state
-        .peek(|project| project.map(|project| (project.id(), project.root().to_path_buf())))
-        .ok_or_else(WobuError::no_project_open)?;
+    let (ticket, destination) =
+        state.ticket(|project| Ok((project.id(), project.root().to_path_buf())))?;
     let source = PathBuf::from(source_path);
     let same_path = std::fs::canonicalize(&source)
         .ok()
@@ -75,8 +74,7 @@ pub async fn style_transfer_apply(
     if bundle.source_project_id() == destination.0 {
         return Err(wobu_store::Error::TransferSameProject.into());
     }
-    let outcome =
-        state.with_project(destination.0, |project| Ok(project.apply_transfer(bundle)?))?;
+    let outcome = state.with_ticket(&ticket, |project| Ok(project.apply_transfer(bundle)?))?;
     let _ = app.emit(WORLD_CHANGED, ());
     Ok(outcome)
 }

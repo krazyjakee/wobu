@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::Serialize;
 use serde_json::json;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use wobu_core::{Generation, Id, MeshOutput};
 use wobu_imagine::{
     Error as ImageError, MeshBackend, MeshFormat, MeshRequest, MeshUsage, ProgressSink,
@@ -21,6 +21,7 @@ use wobu_store::Project;
 
 use crate::error::{Code, CommandResult, WobuError};
 use crate::generate::GENERATION_RECORDED;
+use crate::state::AppState;
 
 pub(super) struct MeshTask {
     pub(super) label: String,
@@ -123,6 +124,7 @@ impl Task for MeshTask {
         })
         .await;
 
+        self.app.state::<AppState>().announce_local_change(self.project_id);
         match saved {
             Ok(Ok(ready)) => {
                 // The same event an image emits, so the 3D gallery and the
@@ -168,6 +170,7 @@ impl MeshTask {
         })
         .await;
 
+        self.app.state::<AppState>().announce_local_change(project_id);
         match recorded {
             Ok(Ok(generation)) => {
                 let _ = app.emit(

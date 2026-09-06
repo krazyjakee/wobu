@@ -209,7 +209,7 @@ const REGISTRY: &[Preset] = &[
         id: "single_image",
         label: "Single image",
         kinds: ANY_KIND,
-        default_for: &[],
+        default_for: ANY_KIND,
         // No priorities at all, and that absence *is* this preset.
         //
         // Every other row here is an opinion about which sections matter for a
@@ -232,7 +232,7 @@ const REGISTRY: &[Preset] = &[
         id: "character_sheet",
         label: "Character sheet",
         kinds: &[NodeKind::Character, NodeKind::Creature],
-        default_for: &[NodeKind::Character, NodeKind::Creature],
+        default_for: &[],
         // Flat light is the point of the sheet, so a location's ambient light is
         // actively unhelpful here however strongly the stack argues for it.
         priorities: &[
@@ -294,7 +294,7 @@ const REGISTRY: &[Preset] = &[
         id: "costume_plate",
         label: "Costume plate",
         kinds: &[NodeKind::Character, NodeKind::Culture],
-        default_for: &[NodeKind::Culture],
+        default_for: &[],
         // There is no wearer in the frame, so anatomy and body silhouette are
         // not merely unimportant, they would put a figure in the shot.
         priorities: &[
@@ -315,7 +315,7 @@ const REGISTRY: &[Preset] = &[
         id: "prop_orthographic",
         label: "Prop orthographic",
         kinds: &[NodeKind::Prop, NodeKind::Vehicle],
-        default_for: &[NodeKind::Prop, NodeKind::Vehicle],
+        default_for: &[],
         priorities: &[
             priority("silhouette", 1.5),
             priority("materials", 1.2),
@@ -340,10 +340,7 @@ const REGISTRY: &[Preset] = &[
         id: "material_study",
         label: "Material study",
         kinds: ANY_KIND,
-        // The fallback default for the kinds no subject-shaped preset covers —
-        // the Style Guide, the World Bible and Species all describe surfaces
-        // before they describe anything you could point a camera at.
-        default_for: &[NodeKind::StyleGuide, NodeKind::WorldBible, NodeKind::Species],
+        default_for: &[],
         priorities: &[
             priority("materials", 2.0),
             priority("wear", 1.4),
@@ -362,7 +359,7 @@ const REGISTRY: &[Preset] = &[
         id: "environment_matte",
         label: "Environment matte",
         kinds: &[NodeKind::Environment, NodeKind::Setting],
-        default_for: &[NodeKind::Environment, NodeKind::Setting],
+        default_for: &[],
         priorities: &[
             priority("architecture", 1.4),
             priority("climate", 1.4),
@@ -669,7 +666,7 @@ mod tests {
         assert!(single.priorities.is_empty());
         for def in kind_registry() {
             assert!(single.applies_to(def.kind), "{} is not offered a single image", def.kind);
-            assert!(!single.is_default_for(def.kind), "{} would skip its own preset", def.kind);
+            assert!(single.is_default_for(def.kind), "{} should default to one image", def.kind);
         }
         // Every section stays where the stack put it.
         for section in ["silhouette", "materials", "light", "costume"] {

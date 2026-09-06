@@ -207,8 +207,9 @@ pub struct Replica {
     /// How many consecutive outbound rounds have found nothing to do, which is
     /// what [`BACKOFF`] is indexed by.
     idle: AtomicU64,
-    /// Interrupts a backed-off outbound poll when an inbound round changed the
-    /// local replica and those bytes now need fanning out to its other peers.
+    /// Interrupts a backed-off outbound poll when this replica gained bytes the
+    /// other peers do not have yet — from an inbound round, or from the user
+    /// editing the folder this machine is holding.
     changed: tokio::sync::Notify,
 }
 
@@ -328,6 +329,29 @@ impl Replica {
         *self.held.lock() = Held::Detached(None);
     }
 
+    /// How many consecutive empty rounds the backoff currently stands at.
+    #[cfg(test)]
+    pub(in crate::sync) fn idle_steps(&self) -> u64 {
+        self.idle.load(Ordering::Relaxed)
+    }
+
+    /// Pretend the poller has dialled this many times and found nothing, which
+    /// is how a replica arrives at the two-minute end of [`BACKOFF`].
+    #[cfg(test)]
+    pub(in crate::sync) fn go_idle_for_test(&self, steps: u64) {
+        self.idle.store(steps, Ordering::Relaxed);
+    }
+
+    /// Whether a wake is waiting for the poller, without blocking if it is not.
+    ///
+    /// `Notify::notify_one` leaves a permit when nobody is waiting, so this is
+    /// also the assertion that an expedite raised *during* a round is not lost
+    /// before the poller comes back around to its next sleep.
+    #[cfg(test)]
+    pub(in crate::sync) async fn took_wake_for_test(&self) -> bool {
+        tokio::time::timeout(Duration::from_millis(250), self.changed.notified()).await.is_ok()
+    }
+
     /// Hand the folder to the window. Blocks until sync has let go.
     fn hand_over(&self) {
         let mut held = self.held.lock();
@@ -420,6 +444,15 @@ impl Handover for SyncManager {
     fn closing(&self, project: Id) {
         if let Some(replica) = self.replicas.lock().get(&project) {
             replica.take_back();
+        }
+    }
+
+    fn changed_locally(&self, project: Id) {
+        // Unshared projects have a replica too — `opening` registers one for
+        // anything the window holds — but no peers, so `dial_round` returns on
+        // the empty peer list and the expedite costs one loop iteration.
+        if let Some(replica) = self.replicas.lock().get(&project) {
+            replica.expedite();
         }
     }
 }

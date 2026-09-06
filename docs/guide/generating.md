@@ -25,24 +25,22 @@ close study of materials the next.
 
 | Preset | Aspect | Images | Chosen by default for |
 | --- | --- | --- | --- |
-| Single image | 1:1 | 1 | — |
-| Character sheet | 3:4 | 4 | character, creature |
+| Single image | 1:1 | 1 | all node types |
+| Character sheet | 3:4 | 4 | — |
 | Turnaround | 1:1 | 8 | — |
 | Portrait study | 4:5 | 4 | — |
-| Costume plate | 3:4 | 2 | culture |
-| Prop orthographic | 4:3 | 3 | prop, vehicle |
-| Material study | 1:1 | 6 | Art Style, World Canon, species |
-| Environment matte | 21:9 | 3 | environment, setting |
+| Costume plate | 3:4 | 2 | — |
+| Prop orthographic | 4:3 | 3 | — |
+| Material study | 1:1 | 6 | — |
+| Environment matte | 21:9 | 3 | — |
 | Interior | 16:9 | 3 | — |
 
 Presets shuffle the order rather than replacing anything. A material study still gets your art style
 and your world — it just brings materials to the front and pushes silhouette back.
 
-**Single image** is the odd one out: it shuffles nothing, and it is how you ask for one picture
-rather than a whole sheet. It is offered for everything, it takes your world exactly as written, and
-it makes one image — so the estimate beside Generate is the price of one. Every other preset makes
-the batch in the table above; how many you get is part of choosing the preset, not a separate
-setting.
+**Single image** is selected by default for every node type. It shuffles nothing, takes your world
+exactly as written, and makes one image. Choose another preset to generate the batch in the table
+above; how many you get is part of choosing the preset, not a separate setting.
 
 ## Seeds
 

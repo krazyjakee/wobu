@@ -525,7 +525,7 @@ mod tests {
         assert_eq!(card["layer"], "style");
         assert_eq!(card["kind"], "style_guide");
         assert_eq!(card["reached"], "root");
-        assert_eq!(json["preset"]["id"], "character_sheet");
+        assert_eq!(json["preset"]["id"], "single_image");
     }
 
     #[test]
@@ -638,7 +638,7 @@ mod tests {
         // The subject reads last, ahead of only the framing, where a text
         // encoder's recency bias does the most good.
         assert!(compiled.prompt.starts_with("Ash-dusted"), "got {}", compiled.prompt);
-        assert!(compiled.prompt.ends_with("single subject"), "got {}", compiled.prompt);
+        assert!(compiled.prompt.ends_with("plain background"), "got {}", compiled.prompt);
     }
 
     #[test]
@@ -674,8 +674,8 @@ mod tests {
         // description of its own still has a prompt rather than an empty string.
         let compiled =
             compiled(&nodes, id, None, &Sliders::neutral(), None, Budget::unlimited()).unwrap();
-        assert_eq!(compiled.preset.id, "prop_orthographic");
-        assert!(compiled.prompt.starts_with("orthographic elevation"), "got {}", compiled.prompt);
+        assert_eq!(compiled.preset.id, "single_image");
+        assert!(compiled.prompt.starts_with("one complete view"), "got {}", compiled.prompt);
         assert_eq!(compiled.negative, "");
         assert!(compiled.dropped.is_empty());
     }
@@ -706,7 +706,7 @@ mod tests {
             Budget::unlimited(),
         )
         .unwrap();
-        assert_eq!(unknown.preset.id, "character_sheet");
+        assert_eq!(unknown.preset.id, "single_image");
 
         // A preset the registry *does* know reweights the same fragments — the
         // costume plate lifts `costume` and all but silences `silhouette`.
@@ -795,7 +795,7 @@ mod tests {
 
         // And the compiled prompt carries the preset's framing whether or not
         // anyone named the shot.
-        assert!(prompt(&world).prompt.ends_with("single subject"));
+        assert!(prompt(&world).prompt.ends_with("plain background"));
     }
 
     #[test]
@@ -810,11 +810,11 @@ mod tests {
             None,
             &Sliders::neutral(),
             None,
-            Budget { prompt: Chars::new(40), negative: Chars::new(0) },
+            Budget { prompt: Chars::new(80), negative: Chars::new(0) },
         )
         .unwrap();
 
-        assert!(cramped.prompt.chars().count() <= 40, "got {}", cramped.prompt);
+        assert!(cramped.prompt.chars().count() <= 80, "got {}", cramped.prompt);
         assert_eq!(cramped.negative, "", "the negatives are emptied rather than overrun");
         let cut: Vec<(&str, DropReason)> =
             cramped.dropped.iter().map(|d| (d.fragment.section, d.reason)).collect();

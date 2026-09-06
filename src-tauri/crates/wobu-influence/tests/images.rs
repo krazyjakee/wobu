@@ -7,7 +7,7 @@
 //! So the kept lists and the whole drop report are written out longhand, and a
 //! diff on one is meant to be read and argued with.
 
-use wobu_core::{AssetRef, AssetRole, Id, Layer, Link, LinkRole, Node, NodeKind, default_preset};
+use wobu_core::{AssetRef, AssetRole, Id, Layer, Link, LinkRole, Node, NodeKind, preset};
 use wobu_influence::{
     Bucket, Budget, Chars, CompiledImages, DropReason, Fragment, ImageBudget, RefBucket, Refs,
     Shot, Sliders, World, compile, compile_images, fragments, image_budget, resolve,
@@ -76,7 +76,7 @@ impl Ashfall {
     fn extract<'a>(&'a self, world: &World<'a>, sliders: &Sliders) -> Vec<Fragment<'a>> {
         let shot = Shot::new("Character sheet · 3:4");
         let stack = resolve(world, self.kael.id, Some(shot)).unwrap();
-        fragments(&stack, default_preset(NodeKind::Character), sliders)
+        fragments(&stack, preset("character_sheet").unwrap(), sliders)
     }
 
     fn name(&self, fragment: &Fragment<'_>) -> &'static str {
@@ -356,7 +356,7 @@ fn a_tie_in_weight_is_broken_towards_the_reference_closest_to_the_subject() {
 
     let world = World::new(vec![&vashk, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
     assert_eq!(extracted[0].weight(), extracted[1].weight(), "the tie this test is about");
 
     let one =
@@ -387,7 +387,7 @@ fn the_buckets_do_not_depend_on_the_order_the_nodes_were_loaded() {
         let world = World::new(nodes);
         let shot = Shot::new("Character sheet · 3:4");
         let stack = resolve(&world, ashfall.kael.id, Some(shot)).unwrap();
-        let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+        let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
         let images = compile_images(&extracted, tight);
         let kept: Vec<&'static str> = images.kept().map(|f| ashfall.name(&f)).collect();
         let lost: Vec<(&'static str, DropReason)> =
@@ -493,7 +493,7 @@ fn a_thousand_references_are_budgeted_within_the_interactive_budget() {
     }
     let world = World::new(vec![&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     // Fastest of several runs, not one — a single sample measures the machine's
     // load as much as this code, and the neighbouring bounds in `prompts.rs` and
