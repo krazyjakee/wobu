@@ -767,10 +767,12 @@ async fn closing_the_queue_stops_everything_unfinished_and_then_quiesces() {
     let running = Fake::new("mid generation", [Step::AwaitCancel]);
     let running_log = running.log();
     let running = queue.submit(running);
+    // Establish the occupied slot before submitting the queued job: spawned
+    // tasks can first acquire the semaphore in either order on this runtime.
+    recorder.until(|| running_log.started() == 1).await;
     let queued = Fake::new("waiting behind it", [Step::Finish]);
     let queued_log = queued.log();
     let queued = queue.submit(queued);
-    recorder.until(|| running_log.started() == 1).await;
 
     assert_eq!(queue.active(), 2, "one running, one queued");
     assert_eq!(queue.close(), 2, "both unfinished jobs are asked to stop");
