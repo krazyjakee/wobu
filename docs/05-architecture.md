@@ -139,5 +139,8 @@ recoverable; the exporter never cleans up or deletes user data.
 - **Thumbnails**: generate WebP thumbs on import off the UI thread; grids bind to thumbs only.
 - **Cancellation**: every job must be genuinely cancellable, including in-flight ComfyUI
   prompts, or the queue becomes a hostage situation.
-- **Undo**: node edits go through a command log so `⌘Z` works across the whole workspace, not
-  just inside a text field.
+- **Undo**: node edits and narrative scene edits go through one command log so `⌘Z` works across
+  the whole workspace, not just inside a text field. One stack, deliberately: a structural edit
+  made on the Flow canvas and the same edit made in a form have to be indistinguishable in
+  history. Canvas *arrangement* is not on it — moving a box is not a story change, and the log has
+  no command that could carry a coordinate.

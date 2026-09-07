@@ -498,7 +498,17 @@ impl Project {
     }
 
     /// The other half: files `guarded_write` parked, which are never nodes.
+    ///
+    /// Narrative source siblings are listed alongside the Markdown ones,
+    /// because source keeps the never-merge rule and that rule is only worth
+    /// anything if the losing version is reachable from the card. Layout
+    /// sidecars are deliberately absent: they merge, so they never produce
+    /// one, and a `.corrupt-` sibling is not a conflict for a human to
+    /// arbitrate.
     pub(super) fn conflict_files(&self) -> Vec<(String, PathBuf)> {
-        self.markdown_files().into_iter().filter(|(_, path)| is_conflict_path(path)).collect()
+        let mut found: Vec<(String, PathBuf)> =
+            self.markdown_files().into_iter().filter(|(_, path)| is_conflict_path(path)).collect();
+        found.extend(crate::narrative::conflict_paths(&self.root));
+        found
     }
 }

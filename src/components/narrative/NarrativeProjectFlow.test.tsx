@@ -1,0 +1,520 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NarrativeDiagnostic, Scene, SceneFile } from '../../lib/api'
+import { useUndoStack } from '../../lib/undo'
+import { useUI } from '../../store/ui'
+import { NarrativeProjectFlow } from './NarrativeProjectFlow'
+import { resetFlowStore, useFlowStore } from './flow/flowStore'
+import { mintId, nodeId } from './flow/source'
+
+/*
+ * The canvas against the real backend.
+ *
+ * The test that matters most in this file is the first one: a writer drags a
+ * wire, and every line of dialogue in the scene is still there in the document
+ * that reaches `narrative_scene_save`. The unit proof is in
+ * `flow/source.test.ts`; this is the same property asserted through the actual
+ * components, so a container that decided to rebuild a scene rather than patch
+ * one could not slip past it.
+ */
+
+const h = vi.hoisted(() => ({ invoke: vi.fn() }))
+vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
+vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
+
+const SCENE = mintId()
+const OTHER = mintId()
+const ARRIVAL = mintId()
+const VERDICT = mintId()
+const CHOICE = mintId()
+const OUTCOME = mintId()
+const SLOT = mintId()
+const VARIANT = mintId()
+const PLAYER_SLOT = mintId()
+
+/** A scene with real dialogue in it, so a lossy save has something to destroy. */
+function council(): Scene {
+  return {
+    id: SCENE,
+    name: 'Council hearing',
+    summary: 'The council hears the beacon evidence.',
+    beats: [
+      {
+        id: ARRIVAL,
+        title: 'Arrival at the hearing',
+        intents: [{ subject: 'narrator', intent: 'set the room' }],
+        must_not_reveal: ['Mira was there'],
+        dialogue: [
+          {
+            id: SLOT,
+            speaker: 'narrator',
+            policy: 'locked',
+            variants: [
+              {
+                id: VARIANT,
+                text: {
+                  revision: 'rev-one',
+                  body: 'The hall smells of wet ash.',
+                  provenance: { generated: { fingerprint: 'fp' } },
+                  lifecycle: { policy: 'locked', review: 'approved', freshness: 'out_of_date' },
+                },
+              },
+            ],
+          },
+          { id: PLAYER_SLOT, speaker: 'player' },
+        ],
+        choices: [{ id: CHOICE, label: 'Show the logbook', to: { beat: VERDICT } }],
+      },
+      {
+        id: VERDICT,
+        title: 'The verdict',
+        outcomes: [{ id: OUTCOME, to: { scene: OTHER } }],
+      },
+    ],
+  }
+}
+
+function file(scene: Scene): SceneFile {
+  return {
+    scene,
+    slug: 'council-hearing',
+    rel: 'narrative/scenes/council-hearing.yaml',
+    stamp: { mtime_ms: 1, size: 2, hash: 'first' },
+  }
+}
+
+let diagnostics: NarrativeDiagnostic[] = []
+let layoutSave: unknown = { outcome: 'written' }
+let layoutLoad: unknown
+
+function answer(command: string, args: Record<string, unknown>): unknown {
+  switch (command) {
+    case 'narrative_scenes':
+      return {
+        scenes: [
+          { id: SCENE, name: 'Council hearing', slug: 'council-hearing', rel: 'a.yaml' },
+          { id: OTHER, name: 'The long road', slug: 'long-road', rel: 'b.yaml' },
+        ],
+        unreadable: [],
+      }
+    case 'narrative_scene_get':
+      return args.sceneId === SCENE
+        ? file(council())
+        : { ...file({ id: OTHER, name: 'The long road', beats: [] }), slug: 'long-road' }
+    case 'narrative_scene_save':
+      return { ...file(args.scene as Scene), stamp: { mtime_ms: 9, size: 3, hash: 'second' } }
+    case 'narrative_diagnostics':
+      return diagnostics
+    case 'narrative_layout_get':
+      return layoutLoad
+    case 'narrative_layout_save':
+      return layoutSave
+    case 'node_list':
+      return []
+    default:
+      return []
+  }
+}
+
+function calls(command: string): Record<string, unknown>[] {
+  return (h.invoke.mock.calls as [string, Record<string, unknown>][])
+    .filter(([name]) => name === command)
+    .map(([, args]) => args)
+}
+
+/** A layout runner that answers at once. The real one starts a Web Worker. */
+const layout = () => Promise.resolve({ positions: {} })
+
+function open(readOnly = false): { qc: QueryClient } {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  )
+  render(
+    <Wrapper>
+      <NarrativeProjectFlow readOnly={readOnly} layout={layout} />
+    </Wrapper>,
+  )
+  return { qc }
+}
+
+/** Open the scene the way the Library does: by writing the shared selection. */
+async function enterCouncil(readOnly = false) {
+  open(readOnly)
+  useUI.getState().selectNarrative({ sceneId: SCENE }, 'library')
+  await screen.findByRole('button', { name: 'Outline list' })
+  fireEvent.click(screen.getByRole('button', { name: 'Outline list' }))
+  await screen.findByLabelText('Council hearing outline')
+}
+
+beforeEach(() => {
+  ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  h.invoke.mockReset()
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+    Promise.resolve(answer(command, args)),
+  )
+  diagnostics = []
+  layoutSave = { outcome: 'written' }
+  layoutLoad = {
+    layout: {
+      schemaVersion: 1,
+      graph: { kind: 'scene', scene: SCENE },
+      mode: 'manual',
+      modeUpdatedAt: 'then',
+      nodes: {},
+      groups: {},
+      annotations: {},
+    },
+    notices: [],
+  }
+  resetFlowStore()
+  useUndoStack.setState({ projectId: 'proj', past: [], future: [], busy: false })
+  useUI.setState({
+    narrative: { sceneId: null, beatId: null, lineId: null },
+    narrativeReveal: null,
+    narrativeFilters: { needsText: false, needsReview: false, outOfDate: false },
+  })
+})
+
+describe('a structural edit cannot lose a line of dialogue', () => {
+  it('saves a patch of the loaded document, with every revision untouched', async () => {
+    await enterCouncil()
+
+    // Re-point the choice from the verdict back at the arrival beat.
+    fireEvent.change(screen.getByLabelText('Show the logbook — Then leads to'), {
+      target: { value: nodeId.beat(ARRIVAL) },
+    })
+
+    await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
+    const sent = calls('narrative_scene_save')[0]!.scene as Scene
+    const before = council()
+
+    // The intended change, and only it — asserted by rebuilding the expected
+    // document from the original. A container that reconstructed a scene from
+    // the canvas would fail here with the dialogue missing.
+    const expected = structuredClone(before)
+    expected.beats![0]!.choices![0]!.to = { beat: ARRIVAL }
+    expect(sent).toEqual(expected)
+
+    // Said again on the fields a lossy save destroys silently.
+    const variant = sent.beats![0]!.dialogue![0]!.variants![0]!
+    expect(variant.text.body).toBe('The hall smells of wet ash.')
+    expect(variant.text.revision).toBe('rev-one')
+    expect(variant.text.lifecycle).toEqual({
+      policy: 'locked',
+      review: 'approved',
+      freshness: 'out_of_date',
+    })
+    expect(sent.beats![0]!.must_not_reveal).toEqual(['Mira was there'])
+  })
+
+  it('sends the precondition off the file it loaded, and records one undo entry', async () => {
+    // Both come from `useSaveScene` rather than from anything in the canvas —
+    // which is the point of routing a canvas edit through the one write hook.
+    await enterCouncil()
+    fireEvent.change(screen.getByLabelText('Show the logbook — Then leads to'), {
+      target: { value: nodeId.beat(ARRIVAL) },
+    })
+    await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
+    expect(calls('narrative_scene_save')[0]!.expected).toEqual({
+      kind: 'stamp',
+      stamp: { mtime_ms: 1, size: 2, hash: 'first' },
+    })
+    await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
+  })
+
+  it('refuses to clear a destination, and does not offer clearing as an option', async () => {
+    /*
+     * The source model has three kinds of destination and no fourth. Clearing
+     * one would have to mean deleting the choice, taking its label, its
+     * condition and its effects with it — so the option is not offered, and a
+     * caller that asks anyway is refused out loud rather than silently.
+     */
+    await enterCouncil()
+    const select = screen.getByLabelText('Show the logbook — Then leads to')
+    expect(within(select).queryByText('Nothing yet')).toBeNull()
+
+    fireEvent.change(select, { target: { value: '' } })
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(useFlowStore.getState().announcement.text).toMatch(/has to lead somewhere/)
+  })
+
+  it('refuses to rewire a beat to its own choices, and says why', async () => {
+    // A beat leads to its choices and outcomes because they belong to it. There
+    // is no field behind that wire, so it is read rather than edited.
+    await enterCouncil()
+    expect(
+      screen.getByLabelText(`Arrival at the hearing — Show the logbook leads to`),
+    ).toBeDisabled()
+  })
+
+  it('refuses to delete the box that only pictures where an outcome leads', async () => {
+    await enterCouncil()
+    const link = screen
+      .getByRole('button', { name: 'Scene linkThe long road' })
+      .closest('.nrt-outline-row') as HTMLElement
+    fireEvent.click(within(link).getByRole('button', { name: 'Delete' }))
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(useFlowStore.getState().announcement.text).toMatch(/picture of where a choice/)
+  })
+
+  it('adds a beat with a real identity and no invented content', async () => {
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: /Arrival at the hearing/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add beat after' }))
+
+    await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
+    const sent = calls('narrative_scene_save')[0]!.scene as Scene
+    expect(sent.beats).toHaveLength(3)
+    expect(sent.beats![2]!.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
+    expect(sent.beats![2]!.dialogue).toBeUndefined()
+    // The first two beats are byte-identical to what was loaded.
+    expect(sent.beats!.slice(0, 2)).toEqual(council().beats)
+  })
+})
+
+describe('the canvas draws what is in the file', () => {
+  it('shows a beat’s counts, never its lines', async () => {
+    await enterCouncil()
+    const rows = screen.getByLabelText('Council hearing outline')
+    expect(rows).toHaveTextContent('2 lines · 1 variants')
+    expect(rows).not.toHaveTextContent('wet ash')
+  })
+
+  it('never says “Demonstration data” over a writer’s own scene', async () => {
+    // The banner claiming a fixture while a real scene is on screen would be
+    // worse than no banner at all.
+    await enterCouncil()
+    expect(screen.queryByText(/Demonstration data/)).toBeNull()
+  })
+
+  it('says the workspace owns undo, rather than offering a second one', async () => {
+    await enterCouncil()
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(screen.getByText(/Undo and redo are the workspace’s own/)).toBeInTheDocument()
+  })
+})
+
+describe('diagnostics, attached by id', () => {
+  it('lands a destination problem on the choice responsible for it', async () => {
+    diagnostics = [
+      {
+        kind: 'choice',
+        code: 'dangling_beat',
+        message: 'this destination names beat 01J, which is not in this scene',
+        destination: true,
+        beatId: ARRIVAL,
+        choiceId: CHOICE,
+      },
+    ]
+    await enterCouncil()
+    const rows = screen.getByLabelText('Council hearing outline')
+    const problems = await within(rows).findByLabelText('Problems with Show the logbook')
+    expect(problems).toHaveTextContent('Error')
+    expect(problems).toHaveTextContent('which is not in this scene')
+  })
+
+  it('rolls a slot’s missing text up onto the beat that holds it', async () => {
+    diagnostics = [
+      {
+        kind: 'dialogueSlot',
+        code: 'missing_text',
+        message: 'this slot has no text yet',
+        destination: false,
+        beatId: ARRIVAL,
+        slotId: SLOT,
+      },
+    ]
+    await enterCouncil()
+    const problems = await screen.findByLabelText('Problems with Arrival at the hearing')
+    expect(problems).toHaveTextContent('Warning')
+  })
+
+  it('reports a problem with the scene itself, which has no box to sit on', async () => {
+    diagnostics = [
+      { kind: 'scene', code: 'no_beats', message: 'this scene has no beats', destination: false },
+    ]
+    await enterCouncil()
+    expect(await screen.findByLabelText('Problems with this scene')).toHaveTextContent(
+      'this scene has no beats',
+    )
+  })
+})
+
+describe('the badge filters, and the one thing they may not do', () => {
+  it('hides a warning and keeps the error, and writes nothing either way', async () => {
+    /*
+     * #189's guarantee, at the surface a person actually touches.
+     *
+     * Turning warnings off is a real filter. Turning errors off is not offered,
+     * and there is no state in which one is hidden — `badgeShown` answers before
+     * it reads the filter at all. A canvas that looked clean while a route led
+     * nowhere is the failure this exists to prevent.
+     */
+    diagnostics = [
+      {
+        kind: 'choice',
+        code: 'dangling_beat',
+        message: 'this destination names a beat that is not in this scene',
+        destination: true,
+        beatId: ARRIVAL,
+        choiceId: CHOICE,
+      },
+      {
+        kind: 'dialogueSlot',
+        code: 'missing_text',
+        message: 'this slot has no text yet',
+        destination: false,
+        beatId: ARRIVAL,
+        slotId: SLOT,
+      },
+    ]
+    open()
+    useUI.getState().selectNarrative({ sceneId: SCENE }, 'library')
+    await screen.findByRole('button', { name: /Auto layout/ })
+    await screen.findByText('1 destination error')
+    expect(screen.getByText('1 text warning')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Badges'))
+    fireEvent.click(screen.getByRole('button', { name: /^Warnings/ }))
+
+    expect(screen.queryByText('1 text warning')).toBeNull()
+    // Still there, with every chip off.
+    expect(screen.getByText('1 destination error')).toBeInTheDocument()
+    // The Errors chip is a marker that explains itself, not a switch.
+    expect(screen.getByRole('button', { name: /^Errors/ })).toHaveAttribute('aria-disabled', 'true')
+
+    // And nothing was written by any of it.
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(calls('narrative_layout_save')).toHaveLength(0)
+    expect(useUndoStack.getState().past).toHaveLength(0)
+  })
+
+  it('counts the three lifecycle dimensions separately on the beat that holds them', async () => {
+    // The locked, approved, out-of-date line in the fixture is *all three* at
+    // once. A single status would have to pick one and hide the other two.
+    open()
+    useUI.getState().selectNarrative({ sceneId: SCENE }, 'library')
+    await screen.findByRole('button', { name: /Auto layout/ })
+    const beat = await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+    expect(beat).toHaveTextContent('1 needs text')
+    expect(beat).toHaveTextContent('1 out of date')
+    expect(beat).toHaveTextContent('1 locked')
+    // Approved, so it is not waiting for review — the dimensions are read
+    // independently rather than derived from one another.
+    expect(beat).not.toHaveTextContent('needs review')
+  })
+})
+
+describe('the arrangement', () => {
+  it('is saved to its own file, with no key the layout format cannot name', async () => {
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Auto layout/ }))
+
+    await waitFor(() => expect(calls('narrative_layout_save')).toHaveLength(1))
+    const sent = calls('narrative_layout_save')[0]!.layout as { nodes: Record<string, unknown> }
+    for (const key of Object.keys(sent.nodes)) {
+      expect(key).toMatch(/^(beat|choice|outcome):[0-9A-HJKMNP-TV-Z]{26}$/)
+    }
+    // And nothing about the story was written.
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(useUndoStack.getState().past).toHaveLength(0)
+  })
+
+  it('treats a refused arrangement as information, never as an error', async () => {
+    // #185's invariant at the UI: a read-only share must not put an alert on
+    // screen for a drag, and it must not stop a source save.
+    layoutSave = { outcome: 'unwritable', reason: 'the folder is read-only' }
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Auto layout/ }))
+
+    const said = await screen.findByText(/only in this session/)
+    expect(said).toHaveAttribute('role', 'status')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('says when a sidecar came from a newer Wobu, without treating it as a failure', async () => {
+    layoutLoad = {
+      layout: {
+        schemaVersion: 1,
+        graph: { kind: 'scene', scene: SCENE },
+        mode: 'automatic',
+        modeUpdatedAt: 'then',
+        nodes: {},
+        groups: {},
+        annotations: {},
+      },
+      notices: [
+        {
+          kind: 'newerSchema',
+          blocking: false,
+          rel: 'narrative/layout/a.yaml',
+          found: 9,
+          supported: 1,
+        },
+      ],
+    }
+    await enterCouncil()
+    expect(await screen.findByText(/written by a newer Wobu/)).toHaveAttribute('role', 'status')
+  })
+})
+
+describe('what is honestly out of reach', () => {
+  it('says a badge cannot open a witness scenario, and why', async () => {
+    await enterCouncil()
+    expect(screen.getByText(/cannot open a witness scenario yet/)).toHaveTextContent(
+      /deterministic runtime and the Preview overlay/,
+    )
+  })
+
+  it('says an affected-build scope cannot be highlighted, and why', async () => {
+    await enterCouncil()
+    expect(screen.getByText(/cannot open a witness scenario yet/)).toHaveTextContent(
+      /dependency tracker and the build planner/,
+    )
+  })
+})
+
+describe('going in and coming back out', () => {
+  it('keeps the scene selected after leaving, because leaving is not deselecting', async () => {
+    // Escape goes back to the arc. Script and the inspector are still reading
+    // the same scene, so the selection has to survive the trip — a level is not
+    // a selection.
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: /Every scene/ }))
+    await screen.findByRole('navigation', { name: 'Flow level' })
+    expect(useUI.getState().narrative.sceneId).toBe(SCENE)
+    expect(screen.queryByLabelText('Council hearing outline')).toBeNull()
+  })
+
+  it('goes back in when the Library asks for the same scene again', async () => {
+    // The second click on a row that is already selected changes no value —
+    // only the reveal's sequence number rises — so following the reveal rather
+    // than the selection is what makes it work at all.
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: /Every scene/ }))
+    await screen.findByRole('navigation', { name: 'Flow level' })
+
+    useUI.getState().selectNarrative({ sceneId: SCENE }, 'library')
+    // The crumb back up to the arc is a button only when a scene is open: the
+    // arc draws itself as the current level, not as a way to reach one.
+    expect(await screen.findByRole('button', { name: /Every scene/ })).toBeInTheDocument()
+  })
+})
+
+describe('a read-only project', () => {
+  it('draws the scene and refuses to write it', async () => {
+    await enterCouncil(true)
+    fireEvent.change(screen.getByLabelText('Show the logbook — Then leads to'), {
+      target: { value: nodeId.beat(ARRIVAL) },
+    })
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(useFlowStore.getState().announcement.text).toMatch(/read-only/)
+  })
+})

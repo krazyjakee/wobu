@@ -16,6 +16,23 @@ export default defineConfig(({ mode }) => ({
   // Don't let Vite wipe Rust compiler errors off the screen.
   clearScreen: false,
 
+  optimizeDeps: {
+    /*
+     * elkjs, named explicitly because it is only ever imported from inside a
+     * Web Worker.
+     *
+     * Vite discovers dependencies by crawling the entry module, and the layout
+     * worker is not on that path — so in dev the 1.6 MB GWT-compiled CommonJS
+     * bundle is found late, on the first layout, and the optimizer restarts and
+     * reloads the page underneath whoever asked for it. Listing it here has it
+     * pre-bundled to ESM before the server starts serving.
+     *
+     * It stays in a worker, always: on the main thread elkjs costs +431 KB
+     * gzipped and is parsed at start-up (docs/17-flow-canvas.md).
+     */
+    include: ['elkjs/lib/elk.bundled.js'],
+  },
+
   server: {
     port: 1420,
     strictPort: true,

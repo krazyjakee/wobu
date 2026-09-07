@@ -7875,6 +7875,7 @@ dependencies = [
  "wobu-jobs",
  "wobu-llm",
  "wobu-mcp",
+ "wobu-narrative",
  "wobu-store",
  "wobu-sync",
 ]
@@ -7965,6 +7966,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "wobu-narrative"
+version = "0.1.11"
+dependencies = [
+ "blake3",
+ "chrono",
+ "indexmap 2.14.0",
+ "serde",
+ "serde_norway",
+ "thiserror 2.0.19",
+ "wobu-core",
+]
+
+[[package]]
 name = "wobu-store"
 version = "0.1.11"
 dependencies = [
@@ -7983,6 +7997,7 @@ dependencies = [
  "walkdir",
  "webp",
  "wobu-core",
+ "wobu-narrative",
 ]
 
 [[package]]

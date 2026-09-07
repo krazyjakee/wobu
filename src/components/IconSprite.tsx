@@ -53,6 +53,18 @@ export function IconSprite() {
           <path d="M21 11.4l-3.5-3.4-4.5 4.4" />
           <path d="M16 17.5a2.5 2.5 0 01-2.5 2.5h-8A2.5 2.5 0 013 17.5V9" />
         </g>
+        {/* One beat forking into two. Narrative's own vocabulary is the branch —
+            three approaches reconverging on one verdict is the thing the Flow
+            canvas exists to show — and a branch is also what tells this apart
+            from `i-library` at rail size, where a speech bubble and a book both
+            reduce to a rounded rectangle. Not `i-link`, which is two chain
+            links about a *reference*, nor `i-share`, which points outward. */}
+        <g id="i-narrative">
+          <circle cx="5.5" cy="12" r="2.5" />
+          <circle cx="18.5" cy="6.5" r="2.5" />
+          <circle cx="18.5" cy="17.5" r="2.5" />
+          <path d="M8 11c3-0.4 5-4.5 8-4.5M8 13c3 0.4 5 4.5 8 4.5" />
+        </g>
         {/* A toothed cog rather than a centre circle with bare spokes, which
             read as the sun used for a light/dark-theme control. It stays inside
             3–21 so its optical size matches the other rail icons. */}

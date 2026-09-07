@@ -24,6 +24,7 @@ pub mod image;
 pub mod index;
 pub mod lora;
 pub mod markdown;
+pub mod narrative;
 pub mod paths;
 pub mod peer;
 pub mod presence;
@@ -40,6 +41,11 @@ pub use assets::{ImportWarning, ImportedAsset, StoredMesh};
 pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, GenerationPage, GenerationPageRequest, GenerationSummary, Index};
+pub use narrative::layout::{
+    Annotation, AnnotationId, GraphKey, Group, GroupId, Layout, LayoutLoad, LayoutMode,
+    LayoutNotice, LayoutSave, NodeKey, NodeLayout,
+};
+pub use narrative::{Catalog, SceneEntry, SceneFile, SourceSave, UnreadableSource};
 pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{
     AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary,

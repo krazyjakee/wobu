@@ -51,6 +51,40 @@ export const qk = {
   // Nor is this one: presence moves on its own heartbeat, and a collaborator
   // opening a node changes who is here without changing the world at all.
   peers: ['presence_peers'] as const,
+
+  // ── narrative ──────────────────────────────────────────────────────────
+  narrativeScenes: ['narrative_scenes'] as const,
+  narrativeScene: (id: string) => ['narrative_scene', id] as const,
+  // The *saved* scene's problems. Diagnostics for an unsaved buffer are not in
+  // the cache at all — see `useDiagnoseScene` — because keying them by the
+  // document would hold one entry per keystroke and keying them by the scene id
+  // would serve the answer for a different document.
+  narrativeDiagnostics: (id: string) => ['narrative_diagnostics', id] as const,
+  narrativeState: ['narrative_state'] as const,
+  // One key per canvas. `graphKeyId` collapses the tagged object to a string so
+  // two renders of the same graph are the same key rather than two structurally
+  // equal objects that TanStack has to hash identically for ever.
+  narrativeLayout: (graph: api.GraphKey) => ['narrative_layout', api.graphKeyId(graph)] as const,
+}
+
+/**
+ * Everything narrative that a write or a folder change can invalidate.
+ *
+ * Layout is deliberately not here. An arrangement is not the world, and
+ * refetching it because somebody saved a scene would fight a canvas the user is
+ * dragging on — the merging write already means two people arranging the same
+ * scene both keep their boxes, so there is nothing a refetch would rescue.
+ */
+export function invalidateNarrative(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: qk.narrativeScenes })
+  void qc.invalidateQueries({ queryKey: ['narrative_scene'] })
+  // Diagnostics are computed against the whole project — the scene catalog and
+  // the declared variables — so a *different* scene being saved or deleted
+  // changes this scene's answer. Invalidating the family rather than one key is
+  // what keeps a dangling cross-scene link from lingering after the scene it
+  // named came back.
+  void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })
+  void qc.invalidateQueries({ queryKey: qk.narrativeState })
 }
 
 /** Everything that the file watcher can invalidate. */
@@ -86,6 +120,12 @@ export function invalidateWorld(qc: QueryClient) {
   // Reference pins, provider selection, and the entity's attached weight all
   // participate in LoRA readiness.
   void qc.invalidateQueries({ queryKey: ['lora_status'] })
+  // Scenes are not in the SQLite index yet (the remaining half of #153), so a
+  // reconcile is the only signal this side gets that a collaborator edited one.
+  // Until they are indexed that signal is coarse — the watcher raises this for
+  // the folder, not for the scene — which is exactly why the whole narrative
+  // family moves together rather than one key at a time.
+  invalidateNarrative(qc)
   // Row thumbnails are keyed by node rather than by query, so they are not in
   // the client's cache at all — see `lib/nodeThumbs.ts`. Choosing a cover or
   // attaching a reference changes what a hundred rows should draw, and this is
