@@ -45,6 +45,10 @@ wobu-imagine = { path = "crates/wobu-imagine" }
 wobu-jobs = { path = "crates/wobu-jobs" }
 wobu-mcp = { path = "crates/wobu-mcp" }
 wobu-sync = { path = "crates/wobu-sync" }
+# The typed narrative source model (#152). No Tauri and no provider
+# dependency by design, so the compiler, the runtime and the engine
+# adapters can all be built against it without pulling the desktop shell in.
+wobu-narrative = { path = "crates/wobu-narrative" }
 
 [package]
 name = "wobu"
@@ -133,6 +137,11 @@ wobu-llm = { workspace = true }
 # turns it on in Settings; `mcp.rs` is the only thing that can, and it is handed
 # an explicit flag to do it with.
 wobu-mcp = { workspace = true }
+# The typed narrative source model. Named here as well as in `wobu-store`
+# because the command layer speaks in its types directly: a `Scene` crosses the
+# bridge as the source document it is, and a mirrored DTO in this crate would
+# be a second copy of the model to keep in step — see `commands/narrative.rs`.
+wobu-narrative = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
 

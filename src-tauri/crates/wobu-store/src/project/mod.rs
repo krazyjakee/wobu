@@ -13,6 +13,7 @@ pub use self::reconcile::{ReconcileObservation, ReconcilePlan};
 
 mod assets;
 mod generations;
+mod narrative;
 mod nodes;
 mod peers;
 mod reconcile;

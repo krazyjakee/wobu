@@ -417,6 +417,125 @@ fn reserve_conflict_sibling(target: &Path, peer: &str) -> Result<PathBuf> {
 
 const MAX_CONFLICT_ATTEMPTS: u32 = 1000;
 
+/// How many times a merging write re-reads and re-merges before it stops
+/// trying to be clever and simply lands.
+///
+/// Three, because each retry costs a `stat` and a re-merge of a file measured
+/// in kilobytes, and because the thing being protected is a box position: an
+/// unbounded loop would let two people dragging boxes at each other keep a
+/// save spinning, which is a worse outcome than the one lost drag the final
+/// unconditional write can cost.
+const MERGE_ATTEMPTS: u32 = 3;
+
+/// Write a file that is allowed to merge, and that must never fail and never
+/// park a conflict sibling.
+///
+/// **This is a deliberate departure from the rule the rest of this module
+/// enforces**, and it is narrow: it exists for the Flow canvas layout sidecars
+/// (#185) and for nothing that carries authored words. The argument is in
+/// `crate::narrative::layout`, and the short form is that two writers dragging
+/// different boxes is not a semantic conflict, so raising a diff card over it
+/// would teach people to dismiss diff cards — which is precisely the habit
+/// [`guarded_write`]'s conflict siblings depend on them not having.
+///
+/// `render` is handed whatever is on disk right now — `None` if there is no
+/// file — and returns the bytes that represent our edit merged into it. It is
+/// called again on each retry, against a freshly read file, so a caller that
+/// merges correctly against one snapshot merges correctly against all of them.
+///
+/// The loop narrows the lost-update window to the gap between a `stat` and a
+/// `rename`, which is as close to a compare-and-swap as a file on an SMB share
+/// gets: neither POSIX nor SMB offers a rename that fails when the target has
+/// moved. The residual is stated rather than hidden — see the module docs on
+/// `narrative::layout` — and on the final attempt the write lands regardless,
+/// because a canvas that refuses to remember where a box is would be a worse
+/// bug than one that occasionally forgets a collaborator's simultaneous drag.
+pub fn merging_write(
+    project_root: &Path,
+    target: &Path,
+    mut render: impl FnMut(Option<&str>) -> Result<String>,
+) -> Result<Stamp> {
+    if let Some(parent) = target.parent() {
+        crate::paths::ensure_dir(parent)?;
+    }
+    for attempt in 1..=MERGE_ATTEMPTS {
+        let before = read_stamped(target)?;
+        let merged = render(before.as_ref().map(|(text, _)| text.as_str()))?;
+
+        // Already what is on disk. Returning early keeps the file's mtime
+        // still, which matters more than the saved rename: every watcher on
+        // the share treats a changed stamp as somebody's edit, and a canvas
+        // that rewrote its sidecar on every open would wake all of them.
+        if let Some((text, stamp)) = &before
+            && *text == merged
+        {
+            return Ok(stamp.clone());
+        }
+
+        let staged = StagedFile::new(project_root, merged.as_bytes())?;
+        let moved_under_us = match (&before, peek(target)?) {
+            (Some((_, stamp)), Some((mtime, size))) => {
+                stamp.mtime_ms != mtime || stamp.size != size
+            }
+            (None, None) => false,
+            _ => true,
+        };
+        if moved_under_us && attempt < MERGE_ATTEMPTS {
+            continue;
+        }
+        staged.rename(target)?;
+        let mtime = fs::metadata(target).map(|m| mtime_ms(&m)).unwrap_or_else(|_| now_ms());
+        return Ok(Stamp::of_bytes(merged.as_bytes(), mtime));
+    }
+    unreachable!("the final attempt always writes")
+}
+
+/// Move a file aside without reading it, keeping its bytes under a name nobody
+/// will mistake for the real thing.
+///
+/// For the one file class where refusing to proceed is the wrong answer: a
+/// corrupt cosmetic sidecar must not wedge the canvas that reads it, and
+/// overwriting it in place would throw away bytes a person might still want to
+/// look at. Returns `None` when there was nothing there.
+pub fn park_unreadable(target: &Path, peer: &str, marker: &str) -> Result<Option<PathBuf>> {
+    if !target.is_file() {
+        return Ok(None);
+    }
+    let stem = target.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = target.extension().map(|s| s.to_string_lossy().into_owned());
+    let peer = wobu_core::slugify(peer).unwrap_or_else(|_| "unknown".to_string());
+    let ts = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+    for attempt in 1..=MAX_CONFLICT_ATTEMPTS {
+        let n = if attempt <= 1 { String::new() } else { format!("-{attempt}") };
+        let name = match &ext {
+            Some(ext) => format!("{stem}.{marker}-{peer}-{ts}{n}.{ext}"),
+            None => format!("{stem}.{marker}-{peer}-{ts}{n}"),
+        };
+        let candidate = target.with_file_name(name);
+        // The name is claimed with `create_new`, which is atomic, rather than
+        // by testing for existence first — two Wobus on one share race here
+        // for real, and `exists()` would let both decide the same name is
+        // free and let the second `rename` destroy what the first parked. The
+        // rename below then replaces our own empty placeholder.
+        match fs::OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(Error::io(&candidate, e)),
+        }
+        return match fs::rename(target, &candidate) {
+            Ok(()) => Ok(Some(candidate)),
+            // Somebody else moved it first. Nothing was lost and nothing is
+            // left to park, so the placeholder goes too.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let _ = fs::remove_file(&candidate);
+                Ok(None)
+            }
+            Err(e) => Err(Error::io(&candidate, e)),
+        };
+    }
+    Err(Error::io(target, std::io::Error::other("could not find a free name to park under")))
+}
+
 /// Stage into `.wobu/tmp` — same filesystem as the target, so `rename` is
 /// atomic — then rename over the destination.
 fn stage_and_rename(project_root: &Path, target: &Path, bytes: &[u8]) -> Result<()> {

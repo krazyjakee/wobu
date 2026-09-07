@@ -39,6 +39,11 @@ walkdir = "2.5.0"
 # meet through a byte slice instead.
 webp = { version = "0.3.1", default-features = false }
 wobu-core.workspace = true
+# The typed narrative source model (#152). This crate persists it; it does not
+# extend it — and in particular the layout sidecars in `narrative::layout` are
+# keyed by ids borrowed from here and store no narrative content at all, which
+# is the whole of #185's separation.
+wobu-narrative.workspace = true
 
 [dev-dependencies]
 # The integration tests need real encoded pictures rather than the hand-written

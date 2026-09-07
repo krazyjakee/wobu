@@ -17,9 +17,12 @@ Most of the folder cannot conflict, and that is a design choice rather than luck
 | `assets/**` | content-addressed, write-once | **none** — same bytes, same path |
 | `generations/**` | ULID-named, write-once, never mutated | **none** |
 | `project.json` | rarely written, small | low |
+| `narrative/layout/**` | edited continuously, merged per node | **none** — see below |
 | `nodes/**/*.md` | edited continuously | **this is the only real surface** |
+| `narrative/scenes/*.yaml`, `narrative/state.yaml` | edited continuously | same surface, same rules |
 
-So all the machinery below exists to protect one class of file: node Markdown.
+So all the machinery below exists to protect two classes of file: node Markdown and narrative
+source. They are treated identically — guarded write, conflict sibling, never merged.
 
 ## Presence, not locking
 
@@ -65,6 +68,45 @@ Enhance and Generate are treated the same way: they write to the node like any o
 a long-running Enhance that finishes after someone else saved raises a conflict rather than
 clobbering.
 
+## Canvas layout is the one thing we do merge
+
+`narrative/layout/**` holds where the boxes are on the Flow canvas (#185): node positions,
+collapsed groups, layout mode, pinned notes. It is merged **per node id, last write wins**,
+and a losing write is never parked as a conflict sibling. That is a deliberate exception to
+everything above, and it is worth being explicit about why:
+
+- Two writers dragging two different boxes is not a semantic disagreement. There is no version
+  of the arrangement that is "theirs" as opposed to "ours" — there is one canvas with two boxes
+  on it, and both moves are correct.
+- A diff card over a coordinate is a diff card nobody will read. The conflict card works
+  *because* it is rare and always about words somebody wrote. Raising one every time two people
+  had a scene open would train people to dismiss the card without looking, and the next one
+  would be a paragraph.
+- Layout must never be able to block a source save, and the cleanest guarantee of that is a
+  separate file that resolves itself. Saving a scene does not touch it at all.
+
+What the merge cannot do, stated so it is a decision rather than a surprise:
+
+- **It resolves by wall clock.** Each entry carries the `updatedAt` of whoever set it, so two
+  machines with skewed clocks resolve in favour of the fast one, not the recent one. There is no
+  vector clock here, because acquiring one would mean a per-peer table for a file whose
+  worst-case loss is a rectangle in the wrong place.
+- **Exact ties break by content hash**, which has no claim to being right — only to being
+  deterministic. Without it two machines merging the same pair of files in opposite directions
+  reach different answers, the folders never converge, and the file ping-pongs forever.
+- **Deletion loses to movement.** The merge is a union, so an entry one side removed and the
+  other kept comes back; it is dropped again the next time the layout is read against the
+  source, which is where deleted ids are collected anyway.
+- **Groups and annotations merge whole.** Two people adding different beats to the same group
+  keeps only the later edit's membership.
+- **The write is not a compare-and-swap.** Neither POSIX nor SMB has a rename that fails when
+  the target moved. The write re-reads and re-merges up to three times and then lands
+  regardless, which narrows the lost-update window to the gap between a `stat` and a `rename`.
+  Inside that window one collaborator's simultaneous drag can be dropped.
+
+Nothing in that list can cost anybody a sentence they wrote. Everything a person types stays in
+the source document, where the never-merge rule applies in full.
+
 ## File watching does not work over the network
 
 `inotify`/`FSEvents` do **not** see writes made by other hosts on NFS or SMB. Relying on
@@ -72,7 +114,12 @@ clobbering.
 
 So the store detects whether the project path is on a network mount and picks a strategy:
 
-- **Local filesystem** → `notify` watcher, near-instant, debounced ~400 ms.
+- **Local filesystem** → `notify` watcher, near-instant, debounced ~400 ms. It watches
+  `nodes/`, `narrative/` and the project root itself. The root is watched non-recursively and
+  for one reason: a project with no narrative has no `narrative/` directory to watch, and
+  creating one at open would change a folder we promised to open unchanged — so the tree is
+  attached the moment it appears, whether that is this machine's first scene, a peer's sync
+  round or a `git pull`.
 - **Network mount** → poll a directory listing every 5 seconds (idle: 15 s), comparing
   `(path, mtime, size)` against the index. Only files whose stamp changed are re-read.
 
