@@ -30,6 +30,10 @@ pub mod influence;
 /// command group with a job, a provider adapter and a task of its own;
 /// `generations::mesh_concepts` is only the reading half of it.
 pub mod mesh;
+/// Narrative source, diagnostics and canvas layout (#151). Coarse on purpose:
+/// a structural edit is a whole scene document, so a canvas edit and the
+/// equivalent form edit cannot produce different source.
+pub mod narrative;
 pub mod nodes;
 pub mod project;
 /// The one reader of `project.json`'s `providers` map, shared by images, text,
