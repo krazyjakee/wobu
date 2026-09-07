@@ -45,6 +45,64 @@ fn stamp_of(view: &SceneFileView) -> Precondition {
     Precondition::Stamp { stamp: view.stamp.clone().expect("a saved scene has a stamp") }
 }
 
+#[test]
+fn changed_wording_cannot_retain_approval_through_a_scene_save() {
+    use wobu_narrative::{Provenance, ReviewState, Text, Variant};
+
+    let temp = Temp::new();
+    let mut project = project(&temp);
+    let mut created = project.create_scene("Council hearing").unwrap();
+    let mut beat = Beat::new("Present evidence");
+    let mut slot = DialogueSlot::new(Speaker::Player);
+    let mut text = Text::written("I witnessed the attack.");
+    text.lifecycle.review = ReviewState::Approved;
+    slot.variants.push(Variant::new(text));
+    beat.dialogue.push(slot);
+    created.scene.beats.push(beat);
+    project.save_scene(&mut created).unwrap();
+    let opened = SceneFileView::of(&created);
+
+    let mut changed = opened.scene.clone();
+    let text = &mut changed.beats[0].dialogue[0].variants[0].text;
+    text.set_body("I heard about the attack.", Provenance::Human);
+    text.lifecycle.review = ReviewState::Approved;
+    let error = save_scene(&mut project, changed.clone(), None, &stamp_of(&opened)).unwrap_err();
+    assert_eq!(error.code.as_str(), "node.invalid");
+    assert_eq!(project.load_scene(opened.scene.id).unwrap().scene, opened.scene);
+
+    changed.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Draft;
+    let saved = save_scene(&mut project, changed, None, &stamp_of(&opened)).unwrap();
+    assert!(saved.scene.beats[0].dialogue[0].variants[0].text.revision_matches());
+    // Undo may restore a previously recorded, correctly sealed approval.
+    let restored =
+        save_scene(&mut project, opened.scene.clone(), None, &Precondition::Current).unwrap();
+    assert_eq!(restored.scene, opened.scene);
+}
+
+#[test]
+fn mismatched_approved_revision_is_rejected_but_incomplete_drafts_can_be_saved() {
+    use wobu_narrative::{ReviewState, Text, Variant};
+
+    let temp = Temp::new();
+    let mut project = project(&temp);
+    let created = project.create_scene("Council hearing").unwrap();
+    let opened = SceneFileView::of(&created);
+    let mut scene = opened.scene.clone();
+    let mut beat = Beat::new("Present evidence");
+    let mut slot = DialogueSlot::new(Speaker::Player);
+    let mut text = Text::written("Original wording");
+    text.body = "Changed directly in Source".into();
+    text.lifecycle.review = ReviewState::Approved;
+    slot.variants.push(Variant::new(text));
+    beat.dialogue.push(slot);
+    scene.beats.push(beat);
+    assert!(save_scene(&mut project, scene.clone(), None, &stamp_of(&opened)).is_err());
+    assert!(save_scene(&mut project, scene.clone(), None, &Precondition::Current).is_err());
+    scene.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Draft;
+    let saved = save_scene(&mut project, scene, None, &stamp_of(&opened)).unwrap();
+    assert!(!saved.scene.beats[0].dialogue[0].variants[0].text.revision_matches());
+}
+
 /* ── catalog ──────────────────────────────────────────────────────────────── */
 
 #[test]

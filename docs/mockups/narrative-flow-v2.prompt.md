@@ -1,0 +1,26 @@
+# Narrative flow mockup prompt
+
+Built-in imagegen visual concept for Library / Flow / Script. Planned UI, not shipped functionality.
+
+Use case: ui-mockup. Create a high-fidelity, implementable desktop application screenshot concept for Wobu, a narrative authoring tool. One full-screen flat straight-on landscape app UI at approximately 2048x1280. No device, browser, perspective or presentation backdrop. Precise readable Inter-like typography, crisp controls, 6px corner radii, fine separators, practical professional density. Match Wobu dark palette: page #0d0e12, panel #14161c, raised #1a1d25, border #2b303c, text #e7e9f0, secondary #9aa1b3. Amber #e2a44f for authored actions/selection, violet #9d7cf5 only for AI generation, green #5fce8b for valid/current. No huge gradients, glow, fantasy art, portraits, chat bubbles or marketing text. Small lowercase wordmark "wobu". Render the specified key text accurately. Initial avatars K, M, O represent Kael, Mira, Orren. Top bar: "wobu", "Ashfall" project dropdown, "Narrative", global "Find scene or line…" search, "Review 8", "Build", outlined "Export". Bottom status bar "All changes saved" left, "Narrative concept · Proposed UI" right. A 52px left rail contains simple Library, Forge, Assets, Narrative-selected and Settings icons.
+Primary request: the NEW Flow-first scene editor, inspired by professional visual workflow editors and Blueprint port connections, retaining a dedicated readable writing inspector. This is a scene-level graph, not an enormous scene tree. Make the graph beautiful and immediately understandable. Nodes are beats and outcomes, never one per sentence or generated variant.
+
+LAYOUT: after the slim rail, a very narrow 160px navigation column, a large central graph occupying about 65% of remaining width, and a generous 330px inspector. Header above graph: breadcrumb "Scenes / Beacon attack / Council hearing", large title "Council hearing", subtitle "Three approaches. One verdict.", tabs "Flow" active amber underline, "Script", "Preview", "Source". On left column top an obvious "← All scenes" button. Then only "PINNED" with "Council hearing", "Beacon aftermath"; "RECENT" with "The captain’s cabin"; lower "THIS SCENE" an "Outline" toggle and compact list "Present evidence", "Council support", "Mira intervenes", "Orren objects", "Council verdict". No hundreds of scenes in this sidebar.
+
+Above canvas an understated toolbar "+ Add beat", "+ Add choice", "Arrange", "Filter", then dropdown "High trust · Witnessed" and play button "Preview". Canvas dark almost-black with tiny faint dot grid. Flow goes LEFT TO RIGHT. Place start/exposition beat "Present evidence" at left-middle, with small subtitle "Kael accuses the captain" and badges "6 lines", "7 variants". It connects to a small distinct decision node "Player choice" to its right. The choice fans out into EXACTLY THREE branches with clear visible ports, arrowheads and tidy curved/orthogonal wires, no crossings:
+Upper branch edge "Show logbook" with small condition "Has logbook" leads to a beat "Council support", subtitle "The evidence is accepted", compact effect "Support +10", status badge "Approved".
+Middle edge "Appeal to duty" leads to selected beat "Mira intervenes", subtitle "Mira supports Kael", count "4 lines · 7 variants", amber small badge "1 needs review".
+Bottom edge "Threaten council" leads to beat "Orren objects", subtitle "The council closes ranks", effect "Trust −10", violet small badge "2 missing lines".
+The three beat nodes then merge via separate clear wires into EXACTLY ONE node on far right of canvas "Council verdict", subtitle "Continue the hearing", count "5 lines", with one outgoing wire to a small round "End" endpoint.
+Canvas selection: "Mira intervenes" has an amber outline and its incoming/outgoing edges subtly amber. Other wires neutral slate. Selected route is editing selection, not a claimed playback trace. Keep wires visible and intentional, aligned rows, no spaghetti. Fit canvas graph with generous gaps and do not clip nodes. Include canvas bottom left zoom controls "-  85%  +" and "Fit", bottom right a small useful minimap. Bottom graph strip "5 beats · 3 choices · 1 review needed" and a tiny legend for Beat, Choice, Outcome. No individual dialogue lines on canvas.
+
+RIGHT INSPECTOR corresponds EXACTLY to selected "Mira intervenes". Header "Selected beat", title "Mira intervenes", tabs "Script" selected / "Context". Small variant dropdown "High trust · Witnessed", subtext "Variant 1 of 7". Participant initial M and name "MIRA". Readable compact script excerpt:
+"I saw the signal log. Kael is telling the truth."
+Below separate badges "Edited", "Needs review", "Current".
+Quiet "Open full script →" link.
+Next mini-section "KAEL" and text "Then let the council see it." with badges "Generated", "Draft".
+Divider. "INTENT" followed by "Support Kael without revealing who changed the log."
+"CONSEQUENCE" followed by "Continue to Council verdict".
+"KNOWLEDGE" with "Mira · Inspected the signal log", linked "View context →".
+At bottom a violet "Generate missing text" button and tiny lock icon text "Locked lines are protected".
+Critical: a spacious flow graph is the centre of this mockup. Do not reproduce the old document editor as the main pane. No poster labels outside the application.

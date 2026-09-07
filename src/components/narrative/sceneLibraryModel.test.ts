@@ -1,0 +1,46 @@
+import { libraryRows } from './sceneLibrary.fixture'
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_LIBRARY_VIEW, findScenes } from './sceneLibraryModel'
+
+describe('scene discovery', () => {
+  it('finds intent and exact dialogue variants without depending on their order', () => {
+    const [result] = findScenes(libraryRows, { ...DEFAULT_LIBRARY_VIEW, query: 'attack' })
+    expect(result?.matches).toMatchObject([
+      { sceneId: 'council', beatId: 'evidence', lineId: 'line', variantId: 'high' },
+      { sceneId: 'council', beatId: 'evidence', lineId: 'line', variantId: 'low' },
+    ])
+    expect(
+      findScenes(libraryRows, { ...DEFAULT_LIBRARY_VIEW, query: 'convince' })[0]?.matches[0]
+        ?.beatId,
+    ).toBe('evidence')
+  })
+  it('excludes generated drafts until explicitly included', () => {
+    expect(findScenes(libraryRows, { ...DEFAULT_LIBRARY_VIEW, query: 'secret' })).toHaveLength(0)
+    expect(
+      findScenes(libraryRows, { ...DEFAULT_LIBRARY_VIEW, query: 'secret', includeDrafts: true })[0]
+        ?.matches[0]?.draft,
+    ).toBe(true)
+  })
+  it('combines independent lifecycle fields on the same variant', () => {
+    expect(
+      findScenes(libraryRows, {
+        ...DEFAULT_LIBRARY_VIEW,
+        participant: 'mira',
+        policy: 'locked',
+        review: 'approved',
+        freshness: 'out_of_date',
+      }),
+    ).toHaveLength(1)
+    expect(
+      findScenes(libraryRows, { ...DEFAULT_LIBRARY_VIEW, policy: 'locked', review: 'draft' }),
+    ).toHaveLength(0)
+    expect(findScenes(libraryRows, { ...DEFAULT_LIBRARY_VIEW, participant: 'other' })).toHaveLength(
+      0,
+    )
+  })
+  it('keeps unread files discoverable by title without claiming text coverage', () => {
+    const rows = [{ summary: libraryRows[0]!.summary, error: 'Conflict' }]
+    expect(findScenes(rows, DEFAULT_LIBRARY_VIEW)).toHaveLength(1)
+    expect(findScenes(rows, { ...DEFAULT_LIBRARY_VIEW, missing: true })).toHaveLength(0)
+  })
+})

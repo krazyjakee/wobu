@@ -66,6 +66,8 @@ use wobu_store::{GraphKey, Layout, LayoutLoad, LayoutNotice, LayoutSave, Project
 use crate::error::{Code, CommandResult, WobuError};
 use crate::state::AppState;
 
+mod editorial;
+
 /* ── what the webview sees ────────────────────────────────────────────────── */
 
 /// One scene as the Library lists it, without parsing its beats.
@@ -572,7 +574,15 @@ fn save_scene(
     // scene somebody broke in a text editor could not be saved over even by
     // the person fixing it.
     let path = wobu_store::paths::from_rel_string(project.root(), &rel);
-    let on_disk = wobu_store::atomic::read_stamped(&path)?.map(|(_, stamp)| stamp);
+    let on_disk = wobu_store::atomic::read_stamped(&path)?;
+    let previous =
+        on_disk.as_ref().and_then(|(yaml, _)| wobu_narrative::SceneDocument::parse(yaml).ok());
+    editorial::validate_approval(
+        previous.as_ref().map(|document| &document.scene),
+        &scene,
+        matches!(expected, Precondition::Current),
+    )?;
+    let on_disk = on_disk.map(|(_, stamp)| stamp);
 
     let mut file = wobu_store::SceneFile { scene, rel, stamp: expected.against(on_disk) };
     match project.save_scene(&mut file)? {
@@ -657,7 +667,7 @@ pub fn narrative_diagnostics(
     state.with(|project| diagnostics(project, scene_id, scene))
 }
 
-fn diagnostics(
+pub(super) fn diagnostics(
     project: &Project,
     scene_id: SceneId,
     scene: Option<Scene>,
@@ -747,3 +757,13 @@ fn layout_save(project: &Project, layout: &Layout) -> LayoutSaveView {
 
 #[cfg(test)]
 mod tests;
+
+/// Prepare handwritten wording without credentials or a generation job.
+#[tauri::command]
+pub fn narrative_text_written(body: String, locked: bool) -> wobu_narrative::Text {
+    if locked {
+        wobu_narrative::Text::written_locked(body)
+    } else {
+        wobu_narrative::Text::written(body)
+    }
+}

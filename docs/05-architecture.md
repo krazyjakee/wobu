@@ -1,5 +1,11 @@
 # 05 — Technical Architecture
 
+The planned [narrative extension](17-narrative-system.md) adds typed narrative source,
+deterministic compilation, editorial review, and portable game packages to this architecture.
+It reuses the store, providers, and jobs while keeping the runtime independent of Tauri and LLMs.
+See that design for the proposed boundaries and implementation backlog; the stack below describes
+the existing application.
+
 ## Stack
 
 - **Shell**: Tauri 2 (Rust core, system webview).

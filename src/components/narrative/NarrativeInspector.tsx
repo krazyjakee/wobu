@@ -1,81 +1,131 @@
+import type { Speaker } from '../../lib/api'
+import { errorMessage } from '../../lib/api'
+import { useScene } from '../../lib/queries'
 import { useUI } from '../../store/ui'
-import { Icon } from '../Icon'
 import { TipButton } from '../Tooltip'
+import { conditionText } from './flow/source'
+import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
+import './narrativeInspector.css'
 
-/**
- * The context pane: what the selected element is allowed to know, and who is in
- * it.
- *
- * The inspector is a *writer* of the shared selection as well as a reader. Its
- * breadcrumb walks back up the path — pressing Scene from a selected line drops
- * the beat and the line — and because that goes through the same
- * `selectNarrative` every other surface uses, the canvas and Script follow it
- * without the inspector knowing they exist.
- *
- * Ids are shown rather than names on purpose. There is no narrative model in
- * this build to resolve a name from, and printing a plausible title here would
- * be inventing one.
- */
+/** The saved scene context, shared by Flow, Script and Source selection. */
 export function NarrativeInspector() {
-  const selection = useUI((s) => s.narrative)
+  const { sceneId, beatId, lineId } = useUI((s) => s.narrative)
   const selectNarrative = useUI((s) => s.selectNarrative)
-  const { sceneId, beatId, lineId } = selection
+  const query = useScene(sceneId)
+  const { nameOf } = useNarrativeNames()
+  const scene = query.data?.scene
+  const beat = scene?.beats?.find((item) => item.id === beatId)
+  const slot = beat?.dialogue?.find((item) => item.id === lineId)
+  const speakerName = (speaker: Speaker) =>
+    typeof speaker === 'string'
+      ? speaker === 'player'
+        ? 'Player'
+        : 'Narrator'
+      : (nameOf(speaker.entity) ?? speaker.entity)
 
   return (
     <aside className="nrt-inspector" aria-label="Narrative context">
       <h2>Context</h2>
-
       {sceneId === null ? (
-        <p className="nrt-note">
-          Nothing is selected. Choosing a scene, a beat or a line anywhere in this workspace fills
-          this pane with what that element is allowed to draw on.
-        </p>
+        <p className="nrt-note">Choose a scene or beat to inspect its authored context.</p>
       ) : (
-        <nav className="nrt-crumbs" aria-label="Selected element">
-          <TipButton
-            className={beatId === null ? 'chip is-on' : 'chip'}
-            aria-current={beatId === null ? 'true' : undefined}
-            tip="Select the scene, and nothing inside it"
-            onClick={() => selectNarrative({ sceneId }, 'inspector')}
-          >
-            Scene <code>{sceneId}</code>
-          </TipButton>
-          {beatId !== null && (
+        <>
+          <nav className="nrt-crumbs" aria-label="Selected element">
             <TipButton
-              className={lineId === null ? 'chip is-on' : 'chip'}
-              aria-current={lineId === null ? 'true' : undefined}
-              tip="Select the beat, and no line within it"
-              onClick={() => selectNarrative({ sceneId, beatId }, 'inspector')}
+              className={beatId === null ? 'chip is-on' : 'chip'}
+              aria-current={beatId === null ? 'true' : undefined}
+              tip="Select the scene, and nothing inside it"
+              onClick={() => selectNarrative({ sceneId }, 'inspector')}
             >
-              Beat <code>{beatId}</code>
+              Scene {scene?.name ?? sceneId}
             </TipButton>
-          )}
-          {lineId !== null && (
-            <span className="chip is-on" aria-current="true">
-              Line <code>{lineId}</code>
-            </span>
-          )}
-        </nav>
+            {beatId !== null && (
+              <TipButton
+                className={lineId === null ? 'chip is-on' : 'chip'}
+                aria-current={lineId === null ? 'true' : undefined}
+                tip="Select the beat, and no line within it"
+                onClick={() => selectNarrative({ sceneId, beatId }, 'inspector')}
+              >
+                Beat {beat?.title ?? beatId}
+              </TipButton>
+            )}
+            {lineId !== null && <span className="chip is-on">Line {lineId}</span>}
+          </nav>
+          {query.isPending && <p role="status">Loading scene context…</p>}
+          {query.isError && <p role="alert">{errorMessage(query.error)}</p>}
+        </>
       )}
-
+      {scene && (
+        <>
+          <p className="nrt-note">Saved context. Save edits to update this pane.</p>
+          {scene.summary && <p>{scene.summary}</p>}
+          <section className="nrt-context">
+            <h3>Participants</h3>
+            {scene.participants?.length ? (
+              <ul>
+                {scene.participants.map((participant) => (
+                  <li key={participant.entity}>
+                    {nameOf(participant.entity) ?? participant.entity}
+                    {participant.role ? ` · ${participant.role}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="nrt-note">No participants assigned.</p>
+            )}
+          </section>
+          {beatId && !beat && <p role="status">The selected beat is no longer in this scene.</p>}
+          {beat && (
+            <>
+              <section className="nrt-context">
+                <h3>Intent</h3>
+                {beat.intents?.length ? (
+                  <ul>
+                    {beat.intents.map((intent, index) => (
+                      <li key={index}>
+                        <strong>{speakerName(intent.subject)}</strong>: {intent.intent}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="nrt-note">No intent authored.</p>
+                )}
+              </section>
+              <ContextList title="Must convey" items={beat.must_convey} />
+              <ContextList title="Must not reveal" items={beat.must_not_reveal} />
+            </>
+          )}
+          {slot && (
+            <section className="nrt-context">
+              <h3>{speakerName(slot.speaker)} · Dialogue</h3>
+              <p className="nrt-note">Slot policy: {slot.policy ?? 'edited'}</p>
+              {slot.variants?.length ? (
+                slot.variants.map((variant) => (
+                  <article className="nrt-context-variant" key={variant.id}>
+                    <p className="nrt-note">{conditionText(variant.when)}</p>
+                    <p className="nrt-context-text">{variant.text.body || 'Empty wording'}</p>
+                    <p className="nrt-note">
+                      {variant.text.lifecycle?.policy ?? 'edited'} ·{' '}
+                      {variant.text.lifecycle?.review ?? 'draft'} ·{' '}
+                      {variant.text.lifecycle?.freshness === 'out_of_date'
+                        ? 'out of date'
+                        : 'current'}
+                    </p>
+                  </article>
+                ))
+              ) : (
+                <p className="nrt-note">Missing text</p>
+              )}
+            </section>
+          )}
+        </>
+      )}
       <section className="nrt-context">
-        <h3>What will appear here</h3>
+        <h3>Knowledge and relationships</h3>
         <p className="nrt-note">
-          <Icon name="lock" size="sm" />
-          {NARRATIVE_UNAVAILABLE.source}
+          Attributed facts, beliefs and relationships are not available yet.
         </p>
-        {/* Named rather than left blank: a writer deciding whether this pane is
-            worth opening should be able to see what it is *for* before there is
-            a project that fills it. */}
-        <ul>
-          <li>Participants, and what each of them intends in this beat</li>
-          <li>Known facts, and where each character learned them</li>
-          <li>Beliefs and relationships, including the mistaken ones</li>
-          <li>Recent events the scene may refer back to</li>
-          <li>What this beat must convey, and what it must not reveal</li>
-          <li>The selected variant, and why it was the one included</li>
-        </ul>
         <TipButton
           className="btn"
           disabledReason={NARRATIVE_UNAVAILABLE.source}
@@ -85,5 +135,19 @@ export function NarrativeInspector() {
         </TipButton>
       </section>
     </aside>
+  )
+}
+
+function ContextList({ title, items }: { title: string; items?: string[] }) {
+  if (!items?.length) return null
+  return (
+    <section className="nrt-context">
+      <h3>{title}</h3>
+      <ul>
+        {items.map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+      </ul>
+    </section>
   )
 }

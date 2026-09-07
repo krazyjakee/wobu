@@ -1,5 +1,11 @@
 # 03 — UI Layout
 
+This page describes the workspace. [Narrative mode](19-narrative-authoring.md) now combines a
+searchable Scene library, scoped Flow canvases, and Script/Source editing of the same scene.
+The inspector shows saved participants, intent and dialogue; its outline contains only the active
+scene. Review, affected builds and playable Preview remain planned in the
+[narrative delivery plan](17-narrative-system.md).
+
 ## Shape of the app
 
 One primary screen — **the Workspace** — with three vertical regions plus a mode rail. Users

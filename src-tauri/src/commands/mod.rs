@@ -34,6 +34,7 @@ pub mod mesh;
 /// a structural edit is a whole scene document, so a canvas edit and the
 /// equivalent form edit cannot produce different source.
 pub mod narrative;
+pub mod narrative_source;
 pub mod nodes;
 pub mod project;
 /// The one reader of `project.json`'s `providers` map, shared by images, text,

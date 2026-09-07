@@ -1,0 +1,9 @@
+.nrt-context-variant {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.nrt-context-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}

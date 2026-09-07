@@ -21,8 +21,6 @@ export const NARRATIVE_TABS: NarrativeTab[] = ['flow', 'script', 'preview', 'sou
 /** The Library navigator's three work filters, from the #151 mockup. */
 export type NarrativeFilter = 'needsText' | 'needsReview' | 'outOfDate'
 
-export const NARRATIVE_FILTERS: NarrativeFilter[] = ['needsText', 'needsReview', 'outOfDate']
-
 /**
  * What the Narrative workspace is pointing at — as stable ids, and nothing else.
  *

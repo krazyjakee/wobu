@@ -530,3 +530,7 @@ export const narrativeLayoutSave = (layout: Layout) =>
 export function graphKeyId(graph: GraphKey): string {
   return graph.kind === 'scene' ? `scene:${graph.scene}` : `arc:${graph.arc}`
 }
+
+/** Prepare handwritten text with the backend's canonical content revision. */
+export const narrativeTextWritten = (body: string, locked = false) =>
+  call<Text>('narrative_text_written', { body, locked })
