@@ -9,6 +9,11 @@ const MODES: { mode: Mode; icon: string; tip: string; command: CommandId }[] = [
   { mode: 'library', icon: 'library', tip: 'Library', command: 'mode.library' },
   { mode: 'forge', icon: 'forge', tip: 'Forge', command: 'mode.forge' },
   { mode: 'assets', icon: 'assets', tip: 'Assets', command: 'mode.assets' },
+  // Appended rather than slotted in beside Library. Narrative is a peer of the
+  // Library conceptually, but the other three buttons have had fixed positions
+  // for the life of the rail and a hand that reaches for the third one should
+  // still land on Assets.
+  { mode: 'narrative', icon: 'narrative', tip: 'Narrative', command: 'mode.narrative' },
 ]
 
 const SETTINGS: { mode: Mode; icon: string; tip: string; command: CommandId } = {

@@ -26,6 +26,7 @@ export type CommandId =
   | 'mode.library'
   | 'mode.forge'
   | 'mode.assets'
+  | 'mode.narrative'
   | 'mode.settings'
   | 'tab.notes'
   | 'tab.refs'
@@ -120,6 +121,13 @@ export const COMMANDS: CommandDef[] = [
     note: 'A toggle: it returns you to the Library from Forge.',
   },
   { id: 'mode.assets', label: 'Assets', group: 'Getting around', chord: 'Mod+Shift+A' },
+  {
+    id: 'mode.narrative',
+    label: 'Narrative',
+    group: 'Getting around',
+    chord: 'Mod+Shift+N',
+    note: 'The scene workspace. ⌘N without Shift still writes a new entity.',
+  },
   { id: 'mode.settings', label: 'Settings', group: 'Getting around', chord: 'Mod+,' },
 
   { id: 'panel.navigator', label: 'Toggle the navigator', group: 'Panels', chord: '[' },

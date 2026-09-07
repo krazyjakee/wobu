@@ -32,6 +32,7 @@ import { NewNodeSheet } from './NewNodeSheet'
 import { StyleTransferSheet } from './StyleTransferSheet'
 import { AssetsMode } from './AssetsMode'
 import { ForgeMode } from './ForgeMode'
+import { NarrativeMode } from './narrative/NarrativeMode'
 import { Settings } from './Settings'
 import { Banners } from './Banners'
 import { ConflictCard, ConflictsElsewhere } from './ConflictCard'
@@ -364,6 +365,8 @@ export function Workspace({ project }: { project: ProjectSummary }) {
             queue={queue}
             onJump={jumpTo}
           />
+        ) : mode === 'narrative' ? (
+          <NarrativeMode project={project} />
         ) : (
           <Settings project={project} />
         )}

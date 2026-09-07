@@ -97,6 +97,9 @@ export function useKeyboard({ onNewNode, readOnly, navKinds }: Context) {
         case 'mode.assets':
           ui.setMode('assets')
           return
+        case 'mode.narrative':
+          ui.setMode('narrative')
+          return
         case 'mode.settings':
           ui.setMode('settings')
           return
