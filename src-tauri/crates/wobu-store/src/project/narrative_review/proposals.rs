@@ -56,15 +56,13 @@ pub(crate) fn list(
     project: &Project,
 ) -> Result<std::collections::BTreeMap<SceneId, Vec<ReviewProposal>>> {
     let mut result = std::collections::BTreeMap::<SceneId, Vec<ReviewProposal>>::new();
-    for record in project.narrative_records(NarrativeRecordKind::Proposal)? {
-        if record.document.payload.get("type").and_then(serde_json::Value::as_str)
-            != Some("narrative_text")
+    for record in super::super::narrative_generation::proposal_documents(project)? {
+        if record.payload.get("type").and_then(serde_json::Value::as_str) != Some("narrative_text")
         {
             continue;
         }
-        let Proposal::NarrativeText { target, .. } =
-            serde_json::from_value(record.document.payload)?;
-        let checked = checked(project, record.document.id)?;
+        let Proposal::NarrativeText { target, .. } = serde_json::from_value(record.payload)?;
+        let checked = checked(project, record.id)?;
         let status = "pending";
         let base_wording = checked
             .request
@@ -76,10 +74,10 @@ pub(crate) fn list(
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
         result.entry(target.scene).or_default().push(ReviewProposal {
-            id: record.document.id,
+            id: record.id,
             hash: checked.hash,
             request_id: checked.request.request_id,
-            receipt_id: record.document.id,
+            receipt_id: record.id,
             candidate: checked.candidate,
             base_revision: checked.request.expected_text_revision,
             base_wording,

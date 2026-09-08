@@ -54,12 +54,21 @@ fn changed_wording_cannot_retain_approval_through_a_scene_save() {
     let mut created = project.create_scene("Council hearing").unwrap();
     let mut beat = Beat::new("Present evidence");
     let mut slot = DialogueSlot::new(Speaker::Player);
-    let mut text = Text::written("I witnessed the attack.");
-    text.lifecycle.review = ReviewState::Approved;
+    let text = Text::written("I witnessed the attack.");
     slot.variants.push(Variant::new(text));
     beat.dialogue.push(slot);
     created.scene.beats.push(beat);
     project.save_scene(&mut created).unwrap();
+    let view = project.review_scene(created.scene.id, None).unwrap();
+    let line = &view.lines[0];
+    let request = wobu_store::project::narrative_review::ReviewRequest {
+        guard: view.guard.clone(),
+        target: line.target.clone(),
+        context_revision: line.context_revision.clone(),
+        state_json: view.state_json.clone(),
+        action: wobu_narrative::review::EditorialAction::Approve,
+    };
+    let created = project.apply_review(&request).unwrap().0;
     let opened = SceneFileView::of(&created);
 
     let mut changed = opened.scene.clone();
@@ -67,16 +76,19 @@ fn changed_wording_cannot_retain_approval_through_a_scene_save() {
     text.set_body("I heard about the attack.", Provenance::Human);
     text.lifecycle.review = ReviewState::Approved;
     let error = save_scene(&mut project, changed.clone(), None, &stamp_of(&opened)).unwrap_err();
-    assert_eq!(error.code.as_str(), "node.invalid");
+    assert_eq!(error.code.as_str(), "node.malformed");
     assert_eq!(project.load_scene(opened.scene.id).unwrap().scene, opened.scene);
 
     changed.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Draft;
     let saved = save_scene(&mut project, changed, None, &stamp_of(&opened)).unwrap();
     assert!(saved.scene.beats[0].dialogue[0].variants[0].text.revision_matches());
-    // Undo may restore a previously recorded, correctly sealed approval.
     let restored =
-        save_scene(&mut project, opened.scene.clone(), None, &Precondition::Current).unwrap();
-    assert_eq!(restored.scene, opened.scene);
+        project.restore_scene(opened.scene.clone(), Some(&saved.scene), &opened.slug).unwrap();
+    assert_eq!(
+        restored.scene.beats[0].dialogue[0].variants[0].text.body,
+        opened.scene.beats[0].dialogue[0].variants[0].text.body
+    );
+    assert!(!project.review_scene(restored.scene.id, None).unwrap().lines[0].approval_valid);
 }
 
 #[test]
@@ -100,7 +112,7 @@ fn mismatched_approved_revision_is_rejected_but_incomplete_drafts_can_be_saved()
     assert!(save_scene(&mut project, scene.clone(), None, &Precondition::Current).is_err());
     scene.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Draft;
     let saved = save_scene(&mut project, scene, None, &stamp_of(&opened)).unwrap();
-    assert!(!saved.scene.beats[0].dialogue[0].variants[0].text.revision_matches());
+    assert!(saved.scene.beats[0].dialogue[0].variants[0].text.revision_matches());
 }
 
 /* ── catalog ──────────────────────────────────────────────────────────────── */
@@ -194,7 +206,7 @@ fn believing_a_file_is_new_when_it_is_not_is_a_conflict_and_not_an_overwrite() {
 }
 
 #[test]
-fn the_current_precondition_is_the_undo_path_and_lands_over_this_sessions_own_save() {
+fn undo_requires_expected_document_and_current_precondition_is_rejected() {
     // Undo replays a version this session recorded. Refusing it because this
     // session's *own* later save moved the file would make every second press
     // of ⌘Z fail.
@@ -205,11 +217,14 @@ fn the_current_precondition_is_the_undo_path_and_lands_over_this_sessions_own_sa
 
     let mut after = before.scene.clone();
     after.summary = "edited".into();
-    save_scene(&mut project, after, None, &stamp_of(&before)).unwrap();
+    let after = save_scene(&mut project, after, None, &stamp_of(&before)).unwrap();
 
     // The recorded inverse carries no stamp of its own.
-    save_scene(&mut project, before.scene.clone(), Some(&before.slug), &Precondition::Current)
-        .unwrap();
+    assert!(
+        save_scene(&mut project, before.scene.clone(), Some(&before.slug), &Precondition::Current)
+            .is_err()
+    );
+    project.restore_scene(before.scene.clone(), Some(&after.scene), &before.slug).unwrap();
     assert_eq!(project.load_scene(created.scene.id).unwrap().scene.summary, "");
 }
 
@@ -229,13 +244,7 @@ fn undoing_a_delete_brings_the_scene_back_as_itself() {
     project.delete_scene(recorded.scene.id).unwrap();
     assert!(project.scene_catalog().unwrap().find(recorded.scene.id).is_none());
 
-    let restored = save_scene(
-        &mut project,
-        recorded.scene.clone(),
-        Some(&recorded.slug),
-        &Precondition::Current,
-    )
-    .unwrap();
+    let restored = project.restore_scene(recorded.scene.clone(), None, &recorded.slug).unwrap();
 
     assert_eq!(restored.scene.id, recorded.scene.id);
     assert_eq!(restored.scene.beats[0].id, beat_id);
@@ -254,13 +263,7 @@ fn a_restore_never_lands_on_top_of_a_scene_that_took_the_name() {
     let squatter = project.create_scene("Council hearing").unwrap();
     assert_eq!(squatter.rel, recorded.rel);
 
-    let restored = save_scene(
-        &mut project,
-        recorded.scene.clone(),
-        Some(&recorded.slug),
-        &Precondition::Current,
-    )
-    .unwrap();
+    let restored = project.restore_scene(recorded.scene.clone(), None, &recorded.slug).unwrap();
 
     assert_ne!(restored.rel, squatter.rel, "a filename is not worth another scene");
     assert_eq!(restored.scene.id, recorded.scene.id, "but the scene is still itself");
@@ -279,7 +282,7 @@ fn a_stale_editor_cannot_write_a_scene_to_a_path_it_remembers() {
         &mut project,
         created.scene.clone(),
         Some("somewhere-else"),
-        &Precondition::Current,
+        &Precondition::Stamp { stamp: created.stamp.unwrap() },
     )
     .unwrap();
 

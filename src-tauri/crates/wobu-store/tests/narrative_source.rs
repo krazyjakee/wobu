@@ -87,7 +87,7 @@ fn tree(root: &Path) -> Vec<String> {
 fn a_scene_round_trips_through_the_folder() {
     let (_dir, mut project) = project();
     let mut file = project.create_scene("Kiln Interrogation").unwrap();
-    file.scene = kiln_scene();
+    file.scene = Scene { id: file.scene.id, ..kiln_scene() };
     let id = file.scene.id;
     assert!(matches!(project.save_scene(&mut file).unwrap(), SourceSave::Saved(_)));
 
@@ -132,7 +132,7 @@ fn a_copied_project_folder_opens_with_its_scenes_on_a_fresh_machine() {
     // seen this project would.
     let (dir, mut project) = project();
     let mut file = project.create_scene("Kiln Interrogation").unwrap();
-    file.scene = kiln_scene();
+    file.scene = Scene { id: file.scene.id, ..kiln_scene() };
     project.save_scene(&mut file).unwrap();
     let fingerprint = project.narrative_fingerprint().unwrap();
     let id = file.scene.id;
@@ -154,7 +154,7 @@ fn a_scene_edited_outside_wobu_is_read_back() {
     // text editor left there is what the next read has to return.
     let (_dir, mut project) = project();
     let mut file = project.create_scene("Kiln Interrogation").unwrap();
-    file.scene = kiln_scene();
+    file.scene = Scene { id: file.scene.id, ..kiln_scene() };
     project.save_scene(&mut file).unwrap();
 
     let path = project.root().join(&file.rel);
@@ -170,7 +170,7 @@ fn a_second_writer_saving_first_parks_a_conflict_rather_than_losing_words() {
     // exception and this test is here to make sure the exception did not leak.
     let (_dir, mut project) = project();
     let mut mine = project.create_scene("Kiln Interrogation").unwrap();
-    mine.scene = kiln_scene();
+    mine.scene = Scene { id: mine.scene.id, ..kiln_scene() };
     project.save_scene(&mut mine).unwrap();
 
     // Nadia is another machine, which is to say: bytes changing under us.
@@ -286,7 +286,7 @@ fn a_narrative_conflict_reaches_the_card_and_can_be_resolved() {
     // eventually somebody deletes the folder full of them.
     let (_dir, mut project) = project();
     let mut mine = project.create_scene("Kiln Interrogation").unwrap();
-    mine.scene = kiln_scene();
+    mine.scene = Scene { id: mine.scene.id, ..kiln_scene() };
     project.save_scene(&mut mine).unwrap();
 
     let path = project.root().join(&mine.rel);

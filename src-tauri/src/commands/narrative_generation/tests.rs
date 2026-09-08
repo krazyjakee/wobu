@@ -63,12 +63,21 @@ fn planner_excludes_slot_and_variant_locks_and_refuses_appending_branches() {
     let temp = Temp::new();
     let (mut project, mut input) = fixture(&temp);
     let mut file = project.load_scene(input.scene).unwrap();
-    file.scene.beats[0].dialogue[0].policy = GenerationPolicy::Locked;
-    project.save_scene(&mut file).unwrap();
+    set_policy(
+        &mut project,
+        &mut file,
+        wobu_narrative::review::PolicyScope::Slot,
+        GenerationPolicy::Locked,
+    );
     let plan = plan::build(&project, input, "fixture", "model").unwrap();
     assert!(plan.requests.is_empty());
     assert_eq!(plan.skipped.len(), 1);
-    file.scene.beats[0].dialogue[0].policy = GenerationPolicy::Edited;
+    set_policy(
+        &mut project,
+        &mut file,
+        wobu_narrative::review::PolicyScope::Slot,
+        GenerationPolicy::Edited,
+    );
     file.scene.beats[0].dialogue[0].variants.push(Variant::new(Text::written("Existing line")));
     project.save_scene(&mut file).unwrap();
     input = plan::PlanInput {
@@ -85,10 +94,14 @@ fn planner_excludes_slot_and_variant_locks_and_refuses_appending_branches() {
         max_output_tokens: 512,
     };
     assert!(plan::build(&project, input.clone(), "fixture", "model").is_err());
-    let variant = &mut file.scene.beats[0].dialogue[0].variants[0];
-    variant.text.lifecycle.policy = GenerationPolicy::Locked;
-    input.selection.as_mut().unwrap().variant = Some(variant.id);
-    project.save_scene(&mut file).unwrap();
+    input.selection.as_mut().unwrap().variant =
+        Some(file.scene.beats[0].dialogue[0].variants[0].id);
+    set_policy(
+        &mut project,
+        &mut file,
+        wobu_narrative::review::PolicyScope::Variant,
+        GenerationPolicy::Locked,
+    );
     let locked = plan::build(&project, input, "fixture", "model").unwrap();
     assert!(locked.requests.is_empty());
     assert_eq!(locked.skipped.len(), 1);
@@ -312,7 +325,12 @@ async fn edits_and_locks_during_provider_call_become_conflicted_proposals() {
                 let mut project = changed.0.lock();
                 let mut file = project.load_scene(scene).unwrap();
                 if locked {
-                    file.scene.beats[0].dialogue[0].policy = GenerationPolicy::Locked;
+                    set_policy(
+                        &mut project,
+                        &mut file,
+                        wobu_narrative::review::PolicyScope::Slot,
+                        GenerationPolicy::Locked,
+                    );
                 } else {
                     file.scene.beats[0].dialogue[0]
                         .variants
@@ -508,4 +526,164 @@ fn success_receipt(request: &FrozenRequest) -> Receipt {
         candidate: Some(request.validate_output(&raw).unwrap()),
         raw_accepted_output: Some(raw),
     }
+}
+
+fn set_policy(
+    project: &mut Project,
+    file: &mut wobu_store::SceneFile,
+    scope: wobu_narrative::review::PolicyScope,
+    policy: GenerationPolicy,
+) {
+    let view = project.review_scene(file.scene.id, None).unwrap();
+    let line = &view.lines[0];
+    let request = wobu_store::project::narrative_review::ReviewRequest {
+        guard: view.guard.clone(),
+        target: line.target.clone(),
+        context_revision: line.context_revision.clone(),
+        state_json: view.state_json.clone(),
+        action: wobu_narrative::review::EditorialAction::Policy { scope, policy },
+    };
+    *file = project.apply_review(&request).unwrap().0;
+}
+
+#[test]
+fn published_candidates_are_visible_and_only_both_generated_policies_allow_replacement() {
+    use wobu_narrative::review::PolicyScope;
+    for slot_policy in
+        [GenerationPolicy::Generated, GenerationPolicy::Edited, GenerationPolicy::Locked]
+    {
+        for variant_policy in
+            [GenerationPolicy::Generated, GenerationPolicy::Edited, GenerationPolicy::Locked]
+        {
+            let temp = Temp::new();
+            let (mut project, mut input) = fixture(&temp);
+            let mut file = project.load_scene(input.scene).unwrap();
+            file.scene.beats[0].dialogue[0]
+                .variants
+                .push(Variant::new(Text::written("Authored baseline")));
+            project.save_scene(&mut file).unwrap();
+            input.selection = Some(wobu_narrative_context::Selection {
+                scene: file.scene.id,
+                beat: file.scene.beats[0].id,
+                slot: file.scene.beats[0].dialogue[0].id,
+                variant: Some(file.scene.beats[0].dialogue[0].variants[0].id),
+            });
+            set_policy(&mut project, &mut file, PolicyScope::Slot, slot_policy);
+            set_policy(&mut project, &mut file, PolicyScope::Variant, variant_policy);
+            if slot_policy == GenerationPolicy::Locked || variant_policy == GenerationPolicy::Locked
+            {
+                assert!(
+                    plan::build(&project, input, "fixture", "local-mock")
+                        .unwrap()
+                        .requests
+                        .is_empty()
+                );
+                continue;
+            }
+            let request = freeze(&mut project, input);
+            let id = wobu_core::new_id();
+            let receipt = success_receipt(&request);
+            records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt)
+                .unwrap();
+            records::publish(&mut project, &request, id, &receipt).unwrap();
+            let view = project.review_scene(file.scene.id, None).unwrap();
+            let line = &view.lines[0];
+            assert_eq!(
+                line.proposals.len(),
+                1,
+                "complete publication is visible without a standalone proposal"
+            );
+            let automatic = slot_policy == GenerationPolicy::Generated
+                && variant_policy == GenerationPolicy::Generated;
+            assert_eq!(line.proposals[0].status, if automatic { "accepted" } else { "pending" });
+            assert_eq!(
+                line.text.as_ref().unwrap().body,
+                if automatic { "They say the beacon went dark." } else { "Authored baseline" }
+            );
+            assert!(!line.approval_valid);
+            if !automatic {
+                let decision = wobu_store::project::narrative_review::ReviewRequest {
+                    guard: view.guard.clone(),
+                    target: line.target.clone(),
+                    context_revision: line.context_revision.clone(),
+                    state_json: view.state_json.clone(),
+                    action: wobu_narrative::review::EditorialAction::Accept {
+                        proposal_id: id,
+                        proposal_hash: line.proposals[0].hash.clone(),
+                        reviewed_text: Some("Human reviewed alternative".into()),
+                    },
+                };
+                project.apply_review(&decision).unwrap();
+                let accepted = project.review_scene(file.scene.id, None).unwrap();
+                assert_eq!(
+                    accepted.lines[0].proposals[0].candidate.text,
+                    "They say the beacon went dark."
+                );
+                assert_eq!(
+                    accepted.lines[0].text.as_ref().unwrap().body,
+                    "Human reviewed alternative"
+                );
+                assert_eq!(
+                    accepted.lines[0].text.as_ref().unwrap().lifecycle.policy,
+                    GenerationPolicy::Edited
+                );
+            }
+        }
+    }
+}
+#[test]
+fn deleting_redundant_attempt_receipt_does_not_allow_another_paid_request() {
+    let temp = Temp::new();
+    let (mut project, input) = fixture(&temp);
+    let request = freeze(&mut project, input);
+    let id = wobu_core::new_id();
+    let receipt = success_receipt(&request);
+    records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt).unwrap();
+    records::publish(&mut project, &request, id, &receipt).unwrap();
+    std::fs::remove_file(project.root().join(format!("narrative/receipts/{id}.json"))).unwrap();
+    assert_eq!(records::attempts(&project, &request).unwrap().len(), 1);
+    assert!(history(&project).unwrap()[0].proposal_published);
+    assert!(task::prepare(&project, &request).is_err());
+    assert_eq!(
+        project.review_scene(request.target.scene, None).unwrap().lines[0].proposals.len(),
+        1
+    );
+}
+#[test]
+fn stale_proposal_never_rebases_and_reject_is_a_guarded_durable_decision() {
+    let temp = Temp::new();
+    let (mut project, input) = fixture(&temp);
+    let request = freeze(&mut project, input);
+    let id = wobu_core::new_id();
+    let receipt = success_receipt(&request);
+    records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt).unwrap();
+    records::publish(&mut project, &request, id, &receipt).unwrap();
+    let mut file = project.load_scene(request.target.scene).unwrap();
+    file.scene.summary = "Context changed".into();
+    project.save_scene(&mut file).unwrap();
+    let view = project.review_scene(request.target.scene, None).unwrap();
+    let line = &view.lines[0];
+    let mut decision = wobu_store::project::narrative_review::ReviewRequest {
+        guard: view.guard.clone(),
+        target: line.target.clone(),
+        context_revision: line.context_revision.clone(),
+        state_json: view.state_json.clone(),
+        action: wobu_narrative::review::EditorialAction::Accept {
+            proposal_id: id,
+            proposal_hash: line.proposals[0].hash.clone(),
+            reviewed_text: None,
+        },
+    };
+    assert!(project.apply_review(&decision).is_err());
+    decision.action = wobu_narrative::review::EditorialAction::Reject {
+        proposal_id: id,
+        proposal_hash: line.proposals[0].hash.clone(),
+    };
+    project.apply_review(&decision).unwrap();
+    assert!(project.apply_review(&decision).is_err());
+    project.rebuild_index().unwrap();
+    assert_eq!(
+        project.review_scene(request.target.scene, None).unwrap().lines[0].proposals[0].status,
+        "rejected"
+    );
 }

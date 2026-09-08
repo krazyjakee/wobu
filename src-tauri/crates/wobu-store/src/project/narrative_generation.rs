@@ -80,35 +80,18 @@ pub fn published(
 /// Completed publications remain canonical even if a redundant standalone
 /// attempt receipt is removed. Orphan objects never enter this set.
 pub fn receipts(project: &Project) -> Result<Vec<crate::NarrativeRecordDocument>> {
-    use crate::narrative::registry;
     use std::collections::BTreeMap;
     let mut documents = BTreeMap::new();
     for record in project.narrative_records(NarrativeRecordKind::Receipt)? {
         documents.insert(record.document.id, record.document);
     }
-    for (rel, _) in registry::paths(project.root())? {
-        if registry::classify(&rel) != Some(registry::NarrativeFileKind::Publication) {
-            continue;
-        }
-        let Some((text, _)) = registry::read(project.root(), &rel)? else { continue };
-        let (_, _, value) = registry::parse(&rel, &text)?;
-        let manifest: crate::narrative::publication::NarrativePublication =
-            serde_json::from_value(value)?;
-        let Some(publication) = project.narrative_publication(manifest.id)? else { continue };
-        for record in publication.records {
-            if record.kind != NarrativeRecordKind::Receipt
-                || record.payload.get("type").and_then(serde_json::Value::as_str)
-                    != Some("narrative_generation_attempt")
-            {
-                continue;
-            }
-            if let Some(previous) = documents.get(&record.id) {
-                if previous != &record {
-                    return Err(invalid("Standalone and published generation receipts disagree."));
-                }
-            } else {
-                documents.insert(record.id, record);
-            }
+    for record in
+        published_records(project, NarrativeRecordKind::Receipt, "narrative_generation_attempt")?
+    {
+        if let Some(previous) = documents.insert(record.id, record.clone())
+            && previous != record
+        {
+            return Err(invalid("Standalone and published generation receipts disagree."));
         }
     }
     // Validate each owning pair before exposing a recovered successful receipt.
@@ -135,6 +118,43 @@ pub fn receipts(project: &Project) -> Result<Vec<crate::NarrativeRecordDocument>
             };
             if project.narrative_publication(record.id)?.is_some() {
                 published(project, &request, record.id, &receipt)?;
+            }
+        }
+    }
+    Ok(documents.into_values().collect())
+}
+
+/// Only complete manifests make generated candidates visible. A standalone
+/// mutable proposal cannot stand in for the exact validated immutable pair.
+pub fn proposal_documents(project: &Project) -> Result<Vec<crate::NarrativeRecordDocument>> {
+    published_records(project, NarrativeRecordKind::Proposal, "narrative_text")
+}
+fn published_records(
+    project: &Project,
+    kind: NarrativeRecordKind,
+    tag: &str,
+) -> Result<Vec<crate::NarrativeRecordDocument>> {
+    use crate::narrative::registry;
+    let mut documents = std::collections::BTreeMap::new();
+    for (rel, _) in registry::paths(project.root())? {
+        if registry::classify(&rel) != Some(registry::NarrativeFileKind::Publication) {
+            continue;
+        }
+        let Some((text, _)) = registry::read(project.root(), &rel)? else { continue };
+        let (_, _, value) = registry::parse(&rel, &text)?;
+        let manifest: crate::narrative::publication::NarrativePublication =
+            serde_json::from_value(value)?;
+        let Some(publication) = project.narrative_publication(manifest.id)? else { continue };
+        for record in publication.records {
+            if record.kind != kind
+                || record.payload.get("type").and_then(serde_json::Value::as_str) != Some(tag)
+            {
+                continue;
+            }
+            if let Some(previous) = documents.insert(record.id, record.clone())
+                && previous != record
+            {
+                return Err(invalid("Published record identities disagree."));
             }
         }
     }

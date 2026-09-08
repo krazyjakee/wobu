@@ -53,22 +53,7 @@ pub(super) fn compile_project(
             "Narrative source changed during compilation. Try compiling again.",
         ));
     }
-    let mut verified_reviews = std::collections::BTreeMap::new();
-    let mut review_snapshots = Vec::new();
-    for scene in &scenes {
-        let snapshot = project.review_snapshot(scene.id, None)?;
-        if snapshot.scene() != scene {
-            return Err(WobuError::new(
-                Code::Invalid,
-                "Scene changed while verifying review history.",
-            ));
-        }
-        verified_reviews.extend(snapshot.evidence()?);
-        review_snapshots.push(snapshot);
-    }
-    for snapshot in &review_snapshots {
-        snapshot.verify_current(project)?;
-    }
+    let verified_reviews = super::narrative_review::verified(project, &scenes, &before)?;
     let report = compile(
         &scenes,
         &schema,

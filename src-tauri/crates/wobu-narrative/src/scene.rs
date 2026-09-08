@@ -178,6 +178,9 @@ impl Variant {
             let mut copy = self.clone();
             copy.id = VariantId::new();
             copy.text.lifecycle.review = crate::ReviewState::Draft;
+            if copy.text.lifecycle.policy != GenerationPolicy::Locked {
+                copy.text.lifecycle.policy = GenerationPolicy::Edited;
+            }
             copy
         }
     }

@@ -582,13 +582,6 @@ fn save_scene(
     // the person fixing it.
     let path = wobu_store::paths::from_rel_string(project.root(), &rel);
     let on_disk = wobu_store::atomic::read_stamped(&path)?;
-    let previous =
-        on_disk.as_ref().and_then(|(yaml, _)| wobu_narrative::SceneDocument::parse(yaml).ok());
-    editorial::validate_approval(
-        previous.as_ref().map(|document| &document.scene),
-        &scene,
-        matches!(expected, Precondition::Current),
-    )?;
     let on_disk = on_disk.map(|(_, stamp)| stamp);
 
     let mut file = wobu_store::SceneFile { scene, rel, stamp: expected.against(on_disk) };

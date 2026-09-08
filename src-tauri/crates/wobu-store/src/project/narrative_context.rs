@@ -102,7 +102,7 @@ fn read_characters(project: &Project, ids: &BTreeSet<EntityId>) -> Result<Charac
                 Ok((*id, (character, Some(stamp))))
             }
             Err(crate::Error::NoSuchNode(_)) => Ok((*id, (None, None))),
-            Err(error) => Err(error.into()),
+            Err(error) => Err(error),
         })
         .collect()
 }

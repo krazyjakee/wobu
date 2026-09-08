@@ -90,10 +90,11 @@ impl Project {
         }
         let mut file = SceneFile {
             scene,
-            rel: current
-                .as_ref()
-                .map(|f| f.rel.clone())
-                .unwrap_or_else(|| narrative::scene_rel(slug)),
+            rel: current.as_ref().map(|f| f.rel.clone()).unwrap_or_else(|| {
+                narrative::scene_rel(&wobu_core::unique_slug(slug, &|candidate| {
+                    self.scene_catalog().is_ok_and(|c| c.slugs().contains(candidate))
+                }))
+            }),
             stamp: current.and_then(|f| f.stamp),
         };
         match self.save_editorial_scene_locked(&mut file)? {
@@ -432,11 +433,23 @@ impl Project {
         self.save_editorial_scene_locked(file)
     }
     fn save_editorial_scene_locked(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        let previous = narrative::read_scene(self.root(), &file.rel).ok();
+        let previous = if narrative::registry::read(self.root(), &file.rel)?.is_some() {
+            Some(narrative::read_scene(self.root(), &file.rel)?)
+        } else {
+            None
+        };
         if previous.as_ref().and_then(|f| f.stamp.as_ref()) != file.stamp.as_ref() {
-            return Err(invalid(
-                "Scene changed before this save. Reload and compare your retained draft.",
-            ));
+            let yaml = wobu_narrative::SceneDocument::new(file.scene.clone())
+                .to_yaml()
+                .map_err(|e| invalid(e.to_string()))?;
+            let path = narrative::registry::safe_path(self.root(), &file.rel)?;
+            let (conflict_path, _) =
+                crate::atomic::park_conflict(self.root(), &path, &yaml, &self.peer)?;
+            return Ok(SourceSave::Conflict {
+                conflict_path: crate::paths::to_rel_string(
+                    conflict_path.strip_prefix(self.root()).unwrap(),
+                ),
+            });
         }
         validate_manual(previous.as_ref().map(|f| &f.scene), &file.scene)?;
         let mut bindings = BTreeMap::new();
@@ -563,6 +576,9 @@ fn event(
 /// Writable scene flags are mirrors only. Normal source and undo may preserve
 /// existing metadata, but cannot introduce an approval, move a head or unlock.
 pub fn validate_manual(previous: Option<&Scene>, next: &Scene) -> Result<()> {
+    if previous.is_some_and(|s| s.id != next.id) {
+        return Err(invalid("Keep the original scene identity when saving."));
+    }
     if next.editorial_head != previous.and_then(|s| s.editorial_head) {
         return Err(invalid("Editorial history can only change through review commands."));
     }
@@ -575,6 +591,14 @@ pub fn validate_manual(previous: Option<&Scene>, next: &Scene) -> Result<()> {
             return Err(invalid("Unlock protected dialogue before deleting it."));
         }
         if let Some(new) = next_slot {
+            if old.policy == GenerationPolicy::Locked && new != old {
+                return Err(invalid("Unlock the slot before changing protected dialogue."));
+            }
+            if old.speaker != new.speaker
+                && old.variants.iter().any(|v| v.text.lifecycle.policy == GenerationPolicy::Locked)
+            {
+                return Err(invalid("Unlock protected wording before changing its speaker."));
+            }
             if old.policy != new.policy {
                 return Err(invalid(
                     "Change existing slot policy through its explicit review control.",

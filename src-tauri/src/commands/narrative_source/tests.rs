@@ -225,7 +225,7 @@ fn repairing_malformed_source_cannot_retain_approval_for_different_wording() {
     scene.beats.push(beat);
     let yaml = SceneDocument::new(scene).to_yaml().unwrap();
     let error = source_repair(&mut project, &original.rel, &yaml, &raw.stamp, None).unwrap_err();
-    assert_eq!(error.code, Code::Invalid);
-    assert!(error.message.contains("approval for different wording"));
+    assert_eq!(error.code, Code::Malformed);
+    assert!(error.message.contains("explicit review"));
     assert_eq!(std::fs::read_to_string(path).unwrap(), raw.yaml);
 }

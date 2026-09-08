@@ -70,3 +70,35 @@ fn bridge<T: Serialize>(value: T) -> CommandResult<T> {
     }
     Ok(value)
 }
+
+pub(super) fn verified(
+    project: &wobu_store::Project,
+    scenes: &[Scene],
+    fingerprint: &str,
+) -> CommandResult<
+    std::collections::BTreeMap<wobu_narrative::VariantId, wobu_narrative::review::ApprovalEvidence>,
+> {
+    let mut evidence = std::collections::BTreeMap::new();
+    let mut snapshots = Vec::new();
+    for scene in scenes {
+        let snapshot = project.review_snapshot(scene.id, None)?;
+        if snapshot.scene() != scene {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Scene changed while verifying review history.",
+            ));
+        }
+        evidence.extend(snapshot.evidence()?);
+        snapshots.push(snapshot);
+    }
+    for snapshot in &snapshots {
+        snapshot.verify_current(project)?;
+    }
+    if project.narrative_fingerprint()? != fingerprint {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Narrative inputs changed while verifying review history.",
+        ));
+    }
+    Ok(evidence)
+}

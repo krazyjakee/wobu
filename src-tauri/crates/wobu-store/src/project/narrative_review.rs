@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use wobu_core::Id;
 use wobu_narrative::review::{EditorialAction, ReviewContext, ReviewTarget};
 use wobu_narrative::{Freshness, GenerationPolicy, ReviewState, SceneId, Speaker, Text};
+pub(crate) use write::scene_lock;
 pub use write::{ReviewTransaction, validate_manual};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
