@@ -13,6 +13,8 @@ import { Icon } from '../../Icon'
 import { NARRATIVE_STATUS } from '../narrativeModel'
 import { useFlowLevel } from './flowStore'
 import { useSceneEdits, type FlowAuthoring } from './useSceneEdits'
+import { buildGraph } from './graph'
+import { seedPositions } from './layout'
 import {
   FLOW_KIND_ICON,
   FLOW_KIND_LABEL,
@@ -128,6 +130,10 @@ export function FlowOutline({
   useFlowReveal({ scene, container, projectKey: actions?.projectKey })
   const sourceDisabled = readOnly || !!actions?.disabled
   const selectedId = useFlowLevel((s) => s.selectedId)
+  const nodePositions = useMemo(
+    () => seedPositions(buildGraph(scene, { closedGroups, grouping, focusId: selectedId })),
+    [scene, closedGroups, grouping, selectedId],
+  )
   const announcement = useFlowLevel((s) => s.announcement)
   const { select, connect, remove, add } = useSceneEdits({
     scene,
@@ -148,7 +154,12 @@ export function FlowOutline({
     <>
       <div className="nrt-flow-bar" role="toolbar" aria-label="Flow outline actions">
         {presentation && (
-          <PresentationTools presentation={presentation} level={level} readOnly={readOnly} />
+          <PresentationTools
+            presentation={presentation}
+            level={level}
+            readOnly={readOnly}
+            nodePositions={nodePositions}
+          />
         )}
         <button
           type="button"

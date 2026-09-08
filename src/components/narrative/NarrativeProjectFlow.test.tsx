@@ -629,6 +629,13 @@ describe('shared presentation controls', () => {
         fireEvent.click(await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`))
       } else fireEvent.click(screen.getByRole('button', { name: /BeatArrival at the hearing/ }))
       fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
+      const previousY = (screen.getByLabelText('Node Y') as HTMLInputElement).valueAsNumber
+      fireEvent.change(screen.getByLabelText('Node X'), { target: { value: '999' } })
+      await waitFor(() =>
+        expect(
+          (calls('narrative_layout_save').at(-1)!.layout as Layout).nodes[`beat:${ARRIVAL}`],
+        ).toMatchObject({ x: 999, y: previousY }),
+      )
       fireEvent.change(screen.getByLabelText('Group name'), {
         target: { value: 'Evidence branch' },
       })
@@ -967,7 +974,9 @@ it('authors three reconverging canvas routes with keyboard connections and share
   const view = open()
   const canvasNode = async (id: string) =>
     (await screen.findByTestId(`flow-node-${id}`)).closest<HTMLElement>('.react-flow__node')!
-  await canvasNode(nodeId.beat(ARRIVAL))
+  const arrival = await canvasNode(nodeId.beat(ARRIVAL))
+  const scrollCanvas = vi.fn()
+  arrival.closest<HTMLElement>('.nrt-flow-canvas')!.scrollIntoView = scrollCanvas
   const routeIds: string[] = []
   for (let index = 0; index < 3; index++) {
     fireEvent.click(await canvasNode(nodeId.beat(ARRIVAL)))
@@ -986,6 +995,7 @@ it('authors three reconverging canvas routes with keyboard connections and share
     document.querySelectorAll(`[data-testid="flow-node-${nodeId.beat(VERDICT)}"]`),
   ).toHaveLength(1)
   expect(workingScene().beats![0]!.dialogue).toEqual(council().beats![0]!.dialogue)
+  expect(scrollCanvas).toHaveBeenCalledWith({ block: 'nearest' })
   const routeId = routeIds[2]!
   const edge = document.querySelector<HTMLElement>(
     `.react-flow__edge[data-id="${nodeId.outcome(routeId)}:then"]`,

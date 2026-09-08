@@ -447,6 +447,7 @@ function Canvas({
             presentation={presentation}
             level={presentationLevel}
             readOnly={readOnly}
+            nodePositions={placed}
             notePosition={() =>
               flow.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
             }

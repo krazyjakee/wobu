@@ -43,8 +43,9 @@ delete controls, plus numeric placement fields. Reveals expand folded groups bef
 members. Presentation and filtering never create a scene draft or a source undo entry.
 
 **Groups & notes → Selected node position** offers numeric X/Y placement in both canvas and outline.
-Entering a coordinate switches the arrangement to Manual; an unset companion coordinate starts at
-zero. Read-only scenes permit temporary automatic layout without attempting to write a sidecar.
+Entering a coordinate switches the arrangement to Manual and retains the companion coordinate from
+the displayed canvas or the outline's seed arrangement. Read-only scenes permit temporary automatic
+layout without attempting to write a sidecar.
 Deleting a focused destination edge returns focus to the destination field in a saved scene, or to
 the surviving route in the standalone demonstration.
 

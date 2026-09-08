@@ -287,8 +287,10 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           className="nrt-editor-view"
           ref={editorRoot}
           data-side-pane={sidePane ?? undefined}
-          onKeyDownCapture={(event) => {
-            if (event.key !== 'Escape' || !sidePane) return
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented || !sidePane) return
+            const selector = sidePane === 'outline' ? '.nrt-scene-outline' : '.nrt-inspector'
+            if (!(event.target as HTMLElement).closest(selector)) return
             event.preventDefault()
             event.stopPropagation()
             sidePaneButtons.current

@@ -163,6 +163,13 @@ describe('Narrative discovery and editor handoff', () => {
       screen.getByRole('navigation', { name: 'Current scene outline' }),
     ).getByRole('button', { name: 'Evidence' })
     await waitFor(() => expect(beat).toHaveFocus())
+    fireEvent.keyDown(screen.getByLabelText('Unsaved draft'), { key: 'Escape' })
+    expect(outline).toHaveAttribute('aria-expanded', 'true')
+    const consumeEscape = (event: Event) => event.preventDefault()
+    beat.addEventListener('keydown', consumeEscape)
+    fireEvent.keyDown(beat, { key: 'Escape' })
+    expect(outline).toHaveAttribute('aria-expanded', 'true')
+    beat.removeEventListener('keydown', consumeEscape)
     fireEvent.keyDown(beat, { key: 'Escape' })
     expect(outline).toHaveFocus()
     expect(outline).toHaveAttribute('aria-expanded', 'false')
