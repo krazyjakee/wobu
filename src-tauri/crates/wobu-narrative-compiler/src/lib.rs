@@ -18,6 +18,9 @@ pub enum Profile {
 
 #[derive(Debug, Clone)]
 pub struct CompileOptions {
+    /// Verified by the host from canonical history and current context. Empty fails closed.
+    pub verified_reviews:
+        BTreeMap<wobu_narrative::VariantId, wobu_narrative::review::ApprovalEvidence>,
     pub profile: Profile,
     /// Complete world membership, not just entities used by this scene.
     pub known_entities: BTreeSet<EntityId>,
@@ -28,6 +31,7 @@ pub struct CompileOptions {
 impl Default for CompileOptions {
     fn default() -> Self {
         Self {
+            verified_reviews: BTreeMap::new(),
             profile: Profile::Development,
             known_entities: BTreeSet::new(),
             commands: BTreeMap::new(),
@@ -328,7 +332,18 @@ pub fn compile(scenes: &[Scene], schema: &StateSchema, options: &CompileOptions)
                             "dialogue text is empty".into(),
                         );
                     }
-                    if !variant.text.lifecycle.is_release_ready() {
+                    if !options.verified_reviews.get(&variant.id).is_some_and(|e| {
+                        e.verifies(
+                            &wobu_narrative::review::ReviewTarget {
+                                scene: scene.id,
+                                beat: beat.id,
+                                slot: slot.id,
+                                variant: Some(variant.id),
+                            },
+                            &slot.speaker,
+                            &variant.text,
+                        )
+                    }) {
                         emit(
                             site,
                             if options.profile == Profile::Release {

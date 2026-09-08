@@ -53,10 +53,26 @@ pub(super) fn compile_project(
             "Narrative source changed during compilation. Try compiling again.",
         ));
     }
+    let mut verified_reviews = std::collections::BTreeMap::new();
+    let mut review_snapshots = Vec::new();
+    for scene in &scenes {
+        let snapshot = project.review_snapshot(scene.id, None)?;
+        if snapshot.scene() != scene {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Scene changed while verifying review history.",
+            ));
+        }
+        verified_reviews.extend(snapshot.evidence()?);
+        review_snapshots.push(snapshot);
+    }
+    for snapshot in &review_snapshots {
+        snapshot.verify_current(project)?;
+    }
     let report = compile(
         &scenes,
         &schema,
-        &CompileOptions { known_entities, commands, ..CompileOptions::default() },
+        &CompileOptions { known_entities, commands, verified_reviews, ..CompileOptions::default() },
     );
     if let Some(graph) = &report.graph {
         bridge_integers(graph)?;

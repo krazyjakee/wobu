@@ -44,6 +44,8 @@ wobu-core.workspace = true
 # keyed by ids borrowed from here and store no narrative content at all, which
 # is the whole of #185's separation.
 wobu-narrative.workspace = true
+wobu-narrative-generation.workspace = true
+wobu-narrative-context.workspace = true
 
 [dev-dependencies]
 # The integration tests need real encoded pictures rather than the hand-written

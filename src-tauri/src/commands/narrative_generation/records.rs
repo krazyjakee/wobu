@@ -1,6 +1,6 @@
 use super::*;
 use wobu_narrative::GenerationPolicy;
-use wobu_narrative_generation::{AttemptStatus, Proposal, PublicationChecks, Receipt, VERSION};
+use wobu_narrative_generation::{AttemptStatus, PublicationChecks, Receipt, VERSION};
 use wobu_store::{NarrativeRecordDocument, NarrativeRecordFile, NarrativeRecordKind, SourceSave};
 
 pub fn save_receipt(
@@ -48,18 +48,17 @@ pub struct RecordSet {
 impl RecordSet {
     pub fn load(project: &Project) -> CommandResult<Self> {
         let mut result = Self { requests: BTreeMap::new(), by_request: BTreeMap::new() };
-        for file in project.narrative_records(NarrativeRecordKind::Receipt)? {
-            let tag = file.document.payload.get("type").and_then(serde_json::Value::as_str);
+        for document in wobu_store::project::narrative_generation::receipts(project)? {
+            let tag = document.payload.get("type").and_then(serde_json::Value::as_str);
             if !matches!(tag, Some("narrative_generation_request" | "narrative_generation_attempt"))
             {
                 continue;
             }
-            let receipt: Receipt =
-                serde_json::from_value(file.document.payload).map_err(invalid)?;
+            let receipt: Receipt = serde_json::from_value(document.payload).map_err(invalid)?;
             match receipt {
                 Receipt::NarrativeGenerationRequest { request } => {
                     request.validate().map_err(invalid)?;
-                    if request.request_id != file.document.id {
+                    if request.request_id != document.id {
                         return Err(invalid("Frozen request identity does not match its receipt."));
                     }
                     result.requests.insert(request.request_id, *request);
@@ -70,11 +69,7 @@ impl RecordSet {
                             "Invalid or unsupported generation attempt version/counter.",
                         ));
                     }
-                    result
-                        .by_request
-                        .entry(request_id)
-                        .or_default()
-                        .push((file.document.id, receipt));
+                    result.by_request.entry(request_id).or_default().push((document.id, receipt));
                 }
             }
         }
@@ -164,7 +159,12 @@ pub fn publish(
         context_unchanged: false,
         locked_now: false,
     });
-    let proposal = proposal(request, receipt_id, candidate.clone(), publication_checks);
+    let proposal = wobu_store::project::narrative_generation::proposal(
+        request,
+        receipt_id,
+        candidate.clone(),
+        publication_checks,
+    );
     let records = [
         NarrativeRecordDocument::new(
             NarrativeRecordKind::Receipt,
@@ -185,77 +185,19 @@ pub fn publish(
         &records,
         None,
     )? {
-        SourceSave::Saved(_) => Ok(()),
+        SourceSave::Saved(_) => {
+            let _ = project.apply_generated_proposal(receipt_id);
+            Ok(())
+        }
         SourceSave::Conflict { conflict_path } => Err(WobuError::conflict(conflict_path)),
     }
 }
 
-fn proposal(
-    request: &FrozenRequest,
-    receipt_id: Id,
-    candidate: wobu_narrative_generation::Candidate,
-    publication_checks: PublicationChecks,
-) -> Proposal {
-    Proposal::NarrativeText {
-        version: VERSION,
-        request_id: request.request_id,
-        receipt_id,
-        request_hash: request.hash(),
-        target: request.target.clone(),
-        candidate,
-        expected_scene_hash: request.expected_scene_hash.clone(),
-        expected_text_revision: request.expected_text_revision.clone(),
-        expected_policy: request.expected_policy,
-        expected_slot_policy: request.expected_slot_policy,
-        expected_context_hash: request.context.hash.clone(),
-        publication_checks,
-    }
-}
-/// Existing checks describe the original publication instant and are never recomputed here.
 pub fn published(
     project: &Project,
     request: &FrozenRequest,
     receipt_id: Id,
     receipt: &Receipt,
 ) -> CommandResult<Option<PublicationChecks>> {
-    let Some(publication) = project.narrative_publication(receipt_id)? else { return Ok(None) };
-    let invalid_pair = || {
-        invalid(
-            "Generation publication does not contain its exact receipt/proposal pair. Retained success will not be regenerated.",
-        )
-    };
-    if publication.records.len() != 2 {
-        return Err(invalid_pair());
-    }
-    let receipt_record = publication
-        .records
-        .iter()
-        .find(|r| r.kind == NarrativeRecordKind::Receipt && r.id == receipt_id)
-        .ok_or_else(invalid_pair)?;
-    if receipt_record.payload != serde_json::to_value(receipt).map_err(invalid)? {
-        return Err(invalid_pair());
-    }
-    let proposal_record = publication
-        .records
-        .iter()
-        .find(|r| r.kind == NarrativeRecordKind::Proposal && r.id == receipt_id)
-        .ok_or_else(invalid_pair)?;
-    let found: Proposal =
-        serde_json::from_value(proposal_record.payload.clone()).map_err(invalid)?;
-    let Proposal::NarrativeText { publication_checks, .. } = &found;
-    let Receipt::NarrativeGenerationAttempt {
-        status: AttemptStatus::Succeeded,
-        candidate: Some(candidate),
-        raw_accepted_output: Some(raw),
-        ..
-    } = receipt
-    else {
-        return Err(invalid_pair());
-    };
-    if request.validate_output(raw).map_err(invalid)? != *candidate
-        || found != proposal(request, receipt_id, candidate.clone(), publication_checks.clone())
-    {
-        return Err(invalid_pair());
-    }
-    Ok(Some(publication_checks.clone()))
+    Ok(wobu_store::project::narrative_generation::published(project, request, receipt_id, receipt)?)
 }

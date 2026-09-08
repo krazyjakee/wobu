@@ -215,6 +215,7 @@ export interface Tombstone {
 }
 
 export interface Scene {
+  editorial_head?: string | null
   id: SceneId
   name: string
   summary?: string
@@ -534,3 +535,6 @@ export function graphKeyId(graph: GraphKey): string {
 /** Prepare handwritten text with the backend's canonical content revision. */
 export const narrativeTextWritten = (body: string, locked = false) =>
   call<Text>('narrative_text_written', { body, locked })
+
+export const narrativeSceneRestore = (scene: Scene, expected: Scene | null, slug: string) =>
+  call<SceneFile>('narrative_scene_restore', { scene, expected, slug })

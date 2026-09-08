@@ -66,7 +66,7 @@ export type WorldCommand =
    * on the far side, so a restore can never land on top of a scene that took
    * the name in the meantime.
    */
-  | { type: 'sceneSave'; scene: Scene; slug: string }
+  | { type: 'sceneSave'; scene: Scene; slug: string; expected?: Scene | null }
   | { type: 'sceneDelete'; id: string }
   | { type: 'worldRestore'; document: WorldDocument; expected: WorldDocument }
 
@@ -267,7 +267,9 @@ export function applyCommand(cmd: WorldCommand): Promise<void> {
     // would otherwise present a precondition three versions stale and park the
     // undo as a conflict, which is a ⌘Z that fails on every press but the first.
     case 'sceneSave':
-      return api.narrativeSceneSave(cmd.scene, { kind: 'current' }, cmd.slug).then(() => undefined)
+      return api
+        .narrativeSceneRestore(cmd.scene, cmd.expected ?? null, cmd.slug)
+        .then(() => undefined)
     case 'sceneDelete':
       return api.narrativeSceneDelete(cmd.id)
     case 'worldRestore':
@@ -559,8 +561,8 @@ export function sceneEditEntry(before: SceneFile, after: SceneFile): NewEntry | 
   return {
     subjectId: after.scene.id,
     label: `${edit.verb} “${after.scene.name}”`,
-    undo: [{ type: 'sceneSave', scene: before.scene, slug: before.slug }],
-    redo: [{ type: 'sceneSave', scene: after.scene, slug: after.slug }],
+    undo: [{ type: 'sceneSave', scene: before.scene, slug: before.slug, expected: after.scene }],
+    redo: [{ type: 'sceneSave', scene: after.scene, slug: after.slug, expected: before.scene }],
     coalesce: edit.coalesce,
   }
 }

@@ -7980,6 +7980,7 @@ dependencies = [
  "chrono",
  "indexmap 2.14.0",
  "serde",
+ "serde_json",
  "serde_norway",
  "thiserror 2.0.19",
  "wobu-core",
@@ -8075,6 +8076,8 @@ dependencies = [
  "webp",
  "wobu-core",
  "wobu-narrative",
+ "wobu-narrative-context",
+ "wobu-narrative-generation",
 ]
 
 [[package]]

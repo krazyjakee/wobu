@@ -169,7 +169,27 @@ fn prepare_checked(
         ));
     }
     let scenes: Vec<_> = files.into_iter().map(|file| file.scene).collect();
-    let report = compile(&scenes, &schema, &CompileOptions { profile, known_entities, commands });
+    let mut verified_reviews = std::collections::BTreeMap::new();
+    let mut review_snapshots = Vec::new();
+    for scene in &scenes {
+        let snapshot = project.review_snapshot(scene.id, None)?;
+        if snapshot.scene() != scene {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Scene changed while verifying review history.",
+            ));
+        }
+        verified_reviews.extend(snapshot.evidence()?);
+        review_snapshots.push(snapshot);
+    }
+    for snapshot in &review_snapshots {
+        snapshot.verify_current(project)?;
+    }
+    let report = compile(
+        &scenes,
+        &schema,
+        &CompileOptions { profile, known_entities, commands, verified_reviews },
+    );
     let package = report
         .graph
         .map(|graph| Package::build(graph, debug))

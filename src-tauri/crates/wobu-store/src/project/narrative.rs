@@ -81,12 +81,7 @@ impl Project {
     /// exception and lives in a different file, so nothing on this path can be
     /// blocked by an arrangement.
     pub fn save_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        self.ensure_writable()?;
-        let outcome = source::write_scene(&self.root, file, &self.peer)?;
-        if matches!(outcome, SourceSave::Saved(_)) {
-            self.index_narrative_path(&file.rel)?;
-        }
-        Ok(outcome)
+        self.save_editorial_scene(file)
     }
 
     /// Delete a scene and the arrangement that described it.

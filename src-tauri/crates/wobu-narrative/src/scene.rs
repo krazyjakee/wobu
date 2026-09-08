@@ -174,7 +174,12 @@ impl Variant {
     /// revision, while the identity — the thing a recording is filed under — is
     /// new because this is a different line.
     pub fn duplicated(&self) -> Variant {
-        Variant { id: VariantId::new(), ..self.clone() }
+        {
+            let mut copy = self.clone();
+            copy.id = VariantId::new();
+            copy.text.lifecycle.review = crate::ReviewState::Draft;
+            copy
+        }
     }
 }
 
@@ -462,6 +467,8 @@ pub struct Tombstone {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Scene {
     pub id: SceneId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editorial_head: Option<wobu_core::Id>,
     /// The display name. Renaming it preserves every id in the file; nothing is
     /// derived from it.
     pub name: String,
@@ -492,6 +499,7 @@ impl Scene {
     pub fn new(name: impl Into<String>) -> Scene {
         Scene {
             id: SceneId::new(),
+            editorial_head: None,
             name: name.into(),
             summary: String::new(),
             participants: Vec::new(),
@@ -606,6 +614,7 @@ impl Scene {
     pub fn duplicated(&self) -> Scene {
         let mut copy = Scene {
             id: SceneId::new(),
+            editorial_head: None,
             name: self.name.clone(),
             summary: self.summary.clone(),
             participants: self.participants.clone(),

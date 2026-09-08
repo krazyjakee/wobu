@@ -121,7 +121,7 @@ pub struct SceneFileView {
 }
 
 impl SceneFileView {
-    fn of(file: &wobu_store::SceneFile) -> SceneFileView {
+    pub(super) fn of(file: &wobu_store::SceneFile) -> SceneFileView {
         SceneFileView {
             scene: file.scene.clone(),
             slug: file.slug().to_string(),
@@ -556,6 +556,12 @@ fn save_scene(
     slug: Option<&str>,
     expected: &Precondition,
 ) -> CommandResult<SceneFileView> {
+    if matches!(expected, Precondition::Current) {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Scene saves require the original stamp. Undo uses a guarded document restore.",
+        ));
+    }
     let catalog = project.scene_catalog()?;
     let rel = match catalog.find(scene.id) {
         // The catalog is authoritative for a scene that exists. Taking the
