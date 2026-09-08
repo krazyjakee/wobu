@@ -3,6 +3,9 @@ use wobu_narrative::*;
 use wobu_narrative_compiler::{CompileOptions, Graph, Profile, compile};
 use wobu_narrative_package::{Manifest, Package, publish, read};
 
+#[path = "../../wobu-narrative-compiler/tests/support/reviews.rs"]
+mod reviews;
+
 struct Temp(PathBuf);
 impl Temp {
     fn new() -> Self {
@@ -39,10 +42,11 @@ fn fixture(profile: Profile) -> Graph {
     choice.id = "00000000000000000000000005".parse().unwrap();
     beat.choices.push(choice);
     scene.beats.push(beat);
+    let verified_reviews = reviews::fixture_reviews(&scene);
     compile(
         &[scene],
         &StateSchema::default(),
-        &CompileOptions { profile, ..CompileOptions::default() },
+        &CompileOptions { profile, verified_reviews, ..CompileOptions::default() },
     )
     .graph
     .unwrap()
