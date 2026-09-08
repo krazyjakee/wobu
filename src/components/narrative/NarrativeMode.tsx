@@ -1,7 +1,8 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ProjectSummary } from '../../lib/api'
 import {
   useCreateScene,
+  useDiagnoseScene,
   useRenameScene,
   useSceneDiagnostics,
   useScene,
@@ -346,7 +347,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         />
       )}
       {worldOpen && <NarrativeWorldPane projectKey={project.path} readOnly={project.readOnly} />}
-      <SceneDiagnosticsFooter />
+      <SceneDiagnosticsFooter projectKey={project.path} />
     </div>
   )
 }
@@ -361,20 +362,31 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
  * sentence beside the count says what these diagnostics are and, more usefully,
  * what they are not.
  */
-function SceneDiagnosticsFooter() {
+function SceneDiagnosticsFooter({ projectKey }: { projectKey: string }) {
   const sceneId = useUI((s) => s.narrative.sceneId)
+  const draft = useScriptDrafts((state) =>
+    sceneId ? state.drafts[sceneEditKey(projectKey, sceneId)]?.scene : undefined,
+  )
   const found = useSceneDiagnostics(sceneId)
-  const count = found.data?.length ?? 0
+  const check = useDiagnoseScene()
+  const diagnose = check.mutate
+  useEffect(() => {
+    if (draft && sceneId) diagnose({ sceneId, scene: draft })
+  }, [draft, sceneId, diagnose])
+  const current = check.variables?.scene === draft
+  const checking = draft ? !current || check.isPending : found.isPending
+  const error = draft ? (current && check.isError ? check.error : null) : found.error
+  const count = (draft ? (current ? check.data?.length : 0) : found.data?.length) ?? 0
   return (
     <footer className="nrt-foot" aria-label="Narrative diagnostics">
       <Icon name={count > 0 ? 'x' : 'check'} size="sm" />
       {sceneId === null
         ? 'Choose a scene to see what is wrong with it. '
-        : found.isPending
-          ? 'Reading this scene’s diagnostics… '
-          : found.isError
-            ? `Could not read this scene’s diagnostics: ${String(found.error)}. `
-            : `${count} problem${count === 1 ? '' : 's'} in this scene. `}
+        : checking
+          ? `Checking this ${draft ? 'unsaved ' : ''}scene… `
+          : error
+            ? `Could not read this scene’s diagnostics: ${String(error)}. `
+            : `${count} problem${count === 1 ? '' : 's'} in this ${draft ? 'unsaved ' : ''}scene. `}
       {NARRATIVE_UNAVAILABLE.diagnostics}
     </footer>
   )

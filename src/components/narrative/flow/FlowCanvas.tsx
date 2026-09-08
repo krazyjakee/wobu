@@ -216,6 +216,7 @@ function Canvas({
   }
   const [laying, setLaying] = useState(false)
   const [layoutError, setLayoutError] = useState<string | null>(null)
+  const [settledLayout, setSettledLayout] = useState<string | null>(null)
 
   const store = useFlowLevelApi()
   /*
@@ -271,6 +272,10 @@ function Canvas({
     () => buildGraph(scene, { closedGroups, focusId, grouping, dangling, spare, blockingIds }),
     [scene, closedGroups, focusId, grouping, dangling, spare, blockingIds],
   )
+  const layoutInput = useMemo(() => layoutRequest(graph), [graph])
+  // Text and diagnostic refreshes replace graph objects without moving boxes.
+  // Only a geometry change should launch ELK or postpone a pending reveal.
+  const layoutIdentity = JSON.stringify(layoutInput)
 
   const seed = useMemo(() => seedPositions(graph), [graph])
   const placed = useMemo(() => {
@@ -289,12 +294,22 @@ function Canvas({
       const at = placed[id]
       if (node && at) {
         const size = NODE_SIZE[node.kind]
-        void flow.setCenter(at.x + size.width / 2, at.y + size.height / 2, { duration: 0 })
+        void flow.setCenter(at.x + size.width / 2, at.y + size.height / 2, {
+          duration: 0,
+          zoom: flow.getZoom(),
+        })
       }
     },
     [graph, placed, flow],
   )
-  useFlowReveal({ scene, container, projectKey: actions?.projectKey, graph, center })
+  useFlowReveal({
+    scene,
+    container,
+    projectKey: actions?.projectKey,
+    graph,
+    center,
+    enabled: !automatic || settledLayout === layoutIdentity,
+  })
   // The other half of the Preview cursor: a trace step asking for its node.
   useRouteCentring(center)
   const pointTranscript = useRouteTranscriptCursor()
@@ -303,13 +318,14 @@ function Canvas({
     const ticket = gate.current.begin()
     setLaying(true)
     setLayoutError(null)
-    layout(layoutRequest(graph))
+    layout(layoutInput)
       .then((result) => {
         // elkjs cannot be cancelled, so a superseded answer is simply dropped
         // here. Applying it would move the boxes of a graph that no longer
         // exists, on top of a newer layout that was right.
         if (!gate.current.accept(ticket)) return
         setLaying(false)
+        setSettledLayout(layoutIdentity)
         if (automatic) setAutoPositions(result.positions)
         else {
           setPositions((previous) => ({ ...previous, ...result.positions }))
@@ -320,9 +336,10 @@ function Canvas({
       .catch((error: unknown) => {
         if (!gate.current.accept(ticket)) return
         setLaying(false)
+        setSettledLayout(layoutIdentity)
         setLayoutError(error instanceof Error ? error.message : String(error))
       })
-  }, [graph, layout, flow, onPositionsChange, automatic, readOnly])
+  }, [layoutInput, layoutIdentity, layout, flow, onPositionsChange, automatic, readOnly])
 
   const automaticRunner = useRef(runLayout)
   useEffect(() => {
@@ -330,7 +347,7 @@ function Canvas({
   }, [runLayout])
   useEffect(() => {
     if (automatic) automaticRunner.current()
-  }, [automatic, graph])
+  }, [automatic, layoutIdentity])
 
   // A scene swap abandons whatever elk is still chewing on.
   const sceneId = scene.id

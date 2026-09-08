@@ -203,6 +203,29 @@ describe('Narrative discovery and editor handoff', () => {
     )
     expect(screen.getByText('Unsaved scene draft.')).toBeInTheDocument()
   })
+  it('checks the current shared draft in the footer instead of displaying saved-scene results', async () => {
+    const prior = h.invoke.getMockImplementation()!
+    h.invoke.mockImplementation((command, args) =>
+      command === 'narrative_diagnostics'
+        ? Promise.resolve(args.scene ? [{ code: 'unresolved_destination' }] : [])
+        : prior(command, args),
+    )
+    useScriptDrafts.getState().put(sceneEditKey(defaultProject.path, libraryScene.id), {
+      file: { scene: libraryScene, slug: 'council', rel: 'council.yaml', stamp: null },
+      scene: { ...libraryScene, summary: 'Unsaved change' },
+    })
+    renderMode()
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Flow' }))
+    await waitFor(() =>
+      expect(screen.getByRole('contentinfo', { name: 'Narrative diagnostics' })).toHaveTextContent(
+        '1 problem in this unsaved scene',
+      ),
+    )
+    expect(h.invoke).toHaveBeenCalledWith(
+      'narrative_diagnostics',
+      expect.objectContaining({ scene: expect.objectContaining({ summary: 'Unsaved change' }) }),
+    )
+  })
   it('returns to the scenes the Back button names, from any full-width surface', async () => {
     renderMode()
     await screen.findByRole('button', { name: 'Open Council hearing in Flow' })

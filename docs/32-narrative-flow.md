@@ -79,5 +79,9 @@ provenance and revisions. Reveal tests cover hidden tabs, repeated requests, pro
 deleted targets and the empty scene. The mounted canvas regression creates three routes, connects
 each to one verdict with C, disconnects a focused edge, checks focus on the destination field, and
 undoes the disconnect in Script while retaining all dialogue. Presentation tests also assert numeric
-outline placement and read-only layout cannot write scene source. These tests do not establish native geometry or pointer behavior;
-native verification of this authoring update remains pending the integrated desktop walkthrough.
+outline placement and read-only layout cannot write scene source. These tests do not establish
+native geometry or pointer behavior. [Native Linux evidence](evidence/narrative-186/README.md)
+records both themes, visible minimap nodes, and keyboard creation/deletion with retained focus at
+150% scaling. Reveals preserve the current zoom and wait for automatic layout to finish before
+focusing a node. The footer checks the same unsaved scene shown in Flow, rather than reporting
+the saved source's problem count beside a changed draft.
