@@ -1129,19 +1129,22 @@ it('reads one compact arc when activated and pages the outline without fetching 
         : answer(command, args),
     ),
   )
+  // Restore the outline directly: canvas rendering has separate bounded-node coverage.
+  projectArcSession(PROJECT).views.set('', { mode: 'outline', grouping: 'quest' })
   const view = open(false, false)
   expect(calls('narrative_arc')).toHaveLength(0)
   expect(calls('narrative_scene_get')).toHaveLength(0)
   view.setActive(true)
-  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
-  expect(screen.getByRole('navigation', { name: 'Arc outline pages' })).toHaveTextContent(
-    'Page 1 of 5',
-  )
-  expect(document.querySelectorAll('.nrt-outline-row')).toHaveLength(25)
-  fireEvent.click(screen.getByRole('button', { name: 'Next scenes' }))
-  expect(screen.getByRole('navigation', { name: 'Arc outline pages' })).toHaveTextContent(
-    'Page 2 of 5',
-  )
+  const pages = await screen.findByRole('navigation', { name: 'Arc outline pages' })
+  const visibleIds = () =>
+    Array.from(document.querySelectorAll('.nrt-outline-row .nrt-outline-name')).map((row) =>
+      row.getAttribute('data-flow-id'),
+    )
+  expect(pages).toHaveTextContent('Page 1 of 5')
+  expect(visibleIds()).toEqual(scenes.slice(0, 25).map((scene) => scene.summary.id))
+  fireEvent.click(within(pages).getByRole('button', { name: 'Next scenes' }))
+  expect(pages).toHaveTextContent('Page 2 of 5')
+  expect(visibleIds()).toEqual(scenes.slice(25, 50).map((scene) => scene.summary.id))
   expect(calls('narrative_arc')).toHaveLength(1)
   expect(calls('narrative_scene_get')).toHaveLength(0)
 })
