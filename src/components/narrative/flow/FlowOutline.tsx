@@ -277,6 +277,7 @@ export function FlowOutline({
               type="button"
               className="btn"
               aria-expanded={!closedGroups.includes(group.id)}
+              data-flow-id={group.id}
               onClick={() =>
                 setClosedGroups(
                   closedGroups.includes(group.id)

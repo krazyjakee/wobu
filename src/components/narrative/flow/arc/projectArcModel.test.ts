@@ -92,7 +92,10 @@ describe('the authored project arc contract', () => {
       dangling: true,
     })
     expect(collapsed.nodes.length).toBeLessThan(arc.level.elements.length)
-    expect(arcDiagnostics(arc).filter((d) => d.severity === 'error')).toHaveLength(2)
+    expect(arcDiagnostics(arc).filter((d) => d.severity === 'error')).toHaveLength(3)
+    expect(
+      arcDiagnostics(arc).find((d) => d.elementId === shared.id && d.severity === 'error')?.message,
+    ).toContain('has no beats')
   })
 
   it('projects canonical Script destination edits and undo without touching locked text', () => {

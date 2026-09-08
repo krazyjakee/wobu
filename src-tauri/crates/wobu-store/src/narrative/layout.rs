@@ -422,7 +422,7 @@ impl Layout {
     /// else added, and every beat in a scene that has never been arranged all
     /// arrive here, which is why it is a list and not an error.
     pub fn unplaced(&self, wanted: &BTreeSet<NodeKey>) -> Vec<NodeKey> {
-        wanted.iter().cloned().filter(|key| !self.nodes.contains_key(key)).collect()
+        wanted.iter().filter(|key| !self.nodes.contains_key(*key)).cloned().collect()
     }
 
     fn to_json(&self) -> Result<String> {

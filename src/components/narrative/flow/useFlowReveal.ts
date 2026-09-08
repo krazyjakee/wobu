@@ -65,13 +65,19 @@ export function useFlowReveal({
     const requested = local?.id ?? flowNodeForTarget(reveal)
     const exact = scene.elements.find((element) => element.id === requested)
     if (local && !exact) return
-    const target =
+    const fallback =
       exact ??
       scene.elements.find(
         (element) => element.kind === 'beat' && element.beatId === reveal.beatId,
       ) ??
       scene.elements.find((element) => element.id === scene.entryId) ??
       scene.elements[0]
+    const target =
+      requested === null &&
+      fallback?.groupId &&
+      store.getState().closedGroups.includes(fallback.groupId)
+        ? { id: fallback.groupId, groupId: null }
+        : fallback
     const observer = new MutationObserver(() => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(attempt)
@@ -89,7 +95,7 @@ export function useFlowReveal({
         observer.disconnect()
         return
       }
-      if (requested === null) {
+      if (requested === null && !reveal!.focus) {
         honoured.current = sequence
         observer.disconnect()
         return

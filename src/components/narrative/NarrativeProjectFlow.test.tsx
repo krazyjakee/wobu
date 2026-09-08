@@ -1298,6 +1298,17 @@ it.each(['canvas', 'outline'])(
 )
 
 it('edits authored arc exits through the shared draft and retains them across scene drill-down, Escape and undo', async () => {
+  let saved = council()
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) => {
+    if (command === 'narrative_scene_save') saved = args.scene as Scene
+    if (command === 'narrative_arc')
+      return Promise.resolve({
+        revision: 'current',
+        scenes: [arcScene(saved), arcScene({ id: OTHER, name: 'The long road', beats: [] })],
+        unreadable: [],
+      })
+    return Promise.resolve(answer(command, args))
+  })
   open()
   fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
   fireEvent.click(screen.getByRole('button', { name: 'SceneCouncil hearing' }))
@@ -1317,6 +1328,8 @@ it('edits authored arc exits through the shared draft and retains them across sc
   fireEvent.click(screen.getByRole('button', { name: 'Redo draft' }))
   fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
   await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
+  await waitFor(() => expect(screen.getByText('Saved scene')).toBeInTheDocument())
+  expect(screen.getByLabelText('Council hearing — Outcome leads to')).toHaveValue('')
   expect((calls('narrative_scene_save')[0]!.scene as Scene).beats![1]!.outcomes![0]!.to).toEqual({
     unresolved: {},
   })
@@ -1404,7 +1417,10 @@ it('restores arc scroll after the first asynchronous read and keeps a Library-se
   fireEvent.click(screen.getByRole('button', { name: 'Open selected scene' }))
   await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
   panel.scrollTop = 800
-  fireEvent.click(screen.getByRole('button', { name: /Every scene/ }))
+  await waitFor(() =>
+    expect(document.activeElement).toHaveAttribute('data-id', nodeId.beat(ARRIVAL)),
+  )
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
   await screen.findByRole('region', { name: 'Selected scene exits' })
   expect(panel.scrollTop).toBe(350)
   useUI.getState().selectNarrative({ sceneId: OTHER }, 'library', { projectKey: PROJECT })

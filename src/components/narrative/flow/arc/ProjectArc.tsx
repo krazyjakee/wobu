@@ -343,10 +343,24 @@ function ArcGraph({
   useEffect(() => {
     const parent = root.current?.closest('.nrt-panel[role=tabpanel]') ?? root.current?.parentElement
     if (parent) parent.scrollTop = sessions.scroll
+    const frame = requestAnimationFrame(() => {
+      if (document.activeElement !== document.body || !root.current) return
+      const selected = store.getState().selectedId
+      const node = Array.from(
+        root.current.querySelectorAll<HTMLElement>('[data-flow-id],.react-flow__node[data-id]'),
+      ).find((one) => (one.dataset.flowId ?? one.dataset.id) === selected)
+      const target =
+        node ??
+        root.current.querySelector<HTMLButtonElement>(
+          '[aria-label="Arc view mode"] button[aria-pressed="true"]',
+        )
+      target?.focus({ preventScroll: true })
+    })
     return () => {
+      cancelAnimationFrame(frame)
       if (parent) sessions.scroll = parent.scrollTop
     }
-  }, [sessions, query.isSuccess])
+  }, [sessions, store, query.isSuccess])
   if (query.isPending) return <p role="status">Reading the project arc…</p>
   if (query.isError)
     return (

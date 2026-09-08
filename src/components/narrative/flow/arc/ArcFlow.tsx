@@ -156,7 +156,7 @@ function Arc({
       {diagnostics.length > 0 && (
         <details className="nrt-arc-checks" open={diagnostics.length <= 25}>
           <summary>
-            {errors} blocking destination problems · {diagnostics.length - errors} scenes without an
+            {errors} blocking arc problems · {diagnostics.length - errors} scenes without an
             incoming exit. Includes filtered and collapsed nodes.
           </summary>
           <ul className="nrt-arc-diagnostics" aria-label="Arc diagnostics">

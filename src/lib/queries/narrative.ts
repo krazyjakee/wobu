@@ -210,6 +210,7 @@ function useSceneWrite<V>(options: {
       // a rename, an approved line or a filled slot is invisible until the
       // writer reopens the project, which reads as the save having been lost.
       void qc.invalidateQueries({ queryKey: ['narrative_library'] })
+      void qc.invalidateQueries({ queryKey: ['narrative_arc'] })
       // A scene's own problems changed, and so did every other scene's: a
       // destination that named a beat in here is checked against this document.
       void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })

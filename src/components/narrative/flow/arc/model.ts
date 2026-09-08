@@ -213,6 +213,15 @@ export function arcDiagnostics(arc: FlowArc): ArcDiagnostic[] {
   const reached = new Set<string>()
 
   for (const scene of scenes) {
+    if (scene.counts.beats === 0)
+      found.push({
+        id: `${scene.id}:empty`,
+        elementId: scene.id,
+        field: scene.id,
+        message: `${scene.title} has no beats. Open it to add its first beat.`,
+        severity: 'error',
+        at: { sceneId: scene.id, beatId: null },
+      })
     for (const exit of scene.out) {
       const at = {
         sceneId: scene.id,
