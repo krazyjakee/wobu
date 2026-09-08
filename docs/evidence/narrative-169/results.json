@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-08",
+  "platform": "Linux native Tauri 2 / WebKitGTK",
+  "backend_revision": "be14051",
+  "frontend_revision": "772d4ed",
+  "windows": [
+    [1440, 900],
+    [960, 620]
+  ],
+  "small": {
+    "project": "/tmp/wobu-169-native-fixture/affected-build-walkthrough.wobu",
+    "items": 3,
+    "policy_counts": {
+      "generate": 1,
+      "propose": 1,
+      "locked": 1
+    },
+    "source_hashes_unchanged": true,
+    "saved_build": "01M216EYFWKZMHK3YXNP0XG77T",
+    "native_compile_graph": true,
+    "provider_calls": "No key present; no attempts dispatched. Execution covered by scripted-provider tests."
+  },
+  "large": {
+    "project": "/tmp/wobu-169-native-483/affected-build-walkthrough.wobu",
+    "items": 483,
+    "policy_counts": {
+      "generate": 1,
+      "propose": 241,
+      "locked": 241
+    },
+    "source_hashes_unchanged": true,
+    "saved_build": "01M216FDCFX2SE43Y6SGASZE8J",
+    "native_compile_graph": true,
+    "generation_attempts": 0,
+    "dispatched_requests": 0,
+    "jobs": 0,
+    "reopened_item_identities_unchanged": true
+  },
+  "large_history_rows": 242,
+  "large_item_ids_sha256": "abe881b9cc11d54d194739e89fd1d7736e3af082938af2699457d6f6ffafb744",
+  "missing_scope_count": 0,
+  "all_selected_scope_count": 4,
+  "key_presence": [
+    {
+      "provider": "anthropic",
+      "source": null,
+      "keychain": "ready"
+    }
+  ],
+  "narrow_geometry": [
+    {
+      "tag": "DIV",
+      "rect": {
+        "x": 24,
+        "y": 25,
+        "width": 912,
+        "height": 570
+      }
+    },
+    {
+      "tag": "SECTION",
+      "rect": {
+        "x": 45,
+        "y": 44,
+        "width": 870,
+        "height": 530
+      }
+    },
+    {
+      "tag": "DIV",
+      "rect": {
+        "x": 45,
+        "y": 472,
+        "width": 861,
+        "height": 260.390625
+      }
+    },
+    {
+      "tag": "TABLE",
+      "rect": {
+        "x": 45,
+        "y": 472,
+        "width": 852,
+        "height": 3736
+      }
+    }
+  ],
+  "uncaught_frontend_errors": [],
+  "provider_execution": "No live calls. Generation success/failure/cancellation/reuse/acceptance guards are covered by scripted-provider and real-file tests.",
+  "harness": "Development-only command bridge and temporary onboarding-store dismissal; no acceptance record or credentials changed."
+}

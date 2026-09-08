@@ -71,6 +71,9 @@ through the shared review transaction and preserves stable source identities.
 
 ## Verification and limits
 
+The [native walkthrough](evidence/narrative-169/README.md) records the three-policy and 483-item
+fixtures, keyless reopening, missing-key feedback and minimum-window layout.
+
 Deterministic real-file tests cover the 483-item plan and reopening, portable receipt sizes,
 Generated siblings, Edited proposals, new locks and source changes, successful-output recovery,
 partial failure/cancellation with a fresh SQLite index, model/context cache misses, voice-change
