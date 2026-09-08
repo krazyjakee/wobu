@@ -44,7 +44,7 @@ struct VersionProbe {
 }
 
 /// Reject a file this build should not touch, before trying to understand it.
-fn check_version(yaml: &str) -> Result<()> {
+pub(crate) fn check_version(yaml: &str) -> Result<()> {
     let probe: VersionProbe = serde_norway::from_str(yaml).map_err(|e| Error::from_yaml(&e))?;
     match probe.schema_version {
         None => Err(Error::MissingSchemaVersion),

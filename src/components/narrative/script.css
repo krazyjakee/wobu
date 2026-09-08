@@ -65,3 +65,17 @@
   color: var(--text-dim);
   font-size: 12px;
 }
+.nrt-script-editor .nrt-typed-condition {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.nrt-script-editor .nrt-typed-condition > div,
+.nrt-script-editor .nrt-typed-condition > fieldset,
+.nrt-script-editor .nrt-typed-condition > pre {
+  grid-column: 1 / -1;
+}
+@media (max-width: 800px) {
+  .nrt-script-editor .nrt-typed-condition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

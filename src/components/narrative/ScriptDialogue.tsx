@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
-import type { Beat, DialogueSlot, Speaker } from '../../lib/api'
+import type { Beat, DialogueSlot, Speaker, VariableDecl } from '../../lib/api'
+import { ScriptOrderControls } from './ScriptOrderControls'
+import { TypedCondition } from './TypedCondition'
 import { mintId } from './flow/source'
 import { speakerFromKey, speakerKey } from './scriptModel'
 
@@ -10,7 +12,13 @@ export function ScriptDialogue({
   onSelectSlot,
   changeBeat,
   speakerOptions,
+  variables,
+  onDeleteVariant,
+  onDeleteSlot,
 }: {
+  variables: VariableDecl[]
+  onDeleteVariant: (slotId: string, variantId: string) => void
+  onDeleteSlot: (slotId: string) => void
   beat: Beat
   disabled: boolean
   selectedLineId: string | null
@@ -41,6 +49,7 @@ export function ScriptDialogue({
               Speaker {slotIndex + 1}
               <select
                 disabled={locked}
+                data-narrative-field={`slot:${slot.id}`}
                 value={speakerKey(slot.speaker)}
                 onChange={(e) => changeSlot({ ...slot, speaker: speakerFromKey(e.target.value) })}
               >
@@ -94,73 +103,119 @@ export function ScriptDialogue({
               <p className="nrt-note">Missing text — this slot is intentionally empty.</p>
             )}
             {(slot.variants ?? []).map((variant, index) => (
-              <label key={variant.id}>
-                Dialogue {slotIndex + 1}, variant {index + 1}
-                <span className="nrt-script-status">
-                  {variant.when && variant.when !== 'always'
-                    ? 'Conditional variant'
-                    : 'Unconditional variant'}{' '}
-                  · {variant.text.lifecycle?.review ?? 'Draft'} ·{' '}
-                  {variant.text.lifecycle?.freshness ?? 'current'}
-                </span>
-                <textarea
-                  disabled={locked}
-                  data-variant-id={variant.id}
-                  value={variant.text.body}
-                  onChange={(e) =>
-                    changeSlot({
-                      ...slot,
-                      policy: 'edited',
-                      variants: slot.variants?.map((v) =>
-                        v.id === variant.id
-                          ? {
-                              ...v,
-                              text: {
-                                ...v.text,
-                                body: e.target.value,
-                                lifecycle: {
-                                  ...v.text.lifecycle,
-                                  policy: 'edited',
-                                  review: 'draft',
+              <div key={variant.id}>
+                <label>
+                  Dialogue {slotIndex + 1}, variant {index + 1}
+                  <span className="nrt-script-status">
+                    {variant.when && variant.when !== 'always'
+                      ? 'Conditional variant'
+                      : 'Unconditional variant'}{' '}
+                    · {variant.text.lifecycle?.review ?? 'Draft'} ·{' '}
+                    {variant.text.lifecycle?.freshness ?? 'current'}
+                  </span>
+                  <textarea
+                    disabled={locked}
+                    data-narrative-field={`variant:${variant.id}`}
+                    data-variant-id={variant.id}
+                    value={variant.text.body}
+                    onChange={(e) =>
+                      changeSlot({
+                        ...slot,
+                        policy: 'edited',
+                        variants: slot.variants?.map((v) =>
+                          v.id === variant.id
+                            ? {
+                                ...v,
+                                text: {
+                                  ...v.text,
+                                  body: e.target.value,
+                                  lifecycle: {
+                                    ...v.text.lifecycle,
+                                    policy: 'edited',
+                                    review: 'draft',
+                                  },
                                 },
-                              },
-                            }
-                          : v,
-                      ),
-                    })
-                  }
-                />
-              </label>
+                              }
+                            : v,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <fieldset disabled={locked}>
+                  <TypedCondition
+                    label={`Dialogue ${slotIndex + 1} variant ${index + 1}`}
+                    value={variant.when}
+                    variables={variables}
+                    onChange={(when) =>
+                      changeSlot({
+                        ...slot,
+                        variants: slot.variants?.map((one) =>
+                          one.id === variant.id
+                            ? {
+                                ...one,
+                                when,
+                                text: {
+                                  ...one.text,
+                                  lifecycle: { ...one.text.lifecycle, review: 'draft' },
+                                },
+                              }
+                            : one,
+                        ),
+                      })
+                    }
+                  />
+                  <ScriptOrderControls
+                    label={`dialogue ${slotIndex + 1} variant ${index + 1}`}
+                    index={index}
+                    items={slot.variants ?? []}
+                    onChange={(variants) => changeSlot({ ...slot, variants })}
+                  />
+                  <button className="btn" onClick={() => onDeleteVariant(slot.id, variant.id)}>
+                    Delete dialogue {slotIndex + 1} variant {index + 1}
+                  </button>
+                </fieldset>
+              </div>
             ))}
-            {!slot.variants?.length && (
-              <button
-                className="btn"
-                disabled={locked}
-                onClick={() =>
-                  changeSlot({
-                    ...slot,
-                    policy: 'edited',
-                    variants: [
-                      {
-                        id: mintId(),
-                        text: {
-                          revision: '',
-                          body: '',
-                          provenance: 'human',
-                          lifecycle: {
-                            policy: 'edited',
-                            review: 'draft',
-                            freshness: 'current',
-                          },
+            <button
+              className="btn"
+              disabled={locked}
+              onClick={() =>
+                changeSlot({
+                  ...slot,
+                  policy: 'edited',
+                  variants: [
+                    ...(slot.variants ?? []),
+                    {
+                      id: mintId(),
+                      text: {
+                        revision: '',
+                        body: '',
+                        provenance: 'human',
+                        lifecycle: {
+                          policy: 'edited',
+                          review: 'draft',
+                          freshness: 'current',
                         },
                       },
-                    ],
-                  })
-                }
-              >
-                Write dialogue {slotIndex + 1}
-              </button>
-            )}
+                    },
+                  ],
+                })
+              }
+            >
+              {slot.variants?.length
+                ? `Add dialogue ${slotIndex + 1} variant`
+                : `Write dialogue ${slotIndex + 1}`}
+            </button>
+            <ScriptOrderControls
+              label={`dialogue ${slotIndex + 1} slot`}
+              index={slotIndex}
+              items={beat.dialogue ?? []}
+              onChange={(dialogue) => changeBeat({ ...beat, dialogue })}
+            />
+            <button className="btn" disabled={locked} onClick={() => onDeleteSlot(slot.id)}>
+              Delete dialogue {slotIndex + 1} slot
+            </button>
           </div>
         )
       })}

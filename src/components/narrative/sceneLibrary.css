@@ -167,3 +167,16 @@
     display: none;
   }
 }
+.nsl-quests {
+  min-width: 140px;
+  max-width: 240px;
+  overflow-wrap: anywhere;
+}
+.nsl-quests ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nsl-quests li + li {
+  margin-top: 5px;
+}

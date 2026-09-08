@@ -7876,6 +7876,8 @@ dependencies = [
  "wobu-llm",
  "wobu-mcp",
  "wobu-narrative",
+ "wobu-narrative-compiler",
+ "wobu-narrative-runtime",
  "wobu-store",
  "wobu-sync",
 ]
@@ -7976,6 +7978,27 @@ dependencies = [
  "serde_norway",
  "thiserror 2.0.19",
  "wobu-core",
+]
+
+[[package]]
+name = "wobu-narrative-compiler"
+version = "0.1.11"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+ "wobu-narrative",
+]
+
+[[package]]
+name = "wobu-narrative-runtime"
+version = "0.1.11"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "wobu-narrative",
+ "wobu-narrative-compiler",
 ]
 
 [[package]]

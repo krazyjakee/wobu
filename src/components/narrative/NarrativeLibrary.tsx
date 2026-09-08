@@ -7,6 +7,7 @@ import {
   type LibraryRow,
   type LibraryView,
   type SceneMatch,
+  type SceneQuest,
 } from './sceneLibraryModel'
 import { readPreferences, writePreferences } from './sceneLibraryPreferences'
 import './sceneLibrary.css'
@@ -17,6 +18,9 @@ const PAGE_SIZE = 25
 export function NarrativeLibrary({
   projectKey,
   rows,
+  quests,
+  questsLoading = false,
+  questsError,
   catalog,
   loading,
   error,
@@ -28,6 +32,9 @@ export function NarrativeLibrary({
 }: {
   projectKey: string
   rows: LibraryRow[]
+  quests?: SceneQuest[]
+  questsLoading?: boolean
+  questsError?: string
   catalog?: SceneCatalog
   loading: boolean
   error?: string
@@ -42,7 +49,13 @@ export function NarrativeLibrary({
   const [matchIndices, setMatchIndices] = useState<Record<string, number>>({})
   const scroll = useRef<HTMLDivElement>(null)
   const deferredView = useDeferredValue(prefs.view)
-  const results = useMemo(() => findScenes(rows, deferredView), [rows, deferredView])
+  const results = useMemo(
+    () => findScenes(rows, deferredView, quests),
+    [rows, deferredView, quests],
+  )
+  const sortedQuests = [...(quests ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const missingQuest =
+    prefs.view.quest && !sortedQuests.some((quest) => quest.id === prefs.view.quest)
   const participants = [
     ...new Set(rows.flatMap((row) => row.scene?.participants?.map((p) => p.entity) ?? [])),
   ].sort((a, b) => (nameOf(a) ?? a).localeCompare(nameOf(b) ?? b))
@@ -163,6 +176,24 @@ export function NarrativeLibrary({
         </label>
         <div className="nsl-filters">
           <label>
+            Quest
+            <select
+              value={prefs.view.quest}
+              onChange={(e) => updateView({ quest: e.target.value })}
+              disabled={questsLoading || Boolean(questsError)}
+            >
+              <option value="">All quests</option>
+              {missingQuest && (
+                <option value={prefs.view.quest}>Unavailable quest ({prefs.view.quest})</option>
+              )}
+              {sortedQuests.map((quest) => (
+                <option key={quest.id} value={quest.id}>
+                  {quest.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             Participant
             <select
               value={prefs.view.participant}
@@ -264,9 +295,21 @@ export function NarrativeLibrary({
           </label>
         </form>
         <p className="nrt-note">
-          Act, quest and tags are not available yet. Status reflects recorded source values;
-          automatic freshness tracking is not available.
+          Act and tags are not available yet. Status reflects recorded source values; automatic
+          freshness tracking is not available.
         </p>
+        {questsLoading && <p className="nrt-note">Reading quest membership…</p>}
+        {questsError && (
+          <p role="alert">
+            Could not read quest membership: {questsError}. Quest results are incomplete.
+          </p>
+        )}
+        {missingQuest && !questsLoading && !questsError && (
+          <p className="nrt-note">
+            The quest selected by this view no longer exists. Choose another quest or clear the
+            filters.
+          </p>
+        )}
         <p role="status" aria-live="polite">
           {loading ? 'Reading scenes…' : `${results.length} matching of ${rows.length} scenes`}
           {pending > 0 && ` · Reading text from ${pending} scenes; results are incomplete.`}
@@ -291,6 +334,7 @@ export function NarrativeLibrary({
             <thead>
               <tr>
                 <th scope="col">Scene</th>
+                <th scope="col">Quests</th>
                 <th scope="col">Participants</th>
                 <th scope="col">Text coverage</th>
                 <th scope="col">Recorded status</th>
@@ -342,6 +386,19 @@ export function NarrativeLibrary({
                         </label>
                       )}
                     </th>
+                    <td className="nsl-quests">
+                      {questsLoading || questsError ? (
+                        'Not read'
+                      ) : row.quests.length ? (
+                        <ul aria-label={`Quests for ${row.summary.name}`}>
+                          {row.quests.map((quest) => (
+                            <li key={quest.id}>{quest.name}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        'No quests'
+                      )}
+                    </td>
                     <td>
                       {row.scene
                         ? row.scene.participants

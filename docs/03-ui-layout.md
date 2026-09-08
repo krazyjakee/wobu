@@ -2,8 +2,10 @@
 
 This page describes the workspace. [Narrative mode](19-narrative-authoring.md) now combines a
 searchable Scene library, scoped Flow canvases, and Script/Source editing of the same scene.
+World state edits attributed facts, relationships, quests and finite variable declarations. Typed
+Script forms author conditions/effects; Preview plays saved source through the isolated Rust runner.
 The inspector shows saved participants, intent and dialogue; its outline contains only the active
-scene. Review, affected builds and playable Preview remain planned in the
+scene. Review, affected builds and Flow playback overlays remain in the
 [narrative delivery plan](17-narrative-system.md).
 
 ## Shape of the app
@@ -49,8 +51,8 @@ result grid) · `Assets` (all images, filterable) · `Narrative` · `Settings`. 
 clean and makes mode switching muscle memory.
 
 `Narrative` is appended rather than slotted in beside `Library`, so the first three buttons
-keep the positions they have always had. It opens the workspace shell — the Library navigator,
-the Flow/Script/Preview/Source tabs, and the context inspector. The plan it belongs to is
+keep the positions they have always had. It opens the main Scene library, with World state available from Narrative navigation and
+Flow/Script/Preview/Source views for a selected scene. The plan it belongs to is
 tracked in issue #151; nothing in that workspace should be described as shipped until its
 acceptance criteria pass.
 
@@ -62,18 +64,21 @@ What is connected to the project folder today, and what is not:
 | Flow, both levels | Yes | Scenes, beats, choices, outcomes, and authored scene links |
 | Flow layout | Yes | `narrative/layout/`, saved per drag, never on the undo stack |
 | Diagnostics badges | Yes | Source-level only; see below |
-| Library → Quests, World state, Text library | **No** | The models behind them (#155, #167) do not exist |
-| Script, Preview, Source tabs | **No** | #156, #161, #157 |
+| World state and quest discovery | Yes | `narrative/world.yaml`; independent beliefs, relationships, events, quests and scene memberships |
+| Variables | Yes | `narrative/state.yaml`; declared finite domains and ownership |
+| Script and Source | Yes | One guarded scene source; typed forms and explicit YAML formatting |
+| Preview | Yes | Compiles saved scenes/state into an isolated graph; playback never writes canon |
+| Text library | **No** | Supporting text kinds remain #167 |
 | Review, Build, Export | **No** | #166, #169, #160 |
 
 Two things #189 asks for are refused with the reason rather than drawn: a badge cannot open a
-**witness scenario**, because that needs the deterministic runtime and the Preview overlay
-(#158, #161, #188); and an **affected-build scope** cannot be highlighted, because that needs
+**witness scenario**, because condition/effect trace data and the Preview overlay are still
+unimplemented (#161, #188); and an **affected-build scope** cannot be highlighted, because that needs
 the dependency tracker and the build planner (#168, #169).
 
 #### What the Flow canvas can and cannot author
 
-The canvas edits the same documents the forms will, through the same single write, so what it
+The canvas edits the same documents as Script forms, through the same single write, so what it
 offers is bounded by what the source model can say rather than by what a canvas could draw:
 
 - **A destination can be moved, and cannot be cleared.** `Destination` is a beat, a scene or an

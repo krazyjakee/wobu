@@ -1,9 +1,13 @@
 import type { GenerationPolicy, ReviewState, Freshness, Scene, SceneSummary } from '../../lib/api'
+import type { Quest } from '../../lib/api/narrativeWorld'
 import type { NarrativeTarget } from '../../store/ui'
+
+export type SceneQuest = Pick<Quest, 'id' | 'name' | 'scene_ids'>
 
 export interface LibraryView {
   query: string
   participant: string
+  quest: string
   policy: GenerationPolicy | ''
   review: ReviewState | ''
   freshness: Freshness | ''
@@ -14,6 +18,7 @@ export interface LibraryView {
 export const DEFAULT_LIBRARY_VIEW: LibraryView = {
   query: '',
   participant: '',
+  quest: '',
   policy: '',
   review: '',
   freshness: '',
@@ -32,16 +37,31 @@ export interface LibraryRow {
   error?: string
 }
 export interface SceneResult extends LibraryRow {
+  quests: SceneQuest[]
   matches: SceneMatch[]
   slots: number
   filled: number
 }
 
 /** Search only canonical source. Generated drafts are an explicit opt-in. */
-export function findScenes(rows: LibraryRow[], view: LibraryView): SceneResult[] {
+export function findScenes(
+  rows: LibraryRow[],
+  view: LibraryView,
+  quests: SceneQuest[] = [],
+): SceneResult[] {
+  const memberships = new Map<string, SceneQuest[]>()
+  for (const quest of quests) {
+    for (const sceneId of new Set(quest.scene_ids)) {
+      const linked = memberships.get(sceneId) ?? []
+      linked.push(quest)
+      memberships.set(sceneId, linked)
+    }
+  }
   const query = view.query.trim().toLocaleLowerCase()
   return rows
     .flatMap((row): SceneResult[] => {
+      const linkedQuests = memberships.get(row.summary.id) ?? []
+      if (view.quest && !linkedQuests.some((quest) => quest.id === view.quest)) return []
       const scene = row.scene
       if (view.participant && !scene?.participants?.some((p) => p.entity === view.participant))
         return []
@@ -104,7 +124,7 @@ export function findScenes(rows: LibraryRow[], view: LibraryView): SceneResult[]
         }
       }
       if (query && !matches.length) return []
-      return [{ ...row, matches, slots: slots.length, filled }]
+      return [{ ...row, quests: linkedQuests, matches, slots: slots.length, filled }]
     })
     .sort((a, b) => {
       const byName =

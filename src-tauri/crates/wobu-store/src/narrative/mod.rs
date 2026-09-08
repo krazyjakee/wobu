@@ -5,6 +5,7 @@
 //!
 //! ```text
 //! narrative/
+//! ├── world.yaml                    canonical facts, beliefs and quests
 //! ├── state.yaml                    the declared variables, project-wide
 //! ├── scenes/<slug>.yaml            one SceneDocument each — canonical source
 //! └── layout/
@@ -51,6 +52,7 @@
 //! through a name.
 
 pub mod layout;
+pub mod world;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -226,7 +228,7 @@ fn scene_paths(root: &Path) -> Vec<(String, PathBuf)> {
 ///
 /// [`layout::is_layout_path`]: crate::narrative::layout::is_layout_path
 pub fn is_source_path(rel: &str) -> bool {
-    rel == STATE_FILE || rel.starts_with(&format!("{SCENES_DIR}/"))
+    rel == STATE_FILE || rel == world::WORLD_FILE || rel.starts_with(&format!("{SCENES_DIR}/"))
 }
 
 /// Conflict siblings `guarded_write` parked beside a narrative source file.
@@ -367,7 +369,7 @@ pub fn write_state(
 /// A hash over every byte of narrative source in the project, and nothing else.
 ///
 /// This is the artefact that makes #185's central claim checkable rather than
-/// merely asserted. It walks `narrative/state.yaml` and `narrative/scenes/`,
+/// merely asserted. It walks `narrative/state.yaml`, `narrative/world.yaml` and `narrative/scenes/`,
 /// so `narrative/layout/` is not excluded by a filter somebody could delete —
 /// it is unreachable from here. A layout-only edit therefore cannot move this
 /// value, and a test that hashes it before and after a drag is a proof rather
@@ -388,6 +390,10 @@ pub fn source_fingerprint(root: &Path) -> Result<String> {
     let state = paths::from_rel_string(root, STATE_FILE);
     if state.is_file() {
         files.push((STATE_FILE.to_string(), state));
+    }
+    let world = paths::from_rel_string(root, world::WORLD_FILE);
+    if world.is_file() {
+        files.push((self::world::WORLD_FILE.to_string(), world));
     }
     files.sort_by(|a, b| a.0.cmp(&b.0));
 

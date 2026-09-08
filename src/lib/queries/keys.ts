@@ -76,6 +76,7 @@ export const qk = {
  * scene both keep their boxes, so there is nothing a refetch would rescue.
  */
 export function invalidateNarrative(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ['narrative_world'] })
   void qc.invalidateQueries({ queryKey: qk.narrativeScenes })
   void qc.invalidateQueries({ queryKey: ['narrative_scene'] })
   // Diagnostics are computed against the whole project — the scene catalog and
@@ -97,6 +98,7 @@ export async function clearNarrativeReads(qc: QueryClient) {
     'narrative_state',
     'narrative_layout',
     'narrative_source',
+    'narrative_world',
   ])
   const filter = {
     predicate: (query: { queryKey: readonly unknown[] }) => families.has(String(query.queryKey[0])),

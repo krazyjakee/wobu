@@ -5,9 +5,10 @@ Wobu is a local-first, AI-assisted world building tool for producing **concept a
 once — art style, lore, species, cultures, places — and every image you generate inherits
 that context automatically.
 
-The planned [narrative system](17-narrative-system.md) extends this world-authoring foundation to
-scenes, branching dialogue, editorial review, and deterministic game-engine exports. Its user
-stories and linked GitHub backlog describe future work, not currently shipped behaviour.
+The [narrative system](17-narrative-system.md) now has scene/world authoring, typed dialogue
+structure and an isolated deterministic Preview. Editorial review, generation, production builds
+and engine integrations remain planned; the [authoring guide](19-narrative-authoring.md) records
+the implemented behavior and remaining acceptance. N5 integrations are excluded from current work.
 
 | Doc | What's in it |
 | --- | --- |
@@ -25,9 +26,9 @@ stories and linked GitHub backlog describe future work, not currently shipped be
 | [15 — Exit Policy](15-exit-policy.md) | Every way the app can be stopped, what is in flight on each, and what is flushed, cancelled or accepted as lost |
 | [16 — Agent Access (MCP)](16-mcp.md) | The opt-in MCP server and client, what each exposes, and what guards the port |
 | [17 — Narrative System](17-narrative-system.md) | User stories, implementation status, compiler/runtime boundaries, and remaining backlog |
-
+| [17 — Runtime Contract](17-narrative-runtime-contract.md) | Internal compiler graph, runtime semantics, commands and snapshots |
 | [18 — Narrative Source Editor](18-narrative-source-editor.md) | YAML policy, draft safety, diagnostics and round trips |
-| [19 — Narrative Authoring](19-narrative-authoring.md) | Scene library, Script, context, current acceptance evidence and gaps |
+| [19 — Narrative Authoring](19-narrative-authoring.md) | Scene/quest discovery, World, typed Script, Preview, draft safety and acceptance gaps |
 
 Two constraints shape most of the above and are worth knowing up front:
 

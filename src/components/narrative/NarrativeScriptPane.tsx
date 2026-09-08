@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Beat, Destination, Scene, SceneFile, Speaker } from '../../lib/api'
+import type { Beat, Scene, SceneFile, Speaker } from '../../lib/api'
 import { prepareScriptText } from './scriptText'
 import { ScriptDialogue } from './ScriptDialogue'
-import { useNodes, useSaveScene, useScene, useScenes } from '../../lib/queries'
+import { ScriptRoutes } from './ScriptRoutes'
+import { ScriptDiagnostics } from './ScriptDiagnostics'
+import { diagnosticField } from './scriptDiagnosticField'
+import { TypedCondition } from './TypedCondition'
+import { hasUnsafeInteger } from './integerInput'
+import { useNodes, useSaveScene, useScene, useScenes, useNarrativeState } from '../../lib/queries'
 import { useUI } from '../../store/ui'
 import { mintId } from './flow/source'
 import {
   beatHasLockedText,
   duplicateScriptBeat,
   removeScriptBeat,
+  removeScriptVariant,
+  removeScriptSlot,
   speakerFromKey,
   speakerKey,
 } from './scriptModel'
@@ -43,15 +50,19 @@ function ScriptEditor({
   const key = `${projectKey}:${file.scene.id}`
   const draft = useScriptDrafts((s) => s.drafts[key])
   const scene = draft?.scene ?? file.scene
+  const unsafeInteger = hasUnsafeInteger(scene)
   const selected = useUI((s) => s.narrative)
   const select = useUI((s) => s.selectNarrative)
   const beat = scene.beats?.find((one) => one.id === selected.beatId) ?? scene.beats?.[0]
   const nodes = useNodes(true)
   const catalog = useScenes()
+  const state = useNarrativeState()
+  const variables = state.data?.document?.variables ?? []
   const save = useSaveScene()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [focusField, setFocusField] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const searchVariant = useSceneLibrary((s) => s.searchVariant)
   const disabled = readOnly || busy || save.isPending
@@ -75,6 +86,19 @@ function ScriptEditor({
     field?.focus()
   }, [searchVariant, scene.id])
 
+  useEffect(() => {
+    if (!focusField) return
+    const field = Array.from(
+      root.current?.querySelectorAll<HTMLElement>('[data-narrative-field]') ?? [],
+    ).find((element) => element.dataset.narrativeField === focusField)
+    const control = field?.matches('input, select, textarea')
+      ? field
+      : field?.querySelector<HTMLElement>('input, select, textarea')
+    control?.scrollIntoView?.({ block: 'center' })
+    control?.focus()
+    if (control) setFocusField(null)
+  }, [focusField, selected.beatId])
+
   const edit = (next: Scene) => {
     if (disabled) return
     useScriptDrafts.getState().put(key, { file: draft?.file ?? file, scene: next })
@@ -94,7 +118,7 @@ function ScriptEditor({
   }
 
   const submit = async () => {
-    if (!draft || disabled) return
+    if (!draft || disabled || unsafeInteger) return
     setBusy(true)
     setError('')
     try {
@@ -135,11 +159,17 @@ function ScriptEditor({
 
   return (
     <div className="nrt-script-editor" ref={root}>
+      {unsafeInteger && (
+        <p role="alert">
+          This scene contains an integer outside the desktop editor’s exact range. Saving is
+          disabled to preserve the source value; correct it in Source before editing this script.
+        </p>
+      )}
       <div className="nrt-script-toolbar">
         <button
           type="button"
           className="btn is-primary"
-          disabled={disabled || !draft}
+          disabled={disabled || !draft || unsafeInteger}
           onClick={() => void submit()}
         >
           {busy ? 'Saving…' : 'Save script'}
@@ -156,6 +186,20 @@ function ScriptEditor({
           {draft ? 'Unsaved draft — kept while switching tabs.' : message || 'Saved script'}
         </span>
       </div>
+      <ScriptDiagnostics
+        scene={scene}
+        onSelect={(diagnostic) => {
+          select(
+            {
+              sceneId: scene.id,
+              beatId: diagnostic.beatId ?? beat?.id ?? null,
+              lineId: diagnostic.slotId ?? null,
+            },
+            'script',
+          )
+          setFocusField(diagnosticField(diagnostic))
+        }}
+      />
       {error && (
         <p className="inline-error" role="alert">
           Could not save: {error}. Your draft is kept.
@@ -172,7 +216,11 @@ function ScriptEditor({
         <legend>Scene</legend>
         <label>
           Scene name
-          <input value={scene.name} onChange={(e) => edit({ ...scene, name: e.target.value })} />
+          <input
+            data-narrative-field="scene:name"
+            value={scene.name}
+            onChange={(e) => edit({ ...scene, name: e.target.value })}
+          />
         </label>
         <label>
           Summary
@@ -184,6 +232,7 @@ function ScriptEditor({
         <label>
           Participants
           <select
+            data-narrative-field="scene:participants"
             multiple
             value={(scene.participants ?? []).map((p) => p.entity)}
             onChange={(e) =>
@@ -213,6 +262,19 @@ function ScriptEditor({
               ))}
           </select>
         </label>
+      </fieldset>
+      <fieldset disabled={disabled}>
+        <div data-narrative-field="scene:entry">
+          <TypedCondition
+            label="Scene entry"
+            value={scene.entry}
+            variables={variables}
+            onChange={(entry) => edit({ ...scene, entry })}
+          />
+        </div>
+        {state.isError && (
+          <p role="alert">Could not load declared state. Existing conditions are preserved.</p>
+        )}
       </fieldset>
       <div className="nrt-script-toolbar">
         <label>
@@ -290,6 +352,7 @@ function ScriptEditor({
             <label>
               Beat title
               <input
+                data-narrative-field={`beat:${beat.id}`}
                 value={beat.title}
                 onChange={(e) => changeBeat({ ...beat, title: e.target.value })}
               />
@@ -326,6 +389,14 @@ function ScriptEditor({
                     }
                   />
                 </label>
+                <button
+                  className="btn"
+                  onClick={() =>
+                    changeBeat({ ...beat, intents: beat.intents?.filter((_, at) => at !== index) })
+                  }
+                >
+                  Delete intent {index + 1}
+                </button>
               </div>
             ))}
             <button
@@ -358,6 +429,11 @@ function ScriptEditor({
           </fieldset>
           <ScriptDialogue
             beat={beat}
+            variables={variables}
+            onDeleteVariant={(slotId, variantId) =>
+              edit(removeScriptVariant(scene, beat.id, slotId, variantId))
+            }
+            onDeleteSlot={(slotId) => edit(removeScriptSlot(scene, beat.id, slotId))}
             disabled={disabled}
             selectedLineId={selected.lineId}
             changeBeat={changeBeat}
@@ -366,151 +442,16 @@ function ScriptEditor({
               select({ sceneId: scene.id, beatId: beat.id, lineId }, 'script')
             }
           />
-          <fieldset disabled={disabled}>
-            <legend>Choices and outcomes</legend>
-            {(beat.choices ?? []).map((choice, index) => (
-              <div className="nrt-script-line" key={choice.id}>
-                <label>
-                  Choice {index + 1}
-                  <input
-                    value={choice.label}
-                    onChange={(e) =>
-                      changeBeat({
-                        ...beat,
-                        choices: beat.choices?.map((one) =>
-                          one.id === choice.id ? { ...one, label: e.target.value } : one,
-                        ),
-                      })
-                    }
-                  />
-                </label>
-                <DestinationPicker
-                  label={`Choice ${index + 1} destination`}
-                  value={choice.to}
-                  scene={scene}
-                  scenes={catalog.data?.scenes ?? []}
-                  onChange={(to) =>
-                    changeBeat({
-                      ...beat,
-                      choices: beat.choices?.map((one) =>
-                        one.id === choice.id ? { ...one, to } : one,
-                      ),
-                    })
-                  }
-                />
-                <span className="nrt-script-status">
-                  {choice.requires && choice.requires !== 'always'
-                    ? 'Conditional'
-                    : 'Always available'}{' '}
-                  · {choice.effects?.length ?? 0} effects
-                </span>
-              </div>
-            ))}
-            {(beat.outcomes ?? []).map((outcome, index) => (
-              <div className="nrt-script-line" key={outcome.id}>
-                <DestinationPicker
-                  label={`Outcome ${index + 1} destination`}
-                  value={outcome.to}
-                  scene={scene}
-                  scenes={catalog.data?.scenes ?? []}
-                  onChange={(to) =>
-                    changeBeat({
-                      ...beat,
-                      outcomes: beat.outcomes?.map((one) =>
-                        one.id === outcome.id ? { ...one, to } : one,
-                      ),
-                    })
-                  }
-                />
-                <span className="nrt-script-status">
-                  {outcome.when && outcome.when !== 'always' ? 'Conditional' : 'Always'} ·{' '}
-                  {outcome.effects?.length ?? 0} effects
-                </span>
-              </div>
-            ))}
-            <p className="nrt-note">
-              New routes explicitly end the scene until you choose another destination. Conditions
-              and effects are preserved; edit them in Source.
-            </p>
-            <div className="nrt-script-actions">
-              <button
-                className="btn"
-                onClick={() =>
-                  changeBeat({
-                    ...beat,
-                    choices: [
-                      ...(beat.choices ?? []),
-                      { id: mintId(), label: 'New choice', to: { end: {} } },
-                    ],
-                  })
-                }
-              >
-                Add choice ending
-              </button>
-              <button
-                className="btn"
-                onClick={() =>
-                  changeBeat({
-                    ...beat,
-                    outcomes: [...(beat.outcomes ?? []), { id: mintId(), to: { end: {} } }],
-                  })
-                }
-              >
-                Add outcome ending
-              </button>
-            </div>
-          </fieldset>
+          <ScriptRoutes
+            beat={beat}
+            scene={scene}
+            scenes={catalog.data?.scenes ?? []}
+            variables={variables}
+            disabled={disabled}
+            changeBeat={changeBeat}
+          />
         </>
       )}
     </div>
-  )
-}
-
-function DestinationPicker({
-  label,
-  value,
-  scene,
-  scenes,
-  onChange,
-}: {
-  label: string
-  value: Destination
-  scene: Scene
-  scenes: { id: string; name: string }[]
-  onChange: (value: Destination) => void
-}) {
-  const selected =
-    'beat' in value ? `beat:${value.beat}` : 'scene' in value ? `scene:${value.scene}` : 'end'
-  const options = [
-    { id: 'end', title: 'End scene' },
-    ...(scene.beats ?? []).map((beat) => ({ id: `beat:${beat.id}`, title: `Beat: ${beat.title}` })),
-    ...scenes.map((one) => ({ id: `scene:${one.id}`, title: `Scene: ${one.name}` })),
-  ]
-  return (
-    <label>
-      {label}
-      <select
-        value={selected}
-        onChange={(e) => {
-          const key = e.target.value
-          onChange(
-            key === 'end'
-              ? { end: {} }
-              : key.startsWith('beat:')
-                ? { beat: key.slice(5) }
-                : { scene: key.slice(6) },
-          )
-        }}
-      >
-        {!options.some((one) => one.id === selected) && (
-          <option value={selected}>Missing destination: {selected}</option>
-        )}
-        {options.map((one) => (
-          <option key={one.id} value={one.id}>
-            {one.title}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

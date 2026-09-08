@@ -2,10 +2,9 @@ import { useId, useRef, type KeyboardEvent } from 'react'
 import { useScenes } from '../../lib/queries'
 import { useUI, NARRATIVE_TABS, type NarrativeTab } from '../../store/ui'
 import { NarrativeProjectFlow } from './NarrativeProjectFlow'
-import { NarrativePlaceholder } from './NarrativePlaceholder'
+import { NarrativePreviewPane } from './NarrativePreviewPane'
 import { NarrativeScriptPane } from './NarrativeScriptPane'
 import { NarrativeSourcePane } from './NarrativeSourcePane'
-import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 
 const TAB_LABEL: Record<NarrativeTab, string> = {
   flow: 'Flow',
@@ -120,12 +119,7 @@ export function NarrativeCentre({
             relation to each other; the scene canvas is one double-click in. */}
         {tab === 'flow' && <NarrativeProjectFlow readOnly={readOnly} />}
         {tab === 'script' && <NarrativeScriptPane readOnly={readOnly} projectKey={projectKey} />}
-        {tab === 'preview' && (
-          <NarrativePlaceholder
-            title="Preview is not in this build"
-            reason={NARRATIVE_UNAVAILABLE.preview}
-          />
-        )}
+        {tab === 'preview' && <NarrativePreviewPane projectKey={projectKey} />}
         {tab === 'source' && <NarrativeSourcePane readOnly={readOnly} projectKey={projectKey} />}
       </div>
     </main>
