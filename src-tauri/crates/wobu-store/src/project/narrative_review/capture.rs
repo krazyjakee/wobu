@@ -190,6 +190,7 @@ impl Project {
                         .and_then(|b| b.dialogue.iter().find(|s| s.id == binding.target.slot))
                         .and_then(|s| s.variants.iter().find(|v| v.id == id).map(|v| (s, v)));
                     event.bindings.get(&id) == Some(binding)
+                        && origin_matches(event, binding)
                         && (!binding.approved
                             || matches!(
                                 event.action,
@@ -393,5 +394,38 @@ impl ReviewSnapshot {
         Ok(ReviewSceneView {scene_id:self.file.scene.id,guard:self.guard(),state_json:serde_json::to_string(&self.state)?,lines,
             history:self.history.iter().map(|e|ReviewHistory {id:e.id,action:serde_json::to_value(&e.action).ok().and_then(|a|a["kind"].as_str().map(str::to_owned)).unwrap_or_default(),target:e.target.clone(),actor:e.actor.clone(),context_revision:e.context.as_ref().map(|c|c.revision.clone())}).collect(),
             context_summary:"Review binds authored scene structure, world records, character voices, variable declarations and the displayed scenario. Editorial flags and the selected wording are tracked separately.".into()})
+    }
+}
+
+/// Manual saves capture several draft baselines; every other binding originates
+/// in one explicit target decision. Empty-slot generation may introduce its id.
+fn origin_matches(event: &EditorialEvent, binding: &ReviewBinding) -> bool {
+    use wobu_narrative::review::EditorialAction;
+    match &event.action {
+        EditorialAction::ManualSave => event.target.is_none() && !binding.approved,
+        EditorialAction::Approve | EditorialAction::Attest | EditorialAction::Edit { .. } => {
+            event.target.as_ref() == Some(&binding.target)
+        }
+        EditorialAction::Accept { .. } | EditorialAction::Generated { .. } => {
+            let Some(target) = &event.target else { return false };
+            let mut assigned = target.clone();
+            assigned.variant = binding.target.variant;
+            if target.variant.is_some() {
+                target == &binding.target
+            } else {
+                assigned == binding.target
+                    && event
+                        .before
+                        .beat(target.beat)
+                        .and_then(|b| b.dialogue.iter().find(|s| s.id == target.slot))
+                        .is_some_and(|s| s.variants.is_empty())
+                    && event
+                        .after
+                        .beat(target.beat)
+                        .and_then(|b| b.dialogue.iter().find(|s| s.id == target.slot))
+                        .is_some_and(|s| s.variants.len() == 1)
+            }
+        }
+        _ => false,
     }
 }

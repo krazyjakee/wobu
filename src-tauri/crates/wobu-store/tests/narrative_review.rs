@@ -340,3 +340,58 @@ fn handwritten_drafts_have_independent_current_context_and_keep_copy_provenance(
     assert_eq!(view.lines[0].freshness, Freshness::OutOfDate);
     assert!(view.lines.iter().all(|l| !l.approval_valid));
 }
+
+#[test]
+fn shared_manual_baselines_cannot_supply_approval_for_a_different_decision_target() {
+    use wobu_narrative::review::EditorialEvent;
+    use wobu_store::{NarrativeRecordDocument, NarrativeRecordFile, NarrativeRecordKind};
+    let (_d, mut p, mut file, t) = fixture();
+    let extra = Variant::new(Text::written("Another draft."));
+    let other = ReviewTarget { variant: Some(extra.id), ..t.clone() };
+    file.scene.beats[0].dialogue[0].variants.push(extra);
+    file.scene.beats[0].dialogue[0].variants[0]
+        .text
+        .set_body("Both changed.", wobu_narrative::Provenance::Human);
+    p.save_scene(&mut file).unwrap();
+    assert!(
+        p.review_scene(t.scene, None)
+            .unwrap()
+            .lines
+            .iter()
+            .all(|line| !line.approval_valid && line.freshness == Freshness::Current)
+    );
+    let approved = apply(&mut p, &t, EditorialAction::Approve);
+    let head = approved.scene.editorial_head.unwrap();
+    let record = p.narrative_record(NarrativeRecordKind::Receipt, head).unwrap().unwrap();
+    let original: EditorialEvent = serde_json::from_value(record.document.payload).unwrap();
+    for target in [Some(other), None] {
+        // New immutable receipt and a continuous chain: only its claimed origin
+        // disagrees with the still-valid target/text/context binding.
+        let mut event = original.clone();
+        event.id = wobu_core::Id::generate();
+        event.parent = Some(head);
+        event.before = approved.scene.clone();
+        event.target = target;
+        event.bindings.get_mut(&t.variant.unwrap()).unwrap().event_id = event.id;
+        let mut forged = NarrativeRecordFile {
+            document: NarrativeRecordDocument::new(
+                NarrativeRecordKind::Receipt,
+                event.id,
+                "Mismatched decision target",
+                serde_json::to_value(&event).unwrap(),
+            ),
+            stamp: None,
+        };
+        p.save_narrative_record(&mut forged).unwrap();
+        let mut changed = approved.scene.clone();
+        changed.editorial_head = Some(event.id);
+        std::fs::write(
+            p.root().join(&approved.rel),
+            wobu_narrative::SceneDocument::new(changed).to_yaml().unwrap(),
+        )
+        .unwrap();
+        let snapshot = p.review_snapshot(t.scene, None).unwrap();
+        assert!(snapshot.evidence().unwrap().is_empty());
+        assert!(snapshot.view(&p).unwrap().lines[0].reason.contains("immutable decision"));
+    }
+}
