@@ -81,6 +81,8 @@ filesystem, synthesizer or audio-device dependency.
 
 ## Verification and limits
 
+The [native acceptance evidence](evidence/narrative-media/README.md) records partial import,
+revision staleness, Release/fallback, actual audio playback and minimum-window checks.
 The [offline original voiced fixture](../examples/recording-handoff/README.md) demonstrates the
 native import/audition/timing workflow. Its cues are hand-authored, not a claim of forced alignment.
 Focused tests cover malformed WAV/timing, Unicode CSV roundtrips, unsafe/symlink paths, duplicate
