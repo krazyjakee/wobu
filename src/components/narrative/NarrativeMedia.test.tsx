@@ -23,6 +23,17 @@ function take(): MediaTake {
   }
 }
 beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async () => new Response(new Uint8Array(16044))),
+  )
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, {
+      createObjectURL: vi.fn(() => 'blob:recording'),
+      revokeObjectURL: vi.fn(),
+    }),
+  )
   h.invoke.mockReset()
   h.save.mockReset()
   h.open.mockReset()
@@ -124,7 +135,7 @@ it('previews guarded partial imports and auditions actual timed media through on
   fireEvent.click(screen.getByRole('button', { name: 'Audition latest take' }))
   const section = await screen.findByRole('region', { name: 'Recording audition' })
   const audio = section.querySelector('audio')!
-  expect(audio).toHaveAttribute('src', 'asset:///world/assets/media/clip.wav')
+  await waitFor(() => expect(audio).toHaveAttribute('src', 'blob:recording'))
   Object.defineProperty(audio, 'currentTime', { value: 0.25 })
   fireEvent.timeUpdate(audio)
   expect(within(section).getByText('viseme: aa (100–800 ms)')).toBeInTheDocument()
