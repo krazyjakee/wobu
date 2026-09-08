@@ -148,6 +148,7 @@ fn preview_rejects_output_counters_that_advance_beyond_the_exact_webview_range()
     scene.beats.push(beat);
     let graph = compile(
         &[scene.clone()],
+        &[],
         &wobu_narrative::StateSchema::empty(),
         &CompileOptions::default(),
     )
@@ -186,6 +187,7 @@ fn pending_preview_commands_restore_fail_cancel_and_accept_validated_host_output
     .unwrap();
     let graph = compile(
         &[scene.clone()],
+        &[],
         &schema,
         &CompileOptions {
             commands: BTreeMap::from([(Name::new("award").unwrap(), vec![])]),

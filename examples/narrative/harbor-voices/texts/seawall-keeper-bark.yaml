@@ -1,0 +1,100 @@
+schema_version: 1
+asset:
+  id: '00000000000000000000000101'
+  kind: bark
+  name: Seawall keeper passing line
+  summary: What the keeper says to somebody walking the seawall at night.
+  trigger:
+    event: player_passes_seawall
+  sources:
+  - quest: '00000000000000000000000099'
+  participants:
+  - entity: '00000000000000000000000090'
+    role: keeper
+  must_convey:
+  - The keeper is tired and still on duty.
+  must_not_reveal:
+  - Who put the north lantern out.
+  repeat: shuffle
+  policy: edited
+  entries:
+  - id: '00000000000000000000000102'
+    label: Mind the step
+    lines:
+    - id: '00000000000000000000000103'
+      speaker:
+        entity: '00000000000000000000000090'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000104'
+        text:
+          revision: a0ac43e6ac2a6974a55d1cd01f166a9d
+          body: Mind the step. Third one's rotten through.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000105'
+    label: Long night
+    lines:
+    - id: '00000000000000000000000106'
+      speaker:
+        entity: '00000000000000000000000090'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000107'
+        text:
+          revision: 9eaad4952677b046fd35e7b19c960d6e
+          body: Long night for it.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000108'
+    label: Dark lantern
+    when:
+      compare:
+        var: recorded
+        op: eq
+        value:
+          literal: false
+    lines:
+    - id: '00000000000000000000000109'
+      speaker:
+        entity: '00000000000000000000000090'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000110'
+        text:
+          revision: 1333c146563b9c266e6e5c4220d3f90b
+          body: North light's still out. Nobody's written it down.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000111'
+    label: Thanks
+    when:
+      compare:
+        var: recorded
+        op: eq
+        value:
+          literal: true
+    lines:
+    - id: '00000000000000000000000112'
+      speaker:
+        entity: '00000000000000000000000090'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000113'
+        text:
+          revision: 83a081434e2b20258385524bf7aa9e54
+          body: You put it in the book. That's more than most.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current

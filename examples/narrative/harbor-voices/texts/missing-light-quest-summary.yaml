@@ -1,0 +1,73 @@
+schema_version: 1
+asset:
+  id: '00000000000000000000000181'
+  kind: quest_summary
+  name: The missing light
+  summary: What the quest log shows about the missing north lantern.
+  trigger:
+    event: quest_log_opened
+  sources:
+  - quest: '00000000000000000000000099'
+  repeat: first
+  policy: edited
+  entries:
+  - id: '00000000000000000000000182'
+    label: Recorded
+    when:
+      compare:
+        var: recorded
+        op: eq
+        value:
+          literal: true
+    lines:
+    - id: '00000000000000000000000183'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000184'
+        text:
+          revision: d9f2c183c1b0153eaa50a84713dfcdc7
+          body: The north lantern's failure is in the watch book. Whoever reads it next will know when it went dark.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000185'
+    label: Witnessed, unrecorded
+    when:
+      compare:
+        var: knowledge
+        op: eq
+        value:
+          literal: witnessed
+    lines:
+    - id: '00000000000000000000000186'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000187'
+        text:
+          revision: e568a8a684c5d899efd80fa57e2564bb
+          body: The north lantern went dark before the bell. Nobody has written it down.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000188'
+    label: Hearsay
+    lines:
+    - id: '00000000000000000000000189'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000190'
+        text:
+          revision: 2f1e425c18add66885c46753f568714e
+          body: Something happened to the north lantern. The quay disagrees about what.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current

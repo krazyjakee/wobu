@@ -26,7 +26,8 @@ These checks use the lifecycle stored in source; dependency freshness recomputat
 all reachable state configurations have text remain separate planned compiler passes.
 
 Runtime IR contains declared typed state, registered command signatures, scene entry conditions,
-explicit beat graphs, dialogue strings and revisions, branches, effects and stable string IDs.
+explicit beat graphs, dialogue strings and revisions, branches, effects, stable string IDs and
+host-triggered supporting text assets with their triggers, conditions and selection policies.
 Intents, summaries, world context, source descriptions, generation policy, review records, provenance
 records and canvas layouts are omitted. The source map connects IDs to scene/beat/slot IDs; it does
 not claim YAML byte locations. Conditions and consequences are copied only from authored structured
@@ -51,9 +52,11 @@ This is an internal Rust contract, not the N5 release package format.
 - After dialogue, all available choices are offered in authored order. If none is available, the
   first matching automatic outcome is taken. If neither exists, execution returns `NoMatch`.
   There is no implicit fallthrough to another beat and no invented ending.
-- Version 1 has no random alternative-selection policy. The seed is retained in snapshots for a
-  future explicitly versioned policy but does not affect selection today. First-match precedence
-  resolves overlapping predicates; the compiler does not claim to prove overlap or coverage.
+- Version 1 has no random alternative-selection policy *for scene dialogue*. Variants remain
+  first-match in authored order and are never sampled. First-match precedence resolves overlapping
+  predicates; the compiler does not claim to prove overlap or coverage. The playthrough seed does
+  affect host-triggered supporting text under its shuffled policy — see below and
+  [supporting text](33-narrative-supporting-text.md).
 - State uses booleans, bounded signed 64-bit integers and declared enum members. Arithmetic is
   checked and errors on both machine overflow and declared-range overflow; it never wraps or clamps.
 - Standard `start` initializes narrative variables from defaults and requires every host variable
@@ -62,6 +65,32 @@ This is an internal Rust contract, not the N5 release package format.
   Unknown variables, wrong types and out-of-range values fail initialization.
 - After initialization, only narrative effects write narrative variables. Host input updates and
   command results may write only host variables and are validated before anything is committed.
+
+## Host-triggered supporting text
+
+Barks, ambient exchanges, companion reactions, codex entries, quest summaries and journals (#167)
+compile into a `texts` map beside the scenes. They have no destinations, no choices and no effects,
+so they are delivered outside the scene cursor rather than through a yield.
+
+`text_events()` lists every host event the graph answers. `deliver_text(event)` selects and records
+one delivery: `Ok(None)` when nothing is eligible, `Err` when the content is broken, and otherwise
+the whole entry at once — asset, kind, entry, ordered lines with speaker/wording/revision, and the
+play count. Assets are considered in stable id order, so the older of two answering the same event
+wins. A failed delivery is transactional like every other public action and leaves play counts
+unchanged. Delivery never moves the scene cursor and never writes narrative state; a game that wants
+a codex page to matter sets a host-owned variable itself.
+
+Selection is authored per asset: `first` (never advances), `once` (each eligible entry once), `cycle`
+(round robin) or `shuffle` (each eligible entry once per seeded round, never opening a round with the
+entry that closed the last). The shuffle is SplitMix64 over a seed folded with FNV-1a, both written
+out in the runtime so an engine adapter can reproduce the exact order. Its Fisher-Yates modulo is
+slightly biased for lengths that do not divide 2^64, which is accepted for transcribability.
+
+Snapshots carry a per-asset record of plays, round, position and the entry that closed the previous
+round, so a reload resumes a bag rather than re-dealing it. `restore` refuses a record naming an
+asset the graph does not contain, exactly as it refuses an invalid visit history, and migration may
+add, transform or drop these records alongside visits. A graph and a snapshot for a project with no
+supporting text serialize to exactly the bytes they did before this field existed.
 
 ## Runner protocol and transaction boundaries
 
@@ -101,8 +130,8 @@ a modest budget for interactive work; the budget counts internal transitions, no
 ## Saves and compatibility
 
 `Snapshot` is versioned, serde-serializable data containing the graph hash and version, cursor,
-selected variant, typed state, visits, seed, pending command queue/tokens, successful acknowledgements,
-run ID and step limit. `restore(graph, snapshot)` validates graph compatibility, required state,
+selected variant, typed state, visits, supporting text repeat state, seed, pending command
+queue/tokens, successful acknowledgements, run ID and step limit. `restore(graph, snapshot)` validates graph compatibility, required state,
 variable domains, cursor, visits and pending command signatures before exposing a yield. Saves at
 Line, Choices, each pending command and End resume at the same boundary without reapplying effects.
 Snapshots are not a signed anti-tampering format; hosts own save integrity and size limits.

@@ -54,7 +54,7 @@ fn fixture() -> (Graph, Scene) {
         commands: BTreeMap::from([(name("award"), vec![VarType::Int { min: 0, max: 10 }])]),
         ..CompileOptions::default()
     };
-    (compile(&[scene.clone()], &schema, &options).graph.unwrap(), scene)
+    (compile(&[scene.clone()], &[], &schema, &options).graph.unwrap(), scene)
 }
 fn start(graph: Graph, scene: &Scene) -> Runtime {
     Runtime::start(

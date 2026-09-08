@@ -1,0 +1,61 @@
+schema_version: 1
+asset:
+  id: '00000000000000000000000201'
+  kind: journal
+  name: Watch nights
+  summary: The player's own record, one page per night, in order.
+  trigger:
+    event: night_ends
+  sources:
+  - quest: '00000000000000000000000099'
+  repeat: once
+  policy: edited
+  entries:
+  - id: '00000000000000000000000202'
+    label: First night
+    lines:
+    - id: '00000000000000000000000203'
+      speaker: player
+      policy: edited
+      variants:
+      - id: '00000000000000000000000204'
+        text:
+          revision: f7a9de1ca2f80fd70b7d8a249da4a94f
+          body: First night on the seawall. The north light was out before I reached the stair, and nobody would say so out loud.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000205'
+    label: Second night
+    lines:
+    - id: '00000000000000000000000206'
+      speaker: player
+      policy: edited
+      variants:
+      - id: '00000000000000000000000207'
+        text:
+          revision: 8e4d3a5520d818c5db6e3a797f832240
+          body: Second night. Mara will talk if I stop writing while she does it.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000208'
+    label: Third night
+    lines:
+    - id: '00000000000000000000000209'
+      speaker: player
+      policy: edited
+      variants:
+      - id: '00000000000000000000000210'
+        text:
+          revision: f9e7a7911c922ca81472c531740ee1f7
+          body: Third night. The book is signed and the light is still dark. Both of those are true and only one of them helps.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current

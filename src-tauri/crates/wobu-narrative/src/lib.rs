@@ -46,6 +46,7 @@ pub mod lifecycle;
 pub mod scene;
 pub mod source;
 pub mod state;
+pub mod text;
 pub mod world;
 
 pub use diagnose::{Diagnostic, Problem, SceneCatalog, Site};
@@ -55,7 +56,8 @@ pub use expr::{
     TypeError,
 };
 pub use id::{
-    BeatId, ChoiceId, DialogueSlotId, OutcomeId, Provenance, Revision, SceneId, VariantId,
+    BeatId, ChoiceId, DialogueSlotId, OutcomeId, Provenance, Revision, SceneId, TextAssetId,
+    TextEntryId, VariantId,
 };
 pub use lifecycle::{ContentLifecycle, Freshness, GenerationPolicy, ReviewState};
 pub use scene::{
@@ -66,6 +68,10 @@ pub use source::{
     SCENE_SCHEMA_VERSION, SOURCE_SCHEMA_VERSION, SceneDocument, StateDocument, WORLD_SCHEMA_VERSION,
 };
 pub use state::{Name, Owner, StateSchema, Value, VarType, VariableDecl};
+pub use text::{
+    Delivery, RepeatPolicy, SourceLink, TEXT_SCHEMA_VERSION, TextAsset, TextAssetDocument,
+    TextEntry, TextKind, Trigger, Voice,
+};
 
 pub use world::{
     Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, NamedClassification,

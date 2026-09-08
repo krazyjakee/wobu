@@ -54,8 +54,13 @@ pub(super) fn compile_project(
         ));
     }
     let verified_reviews = super::narrative_review::verified(project, &scenes, &before)?;
+    // Supporting text (#167) compiles into the same graph. The fingerprint
+    // checked above walks `narrative/texts/` too, so an asset edited during
+    // compilation aborts here rather than producing a graph nobody asked for.
+    let texts = project.text_assets()?;
     let report = compile(
         &scenes,
+        &texts,
         &schema,
         &CompileOptions { known_entities, commands, verified_reviews, ..CompileOptions::default() },
     );

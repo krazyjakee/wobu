@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::expr::{Condition, Effect};
 use crate::id::{
-    BeatId, ChoiceId, DialogueSlotId, OutcomeId, Provenance, Revision, SceneId, VariantId,
+    BeatId, ChoiceId, DialogueSlotId, OutcomeId, Provenance, Revision, SceneId, TextEntryId,
+    VariantId,
 };
 use crate::lifecycle::{ContentLifecycle, GenerationPolicy};
 
@@ -440,6 +441,11 @@ pub enum TombstoneTarget {
     Beat(BeatId),
     DialogueSlot(DialogueSlotId),
     Variant(VariantId),
+    /// One entry of a supporting text asset (#167). Slots and variants inside
+    /// one are tombstoned with the variants above, because a locale row or a
+    /// recording script filed against a bark names exactly the same kind of
+    /// identity it names for scene dialogue.
+    TextEntry(TextEntryId),
 }
 
 /// The record left behind by a deletion.

@@ -14,6 +14,13 @@ pub struct Migration {
     pub beat: String,
     pub selected_variant: Option<String>,
     pub visits: BTreeMap<String, u64>,
+    /// Supporting text repeat state (#167). Editable for the same reason visits
+    /// are: an asset removed from the new graph has to be droppable, or every
+    /// save of the old story becomes unrestorable. It carries no external side
+    /// effect, so unlike command acknowledgements there is nothing to
+    /// invalidate by rewriting it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub texts: BTreeMap<String, crate::TextProgress>,
 }
 
 impl Runtime {
@@ -40,6 +47,7 @@ impl Runtime {
                 _ => None,
             },
             visits: old.saved.visits.clone(),
+            texts: old.saved.texts.clone(),
         })?;
         if plan.from_graph_hash != from || plan.to_graph_hash != to {
             return Err(Error::Incompatible);
@@ -52,6 +60,7 @@ impl Runtime {
         saved.scene = plan.scene;
         saved.beat = plan.beat;
         saved.visits = plan.visits;
+        saved.texts = plan.texts;
         match &mut saved.phase {
             Phase::Dialogue { index, variant } => {
                 let selected = plan.selected_variant.ok_or(Error::InvalidAction)?;

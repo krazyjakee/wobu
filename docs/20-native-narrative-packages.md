@@ -44,14 +44,19 @@ debug/source-map.json  # optional, development only
 
 The manifest has `format: "wobu-narrative"`, package `version: 1`, `graph_version: 1`, a profile,
 base `locale: "en"`, required capabilities, file byte sizes/content hashes and `payload_hash`.
-Version 1 requires exactly `deterministic_graph: 1` and `separate_strings: 1`. Missing/unknown
-required capabilities or unsupported versions are rejected. The base locale identifies the table;
+Version 1 requires exactly `deterministic_graph: 1` and `separate_strings: 1`, plus
+`supporting_text: 1` when and only when the graph contains supporting text assets (#167). The
+declaration is compared against the payload after the graph is parsed, so a manifest that claims
+supporting text and ships none — or the reverse — is rejected rather than silently dropping every
+bark. A package without supporting text declares exactly the capabilities it always did and keeps
+its existing identity. Missing/unknown required capabilities or unsupported versions are rejected. The base locale identifies the table;
 Wobu does not detect or translate its wording. Additional localisation tables remain #178.
 
 `state.json` holds the declared typed domains, defaults and ownership. `graph.json` holds the
 compiler graph with empty state/source-map fields and empty inline choice/dialogue text fields.
 The reader supplies the separate schema and strings to reconstruct the runtime graph. Text is
-keyed by the original stable variant ID or choice ID. Dialogue strings also carry their wording
+keyed by the original stable variant ID or choice ID, and supporting text uses that same table and
+the same variant identities rather than a second one. Dialogue strings also carry their wording
 revision hash; they contain no prompts, generation receipts or approval records. Changing wording
 changes its content hash without renaming its string ID. Dialogue is data and cannot inject logic.
 

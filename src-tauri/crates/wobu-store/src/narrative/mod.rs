@@ -8,6 +8,8 @@
 //! ├── world.yaml                    canonical facts, beliefs and quests
 //! ├── state.yaml                    the declared variables, project-wide
 //! ├── scenes/<slug>.yaml            one SceneDocument each — canonical source
+//! ├── texts/<slug>.yaml             one TextAssetDocument each — barks, ambient,
+//! │                                 reactions, codex, quest summaries, journals
 //! └── layout/
 //!     ├── scenes/<scene-ulid>.json  where the boxes are, per scene
 //!     └── arcs/<slug>.json          where the boxes are, per arc graph
@@ -61,7 +63,10 @@ pub mod world;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use wobu_narrative::{Scene, SceneDocument, SceneId, StateDocument};
+use wobu_narrative::{
+    Scene, SceneDocument, SceneId, StateDocument, TextAsset, TextAssetDocument, TextAssetId,
+    TextKind,
+};
 
 use crate::atomic::{self, Stamp, WriteOutcome};
 use crate::error::{Error, Result};
@@ -71,6 +76,8 @@ use crate::paths;
 pub const NARRATIVE_DIR: &str = "narrative";
 /// Where the canonical scene documents live.
 pub const SCENES_DIR: &str = "narrative/scenes";
+/// Where the canonical supporting text documents live (#167).
+pub const TEXTS_DIR: &str = "narrative/texts";
 /// The project-wide declared variables (#155's seam — see [`StateDocument`]).
 pub const STATE_FILE: &str = "narrative/state.yaml";
 /// Source files carry `.yaml` and layout files carry `.json`, which is not
@@ -89,6 +96,11 @@ pub fn scenes_dir(root: &Path) -> PathBuf {
 /// `narrative/scenes/kiln-interrogation.yaml`
 pub fn scene_rel(slug: &str) -> String {
     format!("{SCENES_DIR}/{slug}.{SOURCE_EXT}")
+}
+
+/// `narrative/texts/gate-guard.yaml`
+pub fn text_rel(slug: &str) -> String {
+    format!("{TEXTS_DIR}/{slug}.{SOURCE_EXT}")
 }
 
 /// What happened to a source write.
@@ -130,6 +142,70 @@ impl SceneFile {
             .and_then(|name| name.strip_suffix(&format!(".{SOURCE_EXT}")))
             .unwrap_or_default()
     }
+}
+
+/// One supporting text asset as it exists on disk (#167).
+///
+/// Deliberately the same three fields as [`SceneFile`], and saved through the
+/// same guarded write for the same reason: a bark is authored, reviewed and
+/// merged by the same people under the same never-merge rule, and a second,
+/// gentler write path for supporting text would be a second place a
+/// collaborator's work could be silently overwritten.
+#[derive(Debug, Clone)]
+pub struct TextFile {
+    pub asset: TextAsset,
+    pub rel: String,
+    pub stamp: Option<Stamp>,
+}
+
+impl TextFile {
+    pub fn slug(&self) -> &str {
+        slug_of(&self.rel)
+    }
+}
+
+/// What one supporting text file says about itself, without reading its lines.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEntrySummary {
+    pub id: TextAssetId,
+    pub kind: TextKind,
+    pub name: String,
+    pub slug: String,
+    pub rel: String,
+}
+
+/// Every supporting text asset in the project, and every file in the directory
+/// that could not be identified.
+#[derive(Debug, Clone, Default)]
+pub struct TextCatalog {
+    pub assets: Vec<TextEntrySummary>,
+    pub unreadable: Vec<UnreadableSource>,
+}
+
+impl TextCatalog {
+    pub fn find(&self, id: TextAssetId) -> Option<&TextEntrySummary> {
+        self.assets.iter().find(|entry| entry.id == id)
+    }
+
+    pub fn slugs(&self) -> BTreeSet<String> {
+        self.assets.iter().map(|entry| entry.slug.clone()).collect()
+    }
+}
+
+/// Read `asset.id`, `asset.kind` and `asset.name` and nothing else — the
+/// supporting-text counterpart of [`Probe`], and permissive for the same
+/// reason: a listing has to keep working while one file is mid-edit.
+#[derive(serde::Deserialize)]
+struct TextProbe {
+    asset: TextProbeAsset,
+}
+
+#[derive(serde::Deserialize)]
+struct TextProbeAsset {
+    id: TextAssetId,
+    kind: TextKind,
+    #[serde(default)]
+    name: String,
 }
 
 /// A scene file the catalog could see but not understand.
@@ -201,8 +277,22 @@ struct ProbeScene {
 /// and orphan everything keyed to their paths — the same argument that keeps
 /// `nodes/<kind>/` two levels deep and no more.
 pub(crate) fn scene_paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
-    let probe = registry::safe_path(root, "narrative/scenes/probe.yaml")?;
-    let directory = probe.parent().expect("scene parent");
+    flat_source_paths(root, SCENES_DIR, registry::NarrativeFileKind::Scene)
+}
+
+/// The canonical documents directly under one source directory.
+///
+/// Depth 1, and shared by scenes and supporting text so the flatness argument
+/// is made once. Nesting would put the project's structure into the filesystem,
+/// where a rename would move files and orphan everything keyed to their paths —
+/// the same argument that keeps `nodes/<kind>/` two levels deep and no more.
+fn flat_source_paths(
+    root: &Path,
+    dir: &str,
+    kind: registry::NarrativeFileKind,
+) -> Result<Vec<(String, PathBuf)>> {
+    let probe = registry::safe_path(root, &format!("{dir}/probe.{SOURCE_EXT}"))?;
+    let directory = probe.parent().expect("source parent");
     let entries = match std::fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
@@ -211,13 +301,18 @@ pub(crate) fn scene_paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| Error::io(directory, error))?;
-        let rel = format!("narrative/scenes/{}", entry.file_name().to_string_lossy());
-        if registry::classify(&rel) == Some(registry::NarrativeFileKind::Scene) {
+        let rel = format!("{dir}/{}", entry.file_name().to_string_lossy());
+        if registry::classify(&rel) == Some(kind) {
             paths.push((rel.clone(), registry::safe_path(root, &rel)?));
         }
     }
     paths.sort();
     Ok(paths)
+}
+
+/// Files directly under `narrative/texts/`, conflict siblings excluded.
+pub(crate) fn text_paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    flat_source_paths(root, TEXTS_DIR, registry::NarrativeFileKind::Text)
 }
 
 /// Whether a project-relative path is canonical narrative source.
@@ -232,6 +327,7 @@ pub fn is_source_path(rel: &str) -> bool {
         registry::classify(rel),
         Some(
             registry::NarrativeFileKind::Scene
+                | registry::NarrativeFileKind::Text
                 | registry::NarrativeFileKind::State
                 | registry::NarrativeFileKind::World
         )
@@ -247,9 +343,18 @@ pub fn is_source_path(rel: &str) -> bool {
 pub fn conflict_paths(root: &Path) -> Vec<(String, PathBuf)> {
     let mut found = Vec::new();
     let directories = std::iter::once(narrative_dir(root)).chain(
-        ["scenes", "scenarios", "proposals", "receipts", "policies", "production", "publications"]
-            .into_iter()
-            .map(|dir| root.join("narrative").join(dir)),
+        [
+            "scenes",
+            "texts",
+            "scenarios",
+            "proposals",
+            "receipts",
+            "policies",
+            "production",
+            "publications",
+        ]
+        .into_iter()
+        .map(|dir| root.join("narrative").join(dir)),
     );
     for dir in directories {
         let probe = if dir == narrative_dir(root) {
@@ -327,6 +432,44 @@ pub fn catalog(root: &Path) -> Result<Catalog> {
     Ok(catalog)
 }
 
+/// Every supporting text asset, named without parsing its lines.
+pub fn text_catalog(root: &Path) -> Result<TextCatalog> {
+    let mut catalog = TextCatalog::default();
+    for (rel, path) in text_paths(root)? {
+        let Some((text, _)) = atomic::read_stamped(&path)? else { continue };
+        match serde_norway::from_str::<TextProbe>(&text) {
+            Ok(probe) => catalog.assets.push(TextEntrySummary {
+                id: probe.asset.id,
+                kind: probe.asset.kind,
+                name: probe.asset.name,
+                slug: slug_of(&rel).to_string(),
+                rel,
+            }),
+            Err(error) => {
+                catalog.unreadable.push(UnreadableSource { rel, reason: error.to_string() })
+            }
+        }
+    }
+    Ok(catalog)
+}
+
+/// Read one supporting text asset, whole and strictly — see [`read_scene`] for
+/// why listing is permissive and opening is not.
+pub fn read_text(root: &Path, rel: &str) -> Result<TextFile> {
+    let (document, stamp) = read_document(root, rel, TextAssetDocument::parse)?;
+    Ok(TextFile { asset: document.asset, rel: rel.to_string(), stamp: Some(stamp) })
+}
+
+/// Write a supporting text asset through the guarded path.
+pub fn write_text(root: &Path, file: &mut TextFile, peer: &str) -> Result<SourceSave> {
+    let yaml = TextAssetDocument::new(file.asset.clone()).to_yaml();
+    let saved = write_document(root, &file.rel, yaml, file.stamp.as_ref(), peer)?;
+    if let SourceSave::Saved(stamp) = &saved {
+        file.stamp = Some(stamp.clone());
+    }
+    Ok(saved)
+}
+
 fn slug_of(rel: &str) -> &str {
     rel.rsplit('/').next().and_then(|name| name.split('.').next()).unwrap_or_default()
 }
@@ -339,13 +482,52 @@ fn slug_of(rel: &str) -> &str {
 /// back. Accepting a document we only half understood and then rewriting it is
 /// how a mistyped key becomes silent data loss — see `wobu_narrative::source`.
 pub fn read_scene(root: &Path, rel: &str) -> Result<SceneFile> {
+    let (document, stamp) = read_document(root, rel, SceneDocument::parse)?;
+    Ok(SceneFile { scene: document.scene, rel: rel.to_string(), stamp: Some(stamp) })
+}
+
+/// Read and strictly parse one canonical source document.
+///
+/// Shared by scenes and supporting text: both are opened to be edited and saved
+/// back, so both have to refuse a document they only half understood rather than
+/// rewriting it and losing the part they did not read.
+fn read_document<T>(
+    root: &Path,
+    rel: &str,
+    parse: impl Fn(&str) -> wobu_narrative::Result<T>,
+) -> Result<(T, Stamp)> {
     let path = registry::safe_path(root, rel)?;
     let Some((text, stamp)) = atomic::read_stamped(&path)? else {
         return Err(Error::io(&path, std::io::Error::from(std::io::ErrorKind::NotFound)));
     };
-    let document = SceneDocument::parse(&text)
-        .map_err(|error| Error::Malformed { path, reason: error.to_string() })?;
-    Ok(SceneFile { scene: document.scene, rel: rel.to_string(), stamp: Some(stamp) })
+    let document =
+        parse(&text).map_err(|error| Error::Malformed { path, reason: error.to_string() })?;
+    Ok((document, stamp))
+}
+
+/// Serialize and guard-write one canonical source document.
+///
+/// Returns the new stamp on success so a caller that saves twice cannot present
+/// the first save's precondition to the second and park its own work as a
+/// conflict.
+fn write_document(
+    root: &Path,
+    rel: &str,
+    yaml: wobu_narrative::Result<String>,
+    expected: Option<&Stamp>,
+    peer: &str,
+) -> Result<SourceSave> {
+    let text = yaml.map_err(|error| Error::Malformed {
+        path: paths::from_rel_string(root, rel),
+        reason: error.to_string(),
+    })?;
+    let path = registry::safe_path(root, rel)?;
+    match atomic::guarded_write(root, &path, &text, expected, peer)? {
+        WriteOutcome::Written(stamp) => Ok(SourceSave::Saved(stamp)),
+        WriteOutcome::Conflict { conflict_path, .. } => {
+            Ok(SourceSave::Conflict { conflict_path: relative(root, &conflict_path) })
+        }
+    }
 }
 
 /// Write a scene through the guarded path, refusing to clobber a concurrent
@@ -355,21 +537,12 @@ pub fn read_scene(root: &Path, rel: &str) -> Result<SceneFile> {
 /// saves twice in a row cannot accidentally present the first save's
 /// precondition to the second and park its own work as a conflict.
 pub fn write_scene(root: &Path, file: &mut SceneFile, peer: &str) -> Result<SourceSave> {
-    let document = SceneDocument::new(file.scene.clone());
-    let text = document.to_yaml().map_err(|error| Error::Malformed {
-        path: paths::from_rel_string(root, &file.rel),
-        reason: error.to_string(),
-    })?;
-    let path = registry::safe_path(root, &file.rel)?;
-    match atomic::guarded_write(root, &path, &text, file.stamp.as_ref(), peer)? {
-        WriteOutcome::Written(stamp) => {
-            file.stamp = Some(stamp.clone());
-            Ok(SourceSave::Saved(stamp))
-        }
-        WriteOutcome::Conflict { conflict_path, .. } => {
-            Ok(SourceSave::Conflict { conflict_path: relative(root, &conflict_path) })
-        }
+    let yaml = SceneDocument::new(file.scene.clone()).to_yaml();
+    let saved = write_document(root, &file.rel, yaml, file.stamp.as_ref(), peer)?;
+    if let SourceSave::Saved(stamp) = &saved {
+        file.stamp = Some(stamp.clone());
     }
+    Ok(saved)
 }
 
 fn relative(root: &Path, path: &Path) -> String {
@@ -391,16 +564,7 @@ pub fn write_state(
     expected: Option<&Stamp>,
     peer: &str,
 ) -> Result<SourceSave> {
-    let path = registry::safe_path(root, STATE_FILE)?;
-    let text = document
-        .to_yaml()
-        .map_err(|error| Error::Malformed { path: path.clone(), reason: error.to_string() })?;
-    match atomic::guarded_write(root, &path, &text, expected, peer)? {
-        WriteOutcome::Written(stamp) => Ok(SourceSave::Saved(stamp)),
-        WriteOutcome::Conflict { conflict_path, .. } => {
-            Ok(SourceSave::Conflict { conflict_path: relative(root, &conflict_path) })
-        }
-    }
+    write_document(root, STATE_FILE, document.to_yaml(), expected, peer)
 }
 
 /// A hash over every byte of narrative source in the project, and nothing else.
@@ -424,6 +588,10 @@ pub fn source_fingerprint(root: &Path) -> Result<String> {
     hasher.update(b"wobu-store/narrative-source/1");
 
     let mut files: Vec<(String, PathBuf)> = scene_paths(root)?;
+    // Supporting text is compiled into the same graph, so an edit to a bark has
+    // to move this value: a build keyed on scenes alone would call two different
+    // games the same one.
+    files.extend(text_paths(root)?);
     let state = registry::safe_path(root, STATE_FILE)?;
     if state.is_file() {
         files.push((STATE_FILE.to_string(), state));

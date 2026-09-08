@@ -25,6 +25,7 @@ fn fixture() -> (Graph, Vec<Scenario>) {
         .collect::<Vec<_>>();
     let graph = compile(
         &[scene],
+        &[],
         &state.schema().unwrap(),
         &CompileOptions { commands: scenarios[0].commands.clone(), ..CompileOptions::default() },
     )

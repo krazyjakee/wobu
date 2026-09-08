@@ -45,7 +45,10 @@ pub use narrative::layout::{
     Annotation, AnnotationId, GraphKey, Group, GroupId, Layout, LayoutLoad, LayoutMode,
     LayoutNotice, LayoutSave, NodeKey, NodeLayout,
 };
-pub use narrative::{Catalog, SceneEntry, SceneFile, SourceSave, UnreadableSource};
+pub use narrative::{
+    Catalog, SceneEntry, SceneFile, SourceSave, TextCatalog, TextEntrySummary, TextFile,
+    UnreadableSource,
+};
 pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{
     AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary,

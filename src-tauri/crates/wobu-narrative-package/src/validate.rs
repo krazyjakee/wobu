@@ -1,13 +1,13 @@
 use crate::{
     FORMAT_VERSION, MAX_FILE_BYTES, MAX_STRING_BYTES, MAX_TOTAL_BYTES, Manifest, REQUIRED, Result,
-    hash, invalid, json,
+    SUPPORTING_TEXT, hash, invalid, json,
 };
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use wobu_narrative::{Condition, Effect, EntityId, StateSchema, VarType, VariableDecl};
-use wobu_narrative_compiler::{GRAPH_VERSION, Graph, Profile, Target, argument_fits};
+use wobu_narrative_compiler::{CompiledSlot, GRAPH_VERSION, Graph, Profile, Target, argument_fits};
 
 pub fn manifest(manifest: &Manifest) -> Result<()> {
     if manifest.format != "wobu-narrative"
@@ -17,11 +17,14 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     {
         return Err(invalid("unsupported format, schema, graph version or locale"));
     }
-    let capabilities = BTreeMap::from([
-        ("deterministic_graph".to_string(), 1),
-        ("separate_strings".to_string(), 1),
-    ]);
-    if manifest.required_capabilities != capabilities {
+    // Either exactly the base set or exactly the base set plus supporting text.
+    // Which one is required cannot be known here — the graph has not been parsed
+    // yet — so both are admitted and `Package::graph` makes the final comparison
+    // against the payload. That ordering is deliberate: capability equality is
+    // still exact, it is just checked once the answer is knowable.
+    if manifest.required_capabilities != capabilities(false)
+        && manifest.required_capabilities != capabilities(true)
+    {
         return Err(invalid("unsupported or missing required capabilities"));
     }
     if REQUIRED.iter().any(|name| !manifest.files.contains_key(*name)) {
@@ -51,6 +54,21 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     Ok(())
 }
 
+/// The exact capability set a package declares.
+///
+/// One function, called by the producer and by both validation points, so a
+/// reader can never be checking a set the writer does not write.
+pub fn capabilities(supporting_text: bool) -> BTreeMap<String, u32> {
+    let mut capabilities = BTreeMap::from([
+        ("deterministic_graph".to_string(), 1),
+        ("separate_strings".to_string(), 1),
+    ]);
+    if supporting_text {
+        capabilities.insert(SUPPORTING_TEXT.to_string(), 1);
+    }
+    capabilities
+}
+
 pub fn portable_path(path: &str) -> Result<()> {
     if path.len() > 180
         || path.is_empty()
@@ -65,6 +83,34 @@ pub fn portable_path(path: &str) -> Result<()> {
         })
     {
         return Err(invalid(format!("unsafe portable path {path}")));
+    }
+    Ok(())
+}
+
+/// One compiled dialogue slot, wherever it lives.
+///
+/// Scene lines and supporting text lines are the same runtime object, so they
+/// get the same checks from the same place: a second copy of this loop is the
+/// obvious spot for a release gate to be tightened for scenes and quietly left
+/// alone for barks.
+fn dialogue(
+    slot: &CompiledSlot,
+    schema: &StateSchema,
+    profile: Profile,
+    add: &mut impl FnMut(&str) -> Result<()>,
+) -> Result<()> {
+    add(&slot.id)?;
+    if slot.variants.is_empty() && profile == Profile::Release {
+        return Err(invalid("release slot missing text"));
+    }
+    for variant in &slot.variants {
+        add(&variant.id)?;
+        condition(schema, variant.when.as_ref())?;
+        text(&variant.text, profile)?;
+        if variant.revision.len() != 32 || !variant.revision.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(invalid("invalid wording revision"));
+        }
     }
     Ok(())
 }
@@ -113,20 +159,7 @@ pub fn graph(graph: &Graph) -> Result<()> {
                 return Err(invalid("beat has no destination"));
             }
             for slot in &beat.dialogue {
-                add(&slot.id)?;
-                if slot.variants.is_empty() && graph.profile == Profile::Release {
-                    return Err(invalid("release slot missing text"));
-                }
-                for variant in &slot.variants {
-                    add(&variant.id)?;
-                    condition(&schema, variant.when.as_ref())?;
-                    text(&variant.text, graph.profile)?;
-                    if variant.revision.len() != 32
-                        || !variant.revision.bytes().all(|b| b.is_ascii_hexdigit())
-                    {
-                        return Err(invalid("invalid wording revision"));
-                    }
-                }
+                dialogue(slot, &schema, graph.profile, &mut add)?;
             }
             for choice in &beat.choices {
                 add(&choice.id)?;
@@ -172,9 +205,49 @@ pub fn graph(graph: &Graph) -> Result<()> {
             }
         }
     }
+    for (asset_id, asset) in &graph.texts {
+        add(asset_id)?;
+        if asset.entries.is_empty() {
+            return Err(invalid("text asset has no entries"));
+        }
+        condition(&schema, asset.when.as_ref())?;
+        for entry in &asset.entries {
+            add(&entry.id)?;
+            condition(&schema, entry.when.as_ref())?;
+            if entry.lines.is_empty() {
+                return Err(invalid("text entry has no lines"));
+            }
+            for slot in &entry.lines {
+                dialogue(slot, &schema, graph.profile, &mut add)?;
+            }
+        }
+    }
     for (id, source) in &graph.source_map {
         if !ids.contains(id) {
             return Err(invalid("debug map references unknown element"));
+        }
+        if let Some(asset_id) = &source.asset {
+            let asset = graph
+                .texts
+                .get(asset_id)
+                .ok_or_else(|| invalid("debug map references unknown text asset"))?;
+            if let Some(entry_id) = &source.entry {
+                let entry = asset
+                    .entries
+                    .iter()
+                    .find(|entry| &entry.id == entry_id)
+                    .ok_or_else(|| invalid("debug map references unknown text entry"))?;
+                if source
+                    .slot
+                    .as_ref()
+                    .is_some_and(|id| !entry.lines.iter().any(|slot| &slot.id == id))
+                {
+                    return Err(invalid("debug map references unknown text line"));
+                }
+            } else if source.slot.is_some() {
+                return Err(invalid("debug text line has no entry"));
+            }
+            continue;
         }
         let scene = graph
             .scenes

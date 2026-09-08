@@ -10,13 +10,15 @@
 
 use std::collections::BTreeSet;
 
-use wobu_narrative::{Scene, SceneId, StateDocument, StateSchema};
+use wobu_narrative::{
+    Name, Scene, SceneId, StateDocument, StateSchema, TextAsset, TextAssetId, TextKind,
+};
 
 use super::*;
 use crate::atomic::Stamp;
 use crate::error::{Error, Result};
 use crate::narrative::layout::{self, GraphKey, Layout, LayoutLoad, LayoutSave};
-use crate::narrative::{self as source, Catalog, SceneFile, SourceSave};
+use crate::narrative::{self as source, Catalog, SceneFile, SourceSave, TextCatalog, TextFile};
 
 impl Project {
     /* ── source ──────────────────────────────────────────────────────── */
@@ -108,19 +110,134 @@ impl Project {
     ///
     /// [`sweep`]: crate::narrative::layout::sweep
     pub fn delete_scene(&mut self, id: SceneId) -> Result<()> {
+        let entry = self.scene_catalog()?.find(id).cloned();
+        let rel = entry.ok_or_else(|| Error::NoSuchNode(id.to_string()))?.rel;
+        self.delete_source(&rel, "Scene")?;
+        layout::delete(&self.root, &GraphKey::of_scene(id))
+    }
+
+    /// Remove one canonical source document, refusing to delete a revision the
+    /// caller has not seen.
+    ///
+    /// Shared by scenes and supporting text so the stamp check cannot be present
+    /// on one path and absent on the other. `noun` only reaches the message a
+    /// person reads.
+    fn delete_source(&mut self, rel: &str, noun: &str) -> Result<()> {
         self.ensure_writable()?;
-        let catalog = self.scene_catalog()?;
-        let entry = catalog.find(id).ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
-        let Some((_, stamp)) = source::registry::read(self.root(), &entry.rel)? else {
-            return Err(Error::NoSuchNode(id.to_string()));
+        let Some((_, stamp)) = source::registry::read(self.root(), rel)? else {
+            return Err(Error::NoSuchNode(rel.to_string()));
         };
-        if !self.delete_narrative_file(&entry.rel, &stamp)? {
+        if !self.delete_narrative_file(rel, &stamp)? {
             return Err(Error::Malformed {
-                path: entry.rel.clone().into(),
-                reason: "Scene changed before deletion; reload it before trying again.".into(),
+                path: rel.into(),
+                reason: format!("{noun} changed before deletion; reload it before trying again."),
             });
         }
-        layout::delete(&self.root, &GraphKey::of_scene(id))
+        Ok(())
+    }
+
+    /* ── supporting text (#167) ──────────────────────────────────────── */
+
+    /// Every supporting text asset in the folder, plus any file in the texts
+    /// directory that could not be identified.
+    ///
+    /// Read straight from disk rather than from the SQLite projection the scene
+    /// library uses. The supporting-text directory is small enough that paging
+    /// it would be premature, and the projection carries scene-shaped columns —
+    /// beats, participants, coverage — that a bark has no answer for. Indexing
+    /// it properly is the same work as adding it to the library search, and
+    /// belongs with that.
+    pub fn text_catalog(&self) -> Result<TextCatalog> {
+        source::text_catalog(&self.root)
+    }
+
+    /// Every supporting text asset, parsed, in catalog order.
+    ///
+    /// The compiler's input. It refuses rather than skipping when one file is
+    /// unreadable, because compiling the readable subset would produce a graph
+    /// that silently omits content the author believes shipped.
+    pub fn text_assets(&self) -> Result<Vec<TextAsset>> {
+        let catalog = self.text_catalog()?;
+        if let Some(bad) = catalog.unreadable.first() {
+            return Err(Error::Malformed {
+                path: bad.rel.clone().into(),
+                reason: bad.reason.clone(),
+            });
+        }
+        catalog
+            .assets
+            .iter()
+            .map(|entry| source::read_text(&self.root, &entry.rel).map(|file| file.asset))
+            .collect()
+    }
+
+    pub fn load_text_asset(&self, id: TextAssetId) -> Result<TextFile> {
+        let catalog = self.text_catalog()?;
+        let entry = catalog.find(id).ok_or_else(|| {
+            if self.is_present() { Error::NoSuchNode(id.to_string()) } else { Error::Disconnected }
+        })?;
+        let file = source::read_text(&self.root, &entry.rel)?;
+        if file.asset.id != id {
+            return Err(Error::Malformed {
+                path: entry.rel.clone().into(),
+                reason: "Text asset identity changed while opening it. Refresh the library.".into(),
+            });
+        }
+        Ok(file)
+    }
+
+    /// Create a supporting text asset and write it.
+    ///
+    /// The slug is minted once from the name, exactly as a scene's is, and for
+    /// the same reason: renaming must not move the file.
+    pub fn create_text_asset(
+        &mut self,
+        kind: TextKind,
+        name: &str,
+        event: Name,
+    ) -> Result<TextFile> {
+        self.ensure_writable()?;
+        let taken = self.text_catalog()?.slugs();
+        let base = wobu_core::slugify(name)?;
+        let slug = wobu_core::unique_slug(&base, &|candidate| taken.contains(candidate));
+
+        let mut file = TextFile {
+            asset: TextAsset::new(kind, name, event),
+            rel: source::text_rel(&slug),
+            stamp: None,
+        };
+        match source::write_text(&self.root, &mut file, &self.peer)? {
+            SourceSave::Saved(_) => {
+                self.index_narrative_path(&file.rel)?;
+                Ok(file)
+            }
+            SourceSave::Conflict { conflict_path } => {
+                Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
+            }
+        }
+    }
+
+    /// Save an edited supporting text asset, refusing to clobber a concurrent
+    /// edit. Whole-document, guarded and never merged, exactly as a scene is.
+    pub fn save_text_asset(&mut self, file: &mut TextFile) -> Result<SourceSave> {
+        self.ensure_writable()?;
+        let outcome = source::write_text(&self.root, file, &self.peer)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            self.index_narrative_path(&file.rel)?;
+        }
+        Ok(outcome)
+    }
+
+    /// Delete a supporting text asset.
+    ///
+    /// There is no layout to remove alongside it: a text asset has no canvas,
+    /// which is the same absence that keeps [`Destination`] out of its model.
+    ///
+    /// [`Destination`]: wobu_narrative::Destination
+    pub fn delete_text_asset(&mut self, id: TextAssetId) -> Result<()> {
+        let entry = self.text_catalog()?.find(id).cloned();
+        let rel = entry.ok_or_else(|| Error::NoSuchNode(id.to_string()))?.rel;
+        self.delete_source(&rel, "Text asset")
     }
 
     /// The declared variables, or `None` in a project that has never had any.
