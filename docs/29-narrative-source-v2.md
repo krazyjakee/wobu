@@ -7,8 +7,9 @@ their unsupported-version check before attempting to interpret its fields.
 
 This is a shared model checkpoint for #154, #186 and #194. Classification authoring, Scene library
 facets and the complete Flow interactions follow in those issues; this checkpoint does not claim
-that their UI or native acceptance is complete. Supporting text records remain separate #152 work.
-N5 is excluded.
+that their UI or native acceptance is complete. Supporting text records are versioned separately;
+see [supporting text](33-narrative-supporting-text.md) and the
+[narrative domain model](34-narrative-domain-model.md). N5 is excluded.
 
 ## Explicit unfinished wiring
 
