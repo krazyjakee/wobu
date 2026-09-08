@@ -87,3 +87,22 @@ Storage tests cover each record kind, guarded concurrent edits, immutable receip
 write routes, schema/identity rejection, internal orphan objects, incomplete publications, a full
 project-folder copy with a new machine-local index, index deletion/rebuild, external edits/removals,
 and symlink refusal. Existing scene tests cover read-only shares and unchanged art-only project open.
+
+## Desktop recovery
+
+Open **Narrative → Recovery…** to inspect retained deletions by their saved name and project-relative
+path. **Restore** explicitly requests the retained original. The dialog never uploads or renders the
+original source bytes just to list history. Read-only projects may inspect history but cannot restore.
+
+A successful restore refreshes the scene/world/state queries. If a newer file occupies the same path,
+it remains current and the original is parked as a conflict copy; the dialog reports the retained
+copy's path and refreshes the ordinary conflict list. **Restoration requested** means a restoration
+marker was recorded, including this conflict outcome. It does not imply the older content replaced
+a newer edit. Completed history remains visible. **Retry restore** repeats the guarded request if the original
+recovery was interrupted after recording its marker; it still preserves a newer current file.
+**Refresh history** rereads canonical recovery metadata.
+
+The [recovery screenshot](evidence/narrative-153/recovery.png) uses the real React dialog with
+explicitly mocked browser IPC. Rust command tests separately verify metadata-only listing, original
+byte restoration and preservation of both versions during a competing edit. This is not a native
+engine or provider validation claim.

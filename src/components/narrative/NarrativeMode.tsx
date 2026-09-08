@@ -7,6 +7,7 @@ import { TipButton } from '../Tooltip'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
 import { NarrativeScenarioTests } from './NarrativeScenarioTests'
+import { NarrativeRecovery } from './NarrativeRecovery'
 import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
@@ -29,6 +30,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
   const [repairRel, setRepairRel] = useState<string | null>(null)
   const [worldOpen, setWorldOpen] = useState(false)
@@ -105,6 +107,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           <button className="btn" onClick={() => setBuildOpen(true)}>
             Build…
           </button>
+          <button className="btn" onClick={() => setRecoveryOpen(true)}>
+            Recovery…
+          </button>
           <button className="btn" onClick={() => setExportOpen(true)}>
             Export…
           </button>
@@ -125,6 +130,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
             )
           }
         />
+      )}
+      {recoveryOpen && (
+        <NarrativeRecovery readOnly={project.readOnly} onClose={() => setRecoveryOpen(false)} />
       )}
       {exportOpen && <NarrativeExport onClose={() => setExportOpen(false)} />}
       <div className="nrt-library-view" hidden={!libraryOpen || worldOpen}>

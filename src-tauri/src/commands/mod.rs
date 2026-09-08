@@ -132,3 +132,5 @@ pub mod narrative_export;
 
 pub mod narrative_context;
 pub mod narrative_scenarios;
+
+pub mod narrative_recovery;

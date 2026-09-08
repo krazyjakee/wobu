@@ -163,6 +163,8 @@ pub fn run() {
             commands::narrative_export::narrative_export,
             commands::narrative_context::narrative_context_capture,
             commands::narrative_context::narrative_context_freshness,
+            commands::narrative_recovery::narrative_recovery_list,
+            commands::narrative_recovery::narrative_recovery_restore,
             commands::narrative_scenarios::narrative_scenarios_list,
             commands::narrative_scenarios::narrative_scenario_save,
             commands::narrative_scenarios::narrative_scenario_run,
