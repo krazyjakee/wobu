@@ -374,6 +374,15 @@
   font-size: 11px;
 }
 
+/* Each Flow pane gives its canvas an explicit flex height. WebKit cannot
+   resolve the inner 100% height through an auto-sized intermediate wrapper. */
+.nrt-flow-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* The plane itself. It must own a height of its own: React Flow measures its
    container, and a container that sizes to its content measures zero. */
 .nrt-flow-canvas {

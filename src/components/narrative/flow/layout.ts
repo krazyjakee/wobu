@@ -180,39 +180,5 @@ export function createLayoutGate() {
   }
 }
 
-interface WorkerReply {
-  id: number
-  positions?: Record<string, XY>
-  error?: string
-}
-
-let worker: Worker | null = null
-let nextId = 0
-const waiting = new Map<number, (reply: WorkerReply) => void>()
-
-/**
- * elk in a worker, created on first use.
- *
- * Lazy because constructing a `Worker` is not something jsdom can do, and the
- * canvas must be importable and renderable in a test without one. Tests pass
- * their own `LayoutRunner`; nothing in the suite reaches this function.
- */
-export const elkLayout: LayoutRunner = (request) => {
-  if (!worker) {
-    worker = new Worker(new URL('./layout.worker.ts', import.meta.url), { type: 'module' })
-    worker.addEventListener('message', (event: MessageEvent<WorkerReply>) => {
-      const settle = waiting.get(event.data.id)
-      if (!settle) return
-      waiting.delete(event.data.id)
-      settle(event.data)
-    })
-  }
-  const id = ++nextId
-  return new Promise<LayoutResult>((resolve, reject) => {
-    waiting.set(id, (reply) => {
-      if (reply.positions) resolve({ positions: reply.positions })
-      else reject(new Error(reply.error ?? 'The layout worker returned nothing.'))
-    })
-    worker?.postMessage({ id, request })
-  })
-}
+// The upstream worker protocol and failure handling live in one lazy runner.
+export { elkLayout } from './elkRunner'

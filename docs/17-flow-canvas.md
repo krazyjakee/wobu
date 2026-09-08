@@ -475,3 +475,35 @@ Every item here is a thing somebody could reasonably assume was covered. None of
 - **Real node sizes.** Every node used a nominal fixed box (220×72 and friends). A layout fed
   measured DOM sizes will differ, and the measure-then-lay-out round trip was not exercised.
 - **Undo, multi-select, copy/paste, and drag-to-reparent** — all in scope for #186, none prototyped.
+
+## Linux native corrections — 2026-09-08 (#186)
+
+The follow-up spike exercised the actual `NarrativeFlowPane` and `FlowCanvas` in Tauri's Linux
+WebKitGTK webview and found two failures the original jsdom/Node checks could not expose.
+
+- The old `layout.worker.ts` constructed `elk.bundled.js` inside an existing browser Worker.
+  Its embedded worker entry detects `self` without `document` and installs its own message
+  handler instead of exporting an in-process Worker shim. Construction therefore threw
+  `TypeError: undefined is not a constructor (evaluating 'new _Worker(url)')`, leaving Auto layout
+  waiting forever. The corrected adapter uses the small `elk-api.js` facade with the unmodified
+  upstream `elk-worker.min.js` as a **classic Worker asset**. Vite emits the asset via `?url`;
+  layout remains off-thread and the existing `LayoutRunner` API is unchanged. Worker errors reject
+  pending calls, terminate that worker and permit a fresh worker on retry. Late errors from the
+  old worker cannot reject the replacement worker's requests.
+- The actual `NarrativeFlowPane` parent rendered a blank 320-pixel canvas in WebKitGTK despite
+  17 node and 19 edge elements in the DOM. The intermediate `.nrt-flow-wrap` had no sizing rule.
+  Giving it a shrinking flex-column layout makes the inner percentage height resolvable and fills
+  the available pane. This was reproduced with the real parent component, not merely a differently
+  sized standalone harness.
+
+[Before the sizing correction](screenshots/narrative-flow-native-before.png): real Linux native
+pane with invisible node content. After the correction and actual worker execution:
+
+![Native Flow pane after correction](screenshots/narrative-flow-native-after.png)
+
+These images use synthetic in-memory council source and the actual product components in a
+throwaway test host. No provider was mocked or called; a real `kind_registry` Tauri invocation
+confirmed the native bridge. They do not establish every saved-project Flow workflow or #186's
+full acceptance. The worker regression executes the actual upstream worker script in an isolated
+worker-like JS realm, tests concurrent grouped layouts and failure/retry isolation, and is backed
+by the separate real-WebKit execution above. No vendor package was patched or added.
