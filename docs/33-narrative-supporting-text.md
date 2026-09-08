@@ -147,7 +147,9 @@ a second line — but the enforcement is the backend's, whose diagnostics the pa
 backend's own words. Saving is a whole-document guarded write with the stamp the document was read
 at, so a stale tab cannot overwrite a colleague's newer file, and a losing write is parked as a
 conflict sibling for a human. Changed wording is re-sealed through `narrative_text_written`; nothing
-on the webview side ever invents a revision.
+on the webview side ever invents a revision. A folder still being read says so, a folder that cannot
+be read names the failure where the list would be, and an asset the catalog offers but the editor
+cannot open names its own failure rather than falling back to "select an asset".
 
 ## Example
 
