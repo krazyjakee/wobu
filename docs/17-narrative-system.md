@@ -4,7 +4,9 @@ Status: **In progress**. Flow, scene discovery and manual Script/Source are merg
 increment adds attributed World state, typed scene forms, deterministic compiler/runtime
 foundations, isolated Preview and cancellable prose-generation jobs. Full editorial acceptance and production workflows remain
 in progress or planned; N5 engine integrations are excluded from current work. See
-[current authoring scope and evidence](19-narrative-authoring.md).
+[current authoring scope and evidence](19-narrative-authoring.md). The typed records, declared
+state, stable identities and the versioned source/runtime type boundary are in
+[the narrative domain model](34-narrative-domain-model.md).
 GitHub milestones and issues below track the remaining acceptance criteria.
 
 ## Product contract

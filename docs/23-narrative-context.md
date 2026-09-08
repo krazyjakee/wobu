@@ -3,8 +3,10 @@
 The Context inspector resolves a saved dialogue slot into an immutable, attributed request for
 offline prose generation. It does not call a provider, enqueue work, write dialogue or change
 runtime state. [Generation jobs](25-narrative-generation.md) create separate proposals; guarded editorial application
-remains #165–#166; supporting
-text records remain part of the unfinished #152 model. N5 engine integrations remain excluded.
+remains #165–#166. Supporting
+text records are defined by the [narrative domain model](34-narrative-domain-model.md) and
+authored through [supporting text](33-narrative-supporting-text.md); generating them remains #167
+work. N5 engine integrations remain excluded.
 
 ## Inspect a line
 
