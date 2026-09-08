@@ -9,7 +9,7 @@ use wobu_narrative_compiler::{CompiledBeat, GRAPH_VERSION, Graph, Target, accept
 mod migration;
 mod trace;
 pub use migration::Migration;
-pub use trace::{ExecutionTrace, TraceEvent, TraceRecord, TraceSite};
+pub use trace::{ChoiceStatus, ExecutionTrace, TraceEvent, TraceRecord, TraceSite};
 
 pub type State = BTreeMap<Name, Value>;
 pub const SNAPSHOT_VERSION: u32 = 1;
@@ -220,6 +220,21 @@ impl Runtime {
     }
     pub fn visits(&self) -> &BTreeMap<String, u64> {
         &self.saved.visits
+    }
+
+    /// The compiled content this run is pinned to.
+    ///
+    /// A hash of the graph, which is the only identity a run has: the same
+    /// snapshot restored against different content is refused by [`restore`],
+    /// so anything drawn *from* this run — an overlay on the Flow canvas — is
+    /// describing this build and no other. Exposed as its own accessor rather
+    /// than read off a serialized `Snapshot`, because the snapshot is opaque by
+    /// contract and a caller that reached into it would be depending on a field
+    /// name this crate never promised.
+    ///
+    /// [`restore`]: Runtime::restore
+    pub fn build(&self) -> &str {
+        &self.saved.graph_hash
     }
 
     pub fn restore(graph: Graph, snapshot: Snapshot) -> Result<Self> {

@@ -39,8 +39,17 @@ fn handwritten_project_compiles_and_previews_without_mutating_its_source() {
     let initial = BTreeMap::from([(Name::new("trust").unwrap(), wobu_narrative::Value::Int(40))]);
     let start = narrative_preview_start(graph.clone(), file.scene.id, initial, None).unwrap();
     assert!(matches!(start.current, Yield::Line { .. }));
+    // Every frame names the build it belongs to, so a derived view — the Flow
+    // overlay — can say which compilation it is drawing rather than redraw
+    // itself over source that has moved on.
+    assert_eq!(start.build, graph.hash());
+    // A line is not a branch, so there is nothing to report about choices yet.
+    assert!(start.branch.is_empty());
     let snapshot = start.snapshot.clone();
     let choices = narrative_preview_step(graph.clone(), snapshot, PreviewAction::Advance).unwrap();
+    assert_eq!(choices.branch.len(), 1);
+    assert!(choices.branch[0].available);
+    assert_eq!(choices.branch[0].label, "Show evidence");
     let invalid = narrative_preview_step(
         graph.clone(),
         choices.snapshot.clone(),

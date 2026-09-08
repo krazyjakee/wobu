@@ -548,7 +548,10 @@ describe('what is honestly out of reach', () => {
     await enterCouncil()
     expect(
       screen.getByText(/Opening a witness needs generated reachability scenarios/),
-    ).toHaveTextContent(/generated reachability scenarios and a Flow overlay/)
+      // The Flow overlay half of this landed in #188, so the sentence now
+      // claims only what is still missing — and says so without implying that
+      // an unplayed scene has been shown unreachable.
+    ).toHaveTextContent(/do not establish reachability either way/)
   })
 
   it('says an affected-build scope cannot be highlighted, and why', async () => {

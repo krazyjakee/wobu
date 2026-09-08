@@ -96,14 +96,34 @@ pub struct PreviewFrame {
     current: Yield,
     state: Values,
     trace: wobu_narrative_runtime::ExecutionTrace,
+    /// Every choice at this branch, available or not, with the recorded
+    /// evaluation of each gate.
+    ///
+    /// Beside the trace rather than inside it, because the trace is what the
+    /// last *action* did and this is what the current position *is*. Restoring
+    /// a checkpoint performs no action at all — the trace that comes back is
+    /// empty — and the Flow overlay still has to say which branches are closed
+    /// and why, without hunting backwards through the history for a step that
+    /// happened to stop at the same beat.
+    branch: Vec<wobu_narrative_runtime::ChoiceStatus>,
+    /// The compiled content this run is pinned to.
+    ///
+    /// Preview compiles saved source, so a frame outlives the source it
+    /// describes the moment somebody edits a scene. Carrying the build lets a
+    /// derived view — the Flow overlay — say which build it is drawing rather
+    /// than quietly redrawing itself over a scene that has moved on.
+    build: String,
 }
 fn frame(runtime: Runtime) -> CommandResult<PreviewFrame> {
+    let current = runtime.current().map_err(runtime_error)?;
     let frame = PreviewFrame {
         snapshot: runtime.snapshot(),
         site: runtime.site(),
-        current: runtime.current().map_err(runtime_error)?,
+        current,
         state: runtime.state().clone(),
         trace: runtime.trace().clone(),
+        branch: runtime.branch().map_err(runtime_error)?,
+        build: runtime.build().to_string(),
     };
     // Valid inputs can still advance counters beyond the exact JS range.
     // Validate the result too, before it leaves Rust and loses precision.

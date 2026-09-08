@@ -11,6 +11,8 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
 const line: PreviewFrame = {
   trace: { committed: true, error: null, omitted: 0, records: [] },
+  branch: [],
+  build: 'build-1',
   snapshot: { at: 'line' },
   current: {
     line: {
@@ -27,6 +29,8 @@ const line: PreviewFrame = {
 }
 const choices: PreviewFrame = {
   trace: { committed: true, error: null, omitted: 0, records: [] },
+  branch: [{ id: 'choice', label: 'Show proof', available: true, records: [] }],
+  build: 'build-1',
   snapshot: { at: 'choices' },
   current: {
     choices: { scene: 'scene', beat: 'beat', choices: [{ id: 'choice', label: 'Show proof' }] },
@@ -35,12 +39,16 @@ const choices: PreviewFrame = {
 }
 const command: PreviewFrame = {
   trace: { committed: true, error: null, omitted: 0, records: [] },
+  branch: [],
+  build: 'build-1',
   snapshot: { at: 'command' },
   current: { game_command: { token: 'token', name: 'award_badge', args: [true] } },
   state: { trust: 50 },
 }
 const end: PreviewFrame = {
   trace: { committed: true, error: null, omitted: 0, records: [] },
+  branch: [],
+  build: 'build-1',
   snapshot: { at: 'end' },
   current: { end: { label: 'Supported' } },
   state: { trust: 50 },
