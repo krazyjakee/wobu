@@ -197,7 +197,9 @@ function ArcGraph({
               members: arc.level.elements
                 .filter((element) => grouping.of(element) === group.id)
                 .map((element) => (element.kind === 'scene' ? `scene:${element.id}` : element.id)),
-              collapsed: base.groups[group.id]?.collapsed ?? arc.level.elements.length > 300,
+              collapsed: base.groups[group.id]
+                ? !!base.groups[group.id]?.collapsed
+                : arc.level.elements.length > 300,
               updatedAt: base.groups[group.id]?.updatedAt ?? '1970-01-01T00:00:00.000Z',
             },
           ]),

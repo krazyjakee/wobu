@@ -913,6 +913,48 @@ describe('shared presentation controls', () => {
     await waitFor(() => expect(calls('narrative_layout_save').length).toBeGreaterThan(0))
   })
 
+  it('keeps a large quest group open after Rust omits its false collapse flag', async () => {
+    const quest = mintId()
+    const scenes = [
+      council(),
+      ...Array.from({ length: 300 }, (_, i) => ({
+        id: mintId(),
+        name: `Scene ${i}`,
+        beats: [{ id: mintId(), title: 'Entry' }],
+      })),
+    ]
+    quests = [
+      worldQuest(
+        quest,
+        'Large inquiry',
+        'open',
+        scenes.map((scene) => scene.id),
+      ),
+    ]
+    h.invoke.mockImplementation(async (command: string, args: Record<string, unknown>) => {
+      if (command === 'narrative_arc')
+        return { revision: 'large', scenes: scenes.map(arcScene), unreadable: [] }
+      const result = answer(command, args)
+      if (command === 'narrative_layout_save') {
+        const saved = layouts.get(JSON.stringify((args.layout as Layout).graph)) as {
+          layout: Layout
+        }
+        saved.layout = structuredClone(saved.layout)
+        for (const group of Object.values(saved.layout.groups)) {
+          if (!group.collapsed) delete group.collapsed
+        }
+      }
+      return result
+    })
+    open()
+    await screen.findByTestId(`flow-node-${groupIdentity(`quest:["${quest}"]`)}`)
+    fireEvent.click(screen.getByRole('button', { name: 'Open all groups' }))
+    await waitFor(() => expect(calls('narrative_layout_save').length).toBeGreaterThan(0))
+    await screen.findByRole('button', { name: 'Close all groups' })
+    expect(projectArcSession(PROJECT).stores.get(':quest')!.getState().closedGroups).toEqual([])
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+  })
+
   it('groups by the stage each quest starts in, folding two quests into one box', async () => {
     quests = [
       worldQuest(mintId(), 'Ashfall inquiry', 'open', [SCENE]),
