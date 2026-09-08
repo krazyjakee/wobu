@@ -92,6 +92,7 @@ impl NarrativeDeletion {
                 reason: "Invalid or unsupported narrative deletion record.".into(),
             });
         }
+        registry::parse(&self.target, &self.original)?;
         Ok(())
     }
 }
@@ -105,6 +106,17 @@ pub fn parse(
         reason: "Narrative identity or content hash does not match its canonical path.".into(),
     };
     match kind {
+        NarrativeFileKind::Restoration => {
+            let restoration: NarrativeRestoration = serde_json::from_str(text)?;
+            if restoration.rel() != rel || restoration.schema_version != RECORD_VERSION {
+                return Err(malformed());
+            }
+            Ok((
+                Some(restoration.id.to_string()),
+                "Explicit narrative restoration".into(),
+                serde_json::to_value(restoration)?,
+            ))
+        }
         NarrativeFileKind::ReceiptBinding => {
             let binding: ReceiptBinding = serde_json::from_str(text)?;
             if binding.rel() != rel
@@ -211,4 +223,17 @@ pub struct NarrativePublicationFile {
     pub manifest: NarrativePublication,
     pub records: Vec<NarrativeRecordDocument>,
     pub stamp: crate::atomic::Stamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NarrativeRestoration {
+    pub schema_version: u32,
+    pub id: Id,
+    pub deletion: Id,
+}
+impl NarrativeRestoration {
+    pub fn rel(&self) -> String {
+        format!("narrative/restorations/{}.json", self.id)
+    }
 }

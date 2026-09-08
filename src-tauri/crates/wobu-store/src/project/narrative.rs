@@ -105,11 +105,14 @@ impl Project {
         self.ensure_writable()?;
         let catalog = self.scene_catalog()?;
         let entry = catalog.find(id).ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
-        let path = paths::from_rel_string(&self.root, &entry.rel);
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(Error::io(&path, error)),
+        let Some((_, stamp)) = source::registry::read(self.root(), &entry.rel)? else {
+            return Err(Error::NoSuchNode(id.to_string()));
+        };
+        if !self.delete_narrative_file(&entry.rel, &stamp)? {
+            return Err(Error::Malformed {
+                path: entry.rel.clone().into(),
+                reason: "Scene changed before deletion; reload it before trying again.".into(),
+            });
         }
         layout::delete(&self.root, &GraphKey::of_scene(id))
     }

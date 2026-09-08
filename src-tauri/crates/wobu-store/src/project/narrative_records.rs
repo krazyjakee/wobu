@@ -69,6 +69,18 @@ impl Project {
     ) -> Result<SourceSave> {
         self.ensure_writable()?;
         registry::parse(rel, text)?;
+        if matches!(
+            registry::classify(rel),
+            Some(
+                registry::NarrativeFileKind::Object
+                    | registry::NarrativeFileKind::ReceiptBinding
+                    | registry::NarrativeFileKind::Tombstone
+                    | registry::NarrativeFileKind::Restoration
+                    | registry::NarrativeFileKind::Record(NarrativeRecordKind::Receipt)
+            )
+        ) {
+            return Ok(SourceSave::Saved(self.write_narrative_immutable(rel, text)?));
+        }
         let path = registry::safe_path(self.root(), rel)?;
         match atomic::guarded_write(self.root(), &path, text, expected, &self.peer)? {
             WriteOutcome::Written(stamp) => {
@@ -84,7 +96,30 @@ impl Project {
     }
     pub(crate) fn write_narrative_immutable(&mut self, rel: &str, text: &str) -> Result<Stamp> {
         self.ensure_writable()?;
-        registry::parse(rel, text)?;
+        let (_, _, value) = registry::parse(rel, text)?;
+        match registry::classify(rel) {
+            Some(
+                registry::NarrativeFileKind::Record(NarrativeRecordKind::Receipt)
+                | registry::NarrativeFileKind::Object,
+            ) => {
+                let document: NarrativeRecordDocument = serde_json::from_value(value)?;
+                if document.kind == NarrativeRecordKind::Receipt {
+                    publication::verify_receipt_binding(self.root(), &document)?;
+                }
+            }
+            Some(registry::NarrativeFileKind::ReceiptBinding) => {
+                let binding: publication::ReceiptBinding = serde_json::from_value(value)?;
+                if let Some(file) =
+                    self.narrative_record(NarrativeRecordKind::Receipt, binding.id)?
+                    && atomic::hash_bytes(
+                        publication::canonical_record_text(&file.document)?.as_bytes(),
+                    ) != binding.canonical_document_hash
+                {
+                    return Err(Error::AlreadyExists(self.root().join(file.document.rel())));
+                }
+            }
+            _ => {}
+        }
         let path = registry::safe_path(self.root(), rel)?;
         let stamp = match atomic::write_once(self.root(), &path, text.as_bytes()) {
             Ok(stamp) => stamp,
@@ -157,7 +192,7 @@ impl Project {
         let records = publication::load_objects(self.root(), &manifest)?;
         Ok(Some(publication::NarrativePublicationFile { manifest, records, stamp }))
     }
-    fn bind_receipt(&mut self, doc: &NarrativeRecordDocument) -> Result<()> {
+    pub(super) fn bind_receipt(&mut self, doc: &NarrativeRecordDocument) -> Result<()> {
         let binding = publication::ReceiptBinding {
             schema_version: RECORD_VERSION,
             id: doc.id,

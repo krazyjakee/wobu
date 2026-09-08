@@ -60,6 +60,27 @@ These publication rules provide a storage boundary for later jobs; they do not t
 independent scene edits as one transaction. A consumer requiring a coherent set of record revisions
 must use a publication manifest and validate all its references.
 
+## Delete and restore
+
+Explicit deletions retain the supported original bytes and their hash in an immutable deletion record
+before moving the file into `narrative/recovery/`. The operation checks the original stamp and never
+deletes a different current revision. If a writer wins during the move, its captured bytes are kept
+in recovery and restored with a guarded write; a further winner is preserved as well. Local folder
+removal changes derived indexes but is never inferred to be a peer deletion.
+
+The recovery API lists deletion names and project-relative targets. Restore writes an immutable
+`narrative/restorations/<id>.json` marker referencing exactly one deletion ID, then restores its
+original bytes without overwriting a newer current file. A newer file produces the usual conflict
+sibling containing the retained original. `restored` means the explicit restoration was requested;
+it does not assert that old text won a conflict. A later deletion gets a fresh identity and is not
+revoked by an earlier restoration.
+
+Startup recovery and reconciliation finish interrupted deletion/restore operations from these
+portable records. Replaying them is idempotent. Copying exact old source bytes back into the folder
+cannot undo an active deletion; use the explicit restore operation. Immutable receipt bindings are
+never deletion targets, and restoring a receipt must agree with its original identity binding.
+Read-only projects list recovery history but refuse mutations.
+
 ## Verification
 
 Storage tests cover each record kind, guarded concurrent edits, immutable receipt reuse across both

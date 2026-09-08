@@ -63,3 +63,6 @@ pub use narrative::publication::{
 };
 pub use narrative::records::{NarrativeRecordDocument, NarrativeRecordFile, NarrativeRecordKind};
 pub use narrative::registry::{NarrativeFileKind, NarrativeIndexEntry};
+
+pub use narrative::publication::NarrativeRestoration;
+pub use project::NarrativeDeletionView;

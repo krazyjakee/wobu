@@ -260,6 +260,9 @@ impl Project {
         cancel: &Cancel,
         on_progress: &mut impl FnMut(ScanProgress),
     ) -> Result<()> {
+        if !self.is_read_only() {
+            self.apply_narrative_deletions()?;
+        }
         let files = self.node_files();
         let total = files.len();
         on_progress(ScanProgress { done: 0, total });
@@ -306,6 +309,7 @@ impl Project {
     /// Only files whose `(mtime, size)` moved are re-read: listing a directory
     /// over SMB is cheap, re-reading hundreds of small files is not.
     pub fn reconcile(&mut self) -> Result<bool> {
+        let recovered = if self.is_read_only() { false } else { self.apply_narrative_deletions()? };
         for _ in 0..3 {
             let observation = self.reconcile_plan()?.observe()?;
             if !observation.revalidate()? {
@@ -315,7 +319,7 @@ impl Project {
             // so an index-stale baseline would be an internal invariant
             // violation. Retrying is still safer than applying it.
             if let Some(changed) = self.apply_reconcile(observation)? {
-                return Ok(changed);
+                return Ok(changed || recovered);
             }
         }
         // A continuously changing folder will be observed again on the next
@@ -426,6 +430,7 @@ impl Project {
             let rel = path.strip_prefix(&self.root).unwrap_or(path);
             rel.components().next().is_some_and(|part| part.as_os_str() == "narrative")
         }) && self.reconcile_narrative()?;
+        let recovered = if self.is_read_only() { false } else { self.apply_narrative_deletions()? };
         let known = self.index.all_stamps()?;
         let was_corrupt: HashSet<String> = self.index.corrupt_paths()?.into_iter().collect();
         let mut targets = HashSet::new();
@@ -498,7 +503,7 @@ impl Project {
                 }
             }
         }
-        Ok(changed || narrative_changed)
+        Ok(changed || narrative_changed || recovered)
     }
 
     /// Every Markdown file under `nodes/`, as `(relative path, absolute path)`.

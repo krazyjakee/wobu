@@ -20,6 +20,7 @@ pub enum NarrativeFileKind {
     Object,
     Tombstone,
     ReceiptBinding,
+    Restoration,
 }
 
 pub fn classify(rel: &str) -> Option<NarrativeFileKind> {
@@ -51,6 +52,7 @@ pub fn classify(rel: &str) -> Option<NarrativeFileKind> {
     match parts[1] {
         "publications" => Some(NarrativeFileKind::Publication),
         "deletions" => Some(NarrativeFileKind::Tombstone),
+        "restorations" => Some(NarrativeFileKind::Restoration),
         "receipt-bindings" => Some(NarrativeFileKind::ReceiptBinding),
         directory => NarrativeRecordKind::ALL
             .into_iter()
@@ -112,6 +114,7 @@ pub fn paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
         "publications",
         "objects",
         "deletions",
+        "restorations",
         "receipt-bindings",
     ];
     for directory in directories {
@@ -222,6 +225,7 @@ pub fn entry(root: &Path, rel: &str, text: &str, stamp: Stamp) -> NarrativeIndex
             NarrativeFileKind::Object
                 | NarrativeFileKind::ReceiptBinding
                 | NarrativeFileKind::Tombstone
+                | NarrativeFileKind::Restoration
         );
     NarrativeIndexEntry {
         rel: rel.into(),
