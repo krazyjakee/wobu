@@ -18,9 +18,7 @@ async fn work<T: Send + 'static>(
     let state = state.handle();
     super::blocking("Recording worker stopped.", move || {
         state.with_ticket(&ticket, |_| Ok(()))?;
-        if state.reconcile_project_now(ticket.project)? {
-            state.announce_local_change(ticket.project);
-        }
+        state.reconcile_ticket_now(&ticket)?;
         state.with_ticket(&ticket, operation)
     })
     .await?

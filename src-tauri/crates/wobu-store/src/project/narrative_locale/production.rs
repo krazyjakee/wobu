@@ -48,10 +48,9 @@ impl Project {
 }
 impl ProductionCapture {
     pub fn verify(&self, project: &Project) -> Result<()> {
-        for snapshot in &self.snapshots {
-            snapshot.check_observations(project)?;
-        }
-        if project.narrative_fingerprint()? != self.fingerprint
+        project.verify_review_snapshots(&self.snapshots)?;
+        if self.snapshots.iter().any(|snapshot| snapshot.fingerprint != self.fingerprint)
+            || (self.snapshots.is_empty() && project.narrative_fingerprint()? != self.fingerprint)
             || project.locale_policy()?.1 != self.policy_guard
             || project.locale_translations()? != self.translations
         {
