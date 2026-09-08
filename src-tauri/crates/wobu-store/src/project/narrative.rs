@@ -192,6 +192,35 @@ impl Project {
         layout::save(&self.root, &self.peer, arrangement, Some(&present))
     }
 
+    pub fn quest_layout(&self, quest: wobu_narrative::EntityId) -> LayoutLoad {
+        let mut loaded = layout::load(&self.root, &GraphKey::Quest { quest });
+        if let Ok(present) = self.quest_layout_keys(quest) {
+            layout::reconcile(&mut loaded, &present);
+        }
+        loaded
+    }
+    fn quest_layout_keys(
+        &self,
+        quest: wobu_narrative::EntityId,
+    ) -> Result<BTreeSet<layout::NodeKey>> {
+        let (world, _) =
+            self.world_document()?.ok_or_else(|| crate::Error::NoSuchNode(quest.to_string()))?;
+        let quest = world
+            .quests
+            .iter()
+            .find(|record| record.id == quest)
+            .ok_or_else(|| crate::Error::NoSuchNode(quest.to_string()))?;
+        Ok(quest.scene_ids.iter().copied().map(layout::NodeKey::Scene).collect())
+    }
+    pub fn save_quest_layout(
+        &self,
+        arrangement: &Layout,
+        quest: wobu_narrative::EntityId,
+    ) -> Result<LayoutSave> {
+        self.ensure_writable()?;
+        layout::save(&self.root, &self.peer, arrangement, Some(&self.quest_layout_keys(quest)?))
+    }
+
     /// Collect scene layout files whose scene no longer exists.
     ///
     /// A maintenance action, not something that runs at open — a half-mounted

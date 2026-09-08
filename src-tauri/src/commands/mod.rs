@@ -136,3 +136,6 @@ pub mod narrative_review;
 pub mod narrative_scenarios;
 
 pub mod narrative_recovery;
+
+#[cfg(test)]
+mod narrative_layout_contract;

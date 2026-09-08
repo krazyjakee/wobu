@@ -11,6 +11,7 @@ export interface SyncPeerStatus {
   connected: boolean
   /** ISO timestamp, absent until a complete conflict-free round finishes. */
   lastConvergedAt: string | null
+  arrangementNotice?: string
 }
 
 /** Payload shared by `sync:state`, `sync:peer`, and the catch-up query. */

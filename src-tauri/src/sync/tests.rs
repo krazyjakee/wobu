@@ -581,7 +581,20 @@ async fn a_round_serves_what_a_peer_asks_for_and_pushes_what_it_is_behind_on() {
     // that is the same rule that makes an empty manifest safe.
     assert!(pushed.contains(&node_id), "the app did not push a node the peer lacked");
     assert_eq!(pushed.len(), announced, "{pushed:?}");
-
+    // This peer deliberately advertised no cosmetic stage. Core transfer is
+    // usable and the unsupported arrangements are reported separately.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if manager.project_statuses().iter().flat_map(|p| &p.peers).any(|p| {
+                p.arrangement_notice.as_ref().is_some_and(|n| n.contains("cannot share Flow"))
+            }) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("missing arrangement capability should be visible without failing core sync");
     session.close();
     manager.shutdown().await;
     peer.shutdown().await.unwrap();
@@ -609,10 +622,15 @@ async fn one_round(
     // The peer's half of the manifest exchange: it holds nothing. Under the
     // rule `wobu-sync` states twice, that is "never had it" and not
     // "deleted", so the app's side plans to send rather than to remove.
-    let exchange =
-        wobu_sync::manifest::exchange(&session, &[], &[], wobu_sync::manifest::IDLE_TIMEOUT)
-            .await
-            .map_err(WobuError::from)?;
+    let exchange = wobu_sync::manifest::exchange_with_layout(
+        &session,
+        &[],
+        &[],
+        wobu_sync::manifest::IDLE_TIMEOUT,
+        false,
+    )
+    .await
+    .map_err(WobuError::from)?;
 
     let connection = session.connection();
     super::narrative::empty_exchange(connection).await?;

@@ -235,6 +235,17 @@ pub async fn run(
         answer(manager, replica, &peer, connection, &completion),
     )?;
 
+    let (layout_changed, layout_notice) = if exchange.flow_layouts {
+        match Box::pin(super::layout::exchange(manager, replica, session)).await {
+            Ok(result) => result,
+            Err(error) => {
+                (false, Some(format!("Arrangements were not fully shared: {}", error.message)))
+            }
+        }
+    } else {
+        (false,Some("This peer cannot share Flow arrangements. Update Wobu on that machine; story and asset sync remain available.".into()))
+    };
+    manager.arrangement_notice(replica.project(), &peer, layout_notice);
     let outcome = Outcome {
         applied: ours.applied + theirs.applied + narrative.applied,
         parked: ours.parked + theirs.parked + narrative.parked,
@@ -246,7 +257,11 @@ pub async fn run(
         pushed: ours.pushed + narrative.pushed,
         served: theirs.served + narrative.served,
         blobs: fetched.placed.len(),
-        changed: ours.changed || theirs.changed || narrative.changed || !fetched.placed.is_empty(),
+        changed: ours.changed
+            || theirs.changed
+            || narrative.changed
+            || layout_changed
+            || !fetched.placed.is_empty(),
         whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 

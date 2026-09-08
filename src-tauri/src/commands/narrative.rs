@@ -710,6 +710,7 @@ fn layout_get(project: &Project, graph: &GraphKey) -> LayoutLoadView {
             }
         },
         GraphKey::Arc { arc } => LayoutLoadView::of(project.arc_layout(arc)),
+        GraphKey::Quest { quest } => LayoutLoadView::of(project.quest_layout(*quest)),
     }
 }
 
@@ -745,6 +746,7 @@ fn layout_save(project: &Project, layout: &Layout) -> LayoutSaveView {
             Err(error) => return LayoutSaveView::Unwritable { reason: error.to_string() },
         },
         GraphKey::Arc { .. } => project.save_arc_layout(layout),
+        GraphKey::Quest { quest } => project.save_quest_layout(layout, *quest),
     };
     match saved {
         Ok(LayoutSave::Written(_)) => LayoutSaveView::Written,

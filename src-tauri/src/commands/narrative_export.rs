@@ -103,7 +103,7 @@ pub async fn narrative_export(
         .map_err(package_error)?;
     Ok(report)
 }
-fn prepare(
+pub(super) fn prepare(
     project: &Project,
     profile: Profile,
     commands: BTreeMap<Name, Vec<VarType>>,

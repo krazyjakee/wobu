@@ -1,3 +1,6 @@
+import type { FlowPresentation } from './useFlowPresentation'
+import { PresentationTools, PinnedNotes } from './PresentationTools'
+import { layoutKeyOf } from './source'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Background,
@@ -123,6 +126,7 @@ export interface FlowCanvasProps {
   readOnly?: boolean
   /** Stored node coordinates (#185). Absent ids fall back to the seed layout. */
   positions?: FlowPositions
+  presentation?: FlowPresentation
   /** Where moved and laid-out coordinates go. Nothing here persists them. */
   onPositionsChange?: (positions: FlowPositions) => void
   /** Swapped for a synchronous fake in tests; the real one starts a worker. */
@@ -175,6 +179,7 @@ function Canvas({
   onChange,
   readOnly = false,
   positions: stored,
+  presentation,
   onPositionsChange,
   layout = elkLayout,
   creatable = CREATABLE,
@@ -192,6 +197,20 @@ function Canvas({
   const flow = useReactFlow()
   const gate = useRef(createLayoutGate())
   const [positions, setPositions] = useState<Record<string, XY>>(() => ({ ...stored }))
+  const [autoPositions, setAutoPositions] = useState<Record<string, XY>>({})
+  const [seenPositions, setSeenPositions] = useState(stored)
+  const [dragging, setDragging] = useState(false)
+  const presentationLevel = presentation?.layout.graph.kind === 'scene' ? 'scene' : 'arc'
+  const automatic = presentation?.layout.mode === 'automatic'
+  const persistent = !!presentation
+  if (stored !== seenPositions && !dragging) {
+    setSeenPositions(stored)
+    setPositions({ ...stored })
+  }
+  const presentationRef = useRef(presentation)
+  useEffect(() => {
+    presentationRef.current = presentation
+  }, [presentation])
   const [laying, setLaying] = useState(false)
   const [layoutError, setLayoutError] = useState<string | null>(null)
 
@@ -210,6 +229,46 @@ function Canvas({
   const closedGroups = useFlowLevel((s) => s.closedGroups)
   const announcement = useFlowLevel((s) => s.announcement)
   const setClosedGroups = useFlowLevel((s) => s.setClosedGroups)
+  const hydratedGroups = useRef(false)
+  const storedGroups = presentation?.layout.groups
+  useEffect(() => {
+    if (!storedGroups) return
+    hydratedGroups.current = true
+    store.getState().setClosedGroups(
+      Object.values(storedGroups)
+        .filter((g) => g.collapsed)
+        .map((g) => g.id),
+    )
+    hydratedGroups.current = false
+  }, [storedGroups, store])
+  useEffect(
+    () =>
+      store.subscribe((state, previous) => {
+        const current = presentationRef.current
+        if (
+          !current ||
+          readOnly ||
+          hydratedGroups.current ||
+          state.closedGroups === previous.closedGroups
+        )
+          return
+        const closed = new Set(state.closedGroups)
+        const groups = { ...current.layout.groups }
+        let changed = false
+        for (const [id, group] of Object.entries(groups)) {
+          if (!!group.collapsed !== closed.has(id)) {
+            groups[id] = {
+              ...group,
+              collapsed: closed.has(id),
+              updatedAt: new Date().toISOString(),
+            }
+            changed = true
+          }
+        }
+        if (changed) current.onChange({ ...current.layout, groups })
+      }),
+    [store, readOnly],
+  )
   const reveal = useUI((s) => s.narrativeReveal)
   const { select, connect, remove, add } = useSceneEdits({
     scene,
@@ -249,9 +308,13 @@ function Canvas({
   const seed = useMemo(() => seedPositions(graph), [graph])
   const placed = useMemo(() => {
     const merged: Record<string, XY> = {}
-    for (const node of graph.nodes) merged[node.id] = positions[node.id] ?? seed[node.id] ?? ZERO
+    for (const node of graph.nodes)
+      merged[node.id] =
+        (automatic && !dragging ? autoPositions[node.id] : positions[node.id]) ??
+        seed[node.id] ??
+        ZERO
     return merged
-  }, [graph, positions, seed])
+  }, [graph, positions, seed, automatic, autoPositions, dragging])
 
   // ── the reveal channel ──────────────────────────────────────────────────
   // Latched rather than consumed, so a canvas mounting on a tab switch still
@@ -286,19 +349,27 @@ function Canvas({
         // exists, on top of a newer layout that was right.
         if (!gate.current.accept(ticket)) return
         setLaying(false)
-        setPositions((previous) => {
-          const next = { ...previous, ...result.positions }
-          onPositionsChange?.(next)
-          return next
-        })
-        window.setTimeout(() => flow.fitView({ duration: 200 }), 0)
+        if (automatic) setAutoPositions(result.positions)
+        else {
+          setPositions((previous) => ({ ...previous, ...result.positions }))
+          onPositionsChange?.(result.positions)
+        }
+        if (!automatic) window.setTimeout(() => flow.fitView({ duration: 200 }), 0)
       })
       .catch((error: unknown) => {
         if (!gate.current.accept(ticket)) return
         setLaying(false)
         setLayoutError(error instanceof Error ? error.message : String(error))
       })
-  }, [graph, layout, flow, onPositionsChange])
+  }, [graph, layout, flow, onPositionsChange, automatic])
+
+  const automaticRunner = useRef(runLayout)
+  useEffect(() => {
+    automaticRunner.current = runLayout
+  }, [runLayout])
+  useEffect(() => {
+    if (automatic) automaticRunner.current()
+  }, [automatic, graph])
 
   // A scene swap abandons whatever elk is still chewing on.
   const sceneId = scene.id
@@ -315,12 +386,12 @@ function Canvas({
       type: node.kind,
       position: placed[node.id] ?? ZERO,
       data: { node },
-      draggable: !readOnly,
+      draggable: !readOnly && (!persistent || layoutKeyOf(node.id, presentationLevel) !== null),
       ariaLabel: nodeLabel(node),
       style: NODE_SIZE[node.kind],
     }))
-    return [...frames(graph, placed, closedGroups), ...nodes]
-  }, [graph, placed, readOnly, closedGroups])
+    return [...frames(graph, placed, closedGroups, NODE_BUDGET - nodes.length), ...nodes]
+  }, [graph, placed, readOnly, closedGroups, persistent, presentationLevel])
 
   const rfEdges = useMemo<Edge[]>(
     () =>
@@ -354,8 +425,22 @@ function Canvas({
   }, [])
 
   const onDragStop = useCallback(
-    () => onPositionsChange?.(positions),
-    [onPositionsChange, positions],
+    (_event: unknown, node: FlowRFNode) => {
+      setDragging(false)
+      if (presentation) {
+        const key = layoutKeyOf(node.id, presentationLevel)
+        if (!key) return
+        const now = new Date().toISOString()
+        const base = presentation.layout
+        presentation.onChange({
+          ...base,
+          mode: 'manual',
+          modeUpdatedAt: now,
+          nodes: { ...base.nodes, [key]: { ...base.nodes[key], ...node.position, updatedAt: now } },
+        })
+      } else onPositionsChange?.({ [node.id]: node.position })
+    },
+    [onPositionsChange, presentation, presentationLevel],
   )
 
   const onKeyDown = useFlowKeyboard({
@@ -393,6 +478,13 @@ function Canvas({
         {/* Not disabled while it runs. A writer who moves a box and asks
             again is asking for a newer answer, and the gate is what makes the
             older one harmless — see `createLayoutGate`. */}
+        {presentation && (
+          <PresentationTools
+            presentation={presentation}
+            level={presentationLevel}
+            readOnly={readOnly}
+          />
+        )}
         <button type="button" className="btn btn-sm" onClick={runLayout}>
           {laying ? 'Laying out…' : 'Auto layout'}
         </button>
@@ -468,6 +560,11 @@ function Canvas({
           edges={rfEdges}
           nodeTypes={NODE_TYPES}
           onNodesChange={onNodesChange}
+          onNodeDragStart={() => {
+            setPositions(placed)
+            setDragging(true)
+            gate.current.abandon()
+          }}
           onNodeDragStop={onDragStop}
           onNodeClick={(_event, node) => select(node.id)}
           // Double-click is the nested-flow gesture articy uses and #187 names.
@@ -492,6 +589,18 @@ function Canvas({
           minZoom={0.1}
           proOptions={{ hideAttribution: false }}
         >
+          {presentation && (
+            <PinnedNotes
+              presentation={presentation}
+              readOnly={readOnly}
+              positions={Object.fromEntries(
+                Object.entries(placed).flatMap(([id, at]) => {
+                  const key = layoutKeyOf(id, presentationLevel)
+                  return key ? [[key, at]] : []
+                }),
+              )}
+            />
+          )}
           <Background gap={24} />
           <Controls showInteractive={false} />
           <MiniMap pannable zoomable ariaLabel={`Map of every ${noun}`} />
@@ -535,9 +644,11 @@ function frames(
   graph: FlowGraph,
   placed: Record<string, XY>,
   closed: readonly string[],
+  budget: number,
 ): FlowRFNode[] {
   const out: FlowRFNode[] = []
   for (const group of graph.groups) {
+    if (out.length >= budget) break
     if (closed.includes(group.id)) continue
     const members = graph.nodes.filter((node) => node.groupId === group.id)
     if (members.length === 0) continue

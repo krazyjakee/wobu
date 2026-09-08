@@ -386,12 +386,21 @@
 /* The plane itself. It must own a height of its own: React Flow measures its
    container, and a container that sizes to its content measures zero. */
 .nrt-flow-canvas {
+  position: relative;
   flex: 1;
   min-height: 320px;
   border: 1px solid var(--border);
   border-radius: var(--r);
   background: var(--bg-panel);
   overflow: hidden;
+}
+/* React Flow overwrites its style prop with inline relative/100% dimensions.
+   Anchor its root to the measured canvas instead: WebKit resolves an inline
+   percentage height as zero when the parent gets its size from min-height. */
+.nrt-flow-canvas > .react-flow {
+  position: absolute !important;
+  height: auto !important;
+  inset: 0;
 }
 .nrt-flow-canvas .react-flow__background-pattern {
   color: var(--border);
@@ -777,6 +786,15 @@
   gap: 4px;
   padding: 8px 10px 0;
 }
+.nrt-panel > .nrt-levels,
+.nrt-panel > .nrt-quest-arrangement {
+  height: 100%;
+}
+.nrt-levels > .nrt-pane.nrt-flow,
+.nrt-quest-arrangement > .nrt-pane.nrt-flow {
+  flex: 1;
+  height: auto;
+}
 .nrt-levels > .nrt-pane.nrt-flow {
   padding: 0 0 10px;
 }
@@ -921,4 +939,92 @@
 .nrt-project-demo > .nrt-pane {
   min-height: 0;
   flex: 1;
+}
+
+.nrt-quest-arrangement {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.nrt-quest-selector,
+.nrt-arrangement-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.nrt-quest-selector {
+  padding: 8px 12px;
+}
+.nrt-presentation-tools {
+  position: absolute;
+  z-index: 15;
+  top: 42px;
+  left: 8px;
+  width: 320px;
+  max-height: 380px;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: 0 12px 32px #0005;
+}
+.nrt-flow-bar {
+  position: relative;
+}
+.nrt-presentation-tools label {
+  display: grid;
+  gap: 5px;
+}
+.nrt-presentation-groups {
+  display: grid;
+  gap: 5px;
+}
+.nrt-pinned-note {
+  pointer-events: auto;
+  position: absolute;
+  padding: 10px;
+  border: 1px solid #bb9656;
+  border-radius: 6px;
+  background: #eadcb5;
+  color: #352f23;
+  box-shadow: 0 3px 12px #0003;
+}
+.nrt-pinned-note textarea {
+  width: 100%;
+  min-height: 72px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  resize: vertical;
+}
+.nrt-pinned-note button {
+  color: inherit;
+  font-size: 10px;
+  background: transparent;
+  border: 0;
+  padding: 3px;
+}
+.nrt-pinned-note .nrt-note-handle {
+  cursor: grab;
+  touch-action: none;
+  width: 100%;
+  text-align: left;
+}
+.nrt-note-pages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  position: absolute;
+  z-index: 10;
+  bottom: 8px;
+  left: 8px;
+  background: var(--bg-raised);
+  padding: 6px;
 }

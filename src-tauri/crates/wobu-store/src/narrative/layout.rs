@@ -10,7 +10,7 @@
 //! it refuses unknown fields, so a coordinate cannot be smuggled into a scene
 //! document even by hand. This module is the other half: a separate file, in a
 //! separate directory, keyed by the ids the source already mints, holding
-//! nothing a person wrote.
+//! presentation notes and geometry, never narrative dialogue.
 //!
 //! [`crate::narrative::source_fingerprint`] is the checkable form of the
 //! claim. It cannot reach `narrative/layout/`, so a layout write cannot move
@@ -50,10 +50,9 @@
 //!   because it is *deterministic*: two machines merging the same pair of
 //!   files in opposite directions have to reach the same answer, or the two
 //!   folders never converge and the file ping-pongs forever.
-//! - **Deletion loses to movement.** The merge is a union, so an entry one
-//!   side removed and the other side kept comes back. This is the right bias
-//!   for cosmetics — never lose an arrangement — and it is harmless because
-//!   [`reconcile`] drops entries whose ids the source no longer contains.
+//! - **Node positions merge by union.** [`reconcile`] drops deleted source IDs.
+//!   Groups and notes carry version-2 deletion timestamps; deletion wins ties
+//!   and older copies cannot resurrect them. A later edit can recreate them.
 //! - **Groups and annotations merge whole.** A group's membership is one
 //!   field of one entry, so two people adding different beats to the same
 //!   group keeps only the later edit's membership. Per-member merging would
@@ -61,10 +60,8 @@
 //!   rectangle marginally righter.
 //! - **The write is not a compare-and-swap.** Neither POSIX nor SMB has a
 //!   rename that fails when the target moved. [`crate::atomic::merging_write`]
-//!   re-reads and re-merges up to three times and then lands regardless, which
-//!   narrows the lost-update window to the gap between a `stat` and a
-//!   `rename`. Inside that window one collaborator's simultaneous drag can be
-//!   dropped.
+//!   re-reads bytes and re-merges up to three times, then defers a busy save.
+//!   The remaining check-to-rename window can still lose a simultaneous drag.
 //!
 //! ## Nothing here may fail to open a scene
 //!
@@ -82,11 +79,13 @@ use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use wobu_narrative::{BeatId, ChoiceId, OutcomeId, Scene, SceneId};
+use wobu_narrative::{BeatId, ChoiceId, EntityId, OutcomeId, Scene, SceneId};
+
+mod io;
+pub use io::{MAX_LAYOUT_BYTES, graph_at, manifest, observation, read_document, read_raw};
 
 use crate::atomic::{self, Stamp};
 use crate::error::{Error, Result};
-use crate::paths;
 
 /// The layout format this build reads and writes.
 ///
@@ -94,7 +93,7 @@ use crate::paths;
 /// `wobu_narrative::SOURCE_SCHEMA_VERSION`, and that separation is load
 /// bearing: bumping the layout format must never look like a source migration,
 /// or moving a box would make every project claim it needed one.
-pub const LAYOUT_SCHEMA_VERSION: u32 = 1;
+pub const LAYOUT_SCHEMA_VERSION: u32 = 2;
 
 /// The presentation tree. Everything that must not see layout — a compiler
 /// input set, a build fingerprint, an export, a `git add` of source — excludes
@@ -112,18 +111,15 @@ pub const CORRUPT_MARKER: &str = "corrupt";
 
 /// Which graph a layout file is for.
 ///
-/// Two cases, because the canvas draws two kinds of graph: the beats inside
-/// one scene, and the scenes inside one arc. An arc is keyed by a slug rather
-/// than an id because arcs have no source document yet — the quest/arc model
-/// is #151's and #155's — so there is no stable id to key it to. When there
-/// is one, `Arc` gains it and the slug form migrates; that is why the
-/// discriminant is written into the file rather than inferred from which
-/// directory it was found in.
+/// Scene graphs use stable SceneId, quest graphs use the World quest EntityId.
+/// Legacy slug-keyed Arc files remain readable without an opening migration;
+/// the all-scenes view uses that form. Names never replace stable quest IDs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum GraphKey {
     Scene { scene: SceneId },
     Arc { arc: String },
+    Quest { quest: EntityId },
 }
 
 impl GraphKey {
@@ -142,6 +138,7 @@ impl GraphKey {
     pub fn rel(&self) -> Result<String> {
         match self {
             GraphKey::Scene { scene } => Ok(format!("{SCENE_LAYOUT_DIR}/{scene}.json")),
+            GraphKey::Quest { quest } => Ok(format!("narrative/layout/quests/{quest}.json")),
             GraphKey::Arc { arc } => {
                 let slug = wobu_core::slugify(arc)?;
                 Ok(format!("{ARC_LAYOUT_DIR}/{slug}.json"))
@@ -269,7 +266,7 @@ pub enum LayoutMode {
 
 /// Everything remembered about one node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NodeLayout {
     pub x: f64,
     pub y: f64,
@@ -289,7 +286,7 @@ impl NodeLayout {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Group {
     pub id: GroupId,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -311,7 +308,7 @@ pub struct Group {
 /// exported or translated, and #151 keeps authored narrative text in the
 /// source document where the never-merge rule still applies to it in full.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Annotation {
     pub id: AnnotationId,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -337,7 +334,7 @@ pub struct Annotation {
 /// the arrangement must produce the same file, or every open would look like a
 /// change to the watcher and to every sync client the folder sits under.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Layout {
     pub schema_version: u32,
     pub graph: GraphKey,
@@ -353,6 +350,10 @@ pub struct Layout {
     pub groups: BTreeMap<GroupId, Group>,
     #[serde(default)]
     pub annotations: BTreeMap<AnnotationId, Annotation>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub removed_groups: BTreeMap<GroupId, DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub removed_annotations: BTreeMap<AnnotationId, DateTime<Utc>>,
 }
 
 impl Layout {
@@ -369,6 +370,8 @@ impl Layout {
             nodes: BTreeMap::new(),
             groups: BTreeMap::new(),
             annotations: BTreeMap::new(),
+            removed_groups: BTreeMap::new(),
+            removed_annotations: BTreeMap::new(),
         }
     }
 
@@ -493,14 +496,19 @@ pub fn load(root: &Path, graph: &GraphKey) -> LayoutLoad {
             stamp: None,
         };
     };
-    let path = paths::from_rel_string(root, &rel);
     let empty = |notice: Option<LayoutNotice>| LayoutLoad {
         layout: Layout::empty(graph.clone()),
         notices: notice.into_iter().collect(),
         stamp: None,
     };
 
-    let read = match atomic::read_stamped(&path) {
+    let path = match path_of(root, graph) {
+        Ok(path) => path,
+        Err(error) => {
+            return empty(Some(LayoutNotice::Unreadable { rel, reason: error.to_string() }));
+        }
+    };
+    let read = match io::read_bounded(&path) {
         Ok(Some(read)) => read,
         Ok(None) => return empty(Some(LayoutNotice::Missing { rel })),
         // An unreadable share, a permission problem, a file that vanished
@@ -523,15 +531,19 @@ pub fn load(root: &Path, graph: &GraphKey) -> LayoutLoad {
         _ => {}
     }
 
-    let layout: Layout = match serde_json::from_str(&text) {
+    let mut layout: Layout = match serde_json::from_str(&text) {
         Ok(layout) => layout,
         Err(error) => {
             return empty(Some(LayoutNotice::Unreadable { rel, reason: error.to_string() }));
         }
     };
+    if let Err(error) = layout.validate() {
+        return empty(Some(LayoutNotice::Unreadable { rel, reason: error.to_string() }));
+    }
     if layout.graph != *graph {
         return empty(Some(LayoutNotice::WrongGraph { rel }));
     }
+    layout.prune_removed();
     LayoutLoad { layout, notices: Vec::new(), stamp: Some(stamp) }
 }
 
@@ -557,8 +569,17 @@ fn probe_version(text: &str) -> Option<u32> {
 /// a read-only share must open, and a project opened to be looked at must not
 /// be rewritten by the looking.
 pub fn reconcile(loaded: &mut LayoutLoad, present: &BTreeSet<NodeKey>) {
-    let stale: Vec<NodeKey> =
-        loaded.layout.nodes.keys().copied().filter(|key| !present.contains(key)).collect();
+    let stale: Vec<NodeKey> = loaded
+        .layout
+        .nodes
+        .keys()
+        .copied()
+        .chain(loaded.layout.groups.values().flat_map(|group| group.members.iter().copied()))
+        .chain(loaded.layout.annotations.values().filter_map(|note| note.attached_to))
+        .filter(|key| !present.contains(key))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
     if !stale.is_empty() {
         for key in &stale {
             loaded.layout.nodes.remove(key);
@@ -630,55 +651,66 @@ pub fn save(
     layout: &Layout,
     prune_to: Option<&BTreeSet<NodeKey>>,
 ) -> Result<LayoutSave> {
+    layout.validate()?;
     let rel = layout.graph.rel()?;
-    let path = paths::from_rel_string(root, &rel);
-
-    // A newer file is refused before anything is staged, and a corrupt one is
-    // moved aside before anything is merged. Doing both here rather than
-    // inside the merge keeps the merge a pure function of two layouts.
-    if let Ok(Some((text, _))) = atomic::read_stamped(&path) {
-        if let Some(found) = probe_version(&text)
-            && found > LAYOUT_SCHEMA_VERSION
-        {
-            return Ok(LayoutSave::Deferred { rel, found, supported: LAYOUT_SCHEMA_VERSION });
-        }
-        if serde_json::from_str::<Layout>(&text).is_err() {
-            atomic::park_unreadable(&path, peer, CORRUPT_MARKER)?;
-        }
-    }
-
-    let stamp = atomic::merging_write(root, &path, |current| {
+    let path = path_of(root, &layout.graph)?;
+    let stamp = atomic::merging_write(root, &path, MAX_LAYOUT_BYTES, |current| {
+        // This runs for every fresh read, including retries after a concurrent
+        // writer. A schema check outside this loop would permit downgrades.
+        path_of(root, &layout.graph)?;
         let mut merged = layout.clone();
-        // Garbage in the file is ignored rather than merged. It was parked
-        // above in every ordinary case; reaching here means somebody wrote
-        // nonsense in the last few milliseconds, and refusing to save a box
-        // position over it would be the wrong way to be careful.
-        if let Some(theirs) = current.and_then(|text| serde_json::from_str::<Layout>(text).ok())
-            && theirs.graph == merged.graph
-        {
-            merge_into(&mut merged, theirs);
-        }
-        if let Some(present) = prune_to {
-            merged.nodes.retain(|key, _| present.contains(key));
-            for group in merged.groups.values_mut() {
-                group.members.retain(|member| present.contains(member));
+        if let Some(text) = current {
+            if let Some(found) = probe_version(text)
+                && found > LAYOUT_SCHEMA_VERSION
+            {
+                return Err(Error::SchemaTooNew { found, supported: LAYOUT_SCHEMA_VERSION });
+            }
+            match io::parse(text) {
+                Ok(theirs) if theirs.graph == merged.graph => merge_into(&mut merged, theirs),
+                _ => {
+                    io::preserve_unreadable(root, &path, text, peer)?;
+                }
             }
         }
+        if let Some(present) = prune_to {
+            let mut loaded = LayoutLoad { layout: merged, notices: Vec::new(), stamp: None };
+            reconcile(&mut loaded, present);
+            merged = loaded.layout;
+        }
         merged.schema_version = LAYOUT_SCHEMA_VERSION;
+        merged.validate()?;
         merged.to_json()
-    })?;
-    Ok(LayoutSave::Written(stamp))
+    });
+    match stamp {
+        Ok(stamp) => Ok(LayoutSave::Written(stamp)),
+        Err(Error::SchemaTooNew { found, supported }) => {
+            Ok(LayoutSave::Deferred { rel, found, supported })
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Union both sides, keeping the later edit of each entry.
 fn merge_into(mine: &mut Layout, theirs: Layout) {
-    if theirs.mode_updated_at > mine.mode_updated_at {
+    if (theirs.mode_updated_at, digest(&theirs.mode)) > (mine.mode_updated_at, digest(&mine.mode)) {
         mine.mode = theirs.mode;
         mine.mode_updated_at = theirs.mode_updated_at;
     }
     merge_entries(&mut mine.nodes, theirs.nodes);
     merge_entries(&mut mine.groups, theirs.groups);
     merge_entries(&mut mine.annotations, theirs.annotations);
+    merge_removals(&mut mine.removed_groups, theirs.removed_groups);
+    merge_removals(&mut mine.removed_annotations, theirs.removed_annotations);
+    mine.prune_removed();
+}
+
+fn merge_removals<K: Ord>(
+    mine: &mut BTreeMap<K, DateTime<Utc>>,
+    theirs: BTreeMap<K, DateTime<Utc>>,
+) {
+    for (key, stamp) in theirs {
+        mine.entry(key).and_modify(|current| *current = (*current).max(stamp)).or_insert(stamp);
+    }
 }
 
 /// The stamp a merge resolves on.
@@ -744,7 +776,7 @@ fn digest<V: Serialize>(value: &V) -> [u8; 32] {
 
 /// Remove one graph's layout. Missing is success.
 pub fn delete(root: &Path, graph: &GraphKey) -> Result<()> {
-    let path = paths::from_rel_string(root, &graph.rel()?);
+    let path = path_of(root, graph)?;
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -761,10 +793,10 @@ pub fn delete(root: &Path, graph: &GraphKey) -> Result<()> {
 /// called where the evidence is unambiguous — immediately after this machine
 /// deleted a scene — and offered as a maintenance action otherwise.
 pub fn sweep(root: &Path, live: &BTreeSet<SceneId>) -> Result<Vec<String>> {
-    let dir = paths::from_rel_string(root, SCENE_LAYOUT_DIR);
-    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(Vec::new()) };
     let mut removed = Vec::new();
-    for path in entries.flatten().map(|entry| entry.path()).filter(|path| path.is_file()) {
+    for (rel, path) in
+        manifest(root)?.into_iter().filter(|(rel, _)| rel.starts_with("narrative/layout/scenes/"))
+    {
         let Some(stem) = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()) else {
             continue;
         };
@@ -776,14 +808,10 @@ pub fn sweep(root: &Path, live: &BTreeSet<SceneId>) -> Result<Vec<String>> {
             continue;
         }
         std::fs::remove_file(&path).map_err(|error| Error::io(&path, error))?;
-        removed.push(relative(root, &path));
+        removed.push(rel);
     }
     removed.sort();
     Ok(removed)
-}
-
-fn relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root).map(paths::to_rel_string).unwrap_or_else(|_| paths::to_rel_string(path))
 }
 
 /// Whether a project-relative path is presentation metadata.
@@ -798,7 +826,7 @@ pub fn is_layout_path(rel: &str) -> bool {
 /// Where a layout file for this graph would live. For the watcher and for
 /// tests; nothing else needs to build the path itself.
 pub fn path_of(root: &Path, graph: &GraphKey) -> Result<PathBuf> {
-    Ok(paths::from_rel_string(root, &graph.rel()?))
+    io::safe_path(root, &graph.rel()?)
 }
 
 #[cfg(test)]
