@@ -188,9 +188,12 @@ includes the complete workflow recording with its mocked-provider evidence limit
 
 ## Evidence and remaining acceptance
 
-Screenshots use the actual React components with explicit in-memory IPC fixtures in Chromium.
-They establish browser rendering. Native layout evidence is identified separately in the arrangement
-guide. The separate [native Preview walkthrough](21-native-narrative-preview.md)
+Earlier screenshots use the actual React components with explicit in-memory IPC fixtures in
+Chromium and establish browser rendering. The [native supporting-text walkthrough](evidence/narrative-supporting/README.md)
+uses real Tauri/WebKitGTK and Rust IPC for all six types, shared review, precise voice invalidation,
+Why affected and Release export. Its generation tests use mocked providers; no live-model claim
+follows from the native captures. Native layout evidence is identified separately in the arrangement
+guide. The [native Preview walkthrough](21-native-narrative-preview.md)
 records real Tauri/WebKit and Rust IPC, including command results, restore, bounds and loop failures;
 its canonical project-file audit verifies isolation. Rust command tests use temporary project files. Current regression coverage includes attributed
 three-character knowledge, contradictory/unknown belief, entity backlinks, strict source/version
@@ -211,7 +214,7 @@ record, rather than reusing #192's counts for the changed implementation.
 | #161 / #195 | Isolated Preview, starting state, checkpoints, evaluated traces, configurable command results and recorded native walkthrough. | Cross-scene preview, which is what the arc view needs before it can draw more than a played badge. |
 | #188 | Played route, current position, open and unavailable branches on the scene Flow canvas, with the failed condition and its evaluated values; saved scenarios opened as overlays without replay. | Witness paths handed over from diagnostics, which need generated reachability scenarios (#171). |
 | #191 | Real multiquest filtering/column and migration of saved views. | Act/tag metadata, rebuildable index and real-load/native acceptance. |
-| #167 | Six supporting text kinds: typed model, guarded authoring, diagnostics, compiled delivery with repeat state, package capability and one worked example. | Generation, Review-queue listing (which blocks Release export of a project containing supporting text), library search and UI screenshots. |
+| #167 | Six supporting text kinds with guarded authoring, context-specific generation, shared Review and verified Release approval, search/paging, repeat-state delivery and reproducible examples. [Native evidence](evidence/narrative-supporting/README.md) covers the Text library, review, invalidation and export. | Generation provider tests are mocked; live-model quality is not claimed. |
 
 Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
 (#195), saved regression scenarios (#162), and attributed frozen generation context (#163) are

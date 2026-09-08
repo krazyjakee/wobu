@@ -2,11 +2,11 @@
 
 The Context inspector resolves a saved dialogue slot into an immutable, attributed request for
 offline prose generation. It does not call a provider, enqueue work, write dialogue or change
-runtime state. [Generation jobs](25-narrative-generation.md) create separate proposals; guarded editorial application
-remains #165–#166. Supporting
-text records are defined by the [narrative domain model](34-narrative-domain-model.md) and
-authored through [supporting text](33-narrative-supporting-text.md); generating them remains #167
-work. N5 engine integrations remain excluded.
+runtime state. [Generation jobs](25-narrative-generation.md) retain frozen requests and separate
+proposals; [editorial review](26-narrative-review.md) applies them through guarded writes. All six
+[supporting text](33-narrative-supporting-text.md) kinds use the same pipeline with their own
+source links, conditions and context-specific instructions. [Native supporting-text evidence](evidence/narrative-supporting/README.md)
+covers the inspector and shared review; provider tests are mocked. N5 engine integrations remain excluded.
 
 ## Inspect a line
 
@@ -17,7 +17,7 @@ work. N5 engine integrations remain excluded.
 2. Author canonical facts and separate knowledge claims in World state. A claim says which
    character believes a fact, whether they consider it true/false/unknown, where the belief came
    from and when it applies. Add directed relationships, event facts and future restrictions.
-3. Select a dialogue line in Script or Flow. In Context, choose an existing variant or new wording,
+3. Select a dialogue line in Script or Flow, or a saved line in Text library → Context. Choose an existing variant or new wording,
    supply complete scenario state and select an estimated input budget. Defaults populate the form;
    missing or out-of-domain variables block resolution. The desktop form accepts safe JavaScript
    integers only and sends the original JSON text to Rust for typed parsing before numeric
@@ -30,9 +30,9 @@ work. N5 engine integrations remain excluded.
 
 Changing form controls only affects the next capture. Unsaved editor text is not silently flushed
 or included. The snapshot is retained while this selected inspector is mounted, not persisted as a
-new canonical project record. Future jobs must retain the entire frozen envelope before queueing,
-require `ready`, and revalidate dependencies before applying their results. This issue provides
-that serializable input/freshness contract, not the job integration itself.
+new canonical project record. Generation jobs retain the entire frozen envelope before queueing,
+require `ready`, and revalidate dependencies before applying their results. [Dependency tracking](35-narrative-dependencies.md)
+separately explains which saved lines became affected when their source inputs changed.
 
 ![Attributed context inspector](screenshots/narrative-context.png)
 
