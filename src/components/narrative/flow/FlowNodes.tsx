@@ -7,6 +7,8 @@ import { NARRATIVE_STATUS } from '../narrativeModel'
 import type { FlowGraphNode } from './graph'
 import { useFlowLevel } from './flowStore'
 import { badgeRows } from './badges'
+import { RouteMarkCap } from './PreviewOverlay'
+import { usePreviewOverlay } from './overlay'
 import {
   FLOW_KIND_ICON,
   FLOW_KIND_LABEL,
@@ -108,19 +110,29 @@ function NodeShell({
     if (found.portId && found.severity === 'error') brokenPorts.set(found.portId, found.message)
   }
 
+  // Subscribed here rather than pushed through `data`, exactly as the selection
+  // is: a Preview step must not rewrite three hundred node objects (#188).
+  const route = usePreviewOverlay()?.overlay.nodes.get(node.id)
+
   const classes = ['nrt-node', `is-${tone}`]
   if (selected) classes.push('is-selected')
   if (connecting) classes.push('is-connecting')
   if (muted) classes.push('is-muted')
+  if (route) classes.push(`is-route-${route.mark}`)
 
   return (
-    <div className={classes.join(' ')} data-testid={`flow-node-${node.id}`}>
+    <div
+      className={classes.join(' ')}
+      data-testid={`flow-node-${node.id}`}
+      data-route={route?.mark}
+    >
       {/* The caps sit above the box because they are facts about the box's
           place in the graph rather than about its content. Reconvergence gets
           one of its own: in a layered drawing the only other signal is several
           lines ending at one box, which is the first signal a dense scene
           destroys, so it is said in words and a count. */}
       <div className="nrt-node-caps">
+        <RouteMarkCap nodeId={node.id} />
         {node.entry && (
           <span className="nrt-node-cap is-entry">
             <Icon name="chev" size="sm" />

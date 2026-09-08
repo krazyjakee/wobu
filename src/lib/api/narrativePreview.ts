@@ -67,12 +67,39 @@ export interface ExecutionTrace {
   omitted: number
   records: { site: PreviewTraceSite; event: PreviewTraceEvent }[]
 }
+/**
+ * One choice at the branch a run is stopped at, taken or not.
+ *
+ * `PreviewYield`'s `choices` lists what may be picked and deliberately nothing
+ * else — a game is not told which options it was refused. Authoring is the
+ * other case, so the closed routes and the recorded evaluation of each gate
+ * arrive here instead, in the trace's own vocabulary.
+ *
+ * Empty away from a branch, and empty is a fact rather than an absence: a run
+ * stopped on a line has no availability to report yet.
+ */
+export interface PreviewChoiceStatus {
+  id: string
+  label: string
+  available: boolean
+  records: { site: PreviewTraceSite; event: PreviewTraceEvent }[]
+}
 export interface PreviewFrame {
   site?: PreviewTraceSite
   snapshot: PreviewSnapshot
   current: PreviewYield
   state: PreviewState
   trace: ExecutionTrace
+  /** Every choice at this position. See `PreviewChoiceStatus`. */
+  branch: PreviewChoiceStatus[]
+  /**
+   * The compiled content this run is pinned to.
+   *
+   * Preview compiles *saved* source, so a frame outlives the source it
+   * describes the moment somebody edits a scene. Anything derived from a frame
+   * carries this so it can say which build it draws.
+   */
+  build: string
 }
 export type PreviewAction =
   | { kind: 'advance' }

@@ -17,6 +17,7 @@ import { PreviewCommandResult } from './PreviewCommandResult'
 import { PreviewTrace } from './PreviewTrace'
 import { usePreviewSessions } from './previewStore'
 import { PreviewScenarios } from './PreviewScenarios'
+import { nodeForSite, usePreviewRouteFocus } from './flow/overlay'
 import { assertFrame, appendTape } from './scenarioTape'
 import type { Scenario, ScenarioAction } from '../../lib/api/narrativeScenarios'
 import './preview.css'
@@ -66,6 +67,17 @@ function PreviewEditor({
     useUI.getState().setNarrativeTab('script')
   }
   const put = usePreviewSessions((state) => state.put)
+  const opened = usePreviewSessions((state) => state.opened[key])
+  /*
+   * The Flow overlay's cursor, honoured on this side (#188).
+   *
+   * A click on a highlighted node latches a step here rather than calling into
+   * this pane, because only one narrative tab is mounted at a time — so the
+   * request has to survive the trip. Filtered by key so a run in another scene
+   * cannot scroll this one.
+   */
+  const focus = usePreviewRouteFocus((state) => state.step)
+  const focusStep = focus && focus.key === key ? focus.step : null
   const current = session?.frame.current
   const speaker = current && 'line' in current ? current.line.speaker : null
   const speakerName =
@@ -187,7 +199,17 @@ function PreviewEditor({
           setCommands(scenario.commands)
           await start(scenario)
         }}
+        onOverlay={(name, scenario) => usePreviewSessions.getState().open(key, { name, scenario })}
       />
+      {opened && (
+        <p className="nrt-note" role="status">
+          “{opened.name}” is drawn on the Flow canvas as an overlay. It is not being played, and
+          nothing about the scene, its arrangement or the project is changed by it.{' '}
+          <button className="btn" onClick={() => usePreviewSessions.getState().open(key, null)}>
+            Close scenario overlay
+          </button>
+        </p>
+      )}
       <div className="nrt-script-actions">
         <button
           className="btn is-primary"
@@ -327,12 +349,19 @@ function PreviewEditor({
           </table>
           <PreviewTrace
             entries={session.trace}
+            focusStep={focusStep}
             openSource={(site) => {
               openScript({
                 sceneId: site.scene,
                 beatId: site.beat,
                 ...(site.slot ? { lineId: site.slot } : {}),
               })
+            }}
+            onCentre={(site) => {
+              const node = nodeForSite(site)
+              if (!node) return
+              usePreviewRouteFocus.getState().showNode(key, node)
+              useUI.getState().setNarrativeTab('flow')
             }}
           />
           <p className="nrt-note">

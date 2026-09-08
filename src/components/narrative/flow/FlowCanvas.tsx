@@ -43,6 +43,8 @@ import {
   type FlowRFNode,
 } from './FlowNodes'
 import { useFlowLevel, useFlowLevelApi } from './flowStore'
+import { RouteLegend } from './PreviewOverlay'
+import { useRouteCentring, useRouteTranscriptCursor } from './overlay'
 import { FlowBadgeFilters } from './FlowBadgeFilters'
 import { useSceneEdits, type FlowAuthoring } from './useSceneEdits'
 import {
@@ -291,6 +293,9 @@ function Canvas({
     [graph, placed, flow],
   )
   useFlowReveal({ scene, container, projectKey: actions?.projectKey, graph, center })
+  // The other half of the Preview cursor: a trace step asking for its node.
+  useRouteCentring(center)
+  const pointTranscript = useRouteTranscriptCursor()
 
   const runLayout = useCallback(() => {
     const ticket = gate.current.begin()
@@ -485,6 +490,8 @@ function Canvas({
         {scene.elements.some((element) => element.diagnostics || element.counts) && (
           <FlowBadgeFilters />
         )}
+        {/* Only when a run has been played: see `RouteLegend`. */}
+        <RouteLegend />
         {toolbar}
         <span className="nrt-bar-count">
           {graph.nodes.length} of {graph.total} on the canvas
@@ -527,7 +534,11 @@ function Canvas({
             gate.current.abandon()
           }}
           onNodeDragStop={onDragStop}
-          onNodeClick={(_event, node) => select(node.id)}
+          onNodeClick={(_event, node) => {
+            select(node.id)
+            // Leaves the tab alone; see `useRouteTranscriptCursor`.
+            pointTranscript(node.id)
+          }}
           // Double-click is the nested-flow gesture articy uses and #187 names.
           // The keyboard equivalent is Enter, in `useFlowKeyboard`.
           onNodeDoubleClick={(_event, node) => onActivate?.(node.id)}

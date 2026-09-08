@@ -268,3 +268,54 @@ fn trace_truncation_is_explicit_and_never_changes_playback() {
     assert!(run.trace().omitted > 0);
     assert!(matches!(run.current().unwrap(), Yield::Line { .. }));
 }
+
+#[test]
+fn the_current_branch_reports_every_choice_with_its_evaluated_gate_after_a_restore() {
+    let (graph, scene) = fixture();
+    let mut run = start(graph.clone(), &scene);
+    // Away from a branch there is nothing to report: the gates on the beat
+    // ahead would be evaluated against state its effects have not written yet.
+    assert!(run.branch().unwrap().is_empty());
+    run.advance().unwrap();
+
+    // A snapshot round trip is the checkpoint restore Preview performs on every
+    // step, and it starts an empty trace. The branch has to survive that, or
+    // the overlay loses the closed routes exactly when a writer goes back.
+    let snapshot = serde_json::from_slice(&serde_json::to_vec(&run.snapshot()).unwrap()).unwrap();
+    let restored = Runtime::restore(graph, snapshot).unwrap();
+    assert!(restored.trace().records.is_empty());
+
+    let branch = restored.branch().unwrap();
+    assert_eq!(branch.len(), 2, "closed routes are reported beside the open ones");
+    assert_eq!(branch[0].id, scene.beats[0].choices[0].id.to_string());
+    assert!(branch[0].available);
+    assert_eq!(branch[1].id, scene.beats[0].choices[1].id.to_string());
+    assert_eq!(branch[1].label, "Unavailable");
+    assert!(!branch[1].available);
+
+    // The reason travels as trace records at the same site the played route
+    // uses, so an overlay needs no second vocabulary and no text matching.
+    assert!(branch[1].records.iter().all(|record| {
+        record.site.scene == scene.id.to_string()
+            && record.site.beat.as_deref() == Some(&scene.beats[0].id.to_string())
+            && record.site.choice.as_deref() == Some(&scene.beats[0].choices[1].id.to_string())
+    }));
+    assert!(
+        branch[1]
+            .records
+            .iter()
+            .any(|record| matches!(&record.event, TraceEvent::Condition { expression, passed, .. }
+                if expression == &Condition::Never && !passed))
+    );
+    // The open route names the variable it read and the value it read there.
+    assert!(
+        branch[0]
+            .records
+            .iter()
+            .any(|record| matches!(&record.event, TraceEvent::Condition { inputs, .. }
+                if inputs.get(&name("logbook")) == Some(&Value::Bool(true))))
+    );
+    // Reading the branch is a read: it leaves the run's own trace alone.
+    assert!(restored.trace().records.is_empty());
+    assert_eq!(restored.build(), run.build());
+}

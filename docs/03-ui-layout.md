@@ -72,9 +72,10 @@ What is connected to the project folder today, and what is not:
 | Review, Build, Export | **No** | #166, #169, #160 |
 
 Two things #189 asks for are refused with the reason rather than drawn: a badge cannot open a
-**witness scenario**, because condition/effect trace data and the Preview overlay are still
-unimplemented (#161, #188); and an **affected-build scope** cannot be highlighted, because that needs
-the dependency tracker and the build planner (#168, #169).
+**witness scenario**, because generated reachability scenarios remain unimplemented (#171) — Preview
+draws the route it played (#188), but a scene nothing has played is not thereby unreachable; and an
+**affected-build scope** cannot be highlighted, because that needs the dependency tracker and the
+build planner (#168, #169).
 
 #### What the Flow canvas can and cannot author
 
