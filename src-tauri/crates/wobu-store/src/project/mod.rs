@@ -22,6 +22,7 @@ pub mod narrative_deps;
 pub mod narrative_generation;
 mod narrative_index;
 pub mod narrative_locale;
+pub mod narrative_media;
 mod narrative_records;
 pub mod narrative_review;
 pub mod narrative_sync;
