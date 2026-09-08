@@ -132,7 +132,7 @@ export function ReviewQueue({
           <p>Read-only project. Wording, provenance and history remain available for inspection.</p>
         )}
         <div className="nrt-review-filters">
-          <label>
+          <label className="field">
             Search review queue
             <input
               type="search"
@@ -140,7 +140,7 @@ export function ReviewQueue({
               onChange={(event) => update({ query: event.target.value })}
             />
           </label>
-          <label>
+          <label className="field">
             Scene
             <select
               value={filters.scene}
@@ -154,7 +154,7 @@ export function ReviewQueue({
               ))}
             </select>
           </label>
-          <label>
+          <label className="field">
             Speaker
             <select
               value={filters.speaker}
@@ -170,7 +170,7 @@ export function ReviewQueue({
               )}
             </select>
           </label>
-          <label>
+          <label className="field">
             Policy
             <select
               value={filters.policy}
@@ -184,7 +184,7 @@ export function ReviewQueue({
               <option value="locked">Locked</option>
             </select>
           </label>
-          <label>
+          <label className="field">
             Approval
             <select
               value={filters.approval}
@@ -198,7 +198,7 @@ export function ReviewQueue({
               <option value="invalid">Invalidated approval</option>
             </select>
           </label>
-          <label>
+          <label className="field">
             Freshness
             <select
               value={filters.freshness}
@@ -236,9 +236,10 @@ export function ReviewQueue({
             Inspecting a different scenario refreshes saved context. Local edits keep their original
             reviewed scenario and guards.
           </p>
-          <label>
+          <label className="field">
             Review scenario state (JSON)
             <textarea
+              aria-label="Review scenario state (JSON)"
               value={stateJson ?? views[0]?.state_json ?? '{}'}
               onChange={(event) => setStateJson(event.target.value)}
             />

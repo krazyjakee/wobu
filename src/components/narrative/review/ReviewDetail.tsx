@@ -158,7 +158,7 @@ export function ReviewDetail({
         {line.approval_valid ? 'Approval valid' : 'No valid approval'}
       </p>
       <p>{line.reason}</p>
-      <label>
+      <label className="field">
         Version to review
         <select
           value={proposalId ?? 'current'}
@@ -197,9 +197,10 @@ export function ReviewDetail({
           baseWording={proposal.base_wording}
         />
       )}
-      <label>
+      <label className="field">
         Reviewed wording
         <textarea
+          aria-label="Reviewed wording"
           value={body}
           disabled={
             busy || readOnly || locked || (proposal !== null && proposal.status !== 'pending')

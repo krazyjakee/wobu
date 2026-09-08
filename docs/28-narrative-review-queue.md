@@ -47,3 +47,11 @@ Component tests cover concurrent refresh and failed acceptance, original-guard r
 manual adoption, locked replacements, project-close draft protection, keyboard navigation, filtering
 and pagination over 201 lines. The queue is being integrated with the shared editorial backend;
 bulk operations and end-to-end evidence are added with that integration.
+
+These screenshots show the actual React components with mocked project data and review callbacks.
+They demonstrate the queue and retained edits after a simulated concurrent-source conflict; they are
+not native Tauri or live-provider evidence.
+
+![Project review queue with wording comparison](images/narrative-review-queue-mock.png)
+
+![Retained manual edits after a simulated acceptance conflict](images/narrative-review-conflict-mock.png)
