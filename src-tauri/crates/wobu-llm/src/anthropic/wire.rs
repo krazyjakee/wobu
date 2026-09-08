@@ -9,12 +9,14 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
+#[cfg(test)]
 use wobu_core::NodeKind;
 
 use crate::error::Error;
-use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, Usage};
+use crate::provider::{DeltaSink, EnhanceRequest, StructuredOutcome, StructuredRequest, Usage};
 use crate::stream::SseConsumer;
-use crate::validate::parse_description;
+#[cfg(test)]
+use crate::{EnhanceOutcome, parse_description};
 
 use super::LABEL;
 
@@ -24,6 +26,8 @@ use super::LABEL;
 /// so a structured description is a tool call whose *input* is the description.
 /// The name is this adapter's invention — Gemini's `response_format` needs no
 /// such thing — which is why it is here and not on [`EnhanceRequest`].
+const NARRATIVE_TOOL: &str = "record_narrative_text";
+
 pub(crate) const TOOL_NAME: &str = "record_description";
 
 /// Why the model is being handed a tool it cannot actually run.
@@ -53,15 +57,29 @@ const TOOL_DESCRIPTION: &str = "Record the finished visual description. Fill in 
 ///   risks trading a rare bad palette entry for every request failing. The
 ///   client-side validator catches the same thing for free.
 pub(crate) fn request_body(request: &EnhanceRequest) -> Value {
+    structured_body_with_tool(&StructuredRequest::from(request), false)
+}
+
+pub(crate) fn structured_body(request: &StructuredRequest) -> Value {
+    structured_body_with_tool(request, true)
+}
+
+fn structured_body_with_tool(request: &StructuredRequest, narrative: bool) -> Value {
+    let tool = if narrative { NARRATIVE_TOOL } else { TOOL_NAME };
+    let description = if narrative {
+        "Return only the requested narrative prose in the supplied schema. Preserve every supplied identity. Do not add story structure or consequences. This records a candidate for local validation; it executes nothing."
+    } else {
+        TOOL_DESCRIPTION
+    };
     let mut body = json!({
         "model": request.model,
         "max_tokens": request.max_output_tokens,
         "stream": true,
         "messages": [{ "role": "user", "content": request.prompt }],
         "tools": [{
-            "name": TOOL_NAME,
-            "description": TOOL_DESCRIPTION,
-            "input_schema": request.schema(),
+            "name": tool,
+            "description": description,
+            "input_schema": request.schema,
         }],
         // `any` would also force a call, but naming the tool is what makes a
         // second tool added here later a compile-time decision rather than a
@@ -69,7 +87,7 @@ pub(crate) fn request_body(request: &EnhanceRequest) -> Value {
         // descriptions arriving on separate indices.
         "tool_choice": {
             "type": "tool",
-            "name": TOOL_NAME,
+            "name": tool,
             "disable_parallel_tool_use": true,
         },
     });
@@ -100,6 +118,7 @@ pub(crate) enum Flow {
 #[derive(Debug, Default)]
 pub(crate) struct Incoming {
     usage: Usage,
+    structured: bool,
     /// Which content block is the tool call. The model may also emit prose, and
     /// prose is not part of the document — forwarding it would put commentary
     /// into the editor and into the text the validator is handed.
@@ -116,6 +135,10 @@ impl Incoming {
         Incoming::default()
     }
 
+    pub(crate) fn structured() -> Self {
+        Self { structured: true, ..Self::default() }
+    }
+
     /// Take one `data:` payload.
     pub(crate) fn accept(&mut self, data: &str, deltas: &mut dyn DeltaSink) -> Flow {
         // A payload that is not JSON is not something to fail the call over:
@@ -123,6 +146,10 @@ impl Incoming {
         // that decide the outcome are all still to come. Failing here would
         // turn a forward-compatible addition into a broken Enhance.
         let Ok(event) = serde_json::from_str::<Value>(data) else {
+            if self.structured && data != "[DONE]" {
+                self.error = Some(Error::NotJson("Malformed provider event".into()));
+                return Flow::Done;
+            }
             return Flow::Continue;
         };
 
@@ -132,7 +159,16 @@ impl Incoming {
             "message_start" => self.read_usage(&event["message"]["usage"]),
             "content_block_start" => {
                 let block = &event["content_block"];
-                if block["type"] == "tool_use" && block["name"] == TOOL_NAME {
+                if block["type"] == "tool_use"
+                    && block["name"] == if self.structured { NARRATIVE_TOOL } else { TOOL_NAME }
+                {
+                    if self.structured
+                        && (self.tool_index.is_some() || event["index"].as_u64().is_none())
+                    {
+                        self.error =
+                            Some(Error::NotJson("Multiple or invalid output blocks".into()));
+                        return Flow::Done;
+                    }
                     self.tool_index = event["index"].as_u64();
                 }
             }
@@ -140,9 +176,17 @@ impl Incoming {
                 // `input_json_delta` carries a fragment of the tool's input
                 // document — which is the description, as JSON text. That is
                 // precisely what `DeltaSink` is documented to carry.
-                if let Some(fragment) = event["delta"]["partial_json"].as_str() {
-                    self.json.push_str(fragment);
-                    deltas.delta(fragment);
+                if let Some(fragment) = event["delta"]["partial_json"].as_str()
+                    && let Err(error) = crate::structured::append(
+                        &mut self.json,
+                        fragment,
+                        self.tool_complete,
+                        self.structured,
+                        deltas,
+                    )
+                {
+                    self.error = Some(error);
+                    return Flow::Done;
                 }
             }
             "content_block_stop" if self.is_tool_block(&event) => self.tool_complete = true,
@@ -177,7 +221,13 @@ impl Incoming {
     /// `aborted` is the caller's own reason for stopping — a cancellation, a
     /// dead socket — and outranks anything inferred here, because those are the
     /// two cases where the stream stopped for a reason the events cannot state.
+    #[cfg(test)]
     pub(crate) fn outcome(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome {
+        let raw = self.raw_outcome(aborted);
+        EnhanceOutcome::new(raw.usage, raw.result.and_then(|json| parse_description(kind, &json)))
+    }
+
+    fn raw_outcome(self, aborted: Option<Error>) -> StructuredOutcome {
         let usage = self.usage;
         let result = if let Some(error) = aborted.or(self.error) {
             Err(error)
@@ -192,10 +242,12 @@ impl Incoming {
         } else if !self.complete {
             // No `message_stop`, so the connection died mid-message.
             Err(Error::Truncated)
+        } else if self.structured && self.stop_reason.as_deref() != Some("tool_use") {
+            Err(Error::Truncated)
         } else if self.tool_complete {
             // Validated regardless of what tool use promises about schema
             // conformance — see `validate.rs`.
-            parse_description(kind, &self.json)
+            Ok(self.json)
         } else if self.stop_reason.as_deref() == Some("refusal") {
             // A safety classifier declined. It has no variant of its own
             // because the UI's taxonomy has no code for it, and the honest
@@ -208,7 +260,7 @@ impl Incoming {
         } else {
             Err(Error::NotJson(format!("the response contained no `{TOOL_NAME}` call")))
         };
-        EnhanceOutcome::new(usage, result)
+        StructuredOutcome { usage, result }
     }
 
     fn is_tool_block(&self, event: &Value) -> bool {
@@ -246,8 +298,8 @@ impl SseConsumer for Incoming {
         self.accept(payload, deltas) == Flow::Done
     }
 
-    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome {
-        self.outcome(kind, aborted)
+    fn finish_raw(self, aborted: Option<Error>) -> StructuredOutcome {
+        self.raw_outcome(aborted)
     }
 }
 

@@ -145,6 +145,37 @@ impl EnhanceRequest {
     }
 }
 
+/// One schema-shaped call for an authoring compiler. The caller owns semantic
+/// validation (including exact IDs and duplicate keys); a provider cannot author logic.
+#[derive(Debug, Clone)]
+pub struct StructuredRequest {
+    pub model: String,
+    pub system: Option<String>,
+    pub prompt: String,
+    pub schema: Value,
+    pub max_output_tokens: u32,
+}
+
+impl From<&EnhanceRequest> for StructuredRequest {
+    fn from(request: &EnhanceRequest) -> Self {
+        Self {
+            model: request.model.clone(),
+            system: request.system.clone(),
+            prompt: request.prompt.clone(),
+            schema: request.schema(),
+            max_output_tokens: request.max_output_tokens,
+        }
+    }
+}
+
+/// Raw complete JSON and the latest reported usage, including on failures.
+/// Zero usage means unknown, never proof that a failed request was free.
+#[derive(Debug)]
+pub struct StructuredOutcome {
+    pub usage: Usage,
+    pub result: Result<String>,
+}
+
 /// Where streamed output goes on its way to the editor.
 ///
 /// A callback rather than a returned stream, and the reasoning is worth keeping:
@@ -284,6 +315,29 @@ pub trait TextProvider: Send + Sync {
     /// adapter because model ids are the fastest-moving fact in
     /// `docs/08-providers.md` and should not be spelled out in the frontend.
     fn default_model(&self) -> &'static str;
+
+    /// Adapter capability, not a promise that every model accepts every schema.
+    fn supports_structured(&self) -> bool {
+        false
+    }
+
+    /// Generate one bounded JSON document. The caller must validate its schema
+    /// and exact authoring identities before accepting it. No automatic retries.
+    /// Only a rejected HTTP 429 may return `RateLimited`; an error after a 2xx
+    /// response may have been billed, regardless of the last usage observed.
+    async fn structured(
+        &self,
+        _request: &StructuredRequest,
+        _deltas: &mut dyn DeltaSink,
+        _cancel: &Cancel,
+    ) -> StructuredOutcome {
+        StructuredOutcome {
+            usage: Usage::default(),
+            result: Err(Error::SchemaRejected {
+                detail: "This provider does not support structured authoring requests".into(),
+            }),
+        }
+    }
 
     /// Ask for one description.
     ///
