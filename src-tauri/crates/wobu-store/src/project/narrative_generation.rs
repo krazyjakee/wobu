@@ -160,3 +160,89 @@ fn published_records(
     }
     Ok(documents.into_values().collect())
 }
+
+/// Version 2 source guard. Context and text revisions are checked separately;
+/// unrelated sibling acceptance must not invalidate a planned target.
+pub fn target_guard(
+    scene: &wobu_narrative::Scene,
+    target: &wobu_narrative_context::Selection,
+) -> String {
+    let slot = scene
+        .beats
+        .iter()
+        .find(|b| b.id == target.beat)
+        .and_then(|b| b.dialogue.iter().find(|s| s.id == target.slot));
+    let variant = slot.and_then(|s| s.variants.iter().find(|v| Some(v.id) == target.variant));
+    wobu_narrative_context::content_hash(&(
+        2,
+        target,
+        scene.supporting_text.as_ref().map(|a| a.policy),
+        slot.map(|s| (&s.speaker, s.policy, target.variant.is_none().then_some(s.variants.len()))),
+        variant.map(|v| (&v.text.revision, v.text.lifecycle.policy, &v.when)),
+    ))
+}
+
+pub fn source_unchanged(file: &crate::SceneFile, request: &FrozenRequest) -> bool {
+    if request.version == 1 {
+        file.stamp.as_ref().is_some_and(|s| s.hash == request.expected_scene_hash)
+    } else {
+        target_guard(&file.scene, &request.target) == request.expected_scene_hash
+    }
+}
+
+/// Shared execution/publication check; the editorial transaction still owns the
+/// container lock and compares the current file stamp at the write boundary.
+pub fn checks(project: &Project, request: &FrozenRequest) -> Result<PublicationChecks> {
+    let file = project.load_editorial_source(request.target.scene)?;
+    let current =
+        super::narrative_context::capture(project, request.context.options.clone(), || {})?;
+    if crate::atomic::read_stamped(&project.root().join(&file.rel))?.map(|(_, stamp)| stamp)
+        != file.stamp
+    {
+        return Err(invalid("Source changed while checking generation eligibility."));
+    }
+    let mut checks = checks_captured(&file.scene, &current, request);
+    checks.scene_unchanged = source_unchanged(&file, request);
+    Ok(checks)
+}
+
+/// Pure checks over a coherent batch capture, used before dispatch. Version 1
+/// must use `checks` because its guard names actual persisted container bytes.
+pub fn checks_captured(
+    scene: &wobu_narrative::Scene,
+    context: &wobu_narrative_context::FrozenContext,
+    request: &FrozenRequest,
+) -> PublicationChecks {
+    use wobu_narrative::GenerationPolicy;
+    let slot = scene
+        .beats
+        .iter()
+        .find(|b| b.id == request.target.beat)
+        .and_then(|b| b.dialogue.iter().find(|s| s.id == request.target.slot));
+    let variant =
+        slot.and_then(|s| s.variants.iter().find(|v| Some(v.id) == request.target.variant));
+    let text_unchanged = if request.target.variant.is_none() {
+        slot.is_some_and(|s| s.variants.is_empty() && s.speaker == request.speaker)
+    } else {
+        variant.is_some_and(|v| {
+            Some(&v.text.revision) == request.expected_text_revision.as_ref()
+                && v.text.revision_matches()
+        })
+    };
+    let policy = variant.map(|v| v.text.lifecycle.policy);
+
+    PublicationChecks {
+        scene_unchanged: request.version == 2
+            && target_guard(scene, &request.target) == request.expected_scene_hash,
+        text_unchanged,
+        policy_unchanged: policy == request.expected_policy
+            && slot.is_some_and(|s| s.policy == request.expected_slot_policy),
+        context_unchanged: wobu_narrative_generation::context_matches(request, context),
+        locked_now: scene
+            .supporting_text
+            .as_ref()
+            .is_some_and(|a| a.policy == GenerationPolicy::Locked)
+            || policy == Some(GenerationPolicy::Locked)
+            || slot.is_some_and(|s| s.policy == GenerationPolicy::Locked),
+    }
+}

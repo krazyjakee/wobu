@@ -15,6 +15,7 @@ mod assets;
 mod generations;
 pub mod layout_sync;
 mod narrative;
+pub mod narrative_build;
 pub mod narrative_context;
 mod narrative_deletions;
 pub mod narrative_deps;

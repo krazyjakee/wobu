@@ -477,6 +477,16 @@ pub(crate) fn selection(providers: &Map<String, Value>) -> Selection {
 /// exists because the label is needed *before* a provider can be built: the
 /// "no key on this machine" message names the vendor, and there is no key to
 /// build one with.
+/// Adapter metadata can be selected without opening a keychain or constructing a client.
+pub(crate) fn planning_model(selection: &Selection) -> CommandResult<String> {
+    let default = match selection.provider.as_str() {
+        anthropic::ID => anthropic::DEFAULT_MODEL,
+        gemini::ID => gemini::DEFAULT_MODEL,
+        _ => return Err(WobuError::new(Code::Invalid, "Unsupported text provider.")),
+    };
+    Ok(selection.model.clone().unwrap_or_else(|| default.into()))
+}
+
 pub(crate) fn text_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>> {
     let built = match id {
         anthropic::ID => {

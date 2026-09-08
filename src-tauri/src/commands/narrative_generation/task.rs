@@ -41,8 +41,8 @@ pub fn prepare(project: &Project, request: &FrozenRequest) -> CommandResult<u32>
             "This request already succeeded; no additional provider call was made.",
         ));
     }
-    if records::checks(project, request)?.locked_now {
-        return Err(invalid("Dialogue was locked before the provider call."));
+    if !records::checks(project, request)?.current() {
+        return Err(invalid("Source, text or policy changed before the provider call."));
     }
     attempts
         .last()

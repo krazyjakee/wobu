@@ -97,14 +97,14 @@ pub(crate) fn unchanged(
     proposal: &CheckedProposal,
 ) -> Result<()> {
     let request = &proposal.request;
-    if snapshot.file.stamp.as_ref().is_none_or(|s| s.hash != request.expected_scene_hash) {
+    if !super::super::narrative_generation::source_unchanged(&snapshot.file, request) {
         return Err(invalid(
             "Scene changed since this proposal was requested. Generate a new proposal or edit the current wording explicitly.",
         ));
     }
     let current =
         super::super::narrative_context::capture(project, request.context.options.clone(), || {})?;
-    if !current.ready || current.hash != request.context.hash {
+    if !wobu_narrative_generation::context_matches(request, &current) {
         return Err(invalid(
             "Generation context changed. The retained proposal cannot replace current wording.",
         ));

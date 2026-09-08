@@ -697,21 +697,23 @@ impl Project {
         scenes: &[Scene],
         texts: &[TextAsset],
     ) -> Result<BTreeMap<VariantId, Producer>> {
-        let generated: BTreeSet<VariantId> = scenes
+        let generated: BTreeMap<VariantId, String> = scenes
             .iter()
             .flat_map(|scene| scene.dialogue_slots().map(|(_, slot)| slot))
             .chain(texts.iter().flat_map(|asset| asset.lines().map(|(_, slot)| slot)))
             .flat_map(|slot| slot.variants.iter())
-            .filter(|variant| matches!(variant.text.provenance, Provenance::Generated { .. }))
-            .map(|variant| variant.id)
+            .filter_map(|variant| match &variant.text.provenance {
+                Provenance::Generated { fingerprint } => Some((variant.id, fingerprint.clone())),
+                _ => None,
+            })
             .collect();
         if generated.is_empty() {
             return Ok(BTreeMap::new());
         }
 
         let mut producers = BTreeMap::new();
-        // Receipts are read in id order, which for ULIDs is creation order, so
-        // the most recent request for a slot is the one that survives.
+        // The accepted wording names its exact producer. Planned, failed and
+        // concurrent requests cannot replace that provenance merely by being newer.
         for file in self.narrative_records(NarrativeRecordKind::Receipt)? {
             if file.document.payload.get("type").and_then(serde_json::Value::as_str)
                 != Some("narrative_generation_request")
@@ -723,7 +725,7 @@ impl Project {
             else {
                 continue;
             };
-            if !generated.contains(&request.candidate_variant_id) {
+            if generated.get(&request.candidate_variant_id) != Some(&request.hash()) {
                 continue;
             }
             producers.insert(
