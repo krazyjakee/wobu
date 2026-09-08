@@ -73,7 +73,7 @@ pub fn resolve(input: Input<'_>, options: Options) -> FrozenContext {
     let mut b = Builder {
         input,
         result: FrozenContext {
-            version: 1,
+            version: crate::CONTEXT_VERSION,
             options,
             fragments: vec![],
             omitted: vec![],

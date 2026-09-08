@@ -21,8 +21,9 @@ Development can export missing draft text with compiler warnings. Playing an unc
 slot still yields the runtime's explicit no-match error. Release verifies canonical editorial
 receipts against exact scene/beat/slot/variant identity, speaker, wording revision and current
 review context. Writable Approved/Current flags alone cannot authorize a release; missing or
-mismatched history blocks it. Review context currently uses a conservative authored projection;
-precise field-level invalidation remains #168. See [review evidence](26-narrative-review.md).
+mismatched history blocks it. Review context still uses a conservative authored projection, which invalidates more lines than
+the [dependency index](35-narrative-dependencies.md) (#168) does; the two are separate answers and
+release validation reads the conservative one. See [review evidence](26-narrative-review.md).
 The source model does not yet contain production media bindings, so current exports contain no
 media assets.
 

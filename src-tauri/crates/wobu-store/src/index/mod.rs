@@ -23,6 +23,7 @@
 mod assets;
 mod generations;
 mod narrative;
+mod narrative_deps;
 mod narrative_library;
 mod nodes;
 mod peers;
@@ -55,7 +56,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from the project folder, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 12;
+pub const INDEX_VERSION: u32 = 13;
 
 /// A node file that is on disk and cannot be read.
 ///

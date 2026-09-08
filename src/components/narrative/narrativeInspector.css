@@ -7,3 +7,14 @@
   overflow-wrap: anywhere;
   margin: 6px 0;
 }
+/* Why affected (#168). One row per source field that moved, in address order. */
+.nrt-affected {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.nrt-affected li {
+  margin-bottom: 8px;
+}
+.nrt-affected code {
+  overflow-wrap: anywhere;
+}

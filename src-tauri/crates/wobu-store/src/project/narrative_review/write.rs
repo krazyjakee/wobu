@@ -713,6 +713,32 @@ pub fn validate_manual(previous: Option<&Scene>, next: &Scene) -> Result<()> {
     Ok(())
 }
 
+/// The scene with derived freshness normalised away.
+///
+/// Freshness is the one field on a scene that nobody decides. `ContentLifecycle`
+/// says so in as many words: it is *derived*, by the dependency tracking of
+/// #168, from source and context outside the scene document, and the tracker
+/// writes it without an editorial event because there is no decision to record —
+/// nobody chose to make a line stale, an upstream fact moved. Comparing it as
+/// though it were authored content would report every project whose world had
+/// changed as having been edited outside its editorial history, and withdraw
+/// every approval in the file. Which is precisely backwards: US-06 wants the
+/// stale badge *and* the approval it invalidates to both stay visible.
+///
+/// Unlike [`undo_content`] this leaves the review state alone. A review state
+/// that moved without a receipt really is a discontinuity.
+pub(crate) fn without_freshness(scene: &Scene) -> Scene {
+    let mut copy = scene.clone();
+    for beat in &mut copy.beats {
+        for slot in &mut beat.dialogue {
+            for variant in &mut slot.variants {
+                variant.text.lifecycle.freshness = Freshness::Current;
+            }
+        }
+    }
+    copy
+}
+
 fn undo_content(scene: &Scene) -> Scene {
     let mut copy = scene.clone();
     copy.editorial_head = None;

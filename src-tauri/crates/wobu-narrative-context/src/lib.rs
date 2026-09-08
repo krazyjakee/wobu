@@ -4,6 +4,15 @@
 mod resolve;
 mod world;
 
+/// The resolver's own version, carried on every [`FrozenContext`] it produces.
+///
+/// Named rather than written as a literal at the three places that check it,
+/// because it is also a fingerprint input for dependency tracking (#168): a
+/// resolver that assembles different fragments from the same source produces
+/// different generation input, and a cached result from an older resolver is
+/// not a result this build would produce again.
+pub const CONTEXT_VERSION: u32 = 1;
+
 pub use resolve::resolve;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

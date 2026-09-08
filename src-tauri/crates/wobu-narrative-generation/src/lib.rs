@@ -57,7 +57,7 @@ impl FrozenRequest {
             || !(1..=wobu_narrative::SCENE_SCHEMA_VERSION).contains(&self.source_schema_version)
             || self.prompt_version != PROMPT_VERSION
             || self.output_schema_version != OUTPUT_SCHEMA_VERSION
-            || self.context.version != 1
+            || self.context.version != wobu_narrative_context::CONTEXT_VERSION
         {
             return Err("Unsupported generation request, context, prompt or output version.".into());
         }

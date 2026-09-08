@@ -556,9 +556,12 @@ describe('what is honestly out of reach', () => {
 
   it('says an affected-build scope cannot be highlighted, and why', async () => {
     await enterCouncil()
-    expect(
-      screen.getByText(/Opening a witness needs generated reachability scenarios/),
-    ).toHaveTextContent(/dependency tracker and build planner/)
+    const note = screen.getByText(/Opening a witness needs generated reachability scenarios/)
+    // #168 landed the tracker, so the sentence no longer claims that part is
+    // missing — it points at where the answer actually is and names the one
+    // thing this canvas still cannot do.
+    expect(note).toHaveTextContent(/Context → Why affected/)
+    expect(note).toHaveTextContent(/need the build planner \(#169\)/)
   })
 })
 
