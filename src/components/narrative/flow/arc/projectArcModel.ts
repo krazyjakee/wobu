@@ -121,7 +121,7 @@ export function projectArc(
     }))
   for (const one of quests ?? []) {
     if (quest && one.id !== quest.id) continue
-    for (const stage of one.stages)
+    for (const stage of new Set(one.stages))
       elements.push({
         id: questStageId(one.id, stage),
         kind: 'questStage',

@@ -1372,6 +1372,7 @@ it('creates a native-ID scene in the arc and connects its first authored beat wi
   fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
   fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
   await screen.findByRole('region', { name: 'Selected scene exits' })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'SceneNew scene' })).toHaveFocus())
   expect(calls('narrative_scene_create')).toEqual([{ name: 'New scene' }])
   expect(useUI.getState().narrative.sceneId).toBe(created.scene.id)
   fireEvent.click(await screen.findByRole('button', { name: 'Add first beat for scene exits' }))
@@ -1413,4 +1414,41 @@ it('restores arc scroll after the first asynchronous read and keeps a Library-se
     'aria-current',
     'true',
   )
+})
+
+it('keeps parsed World quest findings discoverable while arc groups and status filters change', async () => {
+  const q = worldQuest(mintId(), 'Inquiry', 'undeclared', [SCENE])
+  quests = [q]
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) => {
+    const value = answer(command, args)
+    if (command === 'narrative_world_get')
+      return Promise.resolve({
+        ...(value as object),
+        diagnostics: [
+          {
+            recordId: q.id,
+            field: 'initial',
+            message: 'The initial stage is not declared in this quest.',
+          },
+        ],
+      })
+    return Promise.resolve(value)
+  })
+  open()
+  const summary = await screen.findByText(
+    '1 World quest findings. Includes filtered and collapsed quests.',
+  )
+  fireEvent.click(summary)
+  fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Needs review' }))
+  expect(screen.getByRole('list', { name: 'World quest findings' })).toHaveTextContent(
+    'initial: The initial stage is not declared',
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Open quest' }))
+  expect(useUI.getState().narrativeWorldTarget).toMatchObject({
+    projectKey: PROJECT,
+    collection: 'quests',
+    recordId: q.id,
+  })
+  expect(calls('narrative_world_save')).toHaveLength(0)
 })

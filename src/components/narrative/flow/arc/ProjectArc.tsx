@@ -33,6 +33,14 @@ export function ProjectArc(props: Props) {
   const session = projectArcSession(props.projectKey)
   const [scope, setScope] = useState(session.scope)
   const world = useNarrativeWorld()
+  const questNames = new Map(world.data?.document.quests.map((quest) => [quest.id, quest.name]))
+  const questFindings =
+    world.data?.diagnostics.filter(
+      (finding) => finding.recordId && questNames.has(finding.recordId),
+    ) ?? []
+  const [findingPage, setFindingPage] = useState(0)
+  const finalPage = Math.max(0, Math.ceil(questFindings.length / 25) - 1)
+  const page = Math.min(findingPage, finalPage)
   const set = (value: string) => {
     projectArcSession(props.projectKey).scope = value
     setScope(value)
@@ -57,6 +65,51 @@ export function ProjectArc(props: Props) {
       </label>
       {world.isError && (
         <p role="alert">World could not be read. Quest stages and memberships are unavailable.</p>
+      )}
+      {questFindings.length > 0 && (
+        <details className="nrt-arc-checks">
+          <summary>
+            {questFindings.length} World quest findings. Includes filtered and collapsed quests.
+          </summary>
+          <ul aria-label="World quest findings">
+            {questFindings.slice(page * 25, (page + 1) * 25).map((finding, index) => (
+              <li key={`${finding.recordId}:${finding.field}:${index}`}>
+                {questNames.get(finding.recordId!)} · {finding.field}: {finding.message}{' '}
+                <button
+                  className="btn btn-sm"
+                  onClick={() =>
+                    useUI
+                      .getState()
+                      .openNarrativeWorld({
+                        projectKey: props.projectKey,
+                        collection: 'quests',
+                        recordId: finding.recordId!,
+                      })
+                  }
+                >
+                  Open quest
+                </button>
+              </li>
+            ))}
+          </ul>
+          {finalPage > 0 && (
+            <nav aria-label="World quest finding pages">
+              <button className="btn" disabled={!page} onClick={() => setFindingPage(page - 1)}>
+                Previous findings
+              </button>
+              <span>
+                {page + 1} / {finalPage + 1}
+              </span>
+              <button
+                className="btn"
+                disabled={page === finalPage}
+                onClick={() => setFindingPage(page + 1)}
+              >
+                Next findings
+              </button>
+            </nav>
+          )}
+        </details>
       )}
       <ArcGraph key={scope} {...props} scope={scope} quests={world.data?.document.quests} />
     </div>
