@@ -14,6 +14,7 @@ import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { NarrativeSourcePane } from './NarrativeSourcePane'
 import { NarrativeExample } from './NarrativeExample'
 import { NarrativeLibrary } from './NarrativeLibrary'
+import { NarrativeTextLibrary } from './NarrativeTextLibrary'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 import { useSceneLibrary } from './sceneLibraryStore'
@@ -32,6 +33,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const selectNarrative = useUI((s) => s.selectNarrative)
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
+  const [textLibraryOpen, setTextLibraryOpen] = useState(false)
   const [exampleOpen, setExampleOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
@@ -128,6 +130,17 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           >
             World state
           </button>
+          <button
+            type="button"
+            className="btn"
+            aria-pressed={textLibraryOpen}
+            onClick={() => {
+              setTextLibraryOpen(true)
+              closeWorld()
+            }}
+          >
+            Text library
+          </button>
           <button className="btn" onClick={() => setReviewOpen(true)}>
             Review
           </button>
@@ -195,7 +208,11 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         <NarrativeRecovery readOnly={project.readOnly} onClose={() => setRecoveryOpen(false)} />
       )}
       {exportOpen && <NarrativeExport onClose={() => setExportOpen(false)} />}
-      <div ref={libraryRoot} className="nrt-library-view" hidden={!libraryOpen || worldOpen}>
+      <div
+        ref={libraryRoot}
+        className="nrt-library-view"
+        hidden={!libraryOpen || worldOpen || textLibraryOpen}
+      >
         <NarrativeLibrary
           projectKey={project.path}
           readOnly={project.readOnly}
@@ -217,7 +234,11 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         />
       </div>
       {editorOpened && (
-        <div className="nrt-editor-view" style={editorStyle} hidden={libraryOpen || worldOpen}>
+        <div
+          className="nrt-editor-view"
+          style={editorStyle}
+          hidden={libraryOpen || worldOpen || textLibraryOpen}
+        >
           {!navCollapsed && (
             <nav className="nrt-scene-outline" aria-label="Current scene outline">
               <h3>{selected?.name ?? 'Selected scene'}</h3>
@@ -252,6 +273,14 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
             <NarrativeInspector projectKey={project.path} readOnly={project.readOnly} />
           )}
         </div>
+      )}
+      {textLibraryOpen && !worldOpen && (
+        <NarrativeTextLibrary
+          projectKey={project.path}
+          readOnly={project.readOnly}
+          nameOf={nameOf}
+          onClose={() => setTextLibraryOpen(false)}
+        />
       )}
       {worldOpen && <NarrativeWorldPane projectKey={project.path} readOnly={project.readOnly} />}
       <SceneDiagnosticsFooter />

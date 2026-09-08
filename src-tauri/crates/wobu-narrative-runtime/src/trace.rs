@@ -10,6 +10,13 @@ pub struct TraceSite {
     pub outcome: Option<String>,
     pub slot: Option<String>,
     pub variant: Option<String>,
+    /// The supporting text asset a decision belongs to (#167), when it is not a
+    /// scene decision. Skipped when absent so an existing trace serializes to
+    /// the bytes it always did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +51,40 @@ pub enum TraceEvent {
 pub struct TraceRecord {
     pub site: TraceSite,
     pub event: TraceEvent,
+}
+
+/// One choice at the branch a run is stopped at, and the evaluation of its gate.
+///
+/// [`Yield::Choices`] lists what the player may pick and deliberately nothing
+/// else: a game has no business being told which options it was refused, and a
+/// list of them would be a spoiler the runtime handed out. An authoring overlay
+/// is the other case — "why can I not see *Show logbook*" is the question #188
+/// exists to answer — so this is a separate, opt-in read rather than a wider
+/// `Yield`.
+///
+/// It reports through [`TraceRecord`] rather than through a summary of its own,
+/// so the reason a branch is closed is spelled in exactly the vocabulary the
+/// played route already uses: the same sites, the same authored [`Condition`],
+/// the same evaluated inputs. A second shape here would be a second evaluator's
+/// worth of ways to disagree with `evaluate_recording`, and the caller would
+/// have no way to tell which of the two was right.
+///
+/// Recomputed on demand instead of pushed into [`ExecutionTrace`], because a
+/// restored snapshot has no trace at all — [`Runtime::restore`] starts an empty
+/// one. The checkpoint a writer went back to was evaluated in a session that
+/// has since ended, and an overlay that searched the history for the last
+/// branch that *looked* like this one would be guessing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChoiceStatus {
+    pub id: String,
+    pub label: String,
+    /// True when the gate passed. False is the branch an overlay draws closed.
+    pub available: bool,
+    /// The gate's evaluation, in the order the runtime evaluated it. Never
+    /// empty: an absent condition is evaluated as `Always` and recorded, so
+    /// "always available" is a stated fact rather than an absence to interpret.
+    pub records: Vec<TraceRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,6 +124,40 @@ impl Runtime {
             beat: (!self.saved.beat.is_empty()).then(|| self.saved.beat.clone()),
             ..TraceSite::default()
         }
+    }
+
+    /// Every choice at the branch this run is stopped at, taken or not.
+    ///
+    /// Empty away from a branch, and that is the whole rule: only a run that is
+    /// *offering* choices has an availability to report, and answering for a
+    /// beat the cursor has not reached yet would be evaluating gates against
+    /// state the effects on the way there have not written.
+    ///
+    /// Evaluation cannot fail here in practice — `Phase::Branch` is only ever
+    /// entered after every gate on the beat has already evaluated cleanly — but
+    /// the error is propagated rather than swallowed, because a caller that saw
+    /// a silently shortened list would read it as "this choice does not exist".
+    pub fn branch(&self) -> Result<Vec<ChoiceStatus>> {
+        if !matches!(self.saved.phase, Phase::Branch) {
+            return Ok(Vec::new());
+        }
+        let mut out = Vec::new();
+        for choice in &self.beat()?.choices {
+            let site = TraceSite { choice: Some(choice.id.clone()), ..self.site() };
+            let mut records = Vec::new();
+            let condition = choice.requires.as_ref().unwrap_or(&Condition::Always);
+            let available =
+                evaluate_recording(condition, &self.saved.state, &mut Vec::new(), &mut |event| {
+                    records.push(TraceRecord { site: site.clone(), event });
+                })?;
+            out.push(ChoiceStatus {
+                id: choice.id.clone(),
+                label: choice.label.clone(),
+                available,
+                records,
+            });
+        }
+        Ok(out)
     }
 
     pub(super) fn record(&mut self, site: TraceSite, event: TraceEvent) {

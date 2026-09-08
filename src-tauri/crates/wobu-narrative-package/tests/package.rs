@@ -45,6 +45,7 @@ fn fixture(profile: Profile) -> Graph {
     let verified_reviews = reviews::fixture_reviews(&scene);
     compile(
         &[scene],
+        &[],
         &StateSchema::default(),
         &CompileOptions { profile, verified_reviews, ..CompileOptions::default() },
     )
@@ -226,4 +227,128 @@ fn publication_claim_is_exclusive_under_concurrent_writers() {
         .count();
     assert_eq!(successes, 1);
     assert_eq!(read(&out).unwrap().manifest, package.manifest);
+}
+
+/// The same fixture plus one supporting text asset of each spoken and written
+/// kind (#167), so the packaged form can be checked for the two things that
+/// matter: the strings come out into the shared table, and the manifest says so.
+fn text_fixture(profile: Profile) -> Graph {
+    let mut scene = Scene::new("Author-only secret name");
+    scene.id = "00000000000000000000000001".parse().unwrap();
+    let mut beat = Beat::new("Author-only intent");
+    beat.id = "00000000000000000000000002".parse().unwrap();
+    let mut slot = DialogueSlot::new(Speaker::Narrator);
+    slot.id = "00000000000000000000000003".parse().unwrap();
+    let mut variant = Variant::new(Text::written("星の港へ — café"));
+    variant.id = "00000000000000000000000004".parse().unwrap();
+    slot.variants.push(variant);
+    beat.dialogue.push(slot);
+    beat.outcomes.push(Outcome::new(Destination::End { label: "done".into() }));
+    scene.beats.push(beat);
+
+    let entity: EntityId = "00000000000000000000000010".parse().unwrap();
+    let mut bark =
+        TextAsset::new(TextKind::Bark, "Gate guard", Name::new("player_passes_gate").unwrap());
+    bark.id = "00000000000000000000000011".parse().unwrap();
+    bark.participants.push(Participant { entity, role: String::new() });
+    let mut entry = TextEntry::new("Move along");
+    entry.id = "00000000000000000000000012".parse().unwrap();
+    let mut line = DialogueSlot::new(Speaker::Entity(entity));
+    line.id = "00000000000000000000000013".parse().unwrap();
+    let mut wording = Variant::new(Text::written("動け。"));
+    wording.id = "00000000000000000000000014".parse().unwrap();
+    line.variants.push(wording);
+    entry.lines.push(line);
+    bark.entries.push(entry);
+
+    let mut codex =
+        TextAsset::new(TextKind::Codex, "The beacons", Name::new("codex_opened").unwrap());
+    codex.id = "00000000000000000000000021".parse().unwrap();
+    let mut page = TextEntry::new("Overview");
+    page.id = "00000000000000000000000022".parse().unwrap();
+    let mut prose = DialogueSlot::new(Speaker::Narrator);
+    prose.id = "00000000000000000000000023".parse().unwrap();
+    let mut body = Variant::new(Text::written("The beacons predate the harbour."));
+    body.id = "00000000000000000000000024".parse().unwrap();
+    prose.variants.push(body);
+    page.lines.push(prose);
+    codex.entries.push(page);
+
+    let texts = [bark, codex];
+    let verified_reviews = reviews::fixture_reviews(&scene);
+    let verified_text_reviews = texts.iter().flat_map(reviews::fixture_text_reviews).collect();
+    compile(
+        &[scene],
+        &texts,
+        &StateSchema::default(),
+        &CompileOptions {
+            profile,
+            verified_reviews,
+            verified_text_reviews,
+            known_entities: std::collections::BTreeSet::from([entity]),
+            ..CompileOptions::default()
+        },
+    )
+    .graph
+    .unwrap()
+}
+
+#[test]
+fn supporting_text_is_packaged_into_the_shared_string_table_and_declared() {
+    let original = text_fixture(Profile::Release);
+    let package = Package::build(original.clone(), false).unwrap();
+
+    assert_eq!(
+        package.manifest.required_capabilities.get("supporting_text"),
+        Some(&1),
+        "a reader that cannot deliver barks must be told to refuse this package"
+    );
+    // Two scene strings — one line, one choice label — plus one bark and one
+    // codex line, all keyed by the identity a locale row and a recording script
+    // already use.
+    assert_eq!(package.string_count().unwrap(), 3);
+
+    let temp = Temp::new();
+    let out = temp.0.join("package");
+    publish(&package, &out).unwrap();
+    let mut expected = original;
+    expected.source_map.clear();
+    assert_eq!(read(&out).unwrap().graph().unwrap(), expected);
+
+    let strings = std::fs::read_to_string(out.join("strings/en.json")).unwrap();
+    assert!(strings.contains("動け。"), "{strings}");
+    let graph = std::fs::read_to_string(out.join("graph.json")).unwrap();
+    assert!(!graph.contains("動け。"), "wording must not be inlined in the graph");
+}
+
+#[test]
+fn a_package_without_supporting_text_declares_exactly_the_capabilities_it_always_did() {
+    let package = Package::build(fixture(Profile::Release), false).unwrap();
+    assert!(!package.manifest.required_capabilities.contains_key("supporting_text"));
+}
+
+#[test]
+fn a_manifest_that_disagrees_with_its_payload_about_supporting_text_is_refused() {
+    let temp = Temp::new();
+    let out = temp.0.join("package");
+    publish(&Package::build(text_fixture(Profile::Release), false).unwrap(), &out).unwrap();
+    // Removing the declaration leaves a well formed, correctly hashed package
+    // that would silently drop every bark. Only the cross-check catches it.
+    edit_manifest(&out, |m| {
+        m.required_capabilities.remove("supporting_text");
+        m.payload_hash = blake3::hash(&serde_json::to_vec(&m.files).unwrap()).to_hex().to_string();
+    });
+    // `read` reconstructs the graph, so the disagreement is caught before a
+    // caller can ever hold the package.
+    let error = read(&out).unwrap_err().to_string();
+    assert!(error.contains("capabilities"), "{error}");
+}
+
+#[test]
+fn release_packaging_still_refuses_empty_supporting_wording() {
+    let mut graph = text_fixture(Profile::Release);
+    let asset = graph.texts.values_mut().next().unwrap();
+    asset.entries[0].lines[0].variants[0].text = "   ".into();
+    let error = Package::build(graph, false).unwrap_err().to_string();
+    assert!(error.contains("empty"), "{error}");
 }

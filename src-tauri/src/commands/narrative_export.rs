@@ -170,10 +170,21 @@ fn prepare_checked(
     }
     let scenes: Vec<_> = files.into_iter().map(|file| file.scene).collect();
     let verified_reviews = super::narrative_review::verified(project, &scenes, &fingerprint)?;
+    // Supporting text is read after the fingerprint check above, and the check
+    // covers it: `narrative_fingerprint` walks `narrative/texts/` too, so an
+    // asset edited mid-export aborts rather than shipping half of an edit.
+    let texts = project.text_assets()?;
     let report = compile(
         &scenes,
+        &texts,
         &schema,
-        &CompileOptions { profile, known_entities, commands, verified_reviews },
+        &CompileOptions {
+            profile,
+            known_entities,
+            commands,
+            verified_reviews,
+            ..CompileOptions::default()
+        },
     );
     let package = report
         .graph

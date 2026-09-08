@@ -29,10 +29,10 @@ export const NARRATIVE_STATUS: Record<NarrativeStatus, { label: string; icon: st
  */
 export const NARRATIVE_UNAVAILABLE = {
   quests:
-    'Quest membership is available in the Scene library. Grouping the arc canvas by those memberships is not available yet (#187).',
+    'Grouping by quest state uses the stage each quest starts in, because a project records no running quest state. Quest groups closed on the canvas last for this session: the arrangement file keeps only the groups a writer drew.',
   flow: 'No scene is selected, so there is nothing to draw. Choose one in the Library, or open one from the arc.',
   witness:
-    'Opening a witness needs generated reachability scenarios and a Flow overlay (#171, #188). Preview can play a chosen starting state; these source diagnostics do not establish reachability.',
+    'Opening a witness needs generated reachability scenarios (#171). Preview draws the route it played on this canvas, but a scene nothing has played is not thereby unreachable: these source diagnostics do not establish reachability either way.',
   affectedScope:
     'Highlighting affected beats needs the dependency tracker and build planner (#168, #169).',
   diagnostics:

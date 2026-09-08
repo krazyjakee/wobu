@@ -16,6 +16,15 @@ pub const MAX_STRINGS: usize = 100_000;
 pub const MAX_STRING_BYTES: usize = 1024 * 1024;
 pub const INCOMPLETE: &str = ".incomplete";
 const REQUIRED: [&str; 4] = ["graph.json", "state.json", "strings/en.json", "media.json"];
+/// Declared by a package whose graph contains supporting text assets (#167).
+///
+/// A capability rather than a silent addition, because a reader written against
+/// version 1 would otherwise load such a package, ignore the `texts` map it does
+/// not understand, and ship a game that never says a single bark — a failure
+/// with no symptom. Refusing to load is the only honest answer available to a
+/// reader that cannot deliver the content. It is absent from a package with no
+/// supporting text, so existing packages and their identities are unchanged.
+pub const SUPPORTING_TEXT: &str = "supporting_text";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -111,6 +120,27 @@ impl Package {
                 }
             }
         }
+        // Supporting text goes into the same table, keyed by the same variant
+        // identity and carrying the same wording revision. That is what makes a
+        // locale pack or a recording script one list rather than two: a
+        // translator working from `strings/en.json` cannot tell, and should not
+        // need to tell, whether a line is spoken in a scene or shouted at a gate.
+        let supporting_text = !graph.texts.is_empty();
+        for asset in graph.texts.values_mut() {
+            for entry in &mut asset.entries {
+                for slot in &mut entry.lines {
+                    for variant in &mut slot.variants {
+                        strings.insert(
+                            variant.id.clone(),
+                            LocalizedString {
+                                text: std::mem::take(&mut variant.text),
+                                revision: Some(std::mem::take(&mut variant.revision)),
+                            },
+                        );
+                    }
+                }
+            }
+        }
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         files.insert("strings/en.json".into(), json(&strings)?);
         files.insert("state.json".into(), json(&std::mem::take(&mut graph.state))?);
@@ -133,10 +163,7 @@ impl Package {
             graph_version: graph.version,
             profile,
             locale: "en".into(),
-            required_capabilities: BTreeMap::from([
-                ("deterministic_graph".into(), 1),
-                ("separate_strings".into(), 1),
-            ]),
+            required_capabilities: validate::capabilities(supporting_text),
             payload_hash: hash(&json(&records)?),
             files: records,
         };
@@ -215,6 +242,31 @@ impl Package {
                     choice.label = text.text;
                 }
             }
+        }
+        for asset in graph.texts.values_mut() {
+            for entry in &mut asset.entries {
+                for slot in &mut entry.lines {
+                    for variant in &mut slot.variants {
+                        if !variant.text.is_empty() || !variant.revision.is_empty() {
+                            return Err(invalid("inline supporting text in packaged graph"));
+                        }
+                        let text = strings
+                            .remove(&variant.id)
+                            .ok_or_else(|| invalid(format!("missing string {}", variant.id)))?;
+                        variant.text = text.text;
+                        variant.revision = text
+                            .revision
+                            .ok_or_else(|| invalid("supporting text revision missing"))?;
+                    }
+                }
+            }
+        }
+        // The manifest is checked before the graph is parsed, so this is the
+        // first point at which the declared capability can be compared with what
+        // the payload actually contains. A package claiming supporting text and
+        // shipping none — or the reverse — is malformed either way.
+        if self.manifest.required_capabilities != validate::capabilities(!graph.texts.is_empty()) {
+            return Err(invalid("declared capabilities disagree with the packaged graph"));
         }
         if !strings.is_empty() {
             return Err(invalid("unreferenced strings"));

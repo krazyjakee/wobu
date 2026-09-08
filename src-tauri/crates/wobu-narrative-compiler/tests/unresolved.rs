@@ -11,6 +11,7 @@ fn unresolved_routes_never_lower_to_an_ending_or_emit_a_graph() {
     for profile in [Profile::Development, Profile::Release] {
         let report = compile(
             &[scene.clone()],
+            &[],
             &StateSchema::default(),
             &CompileOptions { profile, ..Default::default() },
         );

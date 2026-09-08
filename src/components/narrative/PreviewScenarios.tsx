@@ -14,12 +14,23 @@ export function PreviewScenarios({
   busy,
   readOnly,
   onLoad,
+  onOverlay,
 }: {
   sceneId: string
   tape?: ScenarioTape
   busy: boolean
   readOnly: boolean
   onLoad: (scenario: Scenario) => Promise<void>
+  /**
+   * Draw a saved scenario on the Flow canvas without playing it (#188).
+   *
+   * Separate from `onLoad` on purpose: loading *starts a run* from the
+   * scenario's inputs and will diverge from the tape the moment a different
+   * choice is taken, whereas this reads the tape and nothing else. Collapsing
+   * the two would mean inspecting a saved route silently replaced whatever was
+   * on screen with a new run of it.
+   */
+  onOverlay?: (name: string, scenario: Scenario) => void
 }) {
   const [name, setName] = useState('')
   const [files, setFiles] = useState<ScenarioFile[]>([])
@@ -114,6 +125,22 @@ export function PreviewScenarios({
         >
           Load scenario
         </button>
+        {onOverlay && (
+          <button
+            className="btn"
+            disabled={!selected}
+            onClick={() => {
+              const file = files.find((one) => one.id === selected)
+              if (!file) return
+              onOverlay(file.name, file.scenario)
+              setMessage(
+                'Drawn on the Flow canvas as an overlay. Nothing was replayed and nothing was written.',
+              )
+            }}
+          >
+            Show route in Flow
+          </button>
+        )}
       </fieldset>
       {error && <p role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}

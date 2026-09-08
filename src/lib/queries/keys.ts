@@ -88,6 +88,11 @@ export function invalidateNarrative(qc: QueryClient) {
   // named came back.
   void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })
   void qc.invalidateQueries({ queryKey: qk.narrativeState })
+  // Supporting text (#167) is compiled from the same project and diagnosed
+  // against the same declared variables, so a state edit changes its answers
+  // too.
+  void qc.invalidateQueries({ queryKey: ['narrative_texts'] })
+  void qc.invalidateQueries({ queryKey: ['narrative_text'] })
 }
 
 /** A different project must never render the previous project's scene cache.
@@ -103,6 +108,8 @@ export async function clearNarrativeReads(qc: QueryClient) {
     'narrative_source',
     'narrative_world',
     'narrative_review',
+    'narrative_texts',
+    'narrative_text',
   ])
   const filter = {
     predicate: (query: { queryKey: readonly unknown[] }) => families.has(String(query.queryKey[0])),

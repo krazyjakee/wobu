@@ -7,9 +7,11 @@ use wobu_narrative::{CompareOp, Condition, Effect, Name, Operand, Owner, Speaker
 use wobu_narrative_compiler::{CompiledBeat, GRAPH_VERSION, Graph, Target, accepts};
 
 mod migration;
+mod text;
 mod trace;
 pub use migration::Migration;
-pub use trace::{ExecutionTrace, TraceEvent, TraceRecord, TraceSite};
+pub use text::{DeliveredLine, TextDelivery, TextProgress};
+pub use trace::{ChoiceStatus, ExecutionTrace, TraceEvent, TraceRecord, TraceSite};
 
 pub type State = BTreeMap<Name, Value>;
 pub const SNAPSHOT_VERSION: u32 = 1;
@@ -123,6 +125,13 @@ pub struct Snapshot {
     phase: Phase,
     state: State,
     visits: BTreeMap<String, u64>,
+    /// Supporting text delivery state (#167), keyed by asset id.
+    ///
+    /// Skipped when empty so a playthrough of a project without supporting text
+    /// serializes to exactly the bytes it did before, and an existing save
+    /// restores unchanged.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    texts: BTreeMap<String, TextProgress>,
     command_sequence: u64,
     acknowledged: BTreeMap<String, State>,
     step_limit: u32,
@@ -131,7 +140,9 @@ pub struct Snapshot {
 enum Action {
     Target(Target),
     Dialogue(usize),
-    Transition(Vec<Effect>, Target, TraceSite),
+    /// The trace site is boxed because it is by far the largest thing an action
+    /// carries, and this enum is moved once per step of the driver loop.
+    Transition(Vec<Effect>, Target, Box<TraceSite>),
 }
 
 #[derive(Debug, Clone)]
@@ -198,6 +209,7 @@ impl Runtime {
                 phase: Phase::Branch,
                 state,
                 visits: BTreeMap::new(),
+                texts: BTreeMap::new(),
                 command_sequence: 0,
                 acknowledged: BTreeMap::new(),
                 step_limit,
@@ -222,6 +234,21 @@ impl Runtime {
         &self.saved.visits
     }
 
+    /// The compiled content this run is pinned to.
+    ///
+    /// A hash of the graph, which is the only identity a run has: the same
+    /// snapshot restored against different content is refused by [`restore`],
+    /// so anything drawn *from* this run — an overlay on the Flow canvas — is
+    /// describing this build and no other. Exposed as its own accessor rather
+    /// than read off a serialized `Snapshot`, because the snapshot is opaque by
+    /// contract and a caller that reached into it would be depending on a field
+    /// name this crate never promised.
+    ///
+    /// [`restore`]: Runtime::restore
+    pub fn build(&self) -> &str {
+        &self.saved.graph_hash
+    }
+
     pub fn restore(graph: Graph, snapshot: Snapshot) -> Result<Self> {
         if graph.version != GRAPH_VERSION
             || snapshot.version != SNAPSHOT_VERSION
@@ -241,6 +268,7 @@ impl Runtime {
                 return Err(Error::InvalidState("invalid visit history".into()));
             }
         }
+        runner.validate_texts()?;
         if let Phase::Commands { commands, index, to } = &runner.saved.phase {
             if commands.is_empty() || *index >= commands.len() {
                 return Err(Error::InvalidCommand);
@@ -379,7 +407,7 @@ impl Runtime {
                 return Err(Error::UnavailableChoice(choice_id.into()));
             }
             let mut budget = next.saved.step_limit;
-            next.drive(Action::Transition(choice.effects, choice.to, site), &mut budget)
+            next.drive(Action::Transition(choice.effects, choice.to, Box::new(site)), &mut budget)
         })
     }
 
@@ -558,12 +586,12 @@ impl Runtime {
                     Action::Transition(
                         outcome.effects,
                         outcome.to,
-                        TraceSite { outcome: Some(outcome.id), ..self.site() },
+                        Box::new(TraceSite { outcome: Some(outcome.id), ..self.site() }),
                     )
                 }
                 Action::Transition(effects, to, site) => {
-                    self.record(site.clone(), TraceEvent::Transition { to: to.clone() });
-                    if self.prepare_transition(&effects, to.clone(), site)? {
+                    self.record((*site).clone(), TraceEvent::Transition { to: to.clone() });
+                    if self.prepare_transition(&effects, to.clone(), *site)? {
                         return Ok(());
                     }
                     Action::Target(to)

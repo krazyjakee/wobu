@@ -381,8 +381,11 @@ colour literal; no hex belongs in this document or in a Flow component.
   what is inside and how many edges cross the boundary.
 - **Diagnostics, staleness and missing text** are corner badges with text, not tint, feeding
   [#189](https://github.com/krazyjakee/wobu/issues/189).
-- **The played route** ([#188](https://github.com/krazyjakee/wobu/issues/188)) emphasises nodes and
-  edges by weight and a marker, and an unavailable branch carries the failed condition as text.
+- **The played route** ([#188](https://github.com/krazyjakee/wobu/issues/188)) marks each visited
+  box with a cap carrying a word, a glyph and its position along the route, and marks the current
+  position, the branches that were open and not taken, and the branches that were unavailable. An
+  unavailable branch names the authored field, the test that failed and the values read there. See
+  [Preview route overlay](21-native-narrative-preview.md#the-preview-route-on-the-flow-canvas).
 
 ---
 

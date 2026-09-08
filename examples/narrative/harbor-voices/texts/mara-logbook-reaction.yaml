@@ -1,0 +1,62 @@
+schema_version: 1
+asset:
+  id: '00000000000000000000000141'
+  kind: reaction
+  name: Mara reacts to the logbook
+  summary: Mara's answer when the player opens the watch logbook beside her.
+  trigger:
+    event: logbook_opened
+  sources:
+  - quest: '00000000000000000000000099'
+  participants:
+  - entity: '00000000000000000000000091'
+    role: companion
+  repeat: shuffle
+  policy: edited
+  entries:
+  - id: '00000000000000000000000142'
+    label: Trusted
+    when:
+      compare:
+        var: trust
+        op: ge
+        value:
+          literal: 50
+    lines:
+    - id: '00000000000000000000000143'
+      speaker:
+        entity: '00000000000000000000000091'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000144'
+        text:
+          revision: b866667a1e8ec3d7f4c6cc5274f2ce00
+          body: Write it the way I told it. Word for word, or it isn't worth ink.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000145'
+    label: Wary
+    when:
+      compare:
+        var: trust
+        op: lt
+        value:
+          literal: 50
+    lines:
+    - id: '00000000000000000000000146'
+      speaker:
+        entity: '00000000000000000000000091'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000147'
+        text:
+          revision: 160ee28a466bb6de3e8fbff6ebbf327e
+          body: You're writing already. You haven't asked me anything.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current

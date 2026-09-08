@@ -46,10 +46,15 @@ describe('what the view says about where its arc came from', () => {
   })
 
   it('says separately that the quests are not read from the project', () => {
-    // The demonstration arc remains explicit even though project quests can be authored.
+    // The demonstration arc remains explicit even though a project's own arc
+    // now groups by the quests in its World document.
     render(<NarrativeFlowView />)
     expect(document.getElementById('nrt-quests-unavailable')).toHaveTextContent(
-      /Grouping uses demonstration quests\. Quest membership is available in the Scene library/,
+      /Grouping uses demonstration quests, not the ones in this project’s World document/,
+    )
+    // And the limits of the grouping itself, which hold either way.
+    expect(document.getElementById('nrt-quests-unavailable')).toHaveTextContent(
+      /the stage each quest starts in/,
     )
   })
 

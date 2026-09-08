@@ -127,6 +127,29 @@ narrative_id!(
     "dialogue slot"
 );
 narrative_id!(
+    /// One supporting text asset: a bark, an ambient exchange, a companion
+    /// reaction, a codex entry, a quest summary or a journal (#167).
+    ///
+    /// Its own identity type rather than a [`SceneId`], even though both name a
+    /// document a writer opens and both hold dialogue slots. A bark is not a
+    /// place the story can branch to, so a [`Destination`](crate::Destination)
+    /// must never be able to name one; keeping the types apart is what makes
+    /// that a compile error instead of a runtime check somebody forgets to
+    /// write.
+    TextAssetId,
+    "text asset"
+);
+narrative_id!(
+    /// One alternative inside a supporting text asset: a single bark, one
+    /// version of an ambient exchange, one section of a codex entry.
+    ///
+    /// The counterpart of a [`BeatId`], and separate for the same reason: an
+    /// entry has no destinations and cannot be jumped to, so the runtime's
+    /// beat cursor must not be able to hold one.
+    TextEntryId,
+    "text entry"
+);
+narrative_id!(
     /// One conditioned wording for a dialogue slot.
     ///
     /// A slot with seven variants is still one slot: the variants multiply

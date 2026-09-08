@@ -18,9 +18,11 @@ import { NarrativeFlowPane } from './NarrativeFlowPane'
 import { NarrativeFlowView } from './flow/arc/NarrativeFlowView'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 import { ArcFlow } from './flow/arc/ArcFlow'
-import { sceneNode, type FlowArc } from './flow/arc/model'
+import { sceneNode, worldQuests, type ArcQuests, type FlowArc } from './flow/arc/model'
 import { attachDiagnostics } from './flow/badges'
 import { useFlowStore } from './flow/flowStore'
+import { PreviewOverlayProvider, RouteBanner, RouteDetail } from './flow/PreviewOverlay'
+import { usePlayedScenes, usePreviewRoute } from './flow/overlay'
 import { useFlowPresentation } from './flow/useFlowPresentation'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
 import type { Quest } from '../../lib/api/narrativeWorld'
@@ -99,6 +101,7 @@ export function NarrativeProjectFlow({
    */
   const [entered, setEntered] = useState<string | null>(null)
   const [honoured, setHonoured] = useState(0)
+  const played = usePlayedScenes(projectKey)
   // Not until the catalog has answered: a reveal marked as handled against an
   // empty `ids` would be a request quietly thrown away, and the writer would be
   // left on the arc having clicked a scene.
@@ -186,7 +189,20 @@ export function NarrativeProjectFlow({
     )
   }
 
-  return <ArcLevel ids={ids} active={active} readOnly={readOnly} layout={layout} onEnter={enter} />
+  return (
+    /*
+     * The arc gets one badge per scene and is told why (#188).
+     *
+     * Preview plays a single scene, so there is no cross-scene route to draw
+     * and drawing one would be inventing connections nothing observed. The
+     * provider carries only the set of scenes played, and `RouteBanner` states
+     * that limitation in the pane rather than in a comment.
+     */
+    <PreviewOverlayProvider value={played}>
+      <RouteBanner />
+      <ArcLevel ids={ids} active={active} readOnly={readOnly} layout={layout} onEnter={enter} />
+    </PreviewOverlayProvider>
+  )
 }
 
 /* ── the arc ──────────────────────────────────────────────────────────────── */
@@ -201,6 +217,15 @@ function ArcLevel(props: {
   const world = useNarrativeWorld()
   const [questId, setQuestId] = useState('')
   const quest = world.data?.document.quests.find((quest) => quest.id === questId)
+  /*
+   * The project's own quest membership, for #187's grouping.
+   *
+   * `world.data` and not `world.data ?? []`: a read that has not answered, or
+   * that failed, produces `quests: null` — "this build cannot say" — and the
+   * grouping control refuses itself with that reason. An empty list would say
+   * the project has no quests, which is a different and possibly false claim.
+   */
+  const quests = useMemo(() => worldQuests(world.data?.document.quests), [world.data])
   return (
     <div className="nrt-quest-arrangement">
       <label className="nrt-quest-selector">
@@ -224,7 +249,7 @@ function ArcLevel(props: {
           Quest scopes could not be loaded; the project arrangement is still available.
         </p>
       )}
-      <ArcPage key={quest?.id ?? 'project'} {...props} quest={quest} />
+      <ArcPage key={quest?.id ?? 'project'} {...props} quest={quest} quests={quests} />
     </div>
   )
 }
@@ -240,6 +265,7 @@ function ArcPage({
   ids: string[]
   active: boolean
   quest?: Quest
+  quests: ArcQuests
   readOnly: boolean
   layout?: LayoutRunner
   onEnter: (sceneId: string, beatId?: string | null) => void
@@ -305,8 +331,10 @@ function ArcArrangement({
   layout,
   onEnter,
   quest,
+  quests,
 }: {
   quest?: Quest
+  quests: ArcQuests
   files: { data?: SceneFile }[]
   loading: boolean
   readOnly: boolean
@@ -347,7 +375,11 @@ function ArcArrangement({
           name: group.label ?? group.id,
         })),
         elements: scenes.map((scene) => ({
-          ...sceneNode(scene),
+          // Two independent memberships on one node, and neither is written
+          // anywhere: the arrangement group a writer drew (#185), and the World
+          // quest that lists this scene (#187). Which one carves the canvas up
+          // is the grouping control's business, not the model's.
+          ...sceneNode(scene, quests.questOf(scene.id)),
           groupId:
             Object.values(presentation?.layout.groups ?? {}).find((group) =>
               (group.members ?? []).includes(`scene:${scene.id}`),
@@ -358,10 +390,11 @@ function ArcArrangement({
         // Names remain labels; World scene_ids determines the selected scope.
         entryId: scenes[0]?.id ?? null,
       },
-      // Presentation groups are separate from World quest membership.
-      quests: null,
+      // Presentation groups are separate from World quest membership; the arc
+      // can be carved up by either, and by neither.
+      quests: quests.quests,
     }
-  }, [files, nameOf, sceneName, quest, presentation?.layout.groups])
+  }, [files, nameOf, sceneName, quest, quests, presentation?.layout.groups])
 
   const positions = useMemo(
     () => positionsFromLayout(presentation?.layout, 'arc'),
@@ -415,6 +448,17 @@ function ArcArrangement({
       <p className="nrt-note" role="note">
         <Icon name="lock" size="sm" />
         {flowAuthoring.arcReadOnly} {NARRATIVE_UNAVAILABLE.affectedScope}
+      </p>
+
+      {/* The id is what the grouping control points at when it refuses itself,
+          so the refusal has somewhere to be read. */}
+      <p className="nrt-note" id="nrt-quests-unavailable" role="note">
+        <Icon name="folder" size="sm" />
+        {quests.quests === null
+          ? `The project’s quests could not be read, so the arc cannot be grouped by them. ${NARRATIVE_UNAVAILABLE.quests}`
+          : NARRATIVE_UNAVAILABLE.quests}
+        {quests.shared.length > 0 &&
+          ` ${quests.shared.length} scene${quests.shared.length === 1 ? ' is' : 's are'} listed by more than one quest, and appear under the first.`}
       </p>
 
       <ArcFlow
@@ -545,53 +589,86 @@ function SceneSourceEditor({
     event.preventDefault()
     onLeave()
   }
+  /*
+   * The Preview route, read from the session Preview already holds (#188).
+   *
+   * Derived on render from the frames the runtime returned, so a restart, a
+   * checkpoint restore and a step back all update it without a code path each —
+   * every one of them is simply a different list of frames. `session.dirty` is
+   * what lets it say that the draft on screen is not the source the build
+   * compiled; the overlay is drawn anyway, because a route over an edited scene
+   * is still the route that ran.
+   */
+  const route = usePreviewRoute(projectKey, sceneId, attached.level, session.dirty)
+  // Hidden, not discarded: clearing the overlay is a view decision and must
+  // not throw away a run the writer may still be reading in the Preview tab.
+  const [routeHidden, setRouteHidden] = useState(false)
   return (
-    <div className="nrt-levels" onKeyDown={onKeyDown}>
-      <nav className="nrt-crumbs" aria-label="Flow level">
-        <button type="button" className="chip" onClick={onLeave}>
-          <Icon name="layers" size="sm" />
-          Every scene
-        </button>
-        <span aria-hidden>/</span>
-        <span className="chip is-on" aria-current="true">
-          {scene.name}
-        </span>
-      </nav>
-      <SceneEditControls session={session} />
-      <div className="nrt-source-flow-body">
-        <NarrativeFlowPane
-          source={stored.isPending ? { kind: 'loading' } : { kind: 'ready', scene: attached.level }}
-          readOnly={readOnly}
-          layout={layout}
-          onEdit={() => {
-            /* Canonical actions own source edits; display models never write. */
-          }}
-          actions={actions}
-          authoring={{ fixedPort: flowAuthoring.fixedPort }}
-          positions={positions}
-          presentation={presentation}
-          onPositionsChange={onPositions}
-          creatable={SCENE_CREATABLE}
-          spare={beatSpare}
-          notes={
-            <>
-              <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
-              <SceneWideProblems found={attached.sceneWide} />
-              <p className="nrt-note" role="note">
-                {NARRATIVE_UNAVAILABLE.witness} {NARRATIVE_UNAVAILABLE.affectedScope}
-              </p>
-            </>
-          }
-        />
-        <FlowElementEditor
-          diagnostics={diagnostics}
-          scene={scene}
-          projectKey={projectKey}
-          disabled={session.disabled}
-          onEditOperation={(operation) => dispatch(operation)}
-        />
+    <PreviewOverlayProvider value={routeHidden ? null : route}>
+      <div className="nrt-levels" onKeyDown={onKeyDown}>
+        <nav className="nrt-crumbs" aria-label="Flow level">
+          <button type="button" className="chip" onClick={onLeave}>
+            <Icon name="layers" size="sm" />
+            Every scene
+          </button>
+          <span aria-hidden>/</span>
+          <span className="chip is-on" aria-current="true">
+            {scene.name}
+          </span>
+        </nav>
+        <SceneEditControls session={session} />
+        <div className="nrt-source-flow-body">
+          <NarrativeFlowPane
+            source={
+              stored.isPending ? { kind: 'loading' } : { kind: 'ready', scene: attached.level }
+            }
+            readOnly={readOnly}
+            layout={layout}
+            onEdit={() => {
+              /* Canonical actions own source edits; display models never write. */
+            }}
+            actions={actions}
+            authoring={{ fixedPort: flowAuthoring.fixedPort }}
+            positions={positions}
+            presentation={presentation}
+            onPositionsChange={onPositions}
+            creatable={SCENE_CREATABLE}
+            spare={beatSpare}
+            notes={
+              <>
+                <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
+                <SceneWideProblems found={attached.sceneWide} />
+                <RouteBanner onClose={() => setRouteHidden(true)} />
+                <RouteDetail />
+                {route && routeHidden && (
+                  <p className="nrt-note" role="status">
+                    <Icon name="spark" size="sm" />
+                    The Preview route is hidden.{' '}
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setRouteHidden(false)}
+                    >
+                      Show it again
+                    </button>
+                  </p>
+                )}
+                <p className="nrt-note" role="note">
+                  {NARRATIVE_UNAVAILABLE.witness} {NARRATIVE_UNAVAILABLE.affectedScope}
+                </p>
+              </>
+            }
+          />
+          <FlowElementEditor
+            diagnostics={diagnostics}
+            scene={scene}
+            projectKey={projectKey}
+            disabled={session.disabled}
+            onEditOperation={(operation) => dispatch(operation)}
+          />
+        </div>
       </div>
-    </div>
+    </PreviewOverlayProvider>
   )
 }
 const SCENE_CREATABLE: readonly FlowKind[] = ['beat', 'choice', 'condition', 'outcome', 'end']

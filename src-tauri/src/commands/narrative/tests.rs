@@ -17,16 +17,20 @@ use wobu_store::{GraphKey, Layout, NodeKey, Project};
 use super::*;
 
 /// A project folder that removes itself.
-struct Temp(PathBuf);
+///
+/// `pub(in crate::commands)` so the sibling Text library tests use the same
+/// harness: two copies would be two places for a temp folder to be leaked on a
+/// panic, and the narrative command tests are the ones that already own it.
+pub(in crate::commands) struct Temp(PathBuf);
 
 impl Temp {
-    fn new() -> Temp {
+    pub(in crate::commands) fn new() -> Temp {
         let dir = std::env::temp_dir().join(format!("wobu-narrative-cmd-{}", wobu_core::new_id()));
         std::fs::create_dir_all(&dir).unwrap();
         Temp(dir)
     }
 
-    fn path(&self) -> &Path {
+    pub(in crate::commands) fn path(&self) -> &Path {
         &self.0
     }
 }
@@ -37,7 +41,7 @@ impl Drop for Temp {
     }
 }
 
-fn project(temp: &Temp) -> Project {
+pub(in crate::commands) fn project(temp: &Temp) -> Project {
     Project::create(temp.path(), "Ashfall").unwrap()
 }
 

@@ -139,6 +139,11 @@ function calls(command: string): Record<string, unknown>[] {
     .map(([, args]) => args)
 }
 
+/** A World quest, with only the fields the arc groups by made interesting. */
+function worldQuest(id: string, name: string, initial: string, scenes: string[]): Quest {
+  return { id, name, summary: '', stages: [initial], initial, transitions: [], scene_ids: scenes }
+}
+
 /** A layout runner that answers at once. The real one starts a Web Worker. */
 const layout = () => Promise.resolve({ positions: {} })
 
@@ -543,7 +548,10 @@ describe('what is honestly out of reach', () => {
     await enterCouncil()
     expect(
       screen.getByText(/Opening a witness needs generated reachability scenarios/),
-    ).toHaveTextContent(/generated reachability scenarios and a Flow overlay/)
+      // The Flow overlay half of this landed in #188, so the sentence now
+      // claims only what is still missing — and says so without implying that
+      // an unplayed scene has been shown unreachable.
+    ).toHaveTextContent(/do not establish reachability either way/)
   })
 
   it('says an affected-build scope cannot be highlighted, and why', async () => {
@@ -701,6 +709,84 @@ describe('shared presentation controls', () => {
     expect(screen.queryByTestId(`flow-node-${OTHER}`)).toBeNull()
     expect(calls('narrative_scene_save')).toHaveLength(0)
     expect(calls('narrative_world_save')).toHaveLength(0)
+  })
+
+  it('groups the arc by the quests World records, and writes nothing to do it', async () => {
+    const beacon = mintId()
+    const aftermath = mintId()
+    quests = [worldQuest(beacon, 'Ashfall inquiry', 'open', [SCENE])]
+    quests.push(worldQuest(aftermath, 'Aftermath', 'closed', [OTHER]))
+    open()
+    await screen.findByTestId(`flow-node-${SCENE}`)
+
+    fireEvent.change(await screen.findByLabelText('Group'), { target: { value: 'quest' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
+
+    // Membership is the project's: each scene is inside the quest whose
+    // scene_ids name it, and nothing was derived from either scene's name.
+    expect(await screen.findByTestId(`flow-node-${beacon}`)).toHaveTextContent('1 elements')
+    expect(screen.getByTestId(`flow-node-${aftermath}`)).toHaveTextContent('1 elements')
+    expect(screen.queryByTestId(`flow-node-${SCENE}`)).toBeNull()
+    // Reading the arc a different way is not an edit to anything.
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(calls('narrative_world_save')).toHaveLength(0)
+    expect(calls('narrative_layout_save')).toHaveLength(0)
+  })
+
+  it('groups by the stage each quest starts in, folding two quests into one box', async () => {
+    quests = [
+      worldQuest(mintId(), 'Ashfall inquiry', 'open', [SCENE]),
+      worldQuest(mintId(), 'Aftermath', 'open', [OTHER]),
+    ]
+    open()
+    await screen.findByTestId(`flow-node-${SCENE}`)
+
+    fireEvent.change(await screen.findByLabelText('Group'), { target: { value: 'questState' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
+
+    expect(await screen.findByTestId('flow-node-state:open')).toHaveTextContent('2 elements')
+    expect(calls('narrative_layout_save')).toHaveLength(0)
+  })
+
+  it('leaves the saved arrangement folded while the arc is read by quest', async () => {
+    const group = mintId()
+    quests = [worldQuest(mintId(), 'Ashfall inquiry', 'open', [SCENE, OTHER])]
+    layoutLoad = {
+      layout: {
+        schemaVersion: 2,
+        graph: { kind: 'arc', arc: 'project' },
+        mode: 'manual',
+        modeUpdatedAt: 'then',
+        nodes: {},
+        groups: {
+          [group]: {
+            id: group,
+            label: 'Evidence',
+            members: [`scene:${SCENE}`],
+            collapsed: true,
+            updatedAt: 'then',
+          },
+        },
+        annotations: {},
+      },
+      notices: [],
+    }
+    open()
+    // The arc opens on the arrangement, closed the way the sidecar says.
+    await screen.findByTestId(`flow-node-${group}`)
+    expect(screen.queryByTestId(`flow-node-${SCENE}`)).toBeNull()
+
+    fireEvent.change(await screen.findByLabelText('Group'), { target: { value: 'quest' } })
+    await screen.findByTestId(`flow-node-${SCENE}`)
+    expect(screen.queryByTestId(`flow-node-${group}`)).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'arrangement' } })
+    // Back to the saved arrangement, still folded: looking at the quests did
+    // not quietly reopen every group somebody had closed, and it did not
+    // rewrite the sidecar to say so.
+    await screen.findByTestId(`flow-node-${group}`)
+    expect(calls('narrative_layout_save')).toHaveLength(0)
+    expect(calls('narrative_scene_save')).toHaveLength(0)
   })
 })
 

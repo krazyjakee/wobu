@@ -58,7 +58,7 @@ fn fixture() -> (Scene, StateSchema, CompileOptions) {
     (scene, schema, options)
 }
 fn graph(scene: &Scene, schema: &StateSchema, options: &CompileOptions) -> Graph {
-    let report = compile(std::slice::from_ref(scene), schema, options);
+    let report = compile(std::slice::from_ref(scene), &[], schema, options);
     assert!(report.graph.is_some(), "{:?}", report.diagnostics);
     report.graph.unwrap()
 }
@@ -338,8 +338,8 @@ fn compile_is_deterministic_and_strips_author_context_and_lifecycle() {
     assert!(first.source_map.contains_key(&scene.beats[0].dialogue[0].variants[0].id.to_string()));
     let other = scene.duplicated();
     assert_eq!(
-        compile(&[scene.clone(), other.clone()], &schema, &options).graph,
-        compile(&[other, scene], &schema, &options).graph
+        compile(&[scene.clone(), other.clone()], &[], &schema, &options).graph,
+        compile(&[other, scene], &[], &schema, &options).graph
     );
 }
 
@@ -347,39 +347,39 @@ fn compile_is_deterministic_and_strips_author_context_and_lifecycle() {
 fn compiler_enforces_release_world_commands_references_and_duplicate_ids() {
     let (mut scene, schema, mut options) = fixture();
     options.profile = Profile::Release;
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
+    assert!(compile(&[scene.clone()], &[], &schema, &options).graph.is_none());
     scene.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Approved;
     // Writable flags alone cannot authorize release output.
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
+    assert!(compile(&[scene.clone()], &[], &schema, &options).graph.is_none());
     options.verified_reviews = reviews::fixture_reviews(&scene);
-    assert!(compile(std::slice::from_ref(&scene), &schema, &options).graph.is_some());
+    assert!(compile(std::slice::from_ref(&scene), &[], &schema, &options).graph.is_some());
     scene.beats[0].dialogue[0].variants[0].text.lifecycle.freshness = Freshness::OutOfDate;
     options.verified_reviews.values_mut().next().unwrap().current_context = "f".repeat(64);
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
+    assert!(compile(&[scene.clone()], &[], &schema, &options).graph.is_none());
     options.profile = Profile::Development;
     options.commands.clear();
     assert!(
-        compile(&[scene.clone()], &schema, &options)
+        compile(&[scene.clone()], &[], &schema, &options)
             .diagnostics
             .iter()
             .any(|d| d.code == "invalid_command")
     );
     scene.beats[0].choices[0].effects.clear();
     scene.beats[0].choices[0].to = Destination::Beat(BeatId::new());
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
+    assert!(compile(&[scene.clone()], &[], &schema, &options).graph.is_none());
     scene.beats[0].choices[0].to = end();
     let entity = scene.id.raw();
     scene.participants.push(Participant { entity, role: String::new() });
     assert!(
-        compile(&[scene.clone()], &schema, &options)
+        compile(&[scene.clone()], &[], &schema, &options)
             .diagnostics
             .iter()
             .any(|d| d.code == "unknown_entity")
     );
     options.known_entities.insert(entity);
-    assert!(compile(std::slice::from_ref(&scene), &schema, &options).graph.is_some());
+    assert!(compile(std::slice::from_ref(&scene), &[], &schema, &options).graph.is_some());
     assert!(
-        compile(&[scene.clone(), scene], &schema, &options)
+        compile(&[scene.clone(), scene], &[], &schema, &options)
             .diagnostics
             .iter()
             .any(|d| d.code == "duplicate_id")
@@ -435,7 +435,8 @@ fn set_effects_and_cross_scene_entry_use_current_state() {
         value: Operand::Literal(Value::Int(8)),
     })];
     scene.beats[0].choices[0].to = Destination::Scene(next_scene.id);
-    let graph = compile(&[scene.clone(), next_scene.clone()], &schema, &options).graph.unwrap();
+    let graph =
+        compile(&[scene.clone(), next_scene.clone()], &[], &schema, &options).graph.unwrap();
     let mut run = start(graph.clone(), &scene);
     run.advance().unwrap();
     assert_eq!(
@@ -483,19 +484,19 @@ fn draft_slots_and_malformed_logic_produce_source_addressed_errors() {
     let beat_id = scene.beats[0].id;
     let slot_id = scene.beats[0].dialogue[0].id;
     scene.beats[0].dialogue[0].variants.clear();
-    let draft = compile(&[scene.clone()], &schema, &options);
+    let draft = compile(&[scene.clone()], &[], &schema, &options);
     assert!(draft.graph.is_some());
     let missing = draft.diagnostics.iter().find(|d| d.code == "missing_text").unwrap();
     assert_eq!(missing.site, Site::DialogueSlot { beat: beat_id, slot: slot_id });
     assert_eq!(missing.severity, Severity::Warning);
     options.profile = Profile::Release;
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
+    assert!(compile(&[scene.clone()], &[], &schema, &options).graph.is_none());
     options.profile = Profile::Development;
     scene.beats[0].choices[0].effects = vec![Effect::Set(Assignment {
         var: name("has_logbook"),
         value: Operand::Literal(Value::Bool(false)),
     })];
-    let invalid = compile(&[scene], &schema, &options);
+    let invalid = compile(&[scene], &[], &schema, &options);
     assert!(invalid.graph.is_none());
     let effect =
         invalid.diagnostics.iter().find(|d| d.message.contains("owned by the host")).unwrap();
@@ -510,7 +511,7 @@ fn invalid_command_arguments_and_acknowledgement_changes_are_rejected() {
     let Effect::Command(command) = &mut scene.beats[0].choices[0].effects[1] else { panic!() };
     command.args = vec![Operand::Literal(Value::Bool(true))];
     assert!(
-        compile(&[scene], &schema, &options)
+        compile(&[scene], &[], &schema, &options)
             .diagnostics
             .iter()
             .any(|d| d.code == "invalid_command")
@@ -546,7 +547,7 @@ fn blank_choice_labels_warn_during_authoring_and_block_release_at_the_choice() {
         [(Profile::Development, Severity::Warning), (Profile::Release, Severity::Error)]
     {
         options.profile = profile;
-        let report = compile(&[scene.clone()], &schema, &options);
+        let report = compile(&[scene.clone()], &[], &schema, &options);
         assert_eq!(report.graph.is_some(), profile == Profile::Development);
         assert_eq!(report.diagnostics.len(), 1);
         let diagnostic = &report.diagnostics[0];
@@ -557,7 +558,7 @@ fn blank_choice_labels_warn_during_authoring_and_block_release_at_the_choice() {
     }
     scene.beats[0].choices[0].label = "Present evidence".into();
     options.verified_reviews = reviews::fixture_reviews(&scene);
-    assert!(compile(&[scene], &schema, &options).graph.is_some());
+    assert!(compile(&[scene], &[], &schema, &options).graph.is_some());
 }
 
 #[test]
@@ -565,7 +566,7 @@ fn release_review_evidence_binds_exact_identity_wording_and_current_context() {
     let (scene, schema, mut options) = fixture();
     options.profile = Profile::Release;
     options.verified_reviews = reviews::fixture_reviews(&scene);
-    assert!(compile(std::slice::from_ref(&scene), &schema, &options).graph.is_some());
+    assert!(compile(std::slice::from_ref(&scene), &[], &schema, &options).graph.is_some());
     for change in 0..8 {
         let mut changed = options.clone();
         let proof = changed.verified_reviews.values_mut().next().unwrap();
@@ -581,11 +582,11 @@ fn release_review_evidence_binds_exact_identity_wording_and_current_context() {
             _ => unreachable!(),
         }
         assert!(
-            compile(std::slice::from_ref(&scene), &schema, &changed).graph.is_none(),
+            compile(std::slice::from_ref(&scene), &[], &schema, &changed).graph.is_none(),
             "case {change}"
         );
     }
     let mut edited = scene.clone();
     edited.beats[0].dialogue[0].variants[0].text.set_body("Changed wording", Provenance::Human);
-    assert!(compile(&[edited], &schema, &options).graph.is_none());
+    assert!(compile(&[edited], &[], &schema, &options).graph.is_none());
 }

@@ -16,6 +16,8 @@ const frame: PreviewFrame = {
     },
   },
   trace: { committed: true, error: null, omitted: 0, records: [] },
+  branch: [],
+  build: 'build-1',
 }
 describe('scenario capture', () => {
   it('records stable identities and state without prose, revision or command tokens', () => {

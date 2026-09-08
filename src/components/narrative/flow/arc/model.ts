@@ -1,3 +1,4 @@
+import type { Quest } from '../../../../lib/api/narrativeWorld'
 import type { NarrativeTarget } from '../../../../store/ui'
 import type {
   FlowDiagnostic,
@@ -26,18 +27,20 @@ import type {
  * `model.test.ts` holds it to that with a scene whose prose is nothing but
  * other scenes' names.
  *
- * ── the quest model does not exist yet ───────────────────────────────────────
+ * ── where the quests come from ───────────────────────────────────────────────
  *
- * #187 asks for grouping by quest and by quest state. Quests are #155, and #155
- * is not built: there is no quest type, no store for one, and no command that
- * would return one. So `FlowArc.quests` is `FlowQuest[] | null`, and **null is
- * not "no quests"** — it is "this build cannot say". When it is null the
- * grouping control is refused with that reason, rather than falling back to
- * something derived from scene names, folder layout or id prefixes, all of
+ * #187 asks for grouping by quest and by quest state, and both read the
+ * project's own World document: `worldQuests` below turns its quests into
+ * `FlowQuest`s and files each scene under the quest whose `scene_ids` lists it
+ * — the same membership the Scene library's quest facet is built from. Nothing
+ * is derived from a scene's name, its folder or the shape of its id, all of
  * which would look like a quest model and be a guess.
  *
- * The demonstration fixture is the only thing in the app that fills it in, and
- * the view says so on screen.
+ * `FlowArc.quests` is still `FlowQuest[] | null`, and **null is still not "no
+ * quests"** — it is "this build cannot say", which is what a World read that
+ * has not answered yet, or that failed, leaves behind. When it is null the
+ * grouping control is refused with that reason rather than grouping by
+ * something else and calling it a quest.
  *
  * ── why an arc is a `FlowLevel` ──────────────────────────────────────────────
  *
@@ -52,17 +55,72 @@ import type {
  */
 
 /**
- * One quest, once #155 exists to define one.
+ * One quest, as the arc groups by it.
  *
- * `state` is a plain string rather than an enum for the same reason: the states
- * a project's quests can be in are the project's to declare, and inventing a
- * closed set here would be inventing half of #155.
+ * `state` is a plain string rather than an enum because the stages a project's
+ * quests move through are the project's own to declare: World quests carry a
+ * `stages` list of names, and inventing a closed set here would be inventing a
+ * vocabulary on the author's behalf.
  */
 export interface FlowQuest {
   id: string
   name: string
   /** Null when the quest has no recorded state, which is different from having one. */
   state: string | null
+}
+
+/**
+ * The World document's quests, and which quest each scene is filed under.
+ *
+ * ── what `state` is, and what it is not ──────────────────────────────────────
+ *
+ * The stage the quest **starts** in. That is the only stage a project records:
+ * a running quest state lives in a player's save file, which an authoring tool
+ * never sees, so "group by quest state" can only ever mean "group by the stage
+ * these quests begin in". The view says that in as many words, because a
+ * grouping that quietly means something else is worse than no grouping.
+ *
+ * ── a scene two quests both claim ────────────────────────────────────────────
+ *
+ * World lets a scene appear in more than one quest's `scene_ids`, and a canvas
+ * cannot draw one box inside two frames. So the first quest in document order
+ * wins, deterministically, and every scene that was claimed twice is returned
+ * in `shared` so the pane can say which ones and how many. Silently picking one
+ * would leave a designer wondering why a scene is not in the quest they opened.
+ *
+ * `undefined` in means `quests: null` out — "this build cannot say" — which is
+ * what an unanswered or failed World read has to produce.
+ */
+export interface ArcQuests {
+  /** Null when the World document could not be read. Never an empty list for that. */
+  quests: FlowQuest[] | null
+  questOf: (sceneId: string) => string | null
+  /** Scenes more than one quest lists, filed under the first. */
+  shared: string[]
+}
+
+export function worldQuests(quests: readonly Quest[] | undefined | null): ArcQuests {
+  if (!quests) return { quests: null, questOf: () => null, shared: [] }
+  const owner = new Map<string, string>()
+  const shared: string[] = []
+  for (const quest of quests) {
+    for (const sceneId of quest.scene_ids) {
+      const held = owner.get(sceneId)
+      if (held === undefined) owner.set(sceneId, quest.id)
+      else if (held !== quest.id && !shared.includes(sceneId)) shared.push(sceneId)
+    }
+  }
+  return {
+    quests: quests.map((quest) => ({
+      id: quest.id,
+      name: quest.name,
+      // Empty rather than absent is what a half-written quest leaves; "no
+      // recorded state" is the honest reading of it, not a stage called "".
+      state: quest.initial || null,
+    })),
+    questOf: (sceneId) => owner.get(sceneId) ?? null,
+    shared,
+  }
 }
 
 export interface FlowArc {
@@ -73,10 +131,11 @@ export interface FlowArc {
 }
 
 /** How the arc is carved up. Presentation: none of it is written to the model. */
-export type ArcGrouping = 'none' | 'quest' | 'questState'
+export type ArcGrouping = 'none' | 'arrangement' | 'quest' | 'questState'
 
 export const ARC_GROUPINGS: { id: ArcGrouping; label: string }[] = [
   { id: 'none', label: 'No grouping' },
+  { id: 'arrangement', label: 'By arrangement group' },
   { id: 'quest', label: 'By quest' },
   { id: 'questState', label: 'By quest state' },
 ]
@@ -174,6 +233,16 @@ export function arcGrouping(
   arc: FlowArc,
   mode: ArcGrouping,
 ): { groups: FlowGroup[]; of: (element: FlowElement) => string | null } {
+  /*
+   * The level's own containers, which on a project arc are the arrangement
+   * groups somebody drew in #185. They are the one grouping already written
+   * down, so this hands them straight back rather than rebuilding them:
+   * switching away and back has to land on the same boxes, closed the way the
+   * sidecar says they were.
+   */
+  if (mode === 'arrangement')
+    return { groups: arc.level.groups, of: (element) => element.groupId ?? null }
+
   const quests = arc.quests
   if (mode === 'none' || quests === null) return { groups: [], of: () => null }
 

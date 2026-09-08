@@ -17,6 +17,7 @@ import {
   FLOW_KIND_ICON,
   FLOW_KIND_LABEL,
   type FlowElement,
+  type FlowGroup,
   type FlowKind,
   type FlowLevel,
   type FlowPort,
@@ -47,6 +48,11 @@ import {
  */
 
 const SCENE_CREATABLE: FlowKind[] = ['beat', 'choice', 'condition', 'outcome', 'end']
+
+/** A level's own containers, and the default when nothing regroups it. */
+function ownGroup(element: FlowElement): string | null {
+  return element.groupId ?? null
+}
 
 function readingOrder(scene: FlowLevel): { element: FlowElement; reachable: boolean }[] {
   const byId = new Map(scene.elements.map((element) => [element.id, element]))
@@ -82,6 +88,7 @@ export function FlowOutline({
   authoring,
   actions,
   presentation,
+  grouping,
 }: {
   scene: FlowLevel
   onChange: (scene: FlowLevel) => void
@@ -92,6 +99,15 @@ export function FlowOutline({
   presentation?: FlowPresentation
   /** Which kinds this level can create. The arc creates scenes and nothing else. */
   creatable?: readonly FlowKind[]
+  /**
+   * Regroup without editing, exactly as the canvas takes it.
+   *
+   * The same object `FlowCanvas` is handed, so the arc's quests are the same
+   * containers with the same ids in both modes — which is what makes the
+   * outline a *full* alternative rather than a second view with a grouping of
+   * its own that a reader would have to collapse all over again.
+   */
+  grouping?: { groups: readonly FlowGroup[]; of: (element: FlowElement) => string | null }
   /** The unauthored way out this level offers, if any. See `FlowGraphNode.spare`. */
   spare?: (element: FlowElement) => FlowPort | null
   /** Go into this element — the arc's drill-down, as a plain button. */
@@ -100,7 +116,9 @@ export function FlowOutline({
   targetOf?: Parameters<typeof useSceneEdits>[0]['targetOf']
 }) {
   const container = useRef<HTMLOListElement>(null)
-  useFlowGroupPresentation(presentation, readOnly)
+  useFlowGroupPresentation(presentation, readOnly, !!grouping)
+  const groups = grouping?.groups ?? scene.groups
+  const groupOf = grouping?.of ?? ownGroup
   const closedGroups = useFlowLevel((state) => state.closedGroups)
   const setClosedGroups = useFlowLevel((state) => state.setClosedGroups)
   const participant = useFlowLevel((state) => state.participant)
@@ -135,9 +153,9 @@ export function FlowOutline({
         <button
           type="button"
           className="btn btn-sm"
-          disabled={!scene.groups.length}
+          disabled={!groups.length}
           onClick={() =>
-            setClosedGroups(closedGroups.length ? [] : scene.groups.map((group) => group.id))
+            setClosedGroups(closedGroups.length ? [] : groups.map((group) => group.id))
           }
         >
           {closedGroups.length ? 'Open all groups' : 'Close all groups'}
@@ -160,7 +178,7 @@ export function FlowOutline({
         <span key={announcement.seq}>{announcement.text}</span>
       </p>
       <ol ref={container} className="nrt-outline" aria-label={`${scene.name} outline`}>
-        {scene.groups.map((group) => (
+        {groups.map((group) => (
           <li className="nrt-outline-group" key={`group:${group.id}`}>
             <button
               type="button"
@@ -177,12 +195,15 @@ export function FlowOutline({
               {closedGroups.includes(group.id) ? 'Open' : 'Close'} group {group.name}
             </button>
             <span>
-              {scene.elements.filter((element) => element.groupId === group.id).length} elements
+              {scene.elements.filter((element) => groupOf(element) === group.id).length} elements
             </span>
           </li>
         ))}
         {rows
-          .filter(({ element }) => !element.groupId || !closedGroups.includes(element.groupId))
+          .filter(({ element }) => {
+            const owner = groupOf(element)
+            return !owner || !closedGroups.includes(owner)
+          })
           .map(({ element, reachable }) => {
             const status = element.status ? NARRATIVE_STATUS[element.status] : null
             const selected = element.id === selectedId

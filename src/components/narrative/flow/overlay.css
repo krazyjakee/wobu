@@ -1,0 +1,115 @@
+/* The Preview route, drawn over the authoring canvas.
+   Every rule here pairs its tint with a border style, and every mark carries
+   its own word and glyph in the markup — so the route is readable with no
+   colour at all, which is the encoding #188 asks for by name. */
+
+.nrt-route-cap {
+  pointer-events: auto;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+button.nrt-route-cap {
+  font-family: inherit;
+}
+.nrt-route-cap.is-route-played,
+.nrt-badge.is-route-played {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+/* Doubled rather than merely tinted: "here now" is the one mark a reader looks
+   for first, and a heavier ring finds it before any hue does. */
+.nrt-route-cap.is-route-current,
+.nrt-badge.is-route-current {
+  border-width: 2px;
+  border-color: var(--l-place);
+  color: var(--text);
+}
+.nrt-route-cap.is-route-open,
+.nrt-badge.is-route-open {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+.nrt-route-cap.is-route-blocked,
+.nrt-badge.is-route-blocked {
+  border-style: dotted;
+  border-color: var(--warn);
+  color: var(--text-dim);
+}
+
+/* The box itself, so a route is legible when the caps are off screen. The
+   outline is drawn outside the border the node already has, which is why a
+   marked node never changes size and never moves its neighbours. */
+.nrt-node.is-route-played {
+  outline: 2px solid var(--ok);
+  outline-offset: 2px;
+}
+.nrt-node.is-route-current {
+  outline: 3px double var(--l-place);
+  outline-offset: 2px;
+}
+.nrt-node.is-route-open {
+  outline: 2px dashed var(--border-str);
+  outline-offset: 2px;
+}
+.nrt-node.is-route-blocked {
+  outline: 2px dotted var(--border-str);
+  outline-offset: 2px;
+}
+
+.nrt-route-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.nrt-route-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nrt-route-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.nrt-route-limits li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.nrt-route-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  font-size: 12px;
+}
+.nrt-route-block table {
+  border-collapse: collapse;
+  text-align: left;
+}
+.nrt-route-block th,
+.nrt-route-block td {
+  padding: 3px 10px 3px 0;
+}
+.nrt-route-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-dim);
+}
+
+/* The row in the Preview transcript the canvas jumped to. Marked as well as
+   scrolled: a list that silently scrolled would leave a reader who was not
+   watching with no idea which row was asked for. */
+.nrt-preview-trace > li[aria-current='step'] {
+  border-left: 3px solid var(--l-place);
+  padding-left: 8px;
+}

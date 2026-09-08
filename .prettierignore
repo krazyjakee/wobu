@@ -29,3 +29,10 @@ src-tauri/Cargo.lock
 
 # Canonical byte golden: compact JSON and exact bytes are part of the package contract.
 src-tauri/crates/wobu-narrative-package/tests/fixtures/manifest.json
+
+# Canonical narrative source in Wobu's own writer's spelling (#167). A Rust test
+# requires reading and rewriting each of these to produce identical bytes, so
+# that opening the example in the app and saving it shows no diff. Prettier's
+# YAML indentation is a different, equally valid spelling — and reformatting a
+# byte golden breaks the example it is tidying.
+examples/narrative/harbor-voices/texts/

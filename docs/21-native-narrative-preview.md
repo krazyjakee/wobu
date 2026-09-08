@@ -85,5 +85,36 @@ Migration is an opt-in Rust API, not an automatic desktop checkpoint upgrade. Ch
 pinned to their compiled graph. Trace retention is explicitly bounded and may be incomplete for very
 large actions. Seed storage still reserves a future policy; selection remains authored first-match.
 Subsequent work adds [persisted scenarios](22-narrative-scenarios.md) and
-[native packaging](20-native-narrative-packages.md). Flow overlays (#188) remain planned; N5 engine
-work stays excluded.
+[native packaging](20-native-narrative-packages.md). N5 engine work stays excluded.
+
+## The Preview route on the Flow canvas
+
+A frame carries two things beyond the trace so the Flow canvas can draw the run without matching
+text or inferring anything (#188):
+
+- `branch` — every choice at the position the run is stopped at, each with its label, whether it is
+  available, and the recorded evaluation of its gate as ordinary trace records. `Yield::Choices`
+  lists only what a player may pick, which is right for a game and not enough for authoring; and a
+  checkpoint restore performs no action, so its trace is empty and this is the only evidence there
+  is.
+- `build` — the compiled content the run is pinned to. Preview compiles *saved* source, so an
+  overlay outlives the source it describes the moment somebody edits a scene.
+
+The canvas derives everything else from the trace it already had. Each visited box wears a cap with
+a word, a glyph and its position along the route; the current position, branches that were open and
+not taken, and branches that were unavailable each get their own word and border style, so the route
+reads with no colour at all, and a legend lists the marks that are actually present. Selecting an
+unavailable branch names the authored field (`choice:<ulid>.requires`), the part of the condition
+that did not hold as the writer wrote it, and every variable the gate read with the value it read.
+
+The overlay is derived on render and writes nothing: it cannot reach the scene document, the
+arrangement sidecar or any project file. It updates on restart, checkpoint restore and step-back
+because each is simply a different list of frames, and it says when the scene has unsaved edits or
+has lost an element the route names. A saved scenario ([#162](22-narrative-scenarios.md)) can be
+opened as an overlay without replaying it; a tape records the boundaries and choices, not the
+evaluations, so a branch it did not offer is drawn closed without the values that closed it, and the
+pane says so.
+
+Clicking a box's route cap opens the Preview transcript at that step, and each trace record offers
+**Centre in Flow**. The arc view gets a per-scene "played" badge and nothing more, because Preview
+plays one scene at a time — that limitation is stated in the pane, not only here.
