@@ -382,7 +382,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 - [ ] [Add the Narrative workspace and scene navigation](https://github.com/krazyjakee/wobu/issues/154)
 - [ ] [Edit narrative facts, knowledge, relationships, events, and quests](https://github.com/krazyjakee/wobu/issues/155)
 - [ ] [Author scenes, beats, choices, consequences, and handwritten dialogue](https://github.com/krazyjakee/wobu/issues/156)
-- [ ] [Support structured YAML source with diagnostics and form round trips](https://github.com/krazyjakee/wobu/issues/157)
+- [x] [Support structured YAML source with diagnostics and form round trips](https://github.com/krazyjakee/wobu/issues/157)
 - [ ] [Spike: choose the Flow canvas library, layout engine, and node vocabulary](https://github.com/krazyjakee/wobu/issues/184)
 - [ ] [Persist Flow layout as presentation metadata separate from narrative source](https://github.com/krazyjakee/wobu/issues/185)
 - [ ] [Add the scene Flow canvas for beats, choices, conditions, and outcomes](https://github.com/krazyjakee/wobu/issues/186)
@@ -392,11 +392,12 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 
 - [ ] [Compile narrative source into a validated deterministic graph](https://github.com/krazyjakee/wobu/issues/158)
 - [ ] [Implement the offline narrative runner and versioned save state](https://github.com/krazyjakee/wobu/issues/159)
-- [ ] [Export and validate versioned native narrative packages](https://github.com/krazyjakee/wobu/issues/160)
+- [x] [Export and validate versioned native narrative packages](https://github.com/krazyjakee/wobu/issues/160)
 - [ ] [Play scenes in Preview with state controls and source-linked traces](https://github.com/krazyjakee/wobu/issues/161)
 - [ ] [Save narrative scenarios and assert branch regression traces](https://github.com/krazyjakee/wobu/issues/162)
 - [ ] [Add the quest and arc Flow view with scene nodes and drill-down](https://github.com/krazyjakee/wobu/issues/187)
 - [ ] [Highlight the played route and unavailable branches in Flow during Preview](https://github.com/krazyjakee/wobu/issues/188)
+- [x] [Complete save migration and Preview decision traces](https://github.com/krazyjakee/wobu/issues/195)
 
 ### [N3 — Generation and editorial review](https://github.com/krazyjakee/wobu/milestone/17)
 

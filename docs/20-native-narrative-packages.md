@@ -126,5 +126,16 @@ blockers and concurrent scene/state changes without mutating project canon.
 
 React tests verify profile controls, validation blockers, destination requirements, checked-identity
 publication and visible errors. Those tests mock IPC; they do not establish native Tauri rendering
-or real filesystem publication. Native screenshots/acceptance evidence, when recorded for this
-increment, are documented in the PR separately from these unit/command tests.
+or real filesystem publication.
+
+A separate Linux Tauri/WebKit check used the handwritten project from the
+[native Preview walkthrough](21-native-narrative-preview.md), real Rust IPC and a new destination
+outside the project. Development export with `{"file_record":[]}` and debug maps wrote two scenes,
+four strings and five payload files (3,896 bytes) plus the manifest. The
+[success screenshot](screenshots/narrative-export-native.png) shows payload identity
+`442d76f525538fd1783ba2e5ad1656996e2b0e764491cf5089c4c0ce4353ba72`.
+The package reader also validated the published files and hashes. A second export to that folder was [refused](screenshots/narrative-export-existing-native.png).
+Switching to Release [blocked publication](screenshots/narrative-export-release-blocked-native.png)
+because the three handwritten dialogue variants were unapproved drafts. All 22 canonical file
+hashes from the Preview audit remained unchanged. This native check establishes desktop export;
+it does not claim engine integration or a voiced production package.
