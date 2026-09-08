@@ -394,3 +394,43 @@ fn an_ordinary_failure_message_comes_through_unchanged() {
     assert_eq!(clean.message, "Anthropic is rate limiting this key.");
     assert_eq!(clean.detail, None);
 }
+
+#[test]
+fn narrative_build_publication_cannot_follow_a_changed_project_session() {
+    use crate::commands::narrative_build::plan_saved;
+    let source = r#"{"scope":"all_selected","containers":[],"state":{},"commands":{},"token_budget":4000,"max_output_tokens":512}"#;
+    for same_folder in [false, true] {
+        let (dir, original_root, state) = open_test_state("Original build session");
+        let replacement_root = if same_folder {
+            original_root.clone()
+        } else {
+            let project = Project::create(&dir.0, "Replacement build session").unwrap();
+            project.root().to_path_buf()
+        };
+        let outcome = plan_saved(&state, source, || {
+            // Deterministic scheduling point: reconciliation has finished but
+            // authoring publication has not acquired the project mutex yet.
+            state.close();
+            let project = Project::open(&replacement_root).unwrap();
+            *state.slot.lock() = Some(Open {
+                project,
+                watcher: None,
+                presence: Presence::start(&replacement_root),
+                offline: false,
+            });
+        });
+        assert!(outcome.is_err(), "A stale session published a build");
+        assert!(state.with(|project| Ok(project.narrative_build_ids()?)).unwrap().is_empty());
+        if !same_folder {
+            assert!(
+                Project::open(&original_root).unwrap().narrative_build_ids().unwrap().is_empty()
+            );
+        }
+        // The replacement remains usable through its own newly captured ticket.
+        let current = plan_saved(&state, source, || {}).unwrap();
+        assert_eq!(
+            state.with(|project| Ok(project.narrative_build_ids()?)).unwrap(),
+            vec![current.id]
+        );
+    }
+}

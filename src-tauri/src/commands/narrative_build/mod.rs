@@ -25,9 +25,22 @@ pub async fn narrative_build_plan(
     state: State<'_, AppState>,
     source: String,
 ) -> CommandResult<Build> {
-    let input = serde_json::from_str(&source).map_err(invalid)?;
-    state.reconcile_now()?;
-    state.with(|project| {
+    plan_saved(&state, &source, || {})
+}
+/// Bind authoring publication to the session that requested the plan. The hook
+/// exercises the unlocked reconciliation/publication boundary deterministically.
+pub(crate) fn plan_saved(
+    state: &AppState,
+    source: &str,
+    after_reconcile: impl FnOnce(),
+) -> CommandResult<Build> {
+    let (ticket, ()) = state.ticket(|_| Ok(()))?;
+    let input = serde_json::from_str(source).map_err(invalid)?;
+    if state.reconcile_project_now(ticket.project)? {
+        state.announce_local_change(ticket.project);
+    }
+    after_reconcile();
+    state.with_ticket(&ticket, |project| {
         let selection = crate::enhance::selection(&project.meta().providers);
         let model = crate::enhance::planning_model(&selection)?;
         let build = plan::build(project, input, &selection.provider, &model)?;
