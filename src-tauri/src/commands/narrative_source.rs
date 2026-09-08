@@ -143,7 +143,6 @@ fn source_repair(
 ) -> CommandResult<SourceRepair> {
     let document = SceneDocument::parse(yaml)
         .map_err(|error| WobuError::new(Code::Malformed, error.to_string()))?;
-    super::narrative::validate_approval(None, &document.scene, false)?;
     let known = project
         .scene_catalog()?
         .scenes

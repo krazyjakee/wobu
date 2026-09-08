@@ -60,7 +60,6 @@ impl Project {
         expected_id: Option<SceneId>,
     ) -> Result<(narrative::SourceSave, String)> {
         self.ensure_writable()?;
-        super::narrative_review::validate_manual(None, &document.scene)?;
         let _lock = super::narrative_review::scene_lock(self, document.scene.id)?;
         let path = self.scene_source_path(rel)?;
         let (previous, actual) =
@@ -70,6 +69,7 @@ impl Project {
         {
             return Err(Error::Malformed { path, reason: "This source uses an unsupported schema version. Open it in a compatible Wobu; repair cannot downgrade it.".into() });
         }
+        self.validate_scene_repair(rel, &previous, &actual, document)?;
         let yaml = document
             .to_yaml()
             .map_err(|error| Error::Malformed { path: path.clone(), reason: error.to_string() })?;
@@ -125,5 +125,68 @@ impl Project {
                 },
             };
         Ok((saved, recovery_rel))
+    }
+
+    /// A malformed file is not a trustworthy previous Scene. Only an intact
+    /// canonical identity/head header and the exact bound receipt snapshot can
+    /// authorize preservation of editorial metadata. Repair first; make any
+    /// authored changes afterward through the normal guarded editor.
+    fn validate_scene_repair(
+        &self,
+        rel: &str,
+        previous: &str,
+        stamp: &Stamp,
+        document: &SceneDocument,
+    ) -> Result<()> {
+        let has_head =
+            previous.lines().any(|line| line.trim_start().starts_with("editorial_head:"));
+        if document.scene.editorial_head.is_none() && !has_head {
+            return super::narrative_review::validate_manual(None, &document.scene);
+        }
+        let refused = || Error::Malformed {
+            path: self.root().join(rel),
+            reason: concat!(
+                "Repair must retain the intact scene identity and editorial head, ",
+                "and exactly restore its recorded scene. Make authored changes after repair; ",
+                "unprovable history cannot be replaced."
+            )
+            .into(),
+        };
+        let head = document.scene.editorial_head.ok_or_else(refused)?;
+        let prefix = format!(
+            "schema_version: {}\nscene:\n  id: {}\n  editorial_head: {}\n",
+            document.schema_version, document.scene.id, head
+        );
+        if !previous.starts_with(&prefix) {
+            return Err(refused());
+        }
+        let receipt = self
+            .narrative_record(crate::NarrativeRecordKind::Receipt, head)?
+            .ok_or_else(refused)?;
+        narrative::publication::verify_receipt_binding(self.root(), &receipt.document)?;
+        let event: wobu_narrative::review::EditorialEvent =
+            serde_json::from_value(receipt.document.payload)?;
+        if !event.valid() || event.id != head || event.after.id != document.scene.id {
+            return Err(refused());
+        }
+        let mut recorded = event.after;
+        recorded.editorial_head = Some(head);
+        if document.scene != recorded {
+            return Err(refused());
+        }
+        let snapshot = self.review_source(
+            crate::SceneFile { scene: recorded, rel: rel.into(), stamp: Some(stamp.clone()) },
+            None,
+        )?;
+        if snapshot.history_problem.is_some() {
+            return Err(refused());
+        }
+        for event in snapshot.history {
+            let receipt = self
+                .narrative_record(crate::NarrativeRecordKind::Receipt, event.id)?
+                .ok_or_else(refused)?;
+            narrative::publication::verify_receipt_binding(self.root(), &receipt.document)?;
+        }
+        Ok(())
     }
 }
