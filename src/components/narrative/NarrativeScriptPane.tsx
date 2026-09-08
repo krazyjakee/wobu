@@ -452,7 +452,15 @@ function ScriptEditor({
                   line={line}
                   slotOnly={variantId === null}
                   disabled={disabled || !!draft}
-                  onApply={(action) => review.mutation.mutateAsync({ view, line, action })}
+                  onApply={(action) =>
+                    review.mutation.mutateAsync({
+                      guard: view.guard,
+                      target: line.target,
+                      context_revision: line.context_revision,
+                      state_json: view.state_json,
+                      action,
+                    })
+                  }
                 />
               ) : null
             }}
