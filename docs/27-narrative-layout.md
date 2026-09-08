@@ -119,6 +119,8 @@ read-only measurement hook reported canvas geometry and React Flow's actual stor
 drags and typing used `xdotool` on Xvfb display 197 at 1440×1100. The temporary bootstrap and
 measurement code were removed afterward. This capture predates the separately integrated Review
 queue, so its disabled Review toolbar button is not evidence about the final review workflow.
+A subsequent theme check also moved note surfaces onto shared light/dark theme tokens; the captured
+note colours precede that styling correction.
 
 The walkthrough moved a beat, assigned it to **Evidence branch**, created and edited a pinned note,
 moved that note, collapsed the group, and reloaded the webview and project. The

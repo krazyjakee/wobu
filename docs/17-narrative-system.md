@@ -386,7 +386,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 - [ ] [Author scenes, beats, choices, consequences, and handwritten dialogue](https://github.com/krazyjakee/wobu/issues/156)
 - [x] [Support structured YAML source with diagnostics and form round trips](https://github.com/krazyjakee/wobu/issues/157)
 - [x] [Spike: choose the Flow canvas library, layout engine, and node vocabulary](https://github.com/krazyjakee/wobu/issues/184)
-- [ ] [Persist Flow layout as presentation metadata separate from narrative source](https://github.com/krazyjakee/wobu/issues/185)
+- [x] [Persist Flow layout as presentation metadata separate from narrative source](https://github.com/krazyjakee/wobu/issues/185)
 - [ ] [Add the scene Flow canvas for beats, choices, conditions, and outcomes](https://github.com/krazyjakee/wobu/issues/186)
 - [ ] [Add a searchable Scene library with saved views and editor navigation](https://github.com/krazyjakee/wobu/issues/191)
 
@@ -404,9 +404,9 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 ### [N3 — Generation and editorial review](https://github.com/krazyjakee/wobu/milestone/17)
 
 - [x] [Resolve attributed narrative generation context for each slot and state](https://github.com/krazyjakee/wobu/issues/163)
-- [ ] [Generate narrative drafts through cancellable provider jobs](https://github.com/krazyjakee/wobu/issues/164)
-- [ ] [Enforce revision-aware generation policy, approval, and freshness](https://github.com/krazyjakee/wobu/issues/165)
-- [ ] [Build the dialogue review queue and revision comparison UI](https://github.com/krazyjakee/wobu/issues/166)
+- [x] [Generate narrative drafts through cancellable provider jobs](https://github.com/krazyjakee/wobu/issues/164)
+- [x] [Enforce revision-aware generation policy, approval, and freshness](https://github.com/krazyjakee/wobu/issues/165)
+- [x] [Build the dialogue review queue and revision comparison UI](https://github.com/krazyjakee/wobu/issues/166)
 - [ ] [Author and generate barks, ambient dialogue, reactions, and supporting text](https://github.com/krazyjakee/wobu/issues/167)
 
 ### [N4 — Incremental builds and narrative analysis](https://github.com/krazyjakee/wobu/milestone/18)
