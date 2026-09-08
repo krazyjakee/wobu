@@ -215,6 +215,12 @@ function useSceneWrite<V>(options: {
           .getState()
           .push(options.projectKey === undefined ? entry : { ...entry, coalesce: false })
       void qc.invalidateQueries({ queryKey: qk.narrativeScenes })
+      // The Scene library is a *projection* of what was just written — the
+      // title, the text coverage, the recorded status — and it stays mounted
+      // behind the editor, so nothing else would ever refetch it. Without this
+      // a rename, an approved line or a filled slot is invisible until the
+      // writer reopens the project, which reads as the save having been lost.
+      void qc.invalidateQueries({ queryKey: ['narrative_library'] })
       // A scene's own problems changed, and so did every other scene's: a
       // destination that named a beat in here is checked against this document.
       void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })

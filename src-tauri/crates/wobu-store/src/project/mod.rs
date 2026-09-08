@@ -17,6 +17,7 @@ pub mod layout_sync;
 mod narrative;
 pub mod narrative_context;
 mod narrative_deletions;
+pub mod narrative_deps;
 pub mod narrative_generation;
 mod narrative_index;
 mod narrative_records;

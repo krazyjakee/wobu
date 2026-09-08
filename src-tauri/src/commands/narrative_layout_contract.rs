@@ -28,6 +28,12 @@ fn package_bytes(project: &Project, path: &Path) -> BTreeMap<String, Vec<u8>> {
 #[test]
 fn layout_only_edits_leave_context_dependencies_approval_records_graph_and_package_bytes_identical()
 {
+    // Extended for #168: the dependency index and the affected set are now two
+    // more artefacts a coordinate must not be able to reach, and they are the
+    // two a mistake would be most expensive in — an arrangement that moved a
+    // fingerprint would mark a project stale every time somebody tidied a
+    // canvas.
+
     let home = std::env::temp_dir().join(format!("wobu-layout-contract-{}", wobu_core::new_id()));
     fs::create_dir_all(&home).unwrap();
     let mut project = Project::create(&home, "Ashfall").unwrap();
@@ -78,6 +84,9 @@ fn layout_only_edits_leave_context_dependencies_approval_records_graph_and_packa
             })
             .collect()
     };
+    project.rebuild_narrative_dependencies().unwrap();
+    let dependencies = project.narrative_dependencies().unwrap();
+    let build_fingerprint = project.narrative_build_fingerprint().unwrap();
     let source_and_receipts = canonical(&project);
     let review_before =
         serde_json::to_vec(&project.review_scene(file.scene.id, None).unwrap()).unwrap();
@@ -110,6 +119,10 @@ fn layout_only_edits_leave_context_dependencies_approval_records_graph_and_packa
         graph
     );
     assert_eq!(package_bytes(&project, &home.join("after-export")), package);
+    assert_eq!(project.narrative_build_fingerprint().unwrap(), build_fingerprint);
+    assert_eq!(project.narrative_dependency_snapshot().unwrap().index(), dependencies);
+    assert_eq!(project.narrative_dependencies().unwrap(), dependencies);
+    assert_eq!(project.narrative_affected().unwrap(), Vec::new());
     drop(project);
     fs::remove_dir_all(home).unwrap();
 }

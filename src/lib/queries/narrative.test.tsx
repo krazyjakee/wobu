@@ -131,7 +131,8 @@ describe('the one choke point for a narrative edit', () => {
       Promise.resolve(command === 'narrative_scene_get' ? before : after),
     )
 
-    const { Wrapper } = wrapper()
+    const { qc, Wrapper } = wrapper()
+    const invalidated = vi.spyOn(qc, 'invalidateQueries')
     const { result } = renderHook(() => useRenameScene(), { wrapper: Wrapper })
     result.current.mutate({ sceneId: 's1', name: 'The hearing' })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -139,6 +140,11 @@ describe('the one choke point for a narrative edit', () => {
     expect(argsOf('narrative_scene_rename')).toEqual({ sceneId: 's1', name: 'The hearing' })
     expect(useUndoStack.getState().past[0]?.undo).toEqual([
       { type: 'sceneSave', scene: before.scene, expected: after.scene, slug: before.slug },
+    ])
+    // The row the rename was started from is a projection of the document that
+    // just changed, and it stays mounted, so nothing else would refetch it.
+    expect(invalidated.mock.calls.map(([options]) => options?.queryKey)).toContainEqual([
+      'narrative_library',
     ])
   })
 

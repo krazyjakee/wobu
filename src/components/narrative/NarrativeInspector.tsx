@@ -9,6 +9,7 @@ import { NarrativeContext } from './NarrativeContext'
 import './narrativeInspector.css'
 import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
 import { SceneOrganization } from './SceneOrganization'
+import { WhyAffected } from './WhyAffected'
 
 /** The current scene draft, shared by Flow, Script and outline selection. */
 export function NarrativeInspector({
@@ -133,6 +134,7 @@ export function NarrativeInspector({
               )}
             </section>
           )}
+          {slot && !draft && <WhyAffected slotId={slot.id} />}
         </>
       )}
       {sceneId && beatId && lineId && slot && !draft ? (

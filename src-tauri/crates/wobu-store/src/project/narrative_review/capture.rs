@@ -170,7 +170,9 @@ impl Project {
         for pair in history.windows(2) {
             let mut parent = pair[1].after.clone();
             parent.editorial_head = Some(pair[1].id);
-            if pair[0].before != parent {
+            if super::write::without_freshness(&pair[0].before)
+                != super::write::without_freshness(&parent)
+            {
                 history_problem = Some(
                     "Editorial history has a discontinuity. Approval cannot be verified.".into(),
                 );
@@ -179,7 +181,9 @@ impl Project {
         if let Some(head) = history.first() {
             let mut current = file.scene.clone();
             current.editorial_head = None;
-            if head.after != current {
+            if super::write::without_freshness(&head.after)
+                != super::write::without_freshness(&current)
+            {
                 history_problem=Some("Scene changed outside its recorded editorial history. Save the manual change before reviewing.".into());
             }
             let by_id = history.iter().map(|event| (event.id, event)).collect::<BTreeMap<_, _>>();

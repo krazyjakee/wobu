@@ -140,6 +140,34 @@ describe('the Text library', () => {
     )
   })
 
+  it('says the catalog is being read, and says so when it cannot be', async () => {
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      command === 'narrative_texts'
+        ? Promise.reject(new Error('narrative/texts is not readable'))
+        : Promise.resolve(respond(command, args ?? {})),
+    )
+    draw()
+    // The in-flight state first: an empty pane while the read is running reads
+    // as a project with no supporting text in it.
+    expect(screen.getByText('Reading supporting text…')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('narrative/texts is not readable')
+    expect(screen.queryByText('No supporting text yet. Choose a template above.')).toBeNull()
+  })
+
+  it('names a listed asset the editor cannot open', async () => {
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      command === 'narrative_text_get'
+        ? Promise.reject(new Error('gate-guard.yaml stopped parsing'))
+        : Promise.resolve(respond(command, args ?? {})),
+    )
+    draw()
+    fireEvent.click(await screen.findByRole('button', { name: /Gate guard/ }))
+    const editor = within(screen.getByLabelText('Supporting text editor'))
+    expect(await editor.findByRole('alert')).toHaveTextContent('gate-guard.yaml stopped parsing')
+    // "Select an asset" is advice the writer has already followed.
+    expect(editor.queryByText('Select an asset to edit it.')).toBeNull()
+  })
+
   it('lists every asset with the kind it is', async () => {
     draw()
     const chosen = await screen.findByRole('button', { name: /Gate guard/ })

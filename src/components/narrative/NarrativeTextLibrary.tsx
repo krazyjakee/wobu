@@ -91,7 +91,10 @@ function TextLibrary({
   }
 
   return (
-    <div className="ntl-view" aria-label="Text library">
+    // A section rather than a div: an `aria-label` on a nameless element is
+    // ignored, so the landmark this pane replaces the Scene library with would
+    // have had no name at all.
+    <section className="ntl-view" aria-label="Text library">
       <header className="ntl-head">
         <h2>Text library</h2>
         <p>
@@ -118,6 +121,16 @@ function TextLibrary({
               run(() => narrativeTextCreate(kind, name.trim(), event.trim()))
             }
           />
+          {/* The catalog's own states, in the list rather than above it: a
+              read that is still in flight and a read that failed are facts
+              about this list, and putting them where the assets would be is
+              what keeps an empty pane from reading as an empty project. */}
+          {catalog.isPending && <p className="ntl-empty">Reading supporting text…</p>}
+          {catalog.isError && (
+            <p role="alert" className="ntl-error">
+              Could not read supporting text: {errorMessage(catalog.error)}
+            </p>
+          )}
           <ul>
             {(catalog.data?.assets ?? []).map((asset) => (
               <li key={asset.id}>
@@ -171,12 +184,21 @@ function TextLibrary({
                 })
               }
             />
-          ) : (
+          ) : !selected ? (
             <p className="ntl-empty">Select an asset to edit it.</p>
+          ) : file.isError ? (
+            // Named rather than silent. The asset is in the catalog, so the
+            // list is offering something the editor cannot open, and "select an
+            // asset" would be advice the writer has already followed.
+            <p role="alert" className="ntl-error">
+              Could not read this asset: {errorMessage(file.error)}
+            </p>
+          ) : (
+            <p className="ntl-empty">Reading this asset…</p>
           )}
         </main>
       </div>
-    </div>
+    </section>
   )
 }
 

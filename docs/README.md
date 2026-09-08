@@ -45,6 +45,8 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [31 — Scene Library](31-narrative-library.md) | Indexed discovery, classifications, saved views and scale evidence |
 | [32 — Narrative Flow](32-narrative-flow.md) | Shared structural editing, explicit destinations, keyboard navigation and bounded arrangements |
 | [33 — Supporting Text](33-narrative-supporting-text.md) | Barks, ambient exchanges, reactions, codex, quest summaries and journals: model, selection, host delivery and export |
+| [34 — Narrative Domain Model](34-narrative-domain-model.md) | Typed records, declared state, stable identities, and the versioned source/runtime type boundary |
+| [35 — Dependency Tracking](35-narrative-dependencies.md) | Field and query dependencies, fingerprints, Why affected, the rebuildable index and the layout exclusion |
 
 Two constraints shape most of the above and are worth knowing up front:
 

@@ -46,6 +46,9 @@ wobu-core.workspace = true
 wobu-narrative.workspace = true
 wobu-narrative-generation.workspace = true
 wobu-narrative-context.workspace = true
+# Field-level dependency tracking (#168). Pure: this crate supplies it a
+# coherent snapshot read from the folder and stores the index it returns.
+wobu-narrative-deps.workspace = true
 
 [dev-dependencies]
 # The integration tests need real encoded pictures rather than the hand-written

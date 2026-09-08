@@ -34,7 +34,9 @@ export const NARRATIVE_UNAVAILABLE = {
   witness:
     'Opening a witness needs generated reachability scenarios (#171). Preview draws the route it played on this canvas, but a scene nothing has played is not thereby unreachable: these source diagnostics do not establish reachability either way.',
   affectedScope:
-    'Highlighting affected beats needs the dependency tracker and build planner (#168, #169).',
+    'Dependency tracking answers which lines an edit affected and why (Context → Why affected). Highlighting them on this canvas, and planning the rebuild, need the build planner (#169).',
+  affectedRebuild:
+    'Rebuilding these lines needs the affected build planner (#169). Nothing here has been queued, and no wording has been changed.',
   diagnostics:
     'Checks cover source errors and missing text. Branch reachability has not been checked.',
 } as const

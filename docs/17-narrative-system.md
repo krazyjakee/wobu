@@ -4,7 +4,9 @@ Status: **In progress**. Flow, scene discovery and manual Script/Source are merg
 increment adds attributed World state, typed scene forms, deterministic compiler/runtime
 foundations, isolated Preview and cancellable prose-generation jobs. Full editorial acceptance and production workflows remain
 in progress or planned; N5 engine integrations are excluded from current work. See
-[current authoring scope and evidence](19-narrative-authoring.md).
+[current authoring scope and evidence](19-narrative-authoring.md). The typed records, declared
+state, stable identities and the versioned source/runtime type boundary are in
+[the narrative domain model](34-narrative-domain-model.md).
 GitHub milestones and issues below track the remaining acceptance criteria.
 
 ## Product contract
@@ -368,10 +370,10 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); [provider jobs](25-narrative-generation.md) now retain separate prose proposals. |
 | Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
 | Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and production recovery (#181). |
-| Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
+| Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. Field-level [dependency tracking and invalidation](35-narrative-dependencies.md). | Incremental builds and analysis (#169–#171). |
 | Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests, native walkthrough and the Flow route overlay. | Cross-scene preview, which the arc view needs before it can draw more than a played badge. |
 | Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Richer domain payloads and production recovery (#181). |
-| Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. Supporting text (#167) authors, compiles, plays and exports through the same model. | Generating supporting text, listing it in the Review queue, precise dependency tracking, localisation/audio and production release workflow. N5 engine integrations are excluded. |
+| Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. Supporting text (#167) authors, compiles, plays and exports through the same model. Precise [dependency tracking](35-narrative-dependencies.md) reports and explains affected lines. | Generating supporting text, listing it in the Review queue, planning affected rebuilds, localisation/audio and production release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
 
@@ -411,7 +413,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 
 ### [N4 — Incremental builds and narrative analysis](https://github.com/krazyjakee/wobu/milestone/18)
 
-- [ ] [Track narrative dependencies and invalidate affected content precisely](https://github.com/krazyjakee/wobu/issues/168)
+- [x] [Track narrative dependencies and invalidate affected content precisely](https://github.com/krazyjakee/wobu/issues/168) — see [dependency tracking](35-narrative-dependencies.md)
 - [ ] [Plan and run affected narrative builds with safe resume](https://github.com/krazyjakee/wobu/issues/169)
 - [ ] [Plan bounded narrative variants and prune unreachable configurations](https://github.com/krazyjakee/wobu/issues/170)
 - [ ] [Surface narrative coverage and consistency diagnostics with witness previews](https://github.com/krazyjakee/wobu/issues/171)
