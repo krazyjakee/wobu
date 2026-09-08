@@ -76,6 +76,7 @@ export const qk = {
  * scene both keep their boxes, so there is nothing a refetch would rescue.
  */
 export function invalidateNarrative(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ['narrative_affected'] })
   void qc.invalidateQueries({ queryKey: ['narrative_library'] })
   void qc.invalidateQueries({ queryKey: ['narrative_review'] })
   void qc.invalidateQueries({ queryKey: ['narrative_world'] })
@@ -99,6 +100,7 @@ export function invalidateNarrative(qc: QueryClient) {
  * Draft keys are explicitly project-scoped and remain until saved/discarded. */
 export async function clearNarrativeReads(qc: QueryClient) {
   const families = new Set([
+    'narrative_affected',
     'narrative_scenes',
     'narrative_library',
     'narrative_scene',

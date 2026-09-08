@@ -11,6 +11,8 @@ import { errorMessage, type Scene } from '../../lib/api'
 import { NarrativeGeneration } from './NarrativeGeneration'
 import { NarrativeContext } from './NarrativeContext'
 import { ReviewQueue } from './review/ReviewQueue'
+import { WhyAffected } from './WhyAffected'
+import { invalidateNarrative } from '../../lib/queries/keys'
 
 /** Supporting text reuses the scene editors' guarded commands and comparisons.
  * The adapter only carries stable asset/entry/slot identities; no scene is saved. */
@@ -55,7 +57,7 @@ export function TextEditorial({
   const chosen = lines.find(({ slot }) => slot.id === slotId) ?? lines[0]
   const close = () => {
     setMode(null)
-    void client.invalidateQueries({ queryKey: ['narrative_text', projectKey] })
+    invalidateNarrative(client)
   }
   return (
     <section aria-label="Text generation and review">
@@ -97,11 +99,14 @@ export function TextEditorial({
             </select>
           </label>
           {chosen ? (
-            <NarrativeContext
-              key={chosen.slot.id}
-              selection={{ scene: asset.id, beat: chosen.entry.id, slot: chosen.slot.id }}
-              slot={chosen.slot}
-            />
+            <>
+              <NarrativeContext
+                key={chosen.slot.id}
+                selection={{ scene: asset.id, beat: chosen.entry.id, slot: chosen.slot.id }}
+                slot={chosen.slot}
+              />
+              <WhyAffected slotId={chosen.slot.id} />
+            </>
           ) : (
             <p>Add and save a line to inspect its context.</p>
           )}
@@ -122,6 +127,7 @@ export function TextEditorial({
           }}
           onApply={async (request) => {
             await narrativeReviewApply(request)
+            invalidateNarrative(client)
             await review.refetch()
           }}
           onContext={narrativeReviewContext}

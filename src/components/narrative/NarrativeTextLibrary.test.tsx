@@ -248,6 +248,45 @@ describe('the Text library', () => {
     expect(await problems.findByText(/nothing to deliver/)).toBeInTheDocument()
   })
 
+  it('distinguishes pending and failed checks from a checked draft with no problems', async () => {
+    let finish!: (value: unknown[]) => void
+    let fail!: (error: Error) => void
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      command === 'narrative_text_diagnostics'
+        ? new Promise((resolve, reject) => {
+            finish = resolve
+            fail = reject
+          })
+        : Promise.resolve(respond(command, args ?? {})),
+    )
+    draw()
+    const editor = await openEditor()
+    const problems = within(screen.getByLabelText('Supporting text diagnostics'))
+    expect(problems.getByText('Saved text diagnostics')).toBeInTheDocument()
+    expect(problems.getByText('Checking supporting text…')).toBeInTheDocument()
+    expect(problems.queryByText('0 problems')).toBeNull()
+    finish([])
+    expect(await problems.findByText('0 problems')).toBeInTheDocument()
+
+    fireEvent.change(editor.getByLabelText('Entry 1, line 1'), {
+      target: { value: 'Draft wording.' },
+    })
+    expect(problems.getByText('Draft diagnostics')).toBeInTheDocument()
+    expect(problems.getByText('Checking supporting text…')).toBeInTheDocument()
+    expect(problems.queryByText('0 problems')).toBeNull()
+    await waitFor(() => {
+      const check = h.invoke.mock.calls
+        .filter(([command]) => command === 'narrative_text_diagnostics')
+        .at(-1)!
+      expect(check[1].asset.entries[0].lines[0].variants[0].text.body).toBe('Draft wording.')
+    })
+    fail(new Error('Project source unavailable'))
+    expect(await problems.findByRole('alert')).toHaveTextContent(
+      'Could not check supporting text: Project source unavailable',
+    )
+    expect(problems.queryByText('0 problems')).toBeNull()
+  })
+
   it('writes nothing at all in a read-only project', async () => {
     draw(true)
     const editor = await openEditor()
@@ -255,6 +294,60 @@ describe('the Text library', () => {
     expect(editor.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(editor.getByRole('button', { name: 'Delete' })).toBeDisabled()
     expect(editor.getByRole('button', { name: 'Add entry' })).toBeDisabled()
+  })
+
+  it('explains the chosen saved text line and refreshes affectedness after a source save', async () => {
+    const source = structuredClone(bark)
+    source.asset.entries!.push({
+      id: 'second-entry',
+      label: 'Second response',
+      lines: [{ ...source.asset.entries![0]!.lines![0]!, id: 'second-line' }],
+    })
+    let changed = true
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) => {
+      if (command === 'narrative_affected') {
+        return Promise.resolve(
+          changed
+            ? ['line', 'second-line'].map((slot) => ({
+                scene: null,
+                asset: 'bark',
+                slot,
+                variant: 'variant',
+                kind: 'changed',
+                before: 'before',
+                after: 'after',
+                explanations: [
+                  {
+                    source: `text/bark/${slot}/when`,
+                    context: 'entry condition',
+                    line: slot,
+                    message: `${slot} condition was edited.`,
+                  },
+                ],
+              }))
+            : [],
+        )
+      }
+      if (command === 'narrative_text_get' || command === 'narrative_text_save')
+        return Promise.resolve(source)
+      return Promise.resolve(respond(command, args ?? {}))
+    })
+    draw()
+    const editor = await openEditor()
+    fireEvent.click(editor.getByRole('button', { name: 'Context' }))
+    expect(await editor.findByText('line condition was edited.')).toBeInTheDocument()
+    expect(editor.queryByText('second-line condition was edited.')).toBeNull()
+    fireEvent.change(editor.getByLabelText('Context line'), { target: { value: 'second-line' } })
+    expect(editor.getByText('second-line condition was edited.')).toBeInTheDocument()
+    expect(editor.queryByText('line condition was edited.')).toBeNull()
+
+    changed = false
+    fireEvent.change(editor.getByLabelText('Name'), { target: { value: 'New name' } })
+    fireEvent.click(editor.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editor.queryByRole('region', { name: 'Why affected' })).toBeNull())
+    expect(
+      h.invoke.mock.calls.filter(([command]) => command === 'narrative_affected'),
+    ).toHaveLength(2)
   })
 })
 

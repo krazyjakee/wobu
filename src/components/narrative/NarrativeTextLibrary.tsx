@@ -26,8 +26,10 @@ import './textLibrary.css'
 import { TextEditorial } from './TextEditorial'
 import { TextAssetContext } from './TextAssetContext'
 import { TextLineFields } from './TextLineFields'
+import { PageControls } from './PageControls'
 import { TypedCondition } from './TypedCondition'
 import { useNarrativeState } from '../../lib/queries'
+import { invalidateNarrative } from '../../lib/queries/keys'
 
 /** The six text kinds share canonical slots, generation and guarded review. */
 export function NarrativeTextLibrary(props: {
@@ -81,6 +83,7 @@ function TextLibrary({
   const visible = matching.slice(currentPage * 25, (currentPage + 1) * 25)
 
   const refresh = async () => {
+    invalidateNarrative(client)
     await client.invalidateQueries({ queryKey: ['narrative_texts', projectKey] })
     await client.invalidateQueries({ queryKey: ['narrative_text', projectKey] })
   }
@@ -190,23 +193,7 @@ function TextLibrary({
           </ul>
           {matching.length > 25 && (
             <div className="ntl-actions" aria-label="Text library pages">
-              <button
-                className="btn"
-                disabled={currentPage === 0}
-                onClick={() => setPage(currentPage - 1)}
-              >
-                Previous page
-              </button>
-              <span>
-                Page {currentPage + 1} of {lastPage + 1}
-              </span>
-              <button
-                className="btn"
-                disabled={currentPage === lastPage}
-                onClick={() => setPage(currentPage + 1)}
-              >
-                Next page
-              </button>
+              <PageControls currentPage={currentPage} lastPage={lastPage} onPage={setPage} />
             </div>
           )}
           {catalog.data?.assets.length === 0 && (
@@ -443,12 +430,21 @@ function AssetEditor({
         onSource={(next) => setTarget({ ...next })}
       />
       <section aria-label="Supporting text diagnostics" className="ntl-diagnostics">
-        <h3>{diagnostics.data?.length ?? 0} problems</h3>
-        <ul>
-          {(diagnostics.data ?? []).map((problem, index) => (
-            <li key={`${problem.code}-${index}`}>{problem.message}</li>
-          ))}
-        </ul>
+        <h3>{dirty ? 'Draft diagnostics' : 'Saved text diagnostics'}</h3>
+        {diagnostics.isPending || diagnostics.isFetching ? (
+          <p role="status">Checking supporting text…</p>
+        ) : diagnostics.isError ? (
+          <p role="alert">Could not check supporting text: {errorMessage(diagnostics.error)}</p>
+        ) : (
+          <>
+            <p role="status">{diagnostics.data.length} problems</p>
+            <ul>
+              {diagnostics.data.map((problem, index) => (
+                <li key={`${problem.code}-${index}`}>{problem.message}</li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
     </>
   )

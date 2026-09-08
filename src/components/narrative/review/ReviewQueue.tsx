@@ -9,6 +9,7 @@ import type {
   ReviewTarget,
 } from '../../../lib/api/narrativeReview'
 import type { GenerationHistory } from '../../../lib/api/narrativeGeneration'
+import { PageControls } from '../PageControls'
 import { ReviewDetail } from './ReviewDetail'
 import {
   EMPTY_REVIEW_FILTERS,
@@ -343,23 +344,7 @@ export function ReviewQueue({
               </p>
             )}
             <nav aria-label="Review queue pages">
-              <button
-                className="btn"
-                disabled={currentPage === 0}
-                onClick={() => setPage(currentPage - 1)}
-              >
-                Previous page
-              </button>
-              <span>
-                Page {currentPage + 1} of {lastPage + 1}
-              </span>
-              <button
-                className="btn"
-                disabled={currentPage === lastPage}
-                onClick={() => setPage(currentPage + 1)}
-              >
-                Next page
-              </button>
+              <PageControls currentPage={currentPage} lastPage={lastPage} onPage={setPage} />
             </nav>
           </section>
           {current ? (
