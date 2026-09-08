@@ -68,7 +68,7 @@ What is connected to the project folder today, and what is not:
 | Variables | Yes | `narrative/state.yaml`; declared finite domains and ownership |
 | Script and Source | Yes | One guarded scene source; typed forms and explicit YAML formatting |
 | Preview | Yes | Compiles saved scenes/state into an isolated graph; playback never writes canon |
-| Text library | **No** | Supporting text kinds remain #167 |
+| Text library | **Partial** | Six kinds author, compile, play and export; generation, review-queue listing and search remain — see [supporting text](33-narrative-supporting-text.md) |
 | Review, Build, Export | **No** | #166, #169, #160 |
 
 Two things #189 asks for are refused with the reason rather than drawn: a badge cannot open a

@@ -371,7 +371,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
 | Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests and native walkthrough. | Flow overlays (#188). |
 | Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Richer domain payloads and production recovery (#181). |
-| Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. | Supporting text (#167), precise dependency tracking, localisation/audio and production release workflow. N5 engine integrations are excluded. |
+| Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. Supporting text (#167) authors, compiles, plays and exports through the same model. | Generating supporting text, listing it in the Review queue, precise dependency tracking, localisation/audio and production release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
 

@@ -7,12 +7,20 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 use wobu_core::Id;
-use wobu_narrative::{SceneDocument, StateDocument, WorldDocument};
+use wobu_narrative::{SceneDocument, StateDocument, TextAssetDocument, WorldDocument};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NarrativeFileKind {
     Scene,
+    /// A supporting text asset (#167): `narrative/texts/<slug>.yaml`.
+    ///
+    /// Its own directory rather than a second document shape inside
+    /// `narrative/scenes/`, because everything that treats scenes as a set —
+    /// the compiler's input, the scene library's paging, a `git add` — would
+    /// otherwise have to learn to filter, and the first caller that forgot
+    /// would compile a bark as a scene with no destinations.
+    Text,
     State,
     World,
     Record(NarrativeRecordKind),
@@ -41,6 +49,9 @@ pub fn classify(rel: &str) -> Option<NarrativeFileKind> {
     }
     if parts[1] == "scenes" && parts[2].ends_with(".yaml") && parts[2].len() > 5 {
         return Some(NarrativeFileKind::Scene);
+    }
+    if parts[1] == "texts" && parts[2].ends_with(".yaml") && parts[2].len() > 5 {
+        return Some(NarrativeFileKind::Text);
     }
     if parts[1] == "objects" && parts[2].strip_suffix(".json").is_some_and(valid_hash) {
         return Some(NarrativeFileKind::Object);
@@ -106,6 +117,7 @@ pub fn paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
     }
     let directories = [
         "scenes",
+        "texts",
         "scenarios",
         "proposals",
         "receipts",
@@ -121,7 +133,7 @@ pub fn paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
         let rel = format!("narrative/{directory}");
         // safe_path requires a registered leaf; validating an absent probe also
         // validates both existing ancestors without creating anything.
-        let probe = if directory == "scenes" {
+        let probe = if directory == "scenes" || directory == "texts" {
             format!("{rel}/probe.yaml")
         } else if directory == "objects" {
             format!("{rel}/{}.json", "0".repeat(64))
@@ -175,6 +187,10 @@ pub fn parse(rel: &str, text: &str) -> Result<(Option<String>, String, serde_jso
         NarrativeFileKind::Scene => {
             let doc = SceneDocument::parse(text).map_err(|e| malformed(e.to_string()))?;
             Ok((Some(doc.scene.id.to_string()), doc.scene.name.clone(), serde_json::to_value(doc)?))
+        }
+        NarrativeFileKind::Text => {
+            let doc = TextAssetDocument::parse(text).map_err(|e| malformed(e.to_string()))?;
+            Ok((Some(doc.asset.id.to_string()), doc.asset.name.clone(), serde_json::to_value(doc)?))
         }
         NarrativeFileKind::State => {
             let doc = StateDocument::parse(text).map_err(|e| malformed(e.to_string()))?;

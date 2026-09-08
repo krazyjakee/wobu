@@ -127,7 +127,9 @@ mod tests {
         beat.outcomes.push(Outcome::new(Destination::End { label: "done".into() }));
         scene.beats.push(beat);
         let package = Package::build(
-            compile(&[scene], &StateSchema::default(), &CompileOptions::default()).graph.unwrap(),
+            compile(&[scene], &[], &StateSchema::default(), &CompileOptions::default())
+                .graph
+                .unwrap(),
             false,
         )
         .unwrap();

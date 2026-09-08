@@ -1,0 +1,120 @@
+schema_version: 1
+asset:
+  id: '00000000000000000000000121'
+  kind: ambient
+  name: Quay talk about the north light
+  summary: Two people the player overhears while crossing the quay.
+  trigger:
+    event: quay_idle
+  sources:
+  - quest: '00000000000000000000000099'
+  participants:
+  - entity: '00000000000000000000000091'
+    role: witness
+  - entity: '00000000000000000000000092'
+    role: dockhand
+  repeat: shuffle
+  policy: edited
+  entries:
+  - id: '00000000000000000000000122'
+    label: Before the bell
+    when:
+      compare:
+        var: knowledge
+        op: ne
+        value:
+          literal: rumour
+    lines:
+    - id: '00000000000000000000000123'
+      speaker:
+        entity: '00000000000000000000000091'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000124'
+        text:
+          revision: c83e2f3f6a2df086bbc24507b14985d3
+          body: It went dark before the bell. I was looking straight at it.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    - id: '00000000000000000000000125'
+      speaker:
+        entity: '00000000000000000000000092'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000126'
+        text:
+          revision: f245332d282801332827516038709b9e
+          body: Wind, then. Wind does that.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    - id: '00000000000000000000000127'
+      speaker:
+        entity: '00000000000000000000000091'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000128'
+        text:
+          revision: 080a2ce394d912ab291607d82a85262a
+          body: Wind doesn't climb the stair and shut the door after it.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+  - id: '00000000000000000000000129'
+    label: Only whispers
+    when:
+      compare:
+        var: knowledge
+        op: eq
+        value:
+          literal: rumour
+    lines:
+    - id: '00000000000000000000000130'
+      speaker:
+        entity: '00000000000000000000000092'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000131'
+        text:
+          revision: 58a71679afac99cafa77ff186c968558
+          body: They're saying the north light's out again.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    - id: '00000000000000000000000132'
+      speaker:
+        entity: '00000000000000000000000091'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000133'
+        text:
+          revision: cc9d22f9756382a4c7b49b4bbfa379cb
+          body: They say a lot. Did you see it?
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    - id: '00000000000000000000000134'
+      speaker:
+        entity: '00000000000000000000000092'
+      policy: edited
+      variants:
+      - id: '00000000000000000000000135'
+        text:
+          revision: a32d1cd03ac525a35e1615aa1944a61e
+          body: No. But they're saying it.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current

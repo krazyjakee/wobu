@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::expr::TypeError;
-use crate::id::{BeatId, DialogueSlotId, Revision, SceneId, VariantId};
+use crate::id::{BeatId, DialogueSlotId, Revision, SceneId, TextEntryId, VariantId};
 use crate::scene::{Destination, DestinationSite, EntityId, Scene, Tombstone, TombstoneTarget};
 use crate::state::StateSchema;
 
@@ -91,6 +91,28 @@ pub enum Site {
         slot: DialogueSlotId,
         variant: VariantId,
     },
+    /// A supporting text asset as a whole (#167).
+    ///
+    /// The counterpart of [`Site::Scene`], and separate from it rather than
+    /// reusing it, because a caller turning a diagnostic into a selection has to
+    /// know which editor to open: naming both containers `Scene` would send a
+    /// reader of a bark's diagnostics to the Flow canvas.
+    TextAsset,
+    /// The asset's host trigger and its condition, rather than the asset as a
+    /// whole — the same distinction [`Site::Entry`] makes for a scene.
+    TextTrigger,
+    TextEntry {
+        entry: TextEntryId,
+    },
+    TextSlot {
+        entry: TextEntryId,
+        slot: DialogueSlotId,
+    },
+    TextVariant {
+        entry: TextEntryId,
+        slot: DialogueSlotId,
+        variant: VariantId,
+    },
 }
 
 impl fmt::Display for Site {
@@ -110,6 +132,13 @@ impl fmt::Display for Site {
             Site::DialogueSlot { beat, slot } => write!(f, "beat {beat}, slot {slot}"),
             Site::Variant { beat, slot, variant } => {
                 write!(f, "beat {beat}, slot {slot}, variant {variant}")
+            }
+            Site::TextAsset => f.write_str("text asset"),
+            Site::TextTrigger => f.write_str("text asset trigger"),
+            Site::TextEntry { entry } => write!(f, "entry {entry}"),
+            Site::TextSlot { entry, slot } => write!(f, "entry {entry}, line {slot}"),
+            Site::TextVariant { entry, slot, variant } => {
+                write!(f, "entry {entry}, line {slot}, variant {variant}")
             }
         }
     }
@@ -161,6 +190,18 @@ pub enum Problem {
 
     #[error("{noun} id {id} appears more than once in this scene")]
     DuplicateId { noun: &'static str, id: String },
+
+    #[error("this text asset has no entries, so its trigger has nothing to deliver")]
+    NoTextEntries,
+
+    #[error("a {kind} is standalone prose and has no cast; remove its participants")]
+    ProseHasCast { kind: &'static str },
+
+    #[error("a {kind} is standalone prose, so only the narrator or the player may voice it")]
+    VoiceNotAllowed { kind: &'static str },
+
+    #[error("a {kind} delivers one line at a time, and this entry has {found}")]
+    WrongLineCount { kind: &'static str, found: usize },
 }
 
 impl Problem {

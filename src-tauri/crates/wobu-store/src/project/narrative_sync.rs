@@ -7,7 +7,9 @@ use crate::{
     narrative::{records::NarrativeRecordKind, registry},
 };
 use serde::{Deserialize, Serialize};
-use wobu_narrative::{GenerationPolicy, ReviewState, SceneDocument};
+use wobu_narrative::{
+    DialogueSlot, GenerationPolicy, ReviewState, SceneDocument, TextAssetDocument,
+};
 
 pub const MAX_NARRATIVE_FILE_BYTES: usize = 2 * 1024 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,7 +111,43 @@ impl Project {
             if immutable || kind == NarrativeFileKind::Record(NarrativeRecordKind::Policy) {
                 can_apply = false;
             }
-            if kind == NarrativeFileKind::Scene && !preserves_editorial(old, &incoming.text)? {
+            let preserved = match kind {
+                NarrativeFileKind::Scene => preserves_editorial(
+                    &scene_slots(old, &incoming.rel)?,
+                    &scene_slots(&incoming.text, &incoming.rel)?,
+                ),
+                NarrativeFileKind::Text => preserves_editorial(
+                    &text_slots(old, &incoming.rel)?,
+                    &text_slots(&incoming.text, &incoming.rel)?,
+                ),
+                _ => true,
+            };
+            if !preserved {
+                can_apply = false;
+            }
+        }
+        if kind == NarrativeFileKind::Text {
+            // The same refusal scene dialogue gets below: an approval attests to
+            // a wording, so a peer offering approved text whose stored revision
+            // no longer describes it is offering an approval nobody gave.
+            let next = TextAssetDocument::parse(&incoming.text)
+                .map_err(|e| Error::Malformed {
+                    path: incoming.rel.clone().into(),
+                    reason: e.to_string(),
+                })?
+                .asset;
+            if next.lines().flat_map(|(_, slot)| &slot.variants).any(|variant| {
+                variant.text.lifecycle.review == ReviewState::Approved
+                    && !variant.text.revision_matches()
+            }) {
+                can_apply = false;
+            }
+            if self
+                .text_catalog()?
+                .assets
+                .iter()
+                .any(|entry| entry.id == next.id && entry.rel != incoming.rel)
+            {
                 can_apply = false;
             }
         }
@@ -233,36 +271,60 @@ fn sync_order(rel: &str) -> u8 {
         _ => 4,
     }
 }
-fn preserves_editorial(old: &str, new: &str) -> Result<bool> {
-    let parse = |text| {
-        SceneDocument::parse(text).map_err(|e| Error::Malformed {
-            path: "narrative/scenes".into(),
-            reason: e.to_string(),
-        })
-    };
-    let old = parse(old)?.scene;
-    let new = parse(new)?.scene;
-    if old.id != new.id {
-        return Ok(false);
+/// One document's identity and its dialogue slots, which is everything the
+/// editorial protection below reads.
+///
+/// Reducing both document kinds to this shape is what lets a bark and a scene
+/// share the rule verbatim. Writing the loop twice would work today and would
+/// be the obvious place for the two to drift the first time somebody tightened
+/// one of them.
+type Slots = (String, Vec<DialogueSlot>);
+
+fn scene_slots(text: &str, rel: &str) -> Result<Slots> {
+    let scene = SceneDocument::parse(text)
+        .map_err(|e| Error::Malformed { path: rel.into(), reason: e.to_string() })?
+        .scene;
+    let slots = scene.dialogue_slots().map(|(_, slot)| slot.clone()).collect();
+    Ok((scene.id.to_string(), slots))
+}
+
+fn text_slots(text: &str, rel: &str) -> Result<Slots> {
+    let asset = TextAssetDocument::parse(text)
+        .map_err(|e| Error::Malformed { path: rel.into(), reason: e.to_string() })?
+        .asset;
+    let slots = asset.lines().map(|(_, slot)| slot.clone()).collect();
+    Ok((asset.id.to_string(), slots))
+}
+
+/// Whether an incoming document leaves every hand-written and locked wording
+/// exactly as it was.
+///
+/// A peer may not replace, weaken or remove text a person wrote, however new it
+/// claims its revision to be. Generated wording nobody has touched is the one
+/// exception, because that is precisely the text a newer draft is allowed to
+/// supersede.
+fn preserves_editorial((old_id, old_slots): &Slots, (new_id, new_slots): &Slots) -> bool {
+    if old_id != new_id {
+        return false;
     }
-    for (_, slot) in old.dialogue_slots() {
+    for slot in old_slots {
         for variant in &slot.variants {
             let text = &variant.text;
             if text.lifecycle.policy == GenerationPolicy::Generated {
                 continue;
             }
-            let next = new
-                .dialogue_slots()
-                .find(|(_, s)| s.id == slot.id)
-                .and_then(|(_, s)| s.variants.iter().find(|v| v.id == variant.id));
-            let Some(next) = next else { return Ok(false) };
+            let next = new_slots
+                .iter()
+                .find(|s| s.id == slot.id)
+                .and_then(|s| s.variants.iter().find(|v| v.id == variant.id));
+            let Some(next) = next else { return false };
             if next.text.body != text.body
                 || next.text.provenance != text.provenance
                 || next.text.lifecycle.policy != text.lifecycle.policy
             {
-                return Ok(false);
+                return false;
             }
         }
     }
-    Ok(true)
+    true
 }

@@ -12,6 +12,7 @@ The registry lists only these flat canonical paths:
 | Path | Meaning | Write policy |
 | --- | --- | --- |
 | `narrative/scenes/<slug>.yaml` | Scene graph, accepted/authored text, stable line/variant IDs and editorial state | Guarded |
+| `narrative/texts/<slug>.yaml` | Supporting text asset: trigger, entries, lines, wording and lifecycle (#167) | Guarded |
 | `narrative/state.yaml` | Typed variable declarations | Guarded |
 | `narrative/world.yaml` | Facts, knowledge, relationships, events, quests and restrictions | Guarded |
 | `narrative/scenarios/<id>.json` | Scenario payload | Guarded |
@@ -32,8 +33,10 @@ provider generation, proposal review, production jobs or any N5 behaviour.
 
 Read stamps travel with the record; they are not recovered from SQLite at save time. A stale save
 parks the proposed bytes as a named conflict sibling beside the current file. Unsupported existing
-versions cannot be downgraded by resaving an older envelope. Scene/state/world retain their existing
-versioned YAML formats and guarded source APIs.
+versions cannot be downgraded by resaving an older envelope. Scene/state/world/supporting text retain their existing
+versioned YAML formats and guarded source APIs. Supporting text is part of the accepted-source
+fingerprint, because it compiles into the same graph; it is not yet in the SQLite library
+projection, so the Text library reads the folder rather than a paged index.
 
 All registered paths are normalized project-relative paths. Existing symbolic links in any component
 are refused. Layout, recovery copies, local staging/indexes and credentials are outside canonical

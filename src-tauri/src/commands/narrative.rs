@@ -58,7 +58,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use wobu_narrative::{
     BeatId, ChoiceId, DestinationSite, Diagnostic, DialogueSlotId, OutcomeId, Problem, Scene,
-    SceneCatalog, SceneId, Site, StateDocument, VariantId,
+    SceneCatalog, SceneId, Site, StateDocument, TextEntryId, VariantId,
 };
 use wobu_store::atomic::Stamp;
 use wobu_store::{GraphKey, Layout, LayoutLoad, LayoutNotice, LayoutSave, Project, SourceSave};
@@ -172,7 +172,7 @@ pub enum Precondition {
 
 impl Precondition {
     /// Resolve to the stamp `guarded_write` should compare against.
-    fn against(&self, on_disk: Option<Stamp>) -> Option<Stamp> {
+    pub(super) fn against(&self, on_disk: Option<Stamp>) -> Option<Stamp> {
         match self {
             Precondition::Stamp { stamp } => Some(stamp.clone()),
             Precondition::New => None,
@@ -230,6 +230,12 @@ pub struct DiagnosticView {
     /// position in the beat's list is the only thing that can address one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub intent_index: Option<usize>,
+    /// The entry of a supporting text asset a problem belongs to (#167). A
+    /// separate field from `beat_id` because a caller turning a diagnostic into
+    /// a selection has to open a different editor for each, and one id field
+    /// holding either would make that a guess.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry_id: Option<TextEntryId>,
 }
 
 /// The stable name for a problem.
@@ -251,6 +257,10 @@ fn problem_code(problem: &Problem) -> &'static str {
         Problem::MissingText => "missing_text",
         Problem::RevisionMismatch { .. } => "revision_mismatch",
         Problem::DuplicateId { .. } => "duplicate_id",
+        Problem::NoTextEntries => "no_text_entries",
+        Problem::ProseHasCast { .. } => "prose_has_cast",
+        Problem::VoiceNotAllowed { .. } => "voice_not_allowed",
+        Problem::WrongLineCount { .. } => "wrong_line_count",
     }
 }
 
@@ -268,6 +278,7 @@ impl DiagnosticView {
             variant_id: None,
             entity_id: None,
             intent_index: None,
+            entry_id: None,
         };
         match diagnostic.site {
             Site::Scene => {}
@@ -303,6 +314,23 @@ impl DiagnosticView {
             Site::Variant { beat, slot, variant } => {
                 view.kind = "variant";
                 view.beat_id = Some(beat);
+                view.slot_id = Some(slot);
+                view.variant_id = Some(variant);
+            }
+            Site::TextAsset => view.kind = "textAsset",
+            Site::TextTrigger => view.kind = "textTrigger",
+            Site::TextEntry { entry } => {
+                view.kind = "textEntry";
+                view.entry_id = Some(entry);
+            }
+            Site::TextSlot { entry, slot } => {
+                view.kind = "textLine";
+                view.entry_id = Some(entry);
+                view.slot_id = Some(slot);
+            }
+            Site::TextVariant { entry, slot, variant } => {
+                view.kind = "textVariant";
+                view.entry_id = Some(entry);
                 view.slot_id = Some(slot);
                 view.variant_id = Some(variant);
             }
@@ -768,7 +796,7 @@ fn layout_save(project: &Project, layout: &Layout) -> LayoutSaveView {
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 /// Prepare handwritten wording without credentials or a generation job.
 #[tauri::command]

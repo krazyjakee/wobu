@@ -34,6 +34,8 @@ export type ChoiceId = string
 export type OutcomeId = string
 export type DialogueSlotId = string
 export type VariantId = string
+export type TextAssetId = string
+export type TextEntryId = string
 
 /**
  * A content hash over some wording, not an identity: it changes on every edit.
@@ -374,6 +376,12 @@ export type DiagnosticKind =
   | 'intent'
   | 'dialogueSlot'
   | 'variant'
+  /** Supporting text assets (#167) — see `lib/api/narrativeText.ts`. */
+  | 'textAsset'
+  | 'textTrigger'
+  | 'textEntry'
+  | 'textLine'
+  | 'textVariant'
 
 /**
  * A stable machine-readable name for a problem, distinct from its `message`,
@@ -394,6 +402,10 @@ export type DiagnosticCode =
   | 'missing_text'
   | 'revision_mismatch'
   | 'duplicate_id'
+  | 'no_text_entries'
+  | 'prose_has_cast'
+  | 'voice_not_allowed'
+  | 'wrong_line_count'
   | (string & {})
 
 /**
@@ -418,6 +430,12 @@ export interface NarrativeDiagnostic {
   entityId?: string
   /** Intents have no id; their position in the beat's list addresses them. */
   intentIndex?: number
+  /**
+   * The supporting text entry a problem belongs to (#167). A separate field
+   * from `beatId` because the two open different editors, and one field holding
+   * either would make choosing between them a guess.
+   */
+  entryId?: TextEntryId
 }
 
 /**

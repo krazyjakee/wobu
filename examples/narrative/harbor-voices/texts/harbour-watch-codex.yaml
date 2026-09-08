@@ -1,0 +1,42 @@
+schema_version: 1
+asset:
+  id: '00000000000000000000000161'
+  kind: codex
+  name: The harbour watch
+  summary: The encyclopaedia page a player can read about the watch itself.
+  trigger:
+    event: codex_opened
+  sources:
+  - quest: '00000000000000000000000099'
+  repeat: first
+  policy: edited
+  entries:
+  - id: '00000000000000000000000162'
+    label: Overview
+    lines:
+    - id: '00000000000000000000000163'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000164'
+        text:
+          revision: 9835f61a5ceaf52380012deca1cd0763
+          body: Four lanterns, one bell, and a book that has to be signed before the tide turns. That is the whole of the harbour watch, and it has not changed in ninety years.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    - id: '00000000000000000000000165'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000166'
+        text:
+          revision: 7efeea9c2c936e87fcb877829eb65dd3
+          body: The north lantern is the difficult one. It stands furthest from the seawall stair and its keeper walks back alone.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current

@@ -10,6 +10,13 @@ pub struct TraceSite {
     pub outcome: Option<String>,
     pub slot: Option<String>,
     pub variant: Option<String>,
+    /// The supporting text asset a decision belongs to (#167), when it is not a
+    /// scene decision. Skipped when absent so an existing trace serializes to
+    /// the bytes it always did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

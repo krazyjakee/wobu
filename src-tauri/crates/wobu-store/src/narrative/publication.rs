@@ -76,6 +76,7 @@ impl NarrativeDeletion {
             registry::classify(&self.target),
             Some(
                 NarrativeFileKind::Scene
+                    | NarrativeFileKind::Text
                     | NarrativeFileKind::State
                     | NarrativeFileKind::World
                     | NarrativeFileKind::Record(_)

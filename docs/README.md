@@ -44,6 +44,7 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [30 — Shared Scene Editing](30-narrative-editing-session.md) | Shared drafts, explicit saves, local undo and retained conflicts |
 | [31 — Scene Library](31-narrative-library.md) | Indexed discovery, classifications, saved views and scale evidence |
 | [32 — Narrative Flow](32-narrative-flow.md) | Shared structural editing, explicit destinations, keyboard navigation and bounded arrangements |
+| [33 — Supporting Text](33-narrative-supporting-text.md) | Barks, ambient exchanges, reactions, codex, quest summaries and journals: model, selection, host delivery and export |
 
 Two constraints shape most of the above and are worth knowing up front:
 

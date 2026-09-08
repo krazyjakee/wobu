@@ -202,15 +202,17 @@ record, rather than reusing #192's counts for the changed implementation.
 | #155 | World model/forms, provenance, restrictions, quest stages/membership, related entities, diagnostics and guarded world undo. | Complete character/place backlink navigation and full native workflow acceptance. |
 | #156 | Typed conditions/effects, automatic outcomes and variant controls alongside handwritten authoring. | Full public-command fixture/walkthrough and all structural undo/Flow equivalence acceptance. |
 | #158 | Deterministic validated graph, source maps, typed effects/command signatures and development/release text gates. | Full acceptance review; wider analysis belongs to #170/#171. |
-| #159 / #195 | Pure runner, bounded typed execution, command protocol, version/hash-checked snapshots and explicit validated migration callback. | No random variant-selection policy is authored yet. |
+| #159 / #195 | Pure runner, bounded typed execution, command protocol, version/hash-checked snapshots and explicit validated migration callback. | No random variant-selection policy is authored yet for scene dialogue; supporting text (#167) has its own seeded one. |
 | #161 / #195 | Isolated Preview, starting state, checkpoints, evaluated traces, configurable command results and recorded native walkthrough. | Flow route overlays (#188). |
 | #191 | Real multiquest filtering/column and migration of saved views. | Act/tag metadata, rebuildable index and real-load/native acceptance. |
+| #167 | Six supporting text kinds: typed model, guarded authoring, diagnostics, compiled delivery with repeat state, package capability and one worked example. | Generation, Review-queue listing (which blocks Release export of a project containing supporting text), library search and UI screenshots. |
 
 Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
 (#195), saved regression scenarios (#162), and attributed frozen generation context (#163) are
 implemented alongside portable record indexing, peer sync and explicit recovery (#153).
 [Cancellable generation jobs](25-narrative-generation.md) (#164) retain prose proposals and immutable
 receipts; guarded editorial transitions (#165) and the Review queue (#166) share canonical evidence.
-Supporting text (#167), incremental analysis
+[Supporting text](33-narrative-supporting-text.md) (#167) authors, compiles, plays and exports the six
+kinds; generating it and listing it in the Review queue remain. Incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.
