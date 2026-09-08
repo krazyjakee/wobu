@@ -113,6 +113,14 @@ command calls through the same bridge, including the harness's 16 ms settling wa
 (p95 214 ms). This suggests most warm search time is outside React rendering, but it is not a
 profile of individual backend functions.
 
+A subsequent five-sample command check isolated an additional delay: `narrative_review_get` for
+the selected 50-slot scene took **20,595–21,206 ms**, with frame intervals of **20,085–20,845 ms**.
+In the same series, warmed `narrative_scene_get` took 74–88 ms and `narrative_diagnostics` took
+152–170 ms. The first scene-get sample took 3,910 ms and is retained separately from its four warm
+samples. These figures include the same 16 ms settling wait. Review explicitly reconciles the
+project before capturing its evidence; the measured command boundary does not yet distinguish
+reconciliation time from review capture. This long Review stall remains unresolved.
+
 These observations do not establish repeatable search-budget compliance, combined-filter UI
 performance, cold project-open acceptance, or the full accessibility workflow. #194 and #182 remain
 open; both successful and unsuccessful measurements must be retained when evaluating subsequent
