@@ -1,7 +1,8 @@
 # Native World, conflict and repair checks
 
 Captured 2026-09-08 in the actual Tauri application with WebKitGTK, inside an isolated
-1440 × 900 Xephyr display on Linux. These checks use the Light theme at 100% scale.
+1440 × 900 Xephyr display on Linux. World and conflict checks use the Light theme at
+100% scale; rebuilt repair and read-only checks include both themes at 100%.
 The temporary acceptance projects contain only deliberately created test content.
 No IPC responses or provider results were mocked, and no provider was called.
 
@@ -61,9 +62,36 @@ Commit `41fe6f0` fixes this narrowly using the original intact canonical identit
 header and the exact verified immutable receipt snapshot. Real-file command tests cover
 repair of approved, locked wording, unchanged receipts, exact recovery bytes, reopening
 and valid approval, plus refusal of changed text/policy/context, substituted history,
-tampered receipts and missing identity bindings. Native success must be recaptured with
-a rebuilt binary before being claimed.
+tampered receipts and missing identity bindings. The rebuilt native verification below
+supersedes this baseline failure.
+
+## Rebuilt recorded-source repair: passed
+
+The integrated binary built from root `4b5dbed`, including repair fix `41fe6f0`, was
+restarted with the same isolated settings and display. [The 18.67-second recording](repair-proof-success-keyboard.mp4)
+shows native keyboard removal of the malformed line, Validate, and Save source.
+The UI changes to **Saved source**, and [the Library again contains the repaired scene](repair-proof-recovered-library.png).
+Both [Light](repair-proof-success-light.png) and [Dark](repair-proof-success-dark.png)
+captures show the restored source.
+
+[File and public-command checks](repair-proof-success-checks.json) confirm that the
+complete scene exactly equals its bound editorial receipt snapshot, the original
+editorial head and receipt bytes are unchanged, and the recovery copy's SHA-256 equals
+the original malformed file's SHA-256. No browser errors were recorded. The success
+notice's recovery path did not remain visible after the source refreshed; its existence
+and exact bytes were verified on disk and recorded in the checks file.
+
+## Read-only native controls: passed
+
+The public `project_open` response reports [readOnly true](readonly-proof-open.json).
+The [Library](readonly-proof-library-dark.png) disables New scene, Open Ashfall example,
+and Rename. Flow disables Add beat and Save scene while allowing temporary Auto layout.
+Actual Return on Auto layout rearranges the visible graph. All 11 files in the read-only
+fixture remain byte-for-byte unchanged, as recorded in [the checks](readonly-proof-checks.json).
+Both [Dark](readonly-proof-auto-layout-dark.png) and [Light](readonly-proof-flow-light.png)
+captures show the readable canvas, minimap, read-only notice and disabled authoring actions.
+No browser errors were recorded.
 
 These captures supplement the [both-theme and 150% Flow evidence](../narrative-186/README.md).
-They do not establish native read-only coverage, all #154 states, #194 performance budgets,
+They do not establish all #154 states, #194 performance budgets,
 or completion of the full Ashfall acceptance walkthrough.

@@ -1,0 +1,17 @@
+{
+  "projectOpenReadOnly": true,
+  "libraryActionsDisabled": {
+    "New scene": true,
+    "Open Ashfall example": true,
+    "Rename": true
+  },
+  "flowActionsDisabled": {
+    "Add beat": true,
+    "Save scene": true
+  },
+  "temporaryAutoLayoutEnabled": true,
+  "autoLayoutActivatedBy": "Native Return after harness focus",
+  "allProjectFilesUnchanged": true,
+  "checkedFiles": 11,
+  "browserErrors": []
+}
