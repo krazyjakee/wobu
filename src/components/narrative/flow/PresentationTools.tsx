@@ -78,6 +78,41 @@ export function PresentationTools({
       </button>
       {open && (
         <div className="nrt-presentation-tools" aria-label="Groups and pinned notes">
+          {key && (
+            <fieldset disabled={readOnly}>
+              <legend>Selected node position</legend>
+              {(['x', 'y'] as const).map((axis) => (
+                <label key={axis}>
+                  Node {axis.toUpperCase()}{' '}
+                  <input
+                    type="number"
+                    value={layout.nodes[key]?.[axis] ?? ''}
+                    placeholder="Automatic"
+                    onChange={(event) => {
+                      const value = event.target.valueAsNumber
+                      if (!Number.isFinite(value)) return
+                      const updatedAt = now()
+                      onChange({
+                        ...layout,
+                        mode: 'manual',
+                        modeUpdatedAt: updatedAt,
+                        nodes: {
+                          ...layout.nodes,
+                          [key]: {
+                            x: 0,
+                            y: 0,
+                            ...layout.nodes[key],
+                            [axis]: value,
+                            updatedAt,
+                          },
+                        },
+                      })
+                    }}
+                  />
+                </label>
+              ))}
+            </fieldset>
+          )}
           <label>
             Group name{' '}
             <input

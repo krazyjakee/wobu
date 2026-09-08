@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectSummary } from '../../lib/api'
 import { qk } from '../../lib/queries/keys'
@@ -151,6 +151,30 @@ describe('Narrative discovery and editor handoff', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Flow' }))
     expect(screen.queryByRole('navigation', { name: 'Current scene outline' })).toBeNull()
     expect(screen.queryByRole('complementary', { name: 'Narrative context' })).toBeNull()
+  })
+  it('opens compact auxiliary panes and restores the toggle focus on Escape without losing edits', async () => {
+    useUI.setState({ navCollapsed: true, inspCollapsed: true })
+    renderMode()
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Flow' }))
+    fireEvent.change(screen.getByLabelText('Unsaved draft'), { target: { value: 'Keep this' } })
+    const outline = screen.getByRole('button', { name: 'Scene outline' })
+    fireEvent.click(outline)
+    const beat = within(
+      screen.getByRole('navigation', { name: 'Current scene outline' }),
+    ).getByRole('button', { name: 'Evidence' })
+    await waitFor(() => expect(beat).toHaveFocus())
+    fireEvent.keyDown(beat, { key: 'Escape' })
+    expect(outline).toHaveFocus()
+    expect(outline).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('navigation', { name: 'Current scene outline' })).toBeNull()
+    const context = screen.getByRole('button', { name: 'Context' })
+    fireEvent.click(context)
+    expect(screen.getByRole('complementary', { name: 'Narrative context' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('complementary', { name: 'Narrative context' }), {
+      key: 'Escape',
+    })
+    expect(context).toHaveFocus()
+    expect(screen.getByLabelText('Unsaved draft')).toHaveValue('Keep this')
   })
   it('shows an unfinished shared draft in the outline and context inspector', async () => {
     const scene = {

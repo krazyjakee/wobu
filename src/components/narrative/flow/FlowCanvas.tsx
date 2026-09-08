@@ -313,7 +313,7 @@ function Canvas({
         if (automatic) setAutoPositions(result.positions)
         else {
           setPositions((previous) => ({ ...previous, ...result.positions }))
-          onPositionsChange?.(result.positions)
+          if (!readOnly) onPositionsChange?.(result.positions)
         }
         if (!automatic) window.setTimeout(() => flow.fitView({ duration: 200 }), 0)
       })
@@ -322,7 +322,7 @@ function Canvas({
         setLaying(false)
         setLayoutError(error instanceof Error ? error.message : String(error))
       })
-  }, [graph, layout, flow, onPositionsChange, automatic])
+  }, [graph, layout, flow, onPositionsChange, automatic, readOnly])
 
   const automaticRunner = useRef(runLayout)
   useEffect(() => {

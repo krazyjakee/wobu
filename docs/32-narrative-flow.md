@@ -42,6 +42,17 @@ status and badge controls with the canvas. Pinned notes appear as a paged list w
 delete controls, plus numeric placement fields. Reveals expand folded groups before focusing their
 members. Presentation and filtering never create a scene draft or a source undo entry.
 
+**Groups & notes → Selected node position** offers numeric X/Y placement in both canvas and outline.
+Entering a coordinate switches the arrangement to Manual; an unset companion coordinate starts at
+zero. Read-only scenes permit temporary automatic layout without attempting to write a sidecar.
+Deleting a focused destination edge returns focus to the destination field in a saved scene, or to
+the surviving route in the standalone demonstration.
+
+At narrower workspace widths, including UI scaling, **Scene outline** and **Context** open auxiliary
+panes above the editor. Escape closes a pane and returns focus to its button. Selecting an outline
+beat closes the pane and reveals that beat. The validation explanation is available under
+**About validation and affected text**, leaving room for the canvas and authoring controls.
+
 The arc's **Group** control carves the same scenes up without editing them. *By arrangement group*
 shows the groups drawn in the sidecar and is what a project arc opens on. *By quest* and *by quest
 state* read `narrative/world.yaml`: a scene sits in the quest whose `scene_ids` name it, and a
@@ -64,5 +75,8 @@ Mounted-component tests use mocked IPC and exercise exact full-document parity b
 Script, explicit saves, guarded writes, locked deletion, route creation and draft history. Reducer tests
 check stable identities, tombstones, reconvergence, opaque field preservation and unchanged prose,
 provenance and revisions. Reveal tests cover hidden tabs, repeated requests, project boundaries,
-deleted targets and the empty scene. These tests do not establish native geometry or pointer behavior;
+deleted targets and the empty scene. The mounted canvas regression creates three routes, connects
+each to one verdict with C, disconnects a focused edge, checks focus on the destination field, and
+undoes the disconnect in Script while retaining all dialogue. Presentation tests also assert numeric
+outline placement and read-only layout cannot write scene source. These tests do not establish native geometry or pointer behavior;
 native verification of this authoring update remains pending the integrated desktop walkthrough.

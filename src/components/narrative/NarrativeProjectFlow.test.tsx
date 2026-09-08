@@ -962,10 +962,63 @@ it('lets the canonical deletion choose the surviving canvas focus and announceme
   expect(calls('narrative_scene_save')).toHaveLength(0)
 })
 
+it('authors three reconverging canvas routes with keyboard connections and shared Script undo', async () => {
+  useUI.getState().selectNarrative({ sceneId: SCENE, beatId: ARRIVAL }, 'library')
+  const view = open()
+  const canvasNode = async (id: string) =>
+    (await screen.findByTestId(`flow-node-${id}`)).closest<HTMLElement>('.react-flow__node')!
+  await canvasNode(nodeId.beat(ARRIVAL))
+  const routeIds: string[] = []
+  for (let index = 0; index < 3; index++) {
+    fireEvent.click(await canvasNode(nodeId.beat(ARRIVAL)))
+    fireEvent.click(screen.getByRole('button', { name: 'Add outcome' }))
+    const routeId = workingScene().beats![0]!.outcomes!.at(-1)!.id
+    routeIds.push(routeId)
+    const route = await canvasNode(nodeId.outcome(routeId))
+    await waitFor(() => expect(route).toHaveFocus())
+    fireEvent.keyDown(route, { key: 'c' })
+    const verdict = await canvasNode(nodeId.beat(VERDICT))
+    verdict.focus()
+    fireEvent.keyDown(verdict, { key: 'c' })
+    expect(workingScene().beats![0]!.outcomes!.at(-1)!.to).toEqual({ beat: VERDICT })
+  }
+  expect(
+    document.querySelectorAll(`[data-testid="flow-node-${nodeId.beat(VERDICT)}"]`),
+  ).toHaveLength(1)
+  expect(workingScene().beats![0]!.dialogue).toEqual(council().beats![0]!.dialogue)
+  const routeId = routeIds[2]!
+  const edge = document.querySelector<HTMLElement>(
+    `.react-flow__edge[data-id="${nodeId.outcome(routeId)}:then"]`,
+  )!
+  expect(edge).not.toBeNull()
+  edge.focus()
+  fireEvent.keyDown(edge, { key: 'Delete' })
+  await waitFor(() => expect(screen.getByLabelText('Route destination')).toHaveFocus())
+  expect(workingScene().beats![0]!.outcomes!.at(-1)!.to).toEqual({ unresolved: {} })
+  expect(screen.getByLabelText('Route destination')).toHaveValue('unresolved')
+  expect(useUI.getState().narrative).toMatchObject({ beatId: ARRIVAL, outcomeId: routeId })
+  view.showScript()
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo draft' }))
+  expect(workingScene().beats![0]!.outcomes!.map((route) => route.to)).toEqual(
+    routeIds.map(() => ({ beat: VERDICT })),
+  )
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+})
+
 it('edits and collapses outline groups, positions notes and reveals a folded beat without source writes', async () => {
   await enterCouncil()
   fireEvent.click(screen.getByRole('button', { name: /BeatArrival at the hearing/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
+  fireEvent.change(screen.getByLabelText('Node X'), { target: { value: '240' } })
+  fireEvent.change(screen.getByLabelText('Node Y'), { target: { value: '160' } })
+  await waitFor(() =>
+    expect(
+      (calls('narrative_layout_save').at(-1)!.layout as Layout).nodes[`beat:${ARRIVAL}`],
+    ).toMatchObject({
+      x: 240,
+      y: 160,
+    }),
+  )
   fireEvent.change(screen.getByLabelText('Group name'), { target: { value: 'Evidence' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create group' }))
   const rename = await screen.findByLabelText('Rename group Evidence')

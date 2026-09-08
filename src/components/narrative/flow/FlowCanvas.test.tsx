@@ -234,7 +234,7 @@ describe('authoring with the keyboard alone', () => {
     expect(useUI.getState().narrative.beatId).toBeNull()
   })
 
-  it('disconnects a destination by deleting the focused edge', () => {
+  it('disconnects a destination and returns focus from the removed edge to its route', async () => {
     let latest: FlowScene = councilHearing()
     const { container } = render(
       <Harness initial={councilHearing()} onScene={(next) => (latest = next)} />,
@@ -246,6 +246,7 @@ describe('authoring with the keyboard alone', () => {
 
     expect(latest.elements.find((e) => e.id === 'outcome.2')?.out[0]?.to).toBeNull()
     expect(sceneDiagnostics(latest).map((d) => d.field)).toEqual(['outcome.2.then'])
+    await waitFor(() => expect(nodeEl(container, 'outcome.2')).toHaveFocus())
   })
 })
 
@@ -311,6 +312,24 @@ describe('creating, collapsing and laying out', () => {
 })
 
 describe('filters and read-only', () => {
+  it('allows a read-only local layout without attempting a sidecar or source write', async () => {
+    const onPositionsChange = vi.fn()
+    const onChange = vi.fn()
+    render(
+      <FlowCanvas
+        scene={councilHearing()}
+        readOnly
+        onChange={onChange}
+        onPositionsChange={onPositionsChange}
+        layout={() => Promise.resolve({ positions: { 'beat.1': { x: 100, y: 200 } } })}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Auto layout' }))
+    await screen.findByRole('button', { name: 'Auto layout' })
+    expect(onPositionsChange).not.toHaveBeenCalled()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('mutes the beats a participant is not in, and says they are filtered', () => {
     render(<Harness initial={councilHearing()} />)
     fireEvent.change(screen.getByLabelText('Participant'), { target: { value: 'Orren' } })

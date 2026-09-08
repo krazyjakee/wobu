@@ -101,11 +101,11 @@ export function useFlowKeyboard({
       if (readOnly) return announce('This project folder is read-only.')
       const edge = graph.edges.find((candidate) => candidate.id === edgeId)
       if (!edge) return
-      // Only when it happened. On a source-backed scene it does not: a
-      // destination cannot be cleared, and `useSceneEdits` has already said so
-      // in this same live region.
       if (onDisconnect({ elementId: edge.source, portId: edge.sourceHandle })) {
         announce('Destination removed. The route now has no destination.')
+        // The focused SVG edge disappears. Canonical edits reveal their own
+        // target; the standalone editor must restore focus to its source too.
+        if (!canonicalDeletion) requestAnimationFrame(() => focus(edge.source))
       }
       return
     }

@@ -653,9 +653,12 @@ function SceneSourceEditor({
                     </button>
                   </p>
                 )}
-                <p className="nrt-note" role="note">
-                  {NARRATIVE_UNAVAILABLE.witness} {NARRATIVE_UNAVAILABLE.affectedScope}
-                </p>
+                <details className="nrt-note nrt-flow-limitations">
+                  <summary>About validation and affected text</summary>
+                  <p>
+                    {NARRATIVE_UNAVAILABLE.witness} {NARRATIVE_UNAVAILABLE.affectedScope}
+                  </p>
+                </details>
               </>
             }
           />

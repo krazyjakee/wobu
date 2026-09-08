@@ -46,6 +46,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const [generationOpen, setGenerationOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
+  const [sidePane, setSidePane] = useState<'outline' | 'context' | null>(null)
+  const sidePaneButtons = useRef<HTMLDivElement>(null)
+  const editorRoot = useRef<HTMLDivElement>(null)
   const [repairRel, setRepairRel] = useState<string | null>(null)
   const worldTarget = useUI((state) => state.narrativeWorldTarget)
   const [closedWorldSeq, setClosedWorldSeq] = useState<number | null>(null)
@@ -135,6 +138,31 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         )}
         <div className="nrt-head-actions">
+          {editorOpened && !libraryOpen && !worldOpen && !textLibraryOpen && (
+            <div className="nrt-compact-pane-actions" ref={sidePaneButtons}>
+              {(['outline', 'context'] as const).map((pane) => (
+                <button
+                  key={pane}
+                  type="button"
+                  className="btn"
+                  data-pane-toggle={pane}
+                  aria-expanded={sidePane === pane}
+                  onClick={() => {
+                    setSidePane(sidePane === pane ? null : pane)
+                    const selector = pane === 'outline' ? '.nrt-scene-outline' : '.nrt-inspector'
+                    if (sidePane !== pane)
+                      requestAnimationFrame(() =>
+                        editorRoot.current
+                          ?.querySelector<HTMLElement>(`${selector} :is(button, input, select)`)
+                          ?.focus(),
+                      )
+                  }}
+                >
+                  {pane === 'outline' ? 'Scene outline' : 'Context'}
+                </button>
+              ))}
+            </div>
+          )}
           <button className="btn" onClick={() => setGenerationOpen(true)}>
             Generate…
           </button>
@@ -257,10 +285,21 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
       {editorOpened && (
         <div
           className="nrt-editor-view"
+          ref={editorRoot}
+          data-side-pane={sidePane ?? undefined}
+          onKeyDownCapture={(event) => {
+            if (event.key !== 'Escape' || !sidePane) return
+            event.preventDefault()
+            event.stopPropagation()
+            sidePaneButtons.current
+              ?.querySelector<HTMLElement>(`[data-pane-toggle="${sidePane}"]`)
+              ?.focus()
+            setSidePane(null)
+          }}
           style={editorStyle}
           hidden={libraryOpen || worldOpen || textLibraryOpen}
         >
-          {!navCollapsed && (
+          {(!navCollapsed || sidePane === 'outline') && (
             <nav className="nrt-scene-outline" aria-label="Current scene outline">
               <h3>{selected?.name ?? 'Selected scene'}</h3>
               {(selected?.beats ?? []).map((beat) => (
@@ -268,9 +307,10 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
                   key={beat.id}
                   type="button"
                   aria-current={selection.beatId === beat.id ? 'true' : undefined}
-                  onClick={() =>
+                  onClick={() => {
                     selectNarrative({ sceneId: selected!.id, beatId: beat.id }, 'library')
-                  }
+                    setSidePane(null)
+                  }}
                 >
                   {beat.title}
                 </button>
@@ -290,7 +330,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
               projectKey={project.path}
             />
           )}
-          {!inspCollapsed && (
+          {(!inspCollapsed || sidePane === 'context') && (
             <NarrativeInspector projectKey={project.path} readOnly={project.readOnly} />
           )}
         </div>
