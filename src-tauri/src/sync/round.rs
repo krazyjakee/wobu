@@ -184,6 +184,8 @@ pub async fn run(
     }
 
     let exchange = manifest::exchange(session, &nodes, &announce, manifest::IDLE_TIMEOUT).await?;
+    super::narrative::require_capability(exchange.narrative_records)?;
+    let narrative = Box::pin(super::narrative::exchange(manager, replica, session)).await?;
     let fetched = match blobs {
         Some(blobs) => {
             blobs
@@ -234,13 +236,17 @@ pub async fn run(
     )?;
 
     let outcome = Outcome {
-        applied: ours.applied + theirs.applied,
-        parked: ours.parked + theirs.parked,
-        refused: ours.refused + theirs.refused + exchange.refused + fetched.refused,
-        pushed: ours.pushed,
-        served: theirs.served,
+        applied: ours.applied + theirs.applied + narrative.applied,
+        parked: ours.parked + theirs.parked + narrative.parked,
+        refused: ours.refused
+            + theirs.refused
+            + exchange.refused
+            + fetched.refused
+            + narrative.refused,
+        pushed: ours.pushed + narrative.pushed,
+        served: theirs.served + narrative.served,
         blobs: fetched.placed.len(),
-        changed: ours.changed || theirs.changed || !fetched.placed.is_empty(),
+        changed: ours.changed || theirs.changed || narrative.changed || !fetched.placed.is_empty(),
         whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 

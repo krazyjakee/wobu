@@ -615,6 +615,7 @@ async fn one_round(
             .map_err(WobuError::from)?;
 
     let connection = session.connection();
+    super::narrative::empty_exchange(connection).await?;
     // Both halves at once, exactly as `round::run` does it — a peer that
     // asked everything before answering anything would deadlock against an
     // app doing the same, and this is what proves it does not.

@@ -237,3 +237,16 @@ impl NarrativeRestoration {
         format!("narrative/restorations/{}.json", self.id)
     }
 }
+
+pub fn verify_receipt_if_bound(
+    root: &std::path::Path,
+    doc: &NarrativeRecordDocument,
+) -> Result<()> {
+    // Legacy unbound standalone receipts are readable; the first guarded
+    // writer adopts their actual canonical bytes. A present binding is final.
+    let rel = format!("narrative/receipt-bindings/{}.json", doc.id);
+    if registry::read(root, &rel)?.is_some() {
+        verify_receipt_binding(root, doc)?;
+    }
+    Ok(())
+}

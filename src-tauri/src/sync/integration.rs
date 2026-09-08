@@ -585,6 +585,28 @@ impl Sessions for SessionsInto {
     }
 }
 
+async fn wire_pair(project: Id) -> (SyncEndpoint, SyncEndpoint, Session, Session) {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let server = SyncEndpoint::bind(
+        Config::loopback(),
+        Arc::new(Holds(project)),
+        Arc::new(SessionsInto(tx)),
+    )
+    .await
+    .unwrap();
+    let client = SyncEndpoint::bind(
+        Config::loopback(),
+        Arc::new(Holds(project)),
+        Arc::new(SessionsInto(mpsc::unbounded_channel().0)),
+    )
+    .await
+    .unwrap();
+    let outbound = client.connect(server.addr(), project).await.unwrap();
+    let inbound = rx.recv().await.unwrap();
+
+    (client, server, outbound, inbound)
+}
+
 #[test]
 fn a_disconnect_halfway_through_a_body_lands_no_partial_file_or_index_row() {
     run_async(async {
@@ -601,23 +623,7 @@ fn a_disconnect_halfway_through_a_body_lands_no_partial_file_or_index_row() {
         let bytes_before = fs::read(&target_path).unwrap();
         let index_before = pair.b.manifest(pair.project);
 
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        let server = SyncEndpoint::bind(
-            Config::loopback(),
-            Arc::new(Holds(pair.project)),
-            Arc::new(SessionsInto(tx)),
-        )
-        .await
-        .unwrap();
-        let client = SyncEndpoint::bind(
-            Config::loopback(),
-            Arc::new(Holds(pair.project)),
-            Arc::new(SessionsInto(mpsc::unbounded_channel().0)),
-        )
-        .await
-        .unwrap();
-        let outbound = client.connect(server.addr(), pair.project).await.unwrap();
-        let inbound = rx.recv().await.unwrap();
+        let (client, server, outbound, inbound) = wire_pair(pair.project).await;
 
         let replica = pair.b.manager().replica(pair.project).unwrap();
         let peer = inbound.peer().to_string();
@@ -644,5 +650,156 @@ fn a_disconnect_halfway_through_a_body_lands_no_partial_file_or_index_row() {
         client.shutdown().await.unwrap();
         server.shutdown().await.unwrap();
         pair.stop().await;
+    });
+}
+
+#[test]
+fn narrative_records_publications_and_explicit_recovery_cross_real_peers() {
+    run_async(async {
+        use wobu_store::{
+            NarrativeRecordDocument as Document, NarrativeRecordFile as File,
+            NarrativeRecordKind as Kind,
+        };
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let (scene, record_id, publication) = a
+            .with(|p| {
+                let scene = p.create_scene("Kiln Council")?;
+                let mut scenario = File {
+                    document: Document::new(
+                        Kind::Scenario,
+                        new_id(),
+                        "Council checkpoint",
+                        serde_json::json!({"version":1}),
+                    ),
+                    stamp: None,
+                };
+                p.save_narrative_record(&mut scenario)?;
+                let publication = new_id();
+                p.publish_narrative_records(
+                    publication,
+                    "Council review",
+                    &[Document::new(
+                        Kind::Receipt,
+                        new_id(),
+                        "Receipt",
+                        serde_json::json!({"version":1}),
+                    )],
+                    None,
+                )?;
+                Ok((scene, scenario.document.id, publication))
+            })
+            .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert_eq!(p.load_scene(scene.scene.id)?.scene, scene.scene);
+            assert!(p.narrative_record(Kind::Scenario, record_id)?.is_some());
+            assert_eq!(p.narrative_publication(publication)?.unwrap().records.len(), 1);
+            Ok(())
+        })
+        .unwrap();
+        a.with(|p| {
+            let mut file = p.narrative_record(Kind::Scenario, record_id)?.unwrap();
+            file.document.name = "Updated checkpoint".into();
+            p.save_narrative_record(&mut file)?;
+            Ok(())
+        })
+        .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert_eq!(
+                p.narrative_record(Kind::Scenario, record_id)?.unwrap().document.name,
+                "Updated checkpoint"
+            );
+            Ok(())
+        })
+        .unwrap();
+        for (replica, name) in [(&a, "A's checkpoint"), (&b, "B's checkpoint")] {
+            replica
+                .with(|p| {
+                    let mut file = p.narrative_record(Kind::Scenario, record_id)?.unwrap();
+                    file.document.name = name.into();
+                    p.save_narrative_record(&mut file)?;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        pair.a.sync_with(pair.project, &pair.b).await;
+        for (replica, name) in [(&a, "A's checkpoint"), (&b, "B's checkpoint")] {
+            replica
+                .with(|p| {
+                    let file = p.narrative_record(Kind::Scenario, record_id)?.unwrap();
+                    assert_eq!(file.document.name, name);
+                    assert_eq!(conflicts(&p.root().join(file.document.rel())).len(), 1);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let deletion = a
+            .with(|p| {
+                p.delete_narrative_file(&scene.rel, scene.stamp.as_ref().unwrap())?;
+                Ok(p.narrative_deletions()?.pop().unwrap().deletion.id)
+            })
+            .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        assert!(!pair.b.root.join(&scene.rel).exists());
+        a.with(|p| {
+            p.restore_narrative_deletion(deletion)?;
+            Ok(())
+        })
+        .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert_eq!(p.load_scene(scene.scene.id)?.scene, scene.scene);
+            assert!(p.narrative_deletions()?.iter().all(|d| d.restored));
+            Ok(())
+        })
+        .unwrap();
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn narrative_partial_bodies_bad_hashes_and_midstream_revocation_never_write() {
+    run_async(async {
+        for fault in ["cut", "hash", "revoke"] {
+            let pair = Pair::new(false).await;
+            let incoming = pair
+                .a
+                .manager()
+                .replica(pair.project)
+                .unwrap()
+                .with(|p| {
+                    let scene = p.create_scene("Never partially write this")?;
+                    let entry =
+                        p.narrative_manifest()?.into_iter().find(|e| e.rel == scene.rel).unwrap();
+                    Ok(p.narrative_outgoing(&entry)?.unwrap())
+                })
+                .unwrap();
+            let (client, server, outbound, inbound) = wire_pair(pair.project).await;
+            super::bodies::verify_receive_byte_limits(outbound.connection(), inbound.connection())
+                .await;
+            let replica = pair.b.manager().replica(pair.project).unwrap();
+            super::narrative::fault_exchange(
+                pair.b.manager(),
+                &replica,
+                &outbound,
+                &inbound,
+                incoming.clone(),
+                fault,
+            )
+            .await;
+            assert!(!pair.b.root.join(&incoming.rel).exists(), "{fault}");
+            replica
+                .with(|p| {
+                    assert!(p.narrative_manifest()?.is_empty());
+                    Ok(())
+                })
+                .unwrap();
+            client.shutdown().await.unwrap();
+            server.shutdown().await.unwrap();
+            pair.stop().await;
+        }
     });
 }

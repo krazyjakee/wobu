@@ -66,3 +66,6 @@ pub use narrative::registry::{NarrativeFileKind, NarrativeIndexEntry};
 
 pub use narrative::publication::NarrativeRestoration;
 pub use project::NarrativeDeletionView;
+pub use project::narrative_sync::{
+    MAX_NARRATIVE_FILE_BYTES, NarrativeApplied, NarrativeIncoming, NarrativeSyncEntry,
+};

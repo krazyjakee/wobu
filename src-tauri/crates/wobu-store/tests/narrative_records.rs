@@ -239,3 +239,28 @@ fn immutable_receipt_identity_survives_publication_updates_and_both_write_routes
             .is_err()
     );
 }
+
+#[test]
+fn external_receipt_edits_are_rejected_by_reads_and_rebuilt_indexes() {
+    let mut f = Fixture::new();
+    let mut file = Fixture::record(Kind::Receipt);
+    f.project.save_narrative_record(&mut file).unwrap();
+    let binding =
+        f.project.root().join(format!("narrative/receipt-bindings/{}.json", file.document.id));
+    let original_binding = std::fs::read(&binding).unwrap();
+    file.document.payload["note"] = json!("Tampered externally");
+    let path = f.project.root().join(file.document.rel());
+    let tampered = serde_json::to_string(&file.document).unwrap();
+    std::fs::write(&path, &tampered).unwrap();
+    assert!(f.project.narrative_record(Kind::Receipt, file.document.id).is_err());
+    assert!(f.project.narrative_records(Kind::Receipt).is_err());
+    f.project.index().clear().unwrap();
+    f.project.rescan().unwrap();
+    let entries = f.project.narrative_index().unwrap();
+    let entry = entries.iter().find(|e| e.rel == file.document.rel()).unwrap();
+    assert!(entry.error.as_ref().unwrap().contains("different canonical bytes"));
+    assert!(!entry.visible);
+    assert!(entry.document.is_none());
+    assert_eq!(std::fs::read(binding).unwrap(), original_binding);
+    assert_eq!(std::fs::read_to_string(path).unwrap(), tampered);
+}

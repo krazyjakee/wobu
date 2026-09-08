@@ -209,10 +209,7 @@ pub fn observe(root: &Path) -> Result<Vec<NarrativeIndexEntry>> {
 pub fn entry(root: &Path, rel: &str, text: &str, stamp: Stamp) -> NarrativeIndexEntry {
     let kind = classify(rel).expect("registered paths only");
     let parsed = parse(rel, text).and_then(|(id, name, document)| {
-        if kind == NarrativeFileKind::Publication {
-            let manifest = serde_json::from_value(document.clone())?;
-            super::publication::load_objects(root, &manifest)?;
-        }
+        validate_references(root, kind, &document)?;
         Ok((id, name, document))
     });
     let (id, name, document, error) = match parsed {
@@ -241,4 +238,23 @@ pub fn entry(root: &Path, rel: &str, text: &str, stamp: Stamp) -> NarrativeIndex
 
 pub fn read(root: &Path, rel: &str) -> Result<Option<(String, Stamp)>> {
     atomic::read_stamped(&safe_path(root, rel)?)
+}
+
+pub fn validate_references(
+    root: &Path,
+    kind: NarrativeFileKind,
+    document: &serde_json::Value,
+) -> Result<()> {
+    match kind {
+        NarrativeFileKind::Publication => {
+            let manifest = serde_json::from_value(document.clone())?;
+            super::publication::load_objects(root, &manifest)?;
+        }
+        NarrativeFileKind::Record(NarrativeRecordKind::Receipt) => {
+            let receipt = serde_json::from_value(document.clone())?;
+            super::publication::verify_receipt_if_bound(root, &receipt)?;
+        }
+        _ => {}
+    }
+    Ok(())
 }

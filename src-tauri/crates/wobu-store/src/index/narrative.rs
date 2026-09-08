@@ -1,7 +1,7 @@
 //! Derived canonical narrative documents, including recoverable parse errors.
 use super::Index;
 use crate::{NarrativeIndexEntry, Result};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 pub(super) fn put(connection: &Connection, entry: &NarrativeIndexEntry) -> Result<()> {
     connection.execute("INSERT INTO narrative_files(rel,hash,entry) VALUES(?1,?2,?3) ON CONFLICT(rel) DO UPDATE SET hash=excluded.hash,entry=excluded.entry",params![entry.rel,entry.hash,serde_json::to_string(entry)?])?;
@@ -29,6 +29,20 @@ impl Index {
     }
     pub(crate) fn remove_narrative(&self, rel: &str) -> Result<()> {
         self.conn.execute("DELETE FROM narrative_files WHERE rel=?1", [rel])?;
+        Ok(())
+    }
+    pub(crate) fn narrative_base(&self, peer: &str, rel: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT hash FROM narrative_sync WHERE peer=?1 AND rel=?2",
+                params![peer, rel],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+    pub(crate) fn record_narrative_base(&self, peer: &str, rel: &str, hash: &str) -> Result<()> {
+        self.conn.execute("INSERT INTO narrative_sync(peer,rel,hash) VALUES(?1,?2,?3) ON CONFLICT(peer,rel) DO UPDATE SET hash=excluded.hash",params![peer,rel,hash])?;
         Ok(())
     }
 }

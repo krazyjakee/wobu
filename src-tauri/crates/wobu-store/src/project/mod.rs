@@ -17,6 +17,7 @@ mod narrative;
 mod narrative_deletions;
 mod narrative_index;
 mod narrative_records;
+pub mod narrative_sync;
 pub use narrative_deletions::NarrativeDeletionView;
 mod narrative_repair;
 mod narrative_world;

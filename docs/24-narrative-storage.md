@@ -23,6 +23,7 @@ The registry lists only these flat canonical paths:
 | `narrative/receipt-bindings/<id>.json` | Internal receipt identity binding | Immutable |
 | `narrative/publications/<id>.json` | Complete multi-record revision manifest | Guarded |
 | `narrative/deletions/<id>.json` | Explicit deletion and recoverable original bytes | Immutable |
+| `narrative/restorations/<id>.json` | Explicit request to restore one deletion | Immutable |
 
 Replaceable JSON records use a strict envelope with `schema_version: 1`, stable `id`, `kind`, `name`
 and object `payload`. The owning domain validates that payload before writing it. Storage validates
@@ -106,3 +107,38 @@ The [recovery screenshot](evidence/narrative-153/recovery.png) uses the real Rea
 explicitly mocked browser IPC. Rust command tests separately verify metadata-only listing, original
 byte restoration and preservation of both versions during a competing edit. This is not a native
 engine or provider validation claim.
+
+## Peer protocol and compatibility
+
+Peers advertise the optional `narrative_records` capability in the existing manifest End page.
+An older End parser ignores that field; a new reader defaults an absent field to false. A new build
+refuses sync with an unsupported peer before opening the narrative stage and asks both machines to
+upgrade. An old manifest cannot establish that the remote project contains no narrative work, so
+this explicit compatibility error also applies to art-only sync with an older build. Opening and
+editing an art-only project locally remains unchanged.
+
+Supporting peers exchange a separate version-1 narrative manifest and requested records over the
+existing authenticated session. Files remain in the strict registry; they never enter the general
+immutable asset-blob placement route. Limits are 10,000 records, 2 MiB of original bytes per file,
+a bounded JSON frame allowing escaping, and 64 MiB per stream direction. Unknown versions, malformed
+records, wrong hashes, duplicate paths, truncated messages and incomplete manifests fail explicitly.
+Receipt bindings arrive before objects; objects arrive before their publication manifests.
+
+Replaceable records fast-forward only against the receiver's own previously acknowledged base.
+Losing that disposable cache causes a conservative conflict. A peer-supplied hash is never an
+expected-write stamp. Concurrent edits retain the current file and a named conflict sibling, and a
+repeated unresolved transfer reuses the same retained bytes. A peer cannot replace/remove EDITED or
+LOCKED variant text/provenance or weaken its policy, even when claiming a newer source revision.
+Existing separate policy records require conflict review for any remote change. Immutable receipt
+bindings remain authoritative on reads and index rebuilds, including externally edited files.
+
+Deletion and explicit restoration records use the same authenticated transport. Deletion removes
+only the recorded original hash; a concurrent modification remains alongside the recoverable old
+bytes. Receiving an old source file cannot implicitly revoke deletion. Sharing permission is checked
+again before every record read, apply and acknowledgement, so unsharing during a transfer prevents
+later writes. An interrupted exchange may retain complete guarded records or unused immutable
+objects; it cannot claim convergence or expose a publication with missing dependencies.
+
+Real temporary-folder and loopback QUIC tests exercise record updates, complete receipt publications,
+delete/restore propagation, corrupt/truncated bodies and revocation between request and apply.
+Recovery UI evidence is documented separately and uses a browser fixture, not a native network run.

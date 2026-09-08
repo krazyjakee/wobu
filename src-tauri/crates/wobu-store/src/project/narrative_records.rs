@@ -20,6 +20,11 @@ impl Project {
         let rel = format!("narrative/{}/{}.json", kind.directory(), id);
         let Some((text, stamp)) = registry::read(self.root(), &rel)? else { return Ok(None) };
         let (_, _, value) = registry::parse(&rel, &text)?;
+        registry::validate_references(
+            self.root(),
+            registry::NarrativeFileKind::Record(kind),
+            &value,
+        )?;
         Ok(Some(NarrativeRecordFile {
             document: serde_json::from_value(value)?,
             stamp: Some(stamp),
@@ -31,6 +36,11 @@ impl Project {
             if registry::classify(&rel) == Some(registry::NarrativeFileKind::Record(kind)) {
                 let Some((text, stamp)) = registry::read(self.root(), &rel)? else { continue };
                 let (_, _, value) = registry::parse(&rel, &text)?;
+                registry::validate_references(
+                    self.root(),
+                    registry::NarrativeFileKind::Record(kind),
+                    &value,
+                )?;
                 result.push(NarrativeRecordFile {
                     document: serde_json::from_value(value)?,
                     stamp: Some(stamp),

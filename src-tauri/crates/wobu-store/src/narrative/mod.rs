@@ -238,8 +238,25 @@ pub fn conflict_paths(root: &Path) -> Vec<(String, PathBuf)> {
             .map(|dir| root.join("narrative").join(dir)),
     );
     for dir in directories {
+        let probe = if dir == narrative_dir(root) {
+            "narrative/state.yaml".into()
+        } else {
+            let leaf = if dir.ends_with("scenes") {
+                "probe.yaml"
+            } else {
+                "00000000000000000000000000.json"
+            };
+            paths::to_rel_string(dir.join(leaf).strip_prefix(root).unwrap())
+        };
+        if registry::safe_path(root, &probe).is_err() {
+            continue;
+        }
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for path in entries.flatten().map(|entry| entry.path()).filter(|path| path.is_file()) {
+        for path in entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+            .map(|entry| entry.path())
+        {
             let is_sibling = path
                 .file_name()
                 .is_some_and(|name| crate::conflict::is_sibling(&name.to_string_lossy()));
@@ -265,7 +282,11 @@ pub fn conflict_paths(root: &Path) -> Vec<(String, PathBuf)> {
 /// refusing to list a sibling we cannot label would strand somebody's only
 /// copy of a scene.
 pub fn scene_name_at(root: &Path, rel: &str) -> Option<String> {
-    let path = paths::from_rel_string(root, rel);
+    let path = if registry::classify(rel).is_some() {
+        registry::safe_path(root, rel).ok()?
+    } else {
+        conflict_paths(root).into_iter().find(|(candidate, _)| candidate == rel)?.1
+    };
     let text = std::fs::read_to_string(path).ok()?;
     registry::parse(rel, &text)
         .ok()
