@@ -57,3 +57,9 @@ pub use thumbs::{ThumbTarget, Thumbnail};
 pub use transfer::{TransferBundle, TransferCandidate, TransferOutcome, TransferPreview};
 pub use watcher::{Change as WatchChange, Strategy, Watcher};
 pub use wiki::{WikiExport, WikiSnapshot};
+
+pub use narrative::publication::{
+    NarrativeDeletion, NarrativePublication, NarrativePublicationFile, PublishedRecord,
+};
+pub use narrative::records::{NarrativeRecordDocument, NarrativeRecordFile, NarrativeRecordKind};
+pub use narrative::registry::{NarrativeFileKind, NarrativeIndexEntry};

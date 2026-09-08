@@ -14,6 +14,8 @@ pub use self::reconcile::{ReconcileObservation, ReconcilePlan};
 mod assets;
 mod generations;
 mod narrative;
+mod narrative_index;
+mod narrative_records;
 mod narrative_repair;
 mod narrative_world;
 mod nodes;

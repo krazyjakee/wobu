@@ -15,6 +15,8 @@ use crate::atomic::Stamp;
 use crate::error::Result;
 
 pub(super) const SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS narrative_files (rel TEXT PRIMARY KEY, hash TEXT NOT NULL, entry TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS narrative_sync (peer TEXT NOT NULL, rel TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(peer,rel));
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -267,7 +269,7 @@ pub(super) const UPSERT_GENERATION_SQL: &str = "INSERT INTO generations
 pub(super) const CLEAR_DERIVED_SQL: &str =
     "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
      DELETE FROM node_fts; DELETE FROM assets; DELETE FROM generations;
-     DELETE FROM corrupt;";
+     DELETE FROM corrupt; DELETE FROM narrative_files;";
 
 #[cfg(test)]
 pub(super) const NODE_WRITE_STATEMENT_COUNT: usize = 10;

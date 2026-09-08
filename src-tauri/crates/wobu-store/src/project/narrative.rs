@@ -64,7 +64,10 @@ impl Project {
         let mut file =
             SceneFile { scene: Scene::new(name), rel: source::scene_rel(&slug), stamp: None };
         match source::write_scene(&self.root, &mut file, &self.peer)? {
-            SourceSave::Saved(_) => Ok(file),
+            SourceSave::Saved(_) => {
+                self.index_narrative_path(&file.rel)?;
+                Ok(file)
+            }
             SourceSave::Conflict { conflict_path } => {
                 Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
             }
@@ -79,7 +82,11 @@ impl Project {
     /// blocked by an arrangement.
     pub fn save_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
         self.ensure_writable()?;
-        source::write_scene(&self.root, file, &self.peer)
+        let outcome = source::write_scene(&self.root, file, &self.peer)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            self.index_narrative_path(&file.rel)?;
+        }
+        Ok(outcome)
     }
 
     /// Delete a scene and the arrangement that described it.
@@ -131,7 +138,11 @@ impl Project {
         expected: Option<&Stamp>,
     ) -> Result<SourceSave> {
         self.ensure_writable()?;
-        source::write_state(&self.root, document, expected, &self.peer)
+        let outcome = source::write_state(&self.root, document, expected, &self.peer)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            self.index_narrative_path(source::STATE_FILE)?;
+        }
+        Ok(outcome)
     }
 
     /// A hash over narrative source and nothing else. Structurally unable to
