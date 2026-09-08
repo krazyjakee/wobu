@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use tauri::State;
 use wobu_core::NodeKind;
 use wobu_narrative::{EntityId, KnowledgeProvenance, WorldDocument};
-use wobu_narrative_context::{Character, FrozenContext, Input, Options, resolve};
+use wobu_narrative_context::{Character, FrozenContext, Input, Options, Selection, resolve};
 use wobu_store::{Project, atomic::Stamp};
 
 #[derive(Serialize)]
@@ -20,8 +20,11 @@ pub struct Freshness {
 #[tauri::command]
 pub fn narrative_context_capture(
     state: State<'_, AppState>,
-    options: Options,
+    selection: Selection,
+    state_json: String,
+    token_budget: u32,
 ) -> CommandResult<FrozenContext> {
+    let options = parse_capture_options(selection, &state_json, token_budget)?;
     state.reconcile_now()?;
     state.with(|project| capture(project, options, || {}))
 }
@@ -36,6 +39,17 @@ pub fn narrative_context_freshness(
         let current = capture(project, options, || {})?;
         Ok(Freshness { current: current.hash == expected_hash, hash: current.hash })
     })
+}
+
+// Keep authored numeric spelling intact until the Rust typed parser sees it.
+// JSON.parse can otherwise round a near-limit decimal into a valid integer.
+fn parse_capture_options(
+    selection: Selection,
+    state_json: &str,
+    token_budget: u32,
+) -> CommandResult<Options> {
+    let state = serde_json::from_str(state_json).map_err(|error| invalid(error.to_string()))?;
+    Ok(Options { selection, state, token_budget })
 }
 
 fn invalid(message: impl Into<String>) -> WobuError {

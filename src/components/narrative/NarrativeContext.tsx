@@ -44,11 +44,14 @@ export function NarrativeContext({
         throw new Error('Choose an estimated token budget between 1 and 100000.')
       }
       setBusy(true)
-      const result = await narrativeContextCapture({
-        selection: { ...selection, variant: variant || null },
-        state: state as Record<string, StateValue>,
-        token_budget: tokens,
-      })
+      const result = await narrativeContextCapture(
+        {
+          selection: { ...selection, variant: variant || null },
+          state: state as Record<string, StateValue>,
+          token_budget: tokens,
+        },
+        stateText,
+      )
       setSnapshot(result)
       setFresh(true)
     } catch (e) {

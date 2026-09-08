@@ -100,3 +100,18 @@ fn unsafe_context_numbers_are_rejected_at_the_webview_boundary() {
     assert!(unsafe_integer(&serde_json::json!({"relationship":i64::MAX})));
     assert!(!unsafe_integer(&serde_json::json!({"relationship":9007199254740991_i64})));
 }
+
+#[test]
+fn authored_state_is_typed_before_webview_number_rounding() {
+    let temp = Temp::new();
+    let (_, options) = fixture(&temp);
+    for raw in [r#"{"chapter":9007199254740991.4}"#, r#"{"chapter":1.00000000000000001}"#] {
+        assert!(parse_capture_options(options.selection.clone(), raw, 4000).is_err());
+    }
+    let valid =
+        parse_capture_options(options.selection, r#"{"chapter":9007199254740991}"#, 4000).unwrap();
+    assert_eq!(
+        valid.state[&"chapter".parse().unwrap()],
+        wobu_narrative::Value::Int(9007199254740991)
+    );
+}

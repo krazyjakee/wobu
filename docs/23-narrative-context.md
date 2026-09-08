@@ -17,7 +17,8 @@ text records remain part of the unfinished #152 model. N5 engine integrations re
 3. Select a dialogue line in Script or Flow. In Context, choose an existing variant or new wording,
    supply complete scenario state and select an estimated input budget. Defaults populate the form;
    missing or out-of-domain variables block resolution. The desktop form accepts safe JavaScript
-   integers only; the pure resolver retains the Rust source model's full integer domain.
+   integers only and sends the original JSON text to Rust for typed parsing before numeric
+   spelling can be rounded; the pure resolver retains the Rust source model's full integer domain.
 4. Select **Inspect generation request**. Read the knowledge perspective, sources, constraints and
    diagnostics. Expand source data or **Exact generation input** to inspect the canonical input.
 5. **Check source freshness** compares the frozen request with the saved sources. An out-of-date

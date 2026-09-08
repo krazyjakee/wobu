@@ -31,8 +31,15 @@ export interface FrozenContext {
   ready: boolean
   hash: string
 }
-export const narrativeContextCapture = (options: ContextOptions): Promise<FrozenContext> =>
-  call('narrative_context_capture', { options })
+export const narrativeContextCapture = (
+  options: ContextOptions,
+  stateJson: string,
+): Promise<FrozenContext> =>
+  call('narrative_context_capture', {
+    selection: options.selection,
+    stateJson,
+    tokenBudget: options.token_budget,
+  })
 export const narrativeContextFreshness = (
   options: ContextOptions,
   expectedHash: string,

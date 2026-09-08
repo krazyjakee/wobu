@@ -57,7 +57,10 @@ it('captures complete scenario and retains exact frozen request when freshness f
   setup()
   fireEvent.click(screen.getByRole('button', { name: 'Inspect generation request' }))
   await screen.findByText(/Context ready for review/)
-  expect(narrativeContextCapture).toHaveBeenCalledWith(frozen.options)
+  expect(narrativeContextCapture).toHaveBeenCalledWith(
+    frozen.options,
+    JSON.stringify(frozen.options.state, null, 2),
+  )
   expect(screen.getByText(frozen.request)).toBeInTheDocument()
   vi.mocked(narrativeContextFreshness).mockResolvedValue({ current: false, hash: 'changed' })
   fireEvent.click(screen.getByRole('button', { name: 'Check source freshness' }))
@@ -102,4 +105,14 @@ it('rejects unsafe or malformed scenario input and keeps a capture error visible
   )
   fireEvent.click(screen.getByRole('button', { name: 'Inspect generation request' }))
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Source changed'))
+})
+
+it('sends original numeric spelling to Rust before a decimal can become an integer', async () => {
+  setup()
+  const raw = '{"chapter":9007199254740991.4}'
+  fireEvent.change(screen.getByLabelText('Scenario state (JSON)'), { target: { value: raw } })
+  vi.mocked(narrativeContextCapture).mockRejectedValue(new Error('Expected an integer'))
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect generation request' }))
+  await screen.findByRole('alert')
+  expect(narrativeContextCapture).toHaveBeenCalledWith(expect.anything(), raw)
 })
