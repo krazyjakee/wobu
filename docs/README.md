@@ -6,7 +6,7 @@ once — art style, lore, species, cultures, places — and every image you gene
 that context automatically.
 
 The [narrative system](17-narrative-system.md) now has scene/world authoring, typed dialogue
-structure and an isolated deterministic Preview. Editorial review, generation, production builds
+structure, source repair, native package export and an isolated deterministic Preview with evaluated traces. Editorial review, generation, production builds
 and engine integrations remain planned; the [authoring guide](19-narrative-authoring.md) records
 the implemented behavior and remaining acceptance. N5 integrations are excluded from current work.
 
@@ -30,6 +30,7 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [18 — Narrative Source Editor](18-narrative-source-editor.md) | YAML policy, draft safety, diagnostics and round trips |
 | [19 — Narrative Authoring](19-narrative-authoring.md) | Scene/quest discovery, World, typed Script, Preview, draft safety and acceptance gaps |
 | [20 — Native Narrative Packages](20-native-narrative-packages.md) | Export profiles, native JSON layout, identity, validation limits and safe publication |
+| [21 — Native Narrative Preview](21-native-narrative-preview.md) | Real Tauri walkthrough, command results, restore, bounds and project isolation evidence |
 
 Two constraints shape most of the above and are worth knowing up front:
 

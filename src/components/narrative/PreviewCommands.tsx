@@ -16,8 +16,9 @@ export function PreviewCommands({
     <details>
       <summary>Host command signatures</summary>
       <p>
-        Declare command argument types for this preview, for example{' '}
-        <code>{'{"camera_closeup": ["bool"]}'}</code>. Commands pause for your acknowledgement.
+        Declare the argument types expected by the game host, for example{' '}
+        <code>{'{"camera_closeup": ["bool"]}'}</code>. Preview pauses for a simulated result;
+        exported commands are handled by the game.
       </p>
       <label>
         Command signatures (JSON)

@@ -201,8 +201,8 @@ function Levels({
         // real read lands. Merging them would let the second disappear.
         <p className="nrt-note" role="status">
           <Icon name="lock" size="sm" />
-          Demonstration data. {NARRATIVE_UNAVAILABLE.source} The scenes below are a fixture of the
-          beacon inquiry, held in memory: edits work, and none of them are saved.
+          Demonstration data. The scenes below are a fixture of the beacon inquiry, held in memory:
+          edits work, and none of them are saved.
         </p>
       )}
       <p className="nrt-note" id="nrt-quests-unavailable" role="note">

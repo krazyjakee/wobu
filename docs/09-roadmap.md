@@ -146,5 +146,5 @@ Their N-prefix avoids collisions with the existing product and engineering miles
 The current [authoring and Preview increment](19-narrative-authoring.md) advances world records
 (#155), typed scene forms (#156), compiler/runtime foundations (#158/#159), playable Preview
 (#161) and quest discovery (#191). The guide separates implemented behavior from pending
-acceptance. Release packages, persistent scenarios, generation/review and dependency analysis
-remain planned. N5 (#173–#177) is not implemented, as requested.
+acceptance. Source repair, native package export, explicit save migration and evaluated Preview
+traces are implemented. Persistent scenarios, generation/review and dependency analysis remain planned. N5 (#173–#177) is not implemented, as requested.
