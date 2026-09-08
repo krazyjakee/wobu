@@ -490,6 +490,33 @@ fn prepared_media_package_roundtrip_native_timing_and_fallback_validation() {
     assert!(
         Package::build(graph.clone(), false).unwrap().with_media(stale, files.clone()).is_err()
     );
+    let mut wrong_form = bundle.clone();
+    let mut take = wrong_form.takes.remove(&key.token()).unwrap();
+    take.key.form = wobu_narrative_locale::PluralCategory::One;
+    wrong_form.takes.insert(take.key.token(), take);
+    assert!(
+        Package::build(graph.clone(), false)
+            .unwrap()
+            .with_media(wrong_form, files.clone())
+            .is_err()
+    );
+    for invalid_key in [
+        "en/unknown/other",
+        "en/00000000000000000000000005/one",
+        "en/00000000000000000000000005/not_a_form",
+        "EN/00000000000000000000000005/other",
+        "en/00000000000000000000000005/other/extra",
+    ] {
+        let mut malformed = bundle.clone();
+        malformed.fallback.insert(invalid_key.into());
+        assert!(
+            Package::build(graph.clone(), false)
+                .unwrap()
+                .with_media(malformed, files.clone())
+                .is_err(),
+            "{invalid_key}"
+        );
+    }
     let mut untimed = bundle;
     untimed.takes.get_mut(&key.token()).unwrap().timing = None;
     assert!(Package::build(graph, false).unwrap().with_media(untimed, files).is_err());

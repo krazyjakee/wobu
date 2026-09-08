@@ -35,7 +35,10 @@ impl Package {
         let locales = self.locales()?;
         let mut referenced = std::collections::BTreeSet::new();
         for (key, take) in &bundle.takes {
-            if key != &take.key.token() || take.origin != take.key.locale {
+            if key != &take.key.token()
+                || take.origin != take.key.locale
+                || !admits_key(&take.key, &self.manifest.locale, &source, locales.as_ref())
+            {
                 return Err(invalid("Media identity or locale origin mismatch."));
             }
             let original =
@@ -112,11 +115,24 @@ impl Package {
             return Err(invalid("Unreferenced packaged media file."));
         }
         for key in &bundle.fallback {
-            let Some((locale, _)) = key.split_once('/') else {
+            let mut parts = key.split('/');
+            let (Some(locale), Some(id), Some(form), None) =
+                (parts.next(), parts.next(), parts.next(), parts.next())
+            else {
                 return Err(invalid("Invalid media fallback key."));
             };
-            let locale =
+            let locale: wobu_narrative_locale::LocaleId =
                 locale.parse().map_err(|e: wobu_narrative_locale::Error| invalid(e.to_string()))?;
+            let form = serde_json::from_value(serde_json::Value::String(form.into()))
+                .map_err(|e| invalid(format!("Invalid fallback plural form: {e}")))?;
+            let parsed = media::Key { id: id.into(), locale: locale.clone(), form };
+            if parsed.token() != *key
+                || !admits_key(&parsed, &self.manifest.locale, &source, locales.as_ref())
+            {
+                return Err(invalid(
+                    "Media fallback must name a canonical known locale/string/form.",
+                ));
+            }
             if bundle.required.get(&locale) != Some(&true)
                 || bundle.takes.get(key).is_some_and(|take| {
                     wobu_narrative_locale::format::placeholders(&take.template).is_empty()
@@ -187,4 +203,21 @@ impl Package {
             })
             .transpose()
     }
+}
+
+fn admits_key(
+    key: &media::Key,
+    source_locale: &str,
+    source: &Strings,
+    locales: Option<&wobu_narrative_locale::release::Bundle>,
+) -> bool {
+    source.contains_key(&key.id)
+        && if key.locale.as_str() == source_locale {
+            key.form == wobu_narrative_locale::PluralCategory::Other
+        } else {
+            locales
+                .and_then(|bundle| bundle.strings.get(&key.locale))
+                .and_then(|rows| rows.get(&key.id))
+                .is_some_and(|value| value.forms.contains_key(&key.form))
+        }
 }
