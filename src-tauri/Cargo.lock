@@ -7878,6 +7878,7 @@ dependencies = [
  "wobu-narrative",
  "wobu-narrative-compiler",
  "wobu-narrative-context",
+ "wobu-narrative-generation",
  "wobu-narrative-package",
  "wobu-narrative-runtime",
  "wobu-narrative-scenarios",
@@ -8005,6 +8006,17 @@ dependencies = [
  "wobu-narrative",
  "wobu-narrative-compiler",
  "wobu-narrative-runtime",
+]
+
+[[package]]
+name = "wobu-narrative-generation"
+version = "0.1.11"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wobu-core",
+ "wobu-narrative",
+ "wobu-narrative-context",
 ]
 
 [[package]]
