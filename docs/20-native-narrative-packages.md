@@ -18,9 +18,13 @@ cross-language conformance suite or Yarn exporter is included.
    check. Existing destinations are never overwritten or merged.
 
 Development can export missing draft text with compiler warnings. Playing an uncovered dialogue
-slot still yields the runtime's explicit no-match error. Release freshness is the recorded source
-status; dependency recomputation and production approval receipts remain #168/#165. The source
-model does not yet contain production media bindings, so current exports contain no media assets.
+slot still yields the runtime's explicit no-match error. Release verifies canonical editorial
+receipts against exact scene/beat/slot/variant identity, speaker, wording revision and current
+review context. Writable Approved/Current flags alone cannot authorize a release; missing or
+mismatched history blocks it. Review context currently uses a conservative authored projection;
+precise field-level invalidation remains #168. See [review evidence](26-narrative-review.md).
+The source model does not yet contain production media bindings, so current exports contain no
+media assets.
 
 The export dialog below is a Chromium render of the actual React component, using explicit mock
 IPC validation data. It is browser evidence, not native Tauri or filesystem export evidence.

@@ -354,7 +354,8 @@ not merely when backend APIs exist.
 Merged [PR #190](https://github.com/krazyjakee/wobu/pull/190) established Flow, and
 [PR #192](https://github.com/krazyjakee/wobu/pull/192) added working discovery, Script and Source.
 The current implementation includes World state, typed forms, source repair, a compiler/runtime-backed
-Preview with evaluated traces and command results, explicit save migration, native package export, saved regression scenarios and attributed context.
+Preview with evaluated traces and command results, explicit save migration, native package export,
+saved regression scenarios, attributed context, generation jobs and guarded editorial review.
 Detailed behavior and evidence limits are in [the authoring guide](19-narrative-authoring.md).
 The issue index below retains unchecked full-acceptance items; implementation of a foundation
 is not a claim that every criterion is complete. N5 is excluded from this work by user direction.
@@ -370,7 +371,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
 | Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests and native walkthrough. | Flow overlays (#188). |
 | Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Layout sync (#185), richer domain payloads and production recovery (#181). |
-| Production | Authoring lifecycle/revision safeguards. | Generation, review, dependency tracking, localisation/audio and release workflow. N5 engine integrations are excluded. |
+| Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. | Supporting text (#167), precise dependency tracking, localisation/audio and production release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
 
@@ -435,4 +436,3 @@ Excluded from the current implementation at the user's request; these issues rem
 - [ ] [Validate narrative collaboration, migration, and crash recovery end to end](https://github.com/krazyjakee/wobu/issues/181)
 - [ ] [Validate narrative workspace accessibility and large-project performance](https://github.com/krazyjakee/wobu/issues/182)
 - [ ] [Document and validate the complete narrative production workflow](https://github.com/krazyjakee/wobu/issues/183)
-

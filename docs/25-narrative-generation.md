@@ -47,8 +47,13 @@ receipt and proposal become visible together through the canonical publication m
 immutable objects described in [narrative storage](24-narrative-storage.md). Proposals include
 the frozen expectations and fresh source/text/policy/context checks. Changes during a call
 produce a proposal marked for conflict review. Slot and variant locks are checked both before
-calling the provider and when publishing the result. No generation path writes accepted text,
-changes approval, or creates story logic. Editorial acceptance is a separate guarded operation.
+calling the provider and when publishing the result. After retaining the immutable result, the
+shared editorial transaction can replace wording only when the slot and existing variant both
+remain Generated; an empty Generated slot can receive its first wording. Edited content retains
+a separate proposal, and a lock or changed input prevents automatic replacement. Generation never
+grants approval or creates story logic. [Review](28-narrative-review-queue.md) compares retained
+candidates and records explicit acceptance, approval, attestation and policy decisions through
+the [same guarded storage boundary](26-narrative-review.md).
 
 The Generation history lists live queue status and durable results. **Cancel request** and
 **Cancel active generation** use the existing cancellation token and shutdown queue. Queued
@@ -56,6 +61,8 @@ work can be cancelled before a provider call; running streams are stopped throug
 Only a known rate-limit rejection before any output/usage may retry automatically. Other
 failures, partial streams, cancellation and uncertain billing require an explicit retry.
 Successful requests cannot be implicitly retried, including after restarting Wobu.
+Complete publications retain their successful receipt even if its redundant standalone file is
+removed, so that removal cannot authorize another paid request.
 
 An unfinished request intent appears as interrupted when no live queue job remains. It is
 never automatically resumed: a crash may have occurred after the provider received the call.

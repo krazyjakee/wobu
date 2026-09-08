@@ -102,8 +102,9 @@ export function NarrativeGeneration({
       <section className="nrt-export nrt-generation">
         <h2 id="nrt-generation-title">Generate dialogue</h2>
         <p id="nrt-generation-description">
-          Generate prose for saved dialogue slots. Results are retained as review proposals.
-          Accepted dialogue stays under your control.
+          Generate prose for saved dialogue slots. Slots and variants that are both Generated may
+          update automatically. Edited wording produces a review proposal; Locked wording is
+          skipped. Every result is retained in Review.
         </p>
         <p>
           Uses the text provider and model from Settings. Provider charges may apply; Wobu has no
@@ -263,7 +264,7 @@ export function NarrativeGeneration({
                 )}
                 {item.error_code && <p>{item.error_code}</p>}
                 {item.candidate && <blockquote>{item.candidate.text}</blockquote>}
-                {item.proposal_published && <p>Proposal retained for review.</p>}
+                {item.proposal_published && <p>Result retained in Review.</p>}
                 {item.proposal_current_at_publication === false && (
                   <p>
                     Source, context or policy changed during generation. This proposal requires
