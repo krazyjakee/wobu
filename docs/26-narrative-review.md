@@ -47,9 +47,10 @@ records, variable declarations, captured character names/voices and the exact sc
 `editorial_head`, slot policies, text lifecycle flags, and the selected wording's body/revision/
 provenance. That selected wording is bound separately by scene, beat, slot, variant, speaker and text
 revision. Consequently, approval and lock operations cannot invalidate themselves, while changes to
-intent, speakers, conditions or upstream world content invalidate the relevant proof. Field-level
-precision and incremental rebuild reporting remain #168 work; the current full world projection
-can intentionally invalidate more lines than a future dependency index.
+intent, speakers, conditions or upstream world content invalidate the relevant proof. The current full world projection intentionally
+invalidates more lines than the [dependency index](34-narrative-dependencies.md) (#168), which is
+field-level and query-aware; the two are separate answers and this is the conservative one.
+Incremental rebuild reporting remains #169 work.
 
 Each decision is an immutable `narrative_editorial` payload in the existing Receipt envelope. The
 scene's `editorial_head` selects its committed chain. Events retain the previous and resulting scene,

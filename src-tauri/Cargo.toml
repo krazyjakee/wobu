@@ -55,6 +55,11 @@ wobu-narrative-scenarios = { path = "crates/wobu-narrative-scenarios" }
 wobu-narrative-package = { path = "crates/wobu-narrative-package" }
 wobu-narrative-context = { path = "crates/wobu-narrative-context" }
 wobu-narrative-generation = { path = "crates/wobu-narrative-generation" }
+# Field-level dependency tracking, fingerprints and the rebuildable reverse
+# index (#168). Pure data over the canonical model, like the compiler: it takes
+# scenes, texts, the world and the declared state, and structurally cannot see
+# the Flow layout sidecars.
+wobu-narrative-deps = { path = "crates/wobu-narrative-deps" }
 
 [package]
 name = "wobu"
@@ -154,6 +159,7 @@ wobu-narrative-scenarios = { workspace = true }
 wobu-narrative-package = { workspace = true }
 wobu-narrative-context = { workspace = true }
 wobu-narrative-generation = { workspace = true }
+wobu-narrative-deps = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
 

@@ -74,8 +74,9 @@ What is connected to the project folder today, and what is not:
 Two things #189 asks for are refused with the reason rather than drawn: a badge cannot open a
 **witness scenario**, because generated reachability scenarios remain unimplemented (#171) — Preview
 draws the route it played (#188), but a scene nothing has played is not thereby unreachable; and an
-**affected-build scope** cannot be highlighted, because that needs the dependency tracker and the
-build planner (#168, #169).
+**affected-build scope** cannot be highlighted, because that needs the build planner (#169). Which
+lines an edit affected, and why, is already answered by [dependency
+tracking](34-narrative-dependencies.md) (#168) — in **Context → Why affected**, not on the canvas.
 
 #### What the Flow canvas can and cannot author
 

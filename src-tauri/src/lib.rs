@@ -170,6 +170,7 @@ pub fn run() {
             commands::narrative_review::narrative_scene_restore,
             commands::narrative_context::narrative_context_capture,
             commands::narrative_context::narrative_context_freshness,
+            commands::narrative_deps::narrative_affected,
             commands::narrative_recovery::narrative_recovery_list,
             commands::narrative_recovery::narrative_recovery_restore,
             commands::narrative_scenarios::narrative_scenarios_list,
