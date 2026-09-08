@@ -78,13 +78,11 @@ export function ProjectArc(props: Props) {
                 <button
                   className="btn btn-sm"
                   onClick={() =>
-                    useUI
-                      .getState()
-                      .openNarrativeWorld({
-                        projectKey: props.projectKey,
-                        collection: 'quests',
-                        recordId: finding.recordId!,
-                      })
+                    useUI.getState().openNarrativeWorld({
+                      projectKey: props.projectKey,
+                      collection: 'quests',
+                      recordId: finding.recordId!,
+                    })
                   }
                 >
                   Open quest
