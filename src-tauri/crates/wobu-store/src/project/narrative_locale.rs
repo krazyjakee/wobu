@@ -139,8 +139,14 @@ impl Project {
             diagnostics: locale::preview(&rows, &sources, &existing),
             conflicts: BTreeMap::new(),
         };
+        let blocked: std::collections::BTreeSet<_> = report
+            .diagnostics
+            .iter()
+            .filter(|d| d.code != "missing_id")
+            .map(|d| d.id.clone())
+            .collect();
         for row in &rows {
-            if report.diagnostics.iter().any(|d| d.id == row.source.id && d.code != "missing_id") {
+            if blocked.contains(&row.source.id) {
                 continue;
             }
             match self.locale_write_captured(row, false, &sources, &existing, &snapshots) {
@@ -182,7 +188,8 @@ impl Project {
             .find(|s| s.scene().id == container)
             .ok_or_else(|| invalid("Missing source capture."))?;
         snapshot.check_observations(self)?;
-        let diagnostics = locale::preview(std::slice::from_ref(row), &sources, &existing);
+        let selected = BTreeMap::from([(source.id.clone(), source.clone())]);
+        let diagnostics = locale::preview(std::slice::from_ref(row), &selected, existing);
         if let Some(problem) = diagnostics.iter().find(|d| d.code != "missing_id") {
             return Err(invalid(&problem.message));
         }

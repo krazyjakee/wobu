@@ -183,7 +183,8 @@ pub fn preview(
             );
         }
     }
-    for id in sources.keys().filter(|id| !rows.iter().any(|r| &r.source.id == *id)) {
+    let supplied: BTreeSet<_> = rows.iter().map(|row| row.source.id.as_str()).collect();
+    for id in sources.keys().filter(|id| !supplied.contains(id.as_str())) {
         add(
             id,
             "missing_id",

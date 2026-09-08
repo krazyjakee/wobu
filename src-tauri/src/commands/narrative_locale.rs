@@ -6,9 +6,26 @@ use crate::{
 use tauri::State;
 use wobu_narrative_locale::{LocaleId, Policy, Row};
 use wobu_store::{
-    SourceSave,
+    Project, SourceSave,
     project::narrative_locale::{ImportReport, LocaleView},
 };
+/// Capture the session before queueing work; neither reconciliation nor publication
+/// may follow the window into another project while the blocking pool is busy.
+async fn work<T: Send + 'static>(
+    state: &AppState,
+    operation: impl FnOnce(&mut Project) -> CommandResult<T> + Send + 'static,
+) -> CommandResult<T> {
+    let (ticket, ()) = state.ticket(|_| Ok(()))?;
+    let state = state.handle();
+    super::blocking("Localisation worker stopped.", move || {
+        state.with_ticket(&ticket, |_| Ok(()))?;
+        if state.reconcile_project_now(ticket.project)? {
+            state.announce_local_change(ticket.project);
+        }
+        state.with_ticket(&ticket, operation)
+    })
+    .await?
+}
 fn saved(outcome: SourceSave) -> CommandResult<()> {
     match outcome {
         SourceSave::Saved(_) => Ok(()),
@@ -16,9 +33,8 @@ fn saved(outcome: SourceSave) -> CommandResult<()> {
     }
 }
 #[tauri::command]
-pub fn narrative_locale_get(state: State<'_, AppState>) -> CommandResult<LocaleView> {
-    state.reconcile_now()?;
-    state.with(|p| Ok(p.locale_view()?))
+pub async fn narrative_locale_get(state: State<'_, AppState>) -> CommandResult<LocaleView> {
+    work(&state, |p| Ok(p.locale_view()?)).await
 }
 #[tauri::command]
 pub fn narrative_locale_policy(
@@ -29,14 +45,13 @@ pub fn narrative_locale_policy(
     state.with(|p| saved(p.save_locale_policy(policy, &expected)?))
 }
 #[tauri::command]
-pub fn narrative_locale_export(
+pub async fn narrative_locale_export(
     state: State<'_, AppState>,
     locale: LocaleId,
     csv: bool,
     destination: Option<String>,
 ) -> CommandResult<String> {
-    state.reconcile_now()?;
-    state.with(|p| {
+    work(&state, move |p| {
         let text = p.locale_export(&locale, csv)?;
         if let Some(destination) = destination {
             use std::io::Write;
@@ -65,27 +80,25 @@ pub fn narrative_locale_export(
         }
         Ok(text)
     })
+    .await
 }
 #[tauri::command]
-pub fn narrative_locale_preview(
+pub async fn narrative_locale_preview(
     state: State<'_, AppState>,
     input: String,
     csv: bool,
 ) -> CommandResult<Vec<wobu_narrative_locale::Diagnostic>> {
-    state.reconcile_now()?;
-    state.with(|p| Ok(p.locale_preview(&input, csv)?))
+    work(&state, move |p| Ok(p.locale_preview(&input, csv)?)).await
 }
 #[tauri::command]
-pub fn narrative_locale_import(
+pub async fn narrative_locale_import(
     state: State<'_, AppState>,
     input: String,
     csv: bool,
 ) -> CommandResult<ImportReport> {
-    state.reconcile_now()?;
-    state.with(|p| Ok(p.locale_import(&input, csv)?))
+    work(&state, move |p| Ok(p.locale_import(&input, csv)?)).await
 }
 #[tauri::command]
-pub fn narrative_locale_approve(state: State<'_, AppState>, row: Row) -> CommandResult<()> {
-    state.reconcile_now()?;
-    state.with(|p| saved(p.locale_approve(&row)?))
+pub async fn narrative_locale_approve(state: State<'_, AppState>, row: Row) -> CommandResult<()> {
+    work(&state, move |p| saved(p.locale_approve(&row)?)).await
 }
