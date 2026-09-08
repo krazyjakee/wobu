@@ -55,7 +55,7 @@ fn parse_capture_options(
 fn invalid(message: impl Into<String>) -> WobuError {
     WobuError::new(Code::Invalid, message)
 }
-fn capture(
+pub(super) fn capture(
     project: &Project,
     options: Options,
     after_read: impl FnOnce(),

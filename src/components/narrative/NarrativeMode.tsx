@@ -8,6 +8,7 @@ import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
 import { NarrativeScenarioTests } from './NarrativeScenarioTests'
 import { NarrativeRecovery } from './NarrativeRecovery'
+import { NarrativeGeneration } from './NarrativeGeneration'
 import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
@@ -31,6 +32,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
+  const [generationOpen, setGenerationOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
   const [repairRel, setRepairRel] = useState<string | null>(null)
   const [worldOpen, setWorldOpen] = useState(false)
@@ -89,6 +91,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         )}
         <div className="nrt-head-actions">
+          <button className="btn" onClick={() => setGenerationOpen(true)}>
+            Generate…
+          </button>
           <button
             type="button"
             className="btn"
@@ -115,6 +120,14 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         </div>
       </header>
+      {generationOpen && (
+        <NarrativeGeneration
+          projectKey={project.path}
+          scene={selected}
+          readOnly={project.readOnly}
+          onClose={() => setGenerationOpen(false)}
+        />
+      )}
       {buildOpen && (
         <NarrativeScenarioTests
           readOnly={project.readOnly}

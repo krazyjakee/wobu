@@ -22,6 +22,7 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct FrozenRequest {
     pub version: u32,
+    pub source_schema_version: u32,
     pub request_id: Id,
     pub batch_id: Id,
     pub target: Selection,
@@ -51,6 +52,7 @@ impl FrozenRequest {
 
     pub fn validate(&self) -> Result<(), String> {
         if self.version != VERSION
+            || self.source_schema_version != wobu_narrative::SOURCE_SCHEMA_VERSION
             || self.prompt_version != PROMPT_VERSION
             || self.output_schema_version != OUTPUT_SCHEMA_VERSION
             || self.context.version != 1

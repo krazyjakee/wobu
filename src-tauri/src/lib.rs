@@ -68,6 +68,7 @@ pub fn run() {
         // project it belongs to so an accept can never be answered against a
         // different world.
         .manage(enhance::Pending::default())
+        .manage(commands::narrative_generation::GenerationPlans::default())
         // Beside `AppState` rather than inside it, and that is #82's whole
         // point: that slot holds exactly one project and only while somebody has
         // it open, and syncing worlds nobody is looking at is the feature.
@@ -168,6 +169,11 @@ pub fn run() {
             commands::narrative_scenarios::narrative_scenarios_list,
             commands::narrative_scenarios::narrative_scenario_save,
             commands::narrative_scenarios::narrative_scenario_run,
+            commands::narrative_generation::narrative_generation_plan,
+            commands::narrative_generation::narrative_generation_start,
+            commands::narrative_generation::narrative_generation_history,
+            commands::narrative_generation::narrative_generation_retry,
+            commands::narrative_generation::narrative_generation_recover,
             commands::narrative_preview::narrative_compile,
             commands::narrative_preview::narrative_preview_start,
             commands::narrative_preview::narrative_preview_step,
