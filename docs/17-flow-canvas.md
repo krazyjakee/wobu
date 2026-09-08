@@ -28,15 +28,10 @@ not merged into the product, and a half-built canvas sitting in `src/` waiting f
 | Rejected | `@dagrejs/dagre` 3.1.1 (MIT), `dagre` 0.8.5 (MIT) | — |
 | Fallback if React Flow fails in the webview | hand-rolled SVG canvas — no second library is close | — |
 
-**Neither is installed in `package.json` today.** `knip` fails on a dependency nothing imports, and
-[14](14-code-health.md) says plainly that there are no ignore globs in the Knip configuration and
-that an unused package still fails. Inventing an exception so a spike can leave its dependencies
-lying around is a worse precedent than one extra command. #186 starts with:
-
-```sh
-npm install @xyflow/react@12.11.6 elkjs@0.12.0
-npm run licences        # elkjs must reappear in the review list; see Licences below
-```
+**The chosen React Flow and elkjs versions are now product dependencies.** The original
+September 7 spike removed its temporary dependencies and prototype; #186 subsequently added the
+production canvas. The September 8 follow-up below uses those actual product components, and found
+and corrected two native integration failures. Dagre remains a comparison candidate only.
 
 ---
 
@@ -327,7 +322,8 @@ The strategy #186 and [#182](https://github.com/krazyjakee/wobu/issues/182) are 
 🚩 **Layout time is not interaction smoothness.** Everything in this section is either a pure-Node
 layout measurement or a jsdom mount. Neither is a frame. The budget is derived from where the curve
 bends, and the bend is between 300 and 600 in every measurement taken — but the number that
-confirms or moves it has to come from a real webview with a person dragging.
+confirms or moves it needs real-webview measurements. The September 8 measurements below add
+automated native evidence; physical-device human evaluation remains outstanding.
 
 ---
 
@@ -429,9 +425,8 @@ canvas, which is the same rule that keeps a beat's line count off its face.
 
 ## Known risks for #186
 
-1. **Nothing here ran in the Tauri webview.** This is the one that could still invalidate the
-   choice. Verify React Flow in WebKitGTK and WebView2 in the first hour of #186, before anything
-   is built on it.
+1. **Cross-platform native verification remains incomplete.** September 8 exercised Linux
+   WebKitGTK and corrected two integration failures. WebView2 and macOS WKWebView remain untested.
 2. **elkjs has no layout cancellation.** A superseded layout has to be discarded by the caller —
    a generation counter on the request, or terminate the worker and pay the ~187 ms cold start
    again. Decide which before the first `elk.layout()` call ships.
@@ -444,26 +439,25 @@ canvas, which is the same rule that keeps a beat's line count off its face.
    render at all** and a test asserting on edges passes vacuously. Budget for a browser-driven test
    for anything about geometry.
 6. **elkjs is EPL-2.0.** Never patch a vendored copy. See Licences.
-7. **The 300-node budget is derived, not observed.** It comes from jsdom mounts and Node layout
-   times. Confirm it against a real scene with a person driving before #182 writes it into an
-   acceptance criterion.
+7. **300 is a ceiling, not a frame-rate guarantee.** The native measurements below support a
+   bounded store but show long tails. Validate on representative physical devices for #182.
 
 ---
 
 ## What this spike did not test
 
-Every item here is a thing somebody could reasonably assume was covered. None of it was.
+The original September 7 spike left these gaps. The September 8 follow-up closes only the
+Linux native execution and automated interaction measurements described below.
 
-- **The Tauri webview.** Nothing ran in WebKitGTK, WebView2 or WKWebView. All browser-side numbers
-  are jsdom under Node 22. React Flow's requirements — `ResizeObserver`, `DOMMatrixReadOnly`,
-  pointer events — were read, not exercised.
-- **Interaction smoothness.** No frame times, no drag, no pan, no zoom, no wheel or trackpad
-  behaviour, no touch. These need a human and a real display and were deliberately not faked.
+- **Windows and macOS webviews.** WebView2 and WKWebView remain untested. Linux WebKitGTK
+  exercised `ResizeObserver`, `DOMMatrixReadOnly`, pointer events and actual worker execution.
+- **Human interaction smoothness.** Automated native key, pointer and wheel trials and rAF
+  timings are now recorded. Physical display presentation, human comfort, trackpad and touch
+  behaviour are still untested.
 - **Screen readers.** DOM roles, labels and tab stops were asserted. No AT was run. Orca, NVDA and
   VoiceOver behaviour on a canvas of this shape is unknown.
-- **elkjs actually executing in a browser Worker.** The Vite build emits the worker chunk and the
-  main chunk shrinks accordingly, which proves the *build*. The worker was never started in a
-  browser; all elk timings are the main-thread bundled build under Node.
+- **Worker portability outside Linux.** The corrected worker executes in real Linux WebKitGTK;
+  the earlier Node timing table remains a main-thread benchmark, not native worker timings.
 - **The real Ashfall fixture.** The council graph was built from the issue's description, not read
   out of `examples/Ashfall.wobu/`. The 304- and 1,000-node graphs are synthetic throughout, and a
   real story's shape will differ.
@@ -475,3 +469,108 @@ Every item here is a thing somebody could reasonably assume was covered. None of
 - **Real node sizes.** Every node used a nominal fixed box (220×72 and friends). A layout fed
   measured DOM sizes will differ, and the measure-then-lay-out round trip was not exercised.
 - **Undo, multi-select, copy/paste, and drag-to-reparent** — all in scope for #186, none prototyped.
+
+## Linux native corrections — 2026-09-08 (#186)
+
+The follow-up spike exercised the actual `NarrativeFlowPane` and `FlowCanvas` in Tauri's Linux
+WebKitGTK webview and found two failures the original jsdom/Node checks could not expose.
+
+- The old `layout.worker.ts` constructed `elk.bundled.js` inside an existing browser Worker.
+  Its embedded worker entry detects `self` without `document` and installs its own message
+  handler instead of exporting an in-process Worker shim. Construction therefore threw
+  `TypeError: undefined is not a constructor (evaluating 'new _Worker(url)')`, leaving Auto layout
+  waiting forever. The corrected adapter uses the small `elk-api.js` facade with the unmodified
+  upstream `elk-worker.min.js` as a **classic Worker asset**. Vite emits the asset via `?url`;
+  layout remains off-thread and the existing `LayoutRunner` API is unchanged. Worker errors reject
+  pending calls, terminate that worker and permit a fresh worker on retry. Late errors from the
+  old worker cannot reject the replacement worker's requests.
+- The actual `NarrativeFlowPane` parent rendered a blank 320-pixel canvas in WebKitGTK despite
+  17 node and 19 edge elements in the DOM. The intermediate `.nrt-flow-wrap` had no sizing rule.
+  Giving it a shrinking flex-column layout makes the inner percentage height resolvable and fills
+  the available pane. This was reproduced with the real parent component, not merely a differently
+  sized standalone harness.
+
+[Before the sizing correction](screenshots/narrative-flow-native-before.png): real Linux native
+pane with invisible node content. After the correction and actual worker execution:
+
+![Native Flow pane after correction](screenshots/narrative-flow-native-after.png)
+
+These images use synthetic in-memory council source and the actual product components in a
+throwaway test host. No provider was mocked or called; a real `kind_registry` Tauri invocation
+confirmed the native bridge. They do not establish every saved-project Flow workflow or #186's
+full acceptance. The worker regression executes the actual upstream worker script in an isolated
+worker-like JS realm, tests concurrent grouped layouts and failure/retry isolation, and is backed
+by the separate real-WebKit execution above. No vendor package was patched or added.
+
+
+## Native interaction follow-up — 2026-09-08 (#184)
+
+**Decision: retain React Flow 12.11.6 and elkjs 0.12.0, with a maximum of 300 total React Flow
+store nodes and collapsed arc groups by default.** The native trials establish that this approach
+works in Linux Tauri; they do not establish smooth 60 FPS or three-platform compatibility.
+
+The throwaway host imported the actual `FlowCanvas`, node components, keyboard layer, selection
+store and corrected ELK adapter. It served a Vite production build to the real Tauri debug binary,
+with no mocked IPC; `kind_registry` returned ten kinds. Linux 6.8, WebKitGTK/JavaScriptCore
+2.52.6, an AMD Ryzen 9 5900X (24 logical CPUs), and Xvfb at 1440×1100 / DPR 1 were used.
+Rendering was software-backed, without a physical display. The prototype and driver were removed;
+[the measurement artifact](evidence/narrative-flow-native.json) retains timings, source/store/DOM
+counts, environment, observed errors and the keyboard mutation audit.
+
+The council fixture had 16 story elements, 17 rendered nodes including its group frame, 19 edges,
+three approaches, reconvergence and a back edge. One beat retained 12 lines and seven variants in
+one node. It is the product's synthetic council fixture, not the persisted Ashfall project.
+The scene fixture used 300 elements, three-way branches every ten elements and a back edge every
+50, initially arranged in a compact 15-column grid. The arc fixture had 1,000 scenes in 50 equal
+quest groups: 40 groups collapsed, 200 scenes exposed and 40 collapsed nodes. Ten open-group frames
+made **250 actual React Flow store and DOM nodes**, rather than the toolbar's 240 logical nodes.
+The 300-node scene had all 300 nodes in both store and DOM. Both large overviews began at zoom 0.19;
+this measures an overview, not 300 simultaneously readable dialogue cards.
+
+| Native production-host measurement | Council | 300-node scene | 1,000-scene collapsed arc |
+| --- | ---: | ---: | ---: |
+| Actual React Flow store nodes | 17 | 300 | 250 |
+| Switch to second animation frame, one trial | 82 ms | 289 ms | 227 ms |
+| DOM key dispatch to second frame, median / p95 (90 trials) | 32 / 32 ms | 64 / 79 ms | 64 / 67 ms |
+| Trusted OS key handler to second frame, median / p95 (25 trials) | 29 / 36 ms | 56 / 82 ms | 53 / 75 ms |
+| rAF intervals during OS pointer/pan/wheel, median / p95 | — | 16 / 22 ms | 16 / 42 ms |
+| Idle rAF intervals, median / p95 (three seconds) | — | 16 / 17 ms | 16 / 17 ms |
+| Worker layout round trips, five trials | 237, 28, 28, 32, 28 ms | 364, 240, 220, 210, 228 ms | 76, 73, 94, 66, 71 ms |
+
+The first council layout includes worker initialization; later fixtures reuse it. Worker times
+exclude React Flow applying positions. Key trials alternate successor/predecessor navigation;
+DOM-dispatched trials are synthetic events, while the separate OS trials use trusted `xdotool`
+Space and arrow events. Every measured DOM navigation changed selection. Timings start inside
+the webview and end on the second `requestAnimationFrame`, so they include an intentional frame
+wait and are **not hardware input-to-display latency**. Initial store/DOM counts were read after
+a separate 300 ms settling delay, which is excluded from the switch-to-second-frame number.
+Percentiles use nearest rank; rAF samples are intervals, not GPU presentation durations.
+
+OS pointer sequences included canvas dragging/panning and six wheel steps in each direction;
+viewport changes were observed. These trials do not prove position persistence or drag-to-reparent.
+The large graphs stayed responsive, but tails matter: the 300-node OS key sample reached 184 ms
+and its pointer/wheel frame interval reached 153 ms. The arc's corresponding maxima were 141 ms
+and 47 ms. Eight `ResizeObserver loop completed with undelivered notifications` errors were
+recorded across the main run and supplemental screenshot/idle trials; interaction continued.
+Those observations prohibit a blanket “smooth” or “zero errors” claim.
+
+![All 300 scene nodes in the native canvas](screenshots/narrative-flow-native-300.png)
+
+![A 1,000-scene arc with 40 quest groups collapsed](screenshots/narrative-flow-native-arc.png)
+
+**Keyboard feasibility was exercised with actual OS events.** Starting from the Arrival node,
+Space selected it, C began a connection, two Down presses reached Present evidence and C changed
+Arrival's `then` destination to that node. Delete then removed Present evidence and cleared both
+inbound references. The live announcement reported both operations and the selected-node inspector
+followed navigation. A remaining product gap was observed: deletion selected the surviving Arrival
+node, but DOM focus was lost instead of restored. The current single-rAF focus helper needs a
+render/visibility-aware follow-up in #186; this evidence does not claim complete accessibility.
+No screen reader, source-file write, undo or cross-level editing was exercised by this host.
+
+For #182, count **every node passed to React Flow, including decorative group frames**, toward
+300. Keep collapsed quests as the default, virtualize within the cap and use a local neighbourhood
+plus the outline when even the collapsed graph exceeds it. The observed long tails justify treating
+300 as a hard upper bound, with fewer readable nodes normally displayed. The toolkit choice remains
+supported by the earlier elk/dagre comparison and these native runs; a custom SVG fallback is not
+needed for the Linux failures found here, both of which were narrow integration fixes. Windows,
+macOS, physical-device usability, assistive technology and memory remain explicit follow-ups.

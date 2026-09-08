@@ -22,6 +22,7 @@
 // type stays one type without the file having to be one file.
 mod assets;
 mod generations;
+mod narrative;
 mod nodes;
 mod peers;
 mod rows;
@@ -53,7 +54,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from the project folder, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 10;
+pub const INDEX_VERSION: u32 = 11;
 
 /// A node file that is on disk and cannot be read.
 ///
@@ -198,7 +199,9 @@ impl Index {
                  DROP TABLE IF EXISTS generations;
                  DROP TABLE IF EXISTS corrupt;
                  DROP TABLE IF EXISTS sync_state;
-                 DROP TABLE IF EXISTS sync_rejected;",
+                 DROP TABLE IF EXISTS sync_rejected;
+                 DROP TABLE IF EXISTS narrative_files;
+                 DROP TABLE IF EXISTS narrative_sync;",
             )?;
             self.conn.execute_batch(SCHEMA)?;
             self.conn.execute(
@@ -262,6 +265,7 @@ impl Index {
         generations: &[(Generation, String, Stamp)],
         nodes: &[(Node, String, Stamp)],
         corrupt: &[(String, String)],
+        narrative: &[crate::NarrativeIndexEntry],
     ) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch(CLEAR_DERIVED_SQL)?;
@@ -279,6 +283,9 @@ impl Index {
             for (rel_path, error) in corrupt {
                 statements.mark_corrupt(rel_path, error)?;
             }
+        }
+        for entry in narrative {
+            self::narrative::put(&tx, entry)?;
         }
         tx.commit()?;
         self.write_metrics.committed();

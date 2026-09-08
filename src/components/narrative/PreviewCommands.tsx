@@ -6,11 +6,13 @@ import { validNarrativeName } from './typedFormModel'
 export function PreviewCommands({
   onChange,
   disabled,
+  initial = {},
 }: {
   onChange: (commands: Record<string, VarType[]> | null) => void
   disabled: boolean
+  initial?: Record<string, VarType[]>
 }) {
-  const [source, setSource] = useState('{}')
+  const [source, setSource] = useState(JSON.stringify(initial))
   const [error, setError] = useState('')
   return (
     <details>

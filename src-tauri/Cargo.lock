@@ -7877,8 +7877,10 @@ dependencies = [
  "wobu-mcp",
  "wobu-narrative",
  "wobu-narrative-compiler",
+ "wobu-narrative-context",
  "wobu-narrative-package",
  "wobu-narrative-runtime",
+ "wobu-narrative-scenarios",
  "wobu-store",
  "wobu-sync",
 ]
@@ -7992,6 +7994,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wobu-narrative-context"
+version = "0.1.11"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+ "wobu-core",
+ "wobu-influence",
+ "wobu-narrative",
+ "wobu-narrative-compiler",
+ "wobu-narrative-runtime",
+]
+
+[[package]]
 name = "wobu-narrative-package"
 version = "0.1.11"
 dependencies = [
@@ -8012,6 +8028,18 @@ dependencies = [
  "thiserror 2.0.19",
  "wobu-narrative",
  "wobu-narrative-compiler",
+]
+
+[[package]]
+name = "wobu-narrative-scenarios"
+version = "0.1.11"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "wobu-narrative",
+ "wobu-narrative-compiler",
+ "wobu-narrative-runtime",
 ]
 
 [[package]]

@@ -341,7 +341,7 @@ const REGISTRY: &[KindDef] = &[
         nests: false,
         singleton: false,
         dir: "character",
-        attributes: &[SCALE_ATTRIBUTE],
+        attributes: &[SCALE_ATTRIBUTE, attribute("narrative_voice", "Narrative voice")],
         sections: &[SILHOUETTE, ANATOMY, COSTUME, MATERIALS, PALETTE, SIGNATURE, NEVER],
         default_link_roles: &[LinkRole::SpeciesOf, LinkRole::MemberOf, LinkRole::LocatedIn],
     },

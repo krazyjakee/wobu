@@ -16,17 +16,39 @@ import { PreviewCommands } from './PreviewCommands'
 import { PreviewCommandResult } from './PreviewCommandResult'
 import { PreviewTrace } from './PreviewTrace'
 import { usePreviewSessions } from './previewStore'
+import { PreviewScenarios } from './PreviewScenarios'
+import { assertFrame, appendTape } from './scenarioTape'
+import type { Scenario, ScenarioAction } from '../../lib/api/narrativeScenarios'
 import './preview.css'
 
-export function NarrativePreviewPane({ projectKey = '' }: { projectKey?: string }) {
+export function NarrativePreviewPane({
+  projectKey = '',
+  readOnly = false,
+}: {
+  projectKey?: string
+  readOnly?: boolean
+}) {
   const sceneId = useUI((state) => state.narrative.sceneId)
   if (!sceneId) return <p className="nrt-note">Choose a scene to preview.</p>
   return (
-    <PreviewEditor key={`${projectKey}:${sceneId}`} projectKey={projectKey} sceneId={sceneId} />
+    <PreviewEditor
+      key={`${projectKey}:${sceneId}`}
+      projectKey={projectKey}
+      sceneId={sceneId}
+      readOnly={readOnly}
+    />
   )
 }
 
-function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: string }) {
+function PreviewEditor({
+  projectKey,
+  sceneId,
+  readOnly,
+}: {
+  projectKey: string
+  sceneId: string
+  readOnly: boolean
+}) {
   const key = `${projectKey}:${sceneId}`
   const session = usePreviewSessions((state) => state.sessions[key])
   const diagnostics = usePreviewSessions((state) => state.diagnostics[key])
@@ -50,29 +72,50 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
     speaker && typeof speaker === 'object'
       ? (nodes.data?.find((one) => one.id === speaker.entity)?.name ?? speaker.entity)
       : speaker
-  const start = async () => {
-    if (busy || !commands) return
+  const [loaded, setLoaded] = useState<Scenario | null>(null)
+  const start = async (scenario?: Scenario) => {
+    if (busy || (!commands && !scenario)) return
     setBusy(true)
     setError('')
     try {
-      const report = await narrativeCompile(commands)
+      const frozenCommands = scenario?.commands ?? commands!
+      const report = await narrativeCompile(frozenCommands)
       usePreviewSessions.getState().report(key, report.diagnostics)
       if (!report.graph) {
-        setError('Compilation needs corrections before this preview can start')
+        const failure = new Error('Compilation needs corrections before this preview can start')
+        if (scenario) throw failure
+        setError(failure.message)
         return
       }
+      const inputs =
+        scenario?.initial_state ??
+        Object.fromEntries(variables.map((one) => [one.name, initial[one.name] ?? one.default]))
+      const startScene = scenario?.scene ?? sceneId
       const frame = await narrativePreviewStart(
         report.graph,
-        sceneId,
-        Object.fromEntries(variables.map((one) => [one.name, initial[one.name] ?? one.default])),
+        startScene,
+        inputs,
+        scenario?.seed ?? 0,
       )
       put(key, {
         graph: report.graph,
+        tape: {
+          incomplete: false,
+          scenario: {
+            version: 1,
+            scene: startScene,
+            initial_state: structuredClone(inputs),
+            seed: scenario?.seed ?? 0,
+            commands: structuredClone(frozenCommands),
+            steps: [assertFrame(frame, null)],
+          },
+        },
         frame,
         trace: [{ label: 'Started', execution: frame.trace }],
       })
     } catch (failure) {
       setError(errorMessage(failure))
+      if (scenario) throw failure
     } finally {
       setBusy(false)
     }
@@ -91,6 +134,7 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
         ...session,
         frame,
         trace: [...session.trace, { label, execution: frame.trace }].slice(-100),
+        tape: appendTape(session.tape, frame, scenarioAction(action)),
       })
       if (frame.trace.error) setError(errorMessage(frame.trace.error))
     } catch (failure) {
@@ -126,7 +170,24 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
           )}
         </fieldset>
       </details>
-      <PreviewCommands disabled={busy} onChange={setCommands} />
+      <PreviewCommands
+        key={loaded ? JSON.stringify(loaded.commands) : 'manual'}
+        initial={loaded?.commands}
+        disabled={busy}
+        onChange={setCommands}
+      />
+      <PreviewScenarios
+        sceneId={sceneId}
+        tape={session?.tape}
+        busy={busy}
+        readOnly={readOnly}
+        onLoad={async (scenario) => {
+          setLoaded(scenario)
+          setInitial(scenario.initial_state)
+          setCommands(scenario.commands)
+          await start(scenario)
+        }}
+      />
       <div className="nrt-script-actions">
         <button
           className="btn is-primary"
@@ -139,7 +200,12 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
           className="btn"
           disabled={busy || !session}
           onClick={() =>
-            session && put(key, { ...session, bookmark: structuredClone(session.frame) })
+            session &&
+            put(key, {
+              ...session,
+              bookmark: structuredClone(session.frame),
+              tape: appendTape(session.tape, session.frame, { kind: 'save_checkpoint' }),
+            })
           }
         >
           Save snapshot
@@ -290,4 +356,17 @@ function diagnosticBeat(diagnostic: CompileDiagnostic): string | null {
     return null
   }
   return find(diagnostic.site)
+}
+
+function scenarioAction(action: PreviewAction): ScenarioAction {
+  switch (action.kind) {
+    case 'advance':
+      return { kind: 'advance' }
+    case 'choose':
+      return { kind: 'choose', choice: action.choiceId }
+    case 'completeCommand':
+      return { kind: 'complete_command', result: action.result }
+    case 'restore':
+      return { kind: 'restore_checkpoint' }
+  }
 }

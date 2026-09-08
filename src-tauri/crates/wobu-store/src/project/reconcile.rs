@@ -32,6 +32,7 @@ pub struct ReconcilePlan {
     corrupt: HashSet<String>,
     assets: HashSet<String>,
     generations: HashSet<String>,
+    narrative: Vec<crate::NarrativeIndexEntry>,
 }
 
 enum ObservedNode {
@@ -49,6 +50,7 @@ pub struct ReconcileObservation {
     seen_assets: HashSet<String>,
     generations: Vec<(Generation, String, Stamp)>,
     seen_generations: HashSet<String>,
+    narrative: Vec<crate::NarrativeIndexEntry>,
 }
 
 impl ReconcilePlan {
@@ -120,8 +122,10 @@ impl ReconcilePlan {
             return Err(Error::Disconnected);
         }
 
+        let narrative = super::narrative_index::observe(&self.root)?;
         Ok(ReconcileObservation {
             plan: self,
+            narrative,
             nodes,
             seen_nodes,
             seen_node_stamps,
@@ -192,6 +196,9 @@ impl ReconcileObservation {
                 return Ok(false);
             }
         }
+        if super::narrative_index::observe(&self.plan.root)? != self.narrative {
+            return Ok(false);
+        }
         Ok(true)
     }
 }
@@ -253,6 +260,9 @@ impl Project {
         cancel: &Cancel,
         on_progress: &mut impl FnMut(ScanProgress),
     ) -> Result<()> {
+        if !self.is_read_only() {
+            self.apply_narrative_deletions()?;
+        }
         let files = self.node_files();
         let total = files.len();
         on_progress(ScanProgress { done: 0, total });
@@ -287,7 +297,8 @@ impl Project {
         // recorded so the navigator can say so. The clear and every refill are
         // one transaction, so a malformed row or SQLite failure restores the
         // previous complete read model rather than exposing a partial rebuild.
-        self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken)?;
+        let narrative = super::narrative_index::observe(&self.root)?;
+        self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken, &narrative)?;
         on_progress(ScanProgress { done: total, total });
         Ok(())
     }
@@ -298,6 +309,7 @@ impl Project {
     /// Only files whose `(mtime, size)` moved are re-read: listing a directory
     /// over SMB is cheap, re-reading hundreds of small files is not.
     pub fn reconcile(&mut self) -> Result<bool> {
+        let recovered = if self.is_read_only() { false } else { self.apply_narrative_deletions()? };
         for _ in 0..3 {
             let observation = self.reconcile_plan()?.observe()?;
             if !observation.revalidate()? {
@@ -307,7 +319,7 @@ impl Project {
             // so an index-stale baseline would be an internal invariant
             // violation. Retrying is still safer than applying it.
             if let Some(changed) = self.apply_reconcile(observation)? {
-                return Ok(changed);
+                return Ok(changed || recovered);
             }
         }
         // A continuously changing folder will be observed again on the next
@@ -324,6 +336,7 @@ impl Project {
             corrupt: self.index.corrupt_paths()?.into_iter().collect(),
             assets: self.index.asset_paths()?,
             generations: self.index.generation_paths()?,
+            narrative: self.index.narrative_entries()?,
         })
     }
 
@@ -342,6 +355,7 @@ impl Project {
             seen_assets,
             generations,
             seen_generations,
+            narrative,
         } = observation;
 
         if self.id() != plan.project_id
@@ -350,6 +364,7 @@ impl Project {
             || self.index.corrupt_paths()?.into_iter().collect::<HashSet<_>>() != plan.corrupt
             || self.index.asset_paths()? != plan.assets
             || self.index.generation_paths()? != plan.generations
+            || self.index.narrative_entries()? != plan.narrative
         {
             return Ok(None);
         }
@@ -398,6 +413,10 @@ impl Project {
             self.index.remove_generation_by_rel_path(rel)?;
             changed = true;
         }
+        if narrative != plan.narrative {
+            self.index.replace_narrative(&narrative)?;
+            changed = true;
+        }
         Ok(Some(changed))
     }
 
@@ -407,6 +426,11 @@ impl Project {
             return Err(Error::Disconnected);
         }
 
+        let narrative_changed = changed_paths.iter().any(|path| {
+            let rel = path.strip_prefix(&self.root).unwrap_or(path);
+            rel.components().next().is_some_and(|part| part.as_os_str() == "narrative")
+        }) && self.reconcile_narrative()?;
+        let recovered = if self.is_read_only() { false } else { self.apply_narrative_deletions()? };
         let known = self.index.all_stamps()?;
         let was_corrupt: HashSet<String> = self.index.corrupt_paths()?.into_iter().collect();
         let mut targets = HashSet::new();
@@ -479,7 +503,7 @@ impl Project {
                 }
             }
         }
-        Ok(changed)
+        Ok(changed || narrative_changed || recovered)
     }
 
     /// Every Markdown file under `nodes/`, as `(relative path, absolute path)`.

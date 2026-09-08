@@ -68,6 +68,7 @@ export interface ExecutionTrace {
   records: { site: PreviewTraceSite; event: PreviewTraceEvent }[]
 }
 export interface PreviewFrame {
+  site?: PreviewTraceSite
   snapshot: PreviewSnapshot
   current: PreviewYield
   state: PreviewState
@@ -85,7 +86,8 @@ export const narrativePreviewStart = (
   graph: PreviewGraph,
   sceneId: string,
   initialState: PreviewState,
-): Promise<PreviewFrame> => call('narrative_preview_start', { graph, sceneId, initialState })
+  seed = 0,
+): Promise<PreviewFrame> => call('narrative_preview_start', { graph, sceneId, initialState, seed })
 export const narrativePreviewStep = (
   graph: PreviewGraph,
   snapshot: PreviewSnapshot,

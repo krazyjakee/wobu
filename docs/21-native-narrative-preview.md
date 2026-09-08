@@ -84,5 +84,6 @@ also pass the repository-wide gates before merging.
 Migration is an opt-in Rust API, not an automatic desktop checkpoint upgrade. Checkpoints remain
 pinned to their compiled graph. Trace retention is explicitly bounded and may be incomplete for very
 large actions. Seed storage still reserves a future policy; selection remains authored first-match.
-Persisted scenarios (#162), release packaging (#160), Flow overlays (#188) and N5 engine work are
-separate from this issue.
+Subsequent work adds [persisted scenarios](22-narrative-scenarios.md) and
+[native packaging](20-native-narrative-packages.md). Flow overlays (#188) remain planned; N5 engine
+work stays excluded.

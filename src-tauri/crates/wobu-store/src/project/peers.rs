@@ -502,6 +502,17 @@ impl Project {
                 let Some((parked, _)) = atomic::read_stamped(&sibling)? else {
                     return Err(Error::NotAConflict(sibling));
                 };
+                if crate::narrative::registry::classify(&target_rel).is_some() {
+                    crate::narrative::registry::safe_path(&self.root, &target_rel)?;
+                    if std::fs::symlink_metadata(&sibling).is_ok_and(|m| m.file_type().is_symlink())
+                    {
+                        return Err(Error::NotAConflict(sibling));
+                    }
+                    crate::narrative::registry::parse(&target_rel, &parked)?;
+                    if let Some((text, _)) = &current {
+                        crate::narrative::registry::parse(&target_rel, text)?;
+                    }
+                }
                 let expected = current.map(|(_, stamp)| stamp);
 
                 // Back through `guarded_write` rather than a plain write. The
@@ -523,7 +534,8 @@ impl Project {
                         // through the Markdown parser would put it in the
                         // navigator's broken-file list under a name no node
                         // has, which is a bug report rather than a diagnostic.
-                        if crate::narrative::is_source_path(&target_rel) {
+                        if crate::narrative::registry::classify(&target_rel).is_some() {
+                            self.index_narrative_path(&target_rel)?;
                             self.remove_sibling(&sibling)?;
                             return Ok(Resolved::Done);
                         }

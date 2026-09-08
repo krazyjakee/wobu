@@ -351,7 +351,7 @@ pub async fn finished(send: &mut SendStream) -> CommandResult<()> {
 
 /* ── plumbing ─────────────────────────────────────────────────────────────── */
 
-async fn open(connection: &Connection) -> CommandResult<(SendStream, RecvStream)> {
+pub(super) async fn open(connection: &Connection) -> CommandResult<(SendStream, RecvStream)> {
     within(async { connection.open_bi().await.map_err(|e| transport(&e.to_string())) }).await
 }
 
@@ -362,17 +362,22 @@ async fn open(connection: &Connection) -> CommandResult<(SendStream, RecvStream)
 /// non-string keys and a non-finite float — neither of which can occur. An error
 /// branch here would be one no test could reach and no caller could act on.
 async fn write_line<T: Serialize>(send: &mut SendStream, message: &T) -> CommandResult<()> {
-    let mut line = serde_json::to_vec(message).expect("ids, strings and a node's text");
-    if line.len() >= MAX_LINE {
-        // Raised on the *sending* build, which is the one that can be fixed,
-        // rather than on whichever peer happened to receive the oversized line.
-        return Err(WobuError::new(
-            Code::Malformed,
-            "A node is too large to sync. It will stay on this machine.",
-        )
-        .with_detail(format!("{} bytes, over the {MAX_LINE} byte limit", line.len())));
+    let mut remaining = usize::MAX;
+    write_bounded(send, message, MAX_LINE, &mut remaining).await
+}
+
+pub(super) async fn write_bounded<T: Serialize>(
+    send: &mut SendStream,
+    message: &T,
+    max_line: usize,
+    remaining: &mut usize,
+) -> CommandResult<()> {
+    let mut line = serde_json::to_vec(message).expect("sync messages contain JSON values");
+    if line.len() >= max_line || line.len() + 1 > *remaining {
+        return Err(malformed("the sync message or exchange exceeds its byte limit"));
     }
     line.push(b'\n');
+    *remaining -= line.len();
     within(async { send.write_all(&line).await.map_err(|e| transport(&e.to_string())) }).await
 }
 
@@ -382,7 +387,7 @@ async fn write_line<T: Serialize>(send: &mut SendStream, message: &T) -> Command
 /// for later streams, and their readers finish before the next request begins.
 /// [`finished`] is the exception because it is the final acknowledgement and a
 /// caller may close the connection as soon as it returns.
-fn finish(send: &mut SendStream) -> CommandResult<()> {
+pub(super) fn finish(send: &mut SendStream) -> CommandResult<()> {
     send.finish().map_err(|e| transport(&e.to_string()))
 }
 
@@ -402,16 +407,22 @@ pub(super) async fn cut_push(connection: &Connection, node: &Outgoing) -> Comman
 }
 
 /// Newline-delimited messages off a stream a stranger is writing.
-struct Lines<'a> {
+pub(super) struct Lines<'a> {
     recv: &'a mut RecvStream,
     /// Bytes read and not yet consumed: at most one line plus whatever of the
     /// next arrived in the same chunk.
     buf: Vec<u8>,
+    max_line: usize,
+    remaining: usize,
 }
 
 impl<'a> Lines<'a> {
-    fn new(recv: &'a mut RecvStream) -> Lines<'a> {
-        Lines { recv, buf: Vec::new() }
+    pub(super) fn new(recv: &'a mut RecvStream) -> Lines<'a> {
+        Self::with_limits(recv, MAX_LINE, usize::MAX)
+    }
+
+    pub(super) fn with_limits(recv: &'a mut RecvStream, max_line: usize, remaining: usize) -> Self {
+        Self { recv, buf: Vec::new(), max_line, remaining }
     }
 
     /// The next message, or `None` at a clean end of stream.
@@ -419,9 +430,12 @@ impl<'a> Lines<'a> {
     /// Trailing bytes with no newline are half a message and are refused, not
     /// returned as a short one — a peer that stopped mid-write and a peer that
     /// sent nothing must not be the same event.
-    async fn next<T: for<'de> Deserialize<'de>>(&mut self) -> CommandResult<Option<T>> {
+    pub(super) async fn next<T: for<'de> Deserialize<'de>>(&mut self) -> CommandResult<Option<T>> {
         loop {
             if let Some(end) = self.buf.iter().position(|&b| b == b'\n') {
+                if end >= self.max_line {
+                    return Err(malformed("a peer sent a line larger than this build accepts"));
+                }
                 let mut line: Vec<u8> = self.buf.drain(..=end).collect();
                 line.pop();
                 return serde_json::from_slice(&line)
@@ -430,7 +444,7 @@ impl<'a> Lines<'a> {
             }
             // Checked before reading more, so the buffer never grows past one
             // chunk beyond the cap however much a peer writes in one go.
-            if self.buf.len() > MAX_LINE {
+            if self.buf.len() >= self.max_line {
                 return Err(malformed("a peer sent a line larger than this build accepts"));
             }
 
@@ -440,7 +454,13 @@ impl<'a> Lines<'a> {
             })
             .await?;
             match read {
-                Some(n) => self.buf.extend_from_slice(&chunk[..n]),
+                Some(n) => {
+                    self.remaining = self
+                        .remaining
+                        .checked_sub(n)
+                        .ok_or_else(|| malformed("a peer exceeded the exchange byte limit"))?;
+                    self.buf.extend_from_slice(&chunk[..n]);
+                }
                 None if self.buf.is_empty() => return Ok(None),
                 None => return Err(malformed("a peer stopped mid-message")),
             }
@@ -455,7 +475,7 @@ impl<'a> Lines<'a> {
 /// single deadline over a whole batch would make the batch size a function of
 /// the link speed, which is how a sync that works in testing stops working on a
 /// hotel network.
-async fn within<T>(step: impl Future<Output = CommandResult<T>>) -> CommandResult<T> {
+pub(super) async fn within<T>(step: impl Future<Output = CommandResult<T>>) -> CommandResult<T> {
     match tokio::time::timeout(IDLE, step).await {
         Ok(result) => result,
         Err(_elapsed) => Err(transport("a peer went quiet")),
@@ -475,6 +495,26 @@ fn malformed(what: &str) -> WobuError {
 /// The link, rather than the peer, is what failed.
 fn transport(detail: &str) -> WobuError {
     WobuError::new(Code::Io, "The connection to a peer was interrupted.").with_detail(detail)
+}
+
+#[cfg(test)]
+pub(super) async fn verify_receive_byte_limits(outbound: &Connection, inbound: &Connection) {
+    for (max_line, total, payload) in [
+        (64, 512, format!("\"{}\"\n", "a".repeat(64))),
+        (512, 32, format!("\"{}\"\n", "a".repeat(32))),
+    ] {
+        let sender = async {
+            let (mut send, _) = open(outbound).await.unwrap();
+            send.write_all(payload.as_bytes()).await.unwrap();
+            finish(&mut send).unwrap();
+        };
+        let receiver = async {
+            let (_, mut recv) = inbound.accept_bi().await.unwrap();
+            let mut lines = Lines::with_limits(&mut recv, max_line, total);
+            assert!(lines.next::<serde_json::Value>().await.is_err());
+        };
+        tokio::join!(sender, receiver);
+    }
 }
 
 #[cfg(test)]

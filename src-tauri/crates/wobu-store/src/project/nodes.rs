@@ -53,9 +53,13 @@ impl Project {
     }
 
     pub fn get_node(&self, id: Id) -> Result<Node> {
+        self.get_node_stamped(id).map(|(node, _)| node)
+    }
+
+    pub fn get_node_stamped(&self, id: Id) -> Result<(Node, atomic::Stamp)> {
         let rel = self.index.rel_path_of(id)?.ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
         let path = paths::from_rel_string(&self.root, &rel);
-        let Some((text, _)) = atomic::read_stamped(&path)? else {
+        let Some((text, stamp)) = atomic::read_stamped(&path)? else {
             // The index says this node exists and the file says otherwise. If
             // the whole folder has gone, believe the index: telling the user
             // their character does not exist, when it is sitting safely on a
@@ -66,7 +70,7 @@ impl Project {
                 Error::Disconnected
             });
         };
-        markdown::from_markdown(&text, &path)
+        markdown::from_markdown(&text, &path).map(|node| (node, stamp))
     }
 
     /// The exact node version a long-running local task read before it started.

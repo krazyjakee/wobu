@@ -108,7 +108,7 @@ describe('Narrative discovery and editor handoff', () => {
   })
   it('keeps unimplemented review and builds explicit while enabling native export', () => {
     renderMode()
-    for (const name of ['Review', 'Build…'])
+    for (const name of ['Review'])
       expect(screen.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true')
     expect(screen.getByRole('button', { name: 'Export…' })).toBeEnabled()
     expect(screen.getByRole('contentinfo', { name: 'Narrative diagnostics' })).toHaveTextContent(

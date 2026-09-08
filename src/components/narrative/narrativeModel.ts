@@ -28,8 +28,6 @@ export const NARRATIVE_STATUS: Record<NarrativeStatus, { label: string; icon: st
  * a failure they can retry.
  */
 export const NARRATIVE_UNAVAILABLE = {
-  source:
-    'Resolving attributed world records into a frozen generation request is not available yet (#163). World state can be authored in the World view.',
   quests:
     'Quest membership is available in the Scene library. Grouping the arc canvas by those memberships is not available yet (#187).',
   flow: 'No scene is selected, so there is nothing to draw. Choose one in the Library, or open one from the arc.',
@@ -39,8 +37,6 @@ export const NARRATIVE_UNAVAILABLE = {
     'Highlighting affected beats needs the dependency tracker and build planner (#168, #169).',
   review:
     'The generation proposal comparison and review queue are not available yet (#165, #166). Handwritten text can be edited in Script.',
-  build:
-    'Planning affected generation and running saved scenario tests are not available yet (#169, #162). Compile checks are available through Preview and Export.',
   diagnostics:
     'Checks cover source errors and missing text. Branch reachability has not been checked.',
 } as const

@@ -80,6 +80,7 @@
 //! about local disk space and project-folder permissions.
 
 pub mod bodies;
+mod narrative;
 
 pub mod manager;
 

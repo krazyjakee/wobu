@@ -1,0 +1,11 @@
+.nrt-recovery-list {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-inline-start: 1.25rem;
+}
+.nrt-recovery-list li {
+  margin-block: 1rem;
+}
+.nrt-recovery-path {
+  overflow-wrap: anywhere;
+}

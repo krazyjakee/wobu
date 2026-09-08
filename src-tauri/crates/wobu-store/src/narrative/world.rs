@@ -3,7 +3,6 @@ use super::{SourceSave, relative};
 use crate::{
     atomic::{self, Stamp, WriteOutcome},
     error::{Error, Result},
-    paths,
 };
 use std::path::Path;
 use wobu_narrative::WorldDocument;
@@ -11,7 +10,7 @@ use wobu_narrative::WorldDocument;
 pub const WORLD_FILE: &str = "narrative/world.yaml";
 
 pub fn read(root: &Path) -> Result<Option<(WorldDocument, Stamp)>> {
-    let path = paths::from_rel_string(root, WORLD_FILE);
+    let path = super::registry::safe_path(root, WORLD_FILE)?;
     let Some((yaml, stamp)) = atomic::read_stamped(&path)? else { return Ok(None) };
     let document = WorldDocument::parse(&yaml)
         .map_err(|error| Error::Malformed { path, reason: error.to_string() })?;
@@ -24,7 +23,7 @@ pub fn write(
     expected: Option<&Stamp>,
     peer: &str,
 ) -> Result<SourceSave> {
-    let path = paths::from_rel_string(root, WORLD_FILE);
+    let path = super::registry::safe_path(root, WORLD_FILE)?;
     let yaml = document
         .to_yaml()
         .map_err(|error| Error::Malformed { path: path.clone(), reason: error.to_string() })?;

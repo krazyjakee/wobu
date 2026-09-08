@@ -21,7 +21,7 @@ pub fn narrative_compile(
 ) -> CommandResult<CompileReport> {
     state.with(|project| compile_project(project, commands))
 }
-fn compile_project(
+pub(super) fn compile_project(
     project: &Project,
     commands: BTreeMap<Name, Vec<VarType>>,
 ) -> CommandResult<CompileReport> {
@@ -66,7 +66,7 @@ fn compile_project(
 
 // Rust supports i64, but the webview carries JSON numbers as IEEE-754 doubles.
 // Reject values it would round before a graph/snapshot crosses that boundary.
-fn bridge_integers(value: &impl Serialize) -> CommandResult<()> {
+pub(super) fn bridge_integers(value: &impl Serialize) -> CommandResult<()> {
     fn exact(value: &serde_json::Value) -> bool {
         match value {
             serde_json::Value::Number(number) => {
@@ -91,6 +91,7 @@ fn bridge_integers(value: &impl Serialize) -> CommandResult<()> {
 #[derive(Debug, Serialize)]
 pub struct PreviewFrame {
     snapshot: Snapshot,
+    site: wobu_narrative_runtime::TraceSite,
     current: Yield,
     state: Values,
     trace: wobu_narrative_runtime::ExecutionTrace,
@@ -98,6 +99,7 @@ pub struct PreviewFrame {
 fn frame(runtime: Runtime) -> CommandResult<PreviewFrame> {
     let frame = PreviewFrame {
         snapshot: runtime.snapshot(),
+        site: runtime.site(),
         current: runtime.current().map_err(runtime_error)?,
         state: runtime.state().clone(),
         trace: runtime.trace().clone(),
@@ -116,16 +118,18 @@ pub fn narrative_preview_start(
     graph: Graph,
     scene_id: SceneId,
     initial_state: Values,
+    seed: Option<u64>,
 ) -> CommandResult<PreviewFrame> {
     bridge_integers(&graph)?;
     bridge_integers(&initial_state)?;
+    bridge_integers(&seed)?;
     frame(
         Runtime::start_with_state(
             graph,
             &scene_id.to_string(),
             initial_state,
             wobu_core::new_id().to_string(),
-            0,
+            seed.unwrap_or(0),
             1000,
         )
         .map_err(runtime_error)?,

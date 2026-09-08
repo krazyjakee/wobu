@@ -45,7 +45,7 @@ Events reference established facts and an applicable condition. Quests declare t
 initial stage, conditional transitions and scene memberships. Future knowledge restrictions name
 a fact and the characters who must not reveal it until a condition holds. An empty character list
 means everyone; **Never** keeps the restriction in force indefinitely. These records author intent
-and constraints; automatic attribution into generation requests remains #163.
+and constraints. Select a dialogue line to [inspect attributed generation context](23-narrative-context.md), including its speaker’s knowledge and frozen source dependencies.
 
 **Variables** declares the finite domains used by conditions: booleans, bounded integers and named
 values. Names use lowercase letters, digits and underscores, starting with a letter; reserved YAML
@@ -78,13 +78,14 @@ to draft and preserves recorded freshness. Manual slots start Edited or Locked. 
 be unlocked before editing. Duplication allocates new identities while preserving wording
 provenance/revisions. Guarded saves and structural changes enter the shared undo history. The
 inspector displays saved participants, intent, restrictions and selected dialogue. The World editor
-is the place to author attributed facts; the inspector does not yet resolve epistemic context.
+is the place to author attributed facts. The Context inspector resolves speaker-specific knowledge,
+relationships, restrictions and voice into a frozen request with source dependencies.
 
 ![Typed Script editor](screenshots/narrative-typed-script.png)
 
 YAML edits the same model through [Source](18-narrative-source-editor.md). Explicit formatting/save
-normalises YAML, including comments; semantic diagnostic links use stable IDs rather than exact
-source ranges.
+normalises YAML, including comments. Semantic diagnostics use stable IDs to locate exact YAML
+source ranges, including nested conditions and effects.
 
 ![Source editor](screenshots/narrative-source-dark.png)
 
@@ -110,7 +111,10 @@ remain pending for an explicit retry; restoring a pending checkpoint preserves c
 
 The running session retains its compiled graph. Source edits do not change it mid-play; restarting
 compiles again. Checkpoints and playback history survive view changes within the app session and
-are scoped to the project/scene. They are not persisted scenario assets (#162). Playback history
+are scoped to the project/scene. **Save scenario** records a separate portable action/assertion tape;
+**Load scenario** replays it against current source. Build’s **Scenario tests** reports the first
+divergence with source links. See [saved scenarios](22-narrative-scenarios.md) for limits and the
+six-case Harbor Watch fixture. Playback history
 shows evaluated conditions, transitions, effects before and after, and command results with source
 links. Each action retains at most 2,048 trace records and reports omissions explicitly; the UI keeps
 100 actions. Flow route overlays remain #188.
@@ -140,8 +144,9 @@ conditions and effects, while existing tagged source remains readable.
 World undo/redo compares the expected whole document under the project lock and then performs a
 guarded write using its current stamp. It refuses a changed document from another writer. Ordinary
 World saves cannot request an unguarded `Current` precondition. Existing scene undo retains the older `Current` limitation documented by PR #190. Variable edits
-use guarded stamp-based saves but do not yet enter undo history; shared recovery hardening remains
-#153/#181.
+use guarded stamp-based saves but do not yet enter undo history.
+[Portable storage and Recovery](24-narrative-storage.md) preserve peer conflicts and explicit deletions;
+crash-persistent drafts and production recovery remain #181.
 
 The scene save command rejects approved wording with a mismatched revision and changed wording
 that carries approval forward during an ordinary edit. Correctly sealed undo snapshots can restore
@@ -169,10 +174,12 @@ record, rather than reusing #192's counts for the changed implementation.
 | #156 | Typed conditions/effects, automatic outcomes and variant controls alongside handwritten authoring. | Full public-command fixture/walkthrough and all structural undo/Flow equivalence acceptance. |
 | #158 | Deterministic validated graph, source maps, typed effects/command signatures and development/release text gates. | Full acceptance review; wider analysis belongs to #170/#171. |
 | #159 / #195 | Pure runner, bounded typed execution, command protocol, version/hash-checked snapshots and explicit validated migration callback. | No random variant-selection policy is authored yet. |
-| #161 / #195 | Isolated Preview, starting state, checkpoints, evaluated traces, configurable command results and recorded native walkthrough. | Saved scenarios (#162) and Flow route overlays (#188). |
+| #161 / #195 | Isolated Preview, starting state, checkpoints, evaluated traces, configurable command results and recorded native walkthrough. | Flow route overlays (#188). |
 | #191 | Real multiquest filtering/column and migration of saved views. | Act/tag metadata, rebuildable index and real-load/native acceptance. |
 
-Source repair and semantic ranges (#157), native packages (#160), and migration/Preview traces
-(#195) are implemented. Indexing/sync/recovery (#153), persistent scenarios (#162), generation/review (#163–#167), incremental analysis
+Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
+(#195), saved regression scenarios (#162), and attributed frozen generation context (#163) are
+implemented alongside portable record indexing, peer sync and explicit recovery (#153).
+Generation jobs/review (#164–#167), incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.

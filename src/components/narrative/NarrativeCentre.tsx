@@ -119,7 +119,7 @@ export function NarrativeCentre({
             relation to each other; the scene canvas is one double-click in. */}
         {tab === 'flow' && <NarrativeProjectFlow readOnly={readOnly} />}
         {tab === 'script' && <NarrativeScriptPane readOnly={readOnly} projectKey={projectKey} />}
-        {tab === 'preview' && <NarrativePreviewPane projectKey={projectKey} />}
+        {tab === 'preview' && <NarrativePreviewPane readOnly={readOnly} projectKey={projectKey} />}
         {tab === 'source' && <NarrativeSourcePane readOnly={readOnly} projectKey={projectKey} />}
       </div>
     </main>

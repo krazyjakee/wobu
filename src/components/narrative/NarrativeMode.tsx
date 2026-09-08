@@ -6,6 +6,8 @@ import { Icon } from '../Icon'
 import { TipButton } from '../Tooltip'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
+import { NarrativeScenarioTests } from './NarrativeScenarioTests'
+import { NarrativeRecovery } from './NarrativeRecovery'
 import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
@@ -28,6 +30,8 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
+  const [buildOpen, setBuildOpen] = useState(false)
   const [repairRel, setRepairRel] = useState<string | null>(null)
   const [worldOpen, setWorldOpen] = useState(false)
   const [editorOpened, setEditorOpened] = useState(false)
@@ -100,18 +104,36 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           >
             Review
           </TipButton>
-          <TipButton
-            className="btn"
-            disabledReason={NARRATIVE_UNAVAILABLE.build}
-            tip="See which content a change affected before anything runs"
-          >
+          <button className="btn" onClick={() => setBuildOpen(true)}>
             Build…
-          </TipButton>
+          </button>
+          <button className="btn" onClick={() => setRecoveryOpen(true)}>
+            Recovery…
+          </button>
           <button className="btn" onClick={() => setExportOpen(true)}>
             Export…
           </button>
         </div>
       </header>
+      {buildOpen && (
+        <NarrativeScenarioTests
+          readOnly={project.readOnly}
+          onClose={() => setBuildOpen(false)}
+          onSource={(site) =>
+            open(
+              {
+                sceneId: site.scene,
+                beatId: site.beat,
+                ...(site.slot ? { lineId: site.slot } : {}),
+              },
+              'script',
+            )
+          }
+        />
+      )}
+      {recoveryOpen && (
+        <NarrativeRecovery readOnly={project.readOnly} onClose={() => setRecoveryOpen(false)} />
+      )}
       {exportOpen && <NarrativeExport onClose={() => setExportOpen(false)} />}
       <div className="nrt-library-view" hidden={!libraryOpen || worldOpen}>
         <NarrativeLibrary

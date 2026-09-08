@@ -64,7 +64,10 @@ impl Project {
         let mut file =
             SceneFile { scene: Scene::new(name), rel: source::scene_rel(&slug), stamp: None };
         match source::write_scene(&self.root, &mut file, &self.peer)? {
-            SourceSave::Saved(_) => Ok(file),
+            SourceSave::Saved(_) => {
+                self.index_narrative_path(&file.rel)?;
+                Ok(file)
+            }
             SourceSave::Conflict { conflict_path } => {
                 Err(Error::AlreadyExists(paths::from_rel_string(&self.root, &conflict_path)))
             }
@@ -79,7 +82,11 @@ impl Project {
     /// blocked by an arrangement.
     pub fn save_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
         self.ensure_writable()?;
-        source::write_scene(&self.root, file, &self.peer)
+        let outcome = source::write_scene(&self.root, file, &self.peer)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            self.index_narrative_path(&file.rel)?;
+        }
+        Ok(outcome)
     }
 
     /// Delete a scene and the arrangement that described it.
@@ -98,11 +105,14 @@ impl Project {
         self.ensure_writable()?;
         let catalog = self.scene_catalog()?;
         let entry = catalog.find(id).ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
-        let path = paths::from_rel_string(&self.root, &entry.rel);
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(Error::io(&path, error)),
+        let Some((_, stamp)) = source::registry::read(self.root(), &entry.rel)? else {
+            return Err(Error::NoSuchNode(id.to_string()));
+        };
+        if !self.delete_narrative_file(&entry.rel, &stamp)? {
+            return Err(Error::Malformed {
+                path: entry.rel.clone().into(),
+                reason: "Scene changed before deletion; reload it before trying again.".into(),
+            });
         }
         layout::delete(&self.root, &GraphKey::of_scene(id))
     }
@@ -131,7 +141,11 @@ impl Project {
         expected: Option<&Stamp>,
     ) -> Result<SourceSave> {
         self.ensure_writable()?;
-        source::write_state(&self.root, document, expected, &self.peer)
+        let outcome = source::write_state(&self.root, document, expected, &self.peer)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            self.index_narrative_path(source::STATE_FILE)?;
+        }
+        Ok(outcome)
     }
 
     /// A hash over narrative source and nothing else. Structurally unable to

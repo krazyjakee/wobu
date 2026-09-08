@@ -18,6 +18,10 @@ impl Project {
         expected: Option<&Stamp>,
     ) -> Result<SourceSave> {
         self.ensure_writable()?;
-        world::write(&self.root, document, expected, &self.peer)
+        let outcome = world::write(&self.root, document, expected, &self.peer)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            self.index_narrative_path(world::WORLD_FILE)?;
+        }
+        Ok(outcome)
     }
 }

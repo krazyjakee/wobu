@@ -52,6 +52,9 @@
 //! through a name.
 
 pub mod layout;
+pub mod publication;
+pub mod records;
+pub mod registry;
 pub mod world;
 
 use std::collections::BTreeSet;
@@ -196,28 +199,11 @@ struct ProbeScene {
 /// project's structure into the filesystem, where a rename would move files
 /// and orphan everything keyed to their paths — the same argument that keeps
 /// `nodes/<kind>/` two levels deep and no more.
-fn scene_paths(root: &Path) -> Vec<(String, PathBuf)> {
-    let dir = scenes_dir(root);
-    let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
-    let mut found: Vec<(String, PathBuf)> = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-        .filter(|path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case(SOURCE_EXT)))
-        .filter(|path| {
-            !path
-                .file_name()
-                .is_some_and(|name| crate::conflict::is_sibling(&name.to_string_lossy()))
-        })
-        .filter_map(|path| {
-            let rel = path.strip_prefix(root).ok()?;
-            Some((paths::to_rel_string(rel), path))
-        })
-        .collect();
-    // Sorted so a catalog, and therefore a fingerprint over it, does not
-    // depend on the order a filesystem happens to hand back a directory.
-    found.sort_by(|a, b| a.0.cmp(&b.0));
-    found
+fn scene_paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    Ok(registry::paths(root)?
+        .into_iter()
+        .filter(|(rel, _)| registry::classify(rel) == Some(registry::NarrativeFileKind::Scene))
+        .collect())
 }
 
 /// Whether a project-relative path is canonical narrative source.
@@ -228,7 +214,14 @@ fn scene_paths(root: &Path) -> Vec<(String, PathBuf)> {
 ///
 /// [`layout::is_layout_path`]: crate::narrative::layout::is_layout_path
 pub fn is_source_path(rel: &str) -> bool {
-    rel == STATE_FILE || rel == world::WORLD_FILE || rel.starts_with(&format!("{SCENES_DIR}/"))
+    matches!(
+        registry::classify(rel),
+        Some(
+            registry::NarrativeFileKind::Scene
+                | registry::NarrativeFileKind::State
+                | registry::NarrativeFileKind::World
+        )
+    )
 }
 
 /// Conflict siblings `guarded_write` parked beside a narrative source file.
@@ -239,14 +232,37 @@ pub fn is_source_path(rel: &str) -> bool {
 /// nobody resolves, and eventually somebody deletes the folder full of them.
 pub fn conflict_paths(root: &Path) -> Vec<(String, PathBuf)> {
     let mut found = Vec::new();
-    for dir in [narrative_dir(root), scenes_dir(root)] {
+    let directories = std::iter::once(narrative_dir(root)).chain(
+        ["scenes", "scenarios", "proposals", "receipts", "policies", "production", "publications"]
+            .into_iter()
+            .map(|dir| root.join("narrative").join(dir)),
+    );
+    for dir in directories {
+        let probe = if dir == narrative_dir(root) {
+            "narrative/state.yaml".into()
+        } else {
+            let leaf = if dir.ends_with("scenes") {
+                "probe.yaml"
+            } else {
+                "00000000000000000000000000.json"
+            };
+            paths::to_rel_string(dir.join(leaf).strip_prefix(root).unwrap())
+        };
+        if registry::safe_path(root, &probe).is_err() {
+            continue;
+        }
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for path in entries.flatten().map(|entry| entry.path()).filter(|path| path.is_file()) {
+        for path in entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+            .map(|entry| entry.path())
+        {
             let is_sibling = path
                 .file_name()
                 .is_some_and(|name| crate::conflict::is_sibling(&name.to_string_lossy()));
-            let is_source =
-                path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case(SOURCE_EXT));
+            let is_source = path.extension().is_some_and(|ext| {
+                ext.eq_ignore_ascii_case(SOURCE_EXT) || ext.eq_ignore_ascii_case("json")
+            });
             if is_sibling
                 && is_source
                 && let Ok(rel) = path.strip_prefix(root)
@@ -266,14 +282,21 @@ pub fn conflict_paths(root: &Path) -> Vec<(String, PathBuf)> {
 /// refusing to list a sibling we cannot label would strand somebody's only
 /// copy of a scene.
 pub fn scene_name_at(root: &Path, rel: &str) -> Option<String> {
-    let path = paths::from_rel_string(root, rel);
+    let path = if registry::classify(rel).is_some() {
+        registry::safe_path(root, rel).ok()?
+    } else {
+        conflict_paths(root).into_iter().find(|(candidate, _)| candidate == rel)?.1
+    };
     let text = std::fs::read_to_string(path).ok()?;
-    serde_norway::from_str::<Probe>(&text).ok().map(|probe| probe.scene.name)
+    registry::parse(rel, &text)
+        .ok()
+        .map(|(_, name, _)| name)
+        .or_else(|| serde_norway::from_str::<Probe>(&text).ok().map(|probe| probe.scene.name))
 }
 
 pub fn catalog(root: &Path) -> Result<Catalog> {
     let mut catalog = Catalog::default();
-    for (rel, path) in scene_paths(root) {
+    for (rel, path) in scene_paths(root)? {
         let Some((text, _)) = atomic::read_stamped(&path)? else { continue };
         match serde_norway::from_str::<Probe>(&text) {
             Ok(probe) => catalog.scenes.push(SceneEntry {
@@ -302,7 +325,7 @@ fn slug_of(rel: &str) -> &str {
 /// back. Accepting a document we only half understood and then rewriting it is
 /// how a mistyped key becomes silent data loss — see `wobu_narrative::source`.
 pub fn read_scene(root: &Path, rel: &str) -> Result<SceneFile> {
-    let path = paths::from_rel_string(root, rel);
+    let path = registry::safe_path(root, rel)?;
     let Some((text, stamp)) = atomic::read_stamped(&path)? else {
         return Err(Error::io(&path, std::io::Error::from(std::io::ErrorKind::NotFound)));
     };
@@ -323,7 +346,7 @@ pub fn write_scene(root: &Path, file: &mut SceneFile, peer: &str) -> Result<Sour
         path: paths::from_rel_string(root, &file.rel),
         reason: error.to_string(),
     })?;
-    let path = paths::from_rel_string(root, &file.rel);
+    let path = registry::safe_path(root, &file.rel)?;
     match atomic::guarded_write(root, &path, &text, file.stamp.as_ref(), peer)? {
         WriteOutcome::Written(stamp) => {
             file.stamp = Some(stamp.clone());
@@ -341,7 +364,7 @@ fn relative(root: &Path, path: &Path) -> String {
 
 /// The declared state variables, or `None` when the project has never had any.
 pub fn read_state(root: &Path) -> Result<Option<(StateDocument, Stamp)>> {
-    let path = paths::from_rel_string(root, STATE_FILE);
+    let path = registry::safe_path(root, STATE_FILE)?;
     let Some((text, stamp)) = atomic::read_stamped(&path)? else { return Ok(None) };
     let document = StateDocument::parse(&text)
         .map_err(|error| Error::Malformed { path, reason: error.to_string() })?;
@@ -354,7 +377,7 @@ pub fn write_state(
     expected: Option<&Stamp>,
     peer: &str,
 ) -> Result<SourceSave> {
-    let path = paths::from_rel_string(root, STATE_FILE);
+    let path = registry::safe_path(root, STATE_FILE)?;
     let text = document
         .to_yaml()
         .map_err(|error| Error::Malformed { path: path.clone(), reason: error.to_string() })?;
@@ -386,12 +409,12 @@ pub fn source_fingerprint(root: &Path) -> Result<String> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"wobu-store/narrative-source/1");
 
-    let mut files: Vec<(String, PathBuf)> = scene_paths(root);
-    let state = paths::from_rel_string(root, STATE_FILE);
+    let mut files: Vec<(String, PathBuf)> = scene_paths(root)?;
+    let state = registry::safe_path(root, STATE_FILE)?;
     if state.is_file() {
         files.push((STATE_FILE.to_string(), state));
     }
-    let world = paths::from_rel_string(root, world::WORLD_FILE);
+    let world = registry::safe_path(root, world::WORLD_FILE)?;
     if world.is_file() {
         files.push((self::world::WORLD_FILE.to_string(), world));
     }
