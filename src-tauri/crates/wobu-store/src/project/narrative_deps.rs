@@ -615,6 +615,8 @@ impl Project {
         expected: &TextAsset,
     ) -> Result<()> {
         self.ensure_writable()?;
+        let _lock =
+            super::narrative_review::scene_lock(self, wobu_narrative::SceneId::from_raw(id.raw()))?;
         let mut file: TextFile = match self.load_text_asset(id) {
             Ok(file) => file,
             Err(Error::NoSuchNode(_)) => return Ok(()),

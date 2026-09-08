@@ -15,30 +15,40 @@ pub(super) fn capture_context(
     schema: Json,
     characters: Json,
     state: BTreeMap<Name, Value>,
+    linked_scenes: &[Scene],
 ) -> ReviewContext {
-    capture_context_version(scene, target, world, schema, characters, state, REVIEW_CONTEXT_VERSION)
+    rebuild_context(
+        scene,
+        target,
+        ReviewContext {
+            version: REVIEW_CONTEXT_VERSION,
+            revision: String::new(),
+            state,
+            inputs: serde_json::json!({"world": world, "schema": schema,
+            "characters": characters, "linked_scenes": linked_scenes}),
+        },
+    )
 }
 
-pub(super) fn capture_context_version(
+fn rebuild_context(
     scene: &Scene,
     target: &ReviewTarget,
-    world: Json,
-    schema: Json,
-    characters: Json,
-    state: BTreeMap<Name, Value>,
-    version: u32,
+    mut context: ReviewContext,
 ) -> ReviewContext {
-    if version == 1 || target.variant.is_none() {
-        return ReviewContext::capture(scene, target, world, schema, characters, state);
+    if context.version == 1 || target.variant.is_none() {
+        return ReviewContext::capture(
+            scene,
+            target,
+            context.inputs["world"].clone(),
+            context.inputs["schema"].clone(),
+            context.inputs["characters"].clone(),
+            context.state,
+        );
     }
-    // The event already freezes the source as event.after. Repeating the entire
-    // scene for each target creates quadratic serialization in manual saves.
-    let context = ReviewContext {
-        version: 2,
-        revision: String::new(),
-        state,
-        inputs: serde_json::json!({"world": world, "schema": schema, "characters": characters}),
-    };
+    context.revision.clear();
+    if let Some(inputs) = context.inputs.as_object_mut() {
+        inputs.remove("dependencies");
+    }
     let Ok(world) = serde_json::from_value::<WorldDocument>(context.inputs["world"].clone()) else {
         return context;
     };
@@ -54,8 +64,19 @@ pub(super) fn capture_context_version(
         .filter_map(|v| serde_json::from_value::<Character>(v.clone()).ok())
         .map(|c| (c.id, c))
         .collect();
+    let linked_scenes: Vec<Scene> = match context.inputs.get("linked_scenes") {
+        Some(value) => match serde_json::from_value(value.clone()) {
+            Ok(scenes) => scenes,
+            Err(_) => return context,
+        },
+        None => Vec::new(), // Historical v2 scene receipts predate linked-text context.
+    };
+    let asset = scene.editorial_text();
+    if scene.supporting_text.is_some() && asset.is_none() {
+        return context;
+    }
     let snapshot = Snapshot {
-        scenes: std::slice::from_ref(scene),
+        scenes: if asset.is_some() { &linked_scenes } else { std::slice::from_ref(scene) },
         texts: &[],
         world: &world,
         schema: &schema,
@@ -63,10 +84,13 @@ pub(super) fn capture_context_version(
         producers: &BTreeMap::new(),
         versions: ToolVersions::current(),
     };
-    let dependencies =
+    let dependencies = if let Some(asset) = asset {
+        wobu_narrative_deps::capture::capture_text_variant(&asset, &snapshot, target.variant)
+    } else {
         wobu_narrative_deps::capture::capture_scene_variant(scene, &snapshot, target.variant)
-            .into_iter()
-            .find(|d| target.variant == Some(d.variant()));
+    }
+    .into_iter()
+    .find(|d| target.variant == Some(d.variant()));
     match dependencies {
         Some(dependencies) => context
             .with_dependencies(serde_json::to_value(dependencies).expect("dependencies serialize")),
@@ -82,15 +106,9 @@ pub(super) fn historical_context(
     target: &ReviewTarget,
     state: BTreeMap<Name, Value>,
 ) -> ReviewContext {
-    let rebuilt = capture_context_version(
-        scene,
-        target,
-        context.inputs["world"].clone(),
-        context.inputs["schema"].clone(),
-        context.inputs["characters"].clone(),
-        state,
-        context.version,
-    );
+    let mut historical = context.clone();
+    historical.state = state;
+    let rebuilt = rebuild_context(scene, target, historical);
     if context.version != 2 || !rebuilt.inputs["dependencies"].is_object() {
         return rebuilt;
     }
@@ -126,6 +144,7 @@ mod tests {
             serde_json::to_value(StateDocument::new(vec![])).unwrap(),
             serde_json::json!({}),
             BTreeMap::new(),
+            &[],
         );
         let mut dependencies = current.inputs["dependencies"].clone();
         dependencies["versions"]["prompt"] = serde_json::json!(0);

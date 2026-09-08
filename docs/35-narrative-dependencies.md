@@ -80,6 +80,13 @@ readiness while retaining the decision. Version 1 contexts keep their original v
 rules; historical version 2 decisions verify using their recorded toolchain versions, while
 current readiness uses the current toolchain.
 
+Supporting text uses its native dependency targets through the shared editorial adapter. Linked
+scene names and summaries are frozen with their source stamps, so unrelated dialogue edits keep
+a text approval valid while a linked summary change withdraws it. Historical decisions retain
+the linked scene inputs they actually reviewed. Ambient exchanges also track the complete slot
+order, including the selected line's position. Freshness writes take the same editorial lock as
+text review, preserve the text asset's history head, and reload the canonical asset after undo.
+
 Downstream production records are joined by their `variant_id` and reported as affected. No
 production content is rewritten. This is the existing generic production-record contract;
 no unimplemented recording/translation engine is claimed.

@@ -58,7 +58,7 @@ impl Project {
     ) -> Result<SceneFile> {
         self.ensure_writable()?;
         let _lock = scene_lock(self, scene.id)?;
-        let current = match self.load_scene(scene.id) {
+        let current = match self.load_editorial_source(scene.id) {
             Ok(f) => Some(f),
             Err(Error::NoSuchNode(_)) => None,
             Err(e) => return Err(e),
@@ -92,12 +92,18 @@ impl Project {
                 }
             }
         }
+        let supporting = scene.supporting_text.is_some();
         let mut file = SceneFile {
             scene,
             rel: current.as_ref().map(|f| f.rel.clone()).unwrap_or_else(|| {
-                narrative::scene_rel(&wobu_core::unique_slug(slug, &|candidate| {
-                    self.scene_catalog().is_ok_and(|c| c.slugs().contains(candidate))
-                }))
+                let slug = wobu_core::unique_slug(slug, &|candidate| {
+                    if supporting {
+                        self.text_catalog().is_ok_and(|c| c.slugs().contains(candidate))
+                    } else {
+                        self.scene_catalog().is_ok_and(|c| c.slugs().contains(candidate))
+                    }
+                });
+                if supporting { narrative::text_rel(&slug) } else { narrative::scene_rel(&slug) }
             }),
             stamp: current.and_then(|f| f.stamp),
         };
@@ -111,7 +117,7 @@ impl Project {
                     .collect();
                 self.record_authored_narrative_dependencies_for(&authored)?;
                 self.refresh_narrative_dependencies()?;
-                self.load_scene(file.scene.id)
+                self.load_editorial_source(file.scene.id)
             }
             SourceSave::Conflict { .. } => {
                 Err(invalid("Scene changed during undo. Reload before restoring."))
@@ -356,6 +362,7 @@ impl Project {
             serde_json::to_value(&tx.snapshot.schema)?,
             tx.snapshot.characters.clone(),
             tx.snapshot.state.clone(),
+            &tx.snapshot.linked_scenes,
         );
         if bind {
             let slot = scene
@@ -424,7 +431,7 @@ impl Project {
                 drop(tx._lock);
                 self.record_narrative_dependencies_for(&reviewed)?;
                 self.refresh_narrative_dependencies()?;
-                self.load_scene(file.scene.id)
+                self.load_editorial_source(file.scene.id)
             }
             SourceSave::Conflict { .. } => Err(invalid(
                 "Scene changed before review publication. Receipts remain uncommitted; reload before deciding.",

@@ -10,6 +10,7 @@ pub struct ReviewSnapshot {
     pub(crate) world: WorldDocument,
     pub(crate) schema: StateDocument,
     pub(crate) characters: Json,
+    pub(crate) linked_scenes: Vec<wobu_narrative::Scene>,
     pub(crate) state: BTreeMap<Name, Value>,
     pub(crate) history: Vec<EditorialEvent>,
     pub(crate) history_problem: Option<String>,
@@ -60,6 +61,25 @@ impl Project {
             ("narrative/world.yaml".into(), world_file.map(|(_, stamp)| stamp)),
             ("narrative/state.yaml".into(), schema_file.map(|(_, stamp)| stamp)),
         ]);
+        let mut linked_scenes = Vec::new();
+        for link in file.scene.supporting_text.iter().flat_map(|asset| &asset.sources) {
+            let wobu_narrative::SourceLink::Scene(id) = link else { continue };
+            match self.load_scene(*id) {
+                Ok(linked) => {
+                    observations.insert(linked.rel, linked.stamp);
+                    // Only authored name/summary enter the supporting prompt.
+                    // Freeze those inputs, not unrelated scene wording or layout.
+                    let mut scene = wobu_narrative::Scene::new(&linked.scene.name);
+                    scene.id = linked.scene.id;
+                    scene.summary = linked.scene.summary;
+                    linked_scenes.push(scene);
+                }
+                Err(Error::NoSuchNode(_)) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        linked_scenes.sort_by_key(|scene| scene.id);
+        linked_scenes.dedup_by_key(|scene| scene.id);
         let mut ids = file
             .scene
             .participants
@@ -257,6 +277,7 @@ impl Project {
             world,
             schema,
             characters: serde_json::to_value(characters)?,
+            linked_scenes,
             state,
             history,
             history_problem,
@@ -325,6 +346,7 @@ impl ReviewSnapshot {
             serde_json::to_value(&self.schema)?,
             self.characters.clone(),
             self.state.clone(),
+            &self.linked_scenes,
         ))
     }
     pub(crate) fn bindings(&self) -> BTreeMap<VariantId, ReviewBinding> {
@@ -344,6 +366,7 @@ impl ReviewSnapshot {
                 serde_json::to_value(&self.schema)?,
                 self.characters.clone(),
                 binding.state.clone(),
+                &self.linked_scenes,
             );
             proofs.insert(id, ApprovalEvidence { binding, current_context: context.revision });
         }

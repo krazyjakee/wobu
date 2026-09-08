@@ -187,6 +187,10 @@ pub fn capture_text_variant(
                 fields.present(format!("{site}/when"), &entry.when);
                 names.of_optional(entry.when.as_ref());
                 if asset.kind == wobu_narrative::TextKind::Ambient {
+                    fields.present(
+                        format!("{site}/ambient_order"),
+                        &entry.lines.iter().map(|line| line.id).collect::<Vec<_>>(),
+                    );
                     let neighbors: Vec<_> = entry
                         .lines
                         .iter()
