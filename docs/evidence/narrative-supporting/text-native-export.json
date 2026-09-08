@@ -1,0 +1,506 @@
+{
+  "before": {
+    "diagnostics": [
+      {
+        "scene": "",
+        "asset": "00000000000000000000000101",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000102",
+            "slot": "00000000000000000000000103",
+            "variant": "00000000000000000000000104"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000101",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000105",
+            "slot": "00000000000000000000000106",
+            "variant": "00000000000000000000000107"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000101",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000108",
+            "slot": "00000000000000000000000109",
+            "variant": "00000000000000000000000110"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000101",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000111",
+            "slot": "00000000000000000000000112",
+            "variant": "00000000000000000000000113"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000121",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000122",
+            "slot": "00000000000000000000000123",
+            "variant": "00000000000000000000000124"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000121",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000122",
+            "slot": "00000000000000000000000125",
+            "variant": "00000000000000000000000126"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000121",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000122",
+            "slot": "00000000000000000000000127",
+            "variant": "00000000000000000000000128"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000121",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000129",
+            "slot": "00000000000000000000000130",
+            "variant": "00000000000000000000000131"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000121",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000129",
+            "slot": "00000000000000000000000132",
+            "variant": "00000000000000000000000133"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000121",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000129",
+            "slot": "00000000000000000000000134",
+            "variant": "00000000000000000000000135"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000141",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000142",
+            "slot": "00000000000000000000000143",
+            "variant": "00000000000000000000000144"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000141",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000145",
+            "slot": "00000000000000000000000146",
+            "variant": "00000000000000000000000147"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000161",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000162",
+            "slot": "00000000000000000000000163",
+            "variant": "00000000000000000000000164"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000161",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000162",
+            "slot": "00000000000000000000000165",
+            "variant": "00000000000000000000000166"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000181",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000182",
+            "slot": "00000000000000000000000183",
+            "variant": "00000000000000000000000184"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000181",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000185",
+            "slot": "00000000000000000000000186",
+            "variant": "00000000000000000000000187"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000181",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000188",
+            "slot": "00000000000000000000000189",
+            "variant": "00000000000000000000000190"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000201",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000202",
+            "slot": "00000000000000000000000203",
+            "variant": "00000000000000000000000204"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000201",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000205",
+            "slot": "00000000000000000000000206",
+            "variant": "00000000000000000000000207"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      },
+      {
+        "scene": "",
+        "asset": "00000000000000000000000201",
+        "site": {
+          "text_variant": {
+            "entry": "00000000000000000000000208",
+            "slot": "00000000000000000000000209",
+            "variant": "00000000000000000000000210"
+          }
+        },
+        "severity": "error",
+        "code": "text_not_release_ready",
+        "message": "supporting text must be approved and current for release"
+      }
+    ],
+    "payloadHash": null,
+    "scenes": 0,
+    "strings": 0,
+    "bytes": 0
+  },
+  "decisions": [
+    {
+      "target": {
+        "scene": "00000000000000000000000161",
+        "beat": "00000000000000000000000162",
+        "slot": "00000000000000000000000163",
+        "variant": "00000000000000000000000164"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000161",
+        "beat": "00000000000000000000000162",
+        "slot": "00000000000000000000000165",
+        "variant": "00000000000000000000000166"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000141",
+        "beat": "00000000000000000000000142",
+        "slot": "00000000000000000000000143",
+        "variant": "00000000000000000000000144"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000141",
+        "beat": "00000000000000000000000145",
+        "slot": "00000000000000000000000146",
+        "variant": "00000000000000000000000147"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000181",
+        "beat": "00000000000000000000000182",
+        "slot": "00000000000000000000000183",
+        "variant": "00000000000000000000000184"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000181",
+        "beat": "00000000000000000000000185",
+        "slot": "00000000000000000000000186",
+        "variant": "00000000000000000000000187"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000181",
+        "beat": "00000000000000000000000188",
+        "slot": "00000000000000000000000189",
+        "variant": "00000000000000000000000190"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000121",
+        "beat": "00000000000000000000000122",
+        "slot": "00000000000000000000000123",
+        "variant": "00000000000000000000000124"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000121",
+        "beat": "00000000000000000000000122",
+        "slot": "00000000000000000000000125",
+        "variant": "00000000000000000000000126"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000121",
+        "beat": "00000000000000000000000122",
+        "slot": "00000000000000000000000127",
+        "variant": "00000000000000000000000128"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000121",
+        "beat": "00000000000000000000000129",
+        "slot": "00000000000000000000000130",
+        "variant": "00000000000000000000000131"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000121",
+        "beat": "00000000000000000000000129",
+        "slot": "00000000000000000000000132",
+        "variant": "00000000000000000000000133"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000121",
+        "beat": "00000000000000000000000129",
+        "slot": "00000000000000000000000134",
+        "variant": "00000000000000000000000135"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000101",
+        "beat": "00000000000000000000000102",
+        "slot": "00000000000000000000000103",
+        "variant": "00000000000000000000000104"
+      },
+      "action": "attest",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000101",
+        "beat": "00000000000000000000000105",
+        "slot": "00000000000000000000000106",
+        "variant": "00000000000000000000000107"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000101",
+        "beat": "00000000000000000000000108",
+        "slot": "00000000000000000000000109",
+        "variant": "00000000000000000000000110"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000101",
+        "beat": "00000000000000000000000111",
+        "slot": "00000000000000000000000112",
+        "variant": "00000000000000000000000113"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000201",
+        "beat": "00000000000000000000000202",
+        "slot": "00000000000000000000000203",
+        "variant": "00000000000000000000000204"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000201",
+        "beat": "00000000000000000000000205",
+        "slot": "00000000000000000000000206",
+        "variant": "00000000000000000000000207"
+      },
+      "action": "approve",
+      "approvalValid": true
+    },
+    {
+      "target": {
+        "scene": "00000000000000000000000201",
+        "beat": "00000000000000000000000208",
+        "slot": "00000000000000000000000209",
+        "variant": "00000000000000000000000210"
+      },
+      "action": "approve",
+      "approvalValid": true
+    }
+  ],
+  "after": {
+    "diagnostics": [],
+    "payloadHash": "381e45b63993f555bf9b5d2e7a88538e8c5c7916159a683c3fcfccddc59239be",
+    "scenes": 0,
+    "strings": 20,
+    "bytes": 8637
+  },
+  "export": {
+    "destination": "/tmp/wobu-acceptance-20260908/harbor-voices-release.wobu-narrative",
+    "payloadHash": "381e45b63993f555bf9b5d2e7a88538e8c5c7916159a683c3fcfccddc59239be",
+    "scenes": 0,
+    "strings": 20,
+    "bytes": 8637
+  }
+}
