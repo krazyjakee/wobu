@@ -332,6 +332,7 @@ export function Workspace({ project }: { project: ProjectSummary }) {
                 </div>
               )}
               <Editor
+                projectKey={project.path}
                 selected={selected}
                 kinds={kindIndex}
                 readOnly={readOnly}

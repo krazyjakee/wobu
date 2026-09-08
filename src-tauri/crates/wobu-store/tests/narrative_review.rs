@@ -395,3 +395,39 @@ fn shared_manual_baselines_cannot_supply_approval_for_a_different_decision_targe
         assert!(snapshot.view(&p).unwrap().lines[0].reason.contains("immutable decision"));
     }
 }
+
+#[test]
+fn version_one_review_history_survives_open_rebuild_and_explicit_scene_upgrade() {
+    let (_d, mut p, _, t) = fixture();
+    let file = apply(&mut p, &t, EditorialAction::Approve);
+    let legacy = wobu_narrative::SceneDocument { schema_version: 1, scene: file.scene.clone() };
+    let path = p.root().join(&file.rel);
+    std::fs::write(&path, legacy.to_yaml().unwrap()).unwrap();
+    let before_source = std::fs::read(&path).unwrap();
+    let head_path =
+        p.root().join(format!("narrative/receipts/{}.json", file.scene.editorial_head.unwrap()));
+    let before_receipt = std::fs::read(&head_path).unwrap();
+    let context = p.review_context(&t, None).unwrap();
+    let root = p.root().to_path_buf();
+    drop(p);
+    let mut p = Project::open(&root).unwrap();
+    p.rebuild_index().unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), before_source);
+    assert_eq!(std::fs::read(&head_path).unwrap(), before_receipt);
+    assert_eq!(p.review_context(&t, None).unwrap(), context);
+    assert!(p.review_scene(t.scene, None).unwrap().lines[0].approval_valid);
+    assert!(p.world_document().unwrap().is_none());
+    let mut loaded = p.load_scene(t.scene).unwrap();
+    p.save_scene(&mut loaded).unwrap();
+    assert!(std::fs::read_to_string(&path).unwrap().starts_with("schema_version: 2\n"));
+    assert_eq!(std::fs::read(&head_path).unwrap(), before_receipt);
+    assert!(p.review_scene(t.scene, None).unwrap().lines[0].approval_valid);
+    let obsolete = loaded.stamp.clone();
+    loaded.scene.act_id = Some(wobu_core::Id::generate());
+    p.save_scene(&mut loaded).unwrap();
+    let review = p.review_scene(t.scene, None).unwrap();
+    assert!(!review.lines[0].approval_valid);
+    assert!(review.lines[0].reason.contains("act_id"));
+    loaded.stamp = obsolete;
+    assert!(matches!(p.save_scene(&mut loaded).unwrap(), SourceSave::Conflict { .. }));
+}

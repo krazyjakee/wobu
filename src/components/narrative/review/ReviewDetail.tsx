@@ -1,3 +1,4 @@
+import { assertProjectSession, projectSessionEpoch } from '../../../lib/projectSession'
 import { useState } from 'react'
 import { errorMessage } from '../../../lib/api'
 import type { ReviewAction, ReviewContext, ReviewRequest } from '../../../lib/api/narrativeReview'
@@ -63,12 +64,14 @@ export function ReviewDetail({
     proposal: selected,
   }
   const apply = async (action: ReviewAction) => {
+    const epoch = projectSessionEpoch()
     setBusy(true)
     setError('')
     setMessage('')
     const submitting = draft
     try {
       await onApply({ ...authorization, action })
+      assertProjectSession(epoch)
       if (submitting) useReviewDrafts.getState().clear(draftKey, submitting)
       setMessage('Review decision saved. Canonical history retains the previous version.')
     } catch (failure) {
@@ -95,11 +98,14 @@ export function ReviewDetail({
     }
   }
   const inspect = async () => {
+    const epoch = projectSessionEpoch()
     setBusy(true)
     setError('')
     try {
       const guard = JSON.stringify(scene.guard)
-      setContext(await onContext(scene.state_json))
+      const context = await onContext(scene.state_json)
+      assertProjectSession(epoch)
+      setContext(context)
       setInspectedGuard(guard)
     } catch (failure) {
       setError(errorMessage(failure))

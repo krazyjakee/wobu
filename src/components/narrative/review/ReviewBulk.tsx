@@ -1,3 +1,9 @@
+import {
+  assertProjectSession,
+  isProjectSession,
+  projectSessionEpoch,
+} from '../../../lib/projectSession'
+import { sceneEditKey, useScriptDrafts } from '../scriptDrafts'
 import { useState } from 'react'
 import { errorMessage } from '../../../lib/api'
 import {
@@ -11,6 +17,7 @@ import { useReviewDrafts } from './reviewDrafts'
 
 type Operation = 'approve' | 'attest' | 'lock' | 'unlock'
 interface Plan {
+  epoch: number
   fingerprint: string
   requests: ReviewRequest[]
   items: ReviewBatchItem[]
@@ -30,6 +37,7 @@ export function ReviewBulk({
   const [plan, setPlan] = useState<Plan | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const authoringDrafts = useScriptDrafts((state) => state.drafts)
   const drafts = useReviewDrafts((s) => s.drafts)
   const selectedDrafts = Object.entries(drafts).filter(
     ([key, draft]) =>
@@ -45,9 +53,13 @@ export function ReviewBulk({
       state: row.scene.state_json,
     })),
     drafts: selectedDrafts,
+    authoring: rows.map(
+      (row) => authoringDrafts[sceneEditKey(projectKey, row.line.target.scene)]?.revision ?? null,
+    ),
   })
-  const current = plan?.fingerprint === fingerprint
+  const current = plan?.fingerprint === fingerprint && isProjectSession(plan.epoch)
   const prepare = async () => {
+    const epoch = projectSessionEpoch()
     setBusy(true)
     setError('')
     setPlan(null)
@@ -57,14 +69,17 @@ export function ReviewBulk({
       const draft = selectedDrafts.some(
         ([, draft]) => reviewTargetKey(draft.authorization.target) === row.key,
       )
-      if (draft || requests.length >= 128) {
+      const authoring = !!authoringDrafts[sceneEditKey(projectKey, row.line.target.scene)]
+      if (draft || authoring || requests.length >= 128) {
         skipped.push({
           index: -1,
           target: row.line.target,
           status: 'skipped',
-          reason: draft
-            ? 'This line has local edits in a current or proposed version. Save or discard them first.'
-            : 'Only 128 decisions can be reviewed in one batch. Select fewer lines.',
+          reason: authoring
+            ? 'This scene has a shared authoring draft. Save or discard it first.'
+            : draft
+              ? 'This line has local edits in a current or proposed version. Save or discard them first.'
+              : 'Only 128 decisions can be reviewed in one batch. Select fewer lines.',
         })
         continue
       }
@@ -87,7 +102,9 @@ export function ReviewBulk({
     }
     try {
       const result = requests.length ? await narrativeReviewBatch(requests, false) : { items: [] }
+      assertProjectSession(epoch)
       setPlan({
+        epoch,
         fingerprint,
         requests: requests.filter((_, index) =>
           result.items.some((item) => item.index === index && item.status === 'eligible'),
@@ -102,10 +119,19 @@ export function ReviewBulk({
   }
   const apply = async () => {
     if (!plan || !current || !plan.requests.length) return
+    if (
+      plan.requests.some(
+        (request) =>
+          useScriptDrafts.getState().drafts[sceneEditKey(projectKey, request.target.scene)],
+      )
+    )
+      return
     setBusy(true)
     setError('')
     try {
+      assertProjectSession(plan.epoch)
       const result = await narrativeReviewBatch(plan.requests, true)
+      assertProjectSession(plan.epoch)
       const decisions = new Map(result.items.map((item) => [reviewTargetKey(item.target), item]))
       setPlan({
         ...plan,
@@ -115,7 +141,7 @@ export function ReviewBulk({
       onApplied()
     } catch (failure) {
       setError(errorMessage(failure))
-      onApplied()
+      if (isProjectSession(plan.epoch)) onApplied()
     } finally {
       setBusy(false)
     }

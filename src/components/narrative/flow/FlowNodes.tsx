@@ -1,6 +1,7 @@
+import { isFlowElementMuted } from './flowFilters'
 import { memo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import { useUI, type NarrativeFilter } from '../../../store/ui'
+import { useUI } from '../../../store/ui'
 import { Icon } from '../../Icon'
 import { NARRATIVE_STATUS } from '../narrativeModel'
 import type { FlowGraphNode } from './graph'
@@ -41,37 +42,6 @@ export type FlowRFNode = Node<FlowNodeData>
  * through `data`, for the same reason selection is: changing a filter must not
  * rewrite three hundred node objects.
  */
-function isMuted(
-  node: FlowGraphNode,
-  participant: string | null,
-  statuses: Record<NarrativeFilter, boolean>,
-): boolean {
-  /*
-   * A filter may never hide a release-blocking diagnostic.
-   *
-   * #187 says this in one line and it is the whole reason `blocking` is on the
-   * node: filtering to "needs review" while a scene has no way into it would
-   * otherwise dim the one box that stops the story shipping, and the writer
-   * would be looking at a clean canvas that is not clean.
-   */
-  if (node.blocking) return false
-  const element = node.element
-  if (participant !== null) {
-    const people =
-      element?.kind === 'beat' || element?.kind === 'scene' ? element.participants : null
-    if (!people?.includes(participant)) return true
-  }
-  const wanted = (Object.keys(statuses) as NarrativeFilter[]).filter((key) => statuses[key])
-  if (wanted.length === 0) return false
-  // A scene has no status of its own — it has a bag of work in three states.
-  // It matches a work filter when it *contains* work in that state, which is
-  // what a designer filtering an arc to "needs review" is asking for.
-  if (element?.kind === 'scene') {
-    return !wanted.some((filter) => element.counts[filter] > 0)
-  }
-  return !element?.status || !wanted.includes(element.status as NarrativeFilter)
-}
-
 /** The chip a port row wears when something gates it, or when it is broken. */
 function PortRow({ port, broken }: { port: FlowPort; broken?: string }) {
   return (
@@ -130,7 +100,7 @@ function NodeShell({
   // The spare is a handle like any other, so it is laid out with the rest: a
   // separate absolute position would drift the moment a port was added.
   const handles = node.spare ? [...ports, node.spare] : ports
-  const muted = isMuted(node, participant, statusFilters)
+  const muted = isFlowElementMuted(node.element, node.blocking, participant, statusFilters)
   const brokenPorts = new Map<string, string>()
   for (const found of node.element?.diagnostics ?? []) {
     // Errors only, and errors are never filtered: a wire that cannot be taken

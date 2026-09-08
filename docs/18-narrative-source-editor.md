@@ -45,7 +45,11 @@ other tagged source remains readable. Valid mixed tagged/mapped documents are al
 normalize to mappings on the next Format/Save. Normalization still passes through strict typed
 parsing: it never drops unknown fields. For invalid mixed notation the parser can report the nearest
 incompatible notation rather than the deepest payload; use one notation to obtain the most precise
-syntax diagnostic. Source schema version 1 and the JSON bridge representation are unchanged.
+syntax diagnostic. This notation normalization is independent of the
+[source version 2 migration](29-narrative-source-v2.md): Scene and World now read versions 1 and 2,
+while State remains version 1. New classification fields and unresolved destinations require
+version 2. Opening or formatting a supported version-1 source does not itself upgrade its envelope;
+explicit typed Scene and World saves write version 2.
 
 ## Drafts and concurrent edits
 

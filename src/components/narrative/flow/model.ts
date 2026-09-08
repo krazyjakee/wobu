@@ -141,10 +141,10 @@ interface FlowElementBase {
    */
   beatId?: string | null
   /**
-   * A single-valued summary, for the participant and work chips only.
+   * A single-valued display summary and fallback when work counts are absent.
    *
    * Lossy by construction, which is why `counts` exists beside it and why the
-   * badges read `counts` instead. Nothing should present this as "the state of
+   * badges and work filters read `counts` instead. Nothing should present this as "the state of
    * this element": the three lifecycle dimensions are independent (see
    * `lifecycle.rs`) and a beat can be locked *and* out of date at once.
    */

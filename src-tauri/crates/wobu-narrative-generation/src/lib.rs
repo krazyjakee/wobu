@@ -22,6 +22,8 @@ pub struct Settings {
 #[serde(deny_unknown_fields)]
 pub struct FrozenRequest {
     pub version: u32,
+    /// Source-language capability used to interpret the frozen inputs, not the
+    /// document version on disk. Version-1 requests retain their exact bytes.
     pub source_schema_version: u32,
     pub request_id: Id,
     pub batch_id: Id,
@@ -52,7 +54,7 @@ impl FrozenRequest {
 
     pub fn validate(&self) -> Result<(), String> {
         if self.version != VERSION
-            || self.source_schema_version != wobu_narrative::SOURCE_SCHEMA_VERSION
+            || !(1..=wobu_narrative::SCENE_SCHEMA_VERSION).contains(&self.source_schema_version)
             || self.prompt_version != PROMPT_VERSION
             || self.output_schema_version != OUTPUT_SCHEMA_VERSION
             || self.context.version != 1

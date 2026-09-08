@@ -5,6 +5,7 @@ export interface LibraryPreferences {
   saved: { name: string; view: LibraryView }[]
   pins: string[]
   recent: string[]
+  revision: string | null
   page: number
   scroll: number
   selected: string | null
@@ -16,6 +17,7 @@ export function emptyPreferences(): LibraryPreferences {
     pins: [],
     recent: [],
     page: 0,
+    revision: null,
     scroll: 0,
     selected: null,
   }
@@ -27,7 +29,9 @@ function isView(value: unknown): value is LibraryView {
   return (
     typeof view.query === 'string' &&
     typeof view.participant === 'string' &&
-    (view.quest === undefined || typeof view.quest === 'string') &&
+    ['quest', 'act', 'arc', 'tag'].every(
+      (key) => view[key] === undefined || typeof view[key] === 'string',
+    ) &&
     ['', 'generated', 'edited', 'locked'].includes(String(view.policy)) &&
     ['', 'draft', 'approved'].includes(String(view.review)) &&
     ['', 'current', 'out_of_date'].includes(String(view.freshness)) &&
@@ -44,16 +48,20 @@ export function readPreferences(project: string): LibraryPreferences {
     ) as LibraryPreferences | null
     if (!value || !isView(value.view)) return empty
     return {
-      view: { ...value.view, quest: value.view.quest ?? '' },
+      view: { ...DEFAULT_LIBRARY_VIEW, ...value.view },
       saved: Array.isArray(value.saved)
         ? value.saved
             .filter((s) => typeof s?.name === 'string' && isView(s.view))
-            .map((saved) => ({ ...saved, view: { ...saved.view, quest: saved.view.quest ?? '' } }))
+            .map((saved) => ({ ...saved, view: { ...DEFAULT_LIBRARY_VIEW, ...saved.view } }))
         : [],
       pins: Array.isArray(value.pins) ? value.pins.filter((id) => typeof id === 'string') : [],
       recent: Array.isArray(value.recent)
         ? value.recent.filter((id) => typeof id === 'string').slice(0, 8)
         : [],
+      revision:
+        typeof value.revision === 'string' && /^[a-f0-9]{64}$/.test(value.revision)
+          ? value.revision
+          : null,
       page: Number.isSafeInteger(value.page) && value.page >= 0 ? value.page : 0,
       scroll: Number.isFinite(value.scroll) && value.scroll >= 0 ? value.scroll : 0,
       selected: typeof value.selected === 'string' ? value.selected : null,

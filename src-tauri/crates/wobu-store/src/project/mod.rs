@@ -416,3 +416,5 @@ impl Project {
         self.index_path.clone()
     }
 }
+
+pub mod narrative_library;

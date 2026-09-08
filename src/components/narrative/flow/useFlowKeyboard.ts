@@ -42,6 +42,7 @@ export function useFlowKeyboard({
   onConnect,
   onDisconnect,
   onDelete,
+  canonicalDeletion = false,
   onSelect,
   onActivate,
 }: {
@@ -51,7 +52,9 @@ export function useFlowKeyboard({
   /** Returns whether the connection was made: a refusal must not be announced as one. */
   onConnect: (from: FlowConnection, to: string) => boolean
   onDisconnect: (from: FlowConnection) => boolean
-  onDelete: (id: string) => void
+  onDelete: (id: string) => boolean
+  /** Canonical source edits announce and reveal their own surviving target. */
+  canonicalDeletion?: boolean
   onSelect: (id: string) => void
   /**
    * Go *into* this node — the arc level's drill-down (#187).
@@ -200,7 +203,7 @@ export function useFlowKeyboard({
         // Focus has to land somewhere that still exists, or the reader is
         // dropped back at the top of the document with no idea what happened.
         const survivor = predecessors[0] ?? successors[0] ?? null
-        onDelete(nodeId)
+        if (!onDelete(nodeId) || canonicalDeletion) return
         announce(`Deleted ${here.title}.`)
         if (survivor !== null) requestAnimationFrame(() => focus(survivor))
         return

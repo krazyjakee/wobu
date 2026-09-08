@@ -1,3 +1,7 @@
+import { resetNarrativeDraftGuards } from '../../lib/narrativeDraftGuard'
+import { qk } from '../../lib/queries/keys'
+import { useScriptDrafts, sceneEditKey } from './scriptDrafts'
+import { NarrativeScriptPane } from './NarrativeScriptPane'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -10,21 +14,14 @@ import { NarrativeProjectFlow } from './NarrativeProjectFlow'
 import { resetFlowStore, useFlowStore } from './flow/flowStore'
 import { mintId, nodeId } from './flow/source'
 
-/*
- * The canvas against the real backend.
- *
- * The test that matters most in this file is the first one: a writer drags a
- * wire, and every line of dialogue in the scene is still there in the document
- * that reaches `narrative_scene_save`. The unit proof is in
- * `flow/source.test.ts`; this is the same property asserted through the actual
- * components, so a container that decided to rebuild a scene rather than patch
- * one could not slip past it.
- */
+/* Actual mounted components with mocked IPC. Full-document assertions catch
+ * lossy source reconstruction; native evidence is recorded separately. */
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
 
+const PROJECT = '/fixture/ashfall.wobu'
 const SCENE = mintId()
 const OTHER = mintId()
 const ARRIVAL = mintId()
@@ -145,19 +142,44 @@ function calls(command: string): Record<string, unknown>[] {
 /** A layout runner that answers at once. The real one starts a Web Worker. */
 const layout = () => Promise.resolve({ positions: {} })
 
-function open(readOnly = false): { qc: QueryClient } {
+function open(readOnly = false, active = true) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
+  qc.setQueryData(qk.projectCurrent, { path: PROJECT })
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   )
-  render(
+  const view = render(
     <Wrapper>
-      <NarrativeProjectFlow readOnly={readOnly} layout={layout} />
+      <NarrativeProjectFlow
+        readOnly={readOnly}
+        active={active}
+        projectKey={PROJECT}
+        layout={layout}
+      />
     </Wrapper>,
   )
-  return { qc }
+  return {
+    qc,
+    setActive: (next: boolean) =>
+      view.rerender(
+        <Wrapper>
+          <NarrativeProjectFlow
+            readOnly={readOnly}
+            active={next}
+            projectKey={PROJECT}
+            layout={layout}
+          />
+        </Wrapper>,
+      ),
+    showScript: () =>
+      view.rerender(
+        <Wrapper>
+          <NarrativeScriptPane projectKey={PROJECT} readOnly={readOnly} />
+        </Wrapper>,
+      ),
+  }
 }
 
 /** Open the scene the way the Library does: by writing the shared selection. */
@@ -191,6 +213,8 @@ beforeEach(() => {
     notices: [],
   }
   resetFlowStore()
+  resetNarrativeDraftGuards()
+  useScriptDrafts.setState({ drafts: {} })
   useUndoStack.setState({ projectId: 'proj', past: [], future: [], busy: false })
   useUI.setState({
     narrative: { sceneId: null, beatId: null, lineId: null },
@@ -208,6 +232,8 @@ describe('a structural edit cannot lose a line of dialogue', () => {
       target: { value: nodeId.beat(ARRIVAL) },
     })
 
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
     const sent = calls('narrative_scene_save')[0]!.scene as Scene
     const before = council()
@@ -238,6 +264,8 @@ describe('a structural edit cannot lose a line of dialogue', () => {
     fireEvent.change(screen.getByLabelText('Show the logbook — Then leads to'), {
       target: { value: nodeId.beat(ARRIVAL) },
     })
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
     expect(calls('narrative_scene_save')[0]!.expected).toEqual({
       kind: 'stamp',
@@ -246,20 +274,18 @@ describe('a structural edit cannot lose a line of dialogue', () => {
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
   })
 
-  it('refuses to clear a destination, and does not offer clearing as an option', async () => {
-    /*
-     * The source model has three kinds of destination and no fourth. Clearing
-     * one would have to mean deleting the choice, taking its label, its
-     * condition and its effects with it — so the option is not offered, and a
-     * caller that asks anyway is refused out loud rather than silently.
-     */
+  it('disconnects into an explicit unresolved draft without deleting route content', async () => {
     await enterCouncil()
-    const select = screen.getByLabelText('Show the logbook — Then leads to')
-    expect(within(select).queryByText('Nothing yet')).toBeNull()
-
-    fireEvent.change(select, { target: { value: '' } })
+    const picker = screen.getByLabelText('Show the logbook — Then leads to')
+    expect(within(picker).getByText('Nothing yet')).toBeInTheDocument()
+    fireEvent.change(picker, { target: { value: '' } })
     expect(calls('narrative_scene_save')).toHaveLength(0)
-    expect(useFlowStore.getState().announcement.text).toMatch(/has to lead somewhere/)
+    const draft = useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]!.scene
+    expect(draft.beats![0]!.choices![0]).toEqual({
+      ...council().beats![0]!.choices![0],
+      to: { unresolved: {} },
+    })
+    expect(screen.getByText('Unsaved scene — shared by Script and Flow.')).toBeInTheDocument()
   })
 
   it('refuses to rewire a beat to its own choices, and says why', async () => {
@@ -271,14 +297,16 @@ describe('a structural edit cannot lose a line of dialogue', () => {
     ).toBeDisabled()
   })
 
-  it('refuses to delete the box that only pictures where an outcome leads', async () => {
+  it('disconnects a derived scene link while retaining the owning outcome', async () => {
     await enterCouncil()
     const link = screen
       .getByRole('button', { name: 'Scene linkThe long road' })
       .closest('.nrt-outline-row') as HTMLElement
     fireEvent.click(within(link).getByRole('button', { name: 'Delete' }))
     expect(calls('narrative_scene_save')).toHaveLength(0)
-    expect(useFlowStore.getState().announcement.text).toMatch(/picture of where a choice/)
+    const draft = useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]!.scene
+    expect(draft.beats![1]!.outcomes).toEqual([{ id: OUTCOME, to: { unresolved: {} } }])
+    expect(screen.queryByRole('button', { name: 'Scene linkThe long road' })).toBeNull()
   })
 
   it('adds a beat with a real identity and no invented content', async () => {
@@ -286,14 +314,40 @@ describe('a structural edit cannot lose a line of dialogue', () => {
     fireEvent.click(screen.getByRole('button', { name: /Arrival at the hearing/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Add beat after' }))
 
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
     const sent = calls('narrative_scene_save')[0]!.scene as Scene
     expect(sent.beats).toHaveLength(3)
-    expect(sent.beats![2]!.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
-    expect(sent.beats![2]!.dialogue).toBeUndefined()
+    expect(sent.beats![1]!.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
+    expect(sent.beats![1]!.dialogue).toBeUndefined()
     // The first two beats are byte-identical to what was loaded.
-    expect(sent.beats!.slice(0, 2)).toEqual(council().beats)
+    expect([sent.beats![0], sent.beats![2]]).toEqual(council().beats)
   })
+})
+
+it('uses identical canonical operations from actual Flow and Script controls', async () => {
+  const view = open()
+  useUI.getState().selectNarrative({ sceneId: SCENE, beatId: ARRIVAL }, 'library')
+  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
+  fireEvent.change(await screen.findByLabelText('Show the logbook — Then leads to'), {
+    target: { value: nodeId.beat(ARRIVAL) },
+  })
+  const flow = structuredClone(
+    useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]!.scene,
+  )
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+  view.showScript()
+  fireEvent.change(await screen.findByLabelText('Choice 1 destination'), {
+    target: { value: `beat:${ARRIVAL}` },
+  })
+  const script = useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]!.scene
+  expect(script).toEqual(flow)
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
+  await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
+  expect(calls('narrative_scene_save')[0]!.scene).toEqual(flow)
 })
 
 describe('the canvas draws what is in the file', () => {
@@ -555,64 +609,74 @@ describe('shared presentation controls', () => {
     expect(calls('narrative_layout_save')).toHaveLength(0)
   })
 
-  it('authors a group and note without changing dialogue, source or undo', async () => {
-    await enterCouncil()
-    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
-    const arrival = await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
-    fireEvent.click(arrival)
-    fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
-    fireEvent.change(screen.getByLabelText('Group name'), { target: { value: 'Evidence branch' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create group' }))
-    const close = await screen.findByRole('button', { name: 'Close Evidence branch' })
-    fireEvent.click(close)
-    await screen.findByRole('button', { name: 'Open Evidence branch' })
-    fireEvent.click(screen.getByRole('button', { name: 'Add pinned note' }))
-    const text = await screen.findByRole('textbox', { name: 'Pinned note text' })
-    fireEvent.change(text, { target: { value: 'Keep the exit visible for review.' } })
-    fireEvent.blur(text)
-    await waitFor(() =>
-      expect((calls('narrative_layout_save').at(-1)!.layout as Layout).annotations).toEqual(
-        expect.objectContaining({
-          [Object.keys((calls('narrative_layout_save').at(-1)!.layout as Layout).annotations)[0]!]:
-            expect.objectContaining({ body: 'Keep the exit visible for review.' }),
-        }),
-      ),
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Delete pinned note' }))
-    await waitFor(() =>
-      expect(
-        Object.keys(
-          (calls('narrative_layout_save').at(-1)!.layout as Layout).removedAnnotations ?? {},
+  it.each(['canvas', 'outline'])(
+    'authors a group and note in %s without changing dialogue, source or undo',
+    async (mode) => {
+      await enterCouncil()
+      if (mode === 'canvas') {
+        fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+        fireEvent.click(await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`))
+      } else fireEvent.click(screen.getByRole('button', { name: /BeatArrival at the hearing/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
+      fireEvent.change(screen.getByLabelText('Group name'), {
+        target: { value: 'Evidence branch' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Create group' }))
+      const close = await screen.findByRole('button', { name: 'Close Evidence branch' })
+      fireEvent.click(close)
+      await screen.findByRole('button', { name: 'Open Evidence branch' })
+      fireEvent.click(screen.getByRole('button', { name: 'Add pinned note' }))
+      const text = await screen.findByRole('textbox', { name: 'Pinned note text' })
+      fireEvent.change(text, { target: { value: 'Keep the exit visible for review.' } })
+      fireEvent.blur(text)
+      await waitFor(() =>
+        expect((calls('narrative_layout_save').at(-1)!.layout as Layout).annotations).toEqual(
+          expect.objectContaining({
+            [Object.keys(
+              (calls('narrative_layout_save').at(-1)!.layout as Layout).annotations,
+            )[0]!]: expect.objectContaining({ body: 'Keep the exit visible for review.' }),
+          }),
         ),
-      ).toHaveLength(1),
-    )
-    const saved = calls('narrative_layout_save').at(-1)!.layout as Layout
-    expect(Object.values(saved.groups)[0]).toMatchObject({
-      members: [nodeId.beat(ARRIVAL)],
-      collapsed: true,
-    })
-    expect(saved.annotations).toEqual({})
-    expect(calls('narrative_scene_save')).toHaveLength(0)
-    expect(useUndoStack.getState().past).toHaveLength(0)
-  })
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Delete pinned note' }))
+      await waitFor(() =>
+        expect(
+          Object.keys(
+            (calls('narrative_layout_save').at(-1)!.layout as Layout).removedAnnotations ?? {},
+          ),
+        ).toHaveLength(1),
+      )
+      const saved = calls('narrative_layout_save').at(-1)!.layout as Layout
+      expect(Object.values(saved.groups)[0]).toMatchObject({
+        members: [nodeId.beat(ARRIVAL)],
+        collapsed: true,
+      })
+      expect(saved.annotations).toEqual({})
+      expect(calls('narrative_scene_save')).toHaveLength(0)
+      expect(useUndoStack.getState().past).toHaveLength(0)
+    },
+  )
 
-  it('retries a refused draft and saves its mode without a new edit', async () => {
-    layoutSave = { outcome: 'unwritable', reason: 'temporary folder outage' }
-    await enterCouncil()
-    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
-    fireEvent.change(await screen.findByLabelText('Arrangement mode'), {
-      target: { value: 'automatic' },
-    })
-    const retry = await screen.findByRole('button', { name: 'Retry arrangement save' })
-    expect(screen.getByLabelText('Arrangement mode')).toHaveValue('automatic')
-    layoutSave = { outcome: 'written' }
-    fireEvent.click(retry)
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Retry arrangement save' })).toBeNull(),
-    )
-    expect(calls('narrative_layout_save')).toHaveLength(2)
-    expect(calls('narrative_scene_save')).toHaveLength(0)
-  })
+  it.each(['canvas', 'outline'])(
+    'retries a refused arrangement in %s without a source edit',
+    async (mode) => {
+      layoutSave = { outcome: 'unwritable', reason: 'temporary folder outage' }
+      await enterCouncil()
+      if (mode === 'canvas') fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+      fireEvent.change(await screen.findByLabelText('Arrangement mode'), {
+        target: { value: 'automatic' },
+      })
+      const retry = await screen.findByRole('button', { name: 'Retry arrangement save' })
+      expect(screen.getByLabelText('Arrangement mode')).toHaveValue('automatic')
+      layoutSave = { outcome: 'written' }
+      fireEvent.click(retry)
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Retry arrangement save' })).toBeNull(),
+      )
+      expect(calls('narrative_layout_save')).toHaveLength(2)
+      expect(calls('narrative_scene_save')).toHaveLength(0)
+    },
+  )
 
   it('opens the actual World quest under its stable identity', async () => {
     const id = mintId()
@@ -628,7 +692,8 @@ describe('shared presentation controls', () => {
       },
     ]
     open()
-    fireEvent.change(await screen.findByLabelText('Flow scope'), { target: { value: id } })
+    await screen.findByRole('option', { name: 'Ashfall inquiry' })
+    fireEvent.change(screen.getByLabelText('Flow scope'), { target: { value: id } })
     await waitFor(() =>
       expect(calls('narrative_layout_get')).toContainEqual({ graph: { kind: 'quest', quest: id } }),
     )
@@ -638,3 +703,274 @@ describe('shared presentation controls', () => {
     expect(calls('narrative_world_save')).toHaveLength(0)
   })
 })
+
+function workingScene() {
+  return useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]!.scene
+}
+it('creates choices, guarded outcomes and explicit labelled endings from the outline', async () => {
+  await enterCouncil()
+  fireEvent.click(screen.getByRole('button', { name: /BeatArrival at the hearing/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add choice after' }))
+  fireEvent.change(screen.getByLabelText('Choice label'), {
+    target: { value: 'Ask about the tide' },
+  })
+  fireEvent.change(screen.getByLabelText('Route destination'), {
+    target: { value: `beat:${VERDICT}` },
+  })
+  fireEvent.change(screen.getByLabelText('Choice requirement rule'), { target: { value: 'never' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add Route effect' }))
+  fireEvent.change(screen.getByLabelText('Route effect 1 command name'), {
+    target: { value: 'journal_add' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Add condition after' }))
+  fireEvent.change(screen.getByLabelText('Outcome condition rule'), { target: { value: 'not' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Add end after' }))
+  fireEvent.change(screen.getByLabelText('Route destination ending label'), {
+    target: { value: 'hearing_complete' },
+  })
+  const beat = workingScene().beats![0]!
+  expect(beat.choices![1]).toMatchObject({
+    label: 'Ask about the tide',
+    to: { beat: VERDICT },
+    requires: 'never',
+    effects: [{ command: { name: 'journal_add', args: [] } }],
+  })
+  expect(beat.outcomes!.map(({ to, when }) => ({ to, when }))).toEqual([
+    { to: { unresolved: {} }, when: { not: 'always' } },
+    { to: { end: { label: 'hearing_complete' } }, when: undefined },
+  ])
+  expect(beat.dialogue).toEqual(council().beats![0]!.dialogue)
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }))
+  expect(workingScene().beats![0]!.outcomes![1]!.to).toEqual({ end: {} })
+  fireEvent.click(screen.getByRole('button', { name: 'Redo draft' }))
+  expect(workingScene().beats![0]!.outcomes![1]!.to).toEqual({ end: { label: 'hearing_complete' } })
+})
+
+it('refuses locked deletion aloud and returns keyboard focus to a surviving beat after deletion', async () => {
+  await enterCouncil()
+  const arrival = screen.getByRole('button', { name: /BeatArrival at the hearing/ })
+  fireEvent.click(within(arrival.closest('li')!).getByRole('button', { name: 'Delete' }))
+  expect(screen.getByText(/Unlock protected dialogue/)).toBeInTheDocument()
+  expect(useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]).toBeUndefined()
+  const verdict = screen.getByRole('button', { name: /BeatThe verdict/ })
+  fireEvent.click(verdict)
+  const remove = within(verdict.closest('li')!).getByRole('button', { name: 'Delete' })
+  remove.focus()
+  fireEvent.click(remove)
+  await waitFor(() => expect(arrival).toHaveFocus())
+  expect(workingScene().beats![0]!.choices![0]!.to).toEqual({ beat: VERDICT })
+  expect(workingScene().tombstones).toEqual([
+    expect.objectContaining({ target: { beat: VERDICT } }),
+  ])
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+})
+
+it('links an unresolved destination diagnostic to the selected route field', async () => {
+  diagnostics = [
+    {
+      kind: 'choice',
+      code: 'unresolved_destination',
+      message: 'Choose a destination for this route',
+      destination: true,
+      beatId: ARRIVAL,
+      choiceId: CHOICE,
+    },
+  ]
+  await enterCouncil()
+  fireEvent.click(screen.getByRole('button', { name: 'ChoiceShow the logbook' }))
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Choose a destination for this route — Edit destination',
+    }),
+  )
+  await waitFor(() => expect(screen.getByLabelText('Route destination')).toHaveFocus())
+  expect(useUI.getState().narrativeReveal).toMatchObject({
+    sceneId: SCENE,
+    beatId: ARRIVAL,
+    choiceId: CHOICE,
+    field: 'destination',
+    projectKey: PROJECT,
+  })
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+})
+
+it.each(['library', 'script', 'diagnostic', 'preview'] as const)(
+  'reads only the selected scene when Flow opens from a %s reveal',
+  async (origin) => {
+    useUI.getState().selectNarrative({ sceneId: SCENE }, origin)
+    open()
+    await screen.findByRole('button', { name: 'Outline list' })
+    expect(calls('narrative_scene_get').map((call) => call.sceneId)).toEqual([SCENE])
+  },
+)
+it('defers arc source reads while hidden and pages the project scope', async () => {
+  const scenes = Array.from({ length: 120 }, (_, index) => ({
+    id: `scene-${index}`,
+    name: `Scene ${index}`,
+    slug: `scene-${index}`,
+    rel: `${index}.yaml`,
+  }))
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+    Promise.resolve(
+      command === 'narrative_scenes'
+        ? { scenes, unreadable: [] }
+        : command === 'narrative_scene_get'
+          ? file({ id: String(args.sceneId), name: String(args.sceneId), beats: [] })
+          : answer(command, args),
+    ),
+  )
+  const view = open(false, false)
+  await screen.findByRole('button', { name: 'Next scenes' })
+  expect(calls('narrative_scene_get')).toHaveLength(0)
+  view.setActive(true)
+  await waitFor(() => expect(calls('narrative_scene_get')).toHaveLength(50))
+  expect(screen.getByRole('navigation', { name: 'Flow scene pages' })).toHaveTextContent(
+    'Scenes 1–50 of 120',
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Next scenes' }))
+  await waitFor(() => expect(calls('narrative_scene_get')).toHaveLength(100))
+  expect(screen.getByRole('navigation', { name: 'Flow scene pages' })).toHaveTextContent(
+    'Scenes 51–100 of 120',
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Next scenes' }))
+  await waitFor(() => expect(calls('narrative_scene_get')).toHaveLength(120))
+  expect(screen.getByRole('button', { name: 'Next scenes' })).toBeDisabled()
+})
+
+it('keeps canvas keyboard focus and the refusal announcement when locked deletion is refused', async () => {
+  useUI.getState().selectNarrative({ sceneId: SCENE, beatId: ARRIVAL }, 'library')
+  open()
+  const arrival = (
+    await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+  ).closest<HTMLElement>('.react-flow__node')!
+  arrival.focus()
+  fireEvent.keyDown(arrival, { key: 'Delete' })
+  await waitFor(() =>
+    expect(useFlowStore.getState().announcement.text).toMatch(/Unlock protected dialogue/),
+  )
+  expect(arrival).toHaveFocus()
+  expect(useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]).toBeUndefined()
+})
+it('lets the canonical deletion choose the surviving canvas focus and announcement', async () => {
+  useUI.getState().selectNarrative({ sceneId: SCENE, beatId: VERDICT }, 'library')
+  open()
+  const verdict = (
+    await screen.findByTestId(`flow-node-${nodeId.beat(VERDICT)}`)
+  ).closest<HTMLElement>('.react-flow__node')!
+  verdict.focus()
+  fireEvent.keyDown(verdict, { key: 'Delete' })
+  const arrival = (
+    await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+  ).closest<HTMLElement>('.react-flow__node')!
+  await waitFor(() => expect(arrival).toHaveFocus())
+  expect(useUI.getState().narrative.beatId).toBe(ARRIVAL)
+  expect(useUI.getState().narrative.choiceId).toBeFalsy()
+  expect(useFlowStore.getState().announcement.text).toContain(
+    'Incoming routes retain the deleted destination',
+  )
+  expect(workingScene().beats).toHaveLength(1)
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+})
+
+it('edits and collapses outline groups, positions notes and reveals a folded beat without source writes', async () => {
+  await enterCouncil()
+  fireEvent.click(screen.getByRole('button', { name: /BeatArrival at the hearing/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
+  fireEvent.change(screen.getByLabelText('Group name'), { target: { value: 'Evidence' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }))
+  const rename = await screen.findByLabelText('Rename group Evidence')
+  fireEvent.change(rename, { target: { value: 'Witnesses' } })
+  fireEvent.click(await screen.findByRole('button', { name: 'Close group Witnesses' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: /BeatArrival at the hearing/ })).toBeNull(),
+  )
+  useUI.getState().selectNarrative({ sceneId: SCENE, beatId: ARRIVAL }, 'diagnostic', {
+    projectKey: PROJECT,
+    focus: true,
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /BeatArrival at the hearing/ })).toHaveFocus(),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Add pinned note' }))
+  fireEvent.change(await screen.findByLabelText('Note X'), { target: { value: '120' } })
+  fireEvent.change(screen.getByLabelText('Note Y'), { target: { value: '80' } })
+  await waitFor(() =>
+    expect(
+      Object.values((calls('narrative_layout_save').at(-1)!.layout as Layout).annotations)[0],
+    ).toMatchObject({ x: 120, y: 80 }),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Delete group Witnesses' }))
+  await waitFor(() =>
+    expect(
+      Object.keys((calls('narrative_layout_save').at(-1)!.layout as Layout).groups),
+    ).toHaveLength(0),
+  )
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  expect(useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]).toBeUndefined()
+  expect(useUndoStack.getState().past).toHaveLength(0)
+})
+it('applies shared participant, status and warning filters in the outline while retaining errors', async () => {
+  diagnostics = [
+    {
+      kind: 'choice',
+      code: 'dangling_beat',
+      message: 'Missing destination beat',
+      destination: true,
+      beatId: ARRIVAL,
+      choiceId: CHOICE,
+    },
+    {
+      kind: 'dialogueSlot',
+      code: 'missing_text',
+      message: 'Wording missing',
+      destination: false,
+      beatId: ARRIVAL,
+      slotId: SLOT,
+    },
+  ]
+  await enterCouncil()
+  fireEvent.change(screen.getByLabelText('Participant'), { target: { value: 'Player' } })
+  const verdict = screen.getByRole('button', { name: /BeatThe verdict/ }).closest('li')!
+  expect(within(verdict).getByText('Filtered')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Needs text' }))
+  fireEvent.click(screen.getByText('Badges'))
+  fireEvent.click(screen.getByRole('button', { name: /^Warnings/ }))
+  expect(screen.queryByText('Wording missing')).toBeNull()
+  expect(screen.getByText('Missing destination beat')).toBeInTheDocument()
+  const choice = screen.getByRole('button', { name: 'ChoiceShow the logbook' }).closest('li')!
+  expect(within(choice).queryByText('Filtered')).toBeNull()
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  expect(calls('narrative_layout_save')).toHaveLength(0)
+})
+
+it.each(['canvas', 'outline'])(
+  'keeps a mixed-work beat visible for each independent status filter in %s',
+  async (mode) => {
+    const mixed = council()
+    mixed.beats![0]!.dialogue![0]!.variants![0]!.text.lifecycle!.review = 'draft'
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      Promise.resolve(
+        command === 'narrative_scene_get' && args.sceneId === SCENE
+          ? file(mixed)
+          : answer(command, args),
+      ),
+    )
+    await enterCouncil()
+    if (mode === 'canvas') fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+    const target =
+      mode === 'canvas'
+        ? await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+        : screen.getByRole('button', { name: /BeatArrival at the hearing/ }).closest('li')!
+    for (const label of ['Needs text', 'Needs review', 'Out of date']) {
+      const toggle = screen.getByRole('button', { name: label })
+      fireEvent.click(toggle)
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      expect(target).not.toHaveClass('is-muted')
+      expect(within(target).queryByText(/Filtered/)).toBeNull()
+      fireEvent.click(toggle)
+    }
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(calls('narrative_layout_save')).toHaveLength(0)
+  },
+)

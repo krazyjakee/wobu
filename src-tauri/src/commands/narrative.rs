@@ -239,6 +239,8 @@ pub struct DiagnosticView {
 /// discipline `error::Code` keeps.
 fn problem_code(problem: &Problem) -> &'static str {
     match problem {
+        Problem::UnresolvedDestination => "unresolved_destination",
+        Problem::UnknownClassification { .. } => "unknown_classification",
         Problem::DanglingBeat { .. } => "dangling_beat",
         Problem::DeletedBeat { .. } => "deleted_beat",
         Problem::UnknownScene { .. } => "unknown_scene",
@@ -626,7 +628,7 @@ pub fn narrative_state_save(
     state.with(|project| save_state(project, document, &expected))
 }
 
-fn save_state(
+pub(super) fn save_state(
     project: &mut Project,
     document: StateDocument,
     expected: &Precondition,
@@ -678,7 +680,15 @@ pub(super) fn diagnostics(
     };
     let schema = project.state_schema()?;
     let catalog = SceneCatalog::of(project.scene_ids()?);
-    Ok(scene.diagnostics(&schema, &catalog).iter().map(DiagnosticView::of).collect())
+    let world = project.world_document()?.map(|(document, _)| document).unwrap_or_default();
+    Ok(scene
+        .diagnostics(&schema, &catalog)
+        .into_iter()
+        .chain(
+            scene.classification_diagnostics(&world).into_iter().map(|(diagnostic, _)| diagnostic),
+        )
+        .map(|diagnostic| DiagnosticView::of(&diagnostic))
+        .collect())
 }
 
 /* ── layout ───────────────────────────────────────────────────────────────── */
@@ -769,3 +779,7 @@ pub fn narrative_text_written(body: String, locked: bool) -> wobu_narrative::Tex
         wobu_narrative::Text::written(body)
     }
 }
+
+#[cfg(test)]
+#[path = "narrative/ashfall_tests.rs"]
+mod ashfall_tests;

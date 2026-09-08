@@ -36,6 +36,7 @@ pub mod mesh;
 pub mod narrative;
 pub mod narrative_generation;
 pub mod narrative_source;
+pub mod narrative_state_history;
 pub mod nodes;
 pub mod project;
 /// The one reader of `project.json`'s `providers` map, shared by images, text,
@@ -139,3 +140,5 @@ pub mod narrative_recovery;
 
 #[cfg(test)]
 mod narrative_layout_contract;
+
+pub mod narrative_library;

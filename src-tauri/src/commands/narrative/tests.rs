@@ -618,3 +618,29 @@ fn a_scene_crosses_the_bridge_in_the_source_files_own_spelling() {
     // And the envelope around it is camelCase like every other command payload.
     assert!(json["rel"].as_str().unwrap().starts_with("narrative/scenes/"));
 }
+
+#[test]
+fn state_history_restores_declarations_and_rejects_changed_or_invalid_snapshots() {
+    use crate::commands::narrative_state_history::restore;
+    let temp = Temp::new();
+    let mut project = project(&temp);
+    let empty = StateDocument::new(vec![]);
+    let declared: StateDocument = serde_json::from_value(serde_json::json!({
+        "schema_version": 1, "variables": [{"name": "trust", "type": {"int": {"min": 0, "max": 100}}, "default": 40}]
+    })).unwrap();
+    let saved = save_state(&mut project, declared.clone(), &Precondition::New).unwrap();
+    let undone = restore(&mut project, empty.clone(), &saved.document).unwrap();
+    assert!(undone.document.variables.is_empty());
+    let redone = restore(&mut project, declared.clone(), &empty).unwrap();
+    assert_eq!(redone.document, declared);
+    let mut peer = declared.clone();
+    peer.variables[0].default = wobu_narrative::Value::Int(60);
+    save_state(&mut project, peer.clone(), &Precondition::Stamp { stamp: redone.stamp.unwrap() })
+        .unwrap();
+    let before = std::fs::read(project.root().join("narrative/state.yaml")).unwrap();
+    assert!(restore(&mut project, empty.clone(), &declared).is_err());
+    let mut invalid = peer.clone();
+    invalid.variables[0].default = wobu_narrative::Value::Int(200);
+    assert!(restore(&mut project, invalid, &peer).is_err());
+    assert_eq!(std::fs::read(project.root().join("narrative/state.yaml")).unwrap(), before);
+}

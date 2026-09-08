@@ -1,4 +1,6 @@
+import { assertProjectSession, isProjectSession, projectSessionEpoch } from './projectSession'
 import { create } from 'zustand'
+import { narrativeStateRestore } from './api/narrativeStateHistory'
 import { narrativeWorldRestore, type WorldDocument } from './api/narrativeWorld'
 import * as api from './api'
 import type { Scene, SceneFile, WobuNode } from './api'
@@ -69,6 +71,7 @@ export type WorldCommand =
   | { type: 'sceneSave'; scene: Scene; slug: string; expected?: Scene | null }
   | { type: 'sceneDelete'; id: string }
   | { type: 'worldRestore'; document: WorldDocument; expected: WorldDocument }
+  | { type: 'stateRestore'; document: api.StateDocument; expected: api.StateDocument }
 
 export interface UndoEntry {
   /**
@@ -177,6 +180,8 @@ interface UndoState {
   clear: () => void
 }
 
+let operationSerial = 0
+
 export const useUndoStack = create<UndoState>((set, get) => ({
   projectId: null,
   past: [],
@@ -184,7 +189,11 @@ export const useUndoStack = create<UndoState>((set, get) => ({
   busy: false,
 
   setProject: (id) =>
-    set((s) => (s.projectId === id ? {} : { projectId: id, past: [], future: [] })),
+    set((s) => {
+      if (s.projectId === id) return {}
+      ++operationSerial
+      return { projectId: id, past: [], future: [], busy: false }
+    }),
 
   push: (entry) =>
     set((s) => {
@@ -228,15 +237,26 @@ export const useUndoStack = create<UndoState>((set, get) => ({
     }),
 
   undo: async (run) => {
+    const epoch = projectSessionEpoch()
     const { past, busy } = get()
     const entry = past[past.length - 1]
     if (busy || !entry) return null
+    const operation = ++operationSerial
     set({ past: past.slice(0, -1), busy: true })
     try {
-      for (const cmd of entry.undo) await run(cmd)
+      for (const cmd of entry.undo) {
+        assertProjectSession(epoch)
+        await run(cmd)
+      }
+      assertProjectSession(epoch)
       set((s) => ({ future: [...s.future, entry], busy: false }))
       return entry
     } catch (e) {
+      if (operation !== operationSerial) throw e
+      if (!isProjectSession(epoch)) {
+        set({ busy: false })
+        throw e
+      }
       // Put it back rather than swallowing it. The write was refused — a
       // conflict, a read-only folder, a share that went away — and all of those
       // are conditions the user can resolve and try again through. Losing the
@@ -247,15 +267,26 @@ export const useUndoStack = create<UndoState>((set, get) => ({
   },
 
   redo: async (run) => {
+    const epoch = projectSessionEpoch()
     const { future, busy } = get()
     const entry = future[future.length - 1]
     if (busy || !entry) return null
+    const operation = ++operationSerial
     set({ future: future.slice(0, -1), busy: true })
     try {
-      for (const cmd of entry.redo) await run(cmd)
+      for (const cmd of entry.redo) {
+        assertProjectSession(epoch)
+        await run(cmd)
+      }
+      assertProjectSession(epoch)
       set((s) => ({ past: [...s.past, entry], busy: false }))
       return entry
     } catch (e) {
+      if (operation !== operationSerial) throw e
+      if (!isProjectSession(epoch)) {
+        set({ busy: false })
+        throw e
+      }
       set((s) => ({ future: [...s.future, entry], busy: false }))
       throw e
     }
@@ -298,6 +329,8 @@ export function applyCommand(cmd: WorldCommand): Promise<void> {
         .then(() => undefined)
     case 'sceneDelete':
       return api.narrativeSceneDelete(cmd.id)
+    case 'stateRestore':
+      return narrativeStateRestore(cmd.document, cmd.expected).then(() => undefined)
     case 'worldRestore':
       return narrativeWorldRestore(cmd.document, cmd.expected).then(() => undefined)
   }

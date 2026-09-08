@@ -4,9 +4,7 @@
 mod support;
 
 use support::{ashfall_state, council_hearing};
-use wobu_narrative::{
-    Error, Provenance, SOURCE_SCHEMA_VERSION, SceneDocument, StateDocument, Text,
-};
+use wobu_narrative::{Error, Provenance, SCENE_SCHEMA_VERSION, SceneDocument, StateDocument, Text};
 
 #[test]
 fn a_scene_survives_a_round_trip_unchanged() {
@@ -139,11 +137,11 @@ fn a_newer_schema_version_is_refused_as_a_version_and_not_as_a_shape() {
     let yaml = SceneDocument::new(council.scene)
         .to_yaml()
         .unwrap()
-        .replace("schema_version: 1", "schema_version: 2")
+        .replace("schema_version: 2", "schema_version: 3")
         .replace("  name: Council hearing\n", "  name: Council hearing\n  epilogue: true\n");
 
     let err = SceneDocument::parse(&yaml).unwrap_err();
-    assert_eq!(err, Error::UnsupportedSchemaVersion { found: 2, supported: SOURCE_SCHEMA_VERSION });
+    assert_eq!(err, Error::UnsupportedSchemaVersion { found: 3, supported: SCENE_SCHEMA_VERSION });
     // The remedy has to be in the message, or the obvious response is to delete
     // the fields this build does not recognise.
     assert!(err.to_string().contains("newer Wobu"), "{err}");
@@ -155,7 +153,7 @@ fn an_older_schema_version_is_refused_rather_than_guessed_at() {
     let yaml = SceneDocument::new(council.scene)
         .to_yaml()
         .unwrap()
-        .replace("schema_version: 1", "schema_version: 0");
+        .replace("schema_version: 2", "schema_version: 0");
     assert!(matches!(
         SceneDocument::parse(&yaml),
         Err(Error::UnsupportedSchemaVersion { found: 0, .. })
@@ -166,7 +164,7 @@ fn an_older_schema_version_is_refused_rather_than_guessed_at() {
 fn a_file_with_no_version_is_refused() {
     let council = council_hearing();
     let yaml =
-        SceneDocument::new(council.scene).to_yaml().unwrap().replace("schema_version: 1\n", "");
+        SceneDocument::new(council.scene).to_yaml().unwrap().replace("schema_version: 2\n", "");
     assert_eq!(SceneDocument::parse(&yaml).unwrap_err(), Error::MissingSchemaVersion);
 }
 

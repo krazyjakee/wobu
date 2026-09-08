@@ -1,3 +1,4 @@
+import { sceneEditKey, useScriptDrafts } from '../scriptDrafts'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '../../Modal'
 import type {
@@ -60,6 +61,7 @@ export function ReviewQueue({
   const [page, setPage] = useState(0)
   const [stateJson, setStateJson] = useState<string | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
+  const authoringDrafts = useScriptDrafts((state) => state.drafts)
   const drafts = useReviewDrafts((state) => state.drafts)
   const rows = useMemo(
     () =>
@@ -359,23 +361,32 @@ export function ReviewQueue({
             </nav>
           </section>
           {current ? (
-            <ReviewDetail
-              key={`${projectKey}:${current.key}:${selectedProposal ?? 'current'}`}
-              row={current}
-              projectKey={projectKey}
-              readOnly={readOnly}
-              proposalId={selectedProposal}
-              onProposal={(id) => setProposals((before) => ({ ...before, [current.key]: id }))}
-              onApply={onApply}
-              onContext={(state) => onContext(current.line.target, state)}
-              onSource={() => onSource(current.line.target)}
-              provenance={generationHistory.find(
-                (item) =>
-                  item.request_id ===
-                  current.line.proposals.find((proposal) => proposal.id === selectedProposal)
-                    ?.request_id,
+            <div>
+              {authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] && (
+                <p role="status">
+                  Save or discard the shared scene draft before changing wording or review policy.
+                </p>
               )}
-            />
+              <ReviewDetail
+                key={`${projectKey}:${current.key}:${selectedProposal ?? 'current'}`}
+                row={current}
+                projectKey={projectKey}
+                readOnly={
+                  readOnly || !!authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)]
+                }
+                proposalId={selectedProposal}
+                onProposal={(id) => setProposals((before) => ({ ...before, [current.key]: id }))}
+                onApply={onApply}
+                onContext={(state) => onContext(current.line.target, state)}
+                onSource={() => onSource(current.line.target)}
+                provenance={generationHistory.find(
+                  (item) =>
+                    item.request_id ===
+                    current.line.proposals.find((proposal) => proposal.id === selectedProposal)
+                      ?.request_id,
+                )}
+              />
+            </div>
           ) : (
             <p className="nrt-review-empty">
               Choose a line to compare its wording and review context.

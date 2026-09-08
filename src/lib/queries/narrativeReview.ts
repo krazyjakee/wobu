@@ -1,4 +1,6 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useProjectMutation } from './useProjectMutation'
+import { sceneEditKey, useScriptDrafts } from '../../components/narrative/scriptDrafts'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { narrativeReviewApply, narrativeReviewList } from '../api/narrativeReview'
 import { narrativeGenerationHistory } from '../api/narrativeGeneration'
 import { invalidateNarrative, qk } from './keys'
@@ -25,8 +27,16 @@ export function useNarrativeReviewProvenance(projectKey: string) {
 }
 export function useNarrativeReviewApply(projectKey: string) {
   const client = useQueryClient()
-  return useMutation({
-    mutationFn: narrativeReviewApply,
+  return useProjectMutation({
+    mutationFn: (request: Parameters<typeof narrativeReviewApply>[0]) => {
+      if (client.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path !== projectKey)
+        throw new Error('The project changed before the review could be saved.')
+      if (useScriptDrafts.getState().drafts[sceneEditKey(projectKey, request.target.scene)])
+        throw new Error(
+          'Save or discard the shared scene draft before changing wording or review policy.',
+        )
+      return narrativeReviewApply(request)
+    },
     onSuccess: ({ file }) => {
       // A reply may arrive after this modal closes and another project opens.
       if (client.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path === projectKey) {

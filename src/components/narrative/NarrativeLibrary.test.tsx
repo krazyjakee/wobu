@@ -1,36 +1,72 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LibraryQuery } from '../../lib/api/narrativeLibrary'
 import { NarrativeLibrary } from './NarrativeLibrary'
-import { libraryRows } from './sceneLibrary.fixture'
-import { readPreferences } from './sceneLibraryPreferences'
-
-function renderLibrary(over: Partial<Parameters<typeof NarrativeLibrary>[0]> = {}) {
+import { libraryPage, libraryRow } from './sceneLibrary.fixture'
+import { emptyPreferences, readPreferences, writePreferences } from './sceneLibraryPreferences'
+const query = vi.hoisted(() => vi.fn())
+vi.mock('../../lib/queries/narrativeLibrary', () => ({ useNarrativeLibraryQuery: query }))
+function mount(over: Partial<Parameters<typeof NarrativeLibrary>[0]> = {}) {
   const onOpen = vi.fn()
-  const result = render(
-    <NarrativeLibrary
-      projectKey="/world"
-      rows={libraryRows}
-      loading={false}
-      readOnly={false}
-      navCollapsed={false}
-      nameOf={(id) => (id === 'mira' ? 'Mira' : undefined)}
-      onOpen={onOpen}
-      onCreateScene={vi.fn()}
-      {...over}
-    />,
-  )
-  return { ...result, onOpen }
+  return {
+    ...render(
+      <NarrativeLibrary
+        projectKey="/world"
+        readOnly={false}
+        navCollapsed={false}
+        nameOf={(id) => (id === 'mira' ? 'Mira' : undefined)}
+        onOpen={onOpen}
+        onCreateScene={vi.fn()}
+        {...over}
+      />,
+    ),
+    onOpen,
+  }
 }
-beforeEach(() => localStorage.clear())
-
-describe('Scene library', () => {
-  it('opens a remembered line at its selected variant and combines filters', () => {
-    const { onOpen } = renderLibrary()
+beforeEach(() => {
+  localStorage.clear()
+  query.mockReset()
+  query.mockReturnValue({ data: libraryPage, isFetching: false, refetch: vi.fn() })
+})
+describe('Bounded scene discovery', () => {
+  it('sends combined canonical filters and reveals the selected stable line identity', () => {
+    const { onOpen } = mount()
+    const table = screen.getByRole('table')
+    for (const label of ['Act', 'Arc', 'Tags'])
+      expect(within(table).getByRole('columnheader', { name: label })).toBeInTheDocument()
+    const cells = within(within(table).getAllByRole('row')[1]!).getAllByRole('cell')
+    expect(cells.slice(0, 3).map((cell) => cell.textContent)).toEqual([
+      'Arrival',
+      'Inquiry',
+      'Politics',
+    ])
+    for (const [label, value] of [
+      ['Quest', 'trust'],
+      ['Act', 'arrival'],
+      ['Arc', 'inquiry'],
+      ['Tag', 'politics'],
+      ['Participant', 'mira'],
+      ['Policy', 'locked'],
+      ['Freshness', 'out_of_date'],
+    ])
+      fireEvent.change(screen.getByLabelText(label!), { target: { value } })
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'attack' } })
-    fireEvent.change(screen.getByLabelText('Participant'), { target: { value: 'mira' } })
-    fireEvent.change(screen.getByLabelText('Policy'), { target: { value: 'locked' } })
-    fireEvent.change(screen.getByLabelText('Freshness'), { target: { value: 'out_of_date' } })
-    expect(screen.getByRole('status')).toHaveTextContent('1 matching of 1 scenes')
+    expect(query).toHaveBeenCalledWith(
+      '/world',
+      expect.objectContaining({
+        query: 'attack',
+        quest: 'trust',
+        act: 'arrival',
+        arc: 'inquiry',
+        tag: 'politics',
+        participant: 'mira',
+        policy: 'locked',
+        freshness: 'out_of_date',
+        offset: 0,
+        limit: 25,
+        revision: null,
+      }),
+    )
     fireEvent.change(screen.getByLabelText('Matching passage in Council hearing'), {
       target: { value: '1' },
     })
@@ -45,160 +81,161 @@ describe('Scene library', () => {
       'script',
       'low',
     )
+    expect(
+      within(screen.getByRole('list', { name: 'Quests for Council hearing' })).getAllByRole(
+        'listitem',
+      ),
+    ).toHaveLength(2)
   })
-  it('persists named views, pins, recent scenes and selected result locally per project', () => {
-    const { unmount } = renderLibrary()
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'attack' } })
-    fireEvent.change(screen.getByLabelText('View name'), { target: { value: 'Mira lines' } })
+  it('persists combined saved views, pins, recent and selection across reopen', () => {
+    const { unmount } = mount()
+    fireEvent.change(screen.getByLabelText('Quest'), { target: { value: 'trust' } })
+    fireEvent.change(screen.getByLabelText('Act'), { target: { value: 'arrival' } })
+    fireEvent.change(screen.getByLabelText('View name'), { target: { value: 'Political arrival' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save view' }))
     fireEvent.click(screen.getByRole('button', { name: 'Pin Council hearing' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open Council hearing in Flow' }))
+    unmount()
+    mount()
     expect(readPreferences('/world')).toMatchObject({
       selected: 'council',
       pins: ['council'],
       recent: ['council'],
     })
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Mira lines' }))
-    expect(screen.getByRole('searchbox')).toHaveValue('attack')
-    unmount()
-    renderLibrary()
-    expect(screen.getByRole('searchbox')).toHaveValue('attack')
-    expect(screen.getByRole('button', { name: 'Pin Council hearing' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Political arrival' }))
+    expect(screen.getByLabelText('Act')).toHaveValue('arrival')
+    expect(screen.getByLabelText('Quest')).toHaveValue('trust')
     expect(readPreferences('/other').saved).toEqual([])
   })
-  it('bounds mounted rows with pages and preserves paging across remount', () => {
-    const rows = Array.from({ length: 1000 }, (_, n) => ({
-      summary: {
-        id: String(n),
-        name: `Scene ${String(n).padStart(4, '0')}`,
-        slug: String(n),
-        rel: `${n}.yaml`,
-      },
+  it('restores saved scroll after asynchronous rows arrive and preserves unavailable filters', () => {
+    writePreferences('/world', {
+      ...emptyPreferences(),
+      scroll: 240,
+      view: { ...emptyPreferences().view, participant: 'removed-character' },
+    })
+    query.mockReturnValue({ data: undefined, isFetching: true })
+    const { container, rerender } = mount()
+    const scroller = container.querySelector('.nsl-table-scroll')!
+    expect(scroller.scrollTop).toBe(0)
+    expect(screen.getByLabelText('Participant')).toHaveValue('removed-character')
+    query.mockReturnValue({ data: libraryPage, isFetching: false })
+    rerender(
+      <NarrativeLibrary
+        projectKey="/world"
+        readOnly={false}
+        navCollapsed={false}
+        nameOf={() => undefined}
+        onOpen={vi.fn()}
+        onCreateScene={vi.fn()}
+      />,
+    )
+    expect(scroller.scrollTop).toBe(240)
+    scroller.scrollTop = 320
+    fireEvent.scroll(scroller)
+    expect(readPreferences('/world').scroll).toBe(320)
+    expect(screen.getByRole('button', { name: 'Open Council hearing in Script' })).toHaveAttribute(
+      'data-library-scene',
+      'council',
+    )
+  })
+  it('clears pending restored scroll when restarting an initially failed query', () => {
+    writePreferences('/world', { ...emptyPreferences(), scroll: 240 })
+    const refetch = vi.fn()
+    query.mockReturnValue({
+      data: undefined,
+      error: new Error('Scene library changed'),
+      isFetching: false,
+      refetch,
+    })
+    const { container, rerender } = mount()
+    const scroller = container.querySelector('.nsl-table-scroll')!
+    fireEvent.click(screen.getByRole('button', { name: 'Restart results' }))
+    expect(refetch).toHaveBeenCalledOnce()
+    expect(readPreferences('/world').scroll).toBe(0)
+    query.mockReturnValue({ data: libraryPage, isFetching: false, refetch })
+    rerender(
+      <NarrativeLibrary
+        projectKey="/world"
+        readOnly={false}
+        navCollapsed={false}
+        nameOf={() => undefined}
+        onOpen={vi.fn()}
+        onCreateScene={vi.fn()}
+      />,
+    )
+    expect(scroller.scrollTop).toBe(0)
+    expect(screen.getByRole('button', { name: 'Open Council hearing in Script' })).toBeEnabled()
+  })
+  it('retains page revision, bounds mounted rows, and never silently retries a stale page', () => {
+    let stale = false
+    query.mockImplementation((_project: string, q: LibraryQuery) => ({
+      data: stale
+        ? undefined
+        : {
+            ...libraryPage,
+            total: 1000,
+            sceneCount: 1000,
+            rows: Array.from({ length: 25 }, (_, i) => ({
+              ...libraryRow,
+              summary: {
+                ...libraryRow.summary,
+                id: String(q.offset + i),
+                name: `Scene ${q.offset + i}`,
+              },
+            })),
+          },
+      error: stale ? new Error('Scene library changed') : undefined,
+      isFetching: false,
+      refetch: vi.fn(),
     }))
-    const { unmount } = renderLibrary({ rows })
+    const { unmount } = mount()
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(26)
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
-    expect(screen.getByRole('button', { name: 'Open Scene 0025 in Flow' })).toBeInTheDocument()
+    expect(query).toHaveBeenCalledWith(
+      '/world',
+      expect.objectContaining({ offset: 25, revision: libraryPage.revision }),
+    )
     unmount()
-    renderLibrary({ rows })
-    expect(screen.getByRole('button', { name: 'Open Scene 0025 in Flow' })).toBeInTheDocument()
+    stale = true
+    mount()
+    expect(screen.getByRole('alert')).toHaveTextContent('Scene library changed')
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+    expect(readPreferences('/world').page).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Restart results' }))
+    expect(query).toHaveBeenCalledWith(
+      '/world',
+      expect.objectContaining({ offset: 0, revision: null }),
+    )
   })
-  it('distinguishes incomplete search, read failures and a filtered empty result', () => {
-    renderLibrary({ rows: [{ summary: libraryRows[0]!.summary, error: 'Changed on disk' }] })
-    expect(screen.getByRole('status')).toHaveTextContent('results are incomplete')
-    expect(screen.getByRole('alert')).toHaveTextContent('Changed on disk')
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'not present' } })
-    expect(screen.getByText('No matching scenes. Change or clear the filters.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Create first scene' })).toBeNull()
-  })
-  it('allows read-only discovery while refusing scene creation', () => {
-    renderLibrary({ readOnly: true })
-    expect(screen.getByRole('button', { name: 'New scene' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Open Council hearing in Flow' })).toBeEnabled()
-  })
-  it('opens unidentifiable on-disk source for repair without inventing a scene ID', () => {
+  it('surfaces unreadable source with repair and explicitly pages errors', () => {
     const onRepair = vi.fn()
-    renderLibrary({
-      rows: [],
-      catalog: {
-        scenes: [],
-        unreadable: [{ rel: 'narrative/scenes/broken.yaml', reason: 'invalid YAML' }],
+    query.mockReturnValue({
+      data: {
+        ...libraryPage,
+        unreadable: [{ rel: 'narrative/scenes/broken.yaml', reason: 'ambiguous ID' }],
+        unreadableTotal: 30,
+        unreadableNextOffset: 25,
       },
-      onRepair,
+      isFetching: false,
     })
+    mount({ onRepair })
     fireEvent.click(screen.getByRole('button', { name: 'Repair source' }))
     expect(onRepair).toHaveBeenCalledWith('narrative/scenes/broken.yaml')
-  })
-  it('recovers malformed saved preferences', () => {
-    localStorage.setItem('wobu:narrative-library:v1:/world', '{broken')
-    renderLibrary()
-    expect(screen.getByRole('searchbox')).toHaveValue('')
-  })
-})
-
-describe('Quest discovery', () => {
-  const quests = [
-    { id: 'attack', name: 'Investigate the attack', scene_ids: ['council'] },
-    { id: 'trust', name: 'Earn council trust', scene_ids: ['council'] },
-  ]
-  it('shows both memberships, finds under either, and restores a named quest view', () => {
-    const { unmount } = renderLibrary({ quests })
-    const memberships = screen.getByRole('list', { name: 'Quests for Council hearing' })
-    expect(within(memberships).getAllByRole('listitem')).toHaveLength(2)
-    for (const quest of ['attack', 'trust']) {
-      fireEvent.change(screen.getByLabelText('Quest'), { target: { value: quest } })
-      expect(screen.getByRole('status')).toHaveTextContent('1 matching of 1 scenes')
-      expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2)
-    }
-    fireEvent.change(screen.getByLabelText('View name'), { target: { value: 'Trust scenes' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save view' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
-    unmount()
-    renderLibrary({ quests })
-    fireEvent.click(screen.getByRole('button', { name: 'Trust scenes' }))
-    expect(screen.getByLabelText('Quest')).toHaveValue('trust')
-    expect(readPreferences('/world').saved[0]?.view.quest).toBe('trust')
-  })
-  it('migrates old saved views without discarding their search and selection', () => {
-    localStorage.setItem(
-      'wobu:narrative-library:v1:/world',
-      JSON.stringify({
-        view: {
-          query: 'attack',
-          participant: 'mira',
-          policy: '',
-          review: '',
-          freshness: '',
-          missing: false,
-          includeDrafts: false,
-          sort: 'name',
-        },
-        saved: [
-          {
-            name: 'Older view',
-            view: {
-              query: 'convince',
-              participant: '',
-              policy: '',
-              review: '',
-              freshness: '',
-              missing: false,
-              includeDrafts: false,
-              sort: 'name',
-            },
-          },
-        ],
-        selected: 'council',
-        pins: ['council'],
-        page: 0,
-        scroll: 0,
-      }),
+    fireEvent.click(screen.getByRole('button', { name: 'More source errors' }))
+    expect(query).toHaveBeenCalledWith(
+      '/world',
+      expect.objectContaining({ unreadableOffset: 25, revision: libraryPage.revision }),
     )
-    renderLibrary({ quests })
-    expect(screen.getByRole('searchbox')).toHaveValue('attack')
-    expect(screen.getByLabelText('Quest')).toHaveValue('')
-    expect(readPreferences('/world').selected).toBe('council')
-    fireEvent.click(screen.getByRole('button', { name: 'Older view' }))
-    expect(screen.getByRole('searchbox')).toHaveValue('convince')
-    expect(screen.getByLabelText('Quest')).toHaveValue('')
   })
-  it('retains a deleted quest filter and explains why its view is empty', () => {
-    const { unmount } = renderLibrary({ quests })
-    fireEvent.change(screen.getByLabelText('Quest'), { target: { value: 'trust' } })
-    unmount()
-    renderLibrary({ quests: [quests[0]!] })
-    expect(screen.getByLabelText('Quest')).toHaveValue('trust')
-    expect(screen.getByText(/quest selected by this view no longer exists/)).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('0 matching of 1 scenes')
-  })
-  it('distinguishes unavailable quest source from an unassigned scene', () => {
-    renderLibrary({ questsError: 'Unsupported world version' })
-    expect(screen.getByLabelText('Quest')).toBeDisabled()
-    expect(screen.getByRole('alert')).toHaveTextContent('Quest results are incomplete')
-    expect(screen.queryByText('No quests')).not.toBeInTheDocument()
+  it('discloses truncated passages and read-only discovery', () => {
+    query.mockReturnValue({
+      data: { ...libraryPage, rows: [{ ...libraryRow, matchCount: 22 }] },
+      isFetching: false,
+    })
+    mount({ readOnly: true })
+    expect(screen.getByRole('button', { name: 'New scene' })).toBeDisabled()
+    expect(screen.getByText(/Showing 2 of 22 passages/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open Council hearing in Flow' })).toBeEnabled()
   })
 })

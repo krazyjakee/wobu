@@ -1,3 +1,7 @@
+import { ParticipantFilter, FlowStatusFilters } from './ParticipantFilter'
+import { useFlowGroupPresentation } from './useFlowGroupPresentation'
+import { useFlowReveal } from './useFlowReveal'
+import type { CanonicalFlowActions } from './canonicalFlow'
 import type { FlowPresentation } from './useFlowPresentation'
 import { PresentationTools, PinnedNotes } from './PresentationTools'
 import { layoutKeyOf } from './source'
@@ -15,7 +19,6 @@ import {
   type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { useUI } from '../../../store/ui'
 import { Icon } from '../../Icon'
 import type { FlowGroup } from './model'
 import {
@@ -154,6 +157,7 @@ export interface FlowCanvasProps {
    * actually imposes — see `flowAuthoring` in `source.ts`.
    */
   authoring?: FlowAuthoring
+  actions?: CanonicalFlowActions
   /** Go into a node: double-click, or Enter. The arc's drill-down. */
   onActivate?: (id: string) => void
   /** What one node is, in the keyhole banner and the minimap's name. */
@@ -192,6 +196,7 @@ function Canvas({
   noun = 'element',
   targetOf,
   authoring,
+  actions,
 }: FlowCanvasProps) {
   const container = useRef<HTMLDivElement>(null)
   const flow = useReactFlow()
@@ -207,10 +212,6 @@ function Canvas({
     setSeenPositions(stored)
     setPositions({ ...stored })
   }
-  const presentationRef = useRef(presentation)
-  useEffect(() => {
-    presentationRef.current = presentation
-  }, [presentation])
   const [laying, setLaying] = useState(false)
   const [layoutError, setLayoutError] = useState<string | null>(null)
 
@@ -229,53 +230,15 @@ function Canvas({
   const closedGroups = useFlowLevel((s) => s.closedGroups)
   const announcement = useFlowLevel((s) => s.announcement)
   const setClosedGroups = useFlowLevel((s) => s.setClosedGroups)
-  const hydratedGroups = useRef(false)
-  const storedGroups = presentation?.layout.groups
-  useEffect(() => {
-    if (!storedGroups) return
-    hydratedGroups.current = true
-    store.getState().setClosedGroups(
-      Object.values(storedGroups)
-        .filter((g) => g.collapsed)
-        .map((g) => g.id),
-    )
-    hydratedGroups.current = false
-  }, [storedGroups, store])
-  useEffect(
-    () =>
-      store.subscribe((state, previous) => {
-        const current = presentationRef.current
-        if (
-          !current ||
-          readOnly ||
-          hydratedGroups.current ||
-          state.closedGroups === previous.closedGroups
-        )
-          return
-        const closed = new Set(state.closedGroups)
-        const groups = { ...current.layout.groups }
-        let changed = false
-        for (const [id, group] of Object.entries(groups)) {
-          if (!!group.collapsed !== closed.has(id)) {
-            groups[id] = {
-              ...group,
-              collapsed: closed.has(id),
-              updatedAt: new Date().toISOString(),
-            }
-            changed = true
-          }
-        }
-        if (changed) current.onChange({ ...current.layout, groups })
-      }),
-    [store, readOnly],
-  )
-  const reveal = useUI((s) => s.narrativeReveal)
+  useFlowGroupPresentation(presentation, readOnly)
+  const sourceDisabled = readOnly || !!actions?.disabled
   const { select, connect, remove, add } = useSceneEdits({
     scene,
     onChange,
-    readOnly,
+    readOnly: sourceDisabled,
     targetOf,
     authoring,
+    actions,
   })
 
   /*
@@ -316,27 +279,18 @@ function Canvas({
     return merged
   }, [graph, positions, seed, automatic, autoPositions, dragging])
 
-  // ── the reveal channel ──────────────────────────────────────────────────
-  // Latched rather than consumed, so a canvas mounting on a tab switch still
-  // owes the last reveal. Each `seq` is honoured once — including the ones this
-  // canvas raised itself, which are marked seen and then skipped, so a click
-  // here never bounces the viewport back.
-  const honoured = useRef(0)
-  useEffect(() => {
-    if (!reveal || reveal.seq === honoured.current) return
-    honoured.current = reveal.seq
-    if (reveal.origin === 'flow' || reveal.sceneId !== scene.id) return
-    const target =
-      graph.nodes.find((node) => node.kind === 'beat' && node.beatId === reveal.beatId) ??
-      graph.nodes.find((node) => node.beatId === reveal.beatId)
-    if (!target) return
-    store.getState().select(target.id)
-    const at = placed[target.id]
-    const size = NODE_SIZE[target.kind]
-    if (at) flow.setCenter(at.x + size.width / 2, at.y + size.height / 2, { duration: 200 })
-  }, [reveal, graph, placed, flow, scene.id, store])
-
-  // ── layout on demand ────────────────────────────────────────────────────
+  const center = useCallback(
+    (id: string) => {
+      const node = graph.nodes.find((node) => node.id === id)
+      const at = placed[id]
+      if (node && at) {
+        const size = NODE_SIZE[node.kind]
+        void flow.setCenter(at.x + size.width / 2, at.y + size.height / 2, { duration: 0 })
+      }
+    },
+    [graph, placed, flow],
+  )
+  useFlowReveal({ scene, container, projectKey: actions?.projectKey, graph, center })
 
   const runLayout = useCallback(() => {
     const ticket = gate.current.begin()
@@ -389,6 +343,8 @@ function Canvas({
       draggable: !readOnly && (!persistent || layoutKeyOf(node.id, presentationLevel) !== null),
       ariaLabel: nodeLabel(node),
       style: NODE_SIZE[node.kind],
+      width: NODE_SIZE[node.kind].width,
+      height: NODE_SIZE[node.kind].height,
     }))
     return [...frames(graph, placed, closedGroups, NODE_BUDGET - nodes.length), ...nodes]
   }, [graph, placed, readOnly, closedGroups, persistent, presentationLevel])
@@ -446,10 +402,11 @@ function Canvas({
   const onKeyDown = useFlowKeyboard({
     graph,
     container,
-    readOnly,
+    readOnly: sourceDisabled,
     onConnect: (from, to) => connect(from, to),
     onDisconnect: (from) => connect(from, null),
     onDelete: remove,
+    canonicalDeletion: !!actions,
     onSelect: select,
     onActivate,
   })
@@ -483,6 +440,9 @@ function Canvas({
             presentation={presentation}
             level={presentationLevel}
             readOnly={readOnly}
+            notePosition={() =>
+              flow.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+            }
           />
         )}
         <button type="button" className="btn btn-sm" onClick={runLayout}>
@@ -501,7 +461,7 @@ function Canvas({
             key={kind}
             type="button"
             className="btn btn-sm"
-            disabled={readOnly}
+            disabled={sourceDisabled}
             onClick={() => add(kind, selectedId)}
           >
             Add {FLOW_KIND_LABEL[kind].toLocaleLowerCase()}
@@ -519,6 +479,7 @@ function Canvas({
           {closedGroups.length > 0 ? 'Open all groups' : 'Close all groups'}
         </button>
         <ParticipantFilter scene={scene} />
+        <FlowStatusFilters />
         {/* Only when there is something to explain. A legend for a canvas with
             no badges on it is a control that answers a question nobody asked. */}
         {scene.elements.some((element) => element.diagnostics || element.counts) && (
@@ -572,7 +533,7 @@ function Canvas({
           onNodeDoubleClick={(_event, node) => onActivate?.(node.id)}
           onConnect={onPointerConnect}
           onPaneClick={() => select(null)}
-          nodesConnectable={!readOnly}
+          nodesConnectable={!sourceDisabled}
           nodesDraggable={!readOnly}
           // Ours, not React Flow's: an edge is deleted by disconnecting the port
           // that made it, so the diagnostic can name the field.
@@ -695,35 +656,3 @@ function frames(
 }
 
 /** Filter by who is in a beat. Muting, not removing: a hidden node breaks a route. */
-function ParticipantFilter({ scene }: { scene: FlowLevel }) {
-  const participant = useFlowLevel((s) => s.participant)
-  const setParticipant = useFlowLevel((s) => s.setParticipant)
-  const people = useMemo(() => {
-    const names = new Set<string>()
-    for (const element of scene.elements) {
-      // Beats have participants and so do whole scenes, which is what makes
-      // "show me only Mira's thread" mean the same thing at both levels.
-      if (element.kind === 'beat' || element.kind === 'scene') {
-        for (const name of element.participants) names.add(name)
-      }
-    }
-    return [...names].sort()
-  }, [scene])
-
-  return (
-    <label className="nrt-bar-field">
-      <span>Participant</span>
-      <select
-        value={participant ?? ''}
-        onChange={(event) => setParticipant(event.target.value || null)}
-      >
-        <option value="">Anyone</option>
-        {people.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}

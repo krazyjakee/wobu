@@ -5,7 +5,8 @@ import type { ProjectSummary } from '../../lib/api'
 import { qk } from '../../lib/queries/keys'
 import { useUI } from '../../store/ui'
 import { NarrativeMode } from './NarrativeMode'
-import { libraryRows, libraryScene } from './sceneLibrary.fixture'
+import { libraryPage, libraryRows, libraryScene } from './sceneLibrary.fixture'
+import { useScriptDrafts, sceneEditKey } from './scriptDrafts'
 import { useSceneLibrary } from './sceneLibraryStore'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
@@ -34,6 +35,24 @@ function renderMode(project: ProjectSummary = defaultProject) {
     stamp: null,
   })
   qc.setQueryData(qk.nodes, [])
+  qc.setQueryData(qk.narrativeState, {
+    document: { schema_version: 1, variables: [] },
+    stamp: null,
+  })
+  qc.setQueryData(qk.projectCurrent, project)
+  qc.setQueryData(['narrative_world'], {
+    document: {
+      schema_version: 2,
+      facts: [],
+      knowledge: [],
+      relationships: [],
+      events: [],
+      quests: [],
+      restrictions: [],
+    },
+    diagnostics: [],
+    stamp: null,
+  })
   return render(
     <QueryClientProvider client={qc}>
       <NarrativeMode project={project} />
@@ -50,9 +69,12 @@ const defaultProject: ProjectSummary = {
 }
 beforeEach(() => {
   localStorage.clear()
+  useScriptDrafts.setState({ drafts: {} })
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   h.invoke.mockReset()
-  h.invoke.mockResolvedValue([])
+  h.invoke.mockImplementation((command) =>
+    Promise.resolve(command === 'narrative_library_query' ? libraryPage : []),
+  )
   useUI.setState({
     mode: 'narrative',
     navWidth: 272,
@@ -66,26 +88,30 @@ beforeEach(() => {
 })
 
 describe('Narrative discovery and editor handoff', () => {
-  it('opens on the main library and enters a scene without cloning its source', () => {
+  it('opens on the main library and enters a scene without cloning its source', async () => {
     renderMode()
     expect(screen.getByRole('main', { name: 'Scene library' })).toBeInTheDocument()
     expect(screen.queryByRole('main', { name: 'Narrative editor' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Council hearing in Flow' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Flow' }))
     expect(screen.getByRole('main', { name: 'Narrative editor' })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Current scene outline' })).toHaveTextContent(
       'Evidence',
     )
     expect(useUI.getState().narrative.sceneId).toBe('council')
     expect(h.invoke.mock.calls.some(([command]) => String(command).includes('save'))).toBe(false)
+    expect(
+      h.invoke.mock.calls.filter(([command]) => command === 'narrative_scene_get'),
+    ).toHaveLength(0)
   })
-  it('restores query and preserves mounted unsaved edits on a library round trip', () => {
+  it('restores query and preserves mounted unsaved edits on a library round trip', async () => {
     renderMode()
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'attack' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Open Council hearing in Script' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Script' }))
     expect(useUI.getState().narrative).toEqual({
       sceneId: 'council',
       beatId: 'evidence',
       lineId: 'line',
+      variantId: 'high',
     })
     expect(useSceneLibrary.getState().searchVariant).toEqual({
       sceneId: 'council',
@@ -93,18 +119,39 @@ describe('Narrative discovery and editor handoff', () => {
       variantId: 'high',
     })
     fireEvent.change(screen.getByLabelText('Unsaved draft'), { target: { value: 'Still writing' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Back to scenes' }))
+    const back = screen.getByRole('button', { name: 'Back to scenes' })
+    fireEvent.click(back)
     expect(screen.getByRole('searchbox')).toHaveValue('attack')
-    fireEvent.click(screen.getByRole('button', { name: 'Open Council hearing in Script' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Script' }))
     expect(screen.getByLabelText('Unsaved draft')).toHaveValue('Still writing')
   })
-  it('honours collapsed panels in both library and scene editor', () => {
+  it('honours collapsed panels in both library and scene editor', async () => {
     useUI.setState({ navCollapsed: true, inspCollapsed: true })
     renderMode()
     expect(screen.queryByRole('navigation', { name: 'Narrative library' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Council hearing in Flow' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Flow' }))
     expect(screen.queryByRole('navigation', { name: 'Current scene outline' })).toBeNull()
     expect(screen.queryByRole('complementary', { name: 'Narrative context' })).toBeNull()
+  })
+  it('shows an unfinished shared draft in the outline and context inspector', async () => {
+    const scene = {
+      ...libraryScene,
+      name: 'Unfinished hearing',
+      beats: [{ ...libraryScene.beats![0]!, title: 'Unfinished evidence' }],
+    }
+    useScriptDrafts.getState().put(sceneEditKey(defaultProject.path, scene.id), {
+      file: { scene: libraryScene, slug: 'council', rel: 'council.yaml', stamp: null },
+      scene,
+    })
+    renderMode()
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Council hearing in Flow' }))
+    expect(screen.getByRole('navigation', { name: 'Current scene outline' })).toHaveTextContent(
+      'Unfinished evidence',
+    )
+    expect(screen.getByRole('complementary', { name: 'Narrative context' })).toHaveTextContent(
+      'Unfinished hearing',
+    )
+    expect(screen.getByText('Unsaved scene draft.')).toBeInTheDocument()
   })
   it('enables review and native export while keeping analysis limits explicit', () => {
     renderMode()

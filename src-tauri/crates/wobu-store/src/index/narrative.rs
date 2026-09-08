@@ -5,6 +5,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 pub(super) fn put(connection: &Connection, entry: &NarrativeIndexEntry) -> Result<()> {
     connection.execute("INSERT INTO narrative_files(rel,hash,entry) VALUES(?1,?2,?3) ON CONFLICT(rel) DO UPDATE SET hash=excluded.hash,entry=excluded.entry",params![entry.rel,entry.hash,serde_json::to_string(entry)?])?;
+    super::narrative_library::put(connection, entry)?;
     Ok(())
 }
 impl Index {
@@ -17,7 +18,7 @@ impl Index {
     }
     pub(crate) fn replace_narrative(&self, entries: &[NarrativeIndexEntry]) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
-        tx.execute("DELETE FROM narrative_files", [])?;
+        tx.execute_batch("DELETE FROM narrative_files; DELETE FROM narrative_scene_summary; DELETE FROM narrative_scene_text; DELETE FROM narrative_scene_variant;")?;
         for entry in entries {
             put(&tx, entry)?;
         }
@@ -25,10 +26,14 @@ impl Index {
         Ok(())
     }
     pub(crate) fn upsert_narrative(&self, entry: &NarrativeIndexEntry) -> Result<()> {
-        put(&self.conn, entry)
+        let tx = self.conn.unchecked_transaction()?;
+        put(&tx, entry)?;
+        tx.commit()?;
+        Ok(())
     }
     pub(crate) fn remove_narrative(&self, rel: &str) -> Result<()> {
         self.conn.execute("DELETE FROM narrative_files WHERE rel=?1", [rel])?;
+        super::narrative_library::remove(&self.conn, rel)?;
         Ok(())
     }
     pub(crate) fn narrative_base(&self, peer: &str, rel: &str) -> Result<Option<String>> {

@@ -207,10 +207,12 @@ fn source_check(
     let formatted = document.to_yaml().map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?;
     let schema = project.state_schema()?;
     let catalog = SceneCatalog::of(project.scene_ids()?);
+    let world = project.world_document()?.map(|(document, _)| document).unwrap_or_default();
     let diagnostics = document
         .scene
         .source_diagnostics(&schema, &catalog)
         .into_iter()
+        .chain(document.scene.classification_diagnostics(&world))
         .map(|(diagnostic, source_path)| LocatedDiagnostic {
             diagnostic: DiagnosticView::of(&diagnostic),
             source_path,

@@ -1,81 +1,108 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { Scene, SceneCatalog } from '../../lib/api'
+import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { LibraryLabel, LibraryMatch, LibrarySceneRow } from '../../lib/api/narrativeLibrary'
+import { useNarrativeLibraryQuery } from '../../lib/queries/narrativeLibrary'
 import type { NarrativeTarget } from '../../store/ui'
-import {
-  DEFAULT_LIBRARY_VIEW,
-  findScenes,
-  type LibraryRow,
-  type LibraryView,
-  type SceneMatch,
-  type SceneQuest,
-} from './sceneLibraryModel'
+import { DEFAULT_LIBRARY_VIEW, type LibraryView } from './sceneLibraryModel'
 import { readPreferences, writePreferences } from './sceneLibraryPreferences'
 import './sceneLibrary.css'
 
 const PAGE_SIZE = 25
 
 /** Main discovery surface. Only a page of results is mounted at a time. */
-export function NarrativeLibrary({
+function LibrarySession({
   projectKey,
-  rows,
-  quests,
-  questsLoading = false,
-  questsError,
-  catalog,
-  loading,
-  error,
   readOnly,
   navCollapsed,
   nameOf,
   onOpen,
   onCreateScene,
   onRepair,
+  onOpenExample,
 }: {
   projectKey: string
-  rows: LibraryRow[]
-  quests?: SceneQuest[]
-  questsLoading?: boolean
-  questsError?: string
-  catalog?: SceneCatalog
-  loading: boolean
-  error?: string
   readOnly: boolean
   navCollapsed: boolean
   nameOf: (id: string) => string | undefined
   onOpen: (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => void
   onCreateScene: () => void
   onRepair?: (rel: string) => void
+  onOpenExample?: () => void
 }) {
   const [prefs, setPrefs] = useState(() => readPreferences(projectKey))
   const [viewName, setViewName] = useState('')
   const [matchIndices, setMatchIndices] = useState<Record<string, number>>({})
   const scroll = useRef<HTMLDivElement>(null)
+  const restoreScroll = useRef<number | null>(prefs.scroll)
   const deferredView = useDeferredValue(prefs.view)
-  const results = useMemo(
-    () => findScenes(rows, deferredView, quests),
-    [rows, deferredView, quests],
+  const [unreadableOffset, setUnreadableOffset] = useState(0)
+  const [pinOffset, setPinOffset] = useState(0)
+  const query = useNarrativeLibraryQuery(projectKey, {
+    ...deferredView,
+    offset: prefs.page * PAGE_SIZE,
+    limit: PAGE_SIZE,
+    revision: prefs.revision,
+    unreadableOffset,
+  })
+  const lookupIds = [...new Set([...prefs.pins.slice(pinOffset, pinOffset + 8), ...prefs.recent])]
+  const lookup = useNarrativeLibraryQuery(
+    projectKey,
+    {
+      ...DEFAULT_LIBRARY_VIEW,
+      offset: 0,
+      limit: 16,
+      revision: null,
+      ids: lookupIds,
+    },
+    lookupIds.length > 0,
   )
-  const sortedQuests = [...(quests ?? [])].sort((a, b) => a.name.localeCompare(b.name))
-  const missingQuest =
-    prefs.view.quest && !sortedQuests.some((quest) => quest.id === prefs.view.quest)
-  const participants = [
-    ...new Set(rows.flatMap((row) => row.scene?.participants?.map((p) => p.entity) ?? [])),
-  ].sort((a, b) => (nameOf(a) ?? a).localeCompare(nameOf(b) ?? b))
-  const pages = Math.max(1, Math.ceil(results.length / PAGE_SIZE))
-  const page = Math.min(prefs.page, pages - 1)
-  const visible = results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-  const pending = rows.filter((row) => !row.scene && !row.error).length
-  const failed = rows.filter((row) => row.error).length
+  const data = query.data
+  const visible = data?.rows ?? []
+  const pages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE))
+  const page = prefs.page
+  const loading = query.isFetching
+  const error = query.error?.message
+  const facet = (key: 'quest' | 'act' | 'arc' | 'tag', label: string, records: LibraryLabel[]) => (
+    <label>
+      {label}
+      <select
+        value={prefs.view[key]}
+        onChange={(event) => updateView({ [key]: event.target.value })}
+      >
+        <option value="">All {label.toLowerCase()}s</option>
+        {prefs.view[key] && !records.some((record) => record.id === prefs.view[key]) && (
+          <option value={prefs.view[key]}>
+            Unavailable {label.toLowerCase()} ({prefs.view[key]})
+          </option>
+        )}
+        {records.map((record) => (
+          <option key={record.id} value={record.id}>
+            {record.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+  const restart = () => {
+    restoreScroll.current = null
+    if (scroll.current) scroll.current.scrollTop = 0
+    setUnreadableOffset(0)
+    setPrefs((p) => ({ ...p, page: 0, revision: null, scroll: 0 }))
+    if (prefs.page === 0 && !prefs.revision && !unreadableOffset) void query.refetch()
+  }
   useEffect(() => writePreferences(projectKey, prefs), [projectKey, prefs])
   useLayoutEffect(() => {
-    if (scroll.current) scroll.current.scrollTop = prefs.scroll
-    // Restore once. Subsequent scrolling is owned by the browser while the
-    // library stays mounted behind the editor.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // The initial query can resolve after mount. Restore only once rows exist;
+    // setting scrollTop on the empty table would clamp the saved position to zero.
+    if (data && scroll.current && restoreScroll.current !== null) {
+      scroll.current.scrollTop = restoreScroll.current
+      restoreScroll.current = null
+    }
+  }, [data])
   const updateView = (patch: Partial<LibraryView>) => {
+    restoreScroll.current = null
     setMatchIndices({})
-    setPrefs((p) => ({ ...p, view: { ...p.view, ...patch }, page: 0, scroll: 0 }))
+    setUnreadableOffset(0)
+    setPrefs((p) => ({ ...p, view: { ...p.view, ...patch }, page: 0, revision: null, scroll: 0 }))
     if (scroll.current) scroll.current.scrollTop = 0
   }
   const open = (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => {
@@ -92,7 +119,7 @@ export function NarrativeLibrary({
       <h3>{label}</h3>
       {ids.length === 0 && <p className="nrt-note">No {label.toLocaleLowerCase()} yet.</p>}
       {ids.map((id) => {
-        const row = rows.find((one) => one.summary.id === id)
+        const row = lookup.data?.rows.find((one) => one.summary.id === id)
         return row ? (
           <button
             key={id}
@@ -102,7 +129,11 @@ export function NarrativeLibrary({
           >
             {row.summary.name}
           </button>
-        ) : null
+        ) : (
+          <p key={id} className="nrt-note">
+            {lookup.isFetching ? 'Reading saved scene…' : `Unavailable scene (${id})`}
+          </p>
+        )
       })}
     </section>
   )
@@ -146,7 +177,23 @@ export function NarrativeLibrary({
               <p className="nrt-note">Save a search and filters for later.</p>
             )}
           </section>
-          {jumpList('Pinned scenes', prefs.pins)}
+          {jumpList('Pinned scenes', prefs.pins.slice(pinOffset, pinOffset + 8))}
+          {prefs.pins.length > 8 && (
+            <div className="nsl-pages">
+              <button
+                disabled={!pinOffset}
+                onClick={() => setPinOffset(Math.max(0, pinOffset - 8))}
+              >
+                Previous pins
+              </button>
+              <button
+                disabled={pinOffset + 8 >= prefs.pins.length}
+                onClick={() => setPinOffset(pinOffset + 8)}
+              >
+                More pins
+              </button>
+            </div>
+          )}
           {jumpList('Recent scenes', prefs.recent)}
         </nav>
       )}
@@ -163,38 +210,30 @@ export function NarrativeLibrary({
             title={readOnly ? 'This project is read-only' : undefined}
             onClick={onCreateScene}
           >
-            {rows.length ? 'New scene' : 'Create first scene'}
+            {data?.sceneCount ? 'New scene' : 'Create first scene'}
           </button>
         </header>
+        {onOpenExample && (
+          <button type="button" className="btn" disabled={readOnly} onClick={onOpenExample}>
+            Open Ashfall example
+          </button>
+        )}
         <label className="nsl-search-label">
           Find a scene or a line
           <input
             className="nrt-search"
             type="search"
+            maxLength={500}
             value={prefs.view.query}
             placeholder="Search titles, intent and dialogue…"
             onChange={(e) => updateView({ query: e.target.value })}
           />
         </label>
         <div className="nsl-filters">
-          <label>
-            Quest
-            <select
-              value={prefs.view.quest}
-              onChange={(e) => updateView({ quest: e.target.value })}
-              disabled={questsLoading || Boolean(questsError)}
-            >
-              <option value="">All quests</option>
-              {missingQuest && (
-                <option value={prefs.view.quest}>Unavailable quest ({prefs.view.quest})</option>
-              )}
-              {sortedQuests.map((quest) => (
-                <option key={quest.id} value={quest.id}>
-                  {quest.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {facet('quest', 'Quest', data?.facets.quests ?? [])}
+          {facet('act', 'Act', data?.facets.acts ?? [])}
+          {facet('arc', 'Arc', data?.facets.arcs ?? [])}
+          {facet('tag', 'Tag', data?.facets.tags ?? [])}
           <label>
             Participant
             <select
@@ -202,7 +241,13 @@ export function NarrativeLibrary({
               onChange={(e) => updateView({ participant: e.target.value })}
             >
               <option value="">All participants</option>
-              {participants.map((id) => (
+              {prefs.view.participant &&
+                !data?.facets.participants.includes(prefs.view.participant) && (
+                  <option value={prefs.view.participant}>
+                    Unavailable participant ({prefs.view.participant})
+                  </option>
+                )}
+              {(data?.facets.participants ?? []).map((id) => (
                 <option key={id} value={id}>
                   {nameOf(id) ?? id}
                 </option>
@@ -259,7 +304,7 @@ export function NarrativeLibrary({
               checked={prefs.view.includeDrafts}
               onChange={(e) => updateView({ includeDrafts: e.target.checked })}
             />
-            Include generated drafts
+            Search unapproved generated wording
           </label>
           <button type="button" className="btn" onClick={() => updateView(DEFAULT_LIBRARY_VIEW)}>
             Clear filters
@@ -297,28 +342,25 @@ export function NarrativeLibrary({
           </label>
         </form>
         <p className="nrt-note">
-          Act and tags are not available yet. Status reflects recorded source values; automatic
-          freshness tracking is not available.
+          Status reflects recorded source values. Review verifies current approval and context.
+          Search uses saved wording; unapproved generated wording is optional.
         </p>
-        {questsLoading && <p className="nrt-note">Reading quest membership…</p>}
-        {questsError && (
-          <p role="alert">
-            Could not read quest membership: {questsError}. Quest results are incomplete.
-          </p>
-        )}
-        {missingQuest && !questsLoading && !questsError && (
-          <p className="nrt-note">
-            The quest selected by this view no longer exists. Choose another quest or clear the
-            filters.
-          </p>
-        )}
         <p role="status" aria-live="polite">
-          {loading ? 'Reading scenes…' : `${results.length} matching of ${rows.length} scenes`}
-          {pending > 0 && ` · Reading text from ${pending} scenes; results are incomplete.`}
-          {failed > 0 && ` · ${failed} scenes could not be read; text results are incomplete.`}
+          {loading
+            ? 'Reading scenes…'
+            : `${data?.total ?? 0} matching of ${data?.sceneCount ?? 0} scenes`}
+          {Boolean(data?.unreadableTotal) &&
+            ` · ${data!.unreadableTotal} unreadable or ambiguous files`}
         </p>
-        {error && <p role="alert">Could not read the scene catalog: {error}</p>}
-        {(catalog?.unreadable ?? []).map((one) => (
+        {error && (
+          <p role="alert">
+            Could not read scene results: {error}{' '}
+            <button type="button" className="btn" onClick={restart}>
+              Restart results
+            </button>
+          </p>
+        )}
+        {(data?.unreadable ?? []).map((one) => (
           <p role="alert" key={one.rel}>
             {one.rel} could not be read: {one.reason}. It is still on disk.
             {onRepair && (
@@ -328,6 +370,30 @@ export function NarrativeLibrary({
             )}
           </p>
         ))}
+        {(unreadableOffset > 0 || data?.unreadableNextOffset != null) && (
+          <div className="nsl-pages">
+            <button
+              type="button"
+              disabled={!unreadableOffset || loading}
+              onClick={() => {
+                setUnreadableOffset(Math.max(0, unreadableOffset - PAGE_SIZE))
+                setPrefs((p) => ({ ...p, revision: data?.revision ?? p.revision }))
+              }}
+            >
+              Previous source errors
+            </button>
+            <button
+              type="button"
+              disabled={data?.unreadableNextOffset == null || loading}
+              onClick={() => {
+                setUnreadableOffset(data!.unreadableNextOffset!)
+                setPrefs((p) => ({ ...p, revision: data!.revision }))
+              }}
+            >
+              More source errors
+            </button>
+          </div>
+        )}
         <div
           className="nsl-table-scroll"
           ref={scroll}
@@ -341,6 +407,9 @@ export function NarrativeLibrary({
             <thead>
               <tr>
                 <th scope="col">Scene</th>
+                <th scope="col">Act</th>
+                <th scope="col">Arc</th>
+                <th scope="col">Tags</th>
                 <th scope="col">Quests</th>
                 <th scope="col">Participants</th>
                 <th scope="col">Text coverage</th>
@@ -356,7 +425,11 @@ export function NarrativeLibrary({
                   Math.max(0, row.matches.length - 1),
                 )
                 const match = row.matches[matchIndex]
-                const target: SceneMatch = match ?? { sceneId: row.summary.id, snippet: '' }
+                const target: LibraryMatch = match ?? {
+                  sceneId: row.summary.id,
+                  snippet: '',
+                  draft: false,
+                }
                 return (
                   <tr
                     key={row.summary.id}
@@ -364,11 +437,17 @@ export function NarrativeLibrary({
                   >
                     <th scope="row">
                       <span>{row.summary.name}</span>
-                      {row.error && <p role="alert">Could not read: {row.error}</p>}
+
                       {match && (
                         <p className="nsl-snippet">
                           {match.draft && <b>Generated draft: </b>}
                           {match.snippet}
+                        </p>
+                      )}
+                      {row.matchCount > row.matches.length && (
+                        <p className="nrt-note">
+                          Showing {row.matches.length} of {row.matchCount} passages. Refine the
+                          search for another line.
                         </p>
                       )}
                       {row.matches.length > 1 && (
@@ -393,10 +472,11 @@ export function NarrativeLibrary({
                         </label>
                       )}
                     </th>
+                    <td>{row.act?.name ?? 'Unassigned'}</td>
+                    <td>{row.arc?.name ?? 'Unassigned'}</td>
+                    <td>{row.tags.map((tag) => tag.name).join(', ') || 'No tags'}</td>
                     <td className="nsl-quests">
-                      {questsLoading || questsError ? (
-                        'Not read'
-                      ) : row.quests.length ? (
+                      {row.quests.length ? (
                         <ul aria-label={`Quests for ${row.summary.name}`}>
                           {row.quests.map((quest) => (
                             <li key={quest.id}>{quest.name}</li>
@@ -407,19 +487,21 @@ export function NarrativeLibrary({
                       )}
                     </td>
                     <td>
-                      {row.scene
-                        ? row.scene.participants
-                            ?.map((p) => nameOf(p.entity) ?? p.entity)
-                            .join(', ') || 'None declared'
-                        : 'Not read'}
+                      {row.participants.map((id) => nameOf(id) ?? id).join(', ') || 'None declared'}
                     </td>
-                    <td>{row.scene ? `${row.filled} / ${row.slots} slots` : 'Not read'}</td>
-                    <td>{row.scene ? <SceneStatus scene={row.scene} /> : 'Not read'}</td>
+                    <td>
+                      {row.filled} / {row.slots} slots
+                    </td>
+                    <td>
+                      <SceneStatus row={row} />
+                    </td>
                     <td>
                       <div className="nsl-open">
                         <button
                           type="button"
                           className="btn"
+                          data-library-scene={row.summary.id}
+                          data-library-tab="flow"
                           onClick={() => open(target, 'flow', target.variantId)}
                           aria-label={`Open ${row.summary.name} in Flow`}
                         >
@@ -428,6 +510,8 @@ export function NarrativeLibrary({
                         <button
                           type="button"
                           className="btn"
+                          data-library-scene={row.summary.id}
+                          data-library-tab="script"
                           onClick={() => open(target, 'script', target.variantId)}
                           aria-label={`Open ${row.summary.name} in Script`}
                         >
@@ -458,9 +542,9 @@ export function NarrativeLibrary({
               })}
             </tbody>
           </table>
-          {!loading && !error && !results.length && (
+          {!loading && !error && !data?.total && (
             <p className="nsl-empty">
-              {rows.length
+              {data?.sceneCount
                 ? 'No matching scenes. Change or clear the filters.'
                 : 'No scenes yet. Create a scene to start writing.'}
             </p>
@@ -470,8 +554,8 @@ export function NarrativeLibrary({
           <button
             className="btn"
             type="button"
-            disabled={page === 0}
-            onClick={() => setPrefs((p) => ({ ...p, page: page - 1 }))}
+            disabled={page === 0 || loading || Boolean(error)}
+            onClick={() => setPrefs((p) => ({ ...p, page: page - 1, revision: data!.revision }))}
           >
             Previous page
           </button>
@@ -481,8 +565,8 @@ export function NarrativeLibrary({
           <button
             className="btn"
             type="button"
-            disabled={page + 1 >= pages}
-            onClick={() => setPrefs((p) => ({ ...p, page: page + 1 }))}
+            disabled={page + 1 >= pages || loading || Boolean(error)}
+            onClick={() => setPrefs((p) => ({ ...p, page: page + 1, revision: data!.revision }))}
           >
             Next page
           </button>
@@ -492,29 +576,20 @@ export function NarrativeLibrary({
   )
 }
 
-function SceneStatus({ scene }: { scene: Scene }) {
-  const slots = scene.beats?.flatMap((beat) => beat.dialogue ?? []) ?? []
-  const texts = slots.flatMap((slot) =>
-    (slot.variants ?? []).map((variant) => ({
-      policy:
-        slot.policy === 'locked'
-          ? 'locked'
-          : (variant.text.lifecycle?.policy ?? slot.policy ?? 'edited'),
-      review: variant.text.lifecycle?.review ?? 'draft',
-      freshness: variant.text.lifecycle?.freshness ?? 'current',
-    })),
-  )
-  if (!texts.length) return <span>No text status</span>
-  const policies = [...new Set(texts.map((text) => text.policy))].join(', ')
-  const draft = texts.filter((text) => text.review === 'draft').length
-  const stale = texts.filter((text) => text.freshness === 'out_of_date').length
+function SceneStatus({ row }: { row: LibrarySceneRow }) {
+  const { generated, edited, locked, needsReview, outOfDate } = row.counts
+  const total = generated + edited + locked
   return (
     <span>
-      {policies}
+      {generated} generated · {edited} edited · {locked} locked
       <br />
-      {draft} draft · {texts.length - draft} approved
+      {needsReview} draft · {total - needsReview} approved
       <br />
-      {stale} out of date
+      {outOfDate} out of date
     </span>
   )
+}
+
+export function NarrativeLibrary(props: Parameters<typeof LibrarySession>[0]) {
+  return <LibrarySession key={props.projectKey} {...props} />
 }

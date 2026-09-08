@@ -1,0 +1,24 @@
+{
+  "catalog_ms": 2484.469662,
+  "cold_open_ms": 6852.608703,
+  "fixture_ms": 4372.388065,
+  "project": "/tmp/wobu-narrative-scale-baseline/narrative-scale.wobu",
+  "scene_source_bytes": 22406000,
+  "scenes": 1000,
+  "scope": "Real filesystem/store baseline; no IPC, webview or approval claim",
+  "selected_get_ms": [
+    2470.0985969999997, 2454.633676, 2464.756664, 2467.528585, 2556.423612, 2583.25028, 2611.274993,
+    2588.2043160000003
+  ],
+  "selected_scene": "00000000000000000000000732",
+  "slots": 50000,
+  "build_profile": "dev (unoptimized)",
+  "baseline_commit": "2b31ac19601335eced4e453baf32106a2e9ce555",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "logical_cpus": 24,
+  "cpu_model": "AMD Ryzen 9 5900X 12-Core Processor",
+  "memory_kib": 32770716,
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "selected_get_samples": 8,
+  "selected_get_median_ms": 2513.2611045
+}

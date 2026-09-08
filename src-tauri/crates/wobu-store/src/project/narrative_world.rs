@@ -22,9 +22,7 @@ impl Project {
         // revision being replaced. Missing, malformed or concurrently changed
         // source cannot provide deletion evidence.
         let removed = self
-            .world_document()
-            .ok()
-            .flatten()
+            .world_document()?
             .filter(|(_, stamp)| expected == Some(stamp))
             .map(|(previous, _)| {
                 previous

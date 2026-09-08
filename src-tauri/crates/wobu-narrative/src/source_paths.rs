@@ -164,6 +164,7 @@ impl Scene {
                 child(&child(&path, "to"), "beat")
             }
             Problem::UnknownScene { .. } => child(&child(&path, "to"), "scene"),
+            Problem::UnresolvedDestination => child(&path, "to"),
             Problem::MissingText => child(&path, "variants"),
             Problem::RevisionMismatch { .. } => child(&child(&path, "text"), "revision"),
             Problem::NotAParticipant { .. }
@@ -258,4 +259,46 @@ fn operand_path(value: &Operand, path: Vec<SourcePathPart>) -> Vec<SourcePathPar
             Operand::Literal(_) => "literal",
         },
     )
+}
+
+impl Scene {
+    /// Organization references are authoring diagnostics, never runtime edges.
+    pub fn classification_diagnostics(
+        &self,
+        world: &crate::WorldDocument,
+    ) -> Vec<(Diagnostic, Vec<SourcePathPart>)> {
+        let mut out = Vec::new();
+        for (field, id, records) in
+            [("act_id", self.act_id, &world.acts), ("arc_id", self.arc_id, &world.arcs)]
+        {
+            if let Some(id) = id
+                && !records.iter().any(|record| record.id == id)
+            {
+                out.push((
+                    Diagnostic {
+                        site: Site::Scene,
+                        problem: Problem::UnknownClassification { field, id },
+                    },
+                    vec!["scene".into(), field.into()],
+                ));
+            }
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for (index, id) in self.tag_ids.iter().copied().enumerate() {
+            let problem = if !seen.insert(id) {
+                Some(Problem::DuplicateId { noun: "tag reference", id: id.to_string() })
+            } else if !world.tags.iter().any(|record| record.id == id) {
+                Some(Problem::UnknownClassification { field: "tag_ids", id })
+            } else {
+                None
+            };
+            if let Some(problem) = problem {
+                out.push((
+                    Diagnostic { site: Site::Scene, problem },
+                    vec!["scene".into(), "tag_ids".into(), index.into()],
+                ));
+            }
+        }
+        out
+    }
 }

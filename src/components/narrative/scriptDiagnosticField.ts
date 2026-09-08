@@ -1,14 +1,19 @@
-import type { NarrativeDiagnostic } from '../../lib/api'
+import type { NarrativeTarget } from '../../store/ui'
 
-/** Stable element IDs are used for navigation; diagnostics never parse display text. */
-export function diagnosticField(diagnostic: NarrativeDiagnostic): string {
-  if (diagnostic.choiceId)
-    return `choice:${diagnostic.choiceId}:${diagnostic.destination ? 'destination' : 'condition'}`
-  if (diagnostic.outcomeId)
-    return `outcome:${diagnostic.outcomeId}:${diagnostic.destination ? 'destination' : 'condition'}`
-  if (diagnostic.variantId) return `variant:${diagnostic.variantId}`
-  if (diagnostic.slotId) return `slot:${diagnostic.slotId}`
-  if (diagnostic.kind === 'entry') return 'scene:entry'
-  if (diagnostic.kind === 'participant') return 'scene:participants'
-  return diagnostic.beatId ? `beat:${diagnostic.beatId}` : 'scene:name'
+/** Existing form markers use stable IDs; never interpolate them into a CSS selector. */
+export function narrativeField(target: NarrativeTarget): string {
+  const route = target.choiceId
+    ? `choice:${target.choiceId}`
+    : target.outcomeId
+      ? `outcome:${target.outcomeId}`
+      : null
+  if (route) return `${route}:${target.field ?? 'condition'}`
+  if (target.variantId) return `variant:${target.variantId}`
+  if (target.lineId) return `slot:${target.lineId}`
+  if (
+    target.field &&
+    ['entry', 'participants', 'name', 'act', 'arc', 'tags'].includes(target.field)
+  )
+    return `scene:${target.field}`
+  return target.beatId ? `beat:${target.beatId}` : 'scene:name'
 }

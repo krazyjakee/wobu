@@ -1,8 +1,12 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
+import { useSceneEditSession } from './useSceneEditSession'
+import { SceneEditControls } from './SceneEditControls'
+import { applySceneEdit, type SceneEditOperation } from './sceneEdits'
+import { canonicalFlowActions, flowNodeForTarget } from './flow/canonicalFlow'
+import { FlowElementEditor } from './flow/FlowElementEditor'
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { LayoutNotice, NarrativeDiagnostic, SceneFile } from '../../lib/api'
 import {
   useDiagnoseScene,
-  useSaveScene,
   useScene,
   useSceneDiagnostics,
   useSceneFiles,
@@ -26,7 +30,6 @@ import type { FlowElement, FlowKind, FlowPort, FlowPositions } from './flow/mode
 import {
   flowAuthoring,
   layoutWithPositions,
-  patchScene,
   positionsFromLayout,
   sceneToFlow,
   NEW_OUTCOME_PORT,
@@ -36,40 +39,9 @@ import {
 const EMPTY: NarrativeDiagnostic[] = []
 
 /**
- * The Flow tab, drawing the project's own scenes.
- *
- * This is the component that joins the canvas to the backend, and everything
- * load-bearing about it is a decision about *who owns the document*.
- *
- * ── the save is a patch, never a rebuild ─────────────────────────────────────
- *
- * The canvas hands back a `FlowLevel`, which has no dialogue in it. So this
- * component never turns one into a `Scene`. It hands the level and the document
- * it was drawn from to `patchScene`, which clones the document and applies only
- * the operations the canvas can express. Every line of dialogue in the project
- * depends on that distinction; `flow/source.test.ts` is where it is proved.
- *
- * ── one edit, one save, one undo entry ───────────────────────────────────────
- *
- * There is no local history and no "unsaved changes". A structural edit is
- * patched and saved immediately through `useSaveScene`, which is the workspace's
- * single choke point for a narrative write: it carries the guarded-write
- * precondition off the loaded file, pushes the undo entry, refreshes the cache
- * with the document the backend actually wrote, and turns a lost race into the
- * existing `write.conflict` card. None of that is reimplemented here, and the
- * canvas draws the *saved* document — so a refused save leaves the canvas
- * showing the truth rather than an edit that never landed.
- *
- * ── layout is a different file and cannot fail ───────────────────────────────
- *
- * Coordinates go through `useSaveLayout` to `narrative/layout/`, on their own
- * command, with no precondition and no undo entry. A failure there is a notice
- * above the canvas, never an error and never anything that can stop a source
- * save — the two share no state, so that holds because there is nothing to get
- * wrong rather than because the calls are ordered carefully.
- *
- * Quest membership comes from the World model. This pane only selects a quest
- * scope and edits cosmetic groups; source membership is authored in World.
+ * Project Flow renders the same complete scene draft as Script. Gestures become
+ * canonical reducer operations; only explicit Save commits source and records
+ * canonical undo. Arrangement autosave remains a separate cosmetic sidecar.
  */
 
 /** Stable legacy slug for the all-scenes arrangement; quests use EntityId. */
@@ -79,12 +51,6 @@ const PROJECT_ARC = 'project'
 const ARC_CREATABLE: readonly FlowKind[] = []
 
 /** What a source-backed scene allows, in the source model's own terms. */
-const SCENE_AUTHORING = {
-  destinationRequired: flowAuthoring.destinationRequired,
-  fixedPort: flowAuthoring.fixedPort,
-  derived: flowAuthoring.derived,
-} as const
-
 /** What a source-backed arc allows, which is looking and going in. */
 const ARC_AUTHORING = { refuse: flowAuthoring.arcReadOnly } as const
 
@@ -95,16 +61,19 @@ function beatSpare(element: FlowElement): FlowPort | null {
 }
 
 export function NarrativeProjectFlow({
+  projectKey = '',
+  active = true,
   readOnly,
   layout,
 }: {
   readOnly: boolean
+  projectKey?: string
+  active?: boolean
   /** Swapped for a synchronous fake in tests; the real one starts a worker. */
   layout?: LayoutRunner
 }) {
   const catalog = useScenes()
   const ids = useMemo(() => (catalog.data?.scenes ?? []).map((one) => one.id), [catalog.data])
-  const files = useSceneFiles(ids)
   const selectNarrative = useUI((s) => s.selectNarrative)
   const reveal = useUI((s) => s.narrativeReveal)
 
@@ -135,7 +104,11 @@ export function NarrativeProjectFlow({
   // left on the arc having clicked a scene.
   if (reveal !== null && reveal.seq !== honoured && catalog.isSuccess) {
     setHonoured(reveal.seq)
-    if (reveal.origin === 'library' && reveal.sceneId !== null && ids.includes(reveal.sceneId)) {
+    if (
+      (reveal.projectKey === null || reveal.projectKey === projectKey) &&
+      reveal.sceneId !== null &&
+      ids.includes(reveal.sceneId)
+    ) {
       setEntered(reveal.sceneId)
     }
   }
@@ -205,6 +178,7 @@ export function NarrativeProjectFlow({
       <SceneLevel
         key={entered}
         sceneId={entered}
+        projectKey={projectKey}
         readOnly={readOnly}
         layout={layout}
         onLeave={leave}
@@ -212,22 +186,14 @@ export function NarrativeProjectFlow({
     )
   }
 
-  return (
-    <ArcLevel
-      files={files}
-      loading={files.some((one) => one.isPending)}
-      readOnly={readOnly}
-      layout={layout}
-      onEnter={enter}
-    />
-  )
+  return <ArcLevel ids={ids} active={active} readOnly={readOnly} layout={layout} onEnter={enter} />
 }
 
 /* ── the arc ──────────────────────────────────────────────────────────────── */
 
 function ArcLevel(props: {
-  files: { data?: SceneFile }[]
-  loading: boolean
+  ids: string[]
+  active: boolean
   readOnly: boolean
   layout?: LayoutRunner
   onEnter: (sceneId: string, beatId?: string | null) => void
@@ -241,6 +207,7 @@ function ArcLevel(props: {
         Flow scope{' '}
         <select
           aria-label="Flow scope"
+          disabled={world.isPending}
           value={quest?.id ?? ''}
           onChange={(event) => setQuestId(event.target.value)}
         >
@@ -257,8 +224,77 @@ function ArcLevel(props: {
           Quest scopes could not be loaded; the project arrangement is still available.
         </p>
       )}
-      <ArcArrangement key={quest?.id ?? 'project'} {...props} quest={quest} />
+      <ArcPage key={quest?.id ?? 'project'} {...props} quest={quest} />
     </div>
+  )
+}
+
+/** Load complete source only for the displayed arc page, never a hidden scene editor. */
+const ARC_PAGE_SIZE = 50
+function ArcPage({
+  ids,
+  active,
+  quest,
+  ...props
+}: {
+  ids: string[]
+  active: boolean
+  quest?: Quest
+  readOnly: boolean
+  layout?: LayoutRunner
+  onEnter: (sceneId: string, beatId?: string | null) => void
+}) {
+  const [page, setPage] = useState(0)
+  const scoped = useMemo(
+    () => (quest ? ids.filter((id) => quest.scene_ids.includes(id)) : ids),
+    [ids, quest],
+  )
+  const last = Math.max(0, Math.ceil(scoped.length / ARC_PAGE_SIZE) - 1)
+  const current = Math.min(page, last)
+  const visible = useMemo(
+    () => scoped.slice(current * ARC_PAGE_SIZE, (current + 1) * ARC_PAGE_SIZE),
+    [scoped, current],
+  )
+  const files = useSceneFiles(visible, active)
+  return (
+    <>
+      {scoped.length > ARC_PAGE_SIZE && (
+        <nav className="nrt-crumbs" aria-label="Flow scene pages">
+          <button
+            type="button"
+            className="btn"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+          >
+            Previous scenes
+          </button>
+          <span role="status">
+            Scenes {current * ARC_PAGE_SIZE + 1}–
+            {Math.min((current + 1) * ARC_PAGE_SIZE, scoped.length)} of {scoped.length}. Connections
+            outside this page are not shown; narrow Flow scope or use the Library to open any scene.
+          </span>
+          <button
+            type="button"
+            className="btn"
+            disabled={current === last}
+            onClick={() => setPage(current + 1)}
+          >
+            Next scenes
+          </button>
+        </nav>
+      )}
+      {files.some((one) => one.isError) && (
+        <p role="alert" className="nrt-note inline-error">
+          Some scenes on this page could not be read. Open the Library to inspect their source.
+        </p>
+      )}
+      <ArcArrangement
+        {...props}
+        quest={quest}
+        files={files}
+        loading={files.some((one) => one.isPending)}
+      />
+    </>
   )
 }
 
@@ -402,106 +438,113 @@ function ArcArrangement({
 
 /* ── one scene ────────────────────────────────────────────────────────────── */
 
-function SceneLevel({
-  sceneId,
-  readOnly,
-  layout,
-  onLeave,
-}: {
+interface SceneLevelProps {
   sceneId: string
+  projectKey: string
   readOnly: boolean
   layout?: LayoutRunner
   onLeave: () => void
-}) {
-  const file = useScene(sceneId)
+}
+function SceneLevel(props: SceneLevelProps) {
+  const file = useScene(props.sceneId)
+  if (file.isPending) return <NarrativeFlowPane source={{ kind: 'loading' }} />
+  if (file.isError)
+    return <NarrativeFlowPane source={{ kind: 'error', message: String(file.error) }} />
+  return <SceneSourceEditor {...props} file={file.data} />
+}
+function SceneSourceEditor({
+  file,
+  sceneId,
+  projectKey,
+  readOnly,
+  layout,
+  onLeave,
+}: SceneLevelProps & { file: SceneFile }) {
+  const session = useSceneEditSession(file, projectKey, readOnly)
+  const scene = session.scene
   const graph = useMemo(() => ({ kind: 'scene' as const, scene: sceneId }), [sceneId])
   const { stored, outcome, presentation } = useFlowPresentation(graph)
   const saved = useSceneDiagnostics(sceneId)
   const diagnose = useDiagnoseScene()
-  const save = useSaveScene()
+  const diagnoseScene = diagnose.mutate
+  useEffect(() => {
+    if (session.dirty) diagnoseScene({ sceneId, scene })
+  }, [scene, sceneId, session.dirty, diagnoseScene])
+  const diagnostics = session.dirty
+    ? diagnose.variables?.scene === scene
+      ? (diagnose.data ?? EMPTY)
+      : EMPTY
+    : (saved.data ?? EMPTY)
   const { nameOf, sceneName } = useNarrativeNames()
-
-  /*
-   * Which answer describes what is on screen.
-   *
-   * `useSceneDiagnostics` reads the *saved* scene, which is normally the same
-   * document — every edit here is saved as it is made. The mutation covers the
-   * gap: it is run against the patched document at the moment of the edit, so
-   * badges follow the writer's hand rather than the round trip. Whichever ran
-   * more recently wins, which is the only comparison that cannot go stale in
-   * either direction.
-   */
-  const savedDiagnostics = saved.data
-  const savedAt = saved.dataUpdatedAt
-  const pending = diagnose.data
-  const pendingAt = diagnose.submittedAt
-  const diagnostics: NarrativeDiagnostic[] = useMemo(
+  const attached = useMemo(
     () =>
-      pending !== undefined && pendingAt > (savedAt || 0) ? pending : (savedDiagnostics ?? EMPTY),
-    [pending, pendingAt, savedDiagnostics, savedAt],
+      attachDiagnostics(
+        sceneToFlow(scene, {
+          layout: presentation?.layout ?? null,
+          nameOf,
+          sceneName,
+        }),
+        diagnostics,
+      ),
+    [scene, presentation?.layout, nameOf, sceneName, diagnostics],
   )
-
-  const attached = useMemo(() => {
-    if (!file.data) return null
-    const level = sceneToFlow(file.data.scene, {
-      layout: presentation?.layout ?? null,
-      nameOf,
-      sceneName,
-    })
-    return attachDiagnostics(level, diagnostics)
-  }, [file.data, presentation?.layout, nameOf, sceneName, diagnostics])
-
   const positions = useMemo(
     () => positionsFromLayout(presentation?.layout, 'scene'),
     [presentation?.layout],
   )
-
   const onPositions = useCallback(
     (next: FlowPositions) => {
-      const base = presentation?.layout
-      if (!base) return
-      // Fire and forget, deliberately. `useSaveLayout` cannot reject and
-      // records nothing; a refused arrangement comes back as an outcome shown
-      // in `LayoutNotices`, never as a toast and never as a failed save.
-      presentation?.onChange(layoutWithPositions(base, next, 'scene'))
+      if (presentation)
+        presentation.onChange(layoutWithPositions(presentation.layout, next, 'scene'))
     },
     [presentation],
   )
-
-  const onEdit = useCallback(
-    (next: Parameters<NonNullable<Parameters<typeof NarrativeFlowPane>[0]['onEdit']>>[0]) => {
-      const loaded = file.data
-      if (!loaded) return
-      const patch = patchScene(loaded.scene, next)
-      // A gesture the source model cannot express changed nothing, and saving a
-      // document identical to the one on disk would put a meaningless entry on
-      // the undo stack. `useSceneEdits` has already said why it refused.
-      if (patch.unchanged) return
-      save.mutate({ file: loaded, scene: patch.scene })
-      // Diagnostics for the document that is about to be written, so a badge
-      // does not lag a round trip behind the canvas.
-      diagnose.mutate({ sceneId, scene: patch.scene })
-      const created = patch.created[0]
-      if (created) useFlowStore.getState().select(created)
-    },
-    [diagnose, file.data, save, sceneId],
+  const dispatch = (operation: SceneEditOperation, focus = false) => {
+    if (session.disabled) {
+      useFlowStore.getState().announce('Scene editing is currently unavailable.')
+      return false
+    }
+    const result = applySceneEdit(scene, operation)
+    if ('refused' in result) {
+      useFlowStore.getState().announce(result.refused)
+      return false
+    }
+    if (!result.changed) return true
+    if (!session.edit(result.scene)) return false
+    const removed = result.removed
+      .map(
+        (target) =>
+          target.variantId ?? target.lineId ?? target.choiceId ?? target.outcomeId ?? target.beatId,
+      )
+      .filter((id): id is string => !!id)
+    if (removed.length) useUI.getState().forgetNarrative(removed)
+    if (focus || result.created.length || result.removed.length) {
+      useUI.getState().selectNarrative(result.target, 'flow', { projectKey, focus: true })
+      useFlowStore.getState().select(flowNodeForTarget(result.target))
+    }
+    if (operation.kind === 'removeBeat')
+      useFlowStore
+        .getState()
+        .announce(
+          'Beat deleted. Incoming routes retain the deleted destination and its diagnostic.',
+        )
+    else if (operation.kind === 'removeRoute')
+      useFlowStore.getState().announce('Route deleted. Its beat and dialogue are kept.')
+    else if (result.created.length)
+      useFlowStore.getState().announce('Added to the shared scene draft. Save scene to write it.')
+    return true
+  }
+  const actions = canonicalFlowActions(
+    scene,
+    (operation) => dispatch(operation, true),
+    (message) => useFlowStore.getState().announce(message),
+    { projectKey, disabled: session.disabled },
   )
-
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     event.preventDefault()
     onLeave()
   }
-
-  const source =
-    file.isPending || stored.isPending
-      ? ({ kind: 'loading' } as const)
-      : file.isError
-        ? ({ kind: 'error', message: String(file.error) } as const)
-        : attached
-          ? ({ kind: 'ready', scene: attached.level } as const)
-          : ({ kind: 'loading' } as const)
-
   return (
     <div className="nrt-levels" onKeyDown={onKeyDown}>
       <nav className="nrt-crumbs" aria-label="Flow level">
@@ -511,49 +554,47 @@ function SceneLevel({
         </button>
         <span aria-hidden>/</span>
         <span className="chip is-on" aria-current="true">
-          <Icon name="place" size="sm" />
-          {file.data?.scene.name ?? sceneId}
+          {scene.name}
         </span>
-        <span className="nrt-note-inline">Escape returns to the arc.</span>
       </nav>
-
-      <NarrativeFlowPane
-        source={source}
-        readOnly={readOnly}
-        layout={layout}
-        onEdit={readOnly ? undefined : onEdit}
-        positions={positions}
-        presentation={presentation}
-        onPositionsChange={onPositions}
-        authoring={SCENE_AUTHORING}
-        creatable={SCENE_CREATABLE}
-        spare={beatSpare}
-        notes={
-          <>
-            <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
-            <SceneWideProblems found={attached?.sceneWide ?? []} />
-            <p className="nrt-note" role="note">
-              <Icon name="lock" size="sm" />
-              {NARRATIVE_UNAVAILABLE.witness} {NARRATIVE_UNAVAILABLE.affectedScope}
-            </p>
-          </>
-        }
-      />
+      <SceneEditControls session={session} />
+      <div className="nrt-source-flow-body">
+        <NarrativeFlowPane
+          source={stored.isPending ? { kind: 'loading' } : { kind: 'ready', scene: attached.level }}
+          readOnly={readOnly}
+          layout={layout}
+          onEdit={() => {
+            /* Canonical actions own source edits; display models never write. */
+          }}
+          actions={actions}
+          authoring={{ fixedPort: flowAuthoring.fixedPort }}
+          positions={positions}
+          presentation={presentation}
+          onPositionsChange={onPositions}
+          creatable={SCENE_CREATABLE}
+          spare={beatSpare}
+          notes={
+            <>
+              <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
+              <SceneWideProblems found={attached.sceneWide} />
+              <p className="nrt-note" role="note">
+                {NARRATIVE_UNAVAILABLE.witness} {NARRATIVE_UNAVAILABLE.affectedScope}
+              </p>
+            </>
+          }
+        />
+        <FlowElementEditor
+          diagnostics={diagnostics}
+          scene={scene}
+          projectKey={projectKey}
+          disabled={session.disabled}
+          onEditOperation={(operation) => dispatch(operation)}
+        />
+      </div>
     </div>
   )
 }
-
-/**
- * The only kind a source-backed scene canvas offers to create.
- *
- * A `Choice` and an `Outcome` live inside a beat and both need a destination
- * the moment they exist — `Destination` has no "nowhere" — so an Add button for
- * either would have to invent an ending nobody chose. They are authored instead
- * by connecting from a beat's spare handle, where the gesture supplies the
- * destination. A `Condition` is not an element of the source model at all: a
- * condition is a field on a choice or an outcome.
- */
-const SCENE_CREATABLE: readonly FlowKind[] = ['beat']
+const SCENE_CREATABLE: readonly FlowKind[] = ['beat', 'choice', 'condition', 'outcome', 'end']
 
 /** Problems that belong to the scene rather than to any box on the canvas. */
 function SceneWideProblems({ found }: { found: { id: string; message: string }[] }) {

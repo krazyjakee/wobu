@@ -62,12 +62,14 @@ pub use scene::{
     Beat, Choice, Destination, DestinationSite, DialogueSlot, EntityId, Intent, Outcome,
     Participant, Scene, Speaker, Text, Tombstone, TombstoneTarget, Variant,
 };
-pub use source::{SOURCE_SCHEMA_VERSION, SceneDocument, StateDocument};
+pub use source::{
+    SCENE_SCHEMA_VERSION, SOURCE_SCHEMA_VERSION, SceneDocument, StateDocument, WORLD_SCHEMA_VERSION,
+};
 pub use state::{Name, Owner, StateSchema, Value, VarType, VariableDecl};
 
 pub use world::{
-    Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, Quest, QuestTransition,
-    Relationship, WorldDiagnostic, WorldDocument, WorldEvent,
+    Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, NamedClassification,
+    Quest, QuestTransition, Relationship, WorldDiagnostic, WorldDocument, WorldEvent,
 };
 
 mod source_paths;

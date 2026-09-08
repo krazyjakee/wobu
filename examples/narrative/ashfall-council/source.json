@@ -1,0 +1,227 @@
+{
+  "scene": {
+    "id": "00000000000000000000000001",
+    "name": "Ashfall council hearing",
+    "summary": "Kael brings a disputed logbook to the council at Cinder Bay. Three approaches reconverge on the council response. Register ashfall_file_record in Preview to simulate the clerk.",
+    "beats": [
+      {
+        "id": "00000000000000000000000002",
+        "title": "Present evidence",
+        "intents": [
+          {
+            "subject": "player",
+            "intent": "Secure an investigation while preserving the council\u2019s trust."
+          }
+        ],
+        "dialogue": [
+          {
+            "id": "00000000000000000000000003",
+            "speaker": "player",
+            "policy": "edited",
+            "variants": [
+              {
+                "id": "00000000000000000000000004",
+                "text": {
+                  "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "body": "I brought the logbook. Let the council judge the evidence.",
+                  "lifecycle": {
+                    "policy": "edited",
+                    "review": "draft",
+                    "freshness": "current"
+                  },
+                  "provenance": "human"
+                }
+              }
+            ]
+          }
+        ],
+        "choices": [
+          {
+            "id": "00000000000000000000000005",
+            "label": "Present the logbook",
+            "to": {
+              "beat": "00000000000000000000000010"
+            },
+            "effects": [
+              {
+                "add": {
+                  "var": "ashfall_trust",
+                  "by": 10
+                }
+              },
+              {
+                "command": {
+                  "name": "ashfall_file_record",
+                  "args": []
+                }
+              }
+            ],
+            "requires": {
+              "all": [
+                {
+                  "compare": {
+                    "var": "ashfall_knows_logbook",
+                    "op": "eq",
+                    "value": {
+                      "literal": true
+                    }
+                  }
+                },
+                {
+                  "compare": {
+                    "var": "ashfall_trust",
+                    "op": "ge",
+                    "value": {
+                      "literal": 40
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "00000000000000000000000006",
+            "label": "Ask for a fair hearing",
+            "to": {
+              "beat": "00000000000000000000000010"
+            },
+            "effects": [
+              {
+                "add": {
+                  "var": "ashfall_trust",
+                  "by": 5
+                }
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000007",
+            "label": "Challenge the council\u2019s silence",
+            "to": {
+              "beat": "00000000000000000000000010"
+            },
+            "effects": [
+              {
+                "add": {
+                  "var": "ashfall_trust",
+                  "by": -10
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "00000000000000000000000010",
+        "title": "Council response",
+        "dialogue": [
+          {
+            "id": "00000000000000000000000011",
+            "speaker": "narrator",
+            "policy": "edited",
+            "variants": [
+              {
+                "id": "00000000000000000000000012",
+                "text": {
+                  "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "body": "The council accepts the record. An investigation will begin.",
+                  "lifecycle": {
+                    "policy": "edited",
+                    "review": "draft",
+                    "freshness": "current"
+                  },
+                  "provenance": "human"
+                },
+                "when": {
+                  "compare": {
+                    "var": "ashfall_record_filed",
+                    "op": "eq",
+                    "value": {
+                      "literal": true
+                    }
+                  }
+                }
+              },
+              {
+                "id": "00000000000000000000000013",
+                "text": {
+                  "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "body": "The clerk asks to see the logbook before the council will act.",
+                  "lifecycle": {
+                    "policy": "edited",
+                    "review": "draft",
+                    "freshness": "current"
+                  },
+                  "provenance": "human"
+                },
+                "when": {
+                  "compare": {
+                    "var": "ashfall_knows_logbook",
+                    "op": "eq",
+                    "value": {
+                      "literal": true
+                    }
+                  }
+                }
+              },
+              {
+                "id": "00000000000000000000000014",
+                "text": {
+                  "revision": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "body": "The council asks Kael to find a witness who can establish what happened.",
+                  "lifecycle": {
+                    "policy": "edited",
+                    "review": "draft",
+                    "freshness": "current"
+                  },
+                  "provenance": "human"
+                }
+              }
+            ]
+          }
+        ],
+        "outcomes": [
+          {
+            "id": "00000000000000000000000015",
+            "to": {
+              "end": {
+                "label": "Hearing complete"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "state": {
+    "schema_version": 1,
+    "variables": [
+      {
+        "name": "ashfall_trust",
+        "type": {
+          "int": {
+            "min": 0,
+            "max": 100
+          }
+        },
+        "default": 40,
+        "owner": "narrative",
+        "description": "Council support. Try 20 and 40 in Preview."
+      },
+      {
+        "name": "ashfall_knows_logbook",
+        "type": "bool",
+        "default": true,
+        "owner": "host",
+        "description": "Whether Kael has learned what the logbook contains."
+      },
+      {
+        "name": "ashfall_record_filed",
+        "type": "bool",
+        "default": false,
+        "owner": "host",
+        "description": "Clerk confirmation returned by ashfall_file_record."
+      }
+    ]
+  }
+}

@@ -25,7 +25,8 @@ pub fn write(
 ) -> Result<SourceSave> {
     let path = super::registry::safe_path(root, WORLD_FILE)?;
     let yaml = document
-        .to_yaml()
+        .for_save()
+        .and_then(|document| document.to_yaml())
         .map_err(|error| Error::Malformed { path: path.clone(), reason: error.to_string() })?;
     match atomic::guarded_write(root, &path, &yaml, expected, peer)? {
         WriteOutcome::Written(stamp) => Ok(SourceSave::Saved(stamp)),

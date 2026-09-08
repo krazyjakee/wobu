@@ -223,3 +223,18 @@ it('blocks saves that would round a large integer inside an existing world condi
     screen.getByRole('button', { name: /outside the editor’s exact integer range/ }),
   ).toBeInTheDocument()
 })
+
+it('authors and renames optional classifications while keeping their stable identity', async () => {
+  mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Acts' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add record' }))
+  fireEvent.change(screen.getByLabelText('Record name'), { target: { value: 'Arrival' } })
+  expect(h.invoke.mock.calls.some(([cmd]) => cmd === 'narrative_world_save')).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Save world' }))
+  await waitFor(() => expect(saved.document.acts?.[0]?.name).toBe('Arrival'))
+  const identity = saved.document.acts![0]!.id
+  fireEvent.change(screen.getByLabelText('Record name'), { target: { value: 'Return' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save world' }))
+  await waitFor(() => expect(saved.document.acts?.[0]).toEqual({ id: identity, name: 'Return' }))
+  expect(saved.document.facts).toEqual(base.facts)
+})

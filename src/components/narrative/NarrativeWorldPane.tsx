@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { assertProjectSession, projectSessionEpoch } from '../../lib/projectSession'
+import { useUI } from '../../store/ui'
+import { worldRecordEntities } from './narrativeBacklinkModel'
+import { useEffect, useRef, useState } from 'react'
 import type { WorldFile, WorldDocument } from '../../lib/api/narrativeWorld'
 import { errorMessage } from '../../lib/api'
 import { useNodes, useNarrativeState, useScenes } from '../../lib/queries'
@@ -16,14 +19,17 @@ import { WorldFields } from './WorldFields'
 import { NarrativeVariables } from './NarrativeVariables'
 import './world.css'
 
-export function NarrativeWorldPane({
-  projectKey,
-  readOnly,
-}: {
-  projectKey: string
-  readOnly: boolean
-}) {
-  const [section, setSection] = useState<WorldCollection | 'variables'>('facts')
+export function NarrativeWorldPane(props: { projectKey: string; readOnly: boolean }) {
+  const requested = useUI((state) => state.narrativeWorldTarget)
+  const sequence = requested?.projectKey === props.projectKey ? requested.seq : 0
+  return <WorldPaneSession key={`${props.projectKey}:${sequence}`} {...props} />
+}
+function WorldPaneSession({ projectKey, readOnly }: { projectKey: string; readOnly: boolean }) {
+  const requested = useUI((state) => state.narrativeWorldTarget)
+  const target = requested?.projectKey === projectKey ? requested : null
+  const [section, setSection] = useState<WorldCollection | 'variables'>(
+    target?.collection ?? 'facts',
+  )
   const query = useNarrativeWorld()
   return (
     <main className="nrt-world" aria-label="Narrative world state">
@@ -81,7 +87,11 @@ function WorldEditor({
 }) {
   const draft = useWorldDrafts((s) => s.world[projectKey])
   const document = draft?.document ?? file.document
-  const [selection, setSelection] = useState<string | null>(null)
+  const requested = useUI((state) => state.narrativeWorldTarget)
+  const target = requested?.projectKey === projectKey ? requested : null
+  const [selection, setSelection] = useState<string | null>(target?.recordId ?? null)
+  const detail = useRef<HTMLElement>(null)
+  const revealed = useRef<number | null>(null)
   const [filter, setFilter] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [message, setMessage] = useState('')
@@ -90,9 +100,19 @@ function WorldEditor({
   const scenes = useScenes()
   const variables = useNarrativeState()
   const required = requiredWorldFields(document)
-  const items = document[collection]
+  const items = document[collection] ?? []
   const item = items.find((one) => one.id === selection) ?? items[0]
+  const missingTarget =
+    target?.collection === collection && !items.some((record) => record.id === target.recordId)
   const users = item ? recordUsers(document, item.id) : []
+  useEffect(() => {
+    if (target && target.collection === collection && target.seq !== revealed.current) {
+      const field = detail.current?.querySelector<HTMLInputElement>('input')
+      if (field && !field.matches(':disabled')) field.focus()
+      else detail.current?.focus()
+      revealed.current = target.seq
+    }
+  }, [target, item?.id, collection])
   const disabled = readOnly || save.isPending
   const update = (next: WorldDocument) => {
     if (disabled) return
@@ -103,9 +123,11 @@ function WorldEditor({
   const replace = (next: WorldItem) =>
     update({ ...document, [collection]: items.map((one) => (one.id === next.id ? next : one)) })
   const submit = async () => {
+    const epoch = projectSessionEpoch()
     if (!draft || disabled || required.length) return
     try {
       await save.mutateAsync({ file: draft.file, document: draft.document })
+      assertProjectSession(epoch)
       if (useWorldDrafts.getState().world[projectKey] === draft)
         useWorldDrafts.getState().putWorld(projectKey, null)
       setMessage('World saved. Changes can be undone.')
@@ -142,7 +164,9 @@ function WorldEditor({
           Discard world changes
         </button>
         <span role="status">
-          {message ||
+          {(missingTarget &&
+            'The requested record no longer exists. Showing the first available record in this category.') ||
+            message ||
             (draft ? 'Unsaved world draft — kept when changing views.' : 'Saved world records')}
         </span>
       </div>
@@ -206,7 +230,12 @@ function WorldEditor({
             ))}
           {!items.length && <p>No records yet.</p>}
         </section>
-        <section className="nrt-world-detail" aria-label="Selected world record">
+        <section
+          ref={detail}
+          tabIndex={-1}
+          className="nrt-world-detail"
+          aria-label="Selected world record"
+        >
           {item ? (
             <>
               <fieldset disabled={disabled}>
@@ -223,6 +252,22 @@ function WorldEditor({
                   onChange={replace}
                 />
               </fieldset>
+              {worldRecordEntities(item).length > 0 && (
+                <nav aria-label="Related entities">
+                  {worldRecordEntities(item).map((id) => (
+                    <button
+                      className="btn"
+                      key={id}
+                      disabled={!nodes.data?.some((node) => node.id === id)}
+                      onClick={() => {
+                        useUI.getState().openNarrativeEntity(projectKey, id)
+                      }}
+                    >
+                      {nodes.data?.find((node) => node.id === id)?.name ?? `Missing entity: ${id}`}
+                    </button>
+                  ))}
+                </nav>
+              )}
               {users.length > 0 && (
                 <section>
                   <h3>Used by</h3>

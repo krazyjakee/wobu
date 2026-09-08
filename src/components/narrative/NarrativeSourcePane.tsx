@@ -1,6 +1,12 @@
+import {
+  assertProjectSession,
+  isProjectSession,
+  projectSessionEpoch,
+} from '../../lib/projectSession'
+import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { errorCode, errorMessage } from '../../lib/api'
+import { errorCode, errorMessage, type ProjectSummary } from '../../lib/api'
 import { setNarrativeDraftGuard } from '../../lib/narrativeDraftGuard'
 import {
   narrativeSourceCheck,
@@ -74,6 +80,8 @@ function SourceEditor({
 }) {
   const qc = useQueryClient()
   const sceneId = initial.sceneId
+  const authoringKey = sceneEditKey(projectKey, sceneId ?? target)
+  const authoringDraft = useScriptDrafts((state) => state.drafts[authoringKey])
   const sourceKey = ['narrative_source', projectKey, target]
   const [draft, setDraft] = useState<Draft>(
     () =>
@@ -94,7 +102,12 @@ function SourceEditor({
   const [busy, setBusy] = useState(false)
   const [confirmReload, setConfirmReload] = useState(false)
   const editor = useRef<HTMLTextAreaElement>(null)
-  const save = useSaveScene()
+  const save = useSaveScene(projectKey)
+  const assertProject = (epoch: number) => {
+    assertProjectSession(epoch)
+    if (qc.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path !== projectKey)
+      throw new Error('The project changed. Your Source draft is kept in the original project.')
+  }
   const dirty = draft.yaml !== draft.base.yaml
   const guardKey = `${projectKey}:${target}:source`
   const latestDraft = useRef(draft)
@@ -115,13 +128,16 @@ function SourceEditor({
   }
 
   const run = async (action: 'validate' | 'format' | 'save') => {
+    const epoch = projectSessionEpoch()
     setBusy(true)
     setMessage('')
     try {
+      assertProject(epoch)
       const result = await narrativeSourceCheck(sceneId, draft.yaml)
       const stillCurrent = () =>
         latestDraft.current.revision === draft.revision &&
         qc.getQueryData<Draft>(draftKey(projectKey, target))?.revision === draft.revision
+      assertProject(epoch)
       if (!stillCurrent()) return
       setCheck(result)
       if (!result.scene || result.formatted === null) return
@@ -133,21 +149,21 @@ function SourceEditor({
         setCheck(result)
         setMessage('Formatted draft. Save to update the scene.')
       } else if (action === 'save') {
+        assertProject(epoch)
+        if (useScriptDrafts.getState().drafts[authoringKey])
+          throw new Error('Save or discard the shared scene draft before saving Source.')
         let base: NarrativeSource
         let recovery = ''
         if (draft.base.file) {
           const file = await save.mutateAsync({ file: draft.base.file, scene: result.scene })
-          base = {
-            file,
-            yaml: result.formatted,
-            rel: file.rel,
-            stamp: file.stamp!,
-            sceneId: file.scene.id,
-            problem: null,
-            repairBlocked: false,
-          }
+          assertProject(epoch)
+          // Typed saves may upgrade the source envelope. Read the actual bytes,
+          // including their canonical version, rather than claiming formatted input was saved.
+          base = await narrativeSourceOpen(file.rel)
+          assertProject(epoch)
         } else {
           const repaired = await narrativeSourceRepair(draft.base, draft.yaml)
+          assertProject(epoch)
           base = repaired.source
           recovery = repaired.recoveryRel
           if (base.file) qc.setQueryData(qk.narrativeScene(base.file.scene.id), base.file)
@@ -174,7 +190,12 @@ function SourceEditor({
         )
       }
     } catch (error) {
-      if (errorCode(error) === 'write.conflict') invalidateNarrative(qc)
+      if (
+        isProjectSession(epoch) &&
+        qc.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path === projectKey &&
+        errorCode(error) === 'write.conflict'
+      )
+        invalidateNarrative(qc)
       setMessage(errorMessage(error))
     } finally {
       setBusy(false)
@@ -182,13 +203,16 @@ function SourceEditor({
   }
 
   const reload = async () => {
+    const epoch = projectSessionEpoch()
     if (dirty && !confirmReload) {
       setConfirmReload(true)
       return
     }
     setBusy(true)
     try {
+      assertProject(epoch)
       const base = await narrativeSourceOpen(draft.base.rel)
+      assertProject(epoch)
       const latest = qc.getQueryData<Draft>(draftKey(projectKey, target))
       if (latest?.revision !== draft.revision || latestDraft.current.revision !== draft.revision)
         return
@@ -196,7 +220,12 @@ function SourceEditor({
       qc.setQueryData(sourceKey, base)
       setMessage('Loaded the latest saved scene.')
     } catch (error) {
-      if (errorCode(error) === 'write.conflict') invalidateNarrative(qc)
+      if (
+        isProjectSession(epoch) &&
+        qc.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path === projectKey &&
+        errorCode(error) === 'write.conflict'
+      )
+        invalidateNarrative(qc)
       setMessage(errorMessage(error))
     } finally {
       setBusy(false)
@@ -223,6 +252,9 @@ function SourceEditor({
 
   return (
     <section className="nrt-source" aria-label="Scene source editor">
+      {authoringDraft && (
+        <p role="status">Save or discard the shared scene draft before saving Source.</p>
+      )}
       <div className="nrt-source-toolbar">
         <code>{draft.base.rel}</code>
         <span>{dirty ? 'Unsaved draft' : 'Saved source'}</span>
@@ -240,7 +272,7 @@ function SourceEditor({
         <button
           className="btn is-primary"
           type="button"
-          disabled={busy || readOnly || draft.base.repairBlocked || !dirty}
+          disabled={busy || readOnly || !!authoringDraft || draft.base.repairBlocked || !dirty}
           onClick={() => void run('save')}
         >
           Save source

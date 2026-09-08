@@ -42,13 +42,45 @@ export type NarrativeFilter = 'needsText' | 'needsReview' | 'outOfDate'
  * path, so a beat from the previous scene can never survive under a new one.
  */
 export interface NarrativeSelection {
+  choiceId?: string | null
+  outcomeId?: string | null
+  variantId?: string | null
   sceneId: string | null
   beatId: string | null
   lineId: string | null
 }
 
 /** Which surface asked, so a surface can skip a reveal it caused itself. */
-export type NarrativeOrigin = 'library' | 'flow' | 'script' | 'inspector' | 'search' | 'diagnostic'
+export type NarrativeOrigin =
+  'library' | 'flow' | 'script' | 'inspector' | 'search' | 'diagnostic' | 'preview'
+
+export type NarrativeField =
+  | 'name'
+  | 'entry'
+  | 'participants'
+  | 'title'
+  | 'intent'
+  | 'condition'
+  | 'effects'
+  | 'destination'
+  | 'label'
+  | 'speaker'
+  | 'text'
+  | 'act'
+  | 'arc'
+  | 'tags'
+
+export interface NarrativeWorldTarget {
+  projectKey: string
+  collection: 'facts' | 'knowledge' | 'relationships' | 'events' | 'quests' | 'restrictions'
+  recordId: string
+  seq: number
+}
+
+export interface NarrativeRevealOptions {
+  projectKey?: string
+  focus?: boolean
+}
 
 /**
  * A request to bring the selection into view.
@@ -64,12 +96,22 @@ export type NarrativeOrigin = 'library' | 'flow' | 'script' | 'inspector' | 'sea
  * readable and each surface remembers the last `seq` it honoured.
  */
 export interface NarrativeReveal extends NarrativeSelection {
+  projectKey: string | null
+  variantId: string | null
+  choiceId: string | null
+  outcomeId: string | null
+  field: NarrativeField | null
+  focus: boolean
   seq: number
   origin: NarrativeOrigin
 }
 
 /** The argument to `selectNarrative`: deeper ids left out are cleared. */
 export interface NarrativeTarget {
+  variantId?: string | null
+  choiceId?: string | null
+  outcomeId?: string | null
+  field?: NarrativeField | null
   sceneId: string | null
   beatId?: string | null
   lineId?: string | null
@@ -149,8 +191,17 @@ interface UIState {
    * author's workspace onto everybody who opens the world.
    */
   narrative: NarrativeSelection
+  narrativeEntityTarget: { projectKey: string; entityId: string; seq: number } | null
+  openNarrativeEntity: (projectKey: string, entityId: string) => void
+  finishNarrativeEntityReveal: (seq: number) => void
+  narrativeWorldTarget: NarrativeWorldTarget | null
+  openNarrativeWorld: (target: Omit<NarrativeWorldTarget, 'seq'>) => void
   narrativeReveal: NarrativeReveal | null
-  selectNarrative: (target: NarrativeTarget, origin: NarrativeOrigin) => void
+  selectNarrative: (
+    target: NarrativeTarget,
+    origin: NarrativeOrigin,
+    options?: NarrativeRevealOptions,
+  ) => void
   forgetNarrative: (ids: readonly string[]) => void
 
   narrativeTab: NarrativeTab
@@ -212,7 +263,14 @@ let narrativeSeq = 0
 const NO_NARRATIVE: NarrativeSelection = { sceneId: null, beatId: null, lineId: null }
 
 function samePath(a: NarrativeSelection, b: NarrativeSelection): boolean {
-  return a.sceneId === b.sceneId && a.beatId === b.beatId && a.lineId === b.lineId
+  return (
+    a.sceneId === b.sceneId &&
+    a.beatId === b.beatId &&
+    a.lineId === b.lineId &&
+    (a.choiceId ?? null) === (b.choiceId ?? null) &&
+    (a.outcomeId ?? null) === (b.outcomeId ?? null) &&
+    (a.variantId ?? null) === (b.variantId ?? null)
+  )
 }
 
 /**
@@ -227,8 +285,14 @@ function prunePath(sel: NarrativeSelection, gone: Set<string>): NarrativeSelecti
   if (sel.beatId !== null && gone.has(sel.beatId)) {
     return { sceneId: sel.sceneId, beatId: null, lineId: null }
   }
-  if (sel.lineId !== null && gone.has(sel.lineId)) return { ...sel, lineId: null }
-  return sel
+  const next = { ...sel }
+  if (sel.lineId !== null && gone.has(sel.lineId)) {
+    next.lineId = null
+    delete next.variantId
+  }
+  for (const key of ['choiceId', 'outcomeId', 'variantId'] as const)
+    if (next[key] && gone.has(next[key]!)) delete next[key]
+  return samePath(sel, next) ? sel : next
 }
 
 export const TOAST_DURATION = {
@@ -236,7 +300,7 @@ export const TOAST_DURATION = {
   error: 8_000,
 } as const
 
-export const useUI = create<UIState>((set) => ({
+export const useUI = create<UIState>((set, get) => ({
   mode: 'library',
   setMode: (mode) => set({ mode }),
 
@@ -257,24 +321,64 @@ export const useUI = create<UIState>((set) => ({
   setTab: (tab) => set({ tab }),
 
   narrative: NO_NARRATIVE,
+  narrativeEntityTarget: null,
+  openNarrativeEntity: (projectKey, entityId) => {
+    get().select(entityId)
+    set({
+      mode: 'library',
+      narrativeEntityTarget: { projectKey, entityId, seq: ++narrativeSeq },
+    })
+  },
+  finishNarrativeEntityReveal: (seq) =>
+    set((state) =>
+      state.narrativeEntityTarget?.seq === seq ? { narrativeEntityTarget: null } : {},
+    ),
+  narrativeWorldTarget: null,
+  openNarrativeWorld: (target) =>
+    set({ mode: 'narrative', narrativeWorldTarget: { ...target, seq: ++narrativeSeq } }),
   narrativeReveal: null,
   // The single writer for every route into a narrative element — a Library row,
   // a Flow node, a Script line, a search hit, a diagnostic. Each of them hands
   // over the whole path and says who it is; nothing sets `narrative` directly,
   // because a half-written path is exactly how Flow and Script would come to
   // disagree about what is selected.
-  selectNarrative: (target, origin) =>
+  selectNarrative: (target, origin, options) =>
     set((state) => {
       const next: NarrativeSelection = {
         sceneId: target.sceneId,
-        beatId: target.beatId ?? null,
-        lineId: target.lineId ?? null,
+        beatId: target.sceneId ? (target.beatId ?? null) : null,
+        lineId:
+          target.sceneId && target.beatId && !target.choiceId && !target.outcomeId
+            ? (target.lineId ?? null)
+            : null,
+        ...(target.sceneId && target.beatId
+          ? target.choiceId
+            ? { choiceId: target.choiceId }
+            : target.outcomeId
+              ? { outcomeId: target.outcomeId }
+              : target.lineId && target.variantId
+                ? { variantId: target.variantId }
+                : {}
+          : {}),
       }
       // The previous object back when nothing actually moved. A canvas
       // subscribed to `narrative` re-runs its layout when the value changes,
       // and re-selecting the row you are already on must not cost that.
       const narrative = samePath(state.narrative, next) ? state.narrative : next
-      return { narrative, narrativeReveal: { ...next, seq: ++narrativeSeq, origin } }
+      return {
+        narrative,
+        narrativeReveal: {
+          ...next,
+          seq: ++narrativeSeq,
+          origin,
+          projectKey: options?.projectKey ?? null,
+          focus: options?.focus ?? true,
+          variantId: target.variantId ?? null,
+          choiceId: target.choiceId ?? null,
+          outcomeId: target.outcomeId ?? null,
+          field: target.field ?? null,
+        },
+      }
     }),
   // What a deletion does to a selection. Only ids are held here, so a removed
   // element leaves a live-looking id pointing at nothing; whoever owns the
@@ -290,7 +394,14 @@ export const useUI = create<UIState>((set) => ({
       const reveal = state.narrativeReveal
       const stale =
         reveal !== null &&
-        [reveal.sceneId, reveal.beatId, reveal.lineId].some((id) => id !== null && gone.has(id))
+        [
+          reveal.sceneId,
+          reveal.beatId,
+          reveal.lineId,
+          reveal.variantId,
+          reveal.choiceId,
+          reveal.outcomeId,
+        ].some((id) => id !== null && gone.has(id))
       if (narrative === state.narrative && !stale) return {}
       return { narrative, narrativeReveal: stale ? null : reveal }
     }),

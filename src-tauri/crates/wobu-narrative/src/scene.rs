@@ -243,13 +243,15 @@ impl DialogueSlot {
 
 /// Where the story goes next.
 ///
-/// Three cases and no fourth. In particular there is no "fall through to the
+/// Every state is explicit, including unfinished wiring. There is no "fall through to the
 /// next beat in the list": an implicit destination would mean reordering beats
 /// silently rewired the story, which is precisely the class of accident stable
 /// ids and explicit destinations exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Destination {
+    /// An authored route awaiting a destination; never an implicit ending.
+    Unresolved {},
     /// Another beat in this same scene.
     Beat(BeatId),
     /// A different scene. Whether it exists is not knowable from one file, which
@@ -471,6 +473,12 @@ pub struct Tombstone {
 pub struct Scene {
     pub id: SceneId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub act_id: Option<EntityId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc_id: Option<EntityId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_ids: Vec<EntityId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub editorial_head: Option<wobu_core::Id>,
     /// The display name. Renaming it preserves every id in the file; nothing is
     /// derived from it.
@@ -502,6 +510,9 @@ impl Scene {
     pub fn new(name: impl Into<String>) -> Scene {
         Scene {
             id: SceneId::new(),
+            act_id: None,
+            arc_id: None,
+            tag_ids: Vec::new(),
             editorial_head: None,
             name: name.into(),
             summary: String::new(),
@@ -617,6 +628,9 @@ impl Scene {
     pub fn duplicated(&self) -> Scene {
         let mut copy = Scene {
             id: SceneId::new(),
+            act_id: self.act_id,
+            arc_id: self.arc_id,
+            tag_ids: self.tag_ids.clone(),
             editorial_head: None,
             name: self.name.clone(),
             summary: self.summary.clone(),
@@ -659,7 +673,7 @@ impl Scene {
     pub fn scene_links(&self) -> impl Iterator<Item = (DestinationSite, SceneId)> {
         self.beats.iter().flat_map(Beat::destinations).filter_map(|(site, to)| match to {
             Destination::Scene(id) => Some((site, *id)),
-            Destination::Beat(_) | Destination::End { .. } => None,
+            Destination::Beat(_) | Destination::End { .. } | Destination::Unresolved {} => None,
         })
     }
 }

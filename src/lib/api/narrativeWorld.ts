@@ -62,7 +62,12 @@ export interface FutureRestriction extends WorldRecord {
 }
 
 /** Canonical narrative/world.yaml; unresolved references remain visible draft diagnostics. */
+export type NamedClassification = WorldRecord
+
 export interface WorldDocument {
+  acts?: NamedClassification[]
+  arcs?: NamedClassification[]
+  tags?: NamedClassification[]
   schema_version: number
   facts: Fact[]
   knowledge: KnowledgeClaim[]

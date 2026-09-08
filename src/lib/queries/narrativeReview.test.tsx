@@ -50,4 +50,11 @@ it('does not install an old project scene when a review reply arrives after a pr
   expect(client.getQueryData(qk.narrativeScene('same-imported-id'))).toEqual({
     scene: { id: 'same-imported-id', name: 'New project scene' },
   })
+  const calls = pending.mock.calls.length
+  await act(async () => {
+    await expect(result.current.mutateAsync(request)).rejects.toThrow(
+      'The project changed before the review could be saved.',
+    )
+  })
+  expect(pending).toHaveBeenCalledTimes(calls)
 })

@@ -163,13 +163,17 @@ pub enum Target {
     End { label: String },
 }
 
-impl From<&Destination> for Target {
-    fn from(value: &Destination) -> Self {
-        match value {
+impl TryFrom<&Destination> for Target {
+    type Error = &'static str;
+    fn try_from(value: &Destination) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Destination::Unresolved {} => {
+                return Err("Unresolved destinations cannot be compiled.");
+            }
             Destination::Beat(id) => Self::Beat(id.to_string()),
             Destination::Scene(id) => Self::Scene(id.to_string()),
             Destination::End { label } => Self::End { label: label.clone() },
-        }
+        })
     }
 }
 
@@ -381,22 +385,26 @@ pub fn compile(scenes: &[Scene], schema: &StateSchema, options: &CompileOptions)
                     choices: beat
                         .choices
                         .iter()
-                        .map(|c| CompiledChoice {
-                            id: c.id.to_string(),
-                            label: c.label.clone(),
-                            requires: c.requires.clone(),
-                            effects: c.effects.clone(),
-                            to: (&c.to).into(),
+                        .filter_map(|c| {
+                            Some(CompiledChoice {
+                                id: c.id.to_string(),
+                                label: c.label.clone(),
+                                requires: c.requires.clone(),
+                                effects: c.effects.clone(),
+                                to: Target::try_from(&c.to).ok()?,
+                            })
                         })
                         .collect(),
                     outcomes: beat
                         .outcomes
                         .iter()
-                        .map(|o| CompiledOutcome {
-                            id: o.id.to_string(),
-                            when: o.when.clone(),
-                            effects: o.effects.clone(),
-                            to: (&o.to).into(),
+                        .filter_map(|o| {
+                            Some(CompiledOutcome {
+                                id: o.id.to_string(),
+                                when: o.when.clone(),
+                                effects: o.effects.clone(),
+                                to: Target::try_from(&o.to).ok()?,
+                            })
                         })
                         .collect(),
                 },
