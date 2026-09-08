@@ -19,6 +19,19 @@ vi.mock('./NarrativeCentre', () => ({
     </main>
   ),
 }))
+// Stood in for rather than driven, because what is under test is where the
+// workspace lands when a diagnostic hands back a line — not the review queue's
+// own paging, filters and guarded writes, which have their own tests.
+vi.mock('./NarrativeReview', () => ({
+  NarrativeReview: ({ onSource }: { onSource: (target: Record<string, unknown>) => void }) => (
+    <button
+      type="button"
+      onClick={() => onSource({ scene: 'council', beat: 'evidence', slot: 'line', variant: null })}
+    >
+      Open the source of this line
+    </button>
+  ),
+}))
 
 function renderMode(project: ProjectSummary = defaultProject) {
   const qc = new QueryClient({
@@ -73,7 +86,13 @@ beforeEach(() => {
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   h.invoke.mockReset()
   h.invoke.mockImplementation((command) =>
-    Promise.resolve(command === 'narrative_library_query' ? libraryPage : []),
+    Promise.resolve(
+      command === 'narrative_library_query'
+        ? libraryPage
+        : command === 'narrative_texts'
+          ? { assets: [], unreadable: [] }
+          : [],
+    ),
   )
   useUI.setState({
     mode: 'narrative',
@@ -152,6 +171,30 @@ describe('Narrative discovery and editor handoff', () => {
       'Unfinished hearing',
     )
     expect(screen.getByText('Unsaved scene draft.')).toBeInTheDocument()
+  })
+  it('returns to the scenes the Back button names, from any full-width surface', async () => {
+    renderMode()
+    await screen.findByRole('button', { name: 'Open Council hearing in Flow' })
+    fireEvent.click(screen.getByRole('button', { name: 'Text library' }))
+    expect(await screen.findByRole('region', { name: 'Text library' })).toBeInTheDocument()
+    expect(screen.queryByRole('main', { name: 'Scene library' })).toBeNull()
+    // World state and the Text library are siblings rather than layers, so the
+    // header's one Back button has to clear whichever of them is showing.
+    fireEvent.click(screen.getByRole('button', { name: 'World state' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back to scenes' }))
+    expect(screen.getByRole('main', { name: 'Scene library' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Text library' })).toBeNull()
+  })
+  it('opens a scene in front of the text library rather than behind it', async () => {
+    renderMode()
+    await screen.findByRole('button', { name: 'Open Council hearing in Flow' })
+    fireEvent.click(screen.getByRole('button', { name: 'Text library' }))
+    await screen.findByRole('region', { name: 'Text library' })
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open the source of this line' }))
+    expect(screen.getByRole('main', { name: 'Narrative editor' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Text library' })).toBeNull()
+    expect(useUI.getState().narrative.beatId).toBe('evidence')
   })
   it('enables review and native export while keeping analysis limits explicit', () => {
     renderMode()

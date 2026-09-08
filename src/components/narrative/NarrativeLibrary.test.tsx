@@ -2,8 +2,9 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LibraryQuery } from '../../lib/api/narrativeLibrary'
 import { NarrativeLibrary } from './NarrativeLibrary'
-import { libraryPage, libraryRow } from './sceneLibrary.fixture'
+import { libraryPage, libraryRow, libraryScene } from './sceneLibrary.fixture'
 import { emptyPreferences, readPreferences, writePreferences } from './sceneLibraryPreferences'
+import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
 const query = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/queries/narrativeLibrary', () => ({ useNarrativeLibraryQuery: query }))
 function mount(over: Partial<Parameters<typeof NarrativeLibrary>[0]> = {}) {
@@ -25,6 +26,7 @@ function mount(over: Partial<Parameters<typeof NarrativeLibrary>[0]> = {}) {
 }
 beforeEach(() => {
   localStorage.clear()
+  useScriptDrafts.setState({ drafts: {} })
   query.mockReset()
   query.mockReturnValue({ data: libraryPage, isFetching: false, refetch: vi.fn() })
 })
@@ -228,13 +230,49 @@ describe('Bounded scene discovery', () => {
       expect.objectContaining({ unreadableOffset: 25, revision: libraryPage.revision }),
     )
   })
+  it('renames a scene from its row without opening it', () => {
+    const onRenameScene = vi.fn()
+    mount({ onRenameScene })
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Council hearing' }))
+    const field = screen.getByLabelText('New name for Council hearing')
+    fireEvent.change(field, { target: { value: '  The hearing  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
+    expect(onRenameScene).toHaveBeenCalledWith('council', 'The hearing')
+    // The form closes on its own, and nothing was opened: renaming forty
+    // titles should not mean entering and leaving forty scenes.
+    expect(screen.queryByLabelText('New name for Council hearing')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Rename Council hearing' })).toBeInTheDocument()
+  })
+  it('leaves a name alone when the rename is cancelled or unchanged', () => {
+    const onRenameScene = vi.fn()
+    mount({ onRenameScene })
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Council hearing' }))
+    fireEvent.change(screen.getByLabelText('New name for Council hearing'), {
+      target: { value: 'Half a thought' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel rename' }))
+    expect(onRenameScene).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Council hearing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
+    expect(onRenameScene).not.toHaveBeenCalled()
+  })
+  it('refuses a row rename while that scene holds an unsaved draft', () => {
+    useScriptDrafts.getState().put(sceneEditKey('/world', 'council'), {
+      file: { scene: libraryScene, slug: 'council', rel: 'council.yaml', stamp: null },
+      scene: { ...libraryScene, name: 'Being rewritten' },
+    })
+    mount({ onRenameScene: vi.fn() })
+    expect(screen.queryByRole('button', { name: 'Rename Council hearing' })).toBeNull()
+    expect(screen.getByText(/save or discard it before renaming/i)).toBeInTheDocument()
+  })
   it('discloses truncated passages and read-only discovery', () => {
     query.mockReturnValue({
       data: { ...libraryPage, rows: [{ ...libraryRow, matchCount: 22 }] },
       isFetching: false,
     })
-    mount({ readOnly: true })
+    mount({ readOnly: true, onRenameScene: vi.fn() })
     expect(screen.getByRole('button', { name: 'New scene' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Rename Council hearing' })).toBeDisabled()
     expect(screen.getByText(/Showing 2 of 22 passages/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open Council hearing in Flow' })).toBeEnabled()
   })

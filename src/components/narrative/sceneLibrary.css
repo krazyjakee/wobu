@@ -34,6 +34,13 @@
 .nsl-title {
   justify-content: space-between;
 }
+.nsl-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 8px;
+}
 .nsl-title h2 {
   margin: 0;
 }

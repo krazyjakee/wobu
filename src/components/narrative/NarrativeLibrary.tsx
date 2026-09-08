@@ -4,6 +4,7 @@ import { useNarrativeLibraryQuery } from '../../lib/queries/narrativeLibrary'
 import type { NarrativeTarget } from '../../store/ui'
 import { DEFAULT_LIBRARY_VIEW, type LibraryView } from './sceneLibraryModel'
 import { readPreferences, writePreferences } from './sceneLibraryPreferences'
+import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
 import './sceneLibrary.css'
 
 const PAGE_SIZE = 25
@@ -16,6 +17,7 @@ function LibrarySession({
   nameOf,
   onOpen,
   onCreateScene,
+  onRenameScene,
   onRepair,
   onOpenExample,
 }: {
@@ -25,11 +27,15 @@ function LibrarySession({
   nameOf: (id: string) => string | undefined
   onOpen: (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => void
   onCreateScene: () => void
+  onRenameScene?: (sceneId: string, name: string) => void
   onRepair?: (rel: string) => void
   onOpenExample?: () => void
 }) {
   const [prefs, setPrefs] = useState(() => readPreferences(projectKey))
   const [viewName, setViewName] = useState('')
+  // Every scene's draft, not this row's: a hook cannot be called per row, and
+  // the record's identity only changes when some draft actually does.
+  const drafts = useScriptDrafts((state) => state.drafts)
   const [matchIndices, setMatchIndices] = useState<Record<string, number>>({})
   const scroll = useRef<HTMLDivElement>(null)
   const restoreScroll = useRef<number | null>(prefs.scroll)
@@ -437,6 +443,14 @@ function LibrarySession({
                   >
                     <th scope="row">
                       <span>{row.summary.name}</span>
+                      {onRenameScene && (
+                        <SceneRename
+                          name={row.summary.name}
+                          readOnly={readOnly}
+                          drafted={!!drafts[sceneEditKey(projectKey, row.summary.id)]}
+                          onRename={(name) => onRenameScene(row.summary.id, name)}
+                        />
+                      )}
 
                       {match && (
                         <p className="nsl-snippet">
@@ -573,6 +587,78 @@ function LibrarySession({
         </div>
       </main>
     </div>
+  )
+}
+
+/**
+ * Rename one scene from its row.
+ *
+ * Offered here as well as on the Scene name field inside Script, because the
+ * writer who has just read forty titles is the one who notices that two of them
+ * say the same thing, and making them open a scene to fix its name is how a
+ * library full of "New scene" stays that way. It goes through
+ * `narrative_scene_rename`, which changes the display name and nothing else —
+ * the slug, and therefore the file on the shared folder, is minted once at
+ * create and never moves.
+ *
+ * Refused while that scene has an unsaved draft. The rename is a whole-document
+ * save on the backend's side, so it would land underneath work the writer has
+ * not saved and turn their next save into a conflict. The row says so rather
+ * than hiding a disabled button, because "why can I not rename this" is the
+ * question a greyed control leaves behind.
+ *
+ * Its own local state: the form belongs to one row, and lifting it would make
+ * the whole table re-render on every keystroke of a name nobody else can see.
+ */
+function SceneRename({
+  name,
+  readOnly,
+  drafted,
+  onRename,
+}: {
+  name: string
+  readOnly: boolean
+  drafted: boolean
+  onRename: (name: string) => void
+}) {
+  const [editing, setEditing] = useState<string | null>(null)
+  if (drafted)
+    return <p className="nrt-note">Unsaved draft — save or discard it before renaming.</p>
+  if (editing === null)
+    return (
+      <button
+        type="button"
+        className="btn"
+        disabled={readOnly}
+        title={readOnly ? 'This project is read-only' : undefined}
+        aria-label={`Rename ${name}`}
+        onClick={() => setEditing(name)}
+      >
+        Rename
+      </button>
+    )
+  return (
+    <form
+      className="nsl-rename"
+      onSubmit={(event) => {
+        event.preventDefault()
+        const next = editing.trim()
+        if (!next) return
+        setEditing(null)
+        if (next !== name) onRename(next)
+      }}
+    >
+      <label>
+        New name for {name}
+        <input value={editing} maxLength={200} onChange={(e) => setEditing(e.target.value)} />
+      </label>
+      <button type="submit" className="btn" disabled={!editing.trim()}>
+        Save name
+      </button>
+      <button type="button" className="btn" onClick={() => setEditing(null)}>
+        Cancel rename
+      </button>
+    </form>
   )
 }
 

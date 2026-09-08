@@ -1,6 +1,12 @@
 import { useRef, useState, type CSSProperties } from 'react'
 import type { ProjectSummary } from '../../lib/api'
-import { useCreateScene, useSceneDiagnostics, useScene, useScenes } from '../../lib/queries'
+import {
+  useCreateScene,
+  useRenameScene,
+  useSceneDiagnostics,
+  useScene,
+  useScenes,
+} from '../../lib/queries'
 import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativeCentre } from './NarrativeCentre'
@@ -60,6 +66,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const libraryRoot = useRef<HTMLDivElement>(null)
   const libraryReturn = useRef<HTMLElement | null>(null)
   const createScene = useCreateScene()
+  const renameScene = useRenameScene()
   const { nameOf } = useNarrativeNames()
   const selected = draft?.scene ?? file.data?.scene
   const open = (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => {
@@ -78,6 +85,11 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
     setTab(tab)
     setEditorOpened(true)
     setLibraryOpen(false)
+    // Every full-width surface is dismissed, not just the library. World state
+    // and the Text library are siblings of the editor rather than layers over
+    // it, so one left open would hide the scene this call just selected —
+    // Review's "open the source of this line" would look like it did nothing.
+    setTextLibraryOpen(false)
     closeWorld()
   }
   const editorStyle: CSSProperties = {
@@ -101,6 +113,10 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
             className="btn"
             onClick={() => {
               setLibraryOpen(true)
+              // The same reason `open` clears it: this button says "scenes",
+              // and returning from World state to a Text library nobody closed
+              // is not that.
+              setTextLibraryOpen(false)
               closeWorld()
               requestAnimationFrame(() => {
                 const original = libraryReturn.current
@@ -231,6 +247,11 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
               onSuccess: (file) => open({ sceneId: file.scene.id }, 'flow'),
             })
           }
+          // Renaming stays here rather than inside the table for the same
+          // reason creating does: the library draws rows, and every write in
+          // this workspace is owned by the one component that also owns the
+          // project it is writing to.
+          onRenameScene={(sceneId, name) => renameScene.mutate({ sceneId, name })}
         />
       </div>
       {editorOpened && (
@@ -264,7 +285,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
             />
           ) : (
             <NarrativeCentre
-              active={!libraryOpen && !worldOpen}
+              active={!libraryOpen && !worldOpen && !textLibraryOpen}
               readOnly={project.readOnly}
               projectKey={project.path}
             />
