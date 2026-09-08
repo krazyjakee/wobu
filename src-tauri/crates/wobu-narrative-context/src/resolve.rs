@@ -7,6 +7,8 @@ use wobu_narrative::{Condition, Speaker};
 
 pub(crate) struct Builder<'a> {
     pub input: Input<'a>,
+    pub linked_scenes:
+        &'a std::collections::BTreeMap<wobu_narrative::SceneId, wobu_narrative::Scene>,
     pub result: FrozenContext,
     pub optional: Vec<Fragment>,
 }
@@ -70,7 +72,17 @@ impl Builder<'_> {
 /// Every failure is reviewable data, including a deleted target. Required fragments survive
 /// budget overflow; `ready` is false, so a future queue must refuse the request.
 pub fn resolve(input: Input<'_>, options: Options) -> FrozenContext {
+    resolve_linked(input, options, &Default::default())
+}
+
+/// Store hosts provide coherently captured source links; pure callers may supply fixtures.
+pub fn resolve_linked<'a>(
+    input: Input<'a>,
+    options: Options,
+    linked_scenes: &'a std::collections::BTreeMap<wobu_narrative::SceneId, wobu_narrative::Scene>,
+) -> FrozenContext {
     let mut b = Builder {
+        linked_scenes,
         input,
         result: FrozenContext {
             version: crate::CONTEXT_VERSION,
@@ -163,7 +175,14 @@ pub fn resolve(input: Input<'_>, options: Options) -> FrozenContext {
         b.diagnostic("duplicate_identity","selection","Selected beat or slot identity is duplicated. Repair source identities before generation.",true);
     }
     let site = format!("scene/{}/beat/{}", scene.id, beat.id);
-    b.fragment("objective",&site,true,json!({"scene":scene.name,"summary":scene.summary,"beat":beat.title,"intents":beat.intents}));
+    let title =
+        scene.supporting_text.as_ref().map_or(beat.title.as_str(), |asset| asset.kind.noun());
+    b.fragment(
+        "objective",
+        &site,
+        true,
+        json!({"scene":scene.name,"summary":scene.summary,"beat":title,"intents":beat.intents}),
+    );
     b.fragment("required_meaning", &format!("{site}/must_convey"), true, &beat.must_convey);
     b.fragment(
         "forbidden_revelations",
@@ -252,6 +271,7 @@ pub fn resolve(input: Input<'_>, options: Options) -> FrozenContext {
         _ => None,
     };
     b.world(speaker, &participants);
+    b.supporting(speaker);
     finish(b)
 }
 fn request(b: &Builder<'_>) -> String {

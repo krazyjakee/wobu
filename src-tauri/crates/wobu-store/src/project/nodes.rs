@@ -444,6 +444,9 @@ impl Project {
             }
         }
         self.index.remove_node(id)?;
+        if node.kind == NodeKind::Character {
+            self.refresh_narrative_dependencies()?;
+        }
         Ok(())
     }
 
@@ -452,6 +455,15 @@ impl Project {
         node: &Node,
         expected: Option<&atomic::Stamp>,
     ) -> Result<SaveOutcome> {
+        let previous = self.index.node(node.id)?;
+        let narrative_changed = (node.kind == NodeKind::Character
+            || previous.as_ref().is_some_and(|old| old.kind == NodeKind::Character))
+            && previous.as_ref().is_none_or(|old| {
+                old.kind != node.kind
+                    || old.name != node.name
+                    || old.attributes.get("narrative_voice")
+                        != node.attributes.get("narrative_voice")
+            });
         let rel = self.rel_path(node);
         let path = paths::from_rel_string(&self.root, &rel);
         let text = markdown::to_markdown(node)?;
@@ -466,12 +478,18 @@ impl Project {
             && let Some((theirs, stamp)) = self.same_words_on_disk(node, &path, expected)?
         {
             self.index.upsert_node(&theirs, &rel, &stamp)?;
+            if narrative_changed {
+                self.refresh_narrative_dependencies()?;
+            }
             return Ok(SaveOutcome::Saved(Box::new(theirs)));
         }
 
         match atomic::guarded_write(&self.root, &path, &text, expected, &self.peer)? {
             WriteOutcome::Written(stamp) => {
                 self.index.upsert_node(node, &rel, &stamp)?;
+                if narrative_changed {
+                    self.refresh_narrative_dependencies()?;
+                }
                 Ok(SaveOutcome::Saved(Box::new(node.clone())))
             }
             WriteOutcome::Conflict { conflict_path, .. } => {

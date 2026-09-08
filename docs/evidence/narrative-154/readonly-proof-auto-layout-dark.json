@@ -1,0 +1,1081 @@
+{
+  "url": "http://localhost:1420/",
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "text": "wobu\nNarrative acceptance\nread-only\nnothing selected\nJump to\u2026\nCtrl+K\n\n\n\n\nThis project folder is read-only, so nothing can be saved back into it. The world is fully readable \u2014 creating, renaming, moving, deleting and editing notes are switched off, and nothing is being autosaved.\n\n\n\n\n\n?\n\nNarrative acceptance / Narrative\nBack to scenes\nScene outline\nContext\nGenerate\u2026\nWorld state\nText library\nReview\nBuild\u2026\nRecovery\u2026\nExport\u2026\nAshfall council hearing\nFlow, Script, Preview and Source are four views of this one scene.\nFlow\nScript\nPreview\nSource\nEvery scene\n/\nAshfall council hearing\nSave scene\nDiscard changes\nUndo draft\nRedo draft\nSaved scene\nCanvas\nOutline list\nUndo and redo are the workspace\u2019s own.\nRead-only\n7 boxes had no stored position and were placed automatically.\nAbout validation and affected text\nArrangement \nGroups & notes\nAuto layout\nFit\nAdd beat\nAdd choice\nAdd condition\nAdd outcome\nAdd end\nClose all groups\nParticipant\n\nNeeds text\nNeeds review\nOut of date\nBadges\n7 of 7 on the canvas\nCHOICE\nPresent the logbook\nashfall_trust +10\nashfall_file_record call\nThen\nCHOICE\nAsk for a fair hearing\nashfall_trust +5\nThen\nCHOICE\nChallenge the council\u2019s silence\nashfall_trust \u221210\nThen\nScene start\nBEAT\nNeeds review\n1 needs review\nrequires ashfall_knows_logbook = true and ashfall_trust \u2265 40\nAsk for a fair hearing\nChallenge the council\u2019s silence\nAdd a way out\nOUTCOME\nAutomatically\nThen\nEND\nHearing complete\n3 routes in\nBEAT\nNeeds review\nCouncil response\nNarrator\n1 line \u00b7 3 variants\n3 needs review\nAutomatically\nAdd a way out\n\n\n\nReact Flow\nScene details\n\nScene name\nScene entry\nScene entry rule\n0 problems in this scene. Checks cover source errors and missing text. Branch reachability has not been checked.\nNarrative acceptance\n/tmp/wobu-acceptance-20260908/read-only.wobu\nread-only\n2 nodes\n[ navigator \u00b7 inspector ]\nno image provider chosen\n\u00b7 queue 0\n\u00b7 claude-sonnet-5 \u00b7 1m context\n\u00b7 notifications",
+  "active": {
+    "tag": "BUTTON",
+    "role": null,
+    "label": null,
+    "text": "Auto layout",
+    "id": "",
+    "value": "",
+    "disabled": false,
+    "rect": {
+      "x": 366.53125,
+      "y": 418,
+      "width": 93,
+      "height": 32
+    },
+    "tabIndex": 0
+  },
+  "elements": [
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Narrative acceptance",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 81.046875,
+        "y": 6,
+        "width": 163.765625,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Jump to\u2026Ctrl+K",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1066,
+        "y": 6,
+        "width": 190,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1266,
+        "y": 7,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Minimise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1308,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Maximise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1352,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Close",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1396,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Dismiss",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1410,
+        "y": 49,
+        "width": 18,
+        "height": 19
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Library",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 87,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Forge",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 125,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Assets",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 163,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Narrative",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 201,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Guide",
+      "text": "?",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 793,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 831,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Back to scenes",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 300.453125,
+        "y": 89,
+        "width": 110,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Scene outline",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 634.203125,
+        "y": 89,
+        "width": 105,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Context",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 745.203125,
+        "y": 89,
+        "width": 70.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Generate\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 821.96875,
+        "y": 89,
+        "width": 88.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "World state",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 916.734375,
+        "y": 89,
+        "width": 92.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Text library",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1015.5,
+        "y": 89,
+        "width": 91.6875,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Review",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1113.1875,
+        "y": 89,
+        "width": 66.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Build\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1185.71875,
+        "y": 89,
+        "width": 66,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Recovery\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1257.71875,
+        "y": 89,
+        "width": 87.28125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Export\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1351,
+        "y": 89,
+        "width": 73,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Flow",
+      "id": "_r_q_-tab-flow",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 68,
+        "y": 195,
+        "width": 48.75,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Script",
+      "id": "_r_q_-tab-script",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 118.75,
+        "y": 195,
+        "width": 56,
+        "height": 38
+      },
+      "tabIndex": -1
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Preview",
+      "id": "_r_q_-tab-preview",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 176.75,
+        "y": 195,
+        "width": 67.25,
+        "height": 38
+      },
+      "tabIndex": -1
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Source",
+      "id": "_r_q_-tab-source",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 246,
+        "y": 195,
+        "width": 62.75,
+        "height": 38
+      },
+      "tabIndex": -1
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Every scene",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 62,
+        "y": 249,
+        "width": 98,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Save scene",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 62,
+        "y": 276,
+        "width": 89,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Discard changes",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 159,
+        "y": 276,
+        "width": 121.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Undo draft",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 288.765625,
+        "y": 276,
+        "width": 88.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Redo draft",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 385.53125,
+        "y": 276,
+        "width": 86.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Canvas",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 88,
+        "y": 320,
+        "width": 64,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Outline list",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 154,
+        "y": 320,
+        "width": 86,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": "Arrangement mode",
+      "text": "AutomaticManual",
+      "id": "",
+      "value": "automatic",
+      "disabled": true,
+      "rect": {
+        "x": 154.765625,
+        "y": 419.5,
+        "width": 85,
+        "height": 29
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Groups & notes",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 245.765625,
+        "y": 418,
+        "width": 114.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Auto layout",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 366.53125,
+        "y": 418,
+        "width": 93,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Fit",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 465.53125,
+        "y": 418,
+        "width": 40,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add beat",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 518.53125,
+        "y": 418,
+        "width": 78,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add choice",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 602.53125,
+        "y": 418,
+        "width": 89,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add condition",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 697.53125,
+        "y": 418,
+        "width": 108,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add outcome",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 811.53125,
+        "y": 418,
+        "width": 103,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add end",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 920.53125,
+        "y": 418,
+        "width": 74,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Close all groups",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 72,
+        "y": 456.5,
+        "width": 118.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AnyoneNarratorPlayer",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 258.765625,
+        "y": 456,
+        "width": 86,
+        "height": 33
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Needs text",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 350.765625,
+        "y": 463.5,
+        "width": 91.78125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Needs review",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 447.546875,
+        "y": 463.5,
+        "width": 106.3125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Out of date",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 558.859375,
+        "y": 463.5,
+        "width": 95,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Errors",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 668.859375,
+        "y": 501.5,
+        "width": 68.78125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Warnings",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 742.640625,
+        "y": 501.5,
+        "width": 86.78125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Destinations",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 668.859375,
+        "y": 529.5,
+        "width": 102,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "References",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 775.859375,
+        "y": 529.5,
+        "width": 93.78125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Types",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 874.640625,
+        "y": 529.5,
+        "width": 65.78125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Identities",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 668.859375,
+        "y": 557.5,
+        "width": 85,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Text",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 758.859375,
+        "y": 557.5,
+        "width": 55.96875,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Unrecognised",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 819.828125,
+        "y": 557.5,
+        "width": 109.78125,
+        "height": 23
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Zoom In",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 89,
+        "y": 737,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Zoom Out",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 89,
+        "y": 763,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Fit View",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 89,
+        "y": 789,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "Ashfall council hearing",
+      "disabled": false,
+      "rect": {
+        "x": 1145,
+        "y": 375,
+        "width": 271,
+        "height": 23.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "always",
+      "disabled": false,
+      "rect": {
+        "x": 1147,
+        "y": 452.5,
+        "width": 267,
+        "height": 30
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Open job queue, 0 jobs",
+      "text": "\u00b7 queue 0",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1136.21875,
+        "y": 879,
+        "width": 48,
+        "height": 16
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Notifications, nothing unread, 0 in history",
+      "text": "\u00b7 notifications",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1357,
+        "y": 879,
+        "width": 71,
+        "height": 16
+      },
+      "tabIndex": 0
+    }
+  ],
+  "ui": {
+    "mode": "narrative",
+    "selectedId": null,
+    "recentIds": [],
+    "tab": "notes",
+    "narrative": {
+      "sceneId": "01M20Y1NPQFFHDQRENTY3XDRB6",
+      "beatId": null,
+      "lineId": null
+    },
+    "narrativeEntityTarget": null,
+    "narrativeWorldTarget": null,
+    "narrativeReveal": {
+      "sceneId": "01M20Y1NPQFFHDQRENTY3XDRB6",
+      "beatId": null,
+      "lineId": null,
+      "seq": 1,
+      "origin": "library",
+      "projectKey": "/tmp/wobu-acceptance-20260908/read-only.wobu",
+      "focus": true,
+      "variantId": null,
+      "choiceId": null,
+      "outcomeId": null,
+      "field": null
+    },
+    "narrativeTab": "flow",
+    "narrativeFilters": {
+      "needsText": false,
+      "needsReview": false,
+      "outOfDate": false
+    },
+    "filter": "",
+    "navWidth": 272,
+    "navCollapsed": false,
+    "inspCollapsed": false,
+    "closedGroups": {},
+    "collapsedNodes": {},
+    "bands": {},
+    "paletteOpen": false,
+    "shortcutsOpen": false,
+    "toasts": [],
+    "banners": [
+      {
+        "code": "project.read_only",
+        "text": "This project folder is read-only, so nothing can be saved back into it. The world is fully readable \u2014 creating, renaming, moving, deleting and editing notes are switched off, and nothing is being autosaved.",
+        "retryable": false
+      }
+    ]
+  },
+  "errors": []
+}

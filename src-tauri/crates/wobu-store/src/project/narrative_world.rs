@@ -36,6 +36,7 @@ impl Project {
         let outcome = world::write(&self.root, document, expected, &self.peer)?;
         if matches!(outcome, SourceSave::Saved(_)) {
             self.index_narrative_path(world::WORLD_FILE)?;
+            self.refresh_narrative_dependencies()?;
             for quest in removed {
                 // Cosmetic cleanup must never turn a committed source save into
                 // an error. The layout guard refuses unsafe/symlink paths.

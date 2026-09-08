@@ -279,7 +279,8 @@ pub(super) const CLEAR_DERIVED_SQL: &str =
      DELETE FROM corrupt; DELETE FROM narrative_files;
 DELETE FROM narrative_scene_summary;
 DELETE FROM narrative_scene_text;
-DELETE FROM narrative_scene_variant;";
+DELETE FROM narrative_scene_variant;
+DELETE FROM narrative_dependency; DELETE FROM narrative_dependency_edge;";
 
 #[cfg(test)]
 pub(super) const NODE_WRITE_STATEMENT_COUNT: usize = 10;

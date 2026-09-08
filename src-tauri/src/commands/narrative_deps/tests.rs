@@ -99,13 +99,33 @@ fn a_supporting_text_line_names_its_asset_rather_than_a_scene() {
     asset.asset.entries.push(entry);
     project.save_text_asset(&mut asset).unwrap();
 
-    // Nothing recorded yet, so the one line reports as untracked — which is the
-    // honest answer for a project the tracker has never seen.
+    // Local authoring records its inputs. Changing the real host trigger then
+    // produces an affected asset row without changing this line's wording.
+    assert!(rows(&project).is_empty());
+    let original = asset.asset.entries[0].lines[0].variants[0].text.clone();
+    asset.asset.trigger.event = wobu_narrative::Name::new("leave_gate").unwrap();
+    project.save_text_asset(&mut asset).unwrap();
     let rows = rows(&project);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["scene"], serde_json::Value::Null);
     assert_eq!(rows[0]["asset"], serde_json::json!(asset.asset.id.to_string()));
-    assert_eq!(rows[0]["kind"], serde_json::json!("untracked"));
-    assert_eq!(rows[0]["before"], serde_json::Value::Null);
-    assert!(rows[0]["explanations"].as_array().unwrap().is_empty());
+    assert_eq!(rows[0]["slot"], serde_json::json!(asset.asset.entries[0].lines[0].id.to_string()));
+    assert_eq!(
+        rows[0]["variant"],
+        serde_json::json!(asset.asset.entries[0].lines[0].variants[0].id.to_string())
+    );
+    assert_eq!(rows[0]["kind"], serde_json::json!("changed"));
+    assert!(rows[0]["before"].is_string() && rows[0]["after"].is_string());
+    assert_ne!(rows[0]["before"], rows[0]["after"]);
+    let explanations = rows[0]["explanations"].as_array().unwrap();
+    assert_eq!(explanations.len(), 1);
+    assert_eq!(
+        explanations[0]["source"],
+        serde_json::json!(format!("text/{}/trigger", asset.asset.id))
+    );
+    assert_eq!(explanations[0]["context"], serde_json::json!("context"));
+    let saved = &asset.asset.entries[0].lines[0].variants[0].text;
+    assert_eq!(saved.body, original.body);
+    assert_eq!(saved.revision, original.revision);
+    assert_eq!(saved.lifecycle.freshness, wobu_narrative::Freshness::OutOfDate);
 }

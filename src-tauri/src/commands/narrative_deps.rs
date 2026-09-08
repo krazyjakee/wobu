@@ -1,9 +1,8 @@
 //! Which authored lines an edit affected, and why (#168).
 //!
-//! Read-only. The command reports; it does not queue a rebuild, does not call a
-//! provider and does not write a byte of content — deciding what to *do* about
-//! an affected set is #169, and marking freshness into the documents is a
-//! deliberate act the store exposes separately.
+//! Reports after reconciling external edits. Source saves and reconciliation
+//! propagate freshness automatically; deciding what to rebuild or generating
+//! replacement wording remains the separate #169 workflow.
 //!
 //! The wire shape is flattened on purpose. `Affected` is keyed by a typed
 //! [`TargetRef`](wobu_narrative_deps::TargetRef) whose two variants carry

@@ -186,7 +186,7 @@ impl ToolVersions {
             compiler_graph: wobu_narrative_compiler::GRAPH_VERSION,
             prompt: wobu_narrative_generation::PROMPT_VERSION,
             output_schema: wobu_narrative_generation::OUTPUT_SCHEMA_VERSION,
-            review: wobu_narrative::review::REVIEW_VERSION,
+            review: wobu_narrative::review::REVIEW_CONTEXT_VERSION,
             dependency: DEPENDENCY_VERSION,
         }
     }

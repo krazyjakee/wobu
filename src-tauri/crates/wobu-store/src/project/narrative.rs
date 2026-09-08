@@ -94,7 +94,21 @@ impl Project {
     /// exception and lives in a different file, so nothing on this path can be
     /// blocked by an arrangement.
     pub fn save_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        self.save_editorial_scene(file)
+        let outcome = self.save_editorial_scene(file)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            let authored = file
+                .scene
+                .dialogue_slots()
+                .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+                .collect();
+            self.record_authored_narrative_dependencies_for(&authored)?;
+            self.refresh_narrative_dependencies()?;
+            *file = self.load_scene(file.scene.id)?;
+            if let Some(stamp) = &file.stamp {
+                return Ok(SourceSave::Saved(stamp.clone()));
+            }
+        }
+        Ok(outcome)
     }
 
     /// Delete a scene and the arrangement that described it.
@@ -133,6 +147,7 @@ impl Project {
                 reason: format!("{noun} changed before deletion; reload it before trying again."),
             });
         }
+        self.refresh_narrative_dependencies()?;
         Ok(())
     }
 
@@ -169,6 +184,31 @@ impl Project {
             .iter()
             .map(|entry| source::read_text(&self.root, &entry.rel).map(|file| file.asset))
             .collect()
+    }
+
+    /// Shared authoring address. Reject a cross-domain identity collision instead
+    /// of guessing which canonical document the writer meant.
+    pub fn load_editorial_source(&self, id: SceneId) -> Result<SceneFile> {
+        let scene = self.scene_catalog()?.find(id).cloned();
+        let text_id = TextAssetId::from_raw(id.raw());
+        let text = self.text_catalog()?.find(text_id).cloned();
+        if scene.is_some() && text.is_some() {
+            return Err(Error::Malformed {
+                path: "narrative".into(),
+                reason:
+                    "Scene and text asset share an identity. Repair it before review or generation."
+                        .into(),
+            });
+        }
+        if text.is_some() {
+            let file = self.load_text_asset(text_id)?;
+            return Ok(SceneFile {
+                scene: file.asset.editorial_scene(),
+                rel: file.rel,
+                stamp: file.stamp,
+            });
+        }
+        self.load_scene(id)
     }
 
     pub fn load_text_asset(&self, id: TextAssetId) -> Result<TextFile> {
@@ -221,9 +261,25 @@ impl Project {
     /// edit. Whole-document, guarded and never merged, exactly as a scene is.
     pub fn save_text_asset(&mut self, file: &mut TextFile) -> Result<SourceSave> {
         self.ensure_writable()?;
-        let outcome = source::write_text(&self.root, file, &self.peer)?;
+        let mut projected = SceneFile {
+            scene: file.asset.editorial_scene(),
+            rel: file.rel.clone(),
+            stamp: file.stamp.clone(),
+        };
+        let outcome = self.save_editorial_scene(&mut projected)?;
         if matches!(outcome, SourceSave::Saved(_)) {
-            self.index_narrative_path(&file.rel)?;
+            *file = self.load_text_asset(file.asset.id)?;
+            let authored = file
+                .asset
+                .lines()
+                .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+                .collect();
+            self.record_authored_narrative_dependencies_for(&authored)?;
+            self.refresh_narrative_dependencies()?;
+            *file = self.load_text_asset(file.asset.id)?;
+            if let Some(stamp) = &file.stamp {
+                return Ok(SourceSave::Saved(stamp.clone()));
+            }
         }
         Ok(outcome)
     }
@@ -235,6 +291,15 @@ impl Project {
     ///
     /// [`Destination`]: wobu_narrative::Destination
     pub fn delete_text_asset(&mut self, id: TextAssetId) -> Result<()> {
+        let file = self.load_text_asset(id)?;
+        if file.asset.policy == wobu_narrative::GenerationPolicy::Locked
+            || file.asset.lines().any(|(_, slot)| !slot.may_generate())
+        {
+            return Err(Error::Malformed {
+                path: file.rel.into(),
+                reason: "Unlock protected supporting text before deleting it.".into(),
+            });
+        }
         let entry = self.text_catalog()?.find(id).cloned();
         let rel = entry.ok_or_else(|| Error::NoSuchNode(id.to_string()))?.rel;
         self.delete_source(&rel, "Text asset")
@@ -267,6 +332,7 @@ impl Project {
         let outcome = source::write_state(&self.root, document, expected, &self.peer)?;
         if matches!(outcome, SourceSave::Saved(_)) {
             self.index_narrative_path(source::STATE_FILE)?;
+            self.refresh_narrative_dependencies()?;
         }
         Ok(outcome)
     }

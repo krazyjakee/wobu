@@ -1,0 +1,404 @@
+{
+  "before": {
+    "asset": {
+      "editorial_head": "01M210KP2E5A844D343CH4QNMD",
+      "id": "00000000000000000000000101",
+      "kind": "bark",
+      "name": "Seawall keeper passing line",
+      "summary": "What the keeper says to somebody walking the seawall at night.",
+      "trigger": {
+        "event": "player_passes_seawall"
+      },
+      "sources": [
+        {
+          "quest": "00000000000000000000000099"
+        }
+      ],
+      "participants": [
+        {
+          "entity": "00000000000000000000000090",
+          "role": "keeper"
+        }
+      ],
+      "must_convey": ["The keeper is tired and still on duty."],
+      "must_not_reveal": ["Who put the north lantern out."],
+      "repeat": "shuffle",
+      "policy": "edited",
+      "entries": [
+        {
+          "id": "00000000000000000000000102",
+          "label": "Mind the step",
+          "lines": [
+            {
+              "id": "00000000000000000000000103",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000104",
+                  "text": {
+                    "revision": "a0ac43e6ac2a6974a55d1cd01f166a9d",
+                    "body": "Mind the step. Third one's rotten through.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "locked",
+                      "review": "approved",
+                      "freshness": "current"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000000000000000000105",
+          "label": "Long night",
+          "lines": [
+            {
+              "id": "00000000000000000000000106",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000107",
+                  "text": {
+                    "revision": "9eaad4952677b046fd35e7b19c960d6e",
+                    "body": "Long night for it.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "edited",
+                      "review": "draft",
+                      "freshness": "current"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000000000000000000108",
+          "label": "Dark lantern",
+          "when": {
+            "compare": {
+              "var": "recorded",
+              "op": "eq",
+              "value": {
+                "literal": false
+              }
+            }
+          },
+          "lines": [
+            {
+              "id": "00000000000000000000000109",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000110",
+                  "text": {
+                    "revision": "1333c146563b9c266e6e5c4220d3f90b",
+                    "body": "North light's still out. Nobody's written it down.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "edited",
+                      "review": "draft",
+                      "freshness": "current"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000000000000000000111",
+          "label": "Thanks",
+          "when": {
+            "compare": {
+              "var": "recorded",
+              "op": "eq",
+              "value": {
+                "literal": true
+              }
+            }
+          },
+          "lines": [
+            {
+              "id": "00000000000000000000000112",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000113",
+                  "text": {
+                    "revision": "83a081434e2b20258385524bf7aa9e54",
+                    "body": "You put it in the book. That's more than most.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "edited",
+                      "review": "draft",
+                      "freshness": "current"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "slug": "seawall-keeper-bark",
+    "rel": "narrative/texts/seawall-keeper-bark.yaml",
+    "stamp": {
+      "mtime_ms": 1788888078439,
+      "size": 2774,
+      "hash": "e5cbce11e8a7fa8adfd039ba3c18c2866b386c8730474ee99c026805e1f38b8e"
+    }
+  },
+  "after": {
+    "asset": {
+      "editorial_head": "01M210KP2E5A844D343CH4QNMD",
+      "id": "00000000000000000000000101",
+      "kind": "bark",
+      "name": "Seawall keeper passing line",
+      "summary": "What the keeper says to somebody walking the seawall at night.",
+      "trigger": {
+        "event": "player_passes_seawall"
+      },
+      "sources": [
+        {
+          "quest": "00000000000000000000000099"
+        }
+      ],
+      "participants": [
+        {
+          "entity": "00000000000000000000000090",
+          "role": "keeper"
+        }
+      ],
+      "must_convey": ["The keeper is tired and still on duty."],
+      "must_not_reveal": ["Who put the north lantern out."],
+      "repeat": "shuffle",
+      "policy": "edited",
+      "entries": [
+        {
+          "id": "00000000000000000000000102",
+          "label": "Mind the step",
+          "lines": [
+            {
+              "id": "00000000000000000000000103",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000104",
+                  "text": {
+                    "revision": "a0ac43e6ac2a6974a55d1cd01f166a9d",
+                    "body": "Mind the step. Third one's rotten through.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "locked",
+                      "review": "approved",
+                      "freshness": "out_of_date"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000000000000000000105",
+          "label": "Long night",
+          "lines": [
+            {
+              "id": "00000000000000000000000106",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000107",
+                  "text": {
+                    "revision": "9eaad4952677b046fd35e7b19c960d6e",
+                    "body": "Long night for it.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "edited",
+                      "review": "draft",
+                      "freshness": "out_of_date"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000000000000000000108",
+          "label": "Dark lantern",
+          "when": {
+            "compare": {
+              "var": "recorded",
+              "op": "eq",
+              "value": {
+                "literal": false
+              }
+            }
+          },
+          "lines": [
+            {
+              "id": "00000000000000000000000109",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000110",
+                  "text": {
+                    "revision": "1333c146563b9c266e6e5c4220d3f90b",
+                    "body": "North light's still out. Nobody's written it down.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "edited",
+                      "review": "draft",
+                      "freshness": "out_of_date"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "00000000000000000000000111",
+          "label": "Thanks",
+          "when": {
+            "compare": {
+              "var": "recorded",
+              "op": "eq",
+              "value": {
+                "literal": true
+              }
+            }
+          },
+          "lines": [
+            {
+              "id": "00000000000000000000000112",
+              "speaker": {
+                "entity": "00000000000000000000000090"
+              },
+              "policy": "edited",
+              "variants": [
+                {
+                  "id": "00000000000000000000000113",
+                  "text": {
+                    "revision": "83a081434e2b20258385524bf7aa9e54",
+                    "body": "You put it in the book. That's more than most.",
+                    "provenance": "human",
+                    "lifecycle": {
+                      "policy": "edited",
+                      "review": "draft",
+                      "freshness": "out_of_date"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "slug": "seawall-keeper-bark",
+    "rel": "narrative/texts/seawall-keeper-bark.yaml",
+    "stamp": {
+      "mtime_ms": 1788888183542,
+      "size": 2790,
+      "hash": "e45c4492de361d002f2ed29df436593fc3f887224deaa6b0feada0b51726522d"
+    }
+  },
+  "affected": [
+    {
+      "scene": null,
+      "asset": "00000000000000000000000101",
+      "slot": "00000000000000000000000103",
+      "variant": "00000000000000000000000104",
+      "kind": "changed",
+      "before": "bc474d93364e0480b7280253af92137425cd6d87b563bd2e8d7d410d270b1608",
+      "after": "06eb0850414daff874f7f33973220da1e3837faa36053b9d102163cc7b0d86ff",
+      "explanations": [
+        {
+          "source": "character/00000000000000000000000090/narrative_voice",
+          "context": "context",
+          "line": "text/00000000000000000000000101/entry/00000000000000000000000102/slot/00000000000000000000000103/variant/00000000000000000000000104",
+          "message": "character/00000000000000000000000090/narrative_voice was edited."
+        }
+      ]
+    },
+    {
+      "scene": null,
+      "asset": "00000000000000000000000101",
+      "slot": "00000000000000000000000106",
+      "variant": "00000000000000000000000107",
+      "kind": "changed",
+      "before": "915eea74d532548aa7827f86c1f4d5912366caa97db73d58d7e593bcc7126c41",
+      "after": "9bcae0efc37578f8b8d6da723c924489851ef8c91b95d1a64400a1f1ccf2af5a",
+      "explanations": [
+        {
+          "source": "character/00000000000000000000000090/narrative_voice",
+          "context": "context",
+          "line": "text/00000000000000000000000101/entry/00000000000000000000000105/slot/00000000000000000000000106/variant/00000000000000000000000107",
+          "message": "character/00000000000000000000000090/narrative_voice was edited."
+        }
+      ]
+    },
+    {
+      "scene": null,
+      "asset": "00000000000000000000000101",
+      "slot": "00000000000000000000000109",
+      "variant": "00000000000000000000000110",
+      "kind": "changed",
+      "before": "983807101ae9ab61463b12bdec20f419701a60e4e074fa775d4012d784ece75f",
+      "after": "092eb42ee80bc66c670f992079fd5ce6d68f8b230ff9100610df70af7bb11f95",
+      "explanations": [
+        {
+          "source": "character/00000000000000000000000090/narrative_voice",
+          "context": "context",
+          "line": "text/00000000000000000000000101/entry/00000000000000000000000108/slot/00000000000000000000000109/variant/00000000000000000000000110",
+          "message": "character/00000000000000000000000090/narrative_voice was edited."
+        }
+      ]
+    },
+    {
+      "scene": null,
+      "asset": "00000000000000000000000101",
+      "slot": "00000000000000000000000112",
+      "variant": "00000000000000000000000113",
+      "kind": "changed",
+      "before": "8f963973759c92c40cdf981a67fe939a1a2e691fd10d0492d7749245248e7b98",
+      "after": "d7183344c6fbef7329a8b485087e14093e5fd614f361a4728b6c89216fcd726a",
+      "explanations": [
+        {
+          "source": "character/00000000000000000000000090/narrative_voice",
+          "context": "context",
+          "line": "text/00000000000000000000000101/entry/00000000000000000000000111/slot/00000000000000000000000112/variant/00000000000000000000000113",
+          "message": "character/00000000000000000000000090/narrative_voice was edited."
+        }
+      ]
+    }
+  ]
+}

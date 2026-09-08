@@ -58,7 +58,7 @@ impl Project {
     ) -> Result<SceneFile> {
         self.ensure_writable()?;
         let _lock = scene_lock(self, scene.id)?;
-        let current = match self.load_scene(scene.id) {
+        let current = match self.load_editorial_source(scene.id) {
             Ok(f) => Some(f),
             Err(Error::NoSuchNode(_)) => None,
             Err(e) => return Err(e),
@@ -92,17 +92,33 @@ impl Project {
                 }
             }
         }
+        let supporting = scene.supporting_text.is_some();
         let mut file = SceneFile {
             scene,
             rel: current.as_ref().map(|f| f.rel.clone()).unwrap_or_else(|| {
-                narrative::scene_rel(&wobu_core::unique_slug(slug, &|candidate| {
-                    self.scene_catalog().is_ok_and(|c| c.slugs().contains(candidate))
-                }))
+                let slug = wobu_core::unique_slug(slug, &|candidate| {
+                    if supporting {
+                        self.text_catalog().is_ok_and(|c| c.slugs().contains(candidate))
+                    } else {
+                        self.scene_catalog().is_ok_and(|c| c.slugs().contains(candidate))
+                    }
+                });
+                if supporting { narrative::text_rel(&slug) } else { narrative::scene_rel(&slug) }
             }),
             stamp: current.and_then(|f| f.stamp),
         };
         match self.save_editorial_scene_locked(&mut file)? {
-            SourceSave::Saved(_) => Ok(file),
+            SourceSave::Saved(_) => {
+                drop(_lock);
+                let authored = file
+                    .scene
+                    .dialogue_slots()
+                    .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+                    .collect();
+                self.record_authored_narrative_dependencies_for(&authored)?;
+                self.refresh_narrative_dependencies()?;
+                self.load_editorial_source(file.scene.id)
+            }
             SourceSave::Conflict { .. } => {
                 Err(invalid("Scene changed during undo. Reload before restoring."))
             }
@@ -200,10 +216,12 @@ impl Project {
         if target.variant.is_some() && index.is_none() {
             return Err(invalid("Dialogue variant is missing."));
         }
-        let locked = slot.policy == GenerationPolicy::Locked
-            || index.is_some_and(|i| {
-                slot.variants[i].text.lifecycle.policy == GenerationPolicy::Locked
-            });
+        let locked =
+            before.supporting_text.as_ref().is_some_and(|a| a.policy == GenerationPolicy::Locked)
+                || slot.policy == GenerationPolicy::Locked
+                || index.is_some_and(|i| {
+                    slot.variants[i].text.lifecycle.policy == GenerationPolicy::Locked
+                });
         let mut bind = false;
         let mut approved = false;
         match &action {
@@ -337,13 +355,14 @@ impl Project {
         }
         // Selected wording is excluded from this semantic projection, while
         // variant identity and conditions remain. Capture after insertion.
-        let context = ReviewContext::capture(
+        let context = capture_context(
             &scene,
             &binding_target,
             serde_json::to_value(&tx.snapshot.world)?,
             serde_json::to_value(&tx.snapshot.schema)?,
             tx.snapshot.characters.clone(),
             tx.snapshot.state.clone(),
+            &tx.snapshot.linked_scenes,
         );
         if bind {
             let slot = scene
@@ -398,10 +417,22 @@ impl Project {
             self.write_editorial_event(event)?;
         }
         tx.snapshot.check_current(self)?;
+        let reviewed = tx
+            .bindings
+            .iter()
+            .filter_map(|(id, binding)| {
+                tx.events.iter().any(|event| event.id == binding.event_id).then_some(*id)
+            })
+            .collect();
         let mut file = tx.snapshot.file;
         file.scene = tx.scene;
         match self.write_review_scene(&mut file)? {
-            SourceSave::Saved(_) => Ok(file),
+            SourceSave::Saved(_) => {
+                drop(tx._lock);
+                self.record_narrative_dependencies_for(&reviewed)?;
+                self.refresh_narrative_dependencies()?;
+                self.load_editorial_source(file.scene.id)
+            }
             SourceSave::Conflict { .. } => Err(invalid(
                 "Scene changed before review publication. Receipts remain uncommitted; reload before deciding.",
             )),
@@ -425,7 +456,19 @@ impl Project {
         }
     }
     fn write_review_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        let result = narrative::write_scene(self.root(), file, &self.peer)?;
+        let result = if file.scene.supporting_text.is_some() {
+            let asset = file
+                .scene
+                .editorial_text()
+                .ok_or_else(|| invalid("Invalid supporting-text editorial projection."))?;
+            let mut text_file =
+                crate::TextFile { asset, rel: file.rel.clone(), stamp: file.stamp.clone() };
+            let result = narrative::write_text(self.root(), &mut text_file, &self.peer)?;
+            file.stamp = text_file.stamp;
+            result
+        } else {
+            narrative::write_scene(self.root(), file, &self.peer)?
+        };
         if matches!(result, SourceSave::Saved(_)) {
             self.index_narrative_path(&file.rel)?;
         }
@@ -438,14 +481,17 @@ impl Project {
     }
     fn save_editorial_scene_locked(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
         let previous = if narrative::registry::read(self.root(), &file.rel)?.is_some() {
-            Some(narrative::read_scene(self.root(), &file.rel)?)
+            Some(self.load_editorial_source(file.scene.id)?)
         } else {
             None
         };
         if previous.as_ref().and_then(|f| f.stamp.as_ref()) != file.stamp.as_ref() {
-            let yaml = wobu_narrative::SceneDocument::new(file.scene.clone())
-                .to_yaml()
-                .map_err(|e| invalid(e.to_string()))?;
+            let yaml = if let Some(asset) = file.scene.editorial_text() {
+                wobu_narrative::TextAssetDocument::new(asset).to_yaml()
+            } else {
+                wobu_narrative::SceneDocument::new(file.scene.clone()).to_yaml()
+            }
+            .map_err(|e| invalid(e.to_string()))?;
             let path = narrative::registry::safe_path(self.root(), &file.rel)?;
             let (conflict_path, _) =
                 crate::atomic::park_conflict(self.root(), &path, &yaml, &self.peer)?;
@@ -643,6 +689,12 @@ fn event(
 pub fn validate_manual(previous: Option<&Scene>, next: &Scene) -> Result<()> {
     if previous.is_some_and(|s| s.id != next.id) {
         return Err(invalid("Keep the original scene identity when saving."));
+    }
+    if let Some(old) = previous.and_then(|s| s.supporting_text.as_ref())
+        && old.policy == GenerationPolicy::Locked
+        && previous.is_some_and(|s| s.beats != next.beats)
+    {
+        return Err(invalid("Unlock the supporting asset before changing its wording."));
     }
     if next.editorial_head != previous.and_then(|s| s.editorial_head) {
         return Err(invalid("Editorial history can only change through review commands."));

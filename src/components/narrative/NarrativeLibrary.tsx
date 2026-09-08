@@ -622,11 +622,27 @@ function SceneRename({
   onRename: (name: string) => void
 }) {
   const [editing, setEditing] = useState<string | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const restoring = useRef(false)
+  const isEditing = editing !== null
+  useLayoutEffect(() => {
+    if (isEditing) input.current?.focus()
+    else if (restoring.current) {
+      trigger.current?.focus()
+      restoring.current = false
+    }
+  }, [isEditing])
+  const finish = () => {
+    restoring.current = true
+    setEditing(null)
+  }
   if (drafted)
     return <p className="nrt-note">Unsaved draft — save or discard it before renaming.</p>
   if (editing === null)
     return (
       <button
+        ref={trigger}
         type="button"
         className="btn"
         disabled={readOnly}
@@ -640,22 +656,32 @@ function SceneRename({
   return (
     <form
       className="nsl-rename"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return
+        event.preventDefault()
+        finish()
+      }}
       onSubmit={(event) => {
         event.preventDefault()
         const next = editing.trim()
         if (!next) return
-        setEditing(null)
+        finish()
         if (next !== name) onRename(next)
       }}
     >
       <label>
         New name for {name}
-        <input value={editing} maxLength={200} onChange={(e) => setEditing(e.target.value)} />
+        <input
+          ref={input}
+          value={editing}
+          maxLength={200}
+          onChange={(e) => setEditing(e.target.value)}
+        />
       </label>
       <button type="submit" className="btn" disabled={!editing.trim()}>
         Save name
       </button>
-      <button type="button" className="btn" onClick={() => setEditing(null)}>
+      <button type="button" className="btn" onClick={finish}>
         Cancel rename
       </button>
     </form>

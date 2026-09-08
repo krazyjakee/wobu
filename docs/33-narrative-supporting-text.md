@@ -2,8 +2,8 @@
 
 Everything a game says outside a scene. **Narrative → Text library** authors six kinds through the
 same model, the same wording identities and the same export path as scene dialogue. This is N3
-issue #167. It is planned work landing in stages; the limits at the end of this page say which
-stages are not here yet.
+issue #167. Text generation and review run in the authoring toolchain; the game reads prepared,
+approved content offline.
 
 ## The model
 
@@ -12,7 +12,8 @@ kind, a name, a host trigger, optional source links, a cast, a selection policy 
 of entries. An entry has an optional condition and one or more lines. **A line is a dialogue slot**
 — the same type a beat holds — so a bark carries the same stable slot and variant identities, the
 same wording revision, the same provenance and the same generation policy, review state and
-freshness as a line inside a scene.
+freshness as a line inside a scene. The optional `editorial_head` points to committed immutable
+review history; files without it retain their existing serialization.
 
 There is no choice, outcome or destination anywhere in the model, and no field one could be put in.
 US-09 requires standalone prose to exist without inventing a player choice to hang it on; the
@@ -141,7 +142,11 @@ inside a scene.
 ## The Text library
 
 **Narrative → Text library** lists every asset with its kind, offers the six templates, and edits
-one document at a time: name, trigger, selection policy, brief, asset lock, entries and wording.
+one document at a time: name, trigger and typed condition, selection policy, brief, asset lock,
+cast and speakers, relevant source links, required meaning, forbidden revelations, entries and
+conditioned wording variants. Search by name/type, combine the type filter, and page through 25
+assets at a time; the library displays actual total and matching counts. The catalog remains a
+rebuildable folder read, and pagination bounds rendered results rather than hiding unreadable files.
 The kind shapes the controls — a codex form does not offer a cast picker, a bark form does not offer
 a second line — but the enforcement is the backend's, whose diagnostics the pane renders in the
 backend's own words. Saving is a whole-document guarded write with the stamp the document was read
@@ -170,16 +175,46 @@ the stamp guard, catalog-authoritative paths, deletion and the source fingerprin
 IPC; they establish the displayed controls and the exact command arguments, not native Tauri
 rendering.
 
-Not done in this checkpoint, and not implied by it:
+Generation tests exercise all six kinds through the real cancellable job queue with an in-process
+mock provider, strict output validation, immutable receipts/proposals and guarded acceptance. They
+also reject an asset locked after planning before any provider call. Store fixtures verify approval
+and Release evidence after reopen/index rebuild, stale-context attestation, forged-flag refusal,
+protected wording, stale whole-document conflict files and cross-domain identity collision refusal.
+A supporting-only project exports without creating a scene; two approved Release builds have the
+same payload hash and a changed context blocks the next Release.
 
-- **Generation.** The frozen generation request, its context and its proposal record all name a
-  scene slot. Supporting text is not yet reachable from **Generate…**, so no provider call has been
-  made against one and no context-specific prompt has been validated live. The policy, lock and
-  approval machinery it will use is in place and tested.
-- **Review queue.** The paged Review surface is scene-keyed and does not list supporting text.
-  Approval evidence for supporting text is defined and enforced by the compiler, but nothing yet
-  produces it from canonical editorial history, so a **Release** export of a project containing
-  supporting text is blocked until that lands. Development export works.
-- **Library search.** Supporting text is not in the SQLite projection, so the Text library reads the
-  folder and offers no search, filters or paging.
-- **Screenshots.** No UI evidence is recorded for this checkpoint.
+Provider responses in these tests are mocked. No live model quality, cost, network reliability or
+Unity/Godot/Unreal/Yarn behaviour is claimed; N5 remains excluded. Native Text library screenshots
+are recorded with the integrated acceptance evidence.
+
+## Generate, compare and approve
+
+Save the asset, inspect **Context**, and choose **Generate**. The shared planner uses the saved
+asset/entry/slot/variant IDs, supplied scenario, provider/model settings and frozen attributed
+context. Every type has an explicit prose brief; ambient context includes ordered speakers and
+neighbouring applicable wording. Trigger and entry conditions are checked before generation.
+Linked characters, facts, events, quests and scene intent are attributed in context. A source link
+does not grant a speaking character knowledge; unknown or restricted facts and inactive events
+are excluded from usable source fragments. Quest/scene summaries describe authored intent and are
+not evidence that a future stage has occurred.
+
+**Review** opens the same comparison editor as scene dialogue. Supporting assets also appear in
+the project-wide paged queue. Generated slots may accept eligible generated wording; Edited slots
+retain proposals; asset, slot and wording locks are enforced again at execution and acceptance.
+Approval binds exact wording and reviewed context through immutable decisions. Manual saves cannot
+forge approval or move history. Background refresh retains a dirty draft and its original save
+guard; a competing save is parked as a canonical text conflict for recovery.
+
+The editorial adapter maps the existing container/section address fields to the original asset
+and entry IDs and carries explicit `supporting_text` metadata in new editorial snapshots. It never
+writes a synthetic scene document, and source parsing and compilation reject such adapters as
+scene source. Canonical files remain `TextAsset` documents without choices or outcomes. Existing
+scene receipts and generation requests keep their serialized fields/bytes. Native Release evidence
+is converted from verified committed history to `TextApprovalEvidence`; writable flags alone fail
+closed. Stable variant IDs and independent wording revisions remain the localisation/audio hooks.
+
+For a host using only supporting text, `Runtime::start_text(graph, host_inputs, run_id, seed)`
+initializes an idle scene cursor. `text_events`, `deliver_text` and snapshot/restore work normally;
+scene actions yield End, with no invented beat, choice, visit or effect. Empty-cursor restores are
+validated explicitly. This uses existing supporting delivery and End operations, so no new runtime
+opcode or engine capability is introduced.

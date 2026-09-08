@@ -302,6 +302,10 @@ pub fn compile(
                 message,
             })
         };
+        if scene.supporting_text.is_some() {
+            emit(Site::Scene, Severity::Error, "editorial_projection", "Supporting text must compile from its canonical text asset, not its authoring adapter.".into());
+            continue;
+        }
         for diagnostic in scene.diagnostics(schema, &catalog) {
             let missing = matches!(diagnostic.problem, Problem::MissingText);
             let severity = if missing && options.profile == Profile::Development {

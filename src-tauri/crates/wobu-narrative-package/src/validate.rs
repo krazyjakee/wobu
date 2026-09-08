@@ -116,7 +116,7 @@ fn dialogue(
 }
 
 pub fn graph(graph: &Graph) -> Result<()> {
-    if graph.version != GRAPH_VERSION || graph.scenes.is_empty() {
+    if graph.version != GRAPH_VERSION || (graph.scenes.is_empty() && graph.texts.is_empty()) {
         return Err(invalid("unsupported or empty graph"));
     }
     for variable in graph.state.values() {

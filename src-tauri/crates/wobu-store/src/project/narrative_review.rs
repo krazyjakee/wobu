@@ -1,5 +1,7 @@
 //! Canonical review evidence, guarded transitions and immutable history.
 mod capture;
+mod dependencies;
+use dependencies::{capture_context, historical_context};
 mod proposals;
 mod write;
 use super::Project;

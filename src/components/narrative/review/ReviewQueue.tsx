@@ -1,3 +1,4 @@
+import { textDraftKey, useTextDrafts } from '../textDrafts'
 import { sceneEditKey, useScriptDrafts } from '../scriptDrafts'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '../../Modal'
@@ -8,6 +9,7 @@ import type {
   ReviewTarget,
 } from '../../../lib/api/narrativeReview'
 import type { GenerationHistory } from '../../../lib/api/narrativeGeneration'
+import { PageControls } from '../PageControls'
 import { ReviewDetail } from './ReviewDetail'
 import {
   EMPTY_REVIEW_FILTERS,
@@ -62,6 +64,7 @@ export function ReviewQueue({
   const [stateJson, setStateJson] = useState<string | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const authoringDrafts = useScriptDrafts((state) => state.drafts)
+  const textDrafts = useTextDrafts((state) => state.drafts)
   const drafts = useReviewDrafts((state) => state.drafts)
   const rows = useMemo(
     () =>
@@ -341,30 +344,16 @@ export function ReviewQueue({
               </p>
             )}
             <nav aria-label="Review queue pages">
-              <button
-                className="btn"
-                disabled={currentPage === 0}
-                onClick={() => setPage(currentPage - 1)}
-              >
-                Previous page
-              </button>
-              <span>
-                Page {currentPage + 1} of {lastPage + 1}
-              </span>
-              <button
-                className="btn"
-                disabled={currentPage === lastPage}
-                onClick={() => setPage(currentPage + 1)}
-              >
-                Next page
-              </button>
+              <PageControls currentPage={currentPage} lastPage={lastPage} onPage={setPage} />
             </nav>
           </section>
           {current ? (
             <div>
-              {authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] && (
+              {(authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] ||
+                textDrafts[textDraftKey(projectKey, current.line.target.scene)]) && (
                 <p role="status">
-                  Save or discard the shared scene draft before changing wording or review policy.
+                  Save or discard the shared authoring draft before changing wording or review
+                  policy.
                 </p>
               )}
               <ReviewDetail
@@ -372,7 +361,11 @@ export function ReviewQueue({
                 row={current}
                 projectKey={projectKey}
                 readOnly={
-                  readOnly || !!authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)]
+                  readOnly ||
+                  !!(
+                    authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] ||
+                    textDrafts[textDraftKey(projectKey, current.line.target.scene)]
+                  )
                 }
                 proposalId={selectedProposal}
                 onProposal={(id) => setProposals((before) => ({ ...before, [current.key]: id }))}

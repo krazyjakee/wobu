@@ -337,3 +337,56 @@ fn every_affected_line_explains_itself_as_source_context_line() {
         assert!(explanation.message.ends_with("was edited."));
     }
 }
+
+#[test]
+fn ambient_neighbor_wording_affects_only_other_lines_in_its_exchange() {
+    use wobu_narrative::{DialogueSlot, Speaker, Text, TextEntry, TextKind, Variant};
+    let mut world = harbour();
+    let first = world.codex_line();
+    world.texts[0].kind = TextKind::Ambient;
+    let mut neighbor = DialogueSlot::new(Speaker::Narrator);
+    neighbor.variants.push(Variant::new(Text::written("A reply.")));
+    world.texts[0].entries[0].lines.push(neighbor);
+    let mut unrelated = TextEntry::new("Another exchange");
+    let mut line = DialogueSlot::new(Speaker::Narrator);
+    line.variants.push(Variant::new(Text::written("Elsewhere.")));
+    unrelated.lines.push(line);
+    world.texts[0].entries.push(unrelated);
+    let affected = world.affected(|world| {
+        world.texts[0].entries[0].lines[1].variants[0]
+            .text
+            .set_body("A different reply.", wobu_narrative::Provenance::Human);
+    });
+    assert_eq!(variants(&affected), BTreeSet::from([first]));
+    assert!(affected[0].reasons.iter().any(|reason| matches!(reason, Reason::FieldChanged { source } if source.ends_with("/ambient_neighbors"))));
+}
+
+#[test]
+fn changing_supporting_text_repeat_policy_changes_its_context_only() {
+    let mut world = harbour();
+    let codex = world.codex_line();
+    let affected =
+        world.affected(|world| world.texts[0].repeat = wobu_narrative::RepeatPolicy::Once);
+    assert_eq!(variants(&affected), BTreeSet::from([codex]));
+}
+
+#[test]
+fn reordering_an_ambient_exchange_invalidates_its_lines_but_not_other_entries() {
+    use wobu_narrative::{DialogueSlot, Speaker, Text, TextEntry, TextKind, Variant};
+    let mut world = harbour();
+    let first = world.codex_line();
+    world.texts[0].kind = TextKind::Ambient;
+    let mut neighbor = DialogueSlot::new(Speaker::Narrator);
+    neighbor.variants.push(Variant::new(Text::written("A reply.")));
+    let second = neighbor.variants[0].id;
+    world.texts[0].entries[0].lines.push(neighbor);
+    let mut unrelated = TextEntry::new("Another exchange");
+    let mut line = DialogueSlot::new(Speaker::Narrator);
+    line.variants.push(Variant::new(Text::written("Elsewhere.")));
+    unrelated.lines.push(line);
+    world.texts[0].entries.push(unrelated);
+    let affected = world.affected(|world| world.texts[0].entries[0].lines.swap(0, 1));
+    assert_eq!(variants(&affected), BTreeSet::from([first, second]));
+    assert!(affected.iter().all(|item| item.reasons.iter().any(|reason| matches!(reason,
+        Reason::FieldChanged { source } if source.ends_with("/ambient_order")))));
+}

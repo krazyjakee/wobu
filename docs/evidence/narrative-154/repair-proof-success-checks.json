@@ -1,0 +1,12 @@
+{
+  "sceneId": "01M20Y1NPQFFHDQRENTY3XDRB6",
+  "headBefore": "01M20Y7EF22GR710FJAJWAP38J",
+  "headAfter": "01M20Y7EF22GR710FJAJWAP38J",
+  "exactReceiptSnapshotRestored": true,
+  "receiptBytesUnchanged": true,
+  "malformedBytesSha256": "4114f2ec9134b75e8af19b4022db560ee3af69c495c1fa2a11ce84ef603df95c",
+  "recoveryBytesSha256": "4114f2ec9134b75e8af19b4022db560ee3af69c495c1fa2a11ce84ef603df95c",
+  "recoveryRel": "narrative/recovery/01M20Y1NPQFFHDQRENTY3XDRB6.e13e1ae4abe8b5feec9c47bb73c7571738ece50de044381018def4ca459db355.yaml",
+  "canonicalBytesSha256": "9459d4b0f214bbbdc3b2216357db28d220d8b814db5a27074a1bf3a415b64e70",
+  "browserErrors": []
+}

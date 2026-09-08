@@ -173,6 +173,13 @@ impl Runtime {
         Self::start_with_state(graph, scene, host_inputs, run_id, seed, step_limit)
     }
 
+    /// Initialize host-triggered text without inventing a scene cursor. The
+    /// returned runner yields End for scene actions; delivery and repeat state
+    /// use the normal text_events/deliver_text/snapshot contract.
+    pub fn start_text(graph: Graph, host_inputs: State, run_id: String, seed: u64) -> Result<Self> {
+        Self::start(graph, "", host_inputs, run_id, seed, 1)
+    }
+
     /// Scenario initialization may override narrative defaults as well as host
     /// inputs. Ownership restrictions apply to every subsequent write. This
     /// never edits graph defaults or changes the content hash.
@@ -219,6 +226,10 @@ impl Runtime {
         };
         runner.saved.state.extend(initial);
         runner.validate_state()?;
+        if scene.is_empty() && !runner.graph.texts.is_empty() {
+            runner.saved.phase = Phase::End { label: "Supporting text".into() };
+            return Ok(runner);
+        }
         let mut budget = step_limit;
         runner.drive(Action::Target(Target::Scene(scene.into())), &mut budget)?;
         Ok(runner)
@@ -262,7 +273,19 @@ impl Runtime {
             return Err(Error::InvalidState("invalid execution settings".into()));
         }
         runner.validate_state()?;
-        runner.beat()?;
+        if runner.saved.scene.is_empty() {
+            if runner.graph.texts.is_empty()
+                || !runner.saved.beat.is_empty()
+                || !runner.saved.visits.is_empty()
+                || runner.saved.command_sequence != 0
+                || !runner.saved.acknowledged.is_empty()
+                || runner.saved.phase != (Phase::End { label: "Supporting text".into() })
+            {
+                return Err(Error::InvalidState("invalid supporting-text cursor".into()));
+            }
+        } else {
+            runner.beat()?;
+        }
         for (id, count) in &runner.saved.visits {
             if *count == 0 || !runner.graph.scenes.values().any(|s| s.beats.contains_key(id)) {
                 return Err(Error::InvalidState("invalid visit history".into()));

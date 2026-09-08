@@ -97,6 +97,10 @@ export function useFlowReveal({
       if (!graph) element.scrollIntoView?.({ block: 'nearest' })
       if (reveal!.focus && !reveal!.field) {
         if (element.matches(':disabled')) return
+        // At high UI scaling the surrounding panel may scroll independently
+        // of the graph. Centre the node inside Flow, then expose the canvas
+        // itself before restoring focus without moving its graph viewport.
+        if (graph) root!.scrollIntoView?.({ block: 'nearest' })
         element.focus({ preventScroll: true })
         if (document.activeElement !== element) return
       }

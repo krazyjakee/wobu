@@ -274,7 +274,9 @@ function ScriptEditor({
         <button
           className="btn"
           disabled={disabled}
-          onClick={() => dispatchSceneEdit({ kind: 'addBeat', title: 'New beat' })}
+          onClick={() =>
+            dispatchSceneEdit({ kind: 'addBeat', title: 'New beat', afterId: beat?.id })
+          }
         >
           Add beat
         </button>

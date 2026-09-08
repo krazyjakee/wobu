@@ -48,7 +48,7 @@ pub fn build(
     let graph = report
         .graph
         .ok_or_else(|| invalid("Repair compiler errors before generating dialogue."))?;
-    let file = project.load_scene(input.scene)?;
+    let file = project.load_editorial_source(input.scene)?;
     let scene_hash =
         file.stamp.as_ref().ok_or_else(|| invalid("Save the scene first."))?.hash.clone();
     if input.selection.as_ref().is_some_and(|selection| selection.scene != input.scene) {
@@ -108,7 +108,12 @@ pub fn build(
                 "Choose an existing variant; generation cannot append a new branch to a populated slot.",
             ));
         }
-        if slot.policy == wobu_narrative::GenerationPolicy::Locked
+        if file
+            .scene
+            .supporting_text
+            .as_ref()
+            .is_some_and(|a| a.policy == wobu_narrative::GenerationPolicy::Locked)
+            || slot.policy == wobu_narrative::GenerationPolicy::Locked
             || variant.is_some_and(|v| !v.text.lifecycle.may_generate())
         {
             plan.skipped.push(Skipped { target, reason: "Locked dialogue is excluded.".into() });

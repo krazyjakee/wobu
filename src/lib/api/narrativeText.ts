@@ -77,6 +77,7 @@ export interface TextEntry {
 }
 
 export interface TextAsset {
+  editorial_head?: string | null
   id: TextAssetId
   kind: TextKind
   name: string

@@ -1,7 +1,8 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ProjectSummary } from '../../lib/api'
 import {
   useCreateScene,
+  useDiagnoseScene,
   useRenameScene,
   useSceneDiagnostics,
   useScene,
@@ -21,6 +22,8 @@ import { NarrativeSourcePane } from './NarrativeSourcePane'
 import { NarrativeExample } from './NarrativeExample'
 import { NarrativeLibrary } from './NarrativeLibrary'
 import { NarrativeTextLibrary } from './NarrativeTextLibrary'
+import { useNarrativeTexts } from '../../lib/queries/narrativeText'
+import type { ReviewTarget } from '../../lib/api/narrativeReview'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 import { useSceneLibrary } from './sceneLibraryStore'
@@ -40,12 +43,16 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [textLibraryOpen, setTextLibraryOpen] = useState(false)
+  const [textTarget, setTextTarget] = useState<ReviewTarget | undefined>()
   const [exampleOpen, setExampleOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [generationOpen, setGenerationOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
+  const [sidePane, setSidePane] = useState<'outline' | 'context' | null>(null)
+  const sidePaneButtons = useRef<HTMLDivElement>(null)
+  const editorRoot = useRef<HTMLDivElement>(null)
   const [repairRel, setRepairRel] = useState<string | null>(null)
   const worldTarget = useUI((state) => state.narrativeWorldTarget)
   const [closedWorldSeq, setClosedWorldSeq] = useState<number | null>(null)
@@ -59,6 +66,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   }
   const [editorOpened, setEditorOpened] = useState(false)
   const catalog = useScenes()
+  const textCatalog = useNarrativeTexts(project.path, reviewOpen || textLibraryOpen)
   const file = useScene(selection.sceneId)
   const draft = useScriptDrafts((state) =>
     selection.sceneId ? state.drafts[sceneEditKey(project.path, selection.sceneId)] : undefined,
@@ -135,6 +143,31 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         )}
         <div className="nrt-head-actions">
+          {editorOpened && !libraryOpen && !worldOpen && !textLibraryOpen && (
+            <div className="nrt-compact-pane-actions" ref={sidePaneButtons}>
+              {(['outline', 'context'] as const).map((pane) => (
+                <button
+                  key={pane}
+                  type="button"
+                  className="btn"
+                  data-pane-toggle={pane}
+                  aria-expanded={sidePane === pane}
+                  onClick={() => {
+                    setSidePane(sidePane === pane ? null : pane)
+                    const selector = pane === 'outline' ? '.nrt-scene-outline' : '.nrt-inspector'
+                    if (sidePane !== pane)
+                      requestAnimationFrame(() =>
+                        editorRoot.current
+                          ?.querySelector<HTMLElement>(`${selector} :is(button, input, select)`)
+                          ?.focus(),
+                      )
+                  }}
+                >
+                  {pane === 'outline' ? 'Scene outline' : 'Context'}
+                </button>
+              ))}
+            </div>
+          )}
           <button className="btn" onClick={() => setGenerationOpen(true)}>
             Generate…
           </button>
@@ -183,11 +216,21 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         <NarrativeReview
           projectKey={project.path}
           readOnly={project.readOnly}
-          sceneName={(id) => catalog.data?.scenes.find((scene) => scene.id === id)?.name ?? id}
+          sceneName={(id) =>
+            catalog.data?.scenes.find((scene) => scene.id === id)?.name ??
+            textCatalog.data?.assets.find((asset) => asset.id === id)?.name ??
+            id
+          }
           speakerName={(id) => nameOf(id) ?? id}
           onClose={() => setReviewOpen(false)}
           onSource={(target) => {
             setReviewOpen(false)
+            if (textCatalog.data?.assets.some((asset) => asset.id === target.scene)) {
+              setTextTarget(target)
+              setTextLibraryOpen(true)
+              closeWorld()
+              return
+            }
             open(
               { sceneId: target.scene, beatId: target.beat, lineId: target.slot },
               'script',
@@ -257,10 +300,23 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
       {editorOpened && (
         <div
           className="nrt-editor-view"
+          ref={editorRoot}
+          data-side-pane={sidePane ?? undefined}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented || !sidePane) return
+            const selector = sidePane === 'outline' ? '.nrt-scene-outline' : '.nrt-inspector'
+            if (!(event.target as HTMLElement).closest(selector)) return
+            event.preventDefault()
+            event.stopPropagation()
+            sidePaneButtons.current
+              ?.querySelector<HTMLElement>(`[data-pane-toggle="${sidePane}"]`)
+              ?.focus()
+            setSidePane(null)
+          }}
           style={editorStyle}
           hidden={libraryOpen || worldOpen || textLibraryOpen}
         >
-          {!navCollapsed && (
+          {(!navCollapsed || sidePane === 'outline') && (
             <nav className="nrt-scene-outline" aria-label="Current scene outline">
               <h3>{selected?.name ?? 'Selected scene'}</h3>
               {(selected?.beats ?? []).map((beat) => (
@@ -268,9 +324,10 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
                   key={beat.id}
                   type="button"
                   aria-current={selection.beatId === beat.id ? 'true' : undefined}
-                  onClick={() =>
+                  onClick={() => {
                     selectNarrative({ sceneId: selected!.id, beatId: beat.id }, 'library')
-                  }
+                    setSidePane(null)
+                  }}
                 >
                   {beat.title}
                 </button>
@@ -290,13 +347,15 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
               projectKey={project.path}
             />
           )}
-          {!inspCollapsed && (
+          {(!inspCollapsed || sidePane === 'context') && (
             <NarrativeInspector projectKey={project.path} readOnly={project.readOnly} />
           )}
         </div>
       )}
       {textLibraryOpen && !worldOpen && (
         <NarrativeTextLibrary
+          key={textTarget ? JSON.stringify(textTarget) : 'library'}
+          initialTarget={textTarget}
           projectKey={project.path}
           readOnly={project.readOnly}
           nameOf={nameOf}
@@ -304,7 +363,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         />
       )}
       {worldOpen && <NarrativeWorldPane projectKey={project.path} readOnly={project.readOnly} />}
-      <SceneDiagnosticsFooter />
+      <SceneDiagnosticsFooter projectKey={project.path} />
     </div>
   )
 }
@@ -319,20 +378,31 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
  * sentence beside the count says what these diagnostics are and, more usefully,
  * what they are not.
  */
-function SceneDiagnosticsFooter() {
+function SceneDiagnosticsFooter({ projectKey }: { projectKey: string }) {
   const sceneId = useUI((s) => s.narrative.sceneId)
+  const draft = useScriptDrafts((state) =>
+    sceneId ? state.drafts[sceneEditKey(projectKey, sceneId)]?.scene : undefined,
+  )
   const found = useSceneDiagnostics(sceneId)
-  const count = found.data?.length ?? 0
+  const check = useDiagnoseScene()
+  const diagnose = check.mutate
+  useEffect(() => {
+    if (draft && sceneId) diagnose({ sceneId, scene: draft })
+  }, [draft, sceneId, diagnose])
+  const current = check.variables?.scene === draft
+  const checking = draft ? !current || check.isPending : found.isPending
+  const error = draft ? (current && check.isError ? check.error : null) : found.error
+  const count = (draft ? (current ? check.data?.length : 0) : found.data?.length) ?? 0
   return (
     <footer className="nrt-foot" aria-label="Narrative diagnostics">
       <Icon name={count > 0 ? 'x' : 'check'} size="sm" />
       {sceneId === null
         ? 'Choose a scene to see what is wrong with it. '
-        : found.isPending
-          ? 'Reading this scene’s diagnostics… '
-          : found.isError
-            ? `Could not read this scene’s diagnostics: ${String(found.error)}. `
-            : `${count} problem${count === 1 ? '' : 's'} in this scene. `}
+        : checking
+          ? `Checking this ${draft ? 'unsaved ' : ''}scene… `
+          : error
+            ? `Could not read this scene’s diagnostics: ${String(error)}. `
+            : `${count} problem${count === 1 ? '' : 's'} in this ${draft ? 'unsaved ' : ''}scene. `}
       {NARRATIVE_UNAVAILABLE.diagnostics}
     </footer>
   )

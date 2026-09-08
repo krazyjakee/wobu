@@ -1,9 +1,9 @@
 # Narrative wording review
 
-Script now reviews saved dialogue through the same Rust storage boundary as the project Review
+Script and Text library review saved wording through the same Rust storage boundary as the project Review
 queue. A provider key is unnecessary: authored wording can be reviewed, approved and locked without
-running generation. Save or discard the Script draft first; a decision always refers to the saved
-scene and the exact context displayed for that decision.
+running generation. Save or discard the authoring draft first; a decision always refers to the saved
+scene or text asset and the exact context displayed for that decision.
 
 ![Script wording review: locked text remains stale until explicitly reviewed](screenshots/narrative-line-review.png)
 
@@ -41,19 +41,22 @@ as Edited. Accepting a proposal is not approval. Rejecting, locking and unlockin
 
 ## Canonical decisions and review context
 
-`ReviewContext` version 1 is independent of generation's frozen request/context version. Its
-conservative projection includes the scene's authored structure and other wording, the world
-records, variable declarations, captured character names/voices and the exact scenario. It excludes
-`editorial_head`, slot policies, text lifecycle flags, and the selected wording's body/revision/
-provenance. That selected wording is bound separately by scene, beat, slot, variant, speaker and text
-revision. Consequently, approval and lock operations cannot invalidate themselves, while changes to
-intent, speakers, conditions or upstream world content invalidate the relevant proof. The current full world projection intentionally
-invalidates more lines than the [dependency index](35-narrative-dependencies.md) (#168), which is
-field-level and query-aware; the two are separate answers and this is the conservative one.
-Incremental rebuild reporting remains #169 work.
+New approvals and context attestations use `ReviewContext` version 2, independently of the
+generation frozen-request/context version. Its revision binds the selected target's field and
+query dependencies plus only scenario values those inputs reference. The exact wording is bound
+separately by target identity, speaker and text revision. Policy/review operations do not invalidate
+themselves; unrelated sibling wording or world records leave approval valid. Relevant voice,
+condition, intent or query-membership changes withdraw readiness while retaining the original
+decision. Supporting text uses its native target dependencies, including linked scene summaries
+and ambient line order. See [dependency tracking](35-narrative-dependencies.md).
+
+Existing version 1 contexts retain their original conservative scene/world projection and
+verification rules. Historical version 2 decisions verify against their frozen inputs and recorded
+toolchain versions; current readiness uses the current toolchain. Immutable receipts are not
+rewritten to adopt the newer fingerprint. Incremental rebuild planning remains #169 work.
 
 Each decision is an immutable `narrative_editorial` payload in the existing Receipt envelope. The
-scene's `editorial_head` selects its committed chain. Events retain the previous and resulting scene,
+scene or supporting-text asset's `editorial_head` selects its committed chain. Events retain the previous and resulting scene,
 actor, operation, context, active bindings and proposal decisions. Readers verify receipt identity,
 chain continuity, context reconstruction and exact text/target binding. An unreachable receipt left
 by interruption is not a committed decision. Missing or altered reachable receipts make approval
@@ -97,6 +100,8 @@ completed publication receipts if a redundant standalone attempt file has been r
 cannot authorize another paid request. Incomplete publications and orphan objects never become
 successful reviewed candidates.
 
-This implements #165's lifecycle/domain and Script controls. Project queue, paging, diffs and grouped
-bulk decisions are #166's companion surface. Production dependency records, field-level freshness
-and engine integrations are separate work; N5 remains explicitly excluded.
+Script and all six supporting text kinds share these lifecycle controls, the project Review queue,
+paging, diffs and grouped bulk decisions. [Field-level freshness](35-narrative-dependencies.md)
+propagates through canonical dependency history. The [native supporting-text walkthrough](evidence/narrative-supporting/README.md)
+shows approval, protected wording becoming stale, Why affected and verified Release export.
+Production workflows remain separate work; N5 remains explicitly excluded.

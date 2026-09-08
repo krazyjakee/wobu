@@ -235,13 +235,14 @@ describe('Bounded scene discovery', () => {
     mount({ onRenameScene })
     fireEvent.click(screen.getByRole('button', { name: 'Rename Council hearing' }))
     const field = screen.getByLabelText('New name for Council hearing')
+    expect(field).toHaveFocus()
     fireEvent.change(field, { target: { value: '  The hearing  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
     expect(onRenameScene).toHaveBeenCalledWith('council', 'The hearing')
     // The form closes on its own, and nothing was opened: renaming forty
     // titles should not mean entering and leaving forty scenes.
     expect(screen.queryByLabelText('New name for Council hearing')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Rename Council hearing' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rename Council hearing' })).toHaveFocus()
   })
   it('leaves a name alone when the rename is cancelled or unchanged', () => {
     const onRenameScene = vi.fn()
@@ -251,10 +252,14 @@ describe('Bounded scene discovery', () => {
       target: { value: 'Half a thought' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Cancel rename' }))
+    expect(screen.getByRole('button', { name: 'Rename Council hearing' })).toHaveFocus()
     expect(onRenameScene).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Rename Council hearing' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
     expect(onRenameScene).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Council hearing' }))
+    fireEvent.keyDown(screen.getByLabelText('New name for Council hearing'), { key: 'Escape' })
+    expect(screen.getByRole('button', { name: 'Rename Council hearing' })).toHaveFocus()
   })
   it('refuses a row rename while that scene holds an unsaved draft', () => {
     useScriptDrafts.getState().put(sceneEditKey('/world', 'council'), {

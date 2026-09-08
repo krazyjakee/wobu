@@ -2,6 +2,7 @@
 //! Conditions use the same checked evaluator as the runtime. Time is declared state;
 //! this resolver does not invent event chronology or propagate another character's beliefs.
 mod resolve;
+mod supporting;
 mod world;
 
 /// The resolver's own version, carried on every [`FrozenContext`] it produces.
@@ -13,7 +14,7 @@ mod world;
 /// not a result this build would produce again.
 pub const CONTEXT_VERSION: u32 = 1;
 
-pub use resolve::resolve;
+pub use resolve::{resolve, resolve_linked};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wobu_narrative::{

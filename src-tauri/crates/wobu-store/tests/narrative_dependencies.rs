@@ -182,8 +182,8 @@ fn changing_a_voice_marks_the_dependent_lines_and_writes_nothing_but_freshness()
     assert_eq!(text.body, body.body, "the words moved");
     assert_eq!(text.revision, body.revision, "the revision moved");
     assert_eq!(text.provenance, body.provenance, "the provenance moved");
-    // And the baseline has been recorded, so the same edit is not reported twice.
-    assert!(fixture.project.narrative_affected().unwrap().is_empty());
+    // Marking is idempotent, but the explanation remains until new wording is authored.
+    assert_eq!(fixture.project.narrative_affected().unwrap(), affected);
 }
 
 #[test]
@@ -318,7 +318,6 @@ fn an_irrelevant_edit_leaves_every_slot_alone() {
     let mut beat = Beat::new("Unloading");
     let mut slot = DialogueSlot::new(Speaker::Narrator);
     slot.variants.push(Variant::new(Text::written("Crates, and more crates.")));
-    let elsewhere = slot.variants[0].id;
     beat.dialogue.push(slot);
     other.scene.beats.push(beat);
     fixture.project.save_scene(&mut other).unwrap();
@@ -326,10 +325,9 @@ fn an_irrelevant_edit_leaves_every_slot_alone() {
     let affected = fixture.project.narrative_affected().unwrap();
     assert_eq!(
         affected.iter().map(|item| item.target.variant()).collect::<BTreeSet<_>>(),
-        BTreeSet::from([elsewhere]),
+        BTreeSet::new(),
         "an unrelated scene invalidated existing lines"
     );
-    assert_eq!(affected[0].kind, wobu_narrative_deps::AffectedKind::Untracked);
     fixture.project.rebuild_narrative_dependencies().unwrap();
 
     // Rewriting one line must not mark its neighbour stale. The review context
@@ -394,7 +392,7 @@ fn losing_the_local_index_rebuilds_the_same_dependency_index() {
 
     // Exactly what deleting the database costs.
     fixture.project.forget_narrative_dependencies().unwrap();
-    assert!(fixture.project.narrative_dependencies().unwrap().is_empty());
+    assert_eq!(fixture.project.narrative_dependencies().unwrap(), before);
 
     let rebuilt = fixture.project.rebuild_narrative_dependencies().unwrap();
     assert_eq!(rebuilt, before);
@@ -433,18 +431,69 @@ fn the_candidate_lookup_covers_the_lines_a_change_reaches() {
 }
 
 #[test]
-fn an_untracked_project_reports_every_line_as_new_rather_than_as_stale() {
-    let fixture = harbour();
-    fixture.project.forget_narrative_dependencies().unwrap();
+fn cache_loss_after_a_source_change_preserves_the_original_baseline_and_explanations() {
+    let mut fixture = harbour();
+    let baseline = fixture.project.narrative_dependencies().unwrap();
+    fixture.set_voice(fixture.kael, "Hoarse.");
     let affected = fixture.project.narrative_affected().unwrap();
-    assert_eq!(affected.len(), 3);
-    assert!(affected.iter().all(|item| item.kind == wobu_narrative_deps::AffectedKind::Untracked));
+    let root = fixture.project.root().to_path_buf();
+    let index_path = fixture.project.index_path();
+    drop(fixture.project);
+    std::fs::remove_file(&index_path).unwrap();
+    fixture.project = Project::open_at_index(&root, &index_path).unwrap();
+    assert_eq!(fixture.project.rebuild_narrative_dependencies().unwrap(), baseline);
+    assert_eq!(fixture.project.narrative_affected().unwrap(), affected);
+    assert_eq!(fixture.lifecycle(fixture.kael_line()).freshness, Freshness::OutOfDate);
+}
 
-    // And marking that report writes nothing: an untracked line has never been
-    // measured against anything, so nothing about it has gone stale.
-    let mut fixture = fixture;
-    fixture.project.mark_narrative_affected().unwrap();
-    assert_eq!(fixture.lifecycle(fixture.kael_line()).freshness, Freshness::Current);
+#[test]
+fn a_snapshot_with_a_concurrent_character_edit_cannot_publish_baseline_receipts() {
+    let mut fixture = harbour();
+    let snapshot = fixture.project.narrative_dependency_snapshot().unwrap();
+    fixture.set_voice(fixture.kael, "Changed while a task was running.");
+    let receipts =
+        fixture.project.narrative_records(wobu_store::NarrativeRecordKind::Receipt).unwrap();
+    let error = fixture
+        .project
+        .record_narrative_dependency_snapshot(&snapshot, &BTreeSet::from([fixture.kael_line()]))
+        .unwrap_err();
+    assert!(error.to_string().contains("changed while reading dependencies"));
+    assert_eq!(
+        fixture
+            .project
+            .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.document)
+            .collect::<Vec<_>>(),
+        receipts.into_iter().map(|f| f.document).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_snapshot_with_a_concurrent_scene_edit_cannot_publish_baseline_receipts() {
+    let mut fixture = harbour();
+    let snapshot = fixture.project.narrative_dependency_snapshot().unwrap();
+    fixture.scene.scene.summary = "Changed during capture".into();
+    fixture.project.save_scene(&mut fixture.scene).unwrap();
+    assert!(snapshot.check_current(&fixture.project).is_err());
+}
+
+#[test]
+fn an_external_voice_edit_is_marked_by_watcher_reconciliation() {
+    let mut fixture = harbour();
+    let node = fixture.project.get_node(fixture.kael).unwrap();
+    let rel = fixture.project.index().rel_path_of(node.id).unwrap().unwrap();
+    let path = fixture.project.root().join(&rel);
+    let source = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, source.replace("Clipped.", "Externally rewritten, hoarse voice."))
+        .unwrap();
+    fixture.project.reconcile_paths(&[path]).unwrap();
+    assert_eq!(fixture.lifecycle(fixture.kael_line()).freshness, Freshness::OutOfDate);
+    assert_eq!(
+        affected_variants(&fixture.project),
+        BTreeSet::from([fixture.kael_line(), fixture.mira_line()])
+    );
 }
 
 /* ── downstream artifacts ─────────────────────────────────────────────────── */
@@ -500,4 +549,311 @@ fn an_unaffected_line_names_no_production_artifact() {
     let scene: Scene = fixture.project.load_scene(fixture.scene.scene.id).unwrap().scene;
     assert!(!scene.beats.is_empty());
     assert!(fixture.project.narrative_affected_production(&[]).unwrap().is_empty());
+}
+
+fn review_line(fixture: &mut Fixture, action: wobu_narrative::review::EditorialAction) {
+    let view = fixture.project.review_scene(fixture.scene.scene.id, None).unwrap();
+    let line = view.lines.iter().find(|l| l.target.variant == Some(fixture.kael_line())).unwrap();
+    fixture
+        .project
+        .apply_review(&wobu_store::project::narrative_review::ReviewRequest {
+            guard: view.guard.clone(),
+            target: line.target.clone(),
+            context_revision: line.context_revision.clone(),
+            state_json: view.state_json,
+            action,
+        })
+        .unwrap();
+    fixture.reload();
+}
+
+#[test]
+fn sibling_wording_and_unrelated_facts_preserve_precise_approval_and_attestation() {
+    let mut fixture = harbour();
+    review_line(&mut fixture, wobu_narrative::review::EditorialAction::Approve);
+    let original = fixture.project.review_scene(fixture.scene.scene.id, None).unwrap().lines[0]
+        .context_revision
+        .clone();
+    fixture.scene.scene.beats[0].dialogue[1].variants[0]
+        .text
+        .set_body("Mira corrects a typo.", wobu_narrative::Provenance::Human);
+    fixture.project.save_scene(&mut fixture.scene).unwrap();
+    let (mut world, stamp) = world_of(&fixture.project);
+    world.facts.push(Fact {
+        id: wobu_core::new_id(),
+        name: "A distant island".into(),
+        assertion: "An unrelated island exists.".into(),
+        sources: vec![],
+        entity_ids: vec![],
+    });
+    fixture.project.save_world(&world, Some(&stamp)).unwrap();
+    let view = fixture.project.review_scene(fixture.scene.scene.id, None).unwrap();
+    let line = view.lines.iter().find(|l| l.target.variant == Some(fixture.kael_line())).unwrap();
+    assert_eq!(line.context_revision, original);
+    assert!(line.approval_valid, "{}", line.reason);
+    assert_eq!(line.freshness, Freshness::Current);
+    assert!(fixture.project.narrative_affected().unwrap().is_empty());
+}
+
+#[test]
+fn attesting_unchanged_wording_acknowledges_only_that_lines_current_dependencies() {
+    let mut fixture = harbour();
+    fixture.set_voice(fixture.kael, "Hoarse.");
+    review_line(&mut fixture, wobu_narrative::review::EditorialAction::Attest);
+    assert_eq!(fixture.lifecycle(fixture.kael_line()).freshness, Freshness::Current);
+    assert_eq!(fixture.lifecycle(fixture.mira_line()).freshness, Freshness::OutOfDate);
+    assert_eq!(affected_variants(&fixture.project), BTreeSet::from([fixture.mira_line()]));
+    let before =
+        fixture.project.narrative_records(wobu_store::NarrativeRecordKind::Receipt).unwrap().len();
+    fixture.project.forget_narrative_dependencies().unwrap();
+    assert_eq!(affected_variants(&fixture.project), BTreeSet::from([fixture.mira_line()]));
+    assert_eq!(
+        fixture.project.narrative_records(wobu_store::NarrativeRecordKind::Receipt).unwrap().len(),
+        before
+    );
+}
+
+#[test]
+fn dependency_history_uses_causality_under_clock_skew_and_refuses_concurrent_heads() {
+    let mut fixture = harbour();
+    let baseline = fixture
+        .project
+        .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+        .unwrap()
+        .into_iter()
+        .find(|f| {
+            f.document.payload["type"] == "narrative_dependency_baseline"
+                && f.document.payload["entries"].as_array().unwrap().iter().any(|e| {
+                    e["dependencies"]["target"]["scene_line"]["variant"]
+                        == fixture.kael_line().to_string()
+                })
+        })
+        .unwrap();
+    let mut payload = baseline.document.payload;
+    let entry = payload["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| {
+            e["dependencies"]["target"]["scene_line"]["variant"] == fixture.kael_line().to_string()
+        })
+        .unwrap()
+        .clone();
+    payload["entries"] = serde_json::json!([entry]);
+    payload["entries"][0]["parent"] = serde_json::json!(baseline.document.id);
+    // A peer's clock moved backwards. The causal successor sorts before its parent.
+    payload["entries"][0]["dependencies"]["versions"]["prompt"] = serde_json::json!(0);
+    let mut successor = wobu_store::NarrativeRecordFile {
+        document: wobu_store::NarrativeRecordDocument::new(
+            wobu_store::NarrativeRecordKind::Receipt,
+            "00000000000000000000000001".parse().unwrap(),
+            "Clock-skewed dependency successor",
+            payload.clone(),
+        ),
+        stamp: None,
+    };
+    fixture.project.save_narrative_record(&mut successor).unwrap();
+    assert_eq!(
+        fixture
+            .project
+            .narrative_dependencies()
+            .unwrap()
+            .get(fixture.kael_line())
+            .unwrap()
+            .versions
+            .prompt,
+        0
+    );
+    let mut concurrent = wobu_store::NarrativeRecordFile {
+        document: wobu_store::NarrativeRecordDocument::new(
+            wobu_store::NarrativeRecordKind::Receipt,
+            "00000000000000000000000002".parse().unwrap(),
+            "Concurrent dependency successor",
+            payload,
+        ),
+        stamp: None,
+    };
+    fixture.project.save_narrative_record(&mut concurrent).unwrap();
+    assert!(
+        fixture.project.narrative_dependencies().unwrap_err().to_string().contains("Concurrent")
+    );
+}
+
+#[test]
+fn a_large_authoring_batch_syncs_bounded_chunks_without_inventing_remote_baselines() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut project = Project::create(directory.path(), "Batch").unwrap();
+    let mut file = project.create_scene("A thousand lines").unwrap();
+    let mut beat = Beat::new("Arrival");
+    for _ in 0..1000 {
+        let mut slot = DialogueSlot::new(Speaker::Narrator);
+        slot.variants.push(Variant::new(Text::written("Welcome.")));
+        beat.dialogue.push(slot);
+    }
+    file.scene.beats.push(beat);
+    let start = std::time::Instant::now();
+    project.save_scene(&mut file).unwrap();
+    let dependencies = project
+        .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+        .unwrap()
+        .into_iter()
+        .filter(|f| f.document.payload["type"] == "narrative_dependency_baseline")
+        .collect::<Vec<_>>();
+    assert!(dependencies.len() > 1 && dependencies.len() < 10);
+    assert_eq!(
+        dependencies
+            .iter()
+            .map(|f| f.document.payload["entries"].as_array().unwrap().len())
+            .sum::<usize>(),
+        1000
+    );
+    for file in &dependencies {
+        assert!(
+            std::fs::metadata(project.root().join(file.document.rel())).unwrap().len()
+                <= wobu_store::project::narrative_sync::MAX_NARRATIVE_FILE_BYTES as u64
+        );
+    }
+    eprintln!(
+        "1,000-line canonical dependency enrollment/save ({} chunks): {:?}",
+        dependencies.len(),
+        start.elapsed()
+    );
+
+    let peer_dir = tempfile::tempdir().unwrap();
+    let mut peer = Project::create(peer_dir.path(), "Receiving peer").unwrap();
+    let destination = peer.root().join(&file.rel);
+    std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    std::fs::copy(project.root().join(&file.rel), destination).unwrap();
+    // The line arrived first. A watcher must not invent a local-world baseline.
+    peer.reconcile().unwrap();
+    assert!(peer.narrative_dependencies().unwrap().is_empty());
+    assert!(
+        peer.narrative_affected()
+            .unwrap()
+            .iter()
+            .all(|a| a.kind == wobu_narrative_deps::AffectedKind::Untracked)
+    );
+    assert!(peer.narrative_records(wobu_store::NarrativeRecordKind::Receipt).unwrap().is_empty());
+    let ids: BTreeSet<_> = dependencies.iter().map(|f| f.document.id.to_string()).collect();
+    for entry in project
+        .narrative_manifest()
+        .unwrap()
+        .into_iter()
+        .filter(|entry| ids.iter().any(|id| entry.rel.ends_with(&format!("/{id}.json"))))
+    {
+        let incoming = project.narrative_outgoing(&entry).unwrap().unwrap();
+        assert!(matches!(
+            peer.apply_narrative_from_peer("author", &incoming).unwrap(),
+            wobu_store::NarrativeApplied::Agreed { .. }
+        ));
+    }
+    peer.reconcile().unwrap();
+    peer.forget_narrative_dependencies().unwrap();
+    assert_eq!(
+        peer.rebuild_narrative_dependencies().unwrap(),
+        project.narrative_dependencies().unwrap()
+    );
+    assert!(peer.narrative_affected().unwrap().is_empty());
+}
+
+#[test]
+fn tampering_with_full_frozen_inputs_cannot_preserve_a_precise_approval() {
+    let mut fixture = harbour();
+    review_line(&mut fixture, wobu_narrative::review::EditorialAction::Approve);
+    let id = fixture.scene.scene.editorial_head.unwrap();
+    let mut record = fixture
+        .project
+        .narrative_record(wobu_store::NarrativeRecordKind::Receipt, id)
+        .unwrap()
+        .unwrap();
+    record.document.payload["context"]["inputs"]["world"] = serde_json::json!("damaged");
+    // The semantic dependency digest was not changed. The immutable envelope
+    // binding nevertheless protects every frozen input, before domain decoding.
+    std::fs::write(
+        fixture.project.root().join(record.document.rel()),
+        serde_json::to_string_pretty(&record.document).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        fixture.project.narrative_record(wobu_store::NarrativeRecordKind::Receipt, id).is_err()
+    );
+    let view = fixture.project.review_scene(fixture.scene.scene.id, None).unwrap();
+    assert!(
+        !view
+            .lines
+            .iter()
+            .find(|l| l.target.variant == Some(fixture.kael_line()))
+            .unwrap()
+            .approval_valid
+    );
+}
+
+#[test]
+fn repairing_a_reviewed_scene_refreshes_stale_context_without_changing_its_history() {
+    let mut fixture = harbour();
+    review_line(&mut fixture, wobu_narrative::review::EditorialAction::Approve);
+    review_line(
+        &mut fixture,
+        wobu_narrative::review::EditorialAction::Policy {
+            scope: wobu_narrative::review::PolicyScope::Variant,
+            policy: GenerationPolicy::Locked,
+        },
+    );
+    let recorded = fixture.scene.scene.clone();
+    let receipts = fixture
+        .project
+        .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+        .unwrap()
+        .into_iter()
+        .map(|file| file.document)
+        .collect::<Vec<_>>();
+    let path = fixture.project.root().join(&fixture.scene.rel);
+    let malformed = format!("{}\nmalformed: [\n", std::fs::read_to_string(&path).unwrap());
+    std::fs::write(&path, &malformed).unwrap();
+    fixture.project.reconcile().unwrap();
+    assert!(!fixture.project.scene_catalog().unwrap().unreadable.is_empty());
+    // While the source is malformed, watcher/save maintenance preserves the
+    // last known dependency evidence instead of inventing a fresh baseline.
+    fixture.set_voice(fixture.kael, "A changed voice while source was unavailable.");
+    let (_, damaged_stamp) = wobu_store::atomic::read_stamped(&path).unwrap().unwrap();
+    let (outcome, backup) = fixture
+        .project
+        .repair_scene_source(
+            &fixture.scene.rel,
+            &wobu_narrative::SceneDocument::new(recorded.clone()),
+            &damaged_stamp,
+            Some(recorded.id),
+        )
+        .unwrap();
+    let SourceSave::Saved(returned_stamp) = outcome else {
+        panic!("receipt-exact repair should save")
+    };
+    let repaired = fixture.project.load_scene(recorded.id).unwrap();
+    let mut expected = recorded.clone();
+    for beat in &mut expected.beats {
+        for slot in &mut beat.dialogue {
+            for variant in &mut slot.variants {
+                variant.text.lifecycle.freshness = Freshness::OutOfDate;
+            }
+        }
+    }
+    assert_eq!(repaired.scene, expected, "repair may change only derived freshness");
+    assert_eq!(repaired.stamp, Some(returned_stamp));
+    assert_eq!(std::fs::read_to_string(fixture.project.root().join(backup)).unwrap(), malformed);
+    assert_eq!(
+        fixture
+            .project
+            .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+            .unwrap()
+            .into_iter()
+            .map(|file| file.document)
+            .collect::<Vec<_>>(),
+        receipts
+    );
+    let review = fixture.project.review_scene(recorded.id, None).unwrap();
+    let line =
+        review.lines.iter().find(|line| line.target.variant == Some(fixture.kael_line())).unwrap();
+    assert!(!line.approval_valid);
+    assert_eq!(line.reason, "Authored context changed since the last review.");
+    assert!(fixture.project.scene_catalog().unwrap().unreadable.is_empty());
 }

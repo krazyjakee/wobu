@@ -66,9 +66,6 @@ use wobu_store::{GraphKey, Layout, LayoutLoad, LayoutNotice, LayoutSave, Project
 use crate::error::{Code, CommandResult, WobuError};
 use crate::state::AppState;
 
-mod editorial;
-pub(super) use editorial::validate_approval;
-
 /* ── what the webview sees ────────────────────────────────────────────────── */
 
 /// One scene as the Library lists it, without parsing its beats.

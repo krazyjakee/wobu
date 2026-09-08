@@ -3,7 +3,7 @@ use crate::{Error, Project, Result, atomic::Stamp};
 use std::collections::{BTreeMap, BTreeSet};
 use wobu_core::NodeKind;
 use wobu_narrative::{EntityId, KnowledgeProvenance, WorldDocument};
-use wobu_narrative_context::{Character, FrozenContext, Input, Options, resolve};
+use wobu_narrative_context::{Character, FrozenContext, Input, Options, resolve_linked};
 fn invalid(message: impl Into<String>) -> Error {
     Error::Malformed { path: "narrative/context".into(), reason: message.into() }
 }
@@ -13,7 +13,7 @@ pub fn capture(
     after_read: impl FnOnce(),
 ) -> Result<FrozenContext> {
     let fingerprint = project.narrative_fingerprint()?;
-    let file = project.load_scene(options.selection.scene)?;
+    let file = project.load_editorial_source(options.selection.scene)?;
     let state = project.state_document()?;
     let schema = state
         .as_ref()
@@ -25,6 +25,21 @@ pub fn capture(
     let world = world_file.as_ref().map(|(document, _)| document).cloned().unwrap_or_default();
     let character_ids = referenced_characters(&file.scene, &world, &options);
     let characters = read_characters(project, &character_ids)?;
+    let mut linked_scenes = BTreeMap::new();
+    for id in file.scene.supporting_text.iter().flat_map(|asset| {
+        asset.sources.iter().filter_map(|link| match link {
+            wobu_narrative::SourceLink::Scene(id) => Some(*id),
+            _ => None,
+        })
+    }) {
+        match project.load_scene(id) {
+            Ok(file) => {
+                linked_scenes.insert(id, file.scene);
+            }
+            Err(Error::NoSuchNode(_)) => {}
+            Err(error) => return Err(error),
+        }
+    }
     after_read();
     let current_scene =
         crate::atomic::read_stamped(&project.root().join(&file.rel))?.map(|(_, stamp)| stamp);
@@ -44,9 +59,10 @@ pub fn capture(
         .into_iter()
         .filter_map(|(id, (character, _))| character.map(|character| (id, character)))
         .collect();
-    let result = resolve(
+    let result = resolve_linked(
         Input { scene: &file.scene, world: &world, schema: &schema, characters: &characters },
         options,
+        &linked_scenes,
     );
     Ok(result)
 }
@@ -66,6 +82,12 @@ fn referenced_characters(
         .iter()
         .map(|p| p.entity)
         .chain(speaker)
+        .chain(scene.supporting_text.iter().flat_map(|asset| {
+            asset.sources.iter().filter_map(|source| match source {
+                wobu_narrative::SourceLink::Character(id) => Some(*id),
+                _ => None,
+            })
+        }))
         .chain(world.knowledge.iter().filter(|k| Some(k.character) == speaker).filter_map(|k| {
             match k.provenance {
                 KnowledgeProvenance::Told { by } => Some(by),

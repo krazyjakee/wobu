@@ -341,6 +341,9 @@ impl TextEntry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct TextAsset {
+    /// Head of the same immutable editorial history used by scene dialogue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editorial_head: Option<wobu_core::Id>,
     pub id: TextAssetId,
     pub kind: TextKind,
     /// The display name. Renaming preserves every id in the file.
@@ -392,6 +395,7 @@ impl TextAsset {
     /// A new, empty asset of a kind, with that kind's default selection policy.
     pub fn new(kind: TextKind, name: impl Into<String>, event: Name) -> TextAsset {
         TextAsset {
+            editorial_head: None,
             id: TextAssetId::new(),
             kind,
             name: name.into(),
@@ -491,6 +495,7 @@ impl TextAsset {
     /// [`Scene::duplicated`](crate::Scene::duplicated).
     pub fn duplicated(&self) -> TextAsset {
         TextAsset {
+            editorial_head: None,
             id: TextAssetId::new(),
             entries: self.entries.iter().map(TextEntry::duplicated).collect(),
             tombstones: Vec::new(),

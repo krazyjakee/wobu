@@ -10,6 +10,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 .narrative-mode {
+  container-type: inline-size;
   grid-column: 2 / -1;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -61,6 +62,46 @@
   display: flex;
   margin-left: auto;
   gap: 6px;
+}
+.nrt-compact-pane-actions {
+  display: none;
+}
+.nrt-editor-view {
+  position: relative;
+}
+/* Use the workspace's effective width, including UI scaling. Auxiliary panes
+   remain reachable as drawers without squeezing the scene into a narrow strip. */
+@container (max-width: 1600px) {
+  .nrt-head,
+  .nrt-head-actions {
+    flex-wrap: wrap;
+  }
+  .nrt-compact-pane-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .nrt-editor-view {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .nrt-editor-view > .nrt-scene-outline,
+  .nrt-editor-view > .nrt-inspector {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: min(320px, 100%);
+    z-index: 25;
+    background: var(--bg-panel);
+    box-shadow: var(--shadow-1);
+  }
+  .nrt-editor-view[data-side-pane='outline'] > .nrt-scene-outline {
+    display: block;
+    left: 0;
+  }
+  .nrt-editor-view[data-side-pane='context'] > .nrt-inspector {
+    display: block;
+    right: 0;
+  }
 }
 
 /* ── the Library pane ── */
@@ -410,6 +451,11 @@
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
+}
+.nrt-flow-canvas .react-flow__minimap {
+  --xy-minimap-node-background-color: var(--text-faint);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--bg-raised) 65%, transparent);
+  --xy-minimap-mask-stroke-color: var(--accent);
 }
 .nrt-flow-canvas .react-flow__controls-button {
   border: none;
@@ -801,6 +847,13 @@
 .nrt-note-inline {
   color: var(--text-faint);
   font-size: 11px;
+}
+.nrt-flow-limitations {
+  display: block;
+  flex: none;
+}
+.nrt-flow-limitations summary {
+  cursor: pointer;
 }
 
 .nrt-arc-diagnostics {

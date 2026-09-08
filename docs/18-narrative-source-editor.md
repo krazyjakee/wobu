@@ -72,7 +72,13 @@ invent a scene or offer a general project file editor.
 
 1. Correct the draft and Validate. Invalid YAML never replaces the on-disk file.
 2. Save source. The proposed scene must use the known identity, when one can be read, and must not
-   reuse another file's scene ID. Approved text must retain its matching revision.
+   reuse another file's scene ID. A scene with editorial history must exactly restore its recorded
+   snapshot, including text, policy, approval and freshness. Its original canonical YAML identity/head
+   header must remain intact, and every immutable receipt and identity binding must verify. Repair
+   cannot substitute an older head, remove history or combine restoration with new authored changes.
+   Save those changes normally after repairing. If the header or history cannot be verified, the
+   source and draft are retained for recovery. Legacy scenes without a history head cannot introduce
+   approvals during repair.
 3. The original bytes are retained in
    `narrative/recovery/<scene-id>.<original-content-hash>.yaml` before the guarded repair write.
    The success message gives the recovery path. This immutable copy is outside scene discovery and

@@ -60,7 +60,7 @@ export interface ReviewSceneView {
   context_summary: string
 }
 export interface ReviewContext {
-  version: 1
+  version: 1 | 2
   revision: string
   state: Record<string, StateValue>
   inputs: unknown

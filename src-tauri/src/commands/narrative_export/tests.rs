@@ -67,3 +67,42 @@ fn state_changes_during_capture_are_refused() {
         .is_err()
     );
 }
+
+#[test]
+fn supporting_only_project_releases_after_shared_approval_and_stale_context_blocks_it() {
+    use wobu_narrative::{Name, SceneId, TextEntry, TextKind, review::EditorialAction};
+    use wobu_store::project::narrative_review::ReviewRequest;
+    let temp = Temp::new();
+    let mut project = Project::create(&temp.0, "Text only release").unwrap();
+    let mut file = project
+        .create_text_asset(TextKind::Codex, "Lantern", Name::new("codex_read").unwrap())
+        .unwrap();
+    let mut entry = TextEntry::new("Description");
+    let mut slot = DialogueSlot::new(Speaker::Narrator);
+    slot.variants
+        .push(Variant::new(Text::written("The repaired lantern guides the fishing boats.")));
+    entry.lines.push(slot);
+    file.asset.entries.push(entry);
+    project.save_text_asset(&mut file).unwrap();
+    assert!(prepare(&project, Profile::Development, BTreeMap::new(), false).unwrap().1.is_some());
+    assert!(prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap().1.is_none());
+    let view = project.review_scene(SceneId::from_raw(file.asset.id.raw()), None).unwrap();
+    project
+        .apply_review(&ReviewRequest {
+            guard: view.guard,
+            target: view.lines[0].target.clone(),
+            context_revision: view.lines[0].context_revision.clone(),
+            state_json: view.state_json,
+            action: EditorialAction::Approve,
+        })
+        .unwrap();
+    let first = prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap();
+    assert!(first.1.is_some(), "{:?}", first.0.diagnostics);
+    assert_eq!(first.0.strings, 1);
+    let second = prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap();
+    assert_eq!(first.0.payload_hash, second.0.payload_hash);
+    file = project.load_text_asset(file.asset.id).unwrap();
+    file.asset.summary = "The lantern was extinguished.".into();
+    project.save_text_asset(&mut file).unwrap();
+    assert!(prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap().1.is_none());
+}

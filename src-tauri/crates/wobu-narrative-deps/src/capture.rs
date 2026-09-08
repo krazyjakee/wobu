@@ -83,10 +83,23 @@ pub fn capture(snapshot: &Snapshot<'_>) -> Vec<DependencySet> {
 
 /// The dependency sets of one scene's dialogue.
 pub fn capture_scene(scene: &Scene, snapshot: &Snapshot<'_>) -> Vec<DependencySet> {
+    capture_scene_variant(scene, snapshot, None)
+}
+
+/// Capture only one reviewed wording when supplied, avoiding a full dependency
+/// capture per review line in a large authoring batch.
+pub fn capture_scene_variant(
+    scene: &Scene,
+    snapshot: &Snapshot<'_>,
+    selected: Option<VariantId>,
+) -> Vec<DependencySet> {
     let mut sets = Vec::new();
     for (beat_id, slot) in scene.dialogue_slots() {
         let Some(beat) = scene.beat(beat_id) else { continue };
         for (position, variant) in slot.variants.iter().enumerate() {
+            if selected.is_some_and(|id| id != variant.id) {
+                continue;
+            }
             let mut fields = Fields::default();
             let mut names = Names::default();
 
@@ -139,10 +152,22 @@ pub fn capture_scene(scene: &Scene, snapshot: &Snapshot<'_>) -> Vec<DependencySe
 /// stale when that fact is rewritten or deleted, and nothing has to parse a
 /// sentence to know it.
 pub fn capture_text(asset: &TextAsset, snapshot: &Snapshot<'_>) -> Vec<DependencySet> {
+    capture_text_variant(asset, snapshot, None)
+}
+
+/// Supporting-text counterpart of the focused review capture.
+pub fn capture_text_variant(
+    asset: &TextAsset,
+    snapshot: &Snapshot<'_>,
+    selected: Option<VariantId>,
+) -> Vec<DependencySet> {
     let mut sets = Vec::new();
     for entry in &asset.entries {
         for slot in &entry.lines {
             for (position, variant) in slot.variants.iter().enumerate() {
+                if selected.is_some_and(|id| id != variant.id) {
+                    continue;
+                }
                 let mut fields = Fields::default();
                 let mut names = Names::default();
 
@@ -151,6 +176,7 @@ pub fn capture_text(asset: &TextAsset, snapshot: &Snapshot<'_>) -> Vec<Dependenc
                 fields.present(format!("{asset_site}/summary"), &asset.summary);
                 fields.present(format!("{asset_site}/kind"), &asset.kind);
                 fields.present(format!("{asset_site}/trigger"), &asset.trigger);
+                fields.present(format!("{asset_site}/repeat"), &asset.repeat);
                 fields.present(format!("{asset_site}/must_convey"), &asset.must_convey);
                 fields.present(format!("{asset_site}/must_not_reveal"), &asset.must_not_reveal);
                 fields.present(format!("{asset_site}/participants"), &asset.participants);
@@ -160,6 +186,32 @@ pub fn capture_text(asset: &TextAsset, snapshot: &Snapshot<'_>) -> Vec<Dependenc
                 let site = format!("{asset_site}/entry/{}", entry.id);
                 fields.present(format!("{site}/when"), &entry.when);
                 names.of_optional(entry.when.as_ref());
+                if asset.kind == wobu_narrative::TextKind::Ambient {
+                    fields.present(
+                        format!("{site}/ambient_order"),
+                        &entry.lines.iter().map(|line| line.id).collect::<Vec<_>>(),
+                    );
+                    let neighbors: Vec<_> = entry
+                        .lines
+                        .iter()
+                        .filter(|other| other.id != slot.id)
+                        .map(|other| {
+                            for variant in &other.variants {
+                                names.of_optional(variant.when.as_ref());
+                            }
+                            let mut value =
+                                serde_json::to_value(other).expect("dialogue serializes");
+                            value.as_object_mut().unwrap().remove("policy");
+                            if let Some(variants) = value["variants"].as_array_mut() {
+                                for variant in variants {
+                                    variant["text"].as_object_mut().unwrap().remove("lifecycle");
+                                }
+                            }
+                            value
+                        })
+                        .collect();
+                    fields.present(format!("{site}/ambient_neighbors"), &neighbors);
+                }
 
                 let site = format!("{site}/slot/{}", slot.id);
                 fields.present(format!("{site}/speaker"), &slot.speaker);

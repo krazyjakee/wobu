@@ -229,3 +229,96 @@ fn repairing_malformed_source_cannot_retain_approval_for_different_wording() {
     assert!(error.message.contains("explicit review"));
     assert_eq!(std::fs::read_to_string(path).unwrap(), raw.yaml);
 }
+
+#[test]
+fn repair_restores_bound_editorial_snapshot_without_forging_history_or_unlocking_text() {
+    use wobu_narrative::GenerationPolicy;
+    use wobu_narrative::review::{EditorialAction, PolicyScope, ReviewTarget};
+    use wobu_store::project::narrative_review::ReviewRequest;
+
+    let temp = Temp::new();
+    let mut project = Project::create(&temp.0, "Recorded repair").unwrap();
+    let project_path = project.root().to_path_buf();
+    let mut file = project.create_scene("Council").unwrap();
+    let mut beat = Beat::new("Evidence");
+    let mut slot = DialogueSlot::new(Speaker::Narrator);
+    let variant = Variant::new(Text::written("The record must survive."));
+    let target = ReviewTarget {
+        scene: file.scene.id,
+        beat: beat.id,
+        slot: slot.id,
+        variant: Some(variant.id),
+    };
+    slot.variants.push(variant);
+    beat.dialogue.push(slot);
+    file.scene.beats.push(beat);
+    project.save_scene(&mut file).unwrap();
+    let old_head = file.scene.editorial_head;
+    for action in [
+        EditorialAction::Approve,
+        EditorialAction::Policy { scope: PolicyScope::Variant, policy: GenerationPolicy::Locked },
+    ] {
+        let view = project.review_scene(file.scene.id, None).unwrap();
+        file = project
+            .apply_review(&ReviewRequest {
+                guard: view.guard,
+                target: target.clone(),
+                context_revision: view.lines[0].context_revision.clone(),
+                state_json: view.state_json,
+                action,
+            })
+            .unwrap()
+            .0;
+    }
+    let path = project.root().join(&file.rel);
+    let valid = std::fs::read_to_string(&path).unwrap();
+    let broken = format!("{valid}\ninvalid: [unterminated\n");
+    std::fs::write(&path, &broken).unwrap();
+    let raw = source_at(&project, &file.rel, None).unwrap();
+    let protected = file.scene.clone();
+    for modification in 0..7 {
+        let mut forged = protected.clone();
+        match modification {
+            0 => forged.editorial_head = None,
+            1 => forged.editorial_head = old_head,
+            2 => forged.editorial_head = Some(wobu_core::new_id()),
+            3 => forged.id = SceneId::new(),
+            4 => forged.beats[0].dialogue[0].variants[0].text.body = "Changed wording".into(),
+            5 => {
+                forged.beats[0].dialogue[0].variants[0].text.lifecycle.policy =
+                    GenerationPolicy::Edited
+            }
+            _ => forged.summary = "Unrecorded context".into(),
+        }
+        let yaml = SceneDocument::new(forged).to_yaml().unwrap();
+        assert!(source_repair(&mut project, &file.rel, &yaml, &raw.stamp, None).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), broken);
+    }
+    let head = protected.editorial_head.unwrap();
+    let receipt_path = project.root().join(format!("narrative/receipts/{head}.json"));
+    let receipt = std::fs::read(&receipt_path).unwrap();
+    let mut forged: serde_json::Value = serde_json::from_slice(&receipt).unwrap();
+    forged["payload"]["actor"] = "forged actor".into();
+    std::fs::write(&receipt_path, serde_json::to_vec(&forged).unwrap()).unwrap();
+    assert!(source_repair(&mut project, &file.rel, &valid, &raw.stamp, None).is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), broken);
+    std::fs::write(&receipt_path, &receipt).unwrap();
+    let binding_path = project.root().join(format!("narrative/receipt-bindings/{head}.json"));
+    let binding = std::fs::read(&binding_path).unwrap();
+    std::fs::remove_file(&binding_path).unwrap();
+    assert!(source_repair(&mut project, &file.rel, &valid, &raw.stamp, None).is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), broken);
+    std::fs::write(&binding_path, binding).unwrap();
+
+    let repaired = source_repair(&mut project, &file.rel, &valid, &raw.stamp, None).unwrap();
+    assert_eq!(repaired.source.file.unwrap().scene, protected);
+    assert_eq!(
+        std::fs::read_to_string(project.root().join(repaired.recovery_rel)).unwrap(),
+        broken
+    );
+    assert_eq!(std::fs::read(receipt_path).unwrap(), receipt);
+    drop(project);
+    let reopened = Project::open(&project_path).unwrap();
+    assert_eq!(reopened.load_scene(protected.id).unwrap().scene, protected);
+    assert!(reopened.review_scene(protected.id, None).unwrap().lines[0].approval_valid);
+}

@@ -1,0 +1,31 @@
+{
+  "world": {
+    "entityIds": ["01M2100952N19STAE567YGZD8Z", "01M210098MW5MTKR13WV9QAFEM"],
+    "finalNames": ["Captain Irena", "Council Chamber"],
+    "worldRecordId": "01M21000000000000000000001",
+    "relatedEntityIds": ["01M2100952N19STAE567YGZD8Z", "01M210098MW5MTKR13WV9QAFEM"],
+    "exactWorldDocumentRestored": true
+  },
+  "conflict": {
+    "sceneId": "01M20Y1NPQFFHDQRENTY3XDRB6",
+    "localDraftBeforeSave": "Local draft",
+    "canonicalNameAfterRefusal": "Ashfall council hearing",
+    "concurrentSummaryAfterRefusal": "Concurrent guarded writer acceptance check",
+    "originalSummaryRestored": true,
+    "editorialHeadAdvancesOnRestore": true
+  },
+  "recordings": [
+    {
+      "file": "world-proof-keyboard.mp4",
+      "seconds": 86.5
+    },
+    {
+      "file": "conflict-proof-keyboard.mp4",
+      "seconds": 29.416667
+    },
+    {
+      "file": "repair-proof-keyboard.mp4",
+      "seconds": 19.25
+    }
+  ]
+}

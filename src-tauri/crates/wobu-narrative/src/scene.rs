@@ -477,6 +477,9 @@ pub struct Tombstone {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Scene {
+    /// Authoring-only supporting-text adapter metadata. Never compiled as a scene.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supporting_text: Option<Box<crate::TextAsset>>,
     pub id: SceneId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub act_id: Option<EntityId>,
@@ -515,6 +518,7 @@ pub struct Scene {
 impl Scene {
     pub fn new(name: impl Into<String>) -> Scene {
         Scene {
+            supporting_text: None,
             id: SceneId::new(),
             act_id: None,
             arc_id: None,
@@ -633,6 +637,7 @@ impl Scene {
     /// the original, and the copy has no history yet.
     pub fn duplicated(&self) -> Scene {
         let mut copy = Scene {
+            supporting_text: None,
             id: SceneId::new(),
             act_id: self.act_id,
             arc_id: self.arc_id,

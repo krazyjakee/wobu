@@ -1,35 +1,6 @@
-//! The stored reverse dependency index (#168).
-//!
-//! Two tables holding no canonical data, and deleting the database is always
-//! safe — but they are not a *projection* of the project folder, and the
-//! difference matters. `nodes` and `narrative_files` can be rebuilt from the
-//! folder because they describe what the folder currently says. These describe
-//! what each line was written *against*, which is a claim about the past that no
-//! folder records. They are the same category as `sync_state`: safe to delete,
-//! not derivable, and the cost of losing them is one rebuild and a run of
-//! `Untracked` reports nobody needed.
-//!
-//! That is why they are not in `CLEAR_DERIVED_SQL`. A rescan replaces every row
-//! that describes the folder, and quietly discarding the recorded baseline along
-//! with them would turn an ordinary reconcile into "this project has never been
-//! tracked". Losing them is an explicit act —
-//! [`Project::forget_narrative_dependencies`](crate::Project::forget_narrative_dependencies)
-//! — and recovering from it is
-//! [`Project::rebuild_narrative_dependencies`](crate::Project::rebuild_narrative_dependencies),
-//! which reads canonical data and nothing else. `narrative_dependencies.rs` runs
-//! that round trip rather than asserting it in a comment.
-//!
-//! The two tables are declared with the rest of the schema in
-//! the index's `schema` module, where every other table in this database is
-//! declared, so that reading the layout of the index does not mean opening ten
-//! files.
-//!
-//! `narrative_dependency_edge` is redundant in the strict sense: it is derivable
-//! from the sets, and [`DependencyIndex::rebuild`] does derive it. It is stored
-//! anyway because the question it answers — *which lines could this save
-//! possibly have touched* — is asked on every write, and answering it by loading
-//! and re-parsing every dependency set in the project would put a full scan in
-//! front of every keystroke. The `key` index is what makes that a lookup.
+//! Rebuildable projection of immutable narrative dependency receipts.
+//! Sets and reverse edges can both be discarded; canonical project receipts
+//! retain the exact historical baseline and explanations after cache loss.
 
 use std::collections::BTreeSet;
 
@@ -57,11 +28,6 @@ fn put(connection: &Connection, set: &DependencySet) -> Result<()> {
 }
 
 impl Index {
-    /// Every recorded dependency set, rebuilt into an index.
-    ///
-    /// The edges are re-derived rather than read back from their table, so a
-    /// stored edge row can never be the thing a comparison depends on. The
-    /// table is a lookup accelerator and this method proves it is nothing more.
     pub(crate) fn narrative_dependencies(&self) -> Result<DependencyIndex> {
         let mut query =
             self.conn.prepare("SELECT dependencies FROM narrative_dependency ORDER BY variant")?;

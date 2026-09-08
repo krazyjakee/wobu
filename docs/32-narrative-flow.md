@@ -13,7 +13,8 @@ comparisons and effects use the declared bool, integer and enum variables; host 
 structured authored effects, executed only by the deterministic runtime's host contract.
 
 The **Add** controls create beats, choices, conditional outcomes, ordinary outcomes, and explicit
-endings. Choices and unfinished outcomes start with an unresolved destination. A condition is the
+endings. **Add beat** inserts after the selected beat in both Script and Flow, or appends when no beat
+is selected. Choices and unfinished outcomes start with an unresolved destination. A condition is the
 guard on a route; it does not create a second story model. Several routes can target the same beat
 without copying that beat or its dialogue.
 
@@ -42,6 +43,18 @@ status and badge controls with the canvas. Pinned notes appear as a paged list w
 delete controls, plus numeric placement fields. Reveals expand folded groups before focusing their
 members. Presentation and filtering never create a scene draft or a source undo entry.
 
+**Groups & notes → Selected node position** offers numeric X/Y placement in both canvas and outline.
+Entering a coordinate switches the arrangement to Manual and retains the companion coordinate from
+the displayed canvas or the outline's seed arrangement. Read-only scenes permit temporary automatic
+layout without attempting to write a sidecar.
+Deleting a focused destination edge returns focus to the destination field in a saved scene, or to
+the surviving route in the standalone demonstration.
+
+At narrower workspace widths, including UI scaling, **Scene outline** and **Context** open auxiliary
+panes above the editor. Escape closes a pane and returns focus to its button. Selecting an outline
+beat closes the pane and reveals that beat. The validation explanation is available under
+**About validation and affected text**, leaving room for the canvas and authoring controls.
+
 The arc's **Group** control carves the same scenes up without editing them. *By arrangement group*
 shows the groups drawn in the sidecar and is what a project arc opens on. *By quest* and *by quest
 state* read `narrative/world.yaml`: a scene sits in the quest whose `scene_ids` name it, and a
@@ -64,5 +77,18 @@ Mounted-component tests use mocked IPC and exercise exact full-document parity b
 Script, explicit saves, guarded writes, locked deletion, route creation and draft history. Reducer tests
 check stable identities, tombstones, reconvergence, opaque field preservation and unchanged prose,
 provenance and revisions. Reveal tests cover hidden tabs, repeated requests, project boundaries,
-deleted targets and the empty scene. These tests do not establish native geometry or pointer behavior;
-native verification of this authoring update remains pending the integrated desktop walkthrough.
+deleted targets and the empty scene. The mounted canvas regression creates three routes, connects
+each to one verdict with C, disconnects a focused edge, checks focus on the destination field, and
+undoes the disconnect in Script while retaining all dialogue. Presentation tests also assert numeric
+outline placement and read-only layout cannot write scene source. These tests do not establish
+native geometry or pointer behavior. [Native Linux evidence](evidence/narrative-186/README.md)
+records both themes, visible minimap nodes, and keyboard creation/deletion with retained focus at
+150% scaling. Reveals preserve the current zoom and wait for automatic layout to finish before
+focusing a node. The footer checks the same unsaved scene shown in Flow, rather than reporting
+the saved source's problem count beside a changed draft.
+
+Additional mounted parity cases compare Add beat, Duplicate beat and Delete beat through both views,
+normalizing only freshly minted identities and deletion timestamps. They check selected-anchor order,
+locked text and provenance, preserved incoming references, tombstones and shared undo/redo. A
+three-choice reconvergence case compares the complete resulting source and restores all routes with
+Script undo while retaining locked dialogue.

@@ -12,11 +12,13 @@ export function PresentationTools({
   level,
   readOnly,
   notePosition,
+  nodePositions,
 }: {
   presentation: FlowPresentation
   level: 'scene' | 'arc'
   readOnly: boolean
   notePosition?: () => { x: number; y: number }
+  nodePositions?: Readonly<Record<string, { x: number; y: number }>>
 }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
@@ -24,6 +26,7 @@ export function PresentationTools({
   const selected = useFlowLevel((s) => s.selectedId)
   const { layout, onChange } = presentation
   const key = selected ? layoutKeyOf(selected, level) : null
+  const position = selected ? nodePositions?.[selected] : undefined
   const groups = Object.values(layout.groups).sort((a, b) => a.id.localeCompare(b.id))
   const currentGroupPage = Math.min(groupPage, Math.max(0, Math.ceil(groups.length / 40) - 1))
   const now = () => new Date().toISOString()
@@ -78,6 +81,42 @@ export function PresentationTools({
       </button>
       {open && (
         <div className="nrt-presentation-tools" aria-label="Groups and pinned notes">
+          {key && (
+            <fieldset disabled={readOnly}>
+              <legend>Selected node position</legend>
+              {(['x', 'y'] as const).map((axis) => (
+                <label key={axis}>
+                  Node {axis.toUpperCase()}{' '}
+                  <input
+                    type="number"
+                    value={layout.nodes[key]?.[axis] ?? position?.[axis] ?? ''}
+                    placeholder="Automatic"
+                    onChange={(event) => {
+                      const value = event.target.valueAsNumber
+                      if (!Number.isFinite(value)) return
+                      const updatedAt = now()
+                      onChange({
+                        ...layout,
+                        mode: 'manual',
+                        modeUpdatedAt: updatedAt,
+                        nodes: {
+                          ...layout.nodes,
+                          [key]: {
+                            x: 0,
+                            y: 0,
+                            ...position,
+                            ...layout.nodes[key],
+                            [axis]: value,
+                            updatedAt,
+                          },
+                        },
+                      })
+                    }}
+                  />
+                </label>
+              ))}
+            </fieldset>
+          )}
           <label>
             Group name{' '}
             <input

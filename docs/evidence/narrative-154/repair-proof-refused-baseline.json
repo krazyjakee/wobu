@@ -1,0 +1,517 @@
+{
+  "url": "http://localhost:1420/",
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "text": "wobu\nNarrative acceptance\nnothing selected\nJump to\u2026\nCtrl+K\n\n\n\n\n\n\n\n\n?\n\nNarrative acceptance / Narrative\nBack to scenes\nScene outline\nContext\nGenerate\u2026\nWorld state\nText library\nReview\nBuild\u2026\nRecovery\u2026\nExport\u2026\nnarrative/scenes/ashfall-council-hearing.yaml\nUnsaved draft\nValidate\nFormat\nSave source\nReload\nSave and Format normalise YAML and remove comments. IDs and dialogue remain in the shared scene model. Unsaved drafts stay in this session when you change views. Layout is stored separately.\nThis saved file is malformed. Repair the source below; a successful repair keeps an exact recovery copy. Invalid drafts cannot replace it.\n\nMalformed entity file narrative/review: Editorial history can only change through review commands. Wobu has left the file exactly as it is rather than write over it. Open it in a text editor and check the block of settings at the top \u2014 a hand edit or a half-finished sync is the usual cause.\nChoose a scene to see what is wrong with it. Checks cover source errors and missing text. Branch reachability has not been checked.\nNarrative acceptance\n/tmp/wobu-acceptance-20260908/malformed-source.wobu\n2 nodes\n[ navigator \u00b7 inspector ]\nno image provider chosen\n\u00b7 queue 0\n\u00b7 claude-sonnet-5 \u00b7 1m context\n\u00b7 notifications",
+  "active": {
+    "tag": "BODY",
+    "role": null,
+    "label": null,
+    "text": "\n    wobuNarrative acceptancenothing selectedJump to\u2026Ctrl+K?Narrative acceptance / NarrativeBack to scenesScene outlineContextGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned ",
+    "id": "",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900
+    },
+    "tabIndex": -1
+  },
+  "elements": [
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Narrative acceptance",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 81.046875,
+        "y": 6,
+        "width": 163.765625,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Jump to\u2026Ctrl+K",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1066,
+        "y": 6,
+        "width": 190,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1266,
+        "y": 7,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Minimise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1308,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Maximise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1352,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Close",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1396,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Library",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 49,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Forge",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 87,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Assets",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 125,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Narrative",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 163,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Guide",
+      "text": "?",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 793,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 831,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Back to scenes",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 300.453125,
+        "y": 51,
+        "width": 110,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Scene outline",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 634.203125,
+        "y": 51,
+        "width": 105,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Context",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 745.203125,
+        "y": 51,
+        "width": 70.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Generate\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 821.96875,
+        "y": 51,
+        "width": 88.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "World state",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 916.734375,
+        "y": 51,
+        "width": 92.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Text library",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1015.5,
+        "y": 51,
+        "width": 91.6875,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Review",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1113.1875,
+        "y": 51,
+        "width": 66.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Build\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1185.71875,
+        "y": 51,
+        "width": 66,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Recovery\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1257.71875,
+        "y": 51,
+        "width": 87.28125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Export\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1351,
+        "y": 51,
+        "width": 73,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Validate",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1100.46875,
+        "y": 110,
+        "width": 73.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Format",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1182.234375,
+        "y": 110,
+        "width": 67,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Save source",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1257.234375,
+        "y": 110,
+        "width": 93.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Reload",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1359,
+        "y": 110,
+        "width": 65,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": "Scene YAML",
+      "text": "schema_version: 2\nscene:\n  id: 01M20Y1NPQFFHDQRENTY3XDRB6\n  editorial_head: 01M20Y7EF22GR710FJAJWAP38J\n  name: Ashfall council hearing\n  summary: 'Native keyboard draft: the council waits for the logbook.'\n  beats:\n  - id: 01M20Y1NQ7K181572PPQQCTHKS\n",
+      "id": "",
+      "value": "schema_version: 2\nscene:\n  id: 01M20Y1NPQFFHDQRENTY3XDRB6\n  editorial_head: 01M20Y7EF22GR710FJAJWAP38J\n  name: Ashfall council hearing\n  summary: 'Native keyboard draft: the council waits for the logbook.'\n  beats:\n  - id: 01M20Y1NQ7K181572PPQQCTHKS\n    title: Present evidence\n    intents:\n    - subject: player\n      intent: Secure an investigation while preserving the council\u2019s trust.\n    dialogue:\n    - id: 01M20Y1NQ79KYS7PXCKRZKAY79\n      speaker: player\n      policy: edited\n      variants:\n      - id: 01M20Y1NQ7P0G78BDXSJEWBK01\n        text:\n          revision: af810e1c3ec78d1578022fd38a523c04\n          body: I brought the logbook. Let the council judge the evidence.\n          provenance: human\n          lifecycle:\n            policy: edited\n            review: draft\n            freshness: current\n    choices:\n    - id: 01M20Y1NQ7WSE1AR67YCEK7Q27\n      label: Present the logbook\n      requires:\n        all:\n        - compare:\n            var: ashfall_knows_logbook\n            op: eq\n            value:\n              literal: true\n        - compare:\n            var: ashfall_trust\n            op: ge\n            value:\n              literal: 40\n      effects:\n      - add:\n          var: ashfall_trust\n          by: 10\n      - command:\n          name: ashfall_file_record\n      to:\n        beat: 01M20Y1NQ7B7AGJM3YS3SW6DY0\n    - id: 01M20Y1NQ7TQQXTWS2DDD1W51E\n      label: Ask for a fair hearing\n      effects:\n      - add:\n          var: ashfall_trust\n          by: 5\n      to:\n        beat: 01M20Y1NQ7B7AGJM3YS3SW6DY0\n    - id: 01M20Y1NQ7P71YQ9DAE5GA79RV\n      label: Challenge the council\u2019s silence\n      effects:\n      - add:\n          var: ashfall_trust\n          by: -10\n      to:\n        beat: 01M20Y1NQ7B7AGJM3YS3SW6DY0\n  - id: 01M20Y1NQ7B7AGJM3YS3SW6DY0\n    title: Council response\n    dialogue:\n    - id: 01M20Y1NQ7STS40VP6H0JC14E1\n      speaker: narrator\n      policy: edited\n      variants:\n      - id: 01M20Y1NQ795Q4KP0BZWVMWN91\n        when:\n          compare:\n            var: ashfall_record_filed\n            op: eq\n            value:\n              literal: true\n        text:\n          revision: 857eeeb6008122ae900ca44017edefe8\n          body: The council accepts the record. An investigation will begin.\n          provenance: human\n          lifecycle:\n            policy: edited\n            review: draft\n            freshness: current\n      - id: 01M20Y1NQ7J14FF8EV4TWSGYMP\n        when:\n          compare:\n            var: ashfall_knows_logbook\n            op: eq\n            value:\n              literal: true\n        text:\n          revision: 0fba25c0880edd78a7d766ae5467b80f\n          body: The clerk asks to see the logbook before the council will act.\n          provenance: human\n          lifecycle:\n            policy: edited\n            review: draft\n            freshness: current\n      - id: 01M20Y1NQ7MPTE5V641ZCA77TH\n        text:\n          revision: d957f20e1aa8e0cc3ec715843da5b23e\n          body: The council asks Kael to find a witness who can establish what happened.\n          provenance: human\n          lifecycle:\n            policy: edited\n            review: draft\n            freshness: current\n    outcomes:\n    - id: 01M20Y1NQ796Y5JDTBVBH5YBK7\n      to:\n        end:\n          label: Hearing complete\n\n",
+      "disabled": false,
+      "rect": {
+        "x": 68,
+        "y": 216,
+        "width": 1356,
+        "height": 560
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Open job queue, 0 jobs",
+      "text": "\u00b7 queue 0",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1136.21875,
+        "y": 879,
+        "width": 48,
+        "height": 16
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Notifications, nothing unread, 0 in history",
+      "text": "\u00b7 notifications",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1357,
+        "y": 879,
+        "width": 71,
+        "height": 16
+      },
+      "tabIndex": 0
+    }
+  ],
+  "ui": {
+    "mode": "narrative",
+    "selectedId": null,
+    "recentIds": [],
+    "tab": "notes",
+    "narrative": {
+      "sceneId": null,
+      "beatId": null,
+      "lineId": null
+    },
+    "narrativeEntityTarget": null,
+    "narrativeWorldTarget": null,
+    "narrativeReveal": null,
+    "narrativeTab": "flow",
+    "narrativeFilters": {
+      "needsText": false,
+      "needsReview": false,
+      "outOfDate": false
+    },
+    "filter": "",
+    "navWidth": 272,
+    "navCollapsed": false,
+    "inspCollapsed": false,
+    "closedGroups": {},
+    "collapsedNodes": {},
+    "bands": {},
+    "paletteOpen": false,
+    "shortcutsOpen": false,
+    "toasts": [],
+    "banners": []
+  },
+  "errors": []
+}
