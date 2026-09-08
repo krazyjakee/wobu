@@ -27,8 +27,14 @@ export const EMPTY_REVIEW_FILTERS: ReviewFilters = {
 }
 export const reviewTargetKey = (target: ReviewTarget) =>
   `${target.scene}/${target.beat}/${target.slot}/${target.variant ?? 'empty'}`
-export const reviewPolicy = (line: ReviewLine): GenerationPolicy =>
-  line.slot_policy === 'locked' ? 'locked' : (line.text?.lifecycle?.policy ?? line.slot_policy)
+export const reviewPolicy = (line: ReviewLine): GenerationPolicy => {
+  const policies = [line.slot_policy, line.text?.lifecycle?.policy]
+  return policies.includes('locked')
+    ? 'locked'
+    : policies.includes('edited')
+      ? 'edited'
+      : 'generated'
+}
 
 /** These are display filters, never eligibility checks for writes. */
 export function filterReviewRows(rows: ReviewRow[], filters: ReviewFilters): ReviewRow[] {

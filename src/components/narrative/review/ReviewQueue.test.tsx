@@ -86,3 +86,13 @@ it('paginates hundreds of lines and keeps explicit selection outside the current
   expect(screen.getByText('Page 2 of 5')).toBeVisible()
   expect(bulk.mock.lastCall?.[0]).toHaveLength(50)
 })
+it('filters a generated variant under an Edited slot as protected Edited content', () => {
+  const original = props()
+  original.views[0]!.lines = original.views[0]!.lines.slice(0, 1)
+  original.views[0]!.lines[0]!.slot_policy = 'edited'
+  render(<ReviewQueue {...original} />)
+  fireEvent.change(screen.getByLabelText('Policy'), { target: { value: 'edited' } })
+  expect(screen.getAllByRole('checkbox')).toHaveLength(1)
+  fireEvent.change(screen.getByLabelText('Policy'), { target: { value: 'generated' } })
+  expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+})

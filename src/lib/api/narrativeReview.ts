@@ -85,3 +85,27 @@ export const narrativeReviewContext = (target: ReviewTarget, stateJson: string |
   call<ReviewContext>('narrative_review_context', { target, stateJson })
 export const narrativeReviewApply = (request: ReviewRequest) =>
   call<{ file: SceneFile; review: ReviewSceneView }>('narrative_review_apply', { request })
+
+export interface ReviewList {
+  scenes: ReviewSceneView[]
+  errors: { scene_id: string | null; reason: string }[]
+  next_offset: number | null
+  total_scenes: number
+  catalog_revision: string
+}
+export interface ReviewBatchItem {
+  index: number
+  target: ReviewTarget
+  status: 'eligible' | 'applied' | 'skipped' | 'conflicting'
+  reason: string
+}
+export interface ReviewBatchResult {
+  items: ReviewBatchItem[]
+}
+export const narrativeReviewList = (
+  stateJson: string | null = null,
+  offset = 0,
+  expectedCatalog: string | null = null,
+) => call<ReviewList>('narrative_review_list', { stateJson, offset, expectedCatalog })
+export const narrativeReviewBatch = (requests: ReviewRequest[], commit: boolean) =>
+  call<ReviewBatchResult>('narrative_review_batch', { requests, commit })

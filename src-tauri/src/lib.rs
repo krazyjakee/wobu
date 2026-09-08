@@ -163,6 +163,8 @@ pub fn run() {
             commands::narrative_export::narrative_export_check,
             commands::narrative_export::narrative_export,
             commands::narrative_review::narrative_review_get,
+            commands::narrative_review::queue::narrative_review_list,
+            commands::narrative_review::queue::narrative_review_batch,
             commands::narrative_review::narrative_review_context,
             commands::narrative_review::narrative_review_apply,
             commands::narrative_review::narrative_scene_restore,

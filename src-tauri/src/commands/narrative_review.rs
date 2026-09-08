@@ -1,4 +1,5 @@
 //! Coarse review commands share one canonical storage transition boundary.
+pub mod queue;
 use super::narrative::SceneFileView;
 use crate::{
     error::{Code, CommandResult, WobuError},

@@ -2,7 +2,8 @@
 
 The Review queue compares accepted wording, proposed wording and the revision used to request
 that proposal. It keeps stable scene, beat, slot, variant and speaker identities visible. A proposal
-is a candidate: generation does not replace accepted dialogue.
+is a candidate. Generation never automatically replaces Edited or Locked wording; Generated wording
+can advance under its explicit generation policy.
 
 Filter the project queue by scene, speaker, generation policy, approval and freshness, or search
 wording and names. The queue displays 50 lines per page. Arrow Up and Arrow Down move between
@@ -45,8 +46,7 @@ contract. The backend remains authoritative for eligibility, source/context conf
 
 Component tests cover concurrent refresh and failed acceptance, original-guard retention, explicit
 manual adoption, locked replacements, project-close draft protection, keyboard navigation, filtering
-and pagination over 201 lines. The queue is being integrated with the shared editorial backend;
-bulk operations and end-to-end evidence are added with that integration.
+and pagination over 201 lines. The queue and Script use the same canonical editorial backend.
 
 These screenshots show the actual React components with mocked project data and review callbacks.
 They demonstrate the queue and retained edits after a simulated concurrent-source conflict; they are
@@ -55,3 +55,45 @@ not native Tauri or live-provider evidence.
 ![Project review queue with wording comparison](images/narrative-review-queue-mock.png)
 
 ![Retained manual edits after a simulated acceptance conflict](images/narrative-review-conflict-mock.png)
+
+## Project pages and batch decisions
+
+Open **Narrative → Review**. Reads load 32 scenes at a time, with at most 10,000 dialogue rows in
+one response. **Load more scenes** extends the queue; the loaded/total count states which scenes
+the filters currently search. A changed scene catalog rejects the next page, so a collaborator
+adding or deleting a scene cannot silently shift pagination. Unreadable files, oversized pages and
+invalid scene context are reported explicitly; skipped scenes remain available through Source or
+Script after repair.
+
+Select lines, choose approve, attest, lock or unlock, then **Review selected decisions**. This is a
+dry run against the original scene guards and context revisions. Counts distinguish eligible,
+skipped and conflicting decisions. Any local draft for a selected line—including an unselected
+proposal version—skips that line. A batch is limited to 128 decisions and reports extra selected
+lines as skipped. Backend rejections appear conservatively as conflicting with their exact reason;
+the UI does not infer policy eligibility by parsing error messages.
+
+**Apply eligible decisions** submits only the requests found eligible in that plan. Each scene is
+staged against its original snapshot and committed once. A conflicting scene does not prevent an
+independent scene from succeeding; the resulting counts identify each outcome. Changes to selection,
+operation, reviewed context or local drafts disable the frozen plan until another explicit review.
+Nothing silently replaces the guard midway through a batch. Repeating an already committed request
+fails its original guard, preserving canonical history.
+
+## Full review-loop evidence
+
+The [full browser recording](images/narrative-review-loop-mock.webm) exercises actual Generation and
+Review components through scripted IPC: generate a line, save a human revision, regenerate while
+retaining that revision, compare the candidate, accept edited wording, approve, lock, change upstream
+context, and explicitly attest unchanged wording. The overlay labels mocked IPC and provider results
+throughout. It is a component integration demonstration, not a native Tauri or paid-provider run.
+
+![Comparing a regenerated proposal against retained human edits](images/narrative-review-regenerated-mock.png)
+
+![Approved and locked wording after an explicit review decision](images/narrative-review-locked-mock.png)
+
+Focused frontend tests cover that complete loop plus stale/conflicting acceptance, guarded manual
+adoption, hidden drafts in bulk selection and disabled plans after a context change. Rust command
+adapter tests use real project files to check dry-run immutability, same-scene grouped decisions,
+independent conflicting outcomes, duplicate skipping, repeated-request rejection, bounded listing,
+unreadable sources and catalog changes between pages. The shared editorial backend also tests real
+frozen generation receipts and protected transitions; those tests do not call a live provider.

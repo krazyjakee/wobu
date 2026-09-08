@@ -3,6 +3,8 @@ import {
   narrativeReviewApply,
   narrativeReviewContext,
   narrativeReviewGet,
+  narrativeReviewList,
+  narrativeReviewBatch,
   type ReviewRequest,
 } from './narrativeReview'
 const invoke = vi.hoisted(() => vi.fn())
@@ -37,4 +39,15 @@ it('passes original raw state and guarded actions unchanged across the command b
   await narrativeReviewApply(request)
   expect(invoke).toHaveBeenLastCalledWith('narrative_review_apply', { request })
   expect(request.guard.head).toBe('original-head')
+  await narrativeReviewList(state, 32, 'catalog-guard')
+  expect(invoke).toHaveBeenLastCalledWith('narrative_review_list', {
+    stateJson: state,
+    offset: 32,
+    expectedCatalog: 'catalog-guard',
+  })
+  await narrativeReviewBatch([request], false)
+  expect(invoke).toHaveBeenLastCalledWith('narrative_review_batch', {
+    requests: [request],
+    commit: false,
+  })
 })

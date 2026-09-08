@@ -30,7 +30,11 @@ export function ReviewDetail({
   const { line, scene } = row
   const selected = line.proposals.find((one) => one.id === proposalId) ?? null
   const draftKey = `${projectKey}:${row.key}:${proposalId ?? 'current'}`
-  const draft = useReviewDrafts((state) => state.drafts[draftKey])
+  const drafts = useReviewDrafts((state) => state.drafts)
+  const draft = drafts[draftKey]
+  const hasOtherDraft = Object.keys(drafts).some(
+    (key) => key.startsWith(`${projectKey}:${row.key}:`) && key !== draftKey,
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -140,7 +144,7 @@ export function ReviewDetail({
     }
   }
   const policyScope = line.slot_policy === 'locked' || !line.target.variant ? 'slot' : 'variant'
-  const lifecycleDisabled = busy || readOnly || !!draft || !line.text
+  const lifecycleDisabled = busy || readOnly || !!draft || hasOtherDraft || !line.text
   return (
     <article className="nrt-review-detail" aria-label="Selected dialogue review">
       <header>
@@ -255,6 +259,12 @@ export function ReviewDetail({
           This wording is protected. Explicitly unlock before editing or accepting a replacement.
         </p>
       )}
+      {hasOtherDraft && (
+        <p role="status">
+          Another version of this line has local edits. Review and save or discard them before
+          changing approval or policy.
+        </p>
+      )}
       {!!draft && (
         <p>
           Your local revision is retained across refreshes and navigation. Save or discard it before
@@ -273,7 +283,7 @@ export function ReviewDetail({
             </button>
             <button
               className="btn"
-              disabled={busy || readOnly || !!draft}
+              disabled={busy || readOnly || !!draft || hasOtherDraft}
               title={draft ? 'Discard your local edits before rejecting this proposal.' : undefined}
               onClick={() =>
                 void apply({
@@ -325,7 +335,7 @@ export function ReviewDetail({
         </button>
         <button
           className="btn"
-          disabled={busy || readOnly || !!draft}
+          disabled={busy || readOnly || !!draft || hasOtherDraft}
           onClick={() =>
             void apply({ kind: 'policy', scope: policyScope, policy: locked ? 'edited' : 'locked' })
           }

@@ -17,14 +17,12 @@ function props() {
     proposalId: 'proposal',
     onProposal: vi.fn(),
     onApply: vi.fn().mockResolvedValue(undefined),
-    onContext: vi
-      .fn()
-      .mockResolvedValue({
-        version: 1,
-        revision: 'original-context',
-        state: {},
-        inputs: { facts: ['beacon_failed'] },
-      }),
+    onContext: vi.fn().mockResolvedValue({
+      version: 1,
+      revision: 'original-context',
+      state: {},
+      inputs: { facts: ['beacon_failed'] },
+    }),
     onSource: vi.fn(),
   }
 }

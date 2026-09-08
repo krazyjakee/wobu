@@ -35,6 +35,7 @@ export function ReviewQueue({
   onSource,
   onClose,
   renderBulk,
+  coverage,
 }: {
   projectKey: string
   readOnly: boolean
@@ -50,6 +51,7 @@ export function ReviewQueue({
   onSource: (target: ReviewTarget) => void
   onClose: () => void
   renderBulk?: (rows: ReviewRow[]) => ReactNode
+  coverage?: ReactNode
 }) {
   const [filters, setFilters] = useState<ReviewFilters>(EMPTY_REVIEW_FILTERS)
   const [selection, setSelection] = useState<string | null>(null)
@@ -92,7 +94,13 @@ export function ReviewQueue({
   const selectedRows = rows.filter((row) => checked.includes(row.key))
   const retained = Object.entries(drafts).filter(([key]) => key.startsWith(`${projectKey}:`))
   const orphaned = retained.filter(
-    ([, draft]) => !rows.some((row) => row.key === reviewTargetKey(draft.authorization.target)),
+    ([, draft]) =>
+      !rows.some(
+        (row) =>
+          row.key === reviewTargetKey(draft.authorization.target) &&
+          (!draft.proposal ||
+            row.line.proposals.some((proposal) => proposal.id === draft.proposal!.id)),
+      ),
   )
   const update = (patch: Partial<ReviewFilters>) => {
     setFilters((before) => ({ ...before, ...patch }))
@@ -248,6 +256,7 @@ export function ReviewQueue({
             Inspect review scenario
           </button>
         </details>
+        {coverage}
         {renderBulk?.(selectedRows)}
         {loading && <p role="status">Reading saved narrative review records…</p>}
         {error && <p role="alert">{error}</p>}
@@ -374,13 +383,13 @@ export function ReviewQueue({
           )}
         </div>
         {!!orphaned.length && (
-          <section aria-label="Retained edits for removed lines">
-            <h2>Retained edits for removed lines</h2>
+          <section aria-label="Retained edits for unavailable versions">
+            <h2>Retained edits for unavailable versions</h2>
             {orphaned.map(([key, draft]) => (
               <article key={key}>
                 <p>
-                  The source line is no longer in the current queue. Your writing is retained here
-                  for copying or recovery.
+                  The source line or proposal is no longer in the current queue. Your writing is
+                  retained here for copying or recovery.
                 </p>
                 <textarea
                   aria-label={`Retained wording ${draft.authorization.target.slot}`}
