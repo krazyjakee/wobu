@@ -2,7 +2,7 @@
 
 Status: **In progress**. Flow, scene discovery and manual Script/Source are merged. The current
 increment adds attributed World state, typed scene forms, deterministic compiler/runtime
-foundations and isolated Preview. Full acceptance, generation and production workflows remain
+foundations, isolated Preview and cancellable prose-generation jobs. Full editorial acceptance and production workflows remain
 in progress or planned; N5 engine integrations are excluded from current work. See
 [current authoring scope and evidence](19-narrative-authoring.md).
 GitHub milestones and issues below track the remaining acceptance criteria.
@@ -354,7 +354,8 @@ not merely when backend APIs exist.
 Merged [PR #190](https://github.com/krazyjakee/wobu/pull/190) established Flow, and
 [PR #192](https://github.com/krazyjakee/wobu/pull/192) added working discovery, Script and Source.
 The current implementation includes World state, typed forms, source repair, a compiler/runtime-backed
-Preview with evaluated traces and command results, explicit save migration, native package export, saved regression scenarios and attributed context.
+Preview with evaluated traces and command results, explicit save migration, native package export,
+saved regression scenarios, attributed context, generation jobs and guarded editorial review.
 Detailed behavior and evidence limits are in [the authoring guide](19-narrative-authoring.md).
 The issue index below retains unchecked full-acceptance items; implementation of a foundation
 is not a claim that every criterion is complete. N5 is excluded from this work by user direction.
@@ -362,15 +363,15 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | Plan element | Implemented foundation | Remaining work |
 | --- | --- | --- |
 | Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Multiple-quest arc grouping, route overlays and native acceptance (#187/#188/#186). |
-| Separate layout | Sidecars stay outside source fingerprints, including world source. | Layout-specific index and peer merging (#185). |
+| Separate layout | Versioned scene/quest sidecars, shared mode/groups/notes, separate watcher and peer merging; native canvas and Release invariance evidence. | Platform coverage and broader accessibility acceptance (#182/#186). |
 | Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | Scene-library use of the rebuildable record index, act/tag metadata and real-load benchmarks (#194/#182). |
-| World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); provider jobs remain #164. |
+| World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); [provider jobs](25-narrative-generation.md) now retain separate prose proposals. |
 | Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
 | Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and production recovery (#181). |
 | Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
 | Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests and native walkthrough. | Flow overlays (#188). |
-| Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Layout sync (#185), richer domain payloads and production recovery (#181). |
-| Production | Authoring lifecycle/revision safeguards. | Generation, review, dependency tracking, localisation/audio and release workflow. N5 engine integrations are excluded. |
+| Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Richer domain payloads and production recovery (#181). |
+| Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. | Supporting text (#167), precise dependency tracking, localisation/audio and production release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
 
@@ -385,7 +386,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 - [ ] [Author scenes, beats, choices, consequences, and handwritten dialogue](https://github.com/krazyjakee/wobu/issues/156)
 - [x] [Support structured YAML source with diagnostics and form round trips](https://github.com/krazyjakee/wobu/issues/157)
 - [x] [Spike: choose the Flow canvas library, layout engine, and node vocabulary](https://github.com/krazyjakee/wobu/issues/184)
-- [ ] [Persist Flow layout as presentation metadata separate from narrative source](https://github.com/krazyjakee/wobu/issues/185)
+- [x] [Persist Flow layout as presentation metadata separate from narrative source](https://github.com/krazyjakee/wobu/issues/185)
 - [ ] [Add the scene Flow canvas for beats, choices, conditions, and outcomes](https://github.com/krazyjakee/wobu/issues/186)
 - [ ] [Add a searchable Scene library with saved views and editor navigation](https://github.com/krazyjakee/wobu/issues/191)
 
@@ -403,9 +404,9 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 ### [N3 — Generation and editorial review](https://github.com/krazyjakee/wobu/milestone/17)
 
 - [x] [Resolve attributed narrative generation context for each slot and state](https://github.com/krazyjakee/wobu/issues/163)
-- [ ] [Generate narrative drafts through cancellable provider jobs](https://github.com/krazyjakee/wobu/issues/164)
-- [ ] [Enforce revision-aware generation policy, approval, and freshness](https://github.com/krazyjakee/wobu/issues/165)
-- [ ] [Build the dialogue review queue and revision comparison UI](https://github.com/krazyjakee/wobu/issues/166)
+- [x] [Generate narrative drafts through cancellable provider jobs](https://github.com/krazyjakee/wobu/issues/164)
+- [x] [Enforce revision-aware generation policy, approval, and freshness](https://github.com/krazyjakee/wobu/issues/165)
+- [x] [Build the dialogue review queue and revision comparison UI](https://github.com/krazyjakee/wobu/issues/166)
 - [ ] [Author and generate barks, ambient dialogue, reactions, and supporting text](https://github.com/krazyjakee/wobu/issues/167)
 
 ### [N4 — Incremental builds and narrative analysis](https://github.com/krazyjakee/wobu/milestone/18)
@@ -435,4 +436,3 @@ Excluded from the current implementation at the user's request; these issues rem
 - [ ] [Validate narrative collaboration, migration, and crash recovery end to end](https://github.com/krazyjakee/wobu/issues/181)
 - [ ] [Validate narrative workspace accessibility and large-project performance](https://github.com/krazyjakee/wobu/issues/182)
 - [ ] [Document and validate the complete narrative production workflow](https://github.com/krazyjakee/wobu/issues/183)
-

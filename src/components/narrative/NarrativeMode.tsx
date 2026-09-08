@@ -3,11 +3,12 @@ import type { ProjectSummary } from '../../lib/api'
 import { useCreateScene, useSceneDiagnostics, useSceneFiles, useScenes } from '../../lib/queries'
 import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
-import { TipButton } from '../Tooltip'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
 import { NarrativeScenarioTests } from './NarrativeScenarioTests'
 import { NarrativeRecovery } from './NarrativeRecovery'
+import { NarrativeReview } from './NarrativeReview'
+import { NarrativeGeneration } from './NarrativeGeneration'
 import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
@@ -31,6 +32,8 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
+  const [generationOpen, setGenerationOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
   const [repairRel, setRepairRel] = useState<string | null>(null)
   const [worldOpen, setWorldOpen] = useState(false)
@@ -89,6 +92,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         )}
         <div className="nrt-head-actions">
+          <button className="btn" onClick={() => setGenerationOpen(true)}>
+            Generate…
+          </button>
           <button
             type="button"
             className="btn"
@@ -97,13 +103,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           >
             World state
           </button>
-          <TipButton
-            className="btn"
-            disabledReason={NARRATIVE_UNAVAILABLE.review}
-            tip="Compare drafts against the text they would replace"
-          >
+          <button className="btn" onClick={() => setReviewOpen(true)}>
             Review
-          </TipButton>
+          </button>
           <button className="btn" onClick={() => setBuildOpen(true)}>
             Build…
           </button>
@@ -115,6 +117,31 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         </div>
       </header>
+      {reviewOpen && (
+        <NarrativeReview
+          projectKey={project.path}
+          readOnly={project.readOnly}
+          sceneName={(id) => catalog.data?.scenes.find((scene) => scene.id === id)?.name ?? id}
+          speakerName={(id) => nameOf(id) ?? id}
+          onClose={() => setReviewOpen(false)}
+          onSource={(target) => {
+            setReviewOpen(false)
+            open(
+              { sceneId: target.scene, beatId: target.beat, lineId: target.slot },
+              'script',
+              target.variant ?? undefined,
+            )
+          }}
+        />
+      )}
+      {generationOpen && (
+        <NarrativeGeneration
+          projectKey={project.path}
+          scene={selected}
+          readOnly={project.readOnly}
+          onClose={() => setGenerationOpen(false)}
+        />
+      )}
       {buildOpen && (
         <NarrativeScenarioTests
           readOnly={project.readOnly}

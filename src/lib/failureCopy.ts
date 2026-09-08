@@ -30,6 +30,8 @@ export function jobKindLabel(kind: JobKind): string {
     // place to introduce a second name for it.
     case 'enhance':
       return 'Enhance'
+    case 'narrative':
+      return 'Dialogue generation'
     case 'train_lora':
       return 'LoRA training'
     case 'thumbnail':

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { FlowPresentation } from './flow/useFlowPresentation'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useUI } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativePlaceholder } from './NarrativePlaceholder'
@@ -89,6 +90,7 @@ export function NarrativeFlowPane({
   onEdit,
   positions,
   onPositionsChange,
+  presentation,
   authoring,
   creatable,
   spare,
@@ -108,6 +110,7 @@ export function NarrativeFlowPane({
   positions?: FlowPositions
   /** Where moved and laid-out coordinates go. The pane persists nothing. */
   onPositionsChange?: (positions: FlowPositions) => void
+  presentation?: FlowPresentation
   /** What this level allows, and the sentence for each refusal. */
   authoring?: FlowAuthoring
   /** Which kinds the toolbar offers. Defaults to the canvas's own six. */
@@ -188,6 +191,7 @@ export function NarrativeFlowPane({
       onEdit={onEdit}
       positions={positions}
       onPositionsChange={onPositionsChange}
+      presentation={presentation}
       authoring={authoring}
       creatable={creatable}
       spare={spare}
@@ -212,6 +216,7 @@ function FlowSceneEditor({
   onEdit,
   positions,
   onPositionsChange,
+  presentation,
   authoring,
   creatable,
   spare,
@@ -225,6 +230,7 @@ function FlowSceneEditor({
   onEdit?: (scene: FlowScene) => void
   positions?: FlowPositions
   onPositionsChange?: (positions: FlowPositions) => void
+  presentation?: FlowPresentation
   authoring?: FlowAuthoring
   creatable?: readonly FlowKind[]
   spare?: (element: FlowElement) => FlowPort | null
@@ -235,7 +241,7 @@ function FlowSceneEditor({
   // This component is keyed by the scene, so mounting *is* a scene change: the
   // canvas cursor, the half-made connection and the closed groups all belonged
   // to the scene that just went away.
-  useEffect(() => resetFlowStore(), [])
+  useLayoutEffect(() => resetFlowStore(), [])
 
   /*
    * Undo, local for now.
@@ -403,6 +409,7 @@ function FlowSceneEditor({
           layout={layout}
           positions={positions}
           onPositionsChange={onPositionsChange}
+          presentation={presentation}
           authoring={authoring}
           creatable={creatable}
           spare={spare}

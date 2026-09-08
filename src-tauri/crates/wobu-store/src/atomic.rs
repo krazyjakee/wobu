@@ -256,6 +256,32 @@ pub fn read_stamped(path: &Path) -> Result<Option<(String, Stamp)>> {
     Ok(Some((text, stamp)))
 }
 
+/// Bound the allocation even when an external writer grows the file mid-read.
+pub(crate) fn read_stamped_bounded(
+    path: &Path,
+    max_bytes: usize,
+) -> Result<Option<(String, Stamp)>> {
+    use std::io::Read;
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(Error::io(path, e)),
+    };
+    let meta = file.metadata().map_err(|e| Error::io(path, e))?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes as u64 + 1).read_to_end(&mut bytes).map_err(|e| Error::io(path, e))?;
+    if bytes.len() > max_bytes {
+        return Err(Error::Malformed {
+            path: path.into(),
+            reason: "The arrangement exceeds its byte limit.".into(),
+        });
+    }
+    let stamp = Stamp::of_bytes(&bytes, mtime_ms(&meta));
+    let text = String::from_utf8(bytes)
+        .map_err(|e| Error::Malformed { path: path.into(), reason: e.to_string() })?;
+    Ok(Some((text, stamp)))
+}
+
 /// The cheap half of the check: `(mtime, size)` without reading the contents.
 pub fn peek(path: &Path) -> Result<Option<(i64, u64)>> {
     match fs::metadata(path) {
@@ -443,23 +469,19 @@ const MERGE_ATTEMPTS: u32 = 3;
 /// called again on each retry, against a freshly read file, so a caller that
 /// merges correctly against one snapshot merges correctly against all of them.
 ///
-/// The loop narrows the lost-update window to the gap between a `stat` and a
-/// `rename`, which is as close to a compare-and-swap as a file on an SMB share
-/// gets: neither POSIX nor SMB offers a rename that fails when the target has
-/// moved. The residual is stated rather than hidden — see the module docs on
-/// `narrative::layout` — and on the final attempt the write lands regardless,
-/// because a canvas that refuses to remember where a box is would be a worse
-/// bug than one that occasionally forgets a collaborator's simultaneous drag.
+/// Fresh byte comparisons narrow the check-to-rename race on filesystem shares.
+/// After repeated movement this defers instead of overwriting a newer schema.
 pub fn merging_write(
     project_root: &Path,
     target: &Path,
+    max_bytes: usize,
     mut render: impl FnMut(Option<&str>) -> Result<String>,
 ) -> Result<Stamp> {
     if let Some(parent) = target.parent() {
         crate::paths::ensure_dir(parent)?;
     }
     for attempt in 1..=MERGE_ATTEMPTS {
-        let before = read_stamped(target)?;
+        let before = read_stamped_bounded(target, max_bytes)?;
         let merged = render(before.as_ref().map(|(text, _)| text.as_str()))?;
 
         // Already what is on disk. Returning early keeps the file's mtime
@@ -473,21 +495,26 @@ pub fn merging_write(
         }
 
         let staged = StagedFile::new(project_root, merged.as_bytes())?;
-        let moved_under_us = match (&before, peek(target)?) {
-            (Some((_, stamp)), Some((mtime, size))) => {
-                stamp.mtime_ms != mtime || stamp.size != size
+        let now = read_stamped_bounded(target, max_bytes)?;
+        let moved_under_us =
+            before.as_ref().map(|(text, _)| text) != now.as_ref().map(|(text, _)| text);
+        if moved_under_us {
+            if attempt < MERGE_ATTEMPTS {
+                continue;
             }
-            (None, None) => false,
-            _ => true,
-        };
-        if moved_under_us && attempt < MERGE_ATTEMPTS {
-            continue;
+            return Err(Error::io(
+                target,
+                std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "The arrangement kept changing. Retry saving it.",
+                ),
+            ));
         }
         staged.rename(target)?;
         let mtime = fs::metadata(target).map(|m| mtime_ms(&m)).unwrap_or_else(|_| now_ms());
         return Ok(Stamp::of_bytes(merged.as_bytes(), mtime));
     }
-    unreachable!("the final attempt always writes")
+    unreachable!("the final attempt returns")
 }
 
 /// Move a file aside without reading it, keeping its bytes under a name nobody
@@ -635,6 +662,34 @@ mod tests {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "unexpected bytes"),
             ))
         }
+    }
+
+    #[test]
+    fn a_same_size_concurrent_version_is_revalidated_before_merge_publication() {
+        let dir = project();
+        let path = target(dir.path());
+        fs::write(&path, "version1").unwrap();
+        let mut calls = 0;
+        let outcome = merging_write(dir.path(), &path, 1024, |current| {
+            calls += 1;
+            if current == Some("version9") {
+                return Err(Error::SchemaTooNew { found: 9, supported: 2 });
+            }
+            if calls == 1 {
+                let modified = fs::metadata(&path).unwrap().modified().unwrap();
+                fs::write(&path, "version9").unwrap();
+                fs::File::options()
+                    .write(true)
+                    .open(&path)
+                    .unwrap()
+                    .set_modified(modified)
+                    .unwrap();
+            }
+            Ok("version2".into())
+        });
+        assert!(matches!(outcome, Err(Error::SchemaTooNew { found: 9, .. })));
+        assert_eq!(fs::read_to_string(path).unwrap(), "version9");
+        assert_eq!(calls, 2);
     }
 
     #[test]

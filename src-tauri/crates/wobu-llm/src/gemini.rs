@@ -1,4 +1,4 @@
-//! [`TextProvider`] over Google's Gemini Interactions API.
+//! [`crate::TextProvider`] over Google's Gemini Interactions API.
 //!
 //! The second implementation of the trait, and written deliberately as a mirror
 //! of `anthropic.rs`: same read loop, same cancellation, same shape of
@@ -22,7 +22,7 @@
 //!    or dropped never reaches the completion and has still been paid for.
 //!
 //! Cancellation works exactly as it does for Anthropic: every read is raced
-//! against [`Cancel::cancelled`], and losing that race returns immediately,
+//! against [`crate::Cancel::cancelled`], and losing that race returns immediately,
 //! which drops the response body and closes the connection.
 //!
 //! What this file cannot be tested for is the HTTP itself: sending, headers, and
@@ -37,14 +37,9 @@ pub(crate) mod wire;
 
 use std::fmt;
 
-use async_trait::async_trait;
-
-use crate::cancel::Cancel;
 use crate::error::{Error, Result};
-use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, TextProvider};
-use crate::transport;
 
-use wire::Incoming;
+use crate::transport;
 
 /// The `provider` in `project.json` and the `wobu/<provider>` keychain entry.
 pub const ID: &str = "gemini";
@@ -144,66 +139,16 @@ impl GeminiProvider {
     }
 }
 
-#[async_trait]
-impl TextProvider for GeminiProvider {
-    fn id(&self) -> &'static str {
-        ID
+transport::text_adapter!(
+    GeminiProvider,
+    ID,
+    LABEL,
+    DEFAULT_MODEL,
+    wire,
+    |provider: &GeminiProvider, request: reqwest::RequestBuilder| {
+        request.header("x-goog-api-key", &provider.api_key).header("api-revision", API_REVISION)
     }
-
-    fn label(&self) -> &'static str {
-        LABEL
-    }
-
-    fn default_model(&self) -> &'static str {
-        DEFAULT_MODEL
-    }
-
-    async fn enhance(
-        &self,
-        request: &EnhanceRequest,
-        deltas: &mut dyn DeltaSink,
-        cancel: &Cancel,
-    ) -> EnhanceOutcome {
-        transport::enhance_over_sse(self, request, deltas, cancel).await
-    }
-}
-
-impl transport::SseEnhance for GeminiProvider {
-    type Consumer = Incoming;
-
-    fn client(&self) -> &reqwest::Client {
-        &self.client
-    }
-
-    fn base_url(&self) -> &str {
-        &self.base_url
-    }
-
-    fn authenticate(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request
-            // A header rather than the `?key=` query parameter the quickstarts
-            // use. Both authenticate; only one of them keeps the key out of
-            // proxy logs and out of anything that prints a URL.
-            .header("x-goog-api-key", &self.api_key)
-            .header("api-revision", API_REVISION)
-    }
-
-    fn request_body(request: &EnhanceRequest) -> serde_json::Value {
-        wire::request_body(request)
-    }
-
-    fn error_for_status(
-        status: u16,
-        body: &str,
-        retry_after: Option<std::time::Duration>,
-    ) -> Error {
-        wire::error_for_status(status, body, retry_after)
-    }
-
-    fn consumer() -> Incoming {
-        Incoming::new()
-    }
-}
+);
 
 #[cfg(test)]
 mod tests {
@@ -212,11 +157,13 @@ mod tests {
     use serde_json::json;
     use wobu_core::NodeKind;
 
+    use super::wire::Incoming;
     use crate::provider::Discard;
     use crate::stream::testing::{
         assert_billed_disconnect, assert_complete, assert_every_kind, assert_mid_stream_cancel,
         assert_pre_cancel, assert_quiet_cancel, assert_truncated, block_on, document,
     };
+    use crate::{Cancel, EnhanceRequest, TextProvider};
 
     /// The documented SSE wire format, byte for byte, as
     /// `ai.google.dev/gemini-api/docs/interactions/streaming` prints it — down

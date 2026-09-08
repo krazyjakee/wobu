@@ -60,6 +60,8 @@ impl Project {
         expected_id: Option<SceneId>,
     ) -> Result<(narrative::SourceSave, String)> {
         self.ensure_writable()?;
+        super::narrative_review::validate_manual(None, &document.scene)?;
+        let _lock = super::narrative_review::scene_lock(self, document.scene.id)?;
         let path = self.scene_source_path(rel)?;
         let (previous, actual) =
             atomic::read_stamped(&path)?.ok_or_else(|| Error::NoSuchNode(rel.into()))?;

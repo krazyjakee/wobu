@@ -148,5 +148,6 @@ The current [authoring and Preview increment](19-narrative-authoring.md) advance
 (#161) and quest discovery (#191). The guide separates implemented behavior from pending
 acceptance. Source repair, native package export, explicit save migration and evaluated Preview
 traces, saved regression scenarios, attributed frozen context and portable record sync/recovery are
-implemented. The native Flow spike records the selected toolkit and node budget. Provider generation,
-editorial review and dependency analysis remain planned. N5 (#173–#177) is not implemented, as requested.
+implemented. The native Flow spike records the selected toolkit and node budget. Cancellable provider
+jobs produce separate prose proposals and immutable receipts. Editorial review and dependency
+analysis remain planned. N5 (#173–#177) is not implemented, as requested.

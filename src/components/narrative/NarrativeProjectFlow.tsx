@@ -2,12 +2,10 @@ import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
 import type { LayoutNotice, NarrativeDiagnostic, SceneFile } from '../../lib/api'
 import {
   useDiagnoseScene,
-  useSaveLayout,
   useSaveScene,
   useScene,
   useSceneDiagnostics,
   useSceneFiles,
-  useSceneLayout,
   useScenes,
 } from '../../lib/queries'
 import { useUI } from '../../store/ui'
@@ -19,6 +17,9 @@ import { ArcFlow } from './flow/arc/ArcFlow'
 import { sceneNode, type FlowArc } from './flow/arc/model'
 import { attachDiagnostics } from './flow/badges'
 import { useFlowStore } from './flow/flowStore'
+import { useFlowPresentation } from './flow/useFlowPresentation'
+import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
+import type { Quest } from '../../lib/api/narrativeWorld'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import type { LayoutRunner } from './flow/layout'
 import type { FlowElement, FlowKind, FlowPort, FlowPositions } from './flow/model'
@@ -67,24 +68,11 @@ const EMPTY: NarrativeDiagnostic[] = []
  * save — the two share no state, so that holds because there is nothing to get
  * wrong rather than because the calls are ordered carefully.
  *
- * ── what is genuinely not here ───────────────────────────────────────────────
- *
- * The quest model (#155) does not exist, so `quests` is null and the grouping
- * control says why rather than inventing quests from scene names. Opening a
- * witness scenario needs the runtime (#188, #161, #162) and affected-build
- * scope needs the dependency tracker (#169, #165); neither is built, and both
- * are refused with the reason rather than drawn as a button that does nothing.
+ * Quest membership comes from the World model. This pane only selects a quest
+ * scope and edits cosmetic groups; source membership is authored in World.
  */
 
-/**
- * The one arc a project has today.
- *
- * A constant, and it has to be: an arc is keyed by a slug because arcs have no
- * source document and therefore no id, and there is no quest model to carve the
- * project into several. When #155 lands this becomes the quest's slug; until
- * then, pretending there is more than one arc would be pretending there is a
- * model that decides which scene is in which.
- */
+/** Stable legacy slug for the all-scenes arrangement; quests use EntityId. */
 const PROJECT_ARC = 'project'
 
 /** Nothing is creatable at the arc level: see `authoring` below. */
@@ -237,22 +225,66 @@ export function NarrativeProjectFlow({
 
 /* ── the arc ──────────────────────────────────────────────────────────────── */
 
-function ArcLevel({
-  files,
-  loading,
-  readOnly,
-  layout,
-  onEnter,
-}: {
+function ArcLevel(props: {
   files: { data?: SceneFile }[]
   loading: boolean
   readOnly: boolean
   layout?: LayoutRunner
   onEnter: (sceneId: string, beatId?: string | null) => void
 }) {
-  const graph = useMemo(() => ({ kind: 'arc' as const, arc: PROJECT_ARC }), [])
-  const stored = useSceneLayout(graph)
-  const saveLayout = useSaveLayout()
+  const world = useNarrativeWorld()
+  const [questId, setQuestId] = useState('')
+  const quest = world.data?.document.quests.find((quest) => quest.id === questId)
+  return (
+    <div className="nrt-quest-arrangement">
+      <label className="nrt-quest-selector">
+        Flow scope{' '}
+        <select
+          aria-label="Flow scope"
+          value={quest?.id ?? ''}
+          onChange={(event) => setQuestId(event.target.value)}
+        >
+          <option value="">Every scene</option>
+          {world.data?.document.quests.map((quest) => (
+            <option key={quest.id} value={quest.id}>
+              {quest.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {world.isError && (
+        <p className="nrt-note" role="status">
+          Quest scopes could not be loaded; the project arrangement is still available.
+        </p>
+      )}
+      <ArcArrangement key={quest?.id ?? 'project'} {...props} quest={quest} />
+    </div>
+  )
+}
+
+function ArcArrangement({
+  files,
+  loading,
+  readOnly,
+  layout,
+  onEnter,
+  quest,
+}: {
+  quest?: Quest
+  files: { data?: SceneFile }[]
+  loading: boolean
+  readOnly: boolean
+  layout?: LayoutRunner
+  onEnter: (sceneId: string, beatId?: string | null) => void
+}) {
+  const graph = useMemo(
+    () =>
+      quest
+        ? { kind: 'quest' as const, quest: quest.id }
+        : { kind: 'arc' as const, arc: PROJECT_ARC },
+    [quest],
+  )
+  const { stored, outcome, presentation } = useFlowPresentation(graph)
   const { nameOf, sceneName } = useNarrativeNames()
 
   /*
@@ -266,40 +298,50 @@ function ArcLevel({
    */
   const arc: FlowArc = useMemo(() => {
     const scenes = files.flatMap((one) =>
-      one.data ? [sceneToFlow(one.data.scene, { nameOf, sceneName })] : [],
+      one.data && (!quest || quest.scene_ids.includes(one.data.scene.id))
+        ? [sceneToFlow(one.data.scene, { nameOf, sceneName })]
+        : [],
     )
     return {
       level: {
-        id: `arc:${PROJECT_ARC}`,
-        name: 'Every scene',
-        groups: [],
-        elements: scenes.map((scene) => sceneNode(scene)),
+        id: quest ? `quest:${quest.id}` : `arc:${PROJECT_ARC}`,
+        name: quest?.name ?? 'Every scene',
+        groups: Object.values(presentation?.layout.groups ?? {}).map((group) => ({
+          id: group.id,
+          name: group.label ?? group.id,
+        })),
+        elements: scenes.map((scene) => ({
+          ...sceneNode(scene),
+          groupId:
+            Object.values(presentation?.layout.groups ?? {}).find((group) =>
+              (group.members ?? []).includes(`scene:${scene.id}`),
+            )?.id ?? null,
+        })),
         // The first scene in the catalog, which is alphabetical by file. There
         // is nothing in a project that declares where the story starts, and
-        // guessing one from a name would be inventing the quest model #155 owns.
+        // Names remain labels; World scene_ids determines the selected scope.
         entryId: scenes[0]?.id ?? null,
       },
-      // Not "no quests": this build cannot say. The grouping control refuses
-      // itself with that reason rather than deriving quests from scene names.
+      // Presentation groups are separate from World quest membership.
       quests: null,
     }
-  }, [files, nameOf, sceneName])
+  }, [files, nameOf, sceneName, quest, presentation?.layout.groups])
 
   const positions = useMemo(
-    () => positionsFromLayout(stored.data?.layout, 'arc'),
-    [stored.data?.layout],
+    () => positionsFromLayout(presentation?.layout, 'arc'),
+    [presentation?.layout],
   )
 
   const onPositions = useCallback(
     (next: FlowPositions) => {
-      const base = stored.data?.layout
+      const base = presentation?.layout
       if (!base) return
-      saveLayout.mutate(layoutWithPositions(base, next, 'arc'))
+      presentation?.onChange(layoutWithPositions(base, next, 'arc'))
     },
-    [saveLayout, stored.data?.layout],
+    [presentation],
   )
 
-  if (loading) {
+  if (loading || stored.isPending) {
     return (
       <div className="nrt-pane nrt-flow">
         <p className="nrt-note" aria-busy="true">
@@ -332,12 +374,8 @@ function ArcLevel({
         </span>
       </nav>
 
-      <LayoutNotices notices={stored.data?.notices} outcome={saveLayout.data} />
+      <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
 
-      <p className="nrt-note" id="nrt-quests-unavailable" role="note">
-        <Icon name="folder" size="sm" />
-        {NARRATIVE_UNAVAILABLE.quests}
-      </p>
       <p className="nrt-note" role="note">
         <Icon name="lock" size="sm" />
         {flowAuthoring.arcReadOnly} {NARRATIVE_UNAVAILABLE.affectedScope}
@@ -353,6 +391,7 @@ function ArcLevel({
         readOnly={readOnly}
         layout={layout}
         positions={positions}
+        presentation={presentation}
         onPositionsChange={onPositions}
         authoring={ARC_AUTHORING}
         creatable={ARC_CREATABLE}
@@ -376,11 +415,10 @@ function SceneLevel({
 }) {
   const file = useScene(sceneId)
   const graph = useMemo(() => ({ kind: 'scene' as const, scene: sceneId }), [sceneId])
-  const stored = useSceneLayout(graph)
+  const { stored, outcome, presentation } = useFlowPresentation(graph)
   const saved = useSceneDiagnostics(sceneId)
   const diagnose = useDiagnoseScene()
   const save = useSaveScene()
-  const saveLayout = useSaveLayout()
   const { nameOf, sceneName } = useNarrativeNames()
 
   /*
@@ -406,28 +444,28 @@ function SceneLevel({
   const attached = useMemo(() => {
     if (!file.data) return null
     const level = sceneToFlow(file.data.scene, {
-      layout: stored.data?.layout ?? null,
+      layout: presentation?.layout ?? null,
       nameOf,
       sceneName,
     })
     return attachDiagnostics(level, diagnostics)
-  }, [file.data, stored.data?.layout, nameOf, sceneName, diagnostics])
+  }, [file.data, presentation?.layout, nameOf, sceneName, diagnostics])
 
   const positions = useMemo(
-    () => positionsFromLayout(stored.data?.layout, 'scene'),
-    [stored.data?.layout],
+    () => positionsFromLayout(presentation?.layout, 'scene'),
+    [presentation?.layout],
   )
 
   const onPositions = useCallback(
     (next: FlowPositions) => {
-      const base = stored.data?.layout
+      const base = presentation?.layout
       if (!base) return
       // Fire and forget, deliberately. `useSaveLayout` cannot reject and
       // records nothing; a refused arrangement comes back as an outcome shown
       // in `LayoutNotices`, never as a toast and never as a failed save.
-      saveLayout.mutate(layoutWithPositions(base, next, 'scene'))
+      presentation?.onChange(layoutWithPositions(base, next, 'scene'))
     },
-    [saveLayout, stored.data?.layout],
+    [presentation],
   )
 
   const onEdit = useCallback(
@@ -455,13 +493,14 @@ function SceneLevel({
     onLeave()
   }
 
-  const source = file.isPending
-    ? ({ kind: 'loading' } as const)
-    : file.isError
-      ? ({ kind: 'error', message: String(file.error) } as const)
-      : attached
-        ? ({ kind: 'ready', scene: attached.level } as const)
-        : ({ kind: 'loading' } as const)
+  const source =
+    file.isPending || stored.isPending
+      ? ({ kind: 'loading' } as const)
+      : file.isError
+        ? ({ kind: 'error', message: String(file.error) } as const)
+        : attached
+          ? ({ kind: 'ready', scene: attached.level } as const)
+          : ({ kind: 'loading' } as const)
 
   return (
     <div className="nrt-levels" onKeyDown={onKeyDown}>
@@ -484,13 +523,14 @@ function SceneLevel({
         layout={layout}
         onEdit={readOnly ? undefined : onEdit}
         positions={positions}
+        presentation={presentation}
         onPositionsChange={onPositions}
         authoring={SCENE_AUTHORING}
         creatable={SCENE_CREATABLE}
         spare={beatSpare}
         notes={
           <>
-            <LayoutNotices notices={stored.data?.notices} outcome={saveLayout.data} />
+            <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
             <SceneWideProblems found={attached?.sceneWide ?? []} />
             <p className="nrt-note" role="note">
               <Icon name="lock" size="sm" />

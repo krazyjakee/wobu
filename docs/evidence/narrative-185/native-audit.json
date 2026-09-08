@@ -1,0 +1,220 @@
+{
+  "kind": "native Tauri with real IPC; xdotool pointer and keyboard; temporary bootstrap only",
+  "canonicalBefore": {
+    "project.json": "fe9452b2c86dc25d30285bcf35219ab0a778114650abc5604db5d58e252aa817",
+    "narrative/state.yaml": "e970ff94ee331287a899fc037d6166e002d53dd7cf8bfc4f376f54be5aff4575",
+    "narrative/world.yaml": "e3efbfbb157fec2296906683ecb40fc890c435980984fc36f9d07f9d6358adc8",
+    "narrative/scenes/00000000000000000000000007.yaml": "38cfd8b22875f0ebf0f164c05b9cebc4c8e4afb9ef376a00979a436cb5685078",
+    "narrative/scenes/00000000000000000000000001.yaml": "1ddff24365b3ccc5578dd2914f332179f195484c28211a753e0a8c28f77987b1",
+    "nodes/style-guide/ashfall-house-style.md": "8833c0475e934228f44e183690a28dfc191381b4931a0f62c7a9f3bffa0bc271",
+    "nodes/prop/guild-signet.md": "043625a0522ffb6de899e929ac68210b8da44dda9edda05d128f31f051659e9c",
+    "nodes/prop/ashglass-lantern.md": "cf664ad90430c0e5f90ec39e6e84c1f9a745e218a4451ca2ae20c4348814ee55",
+    "nodes/world-bible/ashfall.md": "3c537ab1ec2b36529336a131724396a4ae5dcb0b7aa7f216801b38fe08877a7e",
+    "nodes/setting/the-ember-coast.md": "453624716545be3f74dcbcce0dac602a2b32e6ef3dcd1ab882924d8ec54e5889",
+    "nodes/setting/cinder-bay.md": "870a738af87277f5856664bad0e3ee3a792dd57e86c4e263b5af00253ffc361c",
+    "nodes/character/sister-oru.md": "3cd7524347975f65c86ffeb425ca93485f9704f70d5b84ba4393a2848a313ce8",
+    "nodes/character/kael-vantris.md": "2c83d9cac44c1f0c887fe6fc80cff1552fe389d575d61b388dc43081a299d420",
+    "nodes/environment/the-drowned-market.md": "816614f336dfa3e5231607f94f0fe47925399f33ff689ac2f47ce303e700ebf7",
+    "nodes/species/vashk.md": "c4c64618fb98a82fd541d9bd75bbcce48f89da7bef6d4c43a315294f9baf7447",
+    "nodes/species/sunborn.md": "db69328729cf1e98e35dd6341da4c6b1d77da6404db976c46e9ed784d2dc9c6a",
+    "nodes/culture/ember-guild.md": "4cf54aea8167aa1510fc5ca15201586ee97499f8d7a6907ea84c787003e25862",
+    "nodes/culture/deepwardens.md": "23ecf28b20928bfaf6e70bfbecd3dc0e6a4ada134dbabcb852b0519413669377"
+  },
+  "canonicalAfter": {
+    "project.json": "fe9452b2c86dc25d30285bcf35219ab0a778114650abc5604db5d58e252aa817",
+    "narrative/state.yaml": "e970ff94ee331287a899fc037d6166e002d53dd7cf8bfc4f376f54be5aff4575",
+    "narrative/world.yaml": "e3efbfbb157fec2296906683ecb40fc890c435980984fc36f9d07f9d6358adc8",
+    "narrative/scenes/00000000000000000000000007.yaml": "38cfd8b22875f0ebf0f164c05b9cebc4c8e4afb9ef376a00979a436cb5685078",
+    "narrative/scenes/00000000000000000000000001.yaml": "1ddff24365b3ccc5578dd2914f332179f195484c28211a753e0a8c28f77987b1",
+    "nodes/style-guide/ashfall-house-style.md": "8833c0475e934228f44e183690a28dfc191381b4931a0f62c7a9f3bffa0bc271",
+    "nodes/prop/guild-signet.md": "043625a0522ffb6de899e929ac68210b8da44dda9edda05d128f31f051659e9c",
+    "nodes/prop/ashglass-lantern.md": "cf664ad90430c0e5f90ec39e6e84c1f9a745e218a4451ca2ae20c4348814ee55",
+    "nodes/world-bible/ashfall.md": "3c537ab1ec2b36529336a131724396a4ae5dcb0b7aa7f216801b38fe08877a7e",
+    "nodes/setting/the-ember-coast.md": "453624716545be3f74dcbcce0dac602a2b32e6ef3dcd1ab882924d8ec54e5889",
+    "nodes/setting/cinder-bay.md": "870a738af87277f5856664bad0e3ee3a792dd57e86c4e263b5af00253ffc361c",
+    "nodes/character/sister-oru.md": "3cd7524347975f65c86ffeb425ca93485f9704f70d5b84ba4393a2848a313ce8",
+    "nodes/character/kael-vantris.md": "2c83d9cac44c1f0c887fe6fc80cff1552fe389d575d61b388dc43081a299d420",
+    "nodes/environment/the-drowned-market.md": "816614f336dfa3e5231607f94f0fe47925399f33ff689ac2f47ce303e700ebf7",
+    "nodes/species/vashk.md": "c4c64618fb98a82fd541d9bd75bbcce48f89da7bef6d4c43a315294f9baf7447",
+    "nodes/species/sunborn.md": "db69328729cf1e98e35dd6341da4c6b1d77da6404db976c46e9ed784d2dc9c6a",
+    "nodes/culture/ember-guild.md": "4cf54aea8167aa1510fc5ca15201586ee97499f8d7a6907ea84c787003e25862",
+    "nodes/culture/deepwardens.md": "23ecf28b20928bfaf6e70bfbecd3dc0e6a4ada134dbabcb852b0519413669377"
+  },
+  "unchanged": true,
+  "sceneLayout": {
+    "schemaVersion": 2,
+    "graph": {
+      "kind": "scene",
+      "scene": "00000000000000000000000001"
+    },
+    "mode": "manual",
+    "modeUpdatedAt": "2026-09-08T03:39:14.151Z",
+    "nodes": {
+      "beat:00000000000000000000000002": {
+        "x": -168.72727272727272,
+        "y": 81.00363636363636,
+        "updatedAt": "2026-09-08T03:39:14.151Z"
+      }
+    },
+    "groups": {
+      "01M1ZHGDX6HY5G0DTZDG70TQYA": {
+        "id": "01M1ZHGDX6HY5G0DTZDG70TQYA",
+        "label": "Evidence branch",
+        "collapsed": true,
+        "members": ["beat:00000000000000000000000002"],
+        "updatedAt": "2026-09-08T03:40:38.611Z"
+      }
+    },
+    "annotations": {
+      "01M1ZHK92YVPATHB0AKJCVAN92": {
+        "id": "01M1ZHK92YVPATHB0AKJCVAN92",
+        "body": "Review the evidence branch before recording dialogue.",
+        "x": 321.0181818181818,
+        "y": 401.70181818181817,
+        "attachedTo": "beat:00000000000000000000000002",
+        "updatedAt": "2026-09-08T03:40:03.799Z"
+      }
+    }
+  },
+  "questLayout": {
+    "schemaVersion": 2,
+    "graph": {
+      "kind": "quest",
+      "quest": "00000000000000000000000020"
+    },
+    "mode": "manual",
+    "modeUpdatedAt": "2026-09-08T03:42:22.071Z",
+    "nodes": {
+      "scene:00000000000000000000000001": {
+        "x": -68.72727272727272,
+        "y": -17.818181818181813,
+        "updatedAt": "2026-09-08T03:42:22.071Z"
+      }
+    },
+    "groups": {},
+    "annotations": {}
+  },
+  "reopenedPageStarted": 1788839286402,
+  "reopenedStoredNodeCount": 5,
+  "reopenedClosedGroupVisible": true,
+  "reopenedNoteVisible": true,
+  "stress": {
+    "pageStarted": 1788839314479,
+    "store": {
+      "nodes": 300,
+      "frames": 0,
+      "viewport": {
+        "x": 88.18110236220474,
+        "y": 27,
+        "zoom": 0.1546681664791901
+      },
+      "sample": [
+        {
+          "id": "beat:00000000000000000000001000",
+          "position": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "beat:00000000000000000000001001",
+          "position": {
+            "x": 260,
+            "y": 0
+          }
+        },
+        {
+          "id": "beat:00000000000000000000001002",
+          "position": {
+            "x": 520,
+            "y": 0
+          }
+        }
+      ],
+      "stored": [
+        [
+          "beat:00000000000000000000001000",
+          {
+            "x": 0,
+            "y": 0
+          }
+        ],
+        [
+          "beat:00000000000000000000001001",
+          {
+            "x": 260,
+            "y": 0
+          }
+        ],
+        [
+          "beat:00000000000000000000001002",
+          {
+            "x": 520,
+            "y": 0
+          }
+        ]
+      ],
+      "local": [
+        [
+          "beat:00000000000000000000001000",
+          {
+            "x": 0,
+            "y": 0
+          }
+        ],
+        [
+          "beat:00000000000000000000001001",
+          {
+            "x": 260,
+            "y": 0
+          }
+        ],
+        [
+          "beat:00000000000000000000001002",
+          {
+            "x": 520,
+            "y": 0
+          }
+        ]
+      ],
+      "automatic": false
+    },
+    "renderedNotes": 40,
+    "canvas": [
+      {
+        "tag": "DIV",
+        "cls": "react-flow light",
+        "position": "absolute",
+        "height": "604px",
+        "text": "Scene startBeatNeeds textReview beat 10 lines \u00b7 0 variants1 destination errorAdd a way outBeatNeeds textReview beat 20 lines \u00b7 0 v",
+        "label": null,
+        "test": "rf__wrapper",
+        "id": null,
+        "x": 335,
+        "y": 427,
+        "w": 774,
+        "h": 604
+      }
+    ]
+  },
+  "canonicalAfterReopen": {
+    "project.json": "fe9452b2c86dc25d30285bcf35219ab0a778114650abc5604db5d58e252aa817",
+    "narrative/state.yaml": "e970ff94ee331287a899fc037d6166e002d53dd7cf8bfc4f376f54be5aff4575",
+    "narrative/world.yaml": "e3efbfbb157fec2296906683ecb40fc890c435980984fc36f9d07f9d6358adc8",
+    "narrative/scenes/00000000000000000000000007.yaml": "38cfd8b22875f0ebf0f164c05b9cebc4c8e4afb9ef376a00979a436cb5685078",
+    "narrative/scenes/00000000000000000000000001.yaml": "1ddff24365b3ccc5578dd2914f332179f195484c28211a753e0a8c28f77987b1",
+    "nodes/style-guide/ashfall-house-style.md": "8833c0475e934228f44e183690a28dfc191381b4931a0f62c7a9f3bffa0bc271",
+    "nodes/prop/guild-signet.md": "043625a0522ffb6de899e929ac68210b8da44dda9edda05d128f31f051659e9c",
+    "nodes/prop/ashglass-lantern.md": "cf664ad90430c0e5f90ec39e6e84c1f9a745e218a4451ca2ae20c4348814ee55",
+    "nodes/world-bible/ashfall.md": "3c537ab1ec2b36529336a131724396a4ae5dcb0b7aa7f216801b38fe08877a7e",
+    "nodes/setting/the-ember-coast.md": "453624716545be3f74dcbcce0dac602a2b32e6ef3dcd1ab882924d8ec54e5889",
+    "nodes/setting/cinder-bay.md": "870a738af87277f5856664bad0e3ee3a792dd57e86c4e263b5af00253ffc361c",
+    "nodes/character/sister-oru.md": "3cd7524347975f65c86ffeb425ca93485f9704f70d5b84ba4393a2848a313ce8",
+    "nodes/character/kael-vantris.md": "2c83d9cac44c1f0c887fe6fc80cff1552fe389d575d61b388dc43081a299d420",
+    "nodes/environment/the-drowned-market.md": "816614f336dfa3e5231607f94f0fe47925399f33ff689ac2f47ce303e700ebf7",
+    "nodes/species/vashk.md": "c4c64618fb98a82fd541d9bd75bbcce48f89da7bef6d4c43a315294f9baf7447",
+    "nodes/species/sunborn.md": "db69328729cf1e98e35dd6341da4c6b1d77da6404db976c46e9ed784d2dc9c6a",
+    "nodes/culture/ember-guild.md": "4cf54aea8167aa1510fc5ca15201586ee97499f8d7a6907ea84c787003e25862",
+    "nodes/culture/deepwardens.md": "23ecf28b20928bfaf6e70bfbecd3dc0e6a4ada134dbabcb852b0519413669377"
+  }
+}

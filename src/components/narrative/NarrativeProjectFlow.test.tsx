@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NarrativeDiagnostic, Scene, SceneFile } from '../../lib/api'
+import type { NarrativeDiagnostic, Scene, SceneFile, Layout } from '../../lib/api'
+import type { Quest } from '../../lib/api/narrativeWorld'
 import { useUndoStack } from '../../lib/undo'
 import { useUI } from '../../store/ui'
 import { NarrativeProjectFlow } from './NarrativeProjectFlow'
@@ -88,6 +89,7 @@ function file(scene: Scene): SceneFile {
 let diagnostics: NarrativeDiagnostic[] = []
 let layoutSave: unknown = { outcome: 'written' }
 let layoutLoad: unknown
+let quests: Quest[] = []
 
 function answer(command: string, args: Record<string, unknown>): unknown {
   switch (command) {
@@ -110,7 +112,23 @@ function answer(command: string, args: Record<string, unknown>): unknown {
     case 'narrative_layout_get':
       return layoutLoad
     case 'narrative_layout_save':
+      if ((layoutSave as { outcome: string }).outcome === 'written')
+        layoutLoad = { layout: args.layout, notices: [] }
       return layoutSave
+    case 'narrative_world_get':
+      return {
+        document: {
+          schema_version: 1,
+          facts: [],
+          knowledge: [],
+          relationships: [],
+          events: [],
+          quests,
+          restrictions: [],
+        },
+        stamp: null,
+        diagnostics: [],
+      }
     case 'node_list':
       return []
     default:
@@ -158,6 +176,7 @@ beforeEach(() => {
     Promise.resolve(answer(command, args)),
   )
   diagnostics = []
+  quests = []
   layoutSave = { outcome: 'written' }
   layoutLoad = {
     layout: {
@@ -516,5 +535,106 @@ describe('a read-only project', () => {
     })
     expect(calls('narrative_scene_save')).toHaveLength(0)
     expect(useFlowStore.getState().announcement.text).toMatch(/read-only/)
+  })
+})
+
+describe('shared presentation controls', () => {
+  it('hydrates stored collapsed groups on the first editor mount', async () => {
+    const id = mintId()
+    ;(layoutLoad as { layout: Layout }).layout.groups[id] = {
+      id,
+      label: 'Saved evidence group',
+      members: [nodeId.beat(ARRIVAL)],
+      collapsed: true,
+      updatedAt: '2026-09-08T00:00:00Z',
+    }
+    open()
+    useUI.getState().selectNarrative({ sceneId: SCENE }, 'library')
+    await screen.findByTestId(`flow-node-${id}`)
+    expect(screen.queryByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)).toBeNull()
+    expect(calls('narrative_layout_save')).toHaveLength(0)
+  })
+
+  it('authors a group and note without changing dialogue, source or undo', async () => {
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+    const arrival = await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+    fireEvent.click(arrival)
+    fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
+    fireEvent.change(screen.getByLabelText('Group name'), { target: { value: 'Evidence branch' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create group' }))
+    const close = await screen.findByRole('button', { name: 'Close Evidence branch' })
+    fireEvent.click(close)
+    await screen.findByRole('button', { name: 'Open Evidence branch' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add pinned note' }))
+    const text = await screen.findByRole('textbox', { name: 'Pinned note text' })
+    fireEvent.change(text, { target: { value: 'Keep the exit visible for review.' } })
+    fireEvent.blur(text)
+    await waitFor(() =>
+      expect((calls('narrative_layout_save').at(-1)!.layout as Layout).annotations).toEqual(
+        expect.objectContaining({
+          [Object.keys((calls('narrative_layout_save').at(-1)!.layout as Layout).annotations)[0]!]:
+            expect.objectContaining({ body: 'Keep the exit visible for review.' }),
+        }),
+      ),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Delete pinned note' }))
+    await waitFor(() =>
+      expect(
+        Object.keys(
+          (calls('narrative_layout_save').at(-1)!.layout as Layout).removedAnnotations ?? {},
+        ),
+      ).toHaveLength(1),
+    )
+    const saved = calls('narrative_layout_save').at(-1)!.layout as Layout
+    expect(Object.values(saved.groups)[0]).toMatchObject({
+      members: [nodeId.beat(ARRIVAL)],
+      collapsed: true,
+    })
+    expect(saved.annotations).toEqual({})
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(useUndoStack.getState().past).toHaveLength(0)
+  })
+
+  it('retries a refused draft and saves its mode without a new edit', async () => {
+    layoutSave = { outcome: 'unwritable', reason: 'temporary folder outage' }
+    await enterCouncil()
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas' }))
+    fireEvent.change(await screen.findByLabelText('Arrangement mode'), {
+      target: { value: 'automatic' },
+    })
+    const retry = await screen.findByRole('button', { name: 'Retry arrangement save' })
+    expect(screen.getByLabelText('Arrangement mode')).toHaveValue('automatic')
+    layoutSave = { outcome: 'written' }
+    fireEvent.click(retry)
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Retry arrangement save' })).toBeNull(),
+    )
+    expect(calls('narrative_layout_save')).toHaveLength(2)
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+  })
+
+  it('opens the actual World quest under its stable identity', async () => {
+    const id = mintId()
+    quests = [
+      {
+        id,
+        name: 'Ashfall inquiry',
+        summary: 'Find the witness',
+        stages: ['open'],
+        initial: 'open',
+        transitions: [],
+        scene_ids: [SCENE],
+      },
+    ]
+    open()
+    fireEvent.change(await screen.findByLabelText('Flow scope'), { target: { value: id } })
+    await waitFor(() =>
+      expect(calls('narrative_layout_get')).toContainEqual({ graph: { kind: 'quest', quest: id } }),
+    )
+    await screen.findByTestId(`flow-node-${SCENE}`)
+    expect(screen.queryByTestId(`flow-node-${OTHER}`)).toBeNull()
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+    expect(calls('narrative_world_save')).toHaveLength(0)
   })
 })

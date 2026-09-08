@@ -53,10 +53,11 @@ pub(super) fn compile_project(
             "Narrative source changed during compilation. Try compiling again.",
         ));
     }
+    let verified_reviews = super::narrative_review::verified(project, &scenes, &before)?;
     let report = compile(
         &scenes,
         &schema,
-        &CompileOptions { known_entities, commands, ..CompileOptions::default() },
+        &CompileOptions { known_entities, commands, verified_reviews, ..CompileOptions::default() },
     );
     if let Some(graph) = &report.graph {
         bridge_integers(graph)?;

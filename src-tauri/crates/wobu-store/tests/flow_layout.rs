@@ -163,7 +163,12 @@ fn source_and_layout_live_in_directories_that_cannot_be_confused() {
             source.push(rel);
         }
     }
-    assert_eq!(source, vec![file.rel.clone()]);
+    let mut canonical: Vec<_> =
+        project.narrative_manifest().unwrap().into_iter().map(|entry| entry.rel).collect();
+    source.sort();
+    canonical.sort();
+    assert_eq!(source, canonical);
+    assert!(source.contains(&file.rel));
     assert_eq!(presentation.len(), 1);
     assert!(presentation[0].ends_with(".json"), "layout is JSON, source is YAML");
 }
@@ -636,4 +641,269 @@ fn copy_to(root: &Path, destination: &Path) {
             fs::copy(entry.path(), &target).unwrap();
         }
     }
+}
+
+#[test]
+fn layout_v1_opens_without_writes_and_mode_ties_converge() {
+    let (_dir, project, file) = arranged();
+    let mut original = drag_everything(&project, &file.scene);
+    original.schema_version = 1;
+    let path = layout_path(&project, file.scene.id);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let text = serde_json::to_string_pretty(&original).unwrap();
+    fs::write(&path, &text).unwrap();
+    assert_eq!(project.scene_layout(&file.scene).layout, original);
+    assert_eq!(fs::read_to_string(&path).unwrap(), text);
+    let mut automatic = original.clone();
+    automatic.mode = LayoutMode::Automatic;
+    project.save_scene_layout(&file.scene, &automatic).unwrap();
+    let left = fs::read(&path).unwrap();
+    fs::write(&path, serde_json::to_string_pretty(&automatic).unwrap()).unwrap();
+    project.save_scene_layout(&file.scene, &original).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), left);
+}
+
+#[test]
+fn deleted_notes_and_groups_do_not_return_when_an_older_writer_saves() {
+    let (_dir, project, file) = arranged();
+    let mut layout = drag_everything(&project, &file.scene);
+    let group = GroupId::new();
+    layout.upsert_group(Group {
+        id: group,
+        label: "First act".into(),
+        collapsed: true,
+        members: vec![NodeKey::Beat(file.scene.beats[0].id)],
+        updated_at: Utc::now(),
+    });
+    let note = wobu_store::AnnotationId::new();
+    layout.upsert_annotation(wobu_store::Annotation {
+        id: note,
+        body: "Keep the accusation concise.".into(),
+        x: 12.0,
+        y: 24.0,
+        width: None,
+        height: None,
+        attached_to: None,
+        updated_at: Utc::now(),
+    });
+    project.save_scene_layout(&file.scene, &layout).unwrap();
+    let stale = layout.clone();
+    layout.remove_annotation(note);
+    layout.remove_group(group);
+    project.save_scene_layout(&file.scene, &layout).unwrap();
+    project.save_scene_layout(&file.scene, &stale).unwrap();
+    let loaded = project.scene_layout(&file.scene).layout;
+    assert!(loaded.annotations.is_empty() && loaded.groups.is_empty());
+    assert!(
+        loaded.removed_annotations.contains_key(&note)
+            && loaded.removed_groups.contains_key(&group)
+    );
+}
+
+#[test]
+fn layout_polling_tracks_changes_errors_and_removals_without_repeated_notifications() {
+    let (_dir, mut project, file) = arranged();
+    project.reconcile().unwrap();
+    assert!(!project.reconcile().unwrap());
+    let source = project.narrative_fingerprint().unwrap();
+    let path = layout_path(&project, file.scene.id);
+    project.save_scene_layout(&file.scene, &drag_everything(&project, &file.scene)).unwrap();
+    assert!(project.reconcile().unwrap());
+    assert!(!project.reconcile().unwrap());
+    fs::write(&path, "{broken layout").unwrap();
+    assert!(project.reconcile().unwrap());
+    assert!(!project.reconcile().unwrap());
+    fs::write(&path, "{\"schemaVersion\":999}").unwrap();
+    assert!(project.reconcile_paths(std::slice::from_ref(&path)).unwrap());
+    assert!(!project.reconcile().unwrap());
+    fs::remove_file(&path).unwrap();
+    assert!(project.reconcile().unwrap());
+    assert!(!project.reconcile().unwrap());
+    assert_eq!(project.narrative_fingerprint().unwrap(), source);
+}
+
+#[cfg(unix)]
+#[test]
+fn layout_io_refuses_symlink_components_and_validates_geometry_before_mutation() {
+    use std::os::unix::fs::symlink;
+    let (dir, project, file) = arranged();
+    let mut layout = drag_everything(&project, &file.scene);
+    let path = layout_path(&project, file.scene.id);
+    let outside = dir.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::remove_dir(path.parent().unwrap()).unwrap();
+    symlink(&outside, path.parent().unwrap()).unwrap();
+    assert!(
+        project
+            .scene_layout(&file.scene)
+            .notices
+            .iter()
+            .any(|notice| matches!(notice, LayoutNotice::Unreadable { .. }))
+    );
+    assert!(project.save_scene_layout(&file.scene, &layout).is_err());
+    assert!(wobu_store::narrative::layout::delete(project.root(), &layout.graph).is_err());
+    assert!(project.sweep_scene_layouts().is_err());
+    assert!(fs::read_dir(&outside).unwrap().next().is_none());
+    fs::remove_file(path.parent().unwrap()).unwrap();
+    layout.nodes.values_mut().next().unwrap().x = f64::INFINITY;
+    assert!(project.save_scene_layout(&file.scene, &layout).is_err());
+    assert!(!path.exists());
+}
+
+fn quest_world(scene: SceneId) -> (wobu_narrative::WorldDocument, wobu_narrative::EntityId) {
+    use wobu_narrative::{EntityId, Name, Quest, WorldDocument};
+    let quest_id = EntityId::generate();
+    let mut world = WorldDocument::default();
+    world.quests.push(Quest {
+        id: quest_id,
+        name: "Ashfall inquiry".into(),
+        summary: String::new(),
+        stages: vec![Name::new("open").unwrap()],
+        initial: Name::new("open").unwrap(),
+        transitions: vec![],
+        scene_ids: vec![scene],
+    });
+    (world, quest_id)
+}
+
+#[test]
+fn quest_identity_survives_rename_and_prunes_membership_and_unpositioned_anchors() {
+    let (_dir, mut project, file) = arranged();
+    let (mut world, quest_id) = quest_world(file.scene.id);
+    project.save_world(&world, None).unwrap();
+    let mut saved = project.quest_layout(quest_id).layout;
+    saved.place(NodeKey::Scene(file.scene.id), 410.0, 220.0);
+    project.save_quest_layout(&saved, quest_id).unwrap();
+    let (_, stamp) = project.world_document().unwrap().unwrap();
+    world.quests[0].name = "Renamed investigation".into();
+    project.save_world(&world, Some(&stamp)).unwrap();
+    assert_eq!(project.quest_layout(quest_id).layout.nodes, saved.nodes);
+    let (_, stamp) = project.world_document().unwrap().unwrap();
+    world.quests[0].scene_ids.clear();
+    project.save_world(&world, Some(&stamp)).unwrap();
+    assert!(project.quest_layout(quest_id).layout.nodes.is_empty());
+
+    let mut scene_layout = project.scene_layout(&file.scene).layout;
+    let unknown = NodeKey::Beat(wobu_narrative::BeatId::new());
+    let mut group = test_group("Deleted branch");
+    group.members.push(unknown);
+    scene_layout.upsert_group(group);
+    let mut note = test_note("Keep these review words");
+    note.attached_to = Some(unknown);
+    scene_layout.upsert_annotation(note);
+    project.save_scene_layout(&file.scene, &scene_layout).unwrap();
+    let loaded = project.scene_layout(&file.scene).layout;
+    assert!(loaded.groups.values().all(|g| g.members.is_empty()));
+    assert!(loaded.annotations.values().all(|n| n.attached_to.is_none()));
+    assert_eq!(loaded.annotations.values().next().unwrap().body, "Keep these review words");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_bad_symlink_does_not_hide_other_layout_changes_from_polling() {
+    let (_dir, mut project, file) = arranged();
+    let layout = drag_everything(&project, &file.scene);
+    project.save_scene_layout(&file.scene, &layout).unwrap();
+    project.reconcile().unwrap();
+    let sibling = layout_path(&project, SceneId::new());
+    std::os::unix::fs::symlink(project.root().join("missing"), &sibling).unwrap();
+    assert!(project.reconcile().unwrap());
+    assert!(!project.reconcile().unwrap());
+    let mut changed = layout.clone();
+    changed.place(NodeKey::Beat(file.scene.beats[0].id), 910.0, 80.0);
+    project.save_scene_layout(&file.scene, &changed).unwrap();
+    assert!(project.reconcile().unwrap());
+    assert!(!project.reconcile().unwrap());
+}
+
+#[test]
+fn oversized_and_wrong_level_layout_data_cannot_replace_a_valid_arrangement() {
+    let (_dir, project, file) = arranged();
+    let original = drag_everything(&project, &file.scene);
+    project.save_scene_layout(&file.scene, &original).unwrap();
+    let path = layout_path(&project, file.scene.id);
+    let before = fs::read(&path).unwrap();
+    let mut oversized = original.clone();
+    oversized.upsert_annotation(test_note(&"x".repeat(8193)));
+    assert!(project.save_scene_layout(&file.scene, &oversized).is_err());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let mut arc = Layout::empty(GraphKey::Arc { arc: "project".into() });
+    let mut group = test_group("Wrong key kind");
+    group.members.push(NodeKey::Beat(file.scene.beats[0].id));
+    arc.upsert_group(group);
+    assert!(arc.validate().is_err());
+    fs::write(&path, vec![b' '; wobu_store::narrative::layout::MAX_LAYOUT_BYTES + 1]).unwrap();
+    assert!(project.save_scene_layout(&file.scene, &original).is_err());
+    assert_eq!(
+        fs::metadata(&path).unwrap().len(),
+        (wobu_store::narrative::layout::MAX_LAYOUT_BYTES + 1) as u64
+    );
+}
+
+fn test_group(label: &str) -> Group {
+    Group {
+        id: GroupId::new(),
+        label: label.into(),
+        collapsed: false,
+        members: vec![],
+        updated_at: Utc::now(),
+    }
+}
+fn test_note(body: &str) -> wobu_store::Annotation {
+    wobu_store::Annotation {
+        id: wobu_store::AnnotationId::new(),
+        body: body.into(),
+        x: 0.0,
+        y: 0.0,
+        width: None,
+        height: None,
+        attached_to: None,
+        updated_at: Utc::now(),
+    }
+}
+
+#[test]
+fn only_a_successful_guarded_quest_removal_collects_its_arrangement() {
+    let (_dir, mut project, file) = arranged();
+    let (mut world, quest) = quest_world(file.scene.id);
+    project.save_world(&world, None).unwrap();
+    let arrangement = project.quest_layout(quest).layout;
+    project.save_quest_layout(&arrangement, quest).unwrap();
+    let path = wobu_store::narrative::layout::path_of(project.root(), &arrangement.graph).unwrap();
+    let bytes = fs::read(&path).unwrap();
+    let (_, old_stamp) = project.world_document().unwrap().unwrap();
+    world.quests[0].name = "New investigation name".into();
+    project.save_world(&world, Some(&old_stamp)).unwrap();
+    world.quests.clear();
+    assert!(matches!(
+        project.save_world(&world, Some(&old_stamp)).unwrap(),
+        SourceSave::Conflict { .. }
+    ));
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(project.world_document().unwrap().unwrap().0.quests.len(), 1);
+    let (_, stamp) = project.world_document().unwrap().unwrap();
+    assert!(matches!(project.save_world(&world, Some(&stamp)).unwrap(), SourceSave::Saved(_)));
+    assert!(!path.exists());
+    assert!(project.world_document().unwrap().unwrap().0.quests.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn unsafe_quest_sidecar_cleanup_cannot_fail_or_escape_a_successful_world_save() {
+    let (dir, mut project, file) = arranged();
+    let (mut world, quest) = quest_world(file.scene.id);
+    project.save_world(&world, None).unwrap();
+    let graph = GraphKey::Quest { quest };
+    let path = wobu_store::narrative::layout::path_of(project.root(), &graph).unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let outside = dir.path().join("retained-layout.json");
+    fs::write(&outside, "retain these bytes").unwrap();
+    std::os::unix::fs::symlink(&outside, &path).unwrap();
+    let (_, stamp) = project.world_document().unwrap().unwrap();
+    world.quests.clear();
+    assert!(matches!(project.save_world(&world, Some(&stamp)).unwrap(), SourceSave::Saved(_)));
+    assert!(project.world_document().unwrap().unwrap().0.quests.is_empty());
+    assert!(path.symlink_metadata().unwrap().is_symlink());
+    assert_eq!(fs::read_to_string(outside).unwrap(), "retain these bytes");
 }

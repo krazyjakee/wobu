@@ -215,6 +215,7 @@ export interface Tombstone {
 }
 
 export interface Scene {
+  editorial_head?: string | null
   id: SceneId
   name: string
   summary?: string
@@ -430,7 +431,10 @@ export const narrativeDiagnostics = (sceneId: SceneId, scene?: Scene | null) =>
  * Which graph an arrangement is for. An arc is keyed by a slug because arcs
  * have no source document yet, so there is no stable id to key one to.
  */
-export type GraphKey = { kind: 'scene'; scene: SceneId } | { kind: 'arc'; arc: string }
+export type GraphKey =
+  | { kind: 'scene'; scene: SceneId }
+  | { kind: 'arc'; arc: string }
+  | { kind: 'quest'; quest: string }
 
 /** `beat:01J…`, `choice:01J…`. A tagged id, so a beat cannot be read as a scene. */
 export type NodeKey = string
@@ -480,6 +484,8 @@ export interface Layout {
   nodes: Record<NodeKey, NodeLayout>
   groups: Record<string, LayoutGroup>
   annotations: Record<string, LayoutAnnotation>
+  removedGroups?: Record<string, string>
+  removedAnnotations?: Record<string, string>
 }
 
 /**
@@ -528,9 +534,16 @@ export const narrativeLayoutSave = (layout: Layout) =>
 
 /** The cache-key form of a graph: one string per canvas, stable across renders. */
 export function graphKeyId(graph: GraphKey): string {
-  return graph.kind === 'scene' ? `scene:${graph.scene}` : `arc:${graph.arc}`
+  return graph.kind === 'scene'
+    ? `scene:${graph.scene}`
+    : graph.kind === 'quest'
+      ? `quest:${graph.quest}`
+      : `arc:${graph.arc}`
 }
 
 /** Prepare handwritten text with the backend's canonical content revision. */
 export const narrativeTextWritten = (body: string, locked = false) =>
   call<Text>('narrative_text_written', { body, locked })
+
+export const narrativeSceneRestore = (scene: Scene, expected: Scene | null, slug: string) =>
+  call<SceneFile>('narrative_scene_restore', { scene, expected, slug })

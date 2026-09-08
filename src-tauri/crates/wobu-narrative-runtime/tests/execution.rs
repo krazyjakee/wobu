@@ -4,6 +4,9 @@ use wobu_narrative::*;
 use wobu_narrative_compiler::*;
 use wobu_narrative_runtime::{CommandResult, Error, Runtime, State, Yield, evaluate};
 
+#[path = "../../wobu-narrative-compiler/tests/support/reviews.rs"]
+mod reviews;
+
 fn name(s: &str) -> Name {
     Name::new(s).unwrap()
 }
@@ -346,8 +349,12 @@ fn compiler_enforces_release_world_commands_references_and_duplicate_ids() {
     options.profile = Profile::Release;
     assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
     scene.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Approved;
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_some());
+    // Writable flags alone cannot authorize release output.
+    assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
+    options.verified_reviews = reviews::fixture_reviews(&scene);
+    assert!(compile(std::slice::from_ref(&scene), &schema, &options).graph.is_some());
     scene.beats[0].dialogue[0].variants[0].text.lifecycle.freshness = Freshness::OutOfDate;
+    options.verified_reviews.values_mut().next().unwrap().current_context = "f".repeat(64);
     assert!(compile(&[scene.clone()], &schema, &options).graph.is_none());
     options.profile = Profile::Development;
     options.commands.clear();
@@ -370,7 +377,7 @@ fn compiler_enforces_release_world_commands_references_and_duplicate_ids() {
             .any(|d| d.code == "unknown_entity")
     );
     options.known_entities.insert(entity);
-    assert!(compile(&[scene.clone()], &schema, &options).graph.is_some());
+    assert!(compile(std::slice::from_ref(&scene), &schema, &options).graph.is_some());
     assert!(
         compile(&[scene.clone(), scene], &schema, &options)
             .diagnostics
@@ -530,6 +537,7 @@ fn blank_choice_labels_warn_during_authoring_and_block_release_at_the_choice() {
     let (mut scene, schema, mut options) = fixture();
     scene.beats[0].dialogue[0].variants[0].text.lifecycle.review = ReviewState::Approved;
     scene.beats[0].choices[0].label = " \t\n ".into();
+    options.verified_reviews = reviews::fixture_reviews(&scene);
     let site = Site::Destination(DestinationSite::Choice {
         beat: scene.beats[0].id,
         choice: scene.beats[0].choices[0].id,
@@ -548,5 +556,36 @@ fn blank_choice_labels_warn_during_authoring_and_block_release_at_the_choice() {
         assert_eq!(diagnostic.severity, expected_severity);
     }
     scene.beats[0].choices[0].label = "Present evidence".into();
+    options.verified_reviews = reviews::fixture_reviews(&scene);
     assert!(compile(&[scene], &schema, &options).graph.is_some());
+}
+
+#[test]
+fn release_review_evidence_binds_exact_identity_wording_and_current_context() {
+    let (scene, schema, mut options) = fixture();
+    options.profile = Profile::Release;
+    options.verified_reviews = reviews::fixture_reviews(&scene);
+    assert!(compile(std::slice::from_ref(&scene), &schema, &options).graph.is_some());
+    for change in 0..8 {
+        let mut changed = options.clone();
+        let proof = changed.verified_reviews.values_mut().next().unwrap();
+        match change {
+            0 => proof.binding.target.scene = SceneId::new(),
+            1 => proof.binding.target.beat = BeatId::new(),
+            2 => proof.binding.target.slot = DialogueSlotId::new(),
+            3 => proof.binding.target.variant = Some(VariantId::new()),
+            4 => proof.binding.speaker = Speaker::Player,
+            5 => proof.binding.text_revision = Text::written("Other wording").revision,
+            6 => proof.binding.approved = false,
+            7 => proof.current_context = "f".repeat(64),
+            _ => unreachable!(),
+        }
+        assert!(
+            compile(std::slice::from_ref(&scene), &schema, &changed).graph.is_none(),
+            "case {change}"
+        );
+    }
+    let mut edited = scene.clone();
+    edited.beats[0].dialogue[0].variants[0].text.set_body("Changed wording", Provenance::Human);
+    assert!(compile(&[edited], &schema, &options).graph.is_none());
 }

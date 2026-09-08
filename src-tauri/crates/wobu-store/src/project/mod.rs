@@ -13,10 +13,14 @@ pub use self::reconcile::{ReconcileObservation, ReconcilePlan};
 
 mod assets;
 mod generations;
+pub mod layout_sync;
 mod narrative;
+pub mod narrative_context;
 mod narrative_deletions;
+pub mod narrative_generation;
 mod narrative_index;
 mod narrative_records;
+pub mod narrative_review;
 pub mod narrative_sync;
 pub use narrative_deletions::NarrativeDeletionView;
 mod narrative_repair;
@@ -121,6 +125,7 @@ pub struct Project {
     /// stamp two conflict siblings in one folder under two different names,
     /// which is a folder nobody can read back.
     peer: String,
+    layout_observation: String,
     /// Every node, whole, for the influence engine. Empty until something asks —
     /// see [`world_nodes`](Project::world_nodes), which is also where the cost
     /// of holding this is argued.
@@ -164,6 +169,7 @@ impl Project {
         let index = Index::open_for(&meta.id)?;
         index.clear()?;
         let mut project = Project {
+            layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
             index,
@@ -245,6 +251,7 @@ impl Project {
             None => (Index::open_for(&meta.id)?, paths::index_path(&meta.id)),
         };
         let mut project = Project {
+            layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
             index,

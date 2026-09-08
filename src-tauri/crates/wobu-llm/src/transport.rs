@@ -10,7 +10,7 @@ use reqwest::{RequestBuilder, Response};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest};
+use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, StructuredRequest};
 use crate::stream::{SseConsumer, read_sse};
 use crate::{Cancel, Error};
 
@@ -129,6 +129,10 @@ pub(crate) trait SseEnhance {
 
     fn request_body(request: &EnhanceRequest) -> Value;
 
+    fn structured_body(request: &StructuredRequest) -> Value;
+
+    fn structured_consumer() -> Self::Consumer;
+
     fn error_for_status(status: u16, body: &str, retry_after: Option<Duration>) -> Error;
 
     fn consumer() -> Self::Consumer;
@@ -181,6 +185,77 @@ fn text_failure(failure: Failure) -> Error {
         Failure::Unavailable(error) => Error::Unavailable { detail: error.to_string() },
     }
 }
+
+/// Both text adapters share this delegation, while the authentication expression
+/// and each wire module remain vendor-owned. Extending the authoring capability
+/// must not leave one adapter on a different request lifecycle.
+macro_rules! text_adapter {
+    ($provider:ty, $id:expr, $label:expr, $model:expr, $wire:ident, $authenticate:expr) => {
+        #[async_trait::async_trait]
+        impl $crate::TextProvider for $provider {
+            fn id(&self) -> &'static str {
+                $id
+            }
+            fn label(&self) -> &'static str {
+                $label
+            }
+            fn default_model(&self) -> &'static str {
+                $model
+            }
+            fn supports_structured(&self) -> bool {
+                true
+            }
+            async fn structured(
+                &self,
+                request: &$crate::StructuredRequest,
+                deltas: &mut dyn $crate::DeltaSink,
+                cancel: &$crate::Cancel,
+            ) -> $crate::StructuredOutcome {
+                $crate::structured::generate(self, request, deltas, cancel).await
+            }
+            async fn enhance(
+                &self,
+                request: &$crate::EnhanceRequest,
+                deltas: &mut dyn $crate::DeltaSink,
+                cancel: &$crate::Cancel,
+            ) -> $crate::EnhanceOutcome {
+                $crate::transport::enhance_over_sse(self, request, deltas, cancel).await
+            }
+        }
+        impl $crate::transport::SseEnhance for $provider {
+            type Consumer = $wire::Incoming;
+            fn client(&self) -> &reqwest::Client {
+                &self.client
+            }
+            fn base_url(&self) -> &str {
+                &self.base_url
+            }
+            fn authenticate(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+                ($authenticate)(self, request)
+            }
+            fn request_body(request: &$crate::EnhanceRequest) -> serde_json::Value {
+                $wire::request_body(request)
+            }
+            fn structured_body(request: &$crate::StructuredRequest) -> serde_json::Value {
+                $wire::structured_body(request)
+            }
+            fn error_for_status(
+                status: u16,
+                body: &str,
+                retry_after: Option<std::time::Duration>,
+            ) -> $crate::Error {
+                $wire::error_for_status(status, body, retry_after)
+            }
+            fn consumer() -> Self::Consumer {
+                $wire::Incoming::new()
+            }
+            fn structured_consumer() -> Self::Consumer {
+                $wire::Incoming::structured()
+            }
+        }
+    };
+}
+pub(crate) use text_adapter;
 
 #[cfg(test)]
 mod tests {

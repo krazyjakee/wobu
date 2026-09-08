@@ -1,0 +1,38 @@
+.nrt-generation {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.nrt-generation label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+.nrt-generation textarea {
+  min-height: 90px;
+  font-family: var(--mono);
+}
+.nrt-generation pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+.nrt-generation-plan,
+.nrt-generation-history li {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.nrt-generation-history {
+  list-style: none;
+  padding: 0;
+}
+.nrt-generation-history h4 {
+  margin: 0;
+}
+.nrt-generation blockquote {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+}

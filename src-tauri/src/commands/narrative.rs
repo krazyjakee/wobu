@@ -121,7 +121,7 @@ pub struct SceneFileView {
 }
 
 impl SceneFileView {
-    fn of(file: &wobu_store::SceneFile) -> SceneFileView {
+    pub(super) fn of(file: &wobu_store::SceneFile) -> SceneFileView {
         SceneFileView {
             scene: file.scene.clone(),
             slug: file.slug().to_string(),
@@ -556,6 +556,12 @@ fn save_scene(
     slug: Option<&str>,
     expected: &Precondition,
 ) -> CommandResult<SceneFileView> {
+    if matches!(expected, Precondition::Current) {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Scene saves require the original stamp. Undo uses a guarded document restore.",
+        ));
+    }
     let catalog = project.scene_catalog()?;
     let rel = match catalog.find(scene.id) {
         // The catalog is authoritative for a scene that exists. Taking the
@@ -576,13 +582,6 @@ fn save_scene(
     // the person fixing it.
     let path = wobu_store::paths::from_rel_string(project.root(), &rel);
     let on_disk = wobu_store::atomic::read_stamped(&path)?;
-    let previous =
-        on_disk.as_ref().and_then(|(yaml, _)| wobu_narrative::SceneDocument::parse(yaml).ok());
-    editorial::validate_approval(
-        previous.as_ref().map(|document| &document.scene),
-        &scene,
-        matches!(expected, Precondition::Current),
-    )?;
     let on_disk = on_disk.map(|(_, stamp)| stamp);
 
     let mut file = wobu_store::SceneFile { scene, rel, stamp: expected.against(on_disk) };
@@ -711,6 +710,7 @@ fn layout_get(project: &Project, graph: &GraphKey) -> LayoutLoadView {
             }
         },
         GraphKey::Arc { arc } => LayoutLoadView::of(project.arc_layout(arc)),
+        GraphKey::Quest { quest } => LayoutLoadView::of(project.quest_layout(*quest)),
     }
 }
 
@@ -746,6 +746,7 @@ fn layout_save(project: &Project, layout: &Layout) -> LayoutSaveView {
             Err(error) => return LayoutSaveView::Unwritable { reason: error.to_string() },
         },
         GraphKey::Arc { .. } => project.save_arc_layout(layout),
+        GraphKey::Quest { quest } => project.save_quest_layout(layout, *quest),
     };
     match saved {
         Ok(LayoutSave::Written(_)) => LayoutSaveView::Written,

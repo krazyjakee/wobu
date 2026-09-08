@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Scene, SceneFile, Text } from '../../lib/api'
+import type { ReviewRequest, ReviewSceneView } from '../../lib/api/narrativeReview'
+import { qk } from '../../lib/queries/keys'
 import { useUndoStack } from '../../lib/undo'
 import { useUI } from '../../store/ui'
 import { NarrativeScriptPane } from './NarrativeScriptPane'
@@ -57,15 +59,49 @@ function initial(): SceneFile {
     stamp: { mtime_ms: 1, size: 1, hash: 'old' },
   }
 }
+function reviewed(): ReviewSceneView {
+  return {
+    scene_id: saved.scene.id,
+    guard: { stamp: saved.stamp, head: saved.scene.editorial_head ?? null },
+    state_json: '{}',
+    history: [],
+    context_summary: 'Scene intent and world facts',
+    lines: (saved.scene.beats ?? []).flatMap((beat) =>
+      (beat.dialogue ?? []).flatMap((slot) =>
+        (slot.variants?.length ? slot.variants : [null]).map((variant) => ({
+          target: {
+            scene: saved.scene.id,
+            beat: beat.id,
+            slot: slot.id,
+            variant: variant?.id ?? null,
+          },
+          speaker: slot.speaker,
+          text: variant?.text ?? null,
+          slot_policy: slot.policy ?? 'edited',
+          review: 'draft' as const,
+          freshness: 'out_of_date' as const,
+          approval_valid: false,
+          reason: 'No verified review',
+          context_revision: 'context',
+          proposals: [],
+        })),
+      ),
+    ),
+  }
+}
 function mount(projectKey = 'project', readOnly = false) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  return render(
-    <QueryClientProvider client={qc}>
-      <NarrativeScriptPane projectKey={projectKey} readOnly={readOnly} />
-    </QueryClientProvider>,
-  )
+  qc.setQueryData(qk.projectCurrent, { path: projectKey })
+  return {
+    qc,
+    ...render(
+      <QueryClientProvider client={qc}>
+        <NarrativeScriptPane projectKey={projectKey} readOnly={readOnly} />
+      </QueryClientProvider>,
+    ),
+  }
 }
 beforeEach(() => {
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
@@ -77,6 +113,32 @@ beforeEach(() => {
   h.invoke.mockReset()
   h.invoke.mockImplementation(async (command: string, args: Record<string, unknown>) => {
     if (command === 'narrative_scene_get') return saved
+    if (command === 'narrative_review_get') return reviewed()
+    if (command === 'narrative_review_context')
+      return {
+        version: 1,
+        revision: 'context',
+        state: {},
+        inputs: { intent: 'Ask about the attack' },
+      }
+    if (command === 'narrative_review_apply') {
+      const request = args.request as ReviewRequest
+      saved = structuredClone(saved)
+      const slot = saved.scene.beats
+        ?.find((b) => b.id === request.target.beat)
+        ?.dialogue?.find((s) => s.id === request.target.slot)
+      if (slot && request.action.kind === 'policy') {
+        if (request.action.scope === 'slot') slot.policy = request.action.policy
+        else {
+          const variant = slot.variants?.find((v) => v.id === request.target.variant)
+          if (variant)
+            variant.text.lifecycle = { ...variant.text.lifecycle, policy: request.action.policy }
+        }
+      }
+      saved.stamp = { hash: `${saved.stamp?.hash}-review`, size: 3, mtime_ms: 3 }
+      saved.scene.editorial_head = `${saved.stamp.hash}-event`
+      return { file: saved, review: reviewed() }
+    }
     if (command === 'narrative_scenes')
       return { scenes: [{ id: 'scene', name: 'Council' }], unreadable: [] }
     if (command === 'node_list') return []
@@ -100,6 +162,31 @@ beforeEach(() => {
 })
 
 describe('Script authoring', () => {
+  it('keeps a late policy reply out of a newly opened project with the same scene ID', async () => {
+    let finish!: (value: unknown) => void
+    const original = h.invoke.getMockImplementation()!
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      command === 'narrative_review_apply'
+        ? new Promise((resolve) => {
+            finish = resolve
+          })
+        : original(command, args),
+    )
+    const { qc } = mount()
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Wording policy' }), {
+      target: { value: 'locked' },
+    })
+    await waitFor(() => expect(finish).toBeDefined())
+    const other = { ...initial(), scene: { id: 'scene', name: 'Different project' } }
+    qc.setQueryData(qk.projectCurrent, { path: 'other-project' })
+    qc.setQueryData(qk.narrativeScene('scene'), other)
+    await act(async () => finish({ file: saved, review: reviewed() }))
+    await waitFor(() =>
+      expect(screen.queryByText('Applying review decision…')).not.toBeInTheDocument(),
+    )
+    expect(qc.getQueryData(qk.narrativeScene('scene'))).toEqual(other)
+  })
+
   it('saves manual text with canonical revisions, retained identity, freshness and undo', async () => {
     mount()
     fireEvent.change(await screen.findByRole('textbox', { name: /Dialogue 1, variant 1/ }), {
@@ -123,7 +210,7 @@ describe('Script authoring', () => {
       expect.objectContaining({ expected: { kind: 'stamp', stamp: initial().stamp } }),
     )
     expect(useUndoStack.getState().past[0]?.undo).toEqual([
-      { type: 'sceneSave', scene: initial().scene, slug: 'council' },
+      { type: 'sceneSave', scene: initial().scene, slug: 'council', expected: saved.scene },
     ])
   })
   it('copies generated text without rewriting provenance and reorders without changing identities', async () => {
@@ -136,7 +223,10 @@ describe('Script authoring', () => {
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
     expect(saved.scene.beats?.[0]?.id).not.toBe('beat')
     expect(saved.scene.beats?.[1]?.id).toBe('beat')
-    expect(saved.scene.beats?.[0]?.dialogue?.[0]?.variants?.[0]?.text).toEqual(original)
+    expect(saved.scene.beats?.[0]?.dialogue?.[0]?.variants?.[0]?.text).toEqual({
+      ...original,
+      lifecycle: { ...original.lifecycle, review: 'draft', policy: 'edited' },
+    })
     expect(h.invoke.mock.calls.some(([command]) => command === 'narrative_text_written')).toBe(
       false,
     )
@@ -150,16 +240,18 @@ describe('Script authoring', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /Dialogue 2, variant 1/ }), {
       target: { value: 'An authored line.' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Lock dialogue 2' }))
     const slotId = useUI.getState().narrative.lineId
     fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
+    await waitFor(() => expect(screen.getAllByLabelText('Slot policy')).toHaveLength(2))
+    fireEvent.change(screen.getAllByLabelText('Slot policy')[1]!, { target: { value: 'locked' } })
+    await waitFor(() => expect(saved.scene.beats?.[0]?.dialogue?.[1]?.policy).toBe('locked'))
     const slot = saved.scene.beats?.[0]?.dialogue?.[1]
     expect(slot?.id).toBe(slotId)
     expect(slot?.policy).toBe('locked')
     expect(slot?.variants?.[0]?.text).toMatchObject({
       body: 'An authored line.',
-      lifecycle: { policy: 'locked', review: 'draft' },
+      lifecycle: { policy: 'edited', review: 'draft' },
     })
   })
 
@@ -167,13 +259,16 @@ describe('Script authoring', () => {
     saved.scene.beats![0]!.dialogue![0]!.policy = 'locked'
     const view = mount()
     expect(await screen.findByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock dialogue 1' }))
+    fireEvent.change(await screen.findByLabelText('Slot policy'), { target: { value: 'edited' } })
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeEnabled(),
+    )
     expect(screen.getByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeEnabled()
     view.unmount()
     mount('project', true)
     expect(await screen.findByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Save script' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Discard changes' })).toBeDisabled()
   })
   it('retains unsaved edits across tab remounts and isolates projects', async () => {
     const view = mount()
@@ -278,7 +373,10 @@ describe('Script variant authoring', () => {
     mount()
     expect(await screen.findByRole('button', { name: 'Delete dialogue 1 slot' })).toBeDisabled()
     expect(screen.getByLabelText('Dialogue 1 variant 1 rule')).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock dialogue 1' }))
+    fireEvent.change(await screen.findByLabelText('Slot policy'), { target: { value: 'edited' } })
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeEnabled(),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Delete dialogue 1 slot' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
@@ -358,4 +456,22 @@ it('refuses to save a loaded scene whose integer would be rounded by the desktop
   fireEvent.change(screen.getByLabelText('Scene name'), { target: { value: 'Renamed council' } })
   expect(screen.getByRole('button', { name: 'Save script' })).toBeDisabled()
   expect(h.invoke.mock.calls.some(([command]) => command === 'narrative_scene_save')).toBe(false)
+})
+
+it('manual editing a Generated slot preserves slot policy and protects only the edited wording', async () => {
+  saved.scene.beats![0]!.dialogue![0]!.policy = 'generated'
+  saved.scene.beats![0]!.dialogue![0]!.variants![0]!.text.lifecycle = {
+    policy: 'generated',
+    review: 'draft',
+    freshness: 'current',
+  }
+  mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: /Dialogue 1, variant 1/ }), {
+    target: { value: 'My corrected wording' },
+  })
+  expect(screen.getByLabelText('Slot policy')).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+  await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
+  expect(saved.scene.beats![0]!.dialogue![0]!.policy).toBe('generated')
+  expect(saved.scene.beats![0]!.dialogue![0]!.variants![0]!.text.lifecycle?.policy).toBe('edited')
 })

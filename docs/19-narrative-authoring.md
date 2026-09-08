@@ -13,7 +13,8 @@ Narrative opens a paged scene table. Search matches scene names, summaries, beat
 intent, required content and dialogue. Each matching passage carries scene, beat, slot and variant
 identity into Flow or Script. Generated draft text is an explicit search option. Quest, participant,
 policy, approval, freshness and missing-text filters combine; policy/approval/freshness must match
-the same variant. Values are the recorded source values, not results of a dependency build.
+the same variant. Library facets use recorded source mirrors; the Review workspace derives verified
+approval and freshness from canonical evidence. Precise dependency builds remain #168.
 
 A quest owns an explicit list of scene IDs. A scene can belong to several quests and appears once
 in the table, with every membership in its Quests column; either quest filter finds it. Set those
@@ -74,9 +75,10 @@ first matching entry is used. See the [runtime contract](17-narrative-runtime-co
 precise evaluation and effect rules.
 
 Save script computes wording revisions in Rust, records human provenance, resets changed wording
-to draft and preserves recorded freshness. Manual slots start Edited or Locked. Locked text must
-be unlocked before editing. Duplication allocates new identities while preserving wording
-provenance/revisions. Guarded saves and structural changes enter the shared undo history. The
+to draft. Manual wording starts Edited or Locked. Locked text must be explicitly unlocked before
+editing. Duplication allocates new identities while preserving words, provenance and revisions;
+the new identity needs its own review, and copied Generated wording becomes Edited. Existing
+locks remain protected. Guarded saves and structural changes enter the shared undo history. The
 inspector displays saved participants, intent, restrictions and selected dialogue. The World editor
 is the place to author attributed facts. The Context inspector resolves speaker-specific knowledge,
 relationships, restrictions and voice into a frozen request with source dependencies.
@@ -125,8 +127,9 @@ The compiler and runtime are pure Rust crates independent of Tauri, providers an
 store. Preview commands adapt them to the app without writing world/project state. This internal
 graph can be exported as a [validated native package](20-native-narrative-packages.md). Engine
 adapters remain excluded N5 work. There is no generation call in compilation or playback. Release validation rejects missing required text
-and wording whose recorded approval/freshness is not ready; dependency freshness recomputation is
-still #168. First-match selection is deterministic; a seed is retained for a future selection policy. The pure
+and wording without verified approval for its exact identity, revision and current reviewed context.
+Writable lifecycle flags cannot supply that proof. Precise dependency invalidation is still #168.
+First-match selection is deterministic; a seed is retained for a future selection policy. The pure
 Rust runtime supports signed 64-bit integers; the JavaScript Preview bridge rejects values or
 declarations outside JavaScript's safe-integer range so IPC cannot silently round them.
 
@@ -143,20 +146,46 @@ conditions and effects, while existing tagged source remains readable.
 
 World undo/redo compares the expected whole document under the project lock and then performs a
 guarded write using its current stamp. It refuses a changed document from another writer. Ordinary
-World saves cannot request an unguarded `Current` precondition. Existing scene undo retains the older `Current` limitation documented by PR #190. Variable edits
-use guarded stamp-based saves but do not yet enter undo history.
+World saves cannot request an unguarded `Current` precondition. Scene undo also compares the expected
+authored document, retaining a refused entry rather than overwriting a collaborator. Coalesced typing
+uses the original and final document as its undo/redo guards and does not absorb an intervening peer
+edit. Variable edits use guarded stamp-based saves but do not yet enter undo history.
 [Portable storage and Recovery](24-narrative-storage.md) preserve peer conflicts and explicit deletions;
 crash-persistent drafts and production recovery remain #181.
 
-The scene save command rejects approved wording with a mismatched revision and changed wording
-that carries approval forward during an ordinary edit. Correctly sealed undo snapshots can restore
-previous approval. This is an authoring safeguard, not the full revision-aware review/receipt system
-in #165. World source participates in the narrative fingerprint; moving Flow boxes does not.
+The shared scene write boundary rejects forged approvals, history heads and policy unlocks.
+Restoring words does not revive a previous approval. [Editorial review](26-narrative-review.md)
+records immutable decisions; missing or mismatched history invalidates proof while preserving words
+and locks. World source participates in the narrative fingerprint; moving Flow boxes does not.
+
+## Arrange Flow
+
+Choose a scene or World quest in **Flow scope**. Shared arrangements retain Automatic/Manual mode,
+node positions, collapsed groups and pinned notes. **Groups & notes** edits that presentation; the
+separate save queue offers an explicit retry if a write fails. Viewport and panels remain local.
+[The arrangement guide](27-narrative-layout.md) describes peer merging, schema compatibility and
+native reopening evidence, including the 300-node canvas bound. Layout-only edits preserve canonical
+source, review evidence, context fingerprints and Release package bytes.
+
+## Generate and review
+
+**Generate…** plans saved dialogue requests before explicitly queuing provider work. Both slot and
+variant must remain Generated for automatic replacement; Edited wording retains a proposal, and
+Locked wording is skipped. Results and provider receipts remain available through interruptions.
+Generation does not grant approval. See [generation jobs](25-narrative-generation.md).
+
+**Review** opens a paged queue with scene, speaker, policy, approval and freshness filters. Compare
+current and proposed wording, inspect its context, accept or edit a proposal, approve exact wording,
+or attest unchanged wording against changed context. Bulk decisions show eligible, skipped and
+conflicting results before applying one guarded transaction per scene. Local drafts retain their
+original comparison guard through navigation and refresh. The [review guide](28-narrative-review-queue.md)
+includes the complete workflow recording with its mocked-provider evidence limits.
 
 ## Evidence and remaining acceptance
 
 Screenshots use the actual React components with explicit in-memory IPC fixtures in Chromium.
-They establish browser rendering. The separate [native Preview walkthrough](21-native-narrative-preview.md)
+They establish browser rendering. Native layout evidence is identified separately in the arrangement
+guide. The separate [native Preview walkthrough](21-native-narrative-preview.md)
 records real Tauri/WebKit and Rust IPC, including command results, restore, bounds and loop failures;
 its canonical project-file audit verifies isolation. Rust command tests use temporary project files. Current regression coverage includes attributed
 three-character knowledge, contradictory/unknown belief, entity backlinks, strict source/version
@@ -180,6 +209,8 @@ record, rather than reusing #192's counts for the changed implementation.
 Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
 (#195), saved regression scenarios (#162), and attributed frozen generation context (#163) are
 implemented alongside portable record indexing, peer sync and explicit recovery (#153).
-Generation jobs/review (#164–#167), incremental analysis
+[Cancellable generation jobs](25-narrative-generation.md) (#164) retain prose proposals and immutable
+receipts; guarded editorial transitions (#165) and the Review queue (#166) share canonical evidence.
+Supporting text (#167), incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.

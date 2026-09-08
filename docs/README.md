@@ -6,8 +6,10 @@ once — art style, lore, species, cultures, places — and every image you gene
 that context automatically.
 
 The [narrative system](17-narrative-system.md) now has scene/world authoring, typed dialogue
-structure, source repair, native package export and an isolated deterministic Preview with evaluated traces. Editorial review, generation, production builds
-and engine integrations remain planned; the [authoring guide](19-narrative-authoring.md) records
+structure, source repair, portable sync/recovery, saved scenarios, native packages and isolated
+deterministic Preview. Attributed context and cancellable prose-generation jobs are implemented.
+Guarded editorial review is implemented; incremental and production builds remain planned.
+The [authoring guide](19-narrative-authoring.md) records
 the implemented behavior and remaining acceptance. N5 integrations are excluded from current work.
 
 | Doc | What's in it |
@@ -34,6 +36,10 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [22 — Narrative Scenarios](22-narrative-scenarios.md) | Saved Preview runs, partial assertions, offline replay and first-divergence reports |
 | [23 — Narrative Generation Context](23-narrative-context.md) | Speaker knowledge, attributed constraints, bounded frozen inputs and freshness |
 | [24 — Narrative Storage](24-narrative-storage.md) | Canonical records, immutable receipts, publication and rebuildable local indexes |
+| [25 — Narrative Generation](25-narrative-generation.md) | Frozen plans, provider jobs, protected proposals, cancellation, receipts and recovery |
+| [26 — Narrative Review Evidence](26-narrative-review.md) | Canonical editorial history, guarded transitions and verified release approval |
+| [27 — Shared Narrative Arrangements](27-narrative-layout.md) | Layout schema, groups/notes, peer merging, native canvas evidence and bounds |
+| [28 — Narrative Review Queue](28-narrative-review-queue.md) | Revision comparison, protected drafts, paged review and grouped bulk decisions |
 
 Two constraints shape most of the above and are worth knowing up front:
 

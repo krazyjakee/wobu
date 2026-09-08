@@ -68,6 +68,7 @@ pub fn run() {
         // project it belongs to so an accept can never be answered against a
         // different world.
         .manage(enhance::Pending::default())
+        .manage(commands::narrative_generation::GenerationPlans::default())
         // Beside `AppState` rather than inside it, and that is #82's whole
         // point: that slot holds exactly one project and only while somebody has
         // it open, and syncing worlds nobody is looking at is the feature.
@@ -161,6 +162,12 @@ pub fn run() {
             commands::nodes::node_backlinks,
             commands::narrative_export::narrative_export_check,
             commands::narrative_export::narrative_export,
+            commands::narrative_review::narrative_review_get,
+            commands::narrative_review::queue::narrative_review_list,
+            commands::narrative_review::queue::narrative_review_batch,
+            commands::narrative_review::narrative_review_context,
+            commands::narrative_review::narrative_review_apply,
+            commands::narrative_review::narrative_scene_restore,
             commands::narrative_context::narrative_context_capture,
             commands::narrative_context::narrative_context_freshness,
             commands::narrative_recovery::narrative_recovery_list,
@@ -168,6 +175,11 @@ pub fn run() {
             commands::narrative_scenarios::narrative_scenarios_list,
             commands::narrative_scenarios::narrative_scenario_save,
             commands::narrative_scenarios::narrative_scenario_run,
+            commands::narrative_generation::narrative_generation_plan,
+            commands::narrative_generation::narrative_generation_start,
+            commands::narrative_generation::narrative_generation_history,
+            commands::narrative_generation::narrative_generation_retry,
+            commands::narrative_generation::narrative_generation_recover,
             commands::narrative_preview::narrative_compile,
             commands::narrative_preview::narrative_preview_start,
             commands::narrative_preview::narrative_preview_step,

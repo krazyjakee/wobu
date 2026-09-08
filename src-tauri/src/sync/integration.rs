@@ -803,3 +803,145 @@ fn narrative_partial_bodies_bad_hashes_and_midstream_revocation_never_write() {
         }
     });
 }
+
+#[test]
+fn flow_layouts_merge_per_node_and_equal_time_mode_then_sync_deleted_notes() {
+    run_async(async {
+        use wobu_store::{Annotation, AnnotationId, GraphKey, Layout, LayoutMode, NodeKey};
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let scene = a
+            .with(|p| {
+                let mut file = p.create_scene("Kiln route")?;
+                file.scene.beats.push(wobu_narrative::Beat::new("Arrival"));
+                file.scene.beats.push(wobu_narrative::Beat::new("Verdict"));
+                p.save_scene(&mut file)?;
+                Ok(file.scene)
+            })
+            .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        let mut left = Layout::empty(GraphKey::of_scene(scene.id));
+        let mut right = left.clone();
+        let at = Utc::now();
+        left.mode = LayoutMode::Manual;
+        left.mode_updated_at = at;
+        right.mode = LayoutMode::Automatic;
+        right.mode_updated_at = at;
+        left.place(NodeKey::Beat(scene.beats[0].id), 15.0, 60.0);
+        right.place(NodeKey::Beat(scene.beats[1].id), 450.0, 60.0);
+        let note = AnnotationId::new();
+        left.upsert_annotation(Annotation {
+            id: note,
+            body: "Ask about the logbook.".into(),
+            x: 120.0,
+            y: 20.0,
+            width: None,
+            height: None,
+            attached_to: None,
+            updated_at: at,
+        });
+        a.with(|p| {
+            p.save_scene_layout(&scene, &left)?;
+            Ok(())
+        })
+        .unwrap();
+        b.with(|p| {
+            p.save_scene_layout(&scene, &right)?;
+            Ok(())
+        })
+        .unwrap();
+        let before = a.with(|p| Ok(p.narrative_fingerprint()?)).unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        let merged = a.with(|p| Ok(p.scene_layout(&scene).layout)).unwrap();
+        assert_eq!(merged, b.with(|p| Ok(p.scene_layout(&scene).layout)).unwrap());
+        assert_eq!(merged.nodes.len(), 2);
+        assert!(merged.annotations.contains_key(&note));
+        let mut removed = merged.clone();
+        removed.remove_annotation(note);
+        a.with(|p| {
+            p.save_scene_layout(&scene, &removed)?;
+            Ok(())
+        })
+        .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert!(p.scene_layout(&scene).layout.annotations.is_empty());
+            assert_eq!(p.narrative_fingerprint()?, before);
+            Ok(())
+        })
+        .unwrap();
+        // A cosmetic parse error does not block a subsequent source update.
+        let path = wobu_store::narrative::layout::path_of(&pair.a.root, &merged.graph).unwrap();
+        fs::write(&path, "{broken arrangement").unwrap();
+        pair.a.edit(pair.project, pair.node, "Core sync still works");
+        pair.a.sync_with(pair.project, &pair.b).await;
+        assert_eq!(pair.b.notes(pair.project, pair.node), "Core sync still works");
+        assert!(
+            pair.a
+                .manager()
+                .project_statuses()
+                .iter()
+                .flat_map(|p| &p.peers)
+                .any(|p| p.arrangement_notice.is_some())
+        );
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn a_layout_offer_survives_receiving_the_peer_merge_before_sending_its_body() {
+    run_async(async {
+        use super::layout::{Snapshot, offer, receive};
+        use wobu_store::{GraphKey, Layout, NodeKey};
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let mut left = Layout::empty(GraphKey::Arc { arc: "project".into() });
+        let mut right = left.clone();
+        left.place(NodeKey::Scene(wobu_narrative::SceneId::new()), 15.0, 60.0);
+        right.place(NodeKey::Scene(wobu_narrative::SceneId::new()), 450.0, 60.0);
+        for (replica, arrangement) in [(&a, &left), (&b, &right)] {
+            replica
+                .with(|p| {
+                    wobu_store::narrative::layout::save(p.root(), "test", arrangement, None)?;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let original = a.with(|p| Ok(p.layout_manifest().entries.remove(0))).unwrap();
+        let frozen_a = a.with(|p| Snapshot::capture(p)).unwrap();
+        let frozen_b = b.with(|p| Snapshot::capture(p)).unwrap();
+        let (client, server, outbound, inbound) = wire_pair(pair.project).await;
+        // Force the CI interleaving: finish merging B into A before A can
+        // answer a request for its original advertised hash. No timing sleeps.
+        let first = tokio::try_join!(
+            offer(pair.b.manager(), &b, &inbound, frozen_b),
+            receive(pair.a.manager(), &a, &outbound),
+        )
+        .unwrap();
+        assert_eq!(first, (None, (true, None)));
+        assert!(a.with(|p| Ok(p.layout_outgoing(&original)?)).unwrap().is_none());
+        let second = tokio::try_join!(
+            offer(pair.a.manager(), &a, &outbound, frozen_a),
+            receive(pair.b.manager(), &b, &inbound),
+        )
+        .unwrap();
+        assert_eq!(second, (None, (true, None)));
+        let read = |replica: &super::manager::Replica| {
+            replica
+                .with(|p| {
+                    Ok(wobu_store::narrative::layout::read_document(p.root(), &original.rel)?
+                        .unwrap()
+                        .0)
+                })
+                .unwrap()
+        };
+        let merged = read(&a);
+        assert_eq!(merged.nodes.len(), 2);
+        assert_eq!(merged, read(&b));
+        client.shutdown().await.unwrap();
+        server.shutdown().await.unwrap();
+        pair.stop().await;
+    });
+}

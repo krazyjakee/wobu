@@ -33,6 +33,7 @@ pub struct ReconcilePlan {
     assets: HashSet<String>,
     generations: HashSet<String>,
     narrative: Vec<crate::NarrativeIndexEntry>,
+    layout_observation: String,
 }
 
 enum ObservedNode {
@@ -51,6 +52,7 @@ pub struct ReconcileObservation {
     generations: Vec<(Generation, String, Stamp)>,
     seen_generations: HashSet<String>,
     narrative: Vec<crate::NarrativeIndexEntry>,
+    layout_observation: String,
 }
 
 impl ReconcilePlan {
@@ -123,7 +125,9 @@ impl ReconcilePlan {
         }
 
         let narrative = super::narrative_index::observe(&self.root)?;
+        let layout_observation = crate::narrative::layout::observation(&self.root);
         Ok(ReconcileObservation {
+            layout_observation,
             plan: self,
             narrative,
             nodes,
@@ -152,6 +156,9 @@ impl ReconcileObservation {
         let raw = std::fs::read_to_string(&meta_path).map_err(|e| Error::io(&meta_path, e))?;
         let meta: ProjectMeta = serde_json::from_str(&raw)?;
         if meta.id != self.plan.project_id {
+            return Ok(false);
+        }
+        if crate::narrative::layout::observation(&self.plan.root) != self.layout_observation {
             return Ok(false);
         }
 
@@ -337,6 +344,7 @@ impl Project {
             assets: self.index.asset_paths()?,
             generations: self.index.generation_paths()?,
             narrative: self.index.narrative_entries()?,
+            layout_observation: self.layout_observation.clone(),
         })
     }
 
@@ -356,10 +364,12 @@ impl Project {
             generations,
             seen_generations,
             narrative,
+            layout_observation,
         } = observation;
 
         if self.id() != plan.project_id
             || self.root != plan.root
+            || self.layout_observation != plan.layout_observation
             || self.index.all_stamps()? != plan.node_stamps
             || self.index.corrupt_paths()?.into_iter().collect::<HashSet<_>>() != plan.corrupt
             || self.index.asset_paths()? != plan.assets
@@ -417,6 +427,8 @@ impl Project {
             self.index.replace_narrative(&narrative)?;
             changed = true;
         }
+        changed |= self.layout_observation != layout_observation;
+        self.layout_observation = layout_observation;
         Ok(Some(changed))
     }
 
@@ -503,7 +515,10 @@ impl Project {
                 }
             }
         }
-        Ok(changed || narrative_changed || recovered)
+        let layout_observation = crate::narrative::layout::observation(&self.root);
+        let layout_changed = self.layout_observation != layout_observation;
+        self.layout_observation = layout_observation;
+        Ok(changed || narrative_changed || recovered || layout_changed)
     }
 
     /// Every Markdown file under `nodes/`, as `(relative path, absolute path)`.

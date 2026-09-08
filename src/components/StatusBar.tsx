@@ -89,6 +89,13 @@ export function StatusBar({
               missing
             </span>
           )}
+          {sync.peers
+            .filter((peer) => peer.arrangementNotice)
+            .map((peer) => (
+              <span key={peer.endpointId} role="status" title={peer.arrangementNotice}>
+                · arrangements: {peer.arrangementNotice}
+              </span>
+            ))}
           {last && (
             <span>
               · last synced with {last.alias} · {relativeTime(last.at, now)}

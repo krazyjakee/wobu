@@ -79,3 +79,29 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.nrt-line-review {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  margin-top: 0.6rem;
+}
+.nrt-line-review pre {
+  max-height: 18rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+}
+.nrt-line-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.nrt-script-editor .nrt-review-ack {
+  flex-direction: row;
+  align-items: center;
+}
+.nrt-script-editor .nrt-review-ack input {
+  width: auto;
+}

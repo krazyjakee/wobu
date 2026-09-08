@@ -117,7 +117,9 @@ describe('the one choke point for a narrative edit', () => {
 
     const [entry] = useUndoStack.getState().past
     expect(entry?.label).toContain('rename')
-    expect(entry?.undo).toEqual([{ type: 'sceneSave', scene: before.scene, slug: before.slug }])
+    expect(entry?.undo).toEqual([
+      { type: 'sceneSave', scene: before.scene, expected: after.scene, slug: before.slug },
+    ])
   })
 
   it('records a rename made from a row that never held the document', async () => {
@@ -136,7 +138,7 @@ describe('the one choke point for a narrative edit', () => {
 
     expect(argsOf('narrative_scene_rename')).toEqual({ sceneId: 's1', name: 'The hearing' })
     expect(useUndoStack.getState().past[0]?.undo).toEqual([
-      { type: 'sceneSave', scene: before.scene, slug: before.slug },
+      { type: 'sceneSave', scene: before.scene, expected: after.scene, slug: before.slug },
     ])
   })
 
@@ -210,7 +212,11 @@ describe('arrangement is not the world', () => {
     // Moving a box is not a story change. A ⌘Z that rewound a drag would, on
     // the very next press, rewind a paragraph — and nothing on screen tells the
     // writer which press they are about to make.
-    h.invoke.mockResolvedValue({ outcome: 'written' })
+    h.invoke.mockImplementation(async (command: string) =>
+      command === 'narrative_layout_get'
+        ? { layout: layout(), notices: [] }
+        : { outcome: 'written' },
+    )
 
     const { qc, Wrapper } = wrapper()
     const { result } = renderHook(() => useSaveLayout(), { wrapper: Wrapper })
@@ -227,7 +233,11 @@ describe('arrangement is not the world', () => {
   it('does not touch a single narrative source query', async () => {
     // The proof that a layout write cannot disturb a source read: no scene, no
     // catalog and no diagnostic query is invalidated by one.
-    h.invoke.mockResolvedValue({ outcome: 'written' })
+    h.invoke.mockImplementation(async (command: string) =>
+      command === 'narrative_layout_get'
+        ? { layout: layout(), notices: [] }
+        : { outcome: 'written' },
+    )
     const { qc, Wrapper } = wrapper()
     const invalidate = vi.spyOn(qc, 'invalidateQueries')
 
@@ -236,7 +246,7 @@ describe('arrangement is not the world', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(invalidate).not.toHaveBeenCalled()
-    expect(calls().map(([name]) => name)).toEqual(['narrative_layout_save'])
+    expect(calls().map(([name]) => name)).toEqual(['narrative_layout_save', 'narrative_layout_get'])
   })
 
   it('treats a refused arrangement as information rather than a failure', async () => {
@@ -365,23 +375,18 @@ describe('declared state', () => {
 })
 
 describe('running an undo against the backend', () => {
-  it('asks for the version on disk rather than the one it recorded', async () => {
-    // The same guarantee `node_upsert` gives — it reads its precondition out of
-    // the index — rather than a weaker one. An entry recorded before three
-    // later saves would otherwise present a precondition three versions stale
-    // and park itself as a conflict: a ⌘Z that fails on every press but the
-    // first.
-    h.invoke.mockResolvedValue(file({ scene: scene({ id: 's1' }) }))
-    await applyCommand({
-      type: 'sceneSave',
-      scene: scene({ id: 's1' }),
+  it('restores only the exact scene recorded as the undo precondition', async () => {
+    const expected = scene({ id: 's1', name: 'The later hearing' })
+    const previous = scene({ id: 's1' })
+    h.invoke.mockResolvedValue(file({ scene: previous }))
+    await applyCommand({ type: 'sceneSave', scene: previous, expected, slug: 'council-hearing' })
+    expect(argsOf('narrative_scene_restore')).toEqual({
+      scene: previous,
+      expected,
       slug: 'council-hearing',
     })
-
-    expect(argsOf('narrative_scene_save')).toMatchObject({
-      expected: { kind: 'current' },
-      slug: 'council-hearing',
-    })
+    expect(argsOf('narrative_scene_save')).toBeUndefined()
+    expect(argsOf('narrative_scene_get')).toBeUndefined()
   })
 
   it('undoes a create through the delete command, not through a second create', async () => {

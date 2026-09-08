@@ -30,7 +30,7 @@ use wobu_core::NodeKind;
 
 use crate::cancel::Cancel;
 use crate::error::Error;
-use crate::provider::{DeltaSink, EnhanceOutcome};
+use crate::provider::{DeltaSink, EnhanceOutcome, StructuredOutcome};
 
 /// Accumulates bytes and hands back complete `data:` payloads.
 #[derive(Debug, Default)]
@@ -39,6 +39,7 @@ pub(crate) struct Sse {
     /// the middle of a decode, which is what makes a split multi-byte character
     /// a non-event: `\n` is ASCII, so anything up to one is whole UTF-8.
     partial: Vec<u8>,
+    invalid_utf8: bool,
     /// The `data:` lines of the event currently being assembled. SSE allows an
     /// event to span several of them; both vendors send one, but a decoder that
     /// only handles the shape it has seen is a decoder that breaks on a change
@@ -57,12 +58,17 @@ impl Sse {
         for &byte in bytes {
             if byte == b'\n' {
                 let line = std::mem::take(&mut self.partial);
+                self.invalid_utf8 |= std::str::from_utf8(&line).is_err();
                 let line = String::from_utf8_lossy(&line);
                 self.line(line.trim_end_matches('\r'));
             } else {
                 self.partial.push(byte);
             }
         }
+    }
+
+    pub(crate) fn has_invalid_utf8(&self) -> bool {
+        self.invalid_utf8
     }
 
     /// The next complete payload, if one has arrived.
@@ -140,7 +146,17 @@ pub(crate) async fn until_cancelled<F: Future>(future: F, cancel: &Cancel) -> Op
 /// and provider status become an Enhance outcome.
 pub(crate) trait SseConsumer {
     fn event(&mut self, payload: &str, deltas: &mut dyn DeltaSink) -> bool;
-    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome;
+    fn finish_raw(self, aborted: Option<Error>) -> StructuredOutcome;
+    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome
+    where
+        Self: Sized,
+    {
+        let raw = self.finish_raw(aborted);
+        EnhanceOutcome::new(
+            raw.usage,
+            raw.result.and_then(|json| crate::parse_description(kind, &json)),
+        )
+    }
 }
 
 /// Read an SSE response until its provider state machine is done, the socket

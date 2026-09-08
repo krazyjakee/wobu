@@ -34,6 +34,7 @@ pub mod mesh;
 /// a structural edit is a whole scene document, so a canvas edit and the
 /// equivalent form edit cannot produce different source.
 pub mod narrative;
+pub mod narrative_generation;
 pub mod narrative_source;
 pub mod nodes;
 pub mod project;
@@ -131,6 +132,10 @@ pub mod narrative_preview;
 pub mod narrative_export;
 
 pub mod narrative_context;
+pub mod narrative_review;
 pub mod narrative_scenarios;
 
 pub mod narrative_recovery;
+
+#[cfg(test)]
+mod narrative_layout_contract;

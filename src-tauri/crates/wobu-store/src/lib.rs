@@ -69,3 +69,5 @@ pub use project::NarrativeDeletionView;
 pub use project::narrative_sync::{
     MAX_NARRATIVE_FILE_BYTES, NarrativeApplied, NarrativeIncoming, NarrativeSyncEntry,
 };
+
+pub use project::layout_sync::{LayoutManifest, LayoutOffer};

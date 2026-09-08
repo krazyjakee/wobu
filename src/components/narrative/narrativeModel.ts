@@ -35,8 +35,6 @@ export const NARRATIVE_UNAVAILABLE = {
     'Opening a witness needs generated reachability scenarios and a Flow overlay (#171, #188). Preview can play a chosen starting state; these source diagnostics do not establish reachability.',
   affectedScope:
     'Highlighting affected beats needs the dependency tracker and build planner (#168, #169).',
-  review:
-    'The generation proposal comparison and review queue are not available yet (#165, #166). Handwritten text can be edited in Script.',
   diagnostics:
     'Checks cover source errors and missing text. Branch reachability has not been checked.',
 } as const

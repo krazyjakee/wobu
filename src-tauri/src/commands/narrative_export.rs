@@ -103,7 +103,7 @@ pub async fn narrative_export(
         .map_err(package_error)?;
     Ok(report)
 }
-fn prepare(
+pub(super) fn prepare(
     project: &Project,
     profile: Profile,
     commands: BTreeMap<Name, Vec<VarType>>,
@@ -169,7 +169,12 @@ fn prepare_checked(
         ));
     }
     let scenes: Vec<_> = files.into_iter().map(|file| file.scene).collect();
-    let report = compile(&scenes, &schema, &CompileOptions { profile, known_entities, commands });
+    let verified_reviews = super::narrative_review::verified(project, &scenes, &fingerprint)?;
+    let report = compile(
+        &scenes,
+        &schema,
+        &CompileOptions { profile, known_entities, commands, verified_reviews },
+    );
     let package = report
         .graph
         .map(|graph| Package::build(graph, debug))

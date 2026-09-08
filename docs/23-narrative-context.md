@@ -1,8 +1,9 @@
 # Attributed narrative generation context
 
 The Context inspector resolves a saved dialogue slot into an immutable, attributed request for
-future offline generation. It does not call a provider, enqueue work, write dialogue or change
-runtime state. Generation jobs and their guarded result application remain #164–#167; supporting
+offline prose generation. It does not call a provider, enqueue work, write dialogue or change
+runtime state. [Generation jobs](25-narrative-generation.md) create separate proposals; guarded editorial application
+remains #165–#166; supporting
 text records remain part of the unfinished #152 model. N5 engine integrations remain excluded.
 
 ## Inspect a line
@@ -68,7 +69,8 @@ can reach the selected beat. Wider reachability analysis remains #170/#171.
 `FrozenContext` version 1. It reuses `wobu-influence::Chars` for its explicitly approximate
 three-characters-per-token budget, never the art system's visual priorities or weighting.
 The estimate covers the complete provider-neutral request, including instructions and attribution.
-A future provider adapter must still count that model's actual tokens and reserve output capacity.
+Provider adapters report actual usage when available. Preflight estimates remain heuristic and do not
+guarantee that a request fits a particular model's context window; output has its own explicit limit.
 
 Required fragments are never removed. If they alone exceed the estimate, the complete required
 request is retained with a blocking overflow diagnostic. Optional existing wording, knowledge,

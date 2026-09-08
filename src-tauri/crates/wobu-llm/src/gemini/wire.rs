@@ -20,12 +20,14 @@
 use std::time::Duration;
 
 use serde_json::{Value, json};
+#[cfg(test)]
 use wobu_core::NodeKind;
 
 use crate::error::Error;
-use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, Usage};
+use crate::provider::{DeltaSink, EnhanceRequest, StructuredOutcome, StructuredRequest, Usage};
 use crate::stream::SseConsumer;
-use crate::validate::parse_description;
+#[cfg(test)]
+use crate::{EnhanceOutcome, parse_description};
 
 use super::LABEL;
 
@@ -61,6 +63,14 @@ pub(crate) const MODEL_OUTPUT_STEP: &str = "model_output";
 /// means every character's canon sitting in someone's Google project until it is
 /// deleted. We never chain, so there is nothing to trade for it.
 pub(crate) fn request_body(request: &EnhanceRequest) -> Value {
+    body_with_schema(&StructuredRequest::from(request), request.schema())
+}
+
+pub(crate) fn structured_body(request: &StructuredRequest) -> Value {
+    body_with_schema(request, crate::structured::gemini_schema(&request.schema))
+}
+
+fn body_with_schema(request: &StructuredRequest, schema: Value) -> Value {
     let mut body = json!({
         "model": request.model,
         // One turn, as a bare string. `input` also accepts an array of typed
@@ -79,7 +89,7 @@ pub(crate) fn request_body(request: &EnhanceRequest) -> Value {
         "response_format": {
             "type": "text",
             "mime_type": "application/json",
-            "schema": request.schema(),
+            "schema": schema,
         },
     });
     if let Some(system) = &request.system {
@@ -109,6 +119,7 @@ pub(crate) enum Flow {
 #[derive(Debug, Default)]
 pub(crate) struct Incoming {
     usage: Usage,
+    structured: bool,
     /// Which step is the answer. See [`MODEL_OUTPUT_STEP`] for why a step index
     /// has to be tracked at all.
     output_index: Option<u64>,
@@ -128,6 +139,10 @@ impl Incoming {
         Incoming::default()
     }
 
+    pub(crate) fn structured() -> Self {
+        Self { structured: true, ..Self::default() }
+    }
+
     /// Take one `data:` payload.
     pub(crate) fn accept(&mut self, data: &str, deltas: &mut dyn DeltaSink) -> Flow {
         // A payload that is not JSON is not something to fail the call over.
@@ -136,6 +151,10 @@ impl Incoming {
         // gracefully rather than thrown on — so failing here would turn a
         // documented sentinel, and every future addition, into a broken Enhance.
         let Ok(event) = serde_json::from_str::<Value>(data) else {
+            if self.structured && data != "[DONE]" {
+                self.error = Some(Error::NotJson("Malformed provider event".into()));
+                return Flow::Done;
+            }
             return Flow::Continue;
         };
 
@@ -151,6 +170,13 @@ impl Incoming {
             "interaction.status_update" => self.read_status(&event["status"]),
             "step.start" => {
                 if event["step"]["type"] == MODEL_OUTPUT_STEP {
+                    if self.structured
+                        && (self.output_index.is_some() || event["index"].as_u64().is_none())
+                    {
+                        self.error =
+                            Some(Error::NotJson("Multiple or invalid output steps".into()));
+                        return Flow::Done;
+                    }
                     self.output_index = event["index"].as_u64();
                 }
             }
@@ -163,9 +189,16 @@ impl Incoming {
                 // response that fails to parse for a reason nothing explains.
                 if event["delta"]["type"] == "text"
                     && let Some(fragment) = event["delta"]["text"].as_str()
+                    && let Err(error) = crate::structured::append(
+                        &mut self.json,
+                        fragment,
+                        self.output_complete,
+                        self.structured,
+                        deltas,
+                    )
                 {
-                    self.json.push_str(fragment);
-                    deltas.delta(fragment);
+                    self.error = Some(error);
+                    return Flow::Done;
                 }
             }
             "step.stop" if self.is_output_step(&event) => self.output_complete = true,
@@ -200,7 +233,13 @@ impl Incoming {
     /// `aborted` is the caller's own reason for stopping — a cancellation, a
     /// dead socket — and outranks anything inferred here, because those are the
     /// two cases where the stream stopped for a reason the events cannot state.
+    #[cfg(test)]
     pub(crate) fn outcome(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome {
+        let raw = self.raw_outcome(aborted);
+        EnhanceOutcome::new(raw.usage, raw.result.and_then(|json| parse_description(kind, &json)))
+    }
+
+    fn raw_outcome(self, aborted: Option<Error>) -> StructuredOutcome {
         let usage = self.usage;
         let result = if let Some(error) = aborted.or(self.error) {
             Err(error)
@@ -224,7 +263,10 @@ impl Incoming {
                 // Validated regardless of what structured output promises about
                 // schema conformance — see `validate.rs`, and the note on
                 // `pattern` in `gemini.rs`.
-                _ if self.output_complete => parse_description(kind, &self.json),
+                _ if self.structured && self.status.as_deref() != Some("completed") => {
+                    Err(Error::Truncated)
+                }
+                _ if self.output_complete => Ok(self.json),
                 // The interaction finished without ever opening a model output
                 // step. A safety classifier declining is the likely cause, and
                 // it has no variant of its own because the UI's taxonomy has no
@@ -238,7 +280,7 @@ impl Incoming {
                 _ => Err(Error::Truncated),
             }
         };
-        EnhanceOutcome::new(usage, result)
+        StructuredOutcome { usage, result }
     }
 
     fn is_output_step(&self, event: &Value) -> bool {
@@ -295,8 +337,8 @@ impl SseConsumer for Incoming {
         self.accept(payload, deltas) == Flow::Done
     }
 
-    fn finish(self, kind: NodeKind, aborted: Option<Error>) -> EnhanceOutcome {
-        self.outcome(kind, aborted)
+    fn finish_raw(self, aborted: Option<Error>) -> StructuredOutcome {
+        self.raw_outcome(aborted)
     }
 }
 

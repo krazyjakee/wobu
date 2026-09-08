@@ -1,3 +1,4 @@
+import type { FlowPresentation } from '../useFlowPresentation'
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../../Icon'
 import { FlowCanvas } from '../FlowCanvas'
@@ -43,6 +44,7 @@ export function ArcFlow({
   layout,
   positions,
   onPositionsChange,
+  presentation,
   authoring,
   creatable = CREATABLE,
 }: {
@@ -56,6 +58,7 @@ export function ArcFlow({
   /** Stored node coordinates for this arc (#185). Persisted by nobody here. */
   positions?: FlowPositions
   onPositionsChange?: (positions: FlowPositions) => void
+  presentation?: FlowPresentation
   /**
    * What this level allows, and the sentence for each refusal.
    *
@@ -79,6 +82,7 @@ export function ArcFlow({
         layout={layout}
         positions={positions}
         onPositionsChange={onPositionsChange}
+        presentation={presentation}
         authoring={authoring}
         creatable={creatable}
       />
@@ -94,6 +98,7 @@ function Arc({
   layout,
   positions,
   onPositionsChange,
+  presentation,
   authoring,
   creatable,
 }: {
@@ -104,6 +109,7 @@ function Arc({
   layout?: LayoutRunner
   positions?: FlowPositions
   onPositionsChange?: (positions: FlowPositions) => void
+  presentation?: FlowPresentation
   authoring?: FlowAuthoring
   creatable: readonly FlowKind[]
 }) {
@@ -113,7 +119,16 @@ function Arc({
   const setClosedGroups = useFlowLevel((s) => s.setClosedGroups)
 
   const diagnostics = useMemo(() => arcDiagnostics(arc), [arc])
-  const groups = useMemo(() => arcGrouping(arc, grouping), [arc, grouping])
+  const groups = useMemo(
+    () =>
+      presentation
+        ? {
+            groups: arc.level.groups,
+            of: (element: FlowLevel['elements'][number]) => element.groupId ?? null,
+          }
+        : arcGrouping(arc, grouping),
+    [arc, grouping, presentation],
+  )
 
   /*
    * Which quests open closed.
@@ -133,6 +148,7 @@ function Arc({
    * else is a first look at this grouping and gets the default.
    */
   useEffect(() => {
+    if (presentation) return
     const mine = new Set(groups.groups.map((group) => group.id))
     if (closedGroups.some((id) => mine.has(id))) return
     setClosedGroups(defaultClosedGroups(arc.level, undefined, groups.groups))
@@ -188,6 +204,7 @@ function Arc({
           layout={layout}
           positions={positions}
           onPositionsChange={onPositionsChange}
+          presentation={presentation}
           creatable={creatable}
           grouping={groups}
           // No spare exit where an exit cannot be authored: a handle that

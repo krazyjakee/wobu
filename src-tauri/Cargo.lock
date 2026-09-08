@@ -7878,6 +7878,7 @@ dependencies = [
  "wobu-narrative",
  "wobu-narrative-compiler",
  "wobu-narrative-context",
+ "wobu-narrative-generation",
  "wobu-narrative-package",
  "wobu-narrative-runtime",
  "wobu-narrative-scenarios",
@@ -7950,6 +7951,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+ "tokio",
  "wobu-core",
 ]
 
@@ -7978,6 +7980,7 @@ dependencies = [
  "chrono",
  "indexmap 2.14.0",
  "serde",
+ "serde_json",
  "serde_norway",
  "thiserror 2.0.19",
  "wobu-core",
@@ -8005,6 +8008,17 @@ dependencies = [
  "wobu-narrative",
  "wobu-narrative-compiler",
  "wobu-narrative-runtime",
+]
+
+[[package]]
+name = "wobu-narrative-generation"
+version = "0.1.11"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wobu-core",
+ "wobu-narrative",
+ "wobu-narrative-context",
 ]
 
 [[package]]
@@ -8062,6 +8076,8 @@ dependencies = [
  "webp",
  "wobu-core",
  "wobu-narrative",
+ "wobu-narrative-context",
+ "wobu-narrative-generation",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-//! [`TextProvider`] over Anthropic's Messages API.
+//! [`crate::TextProvider`] over Anthropic's Messages API.
 //!
 //! Three things this adapter does that a thinner one would not, each of them
 //! costing the user money if it is skipped:
@@ -8,7 +8,7 @@
 //!    in as a tool's `input_schema` with `tool_choice` pinned to it. The tool
 //!    name is this adapter's invention and stops here — see `wire.rs`.
 //! 2. **Cancellation aborts the request.** Every read is raced against
-//!    [`Cancel::cancelled`], and losing that race returns immediately, which
+//!    [`crate::Cancel::cancelled`], and losing that race returns immediately, which
 //!    drops the response body and closes the connection. A run that finishes
 //!    and throws the answer away costs exactly as much as one nobody stopped.
 //! 3. **Usage is reported on every path.** Anthropic bills the prompt before it
@@ -23,14 +23,9 @@ pub(crate) mod wire;
 
 use std::fmt;
 
-use async_trait::async_trait;
-
-use crate::cancel::Cancel;
 use crate::error::{Error, Result};
-use crate::provider::{DeltaSink, EnhanceOutcome, EnhanceRequest, TextProvider};
-use crate::transport;
 
-use wire::Incoming;
+use crate::transport;
 
 /// The `provider` in `project.json` and the `wobu/<provider>` keychain entry.
 pub const ID: &str = "anthropic";
@@ -107,61 +102,16 @@ impl AnthropicProvider {
     }
 }
 
-#[async_trait]
-impl TextProvider for AnthropicProvider {
-    fn id(&self) -> &'static str {
-        ID
+transport::text_adapter!(
+    AnthropicProvider,
+    ID,
+    LABEL,
+    DEFAULT_MODEL,
+    wire,
+    |provider: &AnthropicProvider, request: reqwest::RequestBuilder| {
+        request.header("x-api-key", &provider.api_key).header("anthropic-version", API_VERSION)
     }
-
-    fn label(&self) -> &'static str {
-        LABEL
-    }
-
-    fn default_model(&self) -> &'static str {
-        DEFAULT_MODEL
-    }
-
-    async fn enhance(
-        &self,
-        request: &EnhanceRequest,
-        deltas: &mut dyn DeltaSink,
-        cancel: &Cancel,
-    ) -> EnhanceOutcome {
-        transport::enhance_over_sse(self, request, deltas, cancel).await
-    }
-}
-
-impl transport::SseEnhance for AnthropicProvider {
-    type Consumer = Incoming;
-
-    fn client(&self) -> &reqwest::Client {
-        &self.client
-    }
-
-    fn base_url(&self) -> &str {
-        &self.base_url
-    }
-
-    fn authenticate(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request.header("x-api-key", &self.api_key).header("anthropic-version", API_VERSION)
-    }
-
-    fn request_body(request: &EnhanceRequest) -> serde_json::Value {
-        wire::request_body(request)
-    }
-
-    fn error_for_status(
-        status: u16,
-        body: &str,
-        retry_after: Option<std::time::Duration>,
-    ) -> Error {
-        wire::error_for_status(status, body, retry_after)
-    }
-
-    fn consumer() -> Incoming {
-        Incoming::new()
-    }
-}
+);
 
 #[cfg(test)]
 mod tests {
@@ -170,11 +120,13 @@ mod tests {
     use serde_json::json;
     use wobu_core::NodeKind;
 
+    use super::wire::Incoming;
     use crate::provider::Discard;
     use crate::stream::testing::{
         assert_billed_disconnect, assert_complete, assert_every_kind, assert_mid_stream_cancel,
         assert_pre_cancel, assert_quiet_cancel, assert_truncated, block_on, document,
     };
+    use crate::{Cancel, EnhanceRequest, TextProvider};
 
     /// The documented SSE wire format, byte for byte, so the framing this
     /// adapter relies on is the framing Anthropic publishes.

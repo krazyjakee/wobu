@@ -66,7 +66,7 @@ export type WorldCommand =
    * on the far side, so a restore can never land on top of a scene that took
    * the name in the meantime.
    */
-  | { type: 'sceneSave'; scene: Scene; slug: string }
+  | { type: 'sceneSave'; scene: Scene; slug: string; expected?: Scene | null }
   | { type: 'sceneDelete'; id: string }
   | { type: 'worldRestore'; document: WorldDocument; expected: WorldDocument }
 
@@ -97,6 +97,31 @@ export interface UndoEntry {
 
 /** An entry before it is pushed; `at` is stamped by `push` unless a test sets it. */
 export type NewEntry = Omit<UndoEntry, 'at'> & { at?: number }
+
+function sceneEditsContinue(previous: NewEntry, next: NewEntry): boolean {
+  const after = previous.redo.filter((cmd) => cmd.type === 'sceneSave')
+  const before = next.undo.filter((cmd) => cmd.type === 'sceneSave')
+  return (
+    after.length === before.length &&
+    after.every((cmd) =>
+      before.some(
+        (other) =>
+          other.scene.id === cmd.scene.id &&
+          JSON.stringify(other.scene) === JSON.stringify(cmd.scene),
+      ),
+    )
+  )
+}
+
+function guardSceneRestores(commands: WorldCommand[], opposite: WorldCommand[]): WorldCommand[] {
+  return commands.map((cmd) => {
+    if (cmd.type !== 'sceneSave') return cmd
+    const expected = opposite.find(
+      (other) => other.type === 'sceneSave' && other.scene.id === cmd.scene.id,
+    )
+    return expected?.type === 'sceneSave' ? { ...cmd, expected: expected.scene } : cmd
+  })
+}
 
 /** Runs one command against the world. Injected so the store stays testable. */
 export type Runner = (cmd: WorldCommand) => Promise<void>
@@ -176,16 +201,20 @@ export const useUndoStack = create<UndoState>((set, get) => ({
         entry.coalesce &&
         top.coalesce &&
         top.subjectId === entry.subjectId &&
-        at - top.at <= COALESCE_MS
+        at - top.at <= COALESCE_MS &&
+        sceneEditsContinue(top, entry)
       ) {
         // The absorbed entry keeps the *older* inverse. That is the whole point
         // of coalescing: the state to go back to is the one before the first
         // keystroke of the run, not the one from 500ms ago. Only the redo and
-        // the label move forward, to the newest text.
+        // the label move forward, to the newest text. Guarded scene restores
+        // compare the opposite endpoint of the entire run, not an intermediate
+        // keystroke. A collaborator's intervening edit starts a separate entry.
         const merged: UndoEntry = {
           ...top,
           label: entry.label,
-          redo: entry.redo,
+          undo: guardSceneRestores(top.undo, entry.redo),
+          redo: guardSceneRestores(entry.redo, top.undo),
           at,
         }
         return { past: [...s.past.slice(0, -1), merged], future: [] }
@@ -260,14 +289,13 @@ export function applyCommand(cmd: WorldCommand): Promise<void> {
       return api.nodeDelete(cmd.id)
     case 'move':
       return api.nodeMove(cmd.id, cmd.parentId)
-    // `current` rather than the stamp the entry was recorded against, and it is
-    // the same guarantee `node_upsert` gives rather than a weaker one: that
-    // command reads its precondition out of the index — this session's own view
-    // of disk — and so does this. An entry recorded before three later saves
-    // would otherwise present a precondition three versions stale and park the
-    // undo as a conflict, which is a ⌘Z that fails on every press but the first.
+    // Compare the authored document expected by this history entry. The storage
+    // boundary handles its changing editorial receipt head without authorizing
+    // restoration over a collaborator's newer wording or structure.
     case 'sceneSave':
-      return api.narrativeSceneSave(cmd.scene, { kind: 'current' }, cmd.slug).then(() => undefined)
+      return api
+        .narrativeSceneRestore(cmd.scene, cmd.expected ?? null, cmd.slug)
+        .then(() => undefined)
     case 'sceneDelete':
       return api.narrativeSceneDelete(cmd.id)
     case 'worldRestore':
@@ -559,8 +587,8 @@ export function sceneEditEntry(before: SceneFile, after: SceneFile): NewEntry | 
   return {
     subjectId: after.scene.id,
     label: `${edit.verb} “${after.scene.name}”`,
-    undo: [{ type: 'sceneSave', scene: before.scene, slug: before.slug }],
-    redo: [{ type: 'sceneSave', scene: after.scene, slug: after.slug }],
+    undo: [{ type: 'sceneSave', scene: before.scene, slug: before.slug, expected: after.scene }],
+    redo: [{ type: 'sceneSave', scene: after.scene, slug: after.slug, expected: before.scene }],
     coalesce: edit.coalesce,
   }
 }

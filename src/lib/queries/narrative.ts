@@ -325,21 +325,22 @@ export function useSaveNarrativeState() {
  * show quietly, in the one place the user is already looking, rather than a
  * toast per rectangle.
  *
- * It does not invalidate anything either. The write merges per node id on the
- * far side, so a collaborator dragging a different box has already been
- * accommodated, and a refetch would only fight the pointer that is still down.
+ * Refetch only the merged arrangement after a successful write. Source and
+ * compilation queries remain untouched; refused saves keep the canonical cache.
  */
 export function useSaveLayout() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (layout: api.Layout) => api.narrativeLayoutSave(layout),
-    onSuccess: (_outcome, layout) => {
-      qc.setQueryData<LayoutLoad>(qk.narrativeLayout(layout.graph), (current) =>
-        // The notices describe the *load*, not this save, so they are carried
-        // rather than cleared: a sidecar from a newer Wobu is still from a
-        // newer Wobu after somebody moved a box.
-        current ? { ...current, layout } : { layout, notices: [] },
-      )
+    onSuccess: async (outcome, layout) => {
+      if (outcome.outcome !== 'written') return
+      // The merge may contain a collaborator's moves. Cache the authoritative
+      // merged document rather than echoing only the submitted coordinates.
+      await qc.fetchQuery({
+        queryKey: qk.narrativeLayout(layout.graph),
+        queryFn: () => api.narrativeLayoutGet(layout.graph),
+        staleTime: 0,
+      })
     },
   })
 }

@@ -81,12 +81,7 @@ impl Project {
     /// exception and lives in a different file, so nothing on this path can be
     /// blocked by an arrangement.
     pub fn save_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        self.ensure_writable()?;
-        let outcome = source::write_scene(&self.root, file, &self.peer)?;
-        if matches!(outcome, SourceSave::Saved(_)) {
-            self.index_narrative_path(&file.rel)?;
-        }
-        Ok(outcome)
+        self.save_editorial_scene(file)
     }
 
     /// Delete a scene and the arrangement that described it.
@@ -195,6 +190,35 @@ impl Project {
         let present =
             catalog.ids().into_iter().map(layout::NodeKey::Scene).collect::<BTreeSet<_>>();
         layout::save(&self.root, &self.peer, arrangement, Some(&present))
+    }
+
+    pub fn quest_layout(&self, quest: wobu_narrative::EntityId) -> LayoutLoad {
+        let mut loaded = layout::load(&self.root, &GraphKey::Quest { quest });
+        if let Ok(present) = self.quest_layout_keys(quest) {
+            layout::reconcile(&mut loaded, &present);
+        }
+        loaded
+    }
+    fn quest_layout_keys(
+        &self,
+        quest: wobu_narrative::EntityId,
+    ) -> Result<BTreeSet<layout::NodeKey>> {
+        let (world, _) =
+            self.world_document()?.ok_or_else(|| crate::Error::NoSuchNode(quest.to_string()))?;
+        let quest = world
+            .quests
+            .iter()
+            .find(|record| record.id == quest)
+            .ok_or_else(|| crate::Error::NoSuchNode(quest.to_string()))?;
+        Ok(quest.scene_ids.iter().copied().map(layout::NodeKey::Scene).collect())
+    }
+    pub fn save_quest_layout(
+        &self,
+        arrangement: &Layout,
+        quest: wobu_narrative::EntityId,
+    ) -> Result<LayoutSave> {
+        self.ensure_writable()?;
+        layout::save(&self.root, &self.peer, arrangement, Some(&self.quest_layout_keys(quest)?))
     }
 
     /// Collect scene layout files whose scene no longer exists.

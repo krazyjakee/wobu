@@ -316,3 +316,19 @@ fn every_kind_can_be_asked_for_and_answered_through_the_trait() {
         assert!(!validated.description.is_empty(), "{}", def.kind);
     }
 }
+
+#[test]
+fn existing_providers_decline_structured_requests_without_running_enhance() {
+    let provider = FakeProvider::new(Ending::Whole);
+    assert!(!provider.supports_structured());
+    let request = wobu_llm::StructuredRequest {
+        model: "fake-1".into(),
+        system: None,
+        prompt: "Generate prose".into(),
+        schema: json!({"type":"object"}),
+        max_output_tokens: 16,
+    };
+    let outcome = block_on(provider.structured(&request, &mut Discard, &Cancel::new()));
+    assert!(matches!(outcome.result, Err(Error::SchemaRejected { .. })));
+    assert_eq!(provider.chunks_sent.load(Ordering::SeqCst), 0);
+}

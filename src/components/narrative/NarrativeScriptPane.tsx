@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Beat, Scene, SceneFile, Speaker } from '../../lib/api'
 import { prepareScriptText } from './scriptText'
 import { ScriptDialogue } from './ScriptDialogue'
+import { ScriptReviewControls } from './ScriptReviewControls'
+import { useScriptReview } from './useScriptReview'
 import { ScriptRoutes } from './ScriptRoutes'
 import { ScriptDiagnostics } from './ScriptDiagnostics'
 import { diagnosticField } from './scriptDiagnosticField'
@@ -65,7 +67,8 @@ function ScriptEditor({
   const [focusField, setFocusField] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const searchVariant = useSceneLibrary((s) => s.searchVariant)
-  const disabled = readOnly || busy || save.isPending
+  const review = useScriptReview(file, projectKey)
+  const disabled = readOnly || busy || save.isPending || review.mutation.isPending
   const characters = (nodes.data ?? []).filter((node) => node.kind === 'character')
 
   useEffect(() => {
@@ -427,7 +430,40 @@ function ScriptEditor({
               />
             </label>
           </fieldset>
+          {review.query.isError && (
+            <p role="alert">Review history could not be verified: {String(review.query.error)}</p>
+          )}
+          {draft && (
+            <p className="nrt-note">
+              Save or discard your script draft before changing review or policy.
+            </p>
+          )}
           <ScriptDialogue
+            reviewControls={(slotId, variantId) => {
+              const view = review.query.data
+              const line = view?.lines?.find(
+                (line) =>
+                  line.target.slot === slotId &&
+                  (variantId === null || line.target.variant === variantId),
+              )
+              return view && line ? (
+                <ScriptReviewControls
+                  view={view}
+                  line={line}
+                  slotOnly={variantId === null}
+                  disabled={disabled || !!draft}
+                  onApply={(action) =>
+                    review.mutation.mutateAsync({
+                      guard: view.guard,
+                      target: line.target,
+                      context_revision: line.context_revision,
+                      state_json: view.state_json,
+                      action,
+                    })
+                  }
+                />
+              ) : null
+            }}
             beat={beat}
             variables={variables}
             onDeleteVariant={(slotId, variantId) =>
