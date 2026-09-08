@@ -1,0 +1,211 @@
+//! Build an immutable, verified source snapshot and publish only its runtime assets.
+use crate::{
+    error::{Code, CommandResult, WobuError},
+    state::AppState,
+};
+use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
+use tauri::State;
+use wobu_narrative::{Name, VarType};
+use wobu_narrative_compiler::{CompileDiagnostic, CompileOptions, Profile, compile};
+use wobu_narrative_package::Package;
+use wobu_store::Project;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportCheck {
+    pub diagnostics: Vec<CompileDiagnostic>,
+    pub payload_hash: Option<String>,
+    pub scenes: usize,
+    pub strings: usize,
+    pub bytes: u64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportReport {
+    destination: String,
+    payload_hash: String,
+    scenes: usize,
+    strings: usize,
+    bytes: u64,
+}
+fn package_error(error: wobu_narrative_package::Error) -> WobuError {
+    WobuError::new(Code::Invalid, error.to_string())
+}
+
+#[tauri::command]
+pub fn narrative_export_check(
+    state: State<'_, AppState>,
+    profile: Profile,
+    commands: BTreeMap<Name, Vec<VarType>>,
+    debug: bool,
+) -> CommandResult<ExportCheck> {
+    state.reconcile_now()?;
+    state.with(|project| prepare(project, profile, commands, debug).map(|(check, _)| check))
+}
+#[tauri::command]
+pub async fn narrative_export(
+    state: State<'_, AppState>,
+    destination: String,
+    profile: Profile,
+    commands: BTreeMap<Name, Vec<VarType>>,
+    debug: bool,
+    expected_hash: String,
+) -> CommandResult<ExportReport> {
+    state.reconcile_now()?;
+    let (check, package) = state.with(|project| {
+        let dest = PathBuf::from(&destination);
+        let parent = dest.parent().and_then(|path| path.canonicalize().ok()).ok_or_else(|| {
+            WobuError::new(
+                Code::Invalid,
+                "Choose a new folder inside an existing destination directory.",
+            )
+        })?;
+        if parent.starts_with(
+            project
+                .root()
+                .canonicalize()
+                .map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?,
+        ) {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Choose a destination outside the project folder.",
+            ));
+        }
+        prepare(project, profile, commands, debug)
+    })?;
+    let package = package.ok_or_else(|| {
+        WobuError::new(Code::Invalid, "Resolve export blockers before exporting.")
+    })?;
+    if expected_hash != package.manifest.payload_hash {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Saved narrative changed after validation. Check the export again.",
+        ));
+    }
+    let path = PathBuf::from(&destination);
+    let report = ExportReport {
+        destination,
+        payload_hash: expected_hash,
+        scenes: check.scenes,
+        strings: check.strings,
+        bytes: check.bytes,
+    };
+    tauri::async_runtime::spawn_blocking(move || wobu_narrative_package::publish(&package, &path))
+        .await
+        .map_err(|e| {
+            WobuError::new(
+                Code::Invalid,
+                format!("Export stopped; an incomplete folder may remain: {e}"),
+            )
+        })?
+        .map_err(package_error)?;
+    Ok(report)
+}
+fn prepare(
+    project: &Project,
+    profile: Profile,
+    commands: BTreeMap<Name, Vec<VarType>>,
+    debug: bool,
+) -> CommandResult<(ExportCheck, Option<Package>)> {
+    prepare_checked(project, profile, commands, debug, || {})
+}
+fn prepare_checked(
+    project: &Project,
+    profile: Profile,
+    commands: BTreeMap<Name, Vec<VarType>>,
+    debug: bool,
+    after_read: impl FnOnce(),
+) -> CommandResult<(ExportCheck, Option<Package>)> {
+    if debug && profile == Profile::Release {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Debug source maps are available only for development exports.",
+        ));
+    }
+    let fingerprint = project.narrative_fingerprint()?;
+    let catalog = project.scene_catalog()?;
+    if !catalog.unreadable.is_empty() || catalog.scenes.is_empty() {
+        return Err(WobuError::new(
+            Code::Malformed,
+            "Create a scene and repair unreadable source files before exporting.",
+        ));
+    }
+    let files = catalog
+        .scenes
+        .iter()
+        .map(|entry| project.load_scene(entry.id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let state_document = project.state_document()?;
+    let schema = state_document
+        .as_ref()
+        .map(|(document, _)| document.schema())
+        .transpose()
+        .map_err(|e| WobuError::new(Code::Malformed, e.to_string()))?
+        .unwrap_or_default();
+    let known_entities = characters(project)?;
+    after_read();
+    // Re-read every captured scene stamp as well as the aggregate source tree. This
+    // detects a change during capture, including one overwritten back before the hash.
+    let changed = files.iter().any(|file| {
+        wobu_store::atomic::read_stamped(&project.root().join(&file.rel))
+            .ok()
+            .flatten()
+            .map(|(_, stamp)| stamp)
+            != file.stamp
+    });
+    let current_entities = characters(project)?;
+    let current_state_stamp = project.state_document()?.map(|(_, stamp)| stamp);
+    let state_changed = current_state_stamp != state_document.map(|(_, stamp)| stamp);
+    if changed
+        || state_changed
+        || current_entities != known_entities
+        || project.narrative_fingerprint()? != fingerprint
+    {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Narrative source changed while capturing the export. Check again.",
+        ));
+    }
+    let scenes: Vec<_> = files.into_iter().map(|file| file.scene).collect();
+    let report = compile(&scenes, &schema, &CompileOptions { profile, known_entities, commands });
+    let package = report
+        .graph
+        .map(|graph| Package::build(graph, debug))
+        .transpose()
+        .map_err(package_error)?;
+    let check = ExportCheck {
+        diagnostics: report.diagnostics,
+        payload_hash: package.as_ref().map(|p| p.manifest.payload_hash.clone()),
+        scenes: scenes.len(),
+        strings: package
+            .as_ref()
+            .map(Package::string_count)
+            .transpose()
+            .map_err(package_error)?
+            .unwrap_or(0),
+        bytes: package.as_ref().map(Package::total_bytes).unwrap_or(0),
+    };
+    Ok((check, package))
+}
+
+#[cfg(test)]
+mod tests;
+
+fn characters(project: &Project) -> CommandResult<BTreeSet<wobu_narrative::EntityId>> {
+    let mut found = BTreeSet::new();
+    for summary in project.list_nodes()? {
+        let node = project.get_node(summary.id)?;
+        if node.id != summary.id {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "World entity identity changed. Reload before exporting.",
+            ));
+        }
+        if node.kind == wobu_core::NodeKind::Character {
+            found.insert(node.id);
+        }
+    }
+    Ok(found)
+}

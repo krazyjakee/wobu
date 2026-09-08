@@ -1,0 +1,43 @@
+.nrt-export {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  max-height: 85vh;
+  padding: 24px;
+  overflow: auto;
+}
+.nrt-export fieldset,
+.nrt-export label {
+  display: grid;
+  gap: 8px;
+}
+.nrt-export input:not([type='checkbox']),
+.nrt-export select,
+.nrt-export textarea {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px;
+  width: 100%;
+}
+.nrt-export-actions {
+  display: flex;
+  gap: 8px;
+}
+.nrt-export-hash {
+  overflow-wrap: anywhere;
+}
+
+.nrt-export fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.nrt-export label.nrt-export-option {
+  display: flex;
+  align-items: center;
+}
+.nrt-export-option input {
+  width: auto;
+  margin: 0;
+}

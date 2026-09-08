@@ -159,6 +159,8 @@ pub fn run() {
             commands::nodes::node_link_remove,
             commands::nodes::node_link_update,
             commands::nodes::node_backlinks,
+            commands::narrative_export::narrative_export_check,
+            commands::narrative_export::narrative_export,
             commands::narrative_preview::narrative_compile,
             commands::narrative_preview::narrative_preview_start,
             commands::narrative_preview::narrative_preview_step,

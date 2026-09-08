@@ -29,6 +29,7 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [17 — Runtime Contract](17-narrative-runtime-contract.md) | Internal compiler graph, runtime semantics, commands and snapshots |
 | [18 — Narrative Source Editor](18-narrative-source-editor.md) | YAML policy, draft safety, diagnostics and round trips |
 | [19 — Narrative Authoring](19-narrative-authoring.md) | Scene/quest discovery, World, typed Script, Preview, draft safety and acceptance gaps |
+| [20 — Native Narrative Packages](20-native-narrative-packages.md) | Export profiles, native JSON layout, identity, validation limits and safe publication |
 
 Two constraints shape most of the above and are worth knowing up front:
 

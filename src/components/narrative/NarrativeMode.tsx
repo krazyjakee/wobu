@@ -6,6 +6,7 @@ import { Icon } from '../Icon'
 import { TipButton } from '../Tooltip'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
+import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
 import { NarrativeLibrary } from './NarrativeLibrary'
@@ -25,6 +26,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const selectNarrative = useUI((s) => s.selectNarrative)
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
+  const [exportOpen, setExportOpen] = useState(false)
   const [worldOpen, setWorldOpen] = useState(false)
   const [editorOpened, setEditorOpened] = useState(false)
   const world = useNarrativeWorld()
@@ -102,15 +104,12 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           >
             Build…
           </TipButton>
-          <TipButton
-            className="btn"
-            disabledReason={NARRATIVE_UNAVAILABLE.export}
-            tip="Package the compiled story for a game engine"
-          >
+          <button className="btn" onClick={() => setExportOpen(true)}>
             Export…
-          </TipButton>
+          </button>
         </div>
       </header>
+      {exportOpen && <NarrativeExport onClose={() => setExportOpen(false)} />}
       <div className="nrt-library-view" hidden={!libraryOpen || worldOpen}>
         <NarrativeLibrary
           projectKey={project.path}
