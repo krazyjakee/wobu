@@ -17,6 +17,7 @@ const audition = {
 const create = vi.fn(() => 'blob:take')
 const revoke = vi.fn()
 beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
   create.mockClear()
   revoke.mockClear()
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }))
@@ -36,6 +37,7 @@ it('loads only the requested file and releases its Blob URL when the player clos
   view.unmount()
   expect(fetcher.mock.calls[0]![1].signal.aborted).toBe(true)
   expect(revoke).toHaveBeenCalledWith('blob:take')
+  expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled()
 })
 it('aborts an old take and never publishes its late bytes after changing takes', async () => {
   let finish!: (value: ArrayBuffer) => void

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import type { MediaAudition as Audition } from '../../../lib/api/narrativeMedia'
 import { localeDirection } from '../../../lib/api/narrativeLocale'
@@ -6,10 +6,12 @@ export function MediaAudition({ audition }: { audition: Audition }) {
   return <Player key={`${audition.path}/${audition.take.audio.hash}`} audition={audition} />
 }
 function Player({ audition }: { audition: Audition }) {
+  const audio = useRef<HTMLAudioElement>(null)
   const [source, setSource] = useState('')
   const [position, setPosition] = useState(0)
   const [error, setError] = useState('')
   useEffect(() => {
+    const player = audio.current
     const controller = new AbortController()
     let objectUrl = ''
     // WebKit can fetch the scoped asset protocol but cannot stream it as media.
@@ -56,6 +58,7 @@ function Player({ audition }: { audition: Audition }) {
     })()
     return () => {
       controller.abort()
+      player?.pause()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [audition.path, audition.take.audio.bytes])
@@ -69,6 +72,7 @@ function Player({ audition }: { audition: Audition }) {
       </p>
       <p dir={localeDirection(audition.take.row.key.locale)}>{audition.take.spoken_text}</p>
       <audio
+        ref={audio}
         controls
         preload="metadata"
         src={source || undefined}

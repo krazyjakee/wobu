@@ -23,6 +23,7 @@ function take(): MediaTake {
   }
 }
 beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation(async () => new Response(new Uint8Array(16044))),
