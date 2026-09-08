@@ -91,6 +91,21 @@ impl ReviewContext {
         characters: Json,
         state: BTreeMap<Name, Value>,
     ) -> Self {
+        if let Some(asset) = scene.editorial_text() {
+            return Self::capture_text(
+                &asset,
+                &TextTarget {
+                    asset: asset.id,
+                    entry: TextEntryId::from_raw(target.beat.raw()),
+                    slot: target.slot,
+                    variant: target.variant,
+                },
+                world,
+                schema,
+                characters,
+                state,
+            );
+        }
         let mut source = serde_json::to_value(scene).expect("scene serializes");
         source.as_object_mut().expect("a scene is an object").remove("editorial_head");
         strip_reviewed(
@@ -124,6 +139,8 @@ impl ReviewContext {
         state: BTreeMap<Name, Value>,
     ) -> Self {
         let mut source = serde_json::to_value(asset).expect("text asset serializes");
+        source.as_object_mut().expect("text asset is an object").remove("editorial_head");
+        source.as_object_mut().expect("text asset is an object").remove("policy");
         strip_reviewed(
             &mut source,
             "entries",

@@ -126,10 +126,12 @@ fn prepare_checked(
     }
     let fingerprint = project.narrative_fingerprint()?;
     let catalog = project.scene_catalog()?;
-    if !catalog.unreadable.is_empty() || catalog.scenes.is_empty() {
+    if !catalog.unreadable.is_empty()
+        || (catalog.scenes.is_empty() && project.text_catalog()?.assets.is_empty())
+    {
         return Err(WobuError::new(
             Code::Malformed,
-            "Create a scene and repair unreadable source files before exporting.",
+            "Create a scene or supporting text asset and repair unreadable source files before exporting.",
         ));
     }
     let files = catalog
@@ -174,6 +176,19 @@ fn prepare_checked(
     // covers it: `narrative_fingerprint` walks `narrative/texts/` too, so an
     // asset edited mid-export aborts rather than shipping half of an edit.
     let texts = project.text_assets()?;
+    let mut verified_text_reviews = BTreeMap::new();
+    for asset in &texts {
+        let snapshot =
+            project.review_snapshot(wobu_narrative::SceneId::from_raw(asset.id.raw()), None)?;
+        verified_text_reviews.extend(snapshot.text_evidence()?);
+        snapshot.verify_current(project)?;
+    }
+    if project.narrative_fingerprint()? != fingerprint {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Narrative source changed while capturing text approvals. Check again.",
+        ));
+    }
     let report = compile(
         &scenes,
         &texts,
@@ -183,7 +198,7 @@ fn prepare_checked(
             known_entities,
             commands,
             verified_reviews,
-            ..CompileOptions::default()
+            verified_text_reviews,
         },
     );
     let package = report

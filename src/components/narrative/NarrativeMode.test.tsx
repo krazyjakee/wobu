@@ -9,7 +9,15 @@ import { libraryPage, libraryRows, libraryScene } from './sceneLibrary.fixture'
 import { useScriptDrafts, sceneEditKey } from './scriptDrafts'
 import { useSceneLibrary } from './sceneLibraryStore'
 
-const h = vi.hoisted(() => ({ invoke: vi.fn() }))
+const h = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  reviewTarget: {
+    scene: 'council',
+    beat: 'evidence',
+    slot: 'line',
+    variant: null as string | null,
+  },
+}))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
 vi.mock('./NarrativeCentre', () => ({
@@ -23,13 +31,19 @@ vi.mock('./NarrativeCentre', () => ({
 // workspace lands when a diagnostic hands back a line — not the review queue's
 // own paging, filters and guarded writes, which have their own tests.
 vi.mock('./NarrativeReview', () => ({
-  NarrativeReview: ({ onSource }: { onSource: (target: Record<string, unknown>) => void }) => (
-    <button
-      type="button"
-      onClick={() => onSource({ scene: 'council', beat: 'evidence', slot: 'line', variant: null })}
-    >
-      Open the source of this line
-    </button>
+  NarrativeReview: ({
+    onSource,
+    sceneName,
+  }: {
+    onSource: (target: Record<string, unknown>) => void
+    sceneName: (id: string) => string
+  }) => (
+    <>
+      <span>{sceneName(h.reviewTarget.scene)}</span>
+      <button type="button" onClick={() => onSource(h.reviewTarget)}>
+        Open the source of this line
+      </button>
+    </>
   ),
 }))
 
@@ -81,6 +95,7 @@ const defaultProject: ProjectSummary = {
   lastOpenedAt: null,
 }
 beforeEach(() => {
+  h.reviewTarget = { scene: 'council', beat: 'evidence', slot: 'line', variant: null }
   localStorage.clear()
   useScriptDrafts.setState({ drafts: {} })
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
@@ -258,4 +273,66 @@ describe('Narrative discovery and editor handoff', () => {
       'Branch reachability has not been checked',
     )
   })
+})
+
+it('opens a supporting Review source in the named Text library at the exact variant', async () => {
+  h.reviewTarget = { scene: 'note', beat: 'entry', slot: 'slot', variant: 'second' }
+  const prior = h.invoke.getMockImplementation()!
+  h.invoke.mockImplementation((command, args) => {
+    if (command === 'narrative_texts')
+      return Promise.resolve({
+        assets: [
+          {
+            id: 'note',
+            kind: 'codex',
+            name: 'Dock note',
+            slug: 'note',
+            rel: 'narrative/texts/note.yaml',
+          },
+        ],
+        unreadable: [],
+      })
+    if (command === 'narrative_text_get')
+      return Promise.resolve({
+        asset: {
+          id: 'note',
+          kind: 'codex',
+          name: 'Dock note',
+          trigger: { event: 'read_note' },
+          entries: [
+            {
+              id: 'entry',
+              lines: [
+                {
+                  id: 'slot',
+                  speaker: 'narrator',
+                  variants: [
+                    { id: 'first', text: { body: 'First wording', revision: 'one' } },
+                    { id: 'second', text: { body: 'Reviewed wording', revision: 'two' } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        rel: 'narrative/texts/note.yaml',
+        slug: 'note',
+        stamp: null,
+      })
+    return prior(command, args)
+  })
+  renderMode()
+  fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+  await screen.findByText('Dock note')
+  fireEvent.click(screen.getByRole('button', { name: 'Open the source of this line' }))
+  const field = await screen.findByLabelText('Entry 1, line 1')
+  expect(field).toHaveValue('Reviewed wording')
+  await new Promise((resolve) => requestAnimationFrame(resolve))
+  expect(field).toHaveFocus()
+  expect(
+    h.invoke.mock.calls.some(
+      ([command, args]) =>
+        command === 'narrative_scene_get' && (args as { sceneId: string }).sceneId === 'note',
+    ),
+  ).toBe(false)
 })

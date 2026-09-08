@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { ReviewTarget } from '../../lib/api/narrativeReview'
+import { textDraftKey, useTextDrafts } from './textDrafts'
 import { useQueryClient } from '@tanstack/react-query'
 import { errorMessage, preconditionOf } from '../../lib/api'
 import type { Speaker } from '../../lib/api'
@@ -21,27 +23,17 @@ import { assertProjectSession, projectSessionEpoch } from '../../lib/projectSess
 import { mintId } from './sceneIdentity'
 import { REPEAT_LABELS, TEXT_TEMPLATES, prepareTextAsset, templateOf } from './textLibraryModel'
 import './textLibrary.css'
+import { TextEditorial } from './TextEditorial'
+import { TextAssetContext } from './TextAssetContext'
+import { TextLineFields } from './TextLineFields'
+import { TypedCondition } from './TypedCondition'
+import { useNarrativeState } from '../../lib/queries'
 
-/**
- * The Text library: authoring the six supporting kinds (#167).
- *
- * Deliberately one pane and one form rather than a second workspace. A bark has
- * no canvas, no branches and no cursor, so the Flow/Script/Preview split that a
- * scene needs would be three tabs where two of them have nothing to show. What
- * it does share with a scene is the part that matters: the same whole-document
- * guarded save, the same wording identities, the same diagnostics rendered from
- * the backend's own wording, and the same refusal to invent a revision on this
- * side.
- *
- * What this surface does *not* do yet, stated plainly so it is not mistaken for
- * a gap nobody noticed: it has no search or paging (the assets are not in the
- * SQLite projection), no per-line review controls (the review queue is
- * scene-keyed), and no Generate action (the frozen generation request names a
- * scene slot). The model, compiler, runtime and export all handle supporting
- * text; those three surfaces are the remaining wiring.
- */
+/** The six text kinds share canonical slots, generation and guarded review. */
 export function NarrativeTextLibrary(props: {
   projectKey: string
+  initialAssetId?: TextAssetId
+  initialTarget?: ReviewTarget
   readOnly: boolean
   /** Resolves a world entity id to a name, or `undefined` when nothing can. */
   nameOf: (entity: string) => string | undefined
@@ -52,22 +44,41 @@ export function NarrativeTextLibrary(props: {
 
 function TextLibrary({
   projectKey,
+  initialAssetId,
+  initialTarget,
   readOnly,
   nameOf,
   onClose,
 }: {
   projectKey: string
+  initialAssetId?: TextAssetId
+  initialTarget?: ReviewTarget
   readOnly: boolean
   nameOf: (entity: string) => string | undefined
   onClose: () => void
 }) {
   const client = useQueryClient()
   const catalog = useNarrativeTexts(projectKey)
-  const [selected, setSelected] = useState<TextAssetId | null>(null)
+  const [selected, setSelected] = useState<TextAssetId | null>(
+    initialTarget?.scene ?? initialAssetId ?? null,
+  )
   const file = useNarrativeText(projectKey, selected)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const loaded = file.data
+  const [query, setQuery] = useState('')
+  const [kindFilter, setKindFilter] = useState('')
+  const [page, setPage] = useState(0)
+  const matching = (catalog.data?.assets ?? []).filter(
+    (asset) =>
+      (!kindFilter || asset.kind === kindFilter) &&
+      `${asset.name} ${templateOf(asset.kind).label}`
+        .toLocaleLowerCase()
+        .includes(query.trim().toLocaleLowerCase()),
+  )
+  const lastPage = Math.max(0, Math.ceil(matching.length / 25) - 1)
+  const currentPage = Math.min(page, lastPage)
+  const visible = matching.slice(currentPage * 25, (currentPage + 1) * 25)
 
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: ['narrative_texts', projectKey] })
@@ -83,6 +94,7 @@ function TextLibrary({
       assertProjectSession(epoch)
       await refresh()
       if (result) setSelected(result.asset.id)
+      return result
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -131,8 +143,38 @@ function TextLibrary({
               Could not read supporting text: {errorMessage(catalog.error)}
             </p>
           )}
+          <label>
+            Search text library
+            <input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value)
+                setPage(0)
+              }}
+            />
+          </label>
+          <label>
+            Content type
+            <select
+              value={kindFilter}
+              onChange={(event) => {
+                setKindFilter(event.target.value)
+                setPage(0)
+              }}
+            >
+              <option value="">All types</option>
+              {TEXT_TEMPLATES.map((template) => (
+                <option key={template.kind} value={template.kind}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p role="status">
+            {matching.length} matching of {catalog.data?.assets.length ?? 0} assets
+          </p>
           <ul>
-            {(catalog.data?.assets ?? []).map((asset) => (
+            {visible.map((asset) => (
               <li key={asset.id}>
                 <button
                   type="button"
@@ -146,6 +188,27 @@ function TextLibrary({
               </li>
             ))}
           </ul>
+          {matching.length > 25 && (
+            <div className="ntl-actions" aria-label="Text library pages">
+              <button
+                className="btn"
+                disabled={currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                Previous page
+              </button>
+              <span>
+                Page {currentPage + 1} of {lastPage + 1}
+              </span>
+              <button
+                className="btn"
+                disabled={currentPage === lastPage}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next page
+              </button>
+            </div>
+          )}
           {catalog.data?.assets.length === 0 && (
             <p className="ntl-empty">No supporting text yet. Choose a template above.</p>
           )}
@@ -159,23 +222,22 @@ function TextLibrary({
         <main className="ntl-editor" aria-label="Supporting text editor">
           {loaded ? (
             <AssetEditor
-              // Remounted per document revision rather than synchronised by an
-              // effect: the draft is initialised from the file it belongs to, so
-              // a save that returns re-sealed wording replaces the form instead
-              // of leaving the editor holding pre-seal text.
-              key={`${loaded.rel}:${loaded.stamp?.hash ?? 'new'}`}
+              // Keep the original revision while a dirty draft is open; background
+              // refresh must not discard words or silently advance the save guard.
+              key={loaded.asset.id}
               projectKey={projectKey}
               file={loaded}
-              readOnly={readOnly}
+              readOnly={readOnly || busy}
               busy={busy}
+              initialTarget={initialTarget}
               nameOf={nameOf}
-              onSave={(asset) =>
-                run(async () =>
-                  narrativeTextSave(
-                    await prepareTextAsset(loaded.asset, asset),
-                    preconditionOf(loaded.stamp),
-                  ),
-                )
+              onSave={(baseline, asset) =>
+                run(async () => {
+                  const epoch = projectSessionEpoch()
+                  const prepared = await prepareTextAsset(baseline.asset, asset)
+                  assertProjectSession(epoch)
+                  return narrativeTextSave(prepared, preconditionOf(baseline.stamp))
+                })
               }
               onDelete={() =>
                 run(async () => {
@@ -202,19 +264,11 @@ function TextLibrary({
   )
 }
 
-/**
- * The form for one asset.
- *
- * Its own component so the draft can be initialised from the file it belongs to
- * and thrown away when a different revision arrives, which is what the `key` on
- * the call site is for. A single shared draft synchronised by an effect would
- * have to answer "what happens to unsaved edits when the file changes
- * underneath", and every answer to that is worse than starting again from the
- * document that is actually on disk.
- */
+/** One asset buffer keeps its original guard across navigation and background refresh. */
 function AssetEditor({
   projectKey,
   file,
+  initialTarget,
   readOnly,
   busy,
   nameOf,
@@ -223,18 +277,30 @@ function AssetEditor({
 }: {
   projectKey: string
   file: TextFile
+  initialTarget?: ReviewTarget
   readOnly: boolean
   busy: boolean
   nameOf: (entity: string) => string | undefined
-  onSave: (asset: TextAsset) => void
+  onSave: (baseline: TextFile, asset: TextAsset) => Promise<TextFile | void>
   onDelete: () => void
 }) {
-  const [draft, setDraft] = useState<TextAsset>(() => structuredClone(file.asset))
+  const key = textDraftKey(projectKey, file.asset.id)
+  const retained = useTextDrafts((state) => state.drafts[key])
+  const baseline = retained?.file ?? file
+  const draft = retained?.asset ?? file.asset
+  const setDraft = (asset: TextAsset) => useTextDrafts.getState().put(key, baseline, asset)
+  const [target, setTarget] = useState<ReviewTarget | undefined>(initialTarget)
   const diagnostics = useNarrativeTextDiagnostics(projectKey, file.asset.id, draft)
   const template = templateOf(draft.kind)
-  const dirty = JSON.stringify(draft) !== JSON.stringify(file.asset)
+  const dirty = JSON.stringify(draft) !== JSON.stringify(baseline.asset)
+  const changed = file.stamp?.hash !== baseline.stamp?.hash
   return (
     <>
+      {changed && dirty && (
+        <p role="alert">
+          The saved asset changed. Your draft is retained; saving will check the original revision.
+        </p>
+      )}
       <div className="ntl-fields">
         <label>
           Name
@@ -295,6 +361,7 @@ function AssetEditor({
         </label>
       </div>
 
+      <TextAssetContext asset={draft} disabled={readOnly} onChange={setDraft} />
       <p className="ntl-hint">{template.hint}</p>
 
       <ol className="ntl-entries">
@@ -304,6 +371,8 @@ function AssetEditor({
             entry={entry}
             index={index}
             cast={template.cast}
+            participants={draft.participants ?? []}
+            target={target}
             sequence={template.sequence}
             readOnly={readOnly}
             nameOf={nameOf}
@@ -338,15 +407,41 @@ function AssetEditor({
           type="button"
           className="btn btn-primary"
           disabled={readOnly || busy || !dirty}
-          onClick={() => onSave(draft)}
+          onClick={async () => {
+            const saved = await onSave(baseline, draft)
+            if (saved) {
+              useTextDrafts.getState().clear(key, retained)
+            }
+          }}
         >
           Save
         </button>
-        <button type="button" className="btn" disabled={readOnly || busy} onClick={onDelete}>
+        <button
+          type="button"
+          className="btn"
+          disabled={!dirty || busy}
+          onClick={() => useTextDrafts.getState().clear(key)}
+        >
+          Discard draft
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={readOnly || busy || dirty}
+          onClick={onDelete}
+        >
           Delete
         </button>
       </div>
 
+      <TextEditorial
+        asset={baseline.asset}
+        projectKey={projectKey}
+        readOnly={readOnly}
+        dirty={dirty}
+        nameOf={nameOf}
+        onSource={(next) => setTarget({ ...next })}
+      />
       <section aria-label="Supporting text diagnostics" className="ntl-diagnostics">
         <h3>{diagnostics.data?.length ?? 0} problems</h3>
         <ul>
@@ -417,6 +512,8 @@ function EntryFields({
   entry,
   index,
   cast,
+  participants,
+  target,
   sequence,
   readOnly,
   nameOf,
@@ -426,6 +523,8 @@ function EntryFields({
   entry: TextEntry
   index: number
   cast: boolean
+  participants: NonNullable<TextAsset['participants']>
+  target?: ReviewTarget
   sequence: boolean
   readOnly: boolean
   nameOf: (entity: string) => string | undefined
@@ -433,6 +532,7 @@ function EntryFields({
   onRemove: () => void
 }) {
   const lines = entry.lines ?? []
+  const schema = useNarrativeState()
   return (
     <li className="ntl-entry">
       <label>
@@ -443,36 +543,27 @@ function EntryFields({
           onChange={(changed) => onChange({ ...entry, label: changed.target.value })}
         />
       </label>
+      <TypedCondition
+        label={`Entry ${index + 1} condition`}
+        value={entry.when}
+        variables={schema.data?.document.variables ?? []}
+        disabled={readOnly}
+        onChange={(when) => onChange({ ...entry, when })}
+      />
       {lines.map((slot, position) => (
-        <div key={slot.id} className="ntl-line">
-          <span className="ntl-speaker">{speakerLabel(slot.speaker, nameOf)}</span>
-          <textarea
-            rows={2}
-            aria-label={`Entry ${index + 1}, line ${position + 1}`}
-            value={slot.variants?.[0]?.text.body ?? ''}
-            disabled={readOnly || slot.policy === 'locked'}
-            onChange={(changed) =>
-              onChange({
-                ...entry,
-                lines: lines.map((one) =>
-                  one.id === slot.id
-                    ? {
-                        ...one,
-                        variants: (one.variants ?? []).map((variant, variantIndex) =>
-                          variantIndex === 0
-                            ? {
-                                ...variant,
-                                text: { ...variant.text, body: changed.target.value },
-                              }
-                            : variant,
-                        ),
-                      }
-                    : one,
-                ),
-              })
-            }
-          />
-        </div>
+        <TextLineFields
+          key={slot.id}
+          slot={slot}
+          target={target?.slot === slot.id ? target : undefined}
+          label={`Entry ${index + 1}, line ${position + 1}`}
+          cast={cast}
+          participants={participants}
+          disabled={readOnly}
+          nameOf={nameOf}
+          onChange={(next) =>
+            onChange({ ...entry, lines: lines.map((one) => (one.id === slot.id ? next : one)) })
+          }
+        />
       ))}
       <div className="ntl-entry-actions">
         {sequence && (
@@ -491,19 +582,6 @@ function EntryFields({
       </div>
     </li>
   )
-}
-
-/**
- * The speaker, named where a name exists.
- *
- * An id that nothing can name is left showing rather than given a plausible
- * one, matching `useNarrativeNames`: a made-up name is indistinguishable from a
- * real one and wrong.
- */
-function speakerLabel(speaker: Speaker, nameOf: (entity: string) => string | undefined): string {
-  if (speaker === 'narrator') return 'Narrator'
-  if (speaker === 'player') return 'Player'
-  return nameOf(speaker.entity) ?? speaker.entity
 }
 
 /**

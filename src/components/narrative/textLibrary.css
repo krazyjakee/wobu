@@ -29,6 +29,7 @@
   grid-column: 2;
 }
 .ntl-body {
+  grid-row: 3;
   display: grid;
   grid-template-columns: minmax(240px, 22%) minmax(0, 1fr);
   min-height: 0;
@@ -133,7 +134,7 @@
 }
 .ntl-line {
   display: grid;
-  grid-template-columns: minmax(80px, 12ch) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   align-items: start;
 }
@@ -170,4 +171,37 @@
 .ntl-error {
   color: var(--danger);
   margin: 8px 16px;
+}
+
+.ntl-line > :is(textarea, fieldset),
+.ntl-context-fields > :is(fieldset, label, ul) {
+  grid-column: 1 / -1;
+}
+.ntl-line label,
+.ntl-context-fields label,
+.ntl-list > label {
+  display: grid;
+  gap: 4px;
+}
+.ntl-context-fields {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  min-width: 0;
+}
+.ntl-context-fields label.ntl-check {
+  display: flex;
+}
+@media (max-width: 760px) {
+  .ntl-body {
+    grid-template-columns: minmax(170px, 30%) minmax(0, 1fr);
+  }
+  .ntl-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ntl-head p {
+    display: none;
+  }
 }

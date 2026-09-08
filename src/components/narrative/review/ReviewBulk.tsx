@@ -1,3 +1,4 @@
+import { textDraftKey, useTextDrafts } from '../textDrafts'
 import {
   assertProjectSession,
   isProjectSession,
@@ -38,6 +39,7 @@ export function ReviewBulk({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const authoringDrafts = useScriptDrafts((state) => state.drafts)
+  const textDrafts = useTextDrafts((state) => state.drafts)
   const drafts = useReviewDrafts((s) => s.drafts)
   const selectedDrafts = Object.entries(drafts).filter(
     ([key, draft]) =>
@@ -53,6 +55,9 @@ export function ReviewBulk({
       state: row.scene.state_json,
     })),
     drafts: selectedDrafts,
+    textDrafts: rows.map(
+      (row) => textDrafts[textDraftKey(projectKey, row.line.target.scene)] ?? null,
+    ),
     authoring: rows.map(
       (row) => authoringDrafts[sceneEditKey(projectKey, row.line.target.scene)]?.revision ?? null,
     ),
@@ -69,14 +74,16 @@ export function ReviewBulk({
       const draft = selectedDrafts.some(
         ([, draft]) => reviewTargetKey(draft.authorization.target) === row.key,
       )
-      const authoring = !!authoringDrafts[sceneEditKey(projectKey, row.line.target.scene)]
+      const authoring =
+        !!authoringDrafts[sceneEditKey(projectKey, row.line.target.scene)] ||
+        !!textDrafts[textDraftKey(projectKey, row.line.target.scene)]
       if (draft || authoring || requests.length >= 128) {
         skipped.push({
           index: -1,
           target: row.line.target,
           status: 'skipped',
           reason: authoring
-            ? 'This scene has a shared authoring draft. Save or discard it first.'
+            ? 'This document has a shared authoring draft. Save or discard it first.'
             : draft
               ? 'This line has local edits in a current or proposed version. Save or discard them first.'
               : 'Only 128 decisions can be reviewed in one batch. Select fewer lines.',
@@ -122,7 +129,8 @@ export function ReviewBulk({
     if (
       plan.requests.some(
         (request) =>
-          useScriptDrafts.getState().drafts[sceneEditKey(projectKey, request.target.scene)],
+          useScriptDrafts.getState().drafts[sceneEditKey(projectKey, request.target.scene)] ||
+          useTextDrafts.getState().drafts[textDraftKey(projectKey, request.target.scene)],
       )
     )
       return

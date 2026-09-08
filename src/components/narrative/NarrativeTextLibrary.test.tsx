@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NarrativeTextLibrary } from './NarrativeTextLibrary'
+import { useTextDrafts } from './textDrafts'
 import type { TextCatalog, TextFile } from '../../lib/api/narrativeText'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
@@ -95,6 +96,7 @@ function draw(readOnly = false) {
 }
 
 beforeEach(() => {
+  useTextDrafts.setState({ drafts: {} })
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   h.invoke.mockReset()
   h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
@@ -254,4 +256,116 @@ describe('the Text library', () => {
     expect(editor.getByRole('button', { name: 'Delete' })).toBeDisabled()
     expect(editor.getByRole('button', { name: 'Add entry' })).toBeDisabled()
   })
+})
+
+describe('supporting text production controls', () => {
+  it('pages a large catalog and combines search with type filters', async () => {
+    const assets = Array.from({ length: 76 }, (_, index) => ({
+      ...catalog.assets[index % 2]!,
+      id: `asset-${index}`,
+      name: `Harbor ${String(index).padStart(3, '0')}`,
+    }))
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      Promise.resolve(
+        command === 'narrative_texts' ? { assets, unreadable: [] } : respond(command, args ?? {}),
+      ),
+    )
+    const { container } = draw()
+    await screen.findByText('76 matching of 76 assets')
+    expect(container.querySelectorAll('[data-text-asset]')).toHaveLength(25)
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(screen.getByText('Page 2 of 4')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Search text library'), {
+      target: { value: 'Harbor 00' },
+    })
+    expect(screen.getByText('10 matching of 76 assets')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Content type'), { target: { value: 'codex' } })
+    expect(screen.getByText('5 matching of 76 assets')).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-text-asset]')).toHaveLength(5)
+  })
+
+  it('edits trigger and entry conditions and gates production controls while dirty', async () => {
+    draw()
+    const editor = await openEditor()
+    expect(editor.getByRole('button', { name: 'Generate' })).toBeEnabled()
+    fireEvent.change(editor.getByLabelText('Trigger condition rule'), {
+      target: { value: 'never' },
+    })
+    fireEvent.change(editor.getByLabelText('Entry 1 condition rule'), {
+      target: { value: 'never' },
+    })
+    expect(editor.getByRole('button', { name: 'Generate' })).toBeDisabled()
+    expect(editor.getByRole('button', { name: 'Review' })).toBeDisabled()
+    fireEvent.click(editor.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'narrative_text_save',
+        expect.objectContaining({
+          asset: expect.objectContaining({
+            trigger: { event: 'player_passes_gate', when: 'never' },
+            entries: [expect.objectContaining({ when: 'never' })],
+          }),
+          expected: { kind: 'stamp', stamp: bark.stamp },
+        }),
+      ),
+    )
+  })
+
+  it('opens the shared generation planner with stable asset and entry targets', async () => {
+    draw()
+    const editor = await openEditor()
+    fireEvent.click(editor.getByRole('button', { name: 'Generate' }))
+    expect(await screen.findByRole('heading', { name: 'Generate dialogue' })).toBeInTheDocument()
+    expect(screen.getByText(/Move along.*Move along/)).toBeInTheDocument()
+  })
+})
+
+it('retains a dirty asset across selection and library remount with its original stale save guard', async () => {
+  const codex = {
+    ...bark,
+    asset: { ...bark.asset, id: 'codex', kind: 'codex' as const, name: 'The beacons' },
+    stamp: { ...bark.stamp!, hash: 'codex-hash' },
+  }
+  let incoming = bark
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+    Promise.resolve(
+      command === 'narrative_text_get'
+        ? args.assetId === 'codex'
+          ? codex
+          : incoming
+        : respond(command, args ?? {}),
+    ),
+  )
+  const first = draw()
+  const editor = await openEditor()
+  fireEvent.change(editor.getByLabelText('Entry 1, line 1'), {
+    target: { value: 'My retained sentence.' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: /Codex entry.*The beacons/ }))
+  await waitFor(() =>
+    expect(
+      screen
+        .getAllByLabelText('Name')
+        .some((element) => (element as HTMLInputElement).value === 'The beacons'),
+    ).toBe(true),
+  )
+  fireEvent.click(screen.getByRole('button', { name: /Bark.*Gate guard/ }))
+  expect(await screen.findByLabelText('Entry 1, line 1')).toHaveValue('My retained sentence.')
+  first.unmount()
+  incoming = {
+    ...bark,
+    stamp: { ...bark.stamp!, hash: 'peer-change' },
+    asset: { ...bark.asset, summary: 'A peer changed the context.' },
+  }
+  draw()
+  const restored = await openEditor()
+  expect(restored.getByLabelText('Entry 1, line 1')).toHaveValue('My retained sentence.')
+  expect(restored.getByRole('alert')).toHaveTextContent('Your draft is retained')
+  fireEvent.click(restored.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(h.invoke).toHaveBeenCalledWith(
+      'narrative_text_save',
+      expect.objectContaining({ expected: { kind: 'stamp', stamp: bark.stamp } }),
+    ),
+  )
 })

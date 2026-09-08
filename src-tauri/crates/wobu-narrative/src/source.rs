@@ -145,6 +145,12 @@ impl SceneDocument {
     pub fn parse(yaml: &str) -> Result<SceneDocument> {
         let version = check_version_for(yaml, SCENE_SCHEMA_VERSION)?;
         let document: Self = parse_yaml(yaml)?;
+        if document.scene.supporting_text.is_some() {
+            return Err(Error::Source {
+                location: None,
+                message: "Supporting editorial adapters cannot be authored as scene source.".into(),
+            });
+        }
         if version == 1 {
             let value: serde_json::Value = parse_yaml(yaml)?;
             if ["act_id", "arc_id", "tag_ids"].iter().any(|key| value["scene"].get(key).is_some())
@@ -162,6 +168,12 @@ impl SceneDocument {
     }
 
     pub fn to_yaml(&self) -> Result<String> {
+        if self.scene.supporting_text.is_some() {
+            return Err(Error::Source {
+                location: None,
+                message: "Supporting editorial adapters cannot be saved as scene source.".into(),
+            });
+        }
         if !(1..=SCENE_SCHEMA_VERSION).contains(&self.schema_version) {
             return Err(Error::UnsupportedSchemaVersion {
                 found: self.schema_version,

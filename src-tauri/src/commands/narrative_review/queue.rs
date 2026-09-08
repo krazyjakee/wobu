@@ -46,7 +46,16 @@ fn list(
     expected_catalog: Option<&str>,
 ) -> CommandResult<ReviewList> {
     let catalog = project.scene_catalog()?;
-    let ids = catalog.ids().into_iter().collect::<Vec<_>>();
+    let texts = project.text_catalog()?;
+    let mut ids = catalog
+        .ids()
+        .into_iter()
+        .chain(texts.assets.iter().map(|asset| SceneId::from_raw(asset.id.raw())))
+        .collect::<Vec<_>>();
+    ids.sort();
+    if ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(invalid("Scene and supporting text identities collide."));
+    }
     let catalog_revision =
         blake3::hash(&serde_json::to_vec(&ids).map_err(invalid)?).to_hex().to_string();
     if (offset > 0 && expected_catalog != Some(catalog_revision.as_str())) || offset > ids.len() {
@@ -61,6 +70,7 @@ fn list(
         errors: catalog
             .unreadable
             .iter()
+            .chain(&texts.unreadable)
             .map(|source| ListError {
                 scene_id: None,
                 reason: format!("{}: {}", source.rel, source.reason),
@@ -98,7 +108,9 @@ fn list(
                 .push(ListError { scene_id: Some(view.scene_id), reason: error.to_string() }),
         }
     }
-    if catalog.ids() != project.scene_catalog()?.ids()
+    if texts.assets.iter().map(|asset| asset.id).collect::<Vec<_>>()
+        != project.text_catalog()?.assets.iter().map(|asset| asset.id).collect::<Vec<_>>()
+        || catalog.ids() != project.scene_catalog()?.ids()
         || proposal_bytes != serde_json::to_vec(&project.review_proposals()?).map_err(invalid)?
     {
         return Err(invalid(

@@ -733,3 +733,112 @@ fn old_frozen_requests_and_completed_publications_survive_the_v2_toolchain_witho
     assert!(task::prepare(&project, &request).is_err());
     assert_eq!(records::attempts(&project, &request).unwrap().len(), 1);
 }
+
+#[tokio::test]
+async fn supporting_all_six_types_use_provider_jobs_guarded_review_and_asset_locks() {
+    use wobu_narrative::{Name, SceneId, TextEntry, TextKind};
+    let temp = Temp::new();
+    let mut project = Project::create(&temp.0, "Supporting generation").unwrap();
+    for kind in TextKind::ALL {
+        let mut file = project
+            .create_text_asset(kind, kind.noun(), Name::new("host_trigger").unwrap())
+            .unwrap();
+        let mut entry = TextEntry::new("Arrival");
+        entry.lines.push(DialogueSlot::new(Speaker::Narrator));
+        file.asset.entries.push(entry);
+        project.save_text_asset(&mut file).unwrap();
+        let input = plan::PlanInput {
+            scene: SceneId::from_raw(file.asset.id.raw()),
+            selection: None,
+            state: BTreeMap::new(),
+            commands: BTreeMap::new(),
+            token_budget: 4000,
+            max_output_tokens: 512,
+        };
+        let request = freeze(&mut project, input.clone());
+        assert!(
+            request.context.fragments.iter().any(|fragment| fragment.kind == "supporting_text")
+        );
+        let store = Store(Arc::new(Mutex::new(project)));
+        let queue = Queue::new(Config::default(), Silent);
+        let provider = provider(vec![Reply::Good(raw(&request))]);
+        assert!(matches!(
+            terminal(&queue, submit(&queue, &store, &request, provider.clone())).await,
+            JobState::Done
+        ));
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+        {
+            let mut project = store.0.lock();
+            let view = project.review_scene(input.scene, None).unwrap();
+            assert_eq!(view.lines[0].proposals.len(), 1);
+            assert!(view.lines[0].text.is_none(), "Edited slots retain proposals");
+            project.apply_review(&accept_request(&view, None)).unwrap();
+            let current = project.load_text_asset(file.asset.id).unwrap();
+            assert_eq!(
+                current.asset.entries[0].lines[0].variants[0].text.body,
+                "They say the beacon went dark."
+            );
+            assert!(current.asset.editorial_head.is_some());
+            let mut locked = current;
+            locked.asset.policy = GenerationPolicy::Locked;
+            project.save_text_asset(&mut locked).unwrap();
+            let selected = wobu_narrative_context::Selection {
+                scene: input.scene,
+                beat: request.target.beat,
+                slot: request.target.slot,
+                variant: Some(request.candidate_variant_id),
+            };
+            let excluded = plan::build(
+                &project,
+                plan::PlanInput { selection: Some(selected), ..input },
+                "fixture",
+                "mock",
+            )
+            .unwrap();
+            assert!(excluded.requests.is_empty());
+            assert_eq!(excluded.skipped.len(), 1);
+            assert!(records::checks(&project, &request).unwrap().locked_now);
+            assert!(project.scene_catalog().unwrap().scenes.is_empty());
+        }
+        drop(queue);
+        project = Arc::try_unwrap(store.0).ok().expect("queue released store").into_inner();
+    }
+}
+
+#[tokio::test]
+async fn supporting_asset_locked_after_planning_never_calls_the_provider() {
+    let temp = Temp::new();
+    let mut project = Project::create(&temp.0, "Lock after plan").unwrap();
+    let mut file = project
+        .create_text_asset(
+            wobu_narrative::TextKind::Codex,
+            "Beacon",
+            wobu_narrative::Name::new("read_beacon").unwrap(),
+        )
+        .unwrap();
+    let mut entry = wobu_narrative::TextEntry::new("Description");
+    entry.lines.push(DialogueSlot::new(Speaker::Narrator));
+    file.asset.entries.push(entry);
+    project.save_text_asset(&mut file).unwrap();
+    let request = freeze(
+        &mut project,
+        plan::PlanInput {
+            scene: wobu_narrative::SceneId::from_raw(file.asset.id.raw()),
+            selection: None,
+            state: BTreeMap::new(),
+            commands: BTreeMap::new(),
+            token_budget: 4000,
+            max_output_tokens: 512,
+        },
+    );
+    file.asset.policy = GenerationPolicy::Locked;
+    project.save_text_asset(&mut file).unwrap();
+    let store = Store(Arc::new(Mutex::new(project)));
+    let queue = Queue::new(Config::default(), Silent);
+    let provider = provider(vec![]);
+    assert!(matches!(
+        terminal(&queue, submit(&queue, &store, &request, provider.clone())).await,
+        JobState::Failed { .. }
+    ));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+}

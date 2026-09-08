@@ -1,3 +1,4 @@
+import { textDraftKey, useTextDrafts } from '../textDrafts'
 import { sceneEditKey, useScriptDrafts } from '../scriptDrafts'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '../../Modal'
@@ -62,6 +63,7 @@ export function ReviewQueue({
   const [stateJson, setStateJson] = useState<string | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const authoringDrafts = useScriptDrafts((state) => state.drafts)
+  const textDrafts = useTextDrafts((state) => state.drafts)
   const drafts = useReviewDrafts((state) => state.drafts)
   const rows = useMemo(
     () =>
@@ -362,9 +364,11 @@ export function ReviewQueue({
           </section>
           {current ? (
             <div>
-              {authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] && (
+              {(authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] ||
+                textDrafts[textDraftKey(projectKey, current.line.target.scene)]) && (
                 <p role="status">
-                  Save or discard the shared scene draft before changing wording or review policy.
+                  Save or discard the shared authoring draft before changing wording or review
+                  policy.
                 </p>
               )}
               <ReviewDetail
@@ -372,7 +376,11 @@ export function ReviewQueue({
                 row={current}
                 projectKey={projectKey}
                 readOnly={
-                  readOnly || !!authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)]
+                  readOnly ||
+                  !!(
+                    authoringDrafts[sceneEditKey(projectKey, current.line.target.scene)] ||
+                    textDrafts[textDraftKey(projectKey, current.line.target.scene)]
+                  )
                 }
                 proposalId={selectedProposal}
                 onProposal={(id) => setProposals((before) => ({ ...before, [current.key]: id }))}

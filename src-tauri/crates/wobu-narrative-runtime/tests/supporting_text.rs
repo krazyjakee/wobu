@@ -588,3 +588,26 @@ fn an_id_repeated_between_a_scene_and_an_asset_is_reported() {
     );
     assert!(report.graph.is_none());
 }
+
+#[test]
+fn supporting_only_runtime_needs_no_scene_and_restores_explicit_repeat_state() {
+    let mut asset = TextAsset::new(TextKind::Codex, "Lantern", name("codex_read"));
+    asset
+        .entries
+        .push(entry("Description", vec![line(Speaker::Narrator, "Glass protects the flame.")]));
+    let event = asset.trigger.event.clone();
+    let graph =
+        compile(&[], &[asset], &StateSchema::default(), &CompileOptions::default()).graph.unwrap();
+    let mut runner =
+        Runtime::start_text(graph.clone(), BTreeMap::new(), "text-run".into(), 17).unwrap();
+    assert!(matches!(runner.current().unwrap(), Yield::End { .. }));
+    assert_eq!(
+        runner.deliver_text(&event).unwrap().unwrap().lines[0].text,
+        "Glass protects the flame."
+    );
+    let snapshot = runner.snapshot();
+    let mut restored = Runtime::restore(graph, snapshot.clone()).unwrap();
+    assert_eq!(restored.snapshot(), snapshot);
+    assert_eq!(restored.deliver_text(&event).unwrap(), runner.deliver_text(&event).unwrap());
+    assert!(runner.visits().is_empty());
+}

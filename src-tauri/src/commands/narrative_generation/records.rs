@@ -98,7 +98,7 @@ pub fn attempts(project: &Project, request: &FrozenRequest) -> CommandResult<Vec
 }
 
 pub fn checks(project: &Project, request: &FrozenRequest) -> CommandResult<PublicationChecks> {
-    let file = project.load_scene(request.target.scene)?;
+    let file = project.load_editorial_source(request.target.scene)?;
     let slot = file
         .scene
         .beats
@@ -124,7 +124,12 @@ pub fn checks(project: &Project, request: &FrozenRequest) -> CommandResult<Publi
         policy_unchanged: policy == request.expected_policy
             && slot.is_some_and(|s| s.policy == request.expected_slot_policy),
         context_unchanged: current.is_ok_and(|c| c.ready && c.hash == request.context.hash),
-        locked_now: policy == Some(GenerationPolicy::Locked)
+        locked_now: file
+            .scene
+            .supporting_text
+            .as_ref()
+            .is_some_and(|a| a.policy == GenerationPolicy::Locked)
+            || policy == Some(GenerationPolicy::Locked)
             || slot.is_some_and(|s| s.policy == GenerationPolicy::Locked),
     })
 }

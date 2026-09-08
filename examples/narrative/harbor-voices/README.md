@@ -35,10 +35,26 @@ line is written by hand, every wording carries the revision it hashes to, and no
 
 ## Using it
 
-Create an empty project and close it. Copy `state.yaml` to its `narrative/state.yaml` and the six
-files in `texts/` into `narrative/texts/`. Reopen the project and choose **Narrative → Text
-library**. Compilation and export pick them up with no further configuration; a host binds the six
-trigger names to its own moments and calls the runtime's delivery API when they happen.
+From the repository's `src-tauri/` directory, create a fresh complete example:
+
+```sh
+cargo run -p wobu-store --example harbor_voices_fixture -- /tmp/harbor-voices-example
+```
+
+Open the printed `.wobu` path, then choose **Narrative → Text library**. The setup writes the three
+real character records with their narrative voices, the linked **The missing light** quest,
+declared variables and all six original assets using the normal guarded store. It refuses to
+overwrite an existing project. Copying only the YAML text files into an empty project is
+insufficient: their stable speaker and quest references must also exist.
+
+Development export works immediately. Review and approve the exact wording/context before Release
+export. For Context/Generate, use a complete scenario; for example `trust = 70`,
+`knowledge = witnessed`, `recorded = true` selects the first entries of all six templates. Other
+entries intentionally require different conditions. A host binds the six trigger names and calls
+`Runtime::start_text` followed by `deliver_text`; no scene or player choice is needed.
+
+`cargo test -p wobu-store --test harbor_voices` builds this same project with real nodes and
+source links and checks ready frozen context for all six types.
 
 These files are held to the format by `cargo test -p wobu-narrative --test harbor_voices_example`,
 which parses every one of them, checks each against the declared state, requires every wording to

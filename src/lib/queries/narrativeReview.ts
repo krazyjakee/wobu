@@ -1,3 +1,4 @@
+import { textDraftKey, useTextDrafts } from '../../components/narrative/textDrafts'
 import { useProjectMutation } from './useProjectMutation'
 import { sceneEditKey, useScriptDrafts } from '../../components/narrative/scriptDrafts'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -35,6 +36,8 @@ export function useNarrativeReviewApply(projectKey: string) {
         throw new Error(
           'Save or discard the shared scene draft before changing wording or review policy.',
         )
+      if (useTextDrafts.getState().drafts[textDraftKey(projectKey, request.target.scene)])
+        throw new Error('Save or discard the supporting text draft before reviewing its wording.')
       return narrativeReviewApply(request)
     },
     onSuccess: ({ file }) => {

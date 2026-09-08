@@ -22,6 +22,8 @@ import { NarrativeSourcePane } from './NarrativeSourcePane'
 import { NarrativeExample } from './NarrativeExample'
 import { NarrativeLibrary } from './NarrativeLibrary'
 import { NarrativeTextLibrary } from './NarrativeTextLibrary'
+import { useNarrativeTexts } from '../../lib/queries/narrativeText'
+import type { ReviewTarget } from '../../lib/api/narrativeReview'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 import { useSceneLibrary } from './sceneLibraryStore'
@@ -41,6 +43,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [textLibraryOpen, setTextLibraryOpen] = useState(false)
+  const [textTarget, setTextTarget] = useState<ReviewTarget | undefined>()
   const [exampleOpen, setExampleOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
@@ -63,6 +66,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   }
   const [editorOpened, setEditorOpened] = useState(false)
   const catalog = useScenes()
+  const textCatalog = useNarrativeTexts(project.path, reviewOpen || textLibraryOpen)
   const file = useScene(selection.sceneId)
   const draft = useScriptDrafts((state) =>
     selection.sceneId ? state.drafts[sceneEditKey(project.path, selection.sceneId)] : undefined,
@@ -212,11 +216,21 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         <NarrativeReview
           projectKey={project.path}
           readOnly={project.readOnly}
-          sceneName={(id) => catalog.data?.scenes.find((scene) => scene.id === id)?.name ?? id}
+          sceneName={(id) =>
+            catalog.data?.scenes.find((scene) => scene.id === id)?.name ??
+            textCatalog.data?.assets.find((asset) => asset.id === id)?.name ??
+            id
+          }
           speakerName={(id) => nameOf(id) ?? id}
           onClose={() => setReviewOpen(false)}
           onSource={(target) => {
             setReviewOpen(false)
+            if (textCatalog.data?.assets.some((asset) => asset.id === target.scene)) {
+              setTextTarget(target)
+              setTextLibraryOpen(true)
+              closeWorld()
+              return
+            }
             open(
               { sceneId: target.scene, beatId: target.beat, lineId: target.slot },
               'script',
@@ -340,6 +354,8 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
       )}
       {textLibraryOpen && !worldOpen && (
         <NarrativeTextLibrary
+          key={textTarget ? JSON.stringify(textTarget) : 'library'}
+          initialTarget={textTarget}
           projectKey={project.path}
           readOnly={project.readOnly}
           nameOf={nameOf}

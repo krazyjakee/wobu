@@ -20,7 +20,7 @@ pub struct ReviewSnapshot {
 }
 impl Project {
     pub fn review_snapshot(&self, id: SceneId, state_json: Option<&str>) -> Result<ReviewSnapshot> {
-        self.review_source(self.load_scene(id)?, state_json)
+        self.review_source(self.load_editorial_source(id)?, state_json)
     }
     pub(crate) fn review_source(
         &self,
@@ -67,6 +67,12 @@ impl Project {
             .map(|p| p.entity)
             .chain(file.scene.dialogue_slots().filter_map(|(_, s)| s.speaker.entity()))
             .collect::<BTreeSet<_>>();
+        ids.extend(file.scene.supporting_text.iter().flat_map(|asset| {
+            asset.sources.iter().filter_map(|link| match link {
+                wobu_narrative::SourceLink::Character(id) => Some(*id),
+                _ => None,
+            })
+        }));
         ids.extend(world.knowledge.iter().map(|k| k.character));
         ids.extend(world.knowledge.iter().filter_map(|k| match k.provenance {
             wobu_narrative::KnowledgeProvenance::Told { by } => Some(by),
@@ -106,6 +112,29 @@ impl Project {
             .diagnose(&checked, &known_characters, &known_entities, &self.scene_ids()?)
             .first()
             .map(|d| format!("{}: {}", d.field, d.message));
+        if let Some(asset) = file.scene.editorial_text() {
+            let scenes = self.scene_ids()?;
+            if asset.sources.iter().any(|link| match link {
+                wobu_narrative::SourceLink::Scene(id) => !scenes.contains(id),
+                wobu_narrative::SourceLink::Fact(id) => {
+                    !world.facts.iter().any(|record| record.id == *id)
+                }
+                wobu_narrative::SourceLink::Event(id) => {
+                    !world.events.iter().any(|record| record.id == *id)
+                }
+                wobu_narrative::SourceLink::Quest(id) => {
+                    !world.quests.iter().any(|record| record.id == *id)
+                }
+                wobu_narrative::SourceLink::Character(id) => !known_characters.contains(id),
+            }) {
+                input_problem = Some(
+                    "A supporting-text source link is missing. Repair it before approving.".into(),
+                );
+            }
+            if let Some(diagnostic) = asset.diagnostics(&checked).first() {
+                input_problem = Some(diagnostic.problem.to_string());
+            }
+        }
         if let Some((diagnostic, _)) = file.scene.classification_diagnostics(&world).first() {
             input_problem = Some(diagnostic.to_string());
         }
@@ -320,6 +349,42 @@ impl ReviewSnapshot {
         }
         Ok(proofs)
     }
+    /// Convert only verified immutable shared decisions to native text proofs.
+    pub fn text_evidence(
+        &self,
+    ) -> Result<BTreeMap<VariantId, wobu_narrative::review::TextApprovalEvidence>> {
+        use wobu_narrative::review::{TextApprovalEvidence, TextBinding, TextTarget};
+        let Some(asset) = self.file.scene.editorial_text() else { return Ok(BTreeMap::new()) };
+        Ok(self
+            .evidence()?
+            .into_iter()
+            .map(|(id, proof)| {
+                let binding = proof.binding;
+                (
+                    id,
+                    TextApprovalEvidence {
+                        binding: TextBinding {
+                            target: TextTarget {
+                                asset: asset.id,
+                                entry: wobu_narrative::TextEntryId::from_raw(
+                                    binding.target.beat.raw(),
+                                ),
+                                slot: binding.target.slot,
+                                variant: binding.target.variant,
+                            },
+                            speaker: binding.speaker,
+                            text_revision: binding.text_revision,
+                            context_revision: binding.context_revision,
+                            state: binding.state,
+                            approved: binding.approved,
+                            event_id: binding.event_id,
+                        },
+                        current_context: proof.current_context,
+                    },
+                )
+            })
+            .collect())
+    }
     pub fn view(&self, project: &Project) -> Result<ReviewSceneView> {
         self.view_with_proposals(
             project.review_proposals()?.remove(&self.file.scene.id).unwrap_or_default(),
@@ -379,7 +444,17 @@ impl ReviewSnapshot {
                     target: target.clone(),
                     speaker: slot.speaker.clone(),
                     text: variant.map(|v| v.text.clone()),
-                    slot_policy: slot.policy,
+                    slot_policy: if self
+                        .file
+                        .scene
+                        .supporting_text
+                        .as_ref()
+                        .is_some_and(|a| a.policy == GenerationPolicy::Locked)
+                    {
+                        GenerationPolicy::Locked
+                    } else {
+                        slot.policy
+                    },
                     review: if approved { ReviewState::Approved } else { ReviewState::Draft },
                     freshness,
                     approval_valid: approved,

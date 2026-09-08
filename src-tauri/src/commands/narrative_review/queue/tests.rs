@@ -107,3 +107,36 @@ fn bounded_listing_discloses_unreadable_sources_and_pages_without_omitting_valid
     assert!(list(project, None, 32, Some(&page.catalog_revision)).is_err());
     assert!(!page.scenes.iter().any(|scene| scene.scene_id == last.scenes[0].scene_id));
 }
+
+#[test]
+fn supporting_text_is_listed_and_approved_in_the_project_wide_queue() {
+    let mut holder = TestProject::new();
+    let project = &mut holder.0;
+    let mut file = project
+        .create_text_asset(
+            wobu_narrative::TextKind::Journal,
+            "Tide diary",
+            wobu_narrative::Name::new("evening").unwrap(),
+        )
+        .unwrap();
+    let mut entry = wobu_narrative::TextEntry::new("Day one");
+    let mut slot = DialogueSlot::new(Speaker::Player);
+    slot.variants.push(Variant::new(Text::written("I fixed the lamp before sunset.")));
+    entry.lines.push(slot);
+    file.asset.entries.push(entry);
+    project.save_text_asset(&mut file).unwrap();
+    let listed = list(project, None, 0, None).unwrap();
+    assert_eq!(listed.total_scenes, 1);
+    assert!(listed.errors.is_empty());
+    let view = &listed.scenes[0];
+    assert_eq!(view.scene_id.raw(), file.asset.id.raw());
+    let request = ReviewRequest {
+        guard: view.guard.clone(),
+        target: view.lines[0].target.clone(),
+        context_revision: view.lines[0].context_revision.clone(),
+        state_json: view.state_json.clone(),
+        action: EditorialAction::Approve,
+    };
+    assert_eq!(batch(project, &[request], true).unwrap().items[0].status, "applied");
+    assert!(list(project, None, 0, None).unwrap().scenes[0].lines[0].approval_valid);
+}

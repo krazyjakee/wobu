@@ -219,7 +219,7 @@ implemented alongside portable record indexing, peer sync and explicit recovery 
 [Cancellable generation jobs](25-narrative-generation.md) (#164) retain prose proposals and immutable
 receipts; guarded editorial transitions (#165) and the Review queue (#166) share canonical evidence.
 [Supporting text](33-narrative-supporting-text.md) (#167) authors, compiles, plays and exports the six
-kinds; generating it and listing it in the Review queue remain. [Dependency
+kinds through shared frozen generation, comparison, approval and Release validation. [Dependency
 tracking](35-narrative-dependencies.md) (#168) reports affected lines and explains them; the rest
 of incremental analysis (#169–#172), Flow diagnostic badges (#189) and production work
 (#178–#183) remain tracked. N5

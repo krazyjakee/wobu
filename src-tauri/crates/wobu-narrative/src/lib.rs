@@ -82,3 +82,5 @@ mod source_paths;
 pub use source_paths::SourcePathPart;
 
 pub mod review;
+
+mod text_editorial;

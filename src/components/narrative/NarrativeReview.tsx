@@ -68,9 +68,9 @@ export function NarrativeReview({
       coverage={
         <div className="nrt-review-toolbar">
           <p>
-            {views.length} scenes loaded of {pages[0]?.total_scenes ?? 0}. Filters search loaded
-            scenes.{' '}
-            {errors.length > 0 ? 'Some scenes could not be read; errors are listed below.' : ''}
+            {views.length} documents loaded of {pages[0]?.total_scenes ?? 0}. Filters search loaded
+            documents.{' '}
+            {errors.length > 0 ? 'Some documents could not be read; errors are listed below.' : ''}
           </p>
           {queue.hasNextPage && (
             <button

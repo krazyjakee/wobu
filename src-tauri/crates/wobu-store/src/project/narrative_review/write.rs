@@ -210,10 +210,12 @@ impl Project {
         if target.variant.is_some() && index.is_none() {
             return Err(invalid("Dialogue variant is missing."));
         }
-        let locked = slot.policy == GenerationPolicy::Locked
-            || index.is_some_and(|i| {
-                slot.variants[i].text.lifecycle.policy == GenerationPolicy::Locked
-            });
+        let locked =
+            before.supporting_text.as_ref().is_some_and(|a| a.policy == GenerationPolicy::Locked)
+                || slot.policy == GenerationPolicy::Locked
+                || index.is_some_and(|i| {
+                    slot.variants[i].text.lifecycle.policy == GenerationPolicy::Locked
+                });
         let mut bind = false;
         let mut approved = false;
         match &action {
@@ -447,7 +449,19 @@ impl Project {
         }
     }
     fn write_review_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        let result = narrative::write_scene(self.root(), file, &self.peer)?;
+        let result = if file.scene.supporting_text.is_some() {
+            let asset = file
+                .scene
+                .editorial_text()
+                .ok_or_else(|| invalid("Invalid supporting-text editorial projection."))?;
+            let mut text_file =
+                crate::TextFile { asset, rel: file.rel.clone(), stamp: file.stamp.clone() };
+            let result = narrative::write_text(self.root(), &mut text_file, &self.peer)?;
+            file.stamp = text_file.stamp;
+            result
+        } else {
+            narrative::write_scene(self.root(), file, &self.peer)?
+        };
         if matches!(result, SourceSave::Saved(_)) {
             self.index_narrative_path(&file.rel)?;
         }
@@ -460,14 +474,17 @@ impl Project {
     }
     fn save_editorial_scene_locked(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
         let previous = if narrative::registry::read(self.root(), &file.rel)?.is_some() {
-            Some(narrative::read_scene(self.root(), &file.rel)?)
+            Some(self.load_editorial_source(file.scene.id)?)
         } else {
             None
         };
         if previous.as_ref().and_then(|f| f.stamp.as_ref()) != file.stamp.as_ref() {
-            let yaml = wobu_narrative::SceneDocument::new(file.scene.clone())
-                .to_yaml()
-                .map_err(|e| invalid(e.to_string()))?;
+            let yaml = if let Some(asset) = file.scene.editorial_text() {
+                wobu_narrative::TextAssetDocument::new(asset).to_yaml()
+            } else {
+                wobu_narrative::SceneDocument::new(file.scene.clone()).to_yaml()
+            }
+            .map_err(|e| invalid(e.to_string()))?;
             let path = narrative::registry::safe_path(self.root(), &file.rel)?;
             let (conflict_path, _) =
                 crate::atomic::park_conflict(self.root(), &path, &yaml, &self.peer)?;
@@ -665,6 +682,12 @@ fn event(
 pub fn validate_manual(previous: Option<&Scene>, next: &Scene) -> Result<()> {
     if previous.is_some_and(|s| s.id != next.id) {
         return Err(invalid("Keep the original scene identity when saving."));
+    }
+    if let Some(old) = previous.and_then(|s| s.supporting_text.as_ref())
+        && old.policy == GenerationPolicy::Locked
+        && previous.is_some_and(|s| s.beats != next.beats)
+    {
+        return Err(invalid("Unlock the supporting asset before changing its wording."));
     }
     if next.editorial_head != previous.and_then(|s| s.editorial_head) {
         return Err(invalid("Editorial history can only change through review commands."));
