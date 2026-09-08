@@ -103,3 +103,7 @@ normalizing only freshly minted identities and deletion timestamps. They check s
 locked text and provenance, preserved incoming references, tombstones and shared undo/redo. A
 three-choice reconvergence case compares the complete resulting source and restores all routes with
 Script undo while retaining locked dialogue.
+
+[Native project/quest acceptance](evidence/narrative-187/README.md) records exact destination focus,
+shared draft/save behavior, cosmetic source/compiler invariance, both themes, and the real
+1,000-scene projection with bounded React Flow store/DOM counts and a paged outline alternative.

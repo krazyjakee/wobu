@@ -1,0 +1,288 @@
+{
+  "before": {
+    "files": 16,
+    "sha256": "3ff7c175df38e7d3cafda1abfca198d9bb6b70bb6722f91ad5e0b033fcbe20fc",
+    "entries": {
+      "narrative/receipt-bindings/01M214KQW3A153BAGGTR39M1AT.json": "4ef33b53b6115e4f2aabea5a526936452c00d5072a14dabddf1f3d9eb69d1c43",
+      "narrative/receipt-bindings/01M214KR08Q936AAVD8KJ1GA5X.json": "6277bdd59c882c10adeee092757b054672fc815c0de13b2f0aa6374ce4538fee",
+      "narrative/receipt-bindings/01M214TRR48Z8VSVXG5SAFTHAQ.json": "8b5a0dcf289dd81ca242ffe9c73bc34b5842e04def13fc3374d48b351dbc37a5",
+      "narrative/receipt-bindings/01M215555VDF14E20439KVGA1B.json": "ed336aa11c0816508334b9e3d37fca8b72136f55c6f6b6bdcfd0e7973df94269",
+      "narrative/receipt-bindings/01M215EH4K0SKSZ5SSQCPEP628.json": "832a1a41fd2d417e7936d6b8c4d9c4a6e0da4b40f35d4fc27b22770ed8933eae",
+      "narrative/receipt-bindings/01M215FC2Y45WPNQFJZH6S7QP0.json": "68afe9756fd2ab23fb474167d6ea5818e8f7683bec973cf9401d7198b80cc07a",
+      "narrative/receipts/01M214KQW3A153BAGGTR39M1AT.json": "fbf7d4632052768379208042068bbe7ebacf9451f3b9843d1375b8e8ae20a9e8",
+      "narrative/receipts/01M214KR08Q936AAVD8KJ1GA5X.json": "f0dc8346f984444f4bb1dd738506d4d08d8a0a258ad67be4917cf8c0d3138f13",
+      "narrative/receipts/01M214TRR48Z8VSVXG5SAFTHAQ.json": "7f8b971e55670a27f8da108ba79e35f8a97848daee707501b815457354d790f6",
+      "narrative/receipts/01M215555VDF14E20439KVGA1B.json": "4c6f8f0eb903890a6edab06beabae034d8b6f21e7e0871e8a2e563bf291ac852",
+      "narrative/receipts/01M215EH4K0SKSZ5SSQCPEP628.json": "b69fe4e54822608e7147b51b098a9349ca2e4c2f8ca7ba6f9aedb4b3c7fd4ccd",
+      "narrative/receipts/01M215FC2Y45WPNQFJZH6S7QP0.json": "b2ca2a2b13cf9e45298fe96cd27f90d8cb29c4180c436400fd65f80cad7478c0",
+      "narrative/scenes/council-hearing.yaml": "f8b82feef5c147655fe08318f8f721498d7764669369357c88144cd88ad5e412",
+      "narrative/scenes/harbour-evidence.yaml": "f397931579453798c1a927f72da4be586210b151384d4b47f323d813a9207a03",
+      "narrative/scenes/new-scene.yaml": "3add0831ac313e35cccb59017c3fb51127918c59230de1538c3b49ed51208722",
+      "narrative/world.yaml": "8c52b36f0f6b83236e04e0f8e706ee9f212db697da592edbb93ca5aa3ecfb251"
+    }
+  },
+  "after": {
+    "files": 16,
+    "sha256": "3ff7c175df38e7d3cafda1abfca198d9bb6b70bb6722f91ad5e0b033fcbe20fc",
+    "entries": {
+      "narrative/receipt-bindings/01M214KQW3A153BAGGTR39M1AT.json": "4ef33b53b6115e4f2aabea5a526936452c00d5072a14dabddf1f3d9eb69d1c43",
+      "narrative/receipt-bindings/01M214KR08Q936AAVD8KJ1GA5X.json": "6277bdd59c882c10adeee092757b054672fc815c0de13b2f0aa6374ce4538fee",
+      "narrative/receipt-bindings/01M214TRR48Z8VSVXG5SAFTHAQ.json": "8b5a0dcf289dd81ca242ffe9c73bc34b5842e04def13fc3374d48b351dbc37a5",
+      "narrative/receipt-bindings/01M215555VDF14E20439KVGA1B.json": "ed336aa11c0816508334b9e3d37fca8b72136f55c6f6b6bdcfd0e7973df94269",
+      "narrative/receipt-bindings/01M215EH4K0SKSZ5SSQCPEP628.json": "832a1a41fd2d417e7936d6b8c4d9c4a6e0da4b40f35d4fc27b22770ed8933eae",
+      "narrative/receipt-bindings/01M215FC2Y45WPNQFJZH6S7QP0.json": "68afe9756fd2ab23fb474167d6ea5818e8f7683bec973cf9401d7198b80cc07a",
+      "narrative/receipts/01M214KQW3A153BAGGTR39M1AT.json": "fbf7d4632052768379208042068bbe7ebacf9451f3b9843d1375b8e8ae20a9e8",
+      "narrative/receipts/01M214KR08Q936AAVD8KJ1GA5X.json": "f0dc8346f984444f4bb1dd738506d4d08d8a0a258ad67be4917cf8c0d3138f13",
+      "narrative/receipts/01M214TRR48Z8VSVXG5SAFTHAQ.json": "7f8b971e55670a27f8da108ba79e35f8a97848daee707501b815457354d790f6",
+      "narrative/receipts/01M215555VDF14E20439KVGA1B.json": "4c6f8f0eb903890a6edab06beabae034d8b6f21e7e0871e8a2e563bf291ac852",
+      "narrative/receipts/01M215EH4K0SKSZ5SSQCPEP628.json": "b69fe4e54822608e7147b51b098a9349ca2e4c2f8ca7ba6f9aedb4b3c7fd4ccd",
+      "narrative/receipts/01M215FC2Y45WPNQFJZH6S7QP0.json": "b2ca2a2b13cf9e45298fe96cd27f90d8cb29c4180c436400fd65f80cad7478c0",
+      "narrative/scenes/council-hearing.yaml": "f8b82feef5c147655fe08318f8f721498d7764669369357c88144cd88ad5e412",
+      "narrative/scenes/harbour-evidence.yaml": "f397931579453798c1a927f72da4be586210b151384d4b47f323d813a9207a03",
+      "narrative/scenes/new-scene.yaml": "3add0831ac313e35cccb59017c3fb51127918c59230de1538c3b49ed51208722",
+      "narrative/world.yaml": "8c52b36f0f6b83236e04e0f8e706ee9f212db697da592edbb93ca5aa3ecfb251"
+    }
+  },
+  "sourceUnchanged": true,
+  "compileUnchanged": true,
+  "compileBefore": {
+    "graph": {
+      "version": 1,
+      "profile": "development",
+      "state": {},
+      "commands": {},
+      "scenes": {
+        "01M214J08X6VQGQYWZTJ4GFZJT": {
+          "entry": null,
+          "first": "01M214KQRXYHYX0XXPDKF2SMHP",
+          "beats": {
+            "01M214KQRXYHYX0XXPDKF2SMHP": {
+              "dialogue": [],
+              "choices": [],
+              "outcomes": [
+                {
+                  "id": "01M214KQRXDPFKTQ4N43EVZXWB",
+                  "when": null,
+                  "effects": [],
+                  "to": {
+                    "scene": "01M214J0CCZXSA35KER3NVJ1KK"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "01M214J0CCZXSA35KER3NVJ1KK": {
+          "entry": null,
+          "first": "01M214KQRXCMF8GE4GRGVMC2CZ",
+          "beats": {
+            "01M214KQRXCMF8GE4GRGVMC2CZ": {
+              "dialogue": [],
+              "choices": [],
+              "outcomes": [
+                {
+                  "id": "01M214KQRXRC1AARTEWH08C3VQ",
+                  "when": null,
+                  "effects": [],
+                  "to": {
+                    "end": {
+                      "label": "Complete"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "01M214NCJ4PTJKSMYZM5PRA590": {
+          "entry": null,
+          "first": "01M214PGAS96J551FN7SWAJ9KT",
+          "beats": {
+            "01M214PGAS96J551FN7SWAJ9KT": {
+              "dialogue": [],
+              "choices": [],
+              "outcomes": [
+                {
+                  "id": "01M214PWE0DP4H56B638J3417G",
+                  "when": null,
+                  "effects": [],
+                  "to": {
+                    "scene": "01M214J08X6VQGQYWZTJ4GFZJT"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "source_map": {
+        "01M214J08X6VQGQYWZTJ4GFZJT": {
+          "scene": "01M214J08X6VQGQYWZTJ4GFZJT",
+          "beat": null,
+          "slot": null
+        },
+        "01M214J0CCZXSA35KER3NVJ1KK": {
+          "scene": "01M214J0CCZXSA35KER3NVJ1KK",
+          "beat": null,
+          "slot": null
+        },
+        "01M214KQRXCMF8GE4GRGVMC2CZ": {
+          "scene": "01M214J0CCZXSA35KER3NVJ1KK",
+          "beat": "01M214KQRXCMF8GE4GRGVMC2CZ",
+          "slot": null
+        },
+        "01M214KQRXDPFKTQ4N43EVZXWB": {
+          "scene": "01M214J08X6VQGQYWZTJ4GFZJT",
+          "beat": "01M214KQRXYHYX0XXPDKF2SMHP",
+          "slot": null
+        },
+        "01M214KQRXRC1AARTEWH08C3VQ": {
+          "scene": "01M214J0CCZXSA35KER3NVJ1KK",
+          "beat": "01M214KQRXCMF8GE4GRGVMC2CZ",
+          "slot": null
+        },
+        "01M214KQRXYHYX0XXPDKF2SMHP": {
+          "scene": "01M214J08X6VQGQYWZTJ4GFZJT",
+          "beat": "01M214KQRXYHYX0XXPDKF2SMHP",
+          "slot": null
+        },
+        "01M214NCJ4PTJKSMYZM5PRA590": {
+          "scene": "01M214NCJ4PTJKSMYZM5PRA590",
+          "beat": null,
+          "slot": null
+        },
+        "01M214PGAS96J551FN7SWAJ9KT": {
+          "scene": "01M214NCJ4PTJKSMYZM5PRA590",
+          "beat": "01M214PGAS96J551FN7SWAJ9KT",
+          "slot": null
+        },
+        "01M214PWE0DP4H56B638J3417G": {
+          "scene": "01M214NCJ4PTJKSMYZM5PRA590",
+          "beat": "01M214PGAS96J551FN7SWAJ9KT",
+          "slot": null
+        }
+      }
+    },
+    "diagnostics": []
+  },
+  "compileAfter": {
+    "graph": {
+      "version": 1,
+      "profile": "development",
+      "state": {},
+      "commands": {},
+      "scenes": {
+        "01M214J08X6VQGQYWZTJ4GFZJT": {
+          "entry": null,
+          "first": "01M214KQRXYHYX0XXPDKF2SMHP",
+          "beats": {
+            "01M214KQRXYHYX0XXPDKF2SMHP": {
+              "dialogue": [],
+              "choices": [],
+              "outcomes": [
+                {
+                  "id": "01M214KQRXDPFKTQ4N43EVZXWB",
+                  "when": null,
+                  "effects": [],
+                  "to": {
+                    "scene": "01M214J0CCZXSA35KER3NVJ1KK"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "01M214J0CCZXSA35KER3NVJ1KK": {
+          "entry": null,
+          "first": "01M214KQRXCMF8GE4GRGVMC2CZ",
+          "beats": {
+            "01M214KQRXCMF8GE4GRGVMC2CZ": {
+              "dialogue": [],
+              "choices": [],
+              "outcomes": [
+                {
+                  "id": "01M214KQRXRC1AARTEWH08C3VQ",
+                  "when": null,
+                  "effects": [],
+                  "to": {
+                    "end": {
+                      "label": "Complete"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "01M214NCJ4PTJKSMYZM5PRA590": {
+          "entry": null,
+          "first": "01M214PGAS96J551FN7SWAJ9KT",
+          "beats": {
+            "01M214PGAS96J551FN7SWAJ9KT": {
+              "dialogue": [],
+              "choices": [],
+              "outcomes": [
+                {
+                  "id": "01M214PWE0DP4H56B638J3417G",
+                  "when": null,
+                  "effects": [],
+                  "to": {
+                    "scene": "01M214J08X6VQGQYWZTJ4GFZJT"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "source_map": {
+        "01M214J08X6VQGQYWZTJ4GFZJT": {
+          "scene": "01M214J08X6VQGQYWZTJ4GFZJT",
+          "beat": null,
+          "slot": null
+        },
+        "01M214J0CCZXSA35KER3NVJ1KK": {
+          "scene": "01M214J0CCZXSA35KER3NVJ1KK",
+          "beat": null,
+          "slot": null
+        },
+        "01M214KQRXCMF8GE4GRGVMC2CZ": {
+          "scene": "01M214J0CCZXSA35KER3NVJ1KK",
+          "beat": "01M214KQRXCMF8GE4GRGVMC2CZ",
+          "slot": null
+        },
+        "01M214KQRXDPFKTQ4N43EVZXWB": {
+          "scene": "01M214J08X6VQGQYWZTJ4GFZJT",
+          "beat": "01M214KQRXYHYX0XXPDKF2SMHP",
+          "slot": null
+        },
+        "01M214KQRXRC1AARTEWH08C3VQ": {
+          "scene": "01M214J0CCZXSA35KER3NVJ1KK",
+          "beat": "01M214KQRXCMF8GE4GRGVMC2CZ",
+          "slot": null
+        },
+        "01M214KQRXYHYX0XXPDKF2SMHP": {
+          "scene": "01M214J08X6VQGQYWZTJ4GFZJT",
+          "beat": "01M214KQRXYHYX0XXPDKF2SMHP",
+          "slot": null
+        },
+        "01M214NCJ4PTJKSMYZM5PRA590": {
+          "scene": "01M214NCJ4PTJKSMYZM5PRA590",
+          "beat": null,
+          "slot": null
+        },
+        "01M214PGAS96J551FN7SWAJ9KT": {
+          "scene": "01M214NCJ4PTJKSMYZM5PRA590",
+          "beat": "01M214PGAS96J551FN7SWAJ9KT",
+          "slot": null
+        },
+        "01M214PWE0DP4H56B638J3417G": {
+          "scene": "01M214NCJ4PTJKSMYZM5PRA590",
+          "beat": "01M214PGAS96J551FN7SWAJ9KT",
+          "slot": null
+        }
+      }
+    },
+    "diagnostics": []
+  }
+}

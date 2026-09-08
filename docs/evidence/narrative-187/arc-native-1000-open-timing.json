@@ -1,0 +1,27 @@
+{
+  "ms": 421.9999999999927,
+  "frameIntervals": [19.999999999992724, 75, 1, 8, 8, 16, 16, 16, 16, 16, 202],
+  "rows": 25,
+  "active": {
+    "tag": "BUTTON",
+    "role": null,
+    "label": null,
+    "text": "Canvas",
+    "id": "",
+    "value": "",
+    "disabled": false,
+    "rect": {
+      "x": 78,
+      "y": 409,
+      "width": 64,
+      "height": 38
+    },
+    "tabIndex": 0
+  },
+  "text": "Arrangement AutomaticManualGroups & notesLaying out\u2026FitAdd sceneOpen all groupsParticipantAnyoneNeeds textNeeds reviewOut of dateBadgesErrorsWarningsDestinationsReferencesTypesIdentitiesTextUnrecognisedDestinationsA route that leads to a beat, a scene or an ending that is not there.ReferencesA speaker or a participant this scene does not contain.TypesA condition or an effect that does not type.IdentitiesA duplicated id, or a revision that no longer describes its words.TextA slot that is still waiting for wording.UnrecognisedA problem this build has no name for. Shown as an error, because it cannot be ruled out.Needs textA dialogue slot with no wording in it yet.Needs reviewWording nobody has approved at this revision.Out of dateWording whose context has moved since it was written \u2014 locked or not.LockedWording no generation job may touch. Still counted as out of date when it is.Category chips govern warnings. Needs text, needs review, out of date and locked are counted separately on every beat, because a line can be more than one of them at once.GroupNo groupingBy arrangement groupBy questBy quest state40 of 1020 on the canvas \u00b7 1020 folded away",
+  "selection": {
+    "sceneId": "00000000000000000000000001",
+    "beatId": null,
+    "lineId": null
+  }
+}
