@@ -13,13 +13,14 @@
 //! ## What this is not, and must never become
 //!
 //! **It is not a second, unreviewed way to write text.** A supporting line is a
-//! [`DialogueSlot`] holding [`Variant`]s of [`Text`], exactly as a beat's lines
-//! are. That is not a convenience: it is what makes a bark carry the same
-//! stable slot and variant identities, the same [`Revision`](crate::Revision),
-//! the same [`Provenance`](crate::Provenance) and the same
-//! [`ContentLifecycle`] as scene dialogue, so the review queue (#166), the
-//! generation policy (#165), the freshness recomputation (#168), the locale
-//! pack and the recording script (#178, #179) all see one kind of thing. If
+//! [`DialogueSlot`] holding [`Variant`](crate::Variant)s of [`Text`](crate::Text),
+//! exactly as a beat's lines are. That is not a convenience: it is what makes a
+//! bark carry the same stable slot and variant identities, the same
+//! [`Revision`](crate::Revision), the same [`Provenance`](crate::Provenance) and
+//! the same [`ContentLifecycle`](crate::ContentLifecycle) as scene dialogue, so
+//! the review queue (#166), the generation policy (#165), the freshness
+//! recomputation (#168), the locale pack and the recording script (#178, #179)
+//! all see one kind of thing. If
 //! this module ever grows its own `body: String` beside a slot, every one of
 //! those stops being true for a quarter of the game's words.
 //!
