@@ -1,0 +1,27 @@
+{
+  "ms": 269,
+  "frameIntervals": [14, 13, 7, 12, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 21],
+  "rows": 1,
+  "active": {
+    "tag": "BODY",
+    "role": null,
+    "label": null,
+    "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewVariants\u2026Build\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent s",
+    "id": "",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900
+    },
+    "tabIndex": -1
+  },
+  "text": "Scene search resultsSceneActArcTagsQuestsParticipantsText coverageRecorded statusOpenPinAshfall hearing 0731RenameWitness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.Showing 5 of 50 passages. Refine the search for another line.Matching passage1: Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.2: Witness 01 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.3: Witness 02 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.4: Witness 03 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.5: Witness 04 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.UnassignedUnassignedNo tagsHarbor inquiry 11Harbor inquiry 12None declared50 / 50 slots0 generated \u00b7 50 edited \u00b7 0 locked49 draft \u00b7 1 approved1 out of dateFlowScriptPin",
+  "selection": {
+    "sceneId": null,
+    "beatId": null,
+    "lineId": null
+  },
+  "scroll": [],
+  "errors": []
+}

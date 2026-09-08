@@ -1,0 +1,31 @@
+{
+  "ms": 711.0000000000036,
+  "frameIntervals": [17, 525, 159],
+  "rows": 1,
+  "active": {
+    "tag": "TEXTAREA",
+    "role": null,
+    "label": null,
+    "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.",
+    "id": "",
+    "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.",
+    "disabled": false,
+    "rect": {
+      "x": 100,
+      "y": 478,
+      "width": 1283,
+      "height": 80
+    },
+    "tabIndex": 0
+  },
+  "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.",
+  "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.",
+  "selection": {
+    "sceneId": "00000000000000000000000732",
+    "beatId": "00000000000000000000100731",
+    "lineId": "00000000000000000001036550",
+    "variantId": "00000000000000000002036550"
+  },
+  "scroll": [],
+  "errors": []
+}

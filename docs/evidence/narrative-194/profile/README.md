@@ -129,3 +129,11 @@ source-fingerprint change, absent-character membership, mixed capture revisions,
 queue computation, and closed/reopened session rejection. Code-health remains at its unchanged
 baseline. Native read, frame and combined RSS measurements, plus an actual approve/unlock/save
 measurement, are still required before any interactive-budget claim.
+
+## Integrated native follow-up
+
+The [bounded current native measurements](../current-native/README.md) retain 30 read samples per
+group, exact source-hash invariance, frame/RSS observations and one guarded write sequence. Search,
+combined-filter and Review p95 still miss their predefined budgets. Writes take 23–31 seconds,
+post-action summed RSS exceeds 1 GiB, and the short Script DOM-open observation includes a 525 ms
+frame interval. These results do not close #194 or establish the complete #182 workflow.

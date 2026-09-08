@@ -125,3 +125,10 @@ These observations do not establish repeatable search-budget compliance, combine
 performance, cold project-open acceptance, or the full accessibility workflow. #194 and #182 remain
 open; both successful and unsuccessful measurements must be retained when evaluating subsequent
 optimisations.
+
+## Current guarded-read performance slice
+
+See the [phase profile](profile/README.md), [bounded integrated native results](current-native/README.md)
+and [remaining-criteria audit](current-acceptance.md). All earlier baseline results remain above.
+The new slice improves repeated content-checked reconciliation and native read scheduling, but
+measured budget misses and incomplete full-workflow acceptance keep #194/#182 open.
