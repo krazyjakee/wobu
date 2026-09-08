@@ -1,7 +1,9 @@
 //! Versioned native JSON assets. No authoring database, providers or engine adapter.
 mod disk;
 mod locales;
+mod media;
 pub use locales::LOCALISATION;
+pub use media::PREPARED_MEDIA;
 mod validate;
 
 use serde::{Deserialize, Serialize};
@@ -83,7 +85,7 @@ pub struct LocalizedString {
     pub revision: Option<String>,
 }
 type Strings = BTreeMap<String, LocalizedString>;
-/// v1 has no authored media bindings. Reject non-empty rather than claim to package them.
+/// Legacy packages keep an empty media object without the optional capability.
 type Media = BTreeMap<String, serde_json::Value>;
 
 #[derive(Debug, Clone)]
@@ -213,10 +215,7 @@ impl Package {
             return Err(invalid("graph envelope disagrees with manifest"));
         }
         let state: BTreeMap<Name, StateVariable> = parse(self.file("state.json")?)?;
-        let media: Media = parse(self.file("media.json")?)?;
-        if !media.is_empty() {
-            return Err(invalid("media bindings require a future supported capability"));
-        }
+        let media = self.media()?;
         let mut strings = self.strings()?;
         if strings.len() > MAX_STRINGS {
             return Err(invalid("too many strings"));
@@ -275,6 +274,9 @@ impl Package {
         let mut expected_capabilities = validate::capabilities(!graph.texts.is_empty());
         if self.locales()?.is_some() {
             expected_capabilities.insert(LOCALISATION.into(), 1);
+        }
+        if media.is_some() {
+            expected_capabilities.insert(PREPARED_MEDIA.into(), 1);
         }
         if self.manifest.required_capabilities != expected_capabilities {
             return Err(invalid("declared capabilities disagree with the packaged graph"));

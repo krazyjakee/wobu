@@ -133,8 +133,8 @@ export function NarrativeExport({ onClose }: { onClose: () => void }) {
         </fieldset>
         <p>
           Release requires approved, current, non-empty text and each configured locale, or its
-          explicit fallback policy. Configure locales in Review → Localisation. Media bindings are
-          not authored yet; this package contains no media assets.
+          explicit fallback policy. Configure locales and recording requirements in Review. Required
+          recordings must match current wording, or explicitly permit text-only fallback.
         </p>
         <div className="nrt-export-actions">
           <button className="btn" disabled={busy || !validCommands} onClick={() => void validate()}>
@@ -177,6 +177,16 @@ export function NarrativeExport({ onClose }: { onClose: () => void }) {
           </ul>
         )}
         {check && !check.localeDiagnostics?.length && <p>Configured locale checks passed.</p>}
+        {!!check?.mediaDiagnostics?.length && (
+          <ul aria-label="Media export diagnostics">
+            {check.mediaDiagnostics.map((d, i) => (
+              <li key={i}>
+                {d.key}: {d.message} ({d.code})
+              </li>
+            ))}
+          </ul>
+        )}
+        {check && !check.mediaDiagnostics?.length && <p>Configured recording checks passed.</p>}
         {error && <p role="alert">{error}</p>}
         {report && (
           <div role="status">

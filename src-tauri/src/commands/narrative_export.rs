@@ -17,6 +17,7 @@ use wobu_store::Project;
 pub struct ExportCheck {
     pub diagnostics: Vec<CompileDiagnostic>,
     pub locale_diagnostics: Vec<wobu_narrative_locale::Diagnostic>,
+    pub media_diagnostics: Vec<wobu_narrative_media::Diagnostic>,
     pub payload_hash: Option<String>,
     pub scenes: usize,
     pub strings: usize,
@@ -210,9 +211,34 @@ fn prepare_checked(
         locales.policy.required.clear();
         locales.strings.clear();
     }
+    let mut media = project.media_release()?;
+    let media_blocked = media.diagnostics.iter().any(|d| d.code == "missing_media");
+    if profile == Profile::Development {
+        media.bundle.required.clear();
+        media.bundle.timing.clear();
+        media.bundle.fallback.clear();
+        if locale_blocked {
+            media.bundle.takes.retain(|_, take| take.key.locale == locales.policy.source);
+            let paths: BTreeSet<_> = media
+                .bundle
+                .takes
+                .values()
+                .flat_map(|take| {
+                    std::iter::once(&take.audio.path).chain(take.timing.iter().map(|b| &b.path))
+                })
+                .cloned()
+                .collect();
+            media.files.retain(|path, _| paths.contains(path));
+        }
+    }
     let package = report
         .graph
-        .map(|graph| Package::build(graph, debug).and_then(|p| p.with_locales(locales)))
+        .filter(|_| profile != Profile::Release || (!locale_blocked && !media_blocked))
+        .map(|graph| {
+            Package::build(graph, debug)
+                .and_then(|p| p.with_locales(locales))
+                .and_then(|p| p.with_media(media.bundle, media.files))
+        })
         .transpose()
         .map_err(package_error)?;
     let package = if locale_blocked && profile == Profile::Release { None } else { package };
@@ -223,6 +249,7 @@ fn prepare_checked(
         ));
     }
     let check = ExportCheck {
+        media_diagnostics: media.diagnostics,
         locale_diagnostics,
         diagnostics: report.diagnostics,
         payload_hash: package.as_ref().map(|p| p.manifest.payload_hash.clone()),

@@ -11,6 +11,8 @@ import { invalidateNarrative } from '../../lib/queries/keys'
 import { ReviewQueue } from './review/ReviewQueue'
 import { ReviewBulk } from './review/ReviewBulk'
 import { NarrativeLocale } from './NarrativeLocale'
+import { NarrativeMedia } from './NarrativeMedia'
+import { narrativeMediaGet, mediaKey, mediaStatus } from '../../lib/api/narrativeMedia'
 import {
   narrativeLocaleGet,
   translationStatus,
@@ -33,6 +35,8 @@ export function NarrativeReview({
   onClose: () => void
 }) {
   const [showLocale, setShowLocale] = useState(false)
+  const [showMedia, setShowMedia] = useState(false)
+  const [recording, setRecording] = useState('')
   const [production, setProduction] = useState('')
   const [locale, setLocale] = useState('fr')
   const localisation = useQuery({
@@ -41,6 +45,27 @@ export function NarrativeReview({
     enabled: Boolean(production),
     retry: false,
   })
+  const media = useQuery({
+    queryKey: ['narrative_media', projectKey, locale],
+    queryFn: () => narrativeMediaGet(locale),
+    enabled: Boolean(recording),
+    retry: false,
+  })
+  const mediaMatches = useMemo(() => {
+    const invalid = new Set(media.data?.diagnostics.map((d) => d.key))
+    return new Set(
+      media.data?.rows
+        .filter(
+          (row) =>
+            mediaStatus(
+              row,
+              media.data?.bindings[mediaKey(row.key)],
+              invalid.has(mediaKey(row.key)),
+            ) === recording,
+        )
+        .map((row) => row.key.id),
+    )
+  }, [media.data, recording])
   const localeIndex = useMemo(() => translationIndex(localisation.data), [localisation.data])
   const [stateJson, setStateJson] = useState<string | null>(null)
   const queue = useNarrativeReviewQueue(projectKey, stateJson)
@@ -65,19 +90,21 @@ export function NarrativeReview({
         projectKey={projectKey}
         readOnly={readOnly}
         views={
-          production
+          production || recording
             ? views.map((view) => ({
                 ...view,
                 lines: view.lines.filter(
                   (line) =>
-                    localisation.data &&
                     line.target.variant &&
-                    translationStatus(
-                      localisation.data,
-                      locale,
-                      line.target.variant,
-                      localeIndex,
-                    ) === production,
+                    (!recording || mediaMatches.has(line.target.variant)) &&
+                    (!production ||
+                      (localisation.data &&
+                        translationStatus(
+                          localisation.data,
+                          locale,
+                          line.target.variant,
+                          localeIndex,
+                        ) === production)),
                 ),
               }))
             : views
@@ -105,6 +132,21 @@ export function NarrativeReview({
             <button className="btn" onClick={() => setShowLocale(true)}>
               Localisation…
             </button>
+            <button className="btn" onClick={() => setShowMedia(true)}>
+              Recording…
+            </button>
+            <label>
+              Media readiness{' '}
+              <select value={recording} onChange={(e) => setRecording(e.target.value)}>
+                <option value="">All media</option>
+                <option value="missing">Missing recording</option>
+                <option value="out_of_date">Recording out of date</option>
+                <option value="unavailable">Recording unavailable</option>
+                <option value="current">Recording current</option>
+              </select>
+            </label>
+            {recording && media.isPending && <p role="status">Reading recording readiness…</p>}
+            {recording && media.isError && <p role="alert">{errorMessage(media.error)}</p>}
             <label>
               Production locale{' '}
               <input value={locale} onChange={(e) => setLocale(canonicalLocale(e.target.value))} />
@@ -152,6 +194,13 @@ export function NarrativeReview({
           />
         )}
       />
+      {showMedia && (
+        <NarrativeMedia
+          projectKey={projectKey}
+          readOnly={readOnly}
+          onClose={() => setShowMedia(false)}
+        />
+      )}
       {showLocale && (
         <NarrativeLocale
           projectKey={projectKey}

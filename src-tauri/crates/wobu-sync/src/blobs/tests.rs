@@ -326,3 +326,13 @@ fn only_one_spelling_of_a_digest_parses() {
     // Valid base32 for the same 32 bytes, which `Hash::from_str` would take.
     assert!(parse_hash("V4JUTOPV7GQ2NIBABTPKG3OMSSN4WJOJVXARFN6MTKJ4VZA7GJRA").is_none());
 }
+
+#[test]
+fn prepared_media_paths_must_agree_with_their_transferred_content_hash() {
+    let hash = "a".repeat(64);
+    assert!(super::agrees(&format!("assets/media/{hash}.wav"), &hash));
+    assert!(super::agrees(&format!("assets/media/{hash}.json"), &hash));
+    assert!(!super::agrees(&format!("assets/media/{hash}.wav"), &"b".repeat(64)));
+    assert!(!super::agrees("assets/media/arbitrary.wav", &hash));
+    assert!(!super::agrees(&format!("assets/media/{hash}.exe"), &hash));
+}
