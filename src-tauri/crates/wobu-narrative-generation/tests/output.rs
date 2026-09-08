@@ -31,7 +31,7 @@ fn fixture() -> (FrozenRequest, serde_json::Value) {
         text: String::new(),
     };
     let request = FrozenRequest {
-        version: VERSION,
+        version: REQUEST_VERSION,
         source_schema_version: wobu_narrative::SOURCE_SCHEMA_VERSION,
         request_id: wobu_core::new_id(),
         batch_id: wobu_core::new_id(),
@@ -112,9 +112,21 @@ fn rejects_changed_identities_bad_lengths_and_incomplete_json() {
 #[test]
 fn frozen_contract_rejects_future_versions_tampered_context_and_lock() {
     let (request, _) = fixture();
-    let mut bad = request.clone();
-    bad.version += 1;
-    assert!(bad.validate().is_err());
+    for version in [1, 2] {
+        let mut supported = request.clone();
+        supported.version = version;
+        supported.validate().unwrap();
+        let bytes = serde_json::to_vec(&supported).unwrap();
+        let restored: FrozenRequest = serde_json::from_slice(&bytes).unwrap();
+        restored.validate().unwrap();
+        assert_eq!(restored.hash(), supported.hash());
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
+    }
+    for version in [0, REQUEST_VERSION + 1] {
+        let mut bad = request.clone();
+        bad.version = version;
+        assert!(bad.validate().is_err());
+    }
     let mut bad = request.clone();
     bad.context.request.push_str(" changed");
     assert!(bad.validate().is_err());
@@ -132,6 +144,8 @@ fn frozen_contract_rejects_future_versions_tampered_context_and_lock() {
 #[test]
 fn source_capabilities_preserve_frozen_v1_and_reject_future_versions() {
     let (mut request, _) = fixture();
+    request.version = 1;
+    request.source_schema_version = 1;
     let bytes = serde_json::to_vec(&request).unwrap();
     let hash = request.hash();
     request.validate().unwrap();
