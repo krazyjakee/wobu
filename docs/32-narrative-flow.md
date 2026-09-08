@@ -42,6 +42,17 @@ status and badge controls with the canvas. Pinned notes appear as a paged list w
 delete controls, plus numeric placement fields. Reveals expand folded groups before focusing their
 members. Presentation and filtering never create a scene draft or a source undo entry.
 
+The arc's **Group** control carves the same scenes up without editing them. *By arrangement group*
+shows the groups drawn in the sidecar and is what a project arc opens on. *By quest* and *by quest
+state* read `narrative/world.yaml`: a scene sits in the quest whose `scene_ids` name it, and a
+quest's state is the stage it starts in, because a project records no running quest state. A scene
+listed by several quests appears in the first and the pane says how many are affected. Quest groups
+collapse and expand on the canvas and in the outline, but they last for the session only: the
+arrangement file keeps the collapse of the groups a writer drew, not of a grouping derived from
+World. Switching the control writes nothing to source, to World or to the arrangement. When World
+cannot be read the quest groupings are refused with that reason instead of grouping by something
+else.
+
 The project arrangement reads complete scene source only for its current page of 50 scenes, after
 applying the selected quest scope. Previous/next controls show the range and total; connections to
 scenes outside the current page are not drawn. Use the Library to find a scene directly. Opening an

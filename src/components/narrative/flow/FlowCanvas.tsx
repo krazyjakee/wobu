@@ -230,7 +230,9 @@ function Canvas({
   const closedGroups = useFlowLevel((s) => s.closedGroups)
   const announcement = useFlowLevel((s) => s.announcement)
   const setClosedGroups = useFlowLevel((s) => s.setClosedGroups)
-  useFlowGroupPresentation(presentation, readOnly)
+  // A regrouped level's closed set names its own containers rather than the
+  // sidecar's, so the sidecar is left alone while one is on. See the hook.
+  useFlowGroupPresentation(presentation, readOnly, !!grouping)
   const sourceDisabled = readOnly || !!actions?.disabled
   const { select, connect, remove, add } = useSceneEdits({
     scene,

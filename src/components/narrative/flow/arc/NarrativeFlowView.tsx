@@ -39,9 +39,10 @@ import type { FlowArc } from './model'
  * links, through the same `ArcFlow` below.
  *
  * The quests are a fixture for a second and separate reason, which the banner
- * keeps apart from the first: there is no quest model *at all* (#155), so they
- * would still be invented on a real project's arc. That is why the grouping
- * note is shown whether or not the scenes are demonstration data.
+ * keeps apart from the first: they are invented here, while a project's arc
+ * reads its own from World (#187). That is why the grouping note is shown
+ * whether or not the scenes are demonstration data, and why it says which of
+ * the two it is looking at.
  */
 
 export type FlowViewSource =
@@ -208,8 +209,9 @@ function Levels({
       <p className="nrt-note" id="nrt-quests-unavailable" role="note">
         <Icon name="folder" size="sm" />
         {arc.quests === null
-          ? NARRATIVE_UNAVAILABLE.quests
-          : `Grouping uses demonstration quests. ${NARRATIVE_UNAVAILABLE.quests}`}
+          ? 'This arc came with no quests, so it cannot be grouped by them. '
+          : 'Grouping uses demonstration quests, not the ones in this project’s World document. '}
+        {NARRATIVE_UNAVAILABLE.quests}
       </p>
 
       <ArcFlow arc={arc} onChange={setArc} onEnter={enter} readOnly={readOnly} layout={layout} />

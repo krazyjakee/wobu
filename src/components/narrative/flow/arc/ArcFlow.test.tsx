@@ -145,6 +145,33 @@ describe('grouping, collapse and filters', () => {
     expect(latest).toBeNull()
   })
 
+  it('folds the same quest in the outline, which is the keyboard alternative', () => {
+    // #151 asks for a full alternative rather than a reduced one, and a reader
+    // who cannot use a plane is the reader who most needs an arc folded into
+    // its quests. Same control, same containers, same closed set.
+    render(<Harness initial={beaconArc()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Outline list' }))
+    const rows = () =>
+      screen
+        .getByLabelText('The beacon inquiry outline')
+        .querySelectorAll(':scope > .nrt-outline-row')
+    expect(rows()).toHaveLength(4)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close group The beacon inquiry' }))
+    expect(rows()).toHaveLength(1)
+    expect(screen.getByLabelText('The beacon inquiry outline')).toHaveTextContent('3 elements')
+    expect(
+      screen.getByRole('button', { name: 'Open group The beacon inquiry' }),
+    ).toBeInTheDocument()
+  })
+
+  it('regroups the outline by quest state from the same control', () => {
+    render(<Harness initial={beaconArc()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Outline list' }))
+    fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'questState' } })
+    expect(screen.getByRole('button', { name: 'Close group Investigating' })).toBeInTheDocument()
+  })
+
   it('refuses to group by quest when the quest model is not available', () => {
     render(<Harness initial={{ ...beaconArc(), quests: null }} />)
     const field = screen.getByLabelText('Group')

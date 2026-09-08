@@ -114,21 +114,32 @@ function Arc({
   creatable: readonly FlowKind[]
 }) {
   const [mode, setMode] = useState<FlowMode>('canvas')
-  const [grouping, setGrouping] = useState<ArcGrouping>(arc.quests === null ? 'none' : 'quest')
+  /*
+   * What the arc opens grouped by.
+   *
+   * An arrangement is a thing somebody drew and saved, so a project arc opens
+   * showing it rather than replacing it with a grouping nobody asked for. A
+   * demonstration arc has no arrangement to show and opens by quest, which is
+   * the grouping #187 is about; an arc whose quests could not be read opens
+   * ungrouped, because the alternative is pretending to know.
+   */
+  const [grouping, setGrouping] = useState<ArcGrouping>(() =>
+    presentation ? 'arrangement' : arc.quests === null ? 'none' : 'quest',
+  )
   const closedGroups = useFlowLevel((s) => s.closedGroups)
   const setClosedGroups = useFlowLevel((s) => s.setClosedGroups)
 
   const diagnostics = useMemo(() => arcDiagnostics(arc), [arc])
-  const groups = useMemo(
-    () =>
-      presentation
-        ? {
-            groups: arc.level.groups,
-            of: (element: FlowLevel['elements'][number]) => element.groupId ?? null,
-          }
-        : arcGrouping(arc, grouping),
-    [arc, grouping, presentation],
-  )
+  const groups = useMemo(() => arcGrouping(arc, grouping), [arc, grouping])
+  /*
+   * Derived means "these boxes are not the level's own".
+   *
+   * Handed to the canvas and the outline only then, so that showing the
+   * arrangement is byte for byte what it was before this control existed: the
+   * shared components fall back to `level.groups` and to each element's own
+   * `groupId`, and the layout sidecar keeps owning which of them are closed.
+   */
+  const derived = grouping !== 'arrangement'
 
   /*
    * Which quests open closed.
@@ -148,7 +159,7 @@ function Arc({
    * else is a first look at this grouping and gets the default.
    */
   useEffect(() => {
-    if (presentation) return
+    if (!derived) return
     const mine = new Set(groups.groups.map((group) => group.id))
     if (closedGroups.some((id) => mine.has(id))) return
     setClosedGroups(defaultClosedGroups(arc.level, undefined, groups.groups))
@@ -156,7 +167,7 @@ function Arc({
     // *default* is, and re-running it every time the writer opens a box is how
     // it would start fighting them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, arc.level, setClosedGroups])
+  }, [groups, derived, arc.level, setClosedGroups])
 
   const change = (level: FlowLevel) => onChange({ ...arc, level })
 
@@ -206,7 +217,7 @@ function Arc({
           onPositionsChange={onPositionsChange}
           presentation={presentation}
           creatable={creatable}
-          grouping={groups}
+          grouping={derived ? groups : undefined}
           // No spare exit where an exit cannot be authored: a handle that
           // refuses every drag is worse than no handle.
           spare={authoring?.refuse ? undefined : arcSpare}
@@ -216,21 +227,43 @@ function Arc({
           onActivate={onEnter}
           noun="scene"
           targetOf={arcTarget}
-          toolbar={<GroupingField arc={arc} grouping={grouping} onGrouping={setGrouping} />}
+          toolbar={
+            <GroupingField
+              arc={arc}
+              arrangement={!!presentation}
+              grouping={grouping}
+              onGrouping={setGrouping}
+            />
+          }
         />
       ) : (
-        <FlowOutline
-          presentation={presentation}
-          scene={arc.level}
-          onChange={change}
-          readOnly={readOnly}
-          creatable={creatable}
-          spare={authoring?.refuse ? undefined : arcSpare}
-          authoring={authoring}
-          onActivate={onEnter}
-          activateLabel="Open scene"
-          targetOf={arcTarget}
-        />
+        <>
+          {/* The same control, above the list. #151 requires the outline to be
+              a full alternative rather than a reduced one, and a reader who
+              cannot use the canvas is exactly the reader who most needs the
+              1,000-scene arc folded into fifty quests. */}
+          <div className="nrt-flow-head">
+            <GroupingField
+              arc={arc}
+              arrangement={!!presentation}
+              grouping={grouping}
+              onGrouping={setGrouping}
+            />
+          </div>
+          <FlowOutline
+            presentation={presentation}
+            scene={arc.level}
+            onChange={change}
+            readOnly={readOnly}
+            creatable={creatable}
+            grouping={derived ? groups : undefined}
+            spare={authoring?.refuse ? undefined : arcSpare}
+            authoring={authoring}
+            onActivate={onEnter}
+            activateLabel="Open scene"
+            targetOf={arcTarget}
+          />
+        </>
       )}
     </>
   )
@@ -242,31 +275,43 @@ const CREATABLE: readonly FlowKind[] = ['scene']
 /**
  * Group by quest, or say why not.
  *
- * `readOnly` and `aria-disabled` rather than `disabled`, the same choice the
- * rest of this workspace makes: a disabled control cannot be focused, so it
- * cannot explain itself, and "why can't I group by quest" is exactly the
- * question this build has to answer.
+ * `aria-disabled` rather than `disabled`, the same choice the rest of this
+ * workspace makes: a disabled control cannot be focused, so it cannot explain
+ * itself, and "why can't I group by quest" is exactly the question a build
+ * whose World read failed has to answer. It points at the note that answers it.
+ *
+ * Nothing is offered that cannot be honoured. The quest groupings appear only
+ * when the quests were read, and the arrangement grouping only where there is
+ * an arrangement — a demonstration arc has no sidecar, so a container it drew
+ * would be one nobody could keep.
  */
 function GroupingField({
   arc,
+  arrangement,
   grouping,
   onGrouping,
 }: {
   arc: FlowArc
+  arrangement: boolean
   grouping: ArcGrouping
   onGrouping: (grouping: ArcGrouping) => void
 }) {
-  const available = arc.quests !== null
+  const options = ARC_GROUPINGS.filter((option) => {
+    if (option.id === 'arrangement') return arrangement
+    if (option.id === 'quest' || option.id === 'questState') return arc.quests !== null
+    return true
+  })
+  const available = options.length > 1
   return (
     <label className="nrt-bar-field">
       <span>Group</span>
       <select
         value={grouping}
         aria-disabled={available ? undefined : 'true'}
-        aria-describedby={available ? undefined : 'nrt-quests-unavailable'}
+        aria-describedby={arc.quests === null ? 'nrt-quests-unavailable' : undefined}
         onChange={(event) => available && onGrouping(event.target.value as ArcGrouping)}
       >
-        {ARC_GROUPINGS.filter((option) => available || option.id === 'none').map((option) => (
+        {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.label}
           </option>
