@@ -88,6 +88,12 @@ it('previews before guarded partial import, displays RTL safely and approves ind
   await screen.findByText(/1 rows imported/)
   const translation = screen.getByText('مرحبا {name} "<script>"')
   expect(translation.closest('[dir]')).toHaveAttribute('dir', 'auto')
+  // Native dir=auto chooses the first strong character. A Latin category label
+  // inside this paragraph would force Arabic wording into an LTR paragraph.
+  expect(translation.tagName).toBe('P')
+  expect(translation.textContent).toBe('مرحبا {name}\n"<script>"')
+  expect(translation.querySelector('strong')).toBeNull()
+  expect(translation.previousElementSibling).toHaveTextContent('other:')
   expect(document.querySelector('script')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Approve translation' }))
   await waitFor(() =>

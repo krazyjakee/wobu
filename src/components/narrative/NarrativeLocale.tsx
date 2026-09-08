@@ -322,10 +322,10 @@ export function NarrativeLocale({
                         <td>
                           {latest
                             ? Object.entries(latest.forms).map(([category, text]) => (
-                                <p dir="auto" key={category}>
+                                <div key={category}>
                                   <strong>{category}: </strong>
-                                  {text}
-                                </p>
+                                  <p dir="auto">{text}</p>
+                                </div>
                               ))
                             : 'No translation'}
                         </td>
