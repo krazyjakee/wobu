@@ -36,7 +36,7 @@ export function TextEditorial({
   const [stateJson, setStateJson] = useState<string | null>(null)
   const [slotId, setSlotId] = useState('')
   const review = useQuery({
-    queryKey: ['narrative-review-text', projectKey, asset.id, stateJson],
+    queryKey: ['narrative_review', projectKey, 'text', asset.id, stateJson],
     queryFn: () => narrativeReviewGet(asset.id, stateJson),
     enabled: mode === 'review',
     retry: false,

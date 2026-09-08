@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NarrativeTextLibrary } from './NarrativeTextLibrary'
 import { useTextDrafts } from './textDrafts'
 import type { TextCatalog, TextFile } from '../../lib/api/narrativeText'
+import { invalidateNarrative } from '../../lib/queries/keys'
+import { reviewFixture } from './review/reviewFixture.test-support'
 
 const h = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
@@ -81,8 +83,10 @@ async function openEditor() {
   return editor
 }
 
-function draw(readOnly = false) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function draw(
+  readOnly = false,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
     <QueryClientProvider client={client}>
       <NarrativeTextLibrary
@@ -352,6 +356,36 @@ describe('the Text library', () => {
 })
 
 describe('supporting text production controls', () => {
+  it('refreshes an open Text Review when narrative sources are invalidated externally', async () => {
+    const review = reviewFixture()
+    review.scene_id = 'bark'
+    review.lines = [
+      {
+        ...review.lines[0]!,
+        target: { scene: 'bark', beat: 'entry', slot: 'line', variant: 'variant' },
+        freshness: 'current',
+      },
+    ]
+    h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+      Promise.resolve(
+        command === 'narrative_review_get' ? structuredClone(review) : respond(command, args ?? {}),
+      ),
+    )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    draw(false, client)
+    fireEvent.click((await openEditor()).getByRole('button', { name: 'Review' }))
+    const queue = within(await screen.findByRole('region', { name: 'Project review queue' }))
+    expect(await queue.findByText(/· Current$/)).toBeInTheDocument()
+
+    review.lines[0]!.freshness = 'out_of_date'
+    invalidateNarrative(client)
+    expect(await queue.findByText(/· Out of date$/)).toBeInTheDocument()
+    expect(queue.queryByText(/· Current$/)).toBeNull()
+    expect(
+      h.invoke.mock.calls.filter(([command]) => command === 'narrative_review_get'),
+    ).toHaveLength(2)
+  })
+
   it('pages a large catalog and combines search with type filters', async () => {
     const assets = Array.from({ length: 76 }, (_, index) => ({
       ...catalog.assets[index % 2]!,
