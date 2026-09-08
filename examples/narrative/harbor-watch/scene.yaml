@@ -1,0 +1,114 @@
+schema_version: 1
+scene:
+  id: '00000000000000000000000001'
+  name: 'Harbor Watch: the missing light'
+  beats:
+  - id: '00000000000000000000000002'
+    title: Report at the seawall
+    dialogue:
+    - id: '00000000000000000000000003'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000004'
+        when:
+          compare:
+            var: knowledge
+            op: eq
+            value:
+              literal: witnessed
+        text:
+          revision: a3b8166cf76e7ce64a0d01f8f2db9d87
+          body: I watched the north lantern go dark before the bell.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+      - id: '00000000000000000000000005'
+        when:
+          compare:
+            var: knowledge
+            op: eq
+            value:
+              literal: told
+        text:
+          revision: 6ca16fdeff290b777ce35963219a1156
+          body: Mara told me the north lantern went dark before the bell.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+      - id: '00000000000000000000000006'
+        when:
+          compare:
+            var: knowledge
+            op: eq
+            value:
+              literal: rumour
+        text:
+          revision: edf4183fa9d4d7e5a60305e05f8d5f86
+          body: The quay is whispering about a dark lantern. I cannot swear it happened.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    - id: '00000000000000000000000007'
+      speaker: narrator
+      policy: edited
+      variants:
+      - id: '00000000000000000000000008'
+        when:
+          compare:
+            var: trust
+            op: ge
+            value:
+              literal: 50
+        text:
+          revision: e1b9d28db5bedd8678bed5b1cb097305
+          body: You have kept your word before. Take the watch key.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+      - id: '00000000000000000000000009'
+        text:
+          revision: 70fb5fc747d22fb359a2bcdaa17a5d56
+          body: Stay on the seawall until we verify the report.
+          provenance: human
+          lifecycle:
+            policy: edited
+            review: draft
+            freshness: current
+    choices:
+    - id: '00000000000000000000000010'
+      label: Record the report
+      effects:
+      - add:
+          var: trust
+          by: 5
+      - command:
+          name: record_watch
+      to:
+        end:
+          label: Watch assigned
+    - id: '00000000000000000000000011'
+      label: Lead the lantern search
+      requires:
+        compare:
+          var: trust
+          op: ge
+          value:
+            literal: 50
+      effects:
+      - add:
+          var: trust
+          by: 5
+      - command:
+          name: record_watch
+      to:
+        end:
+          label: Watch assigned

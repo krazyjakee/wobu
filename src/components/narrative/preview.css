@@ -43,3 +43,26 @@
   margin: 8px 0;
   padding-left: 24px;
 }
+
+.nrt-scenarios fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+}
+.nrt-scenarios label {
+  display: grid;
+  gap: 0.25rem;
+}
+.nrt-scenario-results {
+  max-height: 50vh;
+  overflow: auto;
+  padding-inline-start: 1.25rem;
+}
+.nrt-scenario-results li {
+  margin-block: 1rem;
+}
+.nrt-scenario-results pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

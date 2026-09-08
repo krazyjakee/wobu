@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ScenarioTape } from './scenarioTape'
 import type {
   CompileDiagnostic,
   PreviewFrame,
@@ -7,6 +8,7 @@ import type {
 } from '../../lib/api/narrativePreview'
 
 export interface PreviewSession {
+  tape?: ScenarioTape
   graph: PreviewGraph
   frame: PreviewFrame
   trace: { label: string; execution: ExecutionTrace }[]

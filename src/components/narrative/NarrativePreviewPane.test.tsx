@@ -91,6 +91,7 @@ describe('deterministic narrative preview', () => {
       graph: { fingerprint: 'build' },
       sceneId: 'scene',
       initialState: { trust: 71 },
+      seed: 0,
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save snapshot' }))
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -352,4 +353,54 @@ describe('deterministic narrative preview', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Arithmetic overflow for trust.')
     expect(screen.getByText('I have proof.')).toBeInTheDocument()
   })
+})
+
+it('captures the full action tape and frozen command signatures when saving a playthrough', async () => {
+  const previous = h.invoke.getMockImplementation()!
+  h.invoke.mockImplementation(async (command: string, args: Record<string, unknown>) => {
+    if (command === 'narrative_scenario_save')
+      return {
+        id: 'saved',
+        name: args.name,
+        scenario: JSON.parse(args.source as string),
+        stamp: null,
+      }
+    return previous(command, args)
+  })
+  mount()
+  await screen.findByLabelText('Initial trust')
+  fireEvent.change(screen.getByLabelText('Command signatures (JSON)'), {
+    target: { value: '{"award_badge":["bool"]}' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Start preview' }))
+  await screen.findByText('I have proof.')
+  fireEvent.change(screen.getByLabelText('Command signatures (JSON)'), { target: { value: '{}' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save snapshot' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Show proof' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Acknowledge command' }))
+  await screen.findByText('Scene ended: Supported')
+  fireEvent.click(screen.getByRole('button', { name: 'Restore snapshot' }))
+  await screen.findByText('I have proof.')
+  fireEvent.click(screen.getByText('Saved scenarios'))
+  fireEvent.change(screen.getByLabelText('Scenario name'), {
+    target: { value: 'Council regression' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Save scenario' }))
+  await screen.findByText('Saved “Council regression” with 6 asserted steps.')
+  const request = h.invoke.mock.calls.find(([command]) => command === 'narrative_scenario_save')![1]
+  const scenario = JSON.parse(request.source)
+  expect(scenario.commands).toEqual({ award_badge: ['bool'] })
+  expect(
+    scenario.steps.map((step: { action: { kind: string } | null }) => step.action?.kind ?? null),
+  ).toEqual([
+    null,
+    'save_checkpoint',
+    'advance',
+    'choose',
+    'complete_command',
+    'restore_checkpoint',
+  ])
+  expect(request.source).not.toContain('I have proof.')
+  expect(request.source).not.toContain('token')
 })

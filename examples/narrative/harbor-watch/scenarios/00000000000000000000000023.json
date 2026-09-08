@@ -1,0 +1,167 @@
+{
+  "id": "00000000000000000000000023",
+  "kind": "scenario",
+  "name": "High trust / told",
+  "payload": {
+    "commands": {
+      "record_watch": []
+    },
+    "initial_state": {
+      "knowledge": "told",
+      "recorded": false,
+      "trust": 70
+    },
+    "scene": "00000000000000000000000001",
+    "seed": 17,
+    "steps": [
+      {
+        "action": null,
+        "expect": {
+          "boundary": {
+            "beat": "00000000000000000000000002",
+            "kind": "line",
+            "scene": "00000000000000000000000001",
+            "slot": "00000000000000000000000003",
+            "variant": "00000000000000000000000005"
+          },
+          "error": null,
+          "state": {}
+        }
+      },
+      {
+        "action": {
+          "kind": "advance"
+        },
+        "expect": {
+          "boundary": {
+            "beat": "00000000000000000000000002",
+            "kind": "line",
+            "scene": "00000000000000000000000001",
+            "slot": "00000000000000000000000007",
+            "variant": "00000000000000000000000008"
+          },
+          "error": null,
+          "state": {}
+        }
+      },
+      {
+        "action": {
+          "kind": "advance"
+        },
+        "expect": {
+          "boundary": {
+            "beat": "00000000000000000000000002",
+            "ids": [
+              "00000000000000000000000010",
+              "00000000000000000000000011"
+            ],
+            "kind": "choices",
+            "scene": null
+          },
+          "error": null,
+          "state": {}
+        }
+      },
+      {
+        "action": {
+          "choice": "00000000000000000000000011",
+          "kind": "choose"
+        },
+        "expect": {
+          "boundary": {
+            "args": [],
+            "kind": "command",
+            "name": "record_watch"
+          },
+          "error": null,
+          "state": {
+            "recorded": false,
+            "trust": 75
+          }
+        }
+      },
+      {
+        "action": {
+          "kind": "save_checkpoint"
+        },
+        "expect": {
+          "boundary": {
+            "args": [],
+            "kind": "command",
+            "name": "record_watch"
+          },
+          "error": null,
+          "state": {
+            "recorded": false,
+            "trust": 75
+          }
+        }
+      },
+      {
+        "action": {
+          "kind": "complete_command",
+          "result": {
+            "failed": {
+              "message": "The clerk is away"
+            }
+          }
+        },
+        "expect": {
+          "boundary": {
+            "args": [],
+            "kind": "command",
+            "name": "record_watch"
+          },
+          "error": "command_failed",
+          "state": {
+            "recorded": false,
+            "trust": 75
+          }
+        }
+      },
+      {
+        "action": {
+          "kind": "restore_checkpoint"
+        },
+        "expect": {
+          "boundary": {
+            "args": [],
+            "kind": "command",
+            "name": "record_watch"
+          },
+          "error": null,
+          "state": {
+            "recorded": false,
+            "trust": 75
+          }
+        }
+      },
+      {
+        "action": {
+          "kind": "complete_command",
+          "result": {
+            "success": {
+              "host_inputs": {
+                "recorded": true
+              }
+            }
+          }
+        },
+        "expect": {
+          "boundary": {
+            "beat": "00000000000000000000000002",
+            "kind": "end",
+            "scene": "00000000000000000000000001"
+          },
+          "error": null,
+          "state": {
+            "recorded": true,
+            "trust": 75
+          }
+        }
+      }
+    ],
+    "version": 1
+  },
+  "schema_version": 1
+}

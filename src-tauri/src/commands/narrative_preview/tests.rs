@@ -37,7 +37,7 @@ fn handwritten_project_compiles_and_previews_without_mutating_its_source() {
     );
     let graph = report.graph.unwrap();
     let initial = BTreeMap::from([(Name::new("trust").unwrap(), wobu_narrative::Value::Int(40))]);
-    let start = narrative_preview_start(graph.clone(), file.scene.id, initial).unwrap();
+    let start = narrative_preview_start(graph.clone(), file.scene.id, initial, None).unwrap();
     assert!(matches!(start.current, Yield::Line { .. }));
     let snapshot = start.snapshot.clone();
     let choices = narrative_preview_step(graph.clone(), snapshot, PreviewAction::Advance).unwrap();
@@ -144,7 +144,7 @@ fn preview_rejects_output_counters_that_advance_beyond_the_exact_webview_range()
     )
     .graph
     .unwrap();
-    let start = narrative_preview_start(graph.clone(), scene.id, Values::new()).unwrap();
+    let start = narrative_preview_start(graph.clone(), scene.id, Values::new(), None).unwrap();
     let mut saved = serde_json::to_value(start.snapshot).unwrap();
     saved["visits"][&beat_id] = serde_json::json!(9_007_199_254_740_991_i64);
     let snapshot: Snapshot = serde_json::from_value(saved).unwrap();
@@ -189,6 +189,7 @@ fn pending_preview_commands_restore_fail_cancel_and_accept_validated_host_output
         graph.clone(),
         scene.id,
         BTreeMap::from([(Name::new("host_ready").unwrap(), wobu_narrative::Value::Bool(false))]),
+        Some(17),
     )
     .unwrap();
     let Yield::GameCommand { token, .. } = &start.current else { panic!() };

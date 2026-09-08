@@ -76,7 +76,8 @@ impl Runtime {
         &self.trace
     }
 
-    pub(super) fn site(&self) -> TraceSite {
+    /// Stable current cursor, including at command and End boundaries.
+    pub fn site(&self) -> TraceSite {
         TraceSite {
             scene: self.saved.scene.clone(),
             beat: (!self.saved.beat.is_empty()).then(|| self.saved.beat.clone()),

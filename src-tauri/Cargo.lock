@@ -7880,6 +7880,7 @@ dependencies = [
  "wobu-narrative-context",
  "wobu-narrative-package",
  "wobu-narrative-runtime",
+ "wobu-narrative-scenarios",
  "wobu-store",
  "wobu-sync",
 ]
@@ -8027,6 +8028,18 @@ dependencies = [
  "thiserror 2.0.19",
  "wobu-narrative",
  "wobu-narrative-compiler",
+]
+
+[[package]]
+name = "wobu-narrative-scenarios"
+version = "0.1.11"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "wobu-narrative",
+ "wobu-narrative-compiler",
+ "wobu-narrative-runtime",
 ]
 
 [[package]]

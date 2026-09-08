@@ -1,0 +1,22 @@
+schema_version: 1
+variables:
+- name: trust
+  type:
+    int:
+      min: 0
+      max: 100
+  default: 20
+  owner: narrative
+- name: knowledge
+  type:
+    enum:
+      members:
+      - witnessed
+      - told
+      - rumour
+  default: rumour
+  owner: host
+- name: recorded
+  type: bool
+  default: false
+  owner: host
