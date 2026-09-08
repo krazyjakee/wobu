@@ -1,10 +1,15 @@
 # 05 — Technical Architecture
 
-The planned [narrative extension](17-narrative-system.md) adds typed narrative source,
-deterministic compilation, editorial review, and portable game packages to this architecture.
-It reuses the store, providers, and jobs while keeping the runtime independent of Tauri and LLMs.
-See that design for the proposed boundaries and implementation backlog; the stack below describes
-the existing application.
+The [narrative extension](17-narrative-system.md) adds typed source and world records in
+`wobu-narrative`, guarded source persistence in `wobu-store`, deterministic lowering in
+`wobu-narrative-compiler`, and isolated execution in `wobu-narrative-runtime`. The compiler/runtime
+are pure Rust: neither depends on Tauri, providers or the authoring store. Tauri Preview commands
+read saved project source and return isolated graph/snapshot data without changing canon.
+
+Editorial generation/review, release packages and production tooling remain in the backlog. N5
+engine contracts/adapters are excluded from this increment. See the
+[internal runtime contract](17-narrative-runtime-contract.md) for implemented boundaries and the
+[authoring guide](19-narrative-authoring.md) for the UI and remaining acceptance.
 
 ## Stack
 

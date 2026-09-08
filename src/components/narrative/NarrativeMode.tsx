@@ -6,6 +6,8 @@ import { Icon } from '../Icon'
 import { TipButton } from '../Tooltip'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
+import { NarrativeWorldPane } from './NarrativeWorldPane'
+import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
 import { NarrativeLibrary } from './NarrativeLibrary'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
@@ -23,7 +25,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const selectNarrative = useUI((s) => s.selectNarrative)
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
+  const [worldOpen, setWorldOpen] = useState(false)
   const [editorOpened, setEditorOpened] = useState(false)
+  const world = useNarrativeWorld()
   const catalog = useScenes()
   const ids = useMemo(() => (catalog.data?.scenes ?? []).map((one) => one.id), [catalog.data])
   const files = useSceneFiles(ids)
@@ -46,6 +50,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
     setTab(tab)
     setEditorOpened(true)
     setLibraryOpen(false)
+    setWorldOpen(false)
   }
   const editorStyle: CSSProperties = {
     gridTemplateColumns: [
@@ -62,12 +67,27 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         <h1>
           {project.name} <span aria-hidden>/</span> <b>Narrative</b>
         </h1>
-        {!libraryOpen && (
-          <button type="button" className="btn" onClick={() => setLibraryOpen(true)}>
+        {(!libraryOpen || worldOpen) && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setLibraryOpen(true)
+              setWorldOpen(false)
+            }}
+          >
             Back to scenes
           </button>
         )}
         <div className="nrt-head-actions">
+          <button
+            type="button"
+            className="btn"
+            aria-pressed={worldOpen}
+            onClick={() => setWorldOpen(true)}
+          >
+            World state
+          </button>
           <TipButton
             className="btn"
             disabledReason={NARRATIVE_UNAVAILABLE.review}
@@ -91,10 +111,13 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </TipButton>
         </div>
       </header>
-      <div className="nrt-library-view" hidden={!libraryOpen}>
+      <div className="nrt-library-view" hidden={!libraryOpen || worldOpen}>
         <NarrativeLibrary
           projectKey={project.path}
           rows={rows}
+          quests={world.data?.document.quests}
+          questsLoading={world.isLoading}
+          questsError={world.isError ? String(world.error) : undefined}
           catalog={catalog.data}
           loading={catalog.isPending}
           error={catalog.isError ? String(catalog.error) : undefined}
@@ -110,7 +133,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         />
       </div>
       {editorOpened && (
-        <div className="nrt-editor-view" style={editorStyle} hidden={libraryOpen}>
+        <div className="nrt-editor-view" style={editorStyle} hidden={libraryOpen || worldOpen}>
           {!navCollapsed && (
             <nav className="nrt-scene-outline" aria-label="Current scene outline">
               <h3>{selected?.name ?? 'Selected scene'}</h3>
@@ -132,6 +155,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           {!inspCollapsed && <NarrativeInspector />}
         </div>
       )}
+      {worldOpen && <NarrativeWorldPane projectKey={project.path} readOnly={project.readOnly} />}
       <SceneDiagnosticsFooter />
     </div>
   )

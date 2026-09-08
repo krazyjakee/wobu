@@ -1,8 +1,10 @@
 # 17 — Narrative system: user stories and delivery plan
 
-Status: **In progress**. Scene Flow is merged; this branch adds the Scene library and manual
-Script/Source editing. The full compiler, attributed world model, generation and engine integrations
-remain planned. See [current authoring scope and evidence](19-narrative-authoring.md).
+Status: **In progress**. Flow, scene discovery and manual Script/Source are merged. The current
+increment adds attributed World state, typed scene forms, deterministic compiler/runtime
+foundations and isolated Preview. Full acceptance, generation and production workflows remain
+in progress or planned; N5 engine integrations are excluded from current work. See
+[current authoring scope and evidence](19-narrative-authoring.md).
 GitHub milestones and issues below track the remaining acceptance criteria.
 
 ## Product contract
@@ -349,19 +351,24 @@ not merely when backend APIs exist.
 
 ## Implementation alignment
 
-[PR #190](https://github.com/krazyjakee/wobu/pull/190) merged as
-`d4c8d2b618a55c5531153ed674ec347a5bd50ca7`. The authoring increment on top of it replaces
-Library, Script, Source and saved-context placeholders with working views. Detailed evidence and
-remaining acceptance work are in [the authoring guide](19-narrative-authoring.md).
+Merged [PR #190](https://github.com/krazyjakee/wobu/pull/190) established Flow, and
+[PR #192](https://github.com/krazyjakee/wobu/pull/192) added working discovery, Script and Source.
+The current increment adds World state, typed forms and a compiler/runtime-backed Preview.
+Detailed behavior and evidence limits are in [the authoring guide](19-narrative-authoring.md).
+The issue index below retains unchecked full-acceptance items; implementation of a foundation
+is not a claim that every criterion is complete. N5 is excluded from this work by user direction.
 
 | Plan element | Implemented foundation | Remaining work |
 | --- | --- | --- |
-| Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Native acceptance and quest data/grouping (#155/#186/#187). |
-| Separate layout | Layout sidecars and source fingerprints stay separate. | Index and peer integration (#153/#185). |
-| Scene discovery | Paged table, title/intent/dialogue search, actual lifecycle facets, local saved views, pins, recent scenes and return navigation. | SQLite index, real-load benchmarks and act/quest/tag metadata (#153/#191/#182). |
-| Script and inspector | Manual dialogue, canonical wording revisions, beat operations, participants, intents, restrictions, choices/destinations and actual saved context. | Typed condition/effect forms, fuller variant controls and attributed world context (#155/#156/#163). |
-| Source | YAML editing, validation, explicit formatting/save/reload, guarded undo and retained drafts. | Repairing already-malformed files and semantic source ranges (#157). |
-| Preview and production | Source diagnostics and honest unavailable actions. | Compiler/runtime, Preview, review, generation, dependency tracking and engine exports (#158 onward). |
+| Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Multiple-quest arc grouping, route overlays and native acceptance (#187/#188/#186). |
+| Separate layout | Sidecars stay outside source fingerprints, including world source. | Index and peer integration (#153/#185). |
+| Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | SQLite index, act/tag metadata and real-load benchmarks (#153/#191/#182). |
+| World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation and resolved generation context (#155/#163). |
+| Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
+| Source | YAML editing/checking, explicit format/save/reload, guarded saves and retained drafts. | Already-malformed file repair and semantic source ranges (#157). |
+| Compiler and runtime | Pure deterministic graph, source maps, release gates, runner, typed state and snapshot/command protocol. | Save migration hook, release packages and persistent scenarios (#159/#160/#162). |
+| Preview | Isolated starting state, lines/choices, checkpoint restore, explicit command acknowledgement and source links. | Evaluated condition/effect traces, richer command results, overlays and native acceptance (#161/#188). |
+| Production | Authoring lifecycle/revision safeguards. | Generation, review, dependency tracking, localisation/audio and release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
 
@@ -408,6 +415,8 @@ remaining acceptance work are in [the authoring guide](19-narrative-authoring.md
 - [ ] [Mark diagnostics, coverage gaps, and stale or missing text on Flow nodes](https://github.com/krazyjakee/wobu/issues/189)
 
 ### [N5 — Portable engine integrations](https://github.com/krazyjakee/wobu/milestone/19)
+
+Excluded from the current implementation at the user's request; these issues remain planned.
 
 - [ ] [Publish the engine contract and cross-language conformance suite](https://github.com/krazyjakee/wobu/issues/173)
 - [ ] [Ship the Unity narrative adapter and playable sample](https://github.com/krazyjakee/wobu/issues/174)

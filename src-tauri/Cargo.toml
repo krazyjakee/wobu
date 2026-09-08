@@ -49,6 +49,8 @@ wobu-sync = { path = "crates/wobu-sync" }
 # dependency by design, so the compiler, the runtime and the engine
 # adapters can all be built against it without pulling the desktop shell in.
 wobu-narrative = { path = "crates/wobu-narrative" }
+wobu-narrative-compiler = { path = "crates/wobu-narrative-compiler" }
+wobu-narrative-runtime = { path = "crates/wobu-narrative-runtime" }
 
 [package]
 name = "wobu"
@@ -142,6 +144,8 @@ wobu-mcp = { workspace = true }
 # bridge as the source document it is, and a mirrored DTO in this crate would
 # be a second copy of the model to keep in step — see `commands/narrative.rs`.
 wobu-narrative = { workspace = true }
+wobu-narrative-compiler = { workspace = true }
+wobu-narrative-runtime = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
 

@@ -123,3 +123,7 @@ pub fn job_cancel(jobs: State<'_, Jobs>, job_id: String) -> CommandResult<bool> 
 pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
     jobs.snapshot()
 }
+
+pub mod narrative_world;
+
+pub mod narrative_preview;

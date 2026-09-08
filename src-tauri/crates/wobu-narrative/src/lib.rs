@@ -22,11 +22,6 @@
 //! - **Generation, providers and review** (#163–#166). [`Provenance`] and
 //!   [`ContentLifecycle`] record what happened to a piece of text; nothing here
 //!   makes it happen.
-//! - **The world-state model** (#155). Facts, conditional beliefs with
-//!   provenance, directed relationships and events are a larger thing. What a
-//!   scene needs from them is the declared variable domain in [`StateSchema`],
-//!   and that is the seam: this crate defines the variables conditions range
-//!   over, and nothing about who believes what.
 //! - **Canvas layout** (#185). There is no `x`, no `y`, no collapsed flag and no
 //!   node ordering anywhere in this model. Where a beat sits is presentation
 //!   metadata stored beside the source; a coordinate in here would land in a
@@ -51,6 +46,7 @@ pub mod lifecycle;
 pub mod scene;
 pub mod source;
 pub mod state;
+pub mod world;
 
 pub use diagnose::{Diagnostic, Problem, SceneCatalog, Site};
 pub use error::{Error, Result, SourceLocation};
@@ -68,3 +64,8 @@ pub use scene::{
 };
 pub use source::{SOURCE_SCHEMA_VERSION, SceneDocument, StateDocument};
 pub use state::{Name, Owner, StateSchema, Value, VarType, VariableDecl};
+
+pub use world::{
+    Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, Quest, QuestTransition,
+    Relationship, WorldDiagnostic, WorldDocument, WorldEvent,
+};

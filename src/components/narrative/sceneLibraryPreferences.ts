@@ -27,6 +27,7 @@ function isView(value: unknown): value is LibraryView {
   return (
     typeof view.query === 'string' &&
     typeof view.participant === 'string' &&
+    (view.quest === undefined || typeof view.quest === 'string') &&
     ['', 'generated', 'edited', 'locked'].includes(String(view.policy)) &&
     ['', 'draft', 'approved'].includes(String(view.review)) &&
     ['', 'current', 'out_of_date'].includes(String(view.freshness)) &&
@@ -43,9 +44,11 @@ export function readPreferences(project: string): LibraryPreferences {
     ) as LibraryPreferences | null
     if (!value || !isView(value.view)) return empty
     return {
-      view: value.view,
+      view: { ...value.view, quest: value.view.quest ?? '' },
       saved: Array.isArray(value.saved)
-        ? value.saved.filter((s) => typeof s?.name === 'string' && isView(s.view))
+        ? value.saved
+            .filter((s) => typeof s?.name === 'string' && isView(s.view))
+            .map((saved) => ({ ...saved, view: { ...saved.view, quest: saved.view.quest ?? '' } }))
         : [],
       pins: Array.isArray(value.pins) ? value.pins.filter((id) => typeof id === 'string') : [],
       recent: Array.isArray(value.recent)

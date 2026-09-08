@@ -301,6 +301,7 @@ export function useSaveNarrativeState() {
       api.narrativeStateSave(value.document, value.expected),
     onSuccess: (file) => {
       qc.setQueryData(qk.narrativeState, file)
+      void qc.invalidateQueries({ queryKey: ['narrative_world'] })
       // Every condition and effect in the project is typed against these, so
       // the answer to "what is wrong with this scene" just changed everywhere.
       void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })

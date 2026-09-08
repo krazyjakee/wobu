@@ -1,0 +1,32 @@
+.nrt-preview-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+.nrt-preview-line {
+  font-size: 18px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.nrt-preview table {
+  border-collapse: collapse;
+  text-align: left;
+}
+.nrt-preview th,
+.nrt-preview td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.nrt-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.nrt-preview summary {
+  cursor: pointer;
+  padding: 8px 0;
+}

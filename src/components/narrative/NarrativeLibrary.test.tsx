@@ -106,3 +106,86 @@ describe('Scene library', () => {
     expect(screen.getByRole('searchbox')).toHaveValue('')
   })
 })
+
+describe('Quest discovery', () => {
+  const quests = [
+    { id: 'attack', name: 'Investigate the attack', scene_ids: ['council'] },
+    { id: 'trust', name: 'Earn council trust', scene_ids: ['council'] },
+  ]
+  it('shows both memberships, finds under either, and restores a named quest view', () => {
+    const { unmount } = renderLibrary({ quests })
+    const memberships = screen.getByRole('list', { name: 'Quests for Council hearing' })
+    expect(within(memberships).getAllByRole('listitem')).toHaveLength(2)
+    for (const quest of ['attack', 'trust']) {
+      fireEvent.change(screen.getByLabelText('Quest'), { target: { value: quest } })
+      expect(screen.getByRole('status')).toHaveTextContent('1 matching of 1 scenes')
+      expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2)
+    }
+    fireEvent.change(screen.getByLabelText('View name'), { target: { value: 'Trust scenes' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save view' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    unmount()
+    renderLibrary({ quests })
+    fireEvent.click(screen.getByRole('button', { name: 'Trust scenes' }))
+    expect(screen.getByLabelText('Quest')).toHaveValue('trust')
+    expect(readPreferences('/world').saved[0]?.view.quest).toBe('trust')
+  })
+  it('migrates old saved views without discarding their search and selection', () => {
+    localStorage.setItem(
+      'wobu:narrative-library:v1:/world',
+      JSON.stringify({
+        view: {
+          query: 'attack',
+          participant: 'mira',
+          policy: '',
+          review: '',
+          freshness: '',
+          missing: false,
+          includeDrafts: false,
+          sort: 'name',
+        },
+        saved: [
+          {
+            name: 'Older view',
+            view: {
+              query: 'convince',
+              participant: '',
+              policy: '',
+              review: '',
+              freshness: '',
+              missing: false,
+              includeDrafts: false,
+              sort: 'name',
+            },
+          },
+        ],
+        selected: 'council',
+        pins: ['council'],
+        page: 0,
+        scroll: 0,
+      }),
+    )
+    renderLibrary({ quests })
+    expect(screen.getByRole('searchbox')).toHaveValue('attack')
+    expect(screen.getByLabelText('Quest')).toHaveValue('')
+    expect(readPreferences('/world').selected).toBe('council')
+    fireEvent.click(screen.getByRole('button', { name: 'Older view' }))
+    expect(screen.getByRole('searchbox')).toHaveValue('convince')
+    expect(screen.getByLabelText('Quest')).toHaveValue('')
+  })
+  it('retains a deleted quest filter and explains why its view is empty', () => {
+    const { unmount } = renderLibrary({ quests })
+    fireEvent.change(screen.getByLabelText('Quest'), { target: { value: 'trust' } })
+    unmount()
+    renderLibrary({ quests: [quests[0]!] })
+    expect(screen.getByLabelText('Quest')).toHaveValue('trust')
+    expect(screen.getByText(/quest selected by this view no longer exists/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('0 matching of 1 scenes')
+  })
+  it('distinguishes unavailable quest source from an unassigned scene', () => {
+    renderLibrary({ questsError: 'Unsupported world version' })
+    expect(screen.getByLabelText('Quest')).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('Quest results are incomplete')
+    expect(screen.queryByText('No quests')).not.toBeInTheDocument()
+  })
+})

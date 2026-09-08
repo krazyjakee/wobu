@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { narrativeWorldRestore, type WorldDocument } from './api/narrativeWorld'
 import * as api from './api'
 import type { Scene, SceneFile, WobuNode } from './api'
 
@@ -67,6 +68,7 @@ export type WorldCommand =
    */
   | { type: 'sceneSave'; scene: Scene; slug: string }
   | { type: 'sceneDelete'; id: string }
+  | { type: 'worldRestore'; document: WorldDocument; expected: WorldDocument }
 
 export interface UndoEntry {
   /**
@@ -268,6 +270,8 @@ export function applyCommand(cmd: WorldCommand): Promise<void> {
       return api.narrativeSceneSave(cmd.scene, { kind: 'current' }, cmd.slug).then(() => undefined)
     case 'sceneDelete':
       return api.narrativeSceneDelete(cmd.id)
+    case 'worldRestore':
+      return narrativeWorldRestore(cmd.document, cmd.expected).then(() => undefined)
   }
 }
 

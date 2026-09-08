@@ -130,17 +130,21 @@ viewer without a reload ([#110](https://github.com/krazyjakee/wobu/issues/110)).
 [Narrative tracker #151](https://github.com/krazyjakee/wobu/issues/151) contains 16 concrete user
 stories, the proposed workspace, and the implementation checklist. The
 [narrative design](17-narrative-system.md) keeps the same contract in the repository. This extends
-Wobu from concept assets to offline narrative compilation; all six milestones below are planned.
+Wobu from concept assets to offline narrative compilation. N1 and N2 have working foundations;
+their complete acceptance remains in progress. N5 is excluded from the current implementation scope.
 Their N-prefix avoids collisions with the existing product and engineering milestone numbers.
 
 | Milestone | Status | Exit result | Implementation issues |
 | --- | --- | --- | --- |
 | [N1 — Narrative world and scene authoring](https://github.com/krazyjakee/wobu/milestone/15) | **In progress** | Find scenes in the Scene library; author through coordinated Flow/Script views with separate layout metadata. | [#152](https://github.com/krazyjakee/wobu/issues/152)–[#157](https://github.com/krazyjakee/wobu/issues/157), [#184](https://github.com/krazyjakee/wobu/issues/184)–[#186](https://github.com/krazyjakee/wobu/issues/186), [#191](https://github.com/krazyjakee/wobu/issues/191) |
-| [N2 — Deterministic compiler and playable preview](https://github.com/krazyjakee/wobu/milestone/16) | **Planned** | Compile/export and play offline, inspect arc Flow and played routes, and repeat saved scenario tests. | [#158](https://github.com/krazyjakee/wobu/issues/158)–[#162](https://github.com/krazyjakee/wobu/issues/162), [#187](https://github.com/krazyjakee/wobu/issues/187)–[#188](https://github.com/krazyjakee/wobu/issues/188) |
+| [N2 — Deterministic compiler and playable preview](https://github.com/krazyjakee/wobu/milestone/16) | **In progress** | Compile/export and play offline, inspect arc Flow and played routes, and repeat saved scenario tests. | [#158](https://github.com/krazyjakee/wobu/issues/158)–[#162](https://github.com/krazyjakee/wobu/issues/162), [#187](https://github.com/krazyjakee/wobu/issues/187)–[#188](https://github.com/krazyjakee/wobu/issues/188) |
 | [N3 — Generation and editorial review](https://github.com/krazyjakee/wobu/milestone/17) | **Planned** | Generate, edit, approve, and lock dialogue and supporting text without changing authored logic. | [#163](https://github.com/krazyjakee/wobu/issues/163)–[#167](https://github.com/krazyjakee/wobu/issues/167) |
 | [N4 — Incremental builds and narrative analysis](https://github.com/krazyjakee/wobu/milestone/18) | **Planned** | Rebuild affected content safely, inspect bounded coverage and Flow diagnostics, and author the DSL. | [#168](https://github.com/krazyjakee/wobu/issues/168)–[#172](https://github.com/krazyjakee/wobu/issues/172), [#189](https://github.com/krazyjakee/wobu/issues/189) |
-| [N5 — Portable engine integrations](https://github.com/krazyjakee/wobu/milestone/19) | **Planned** | Play matching native traces in Unity, Godot, and Unreal; export supported graphs to Yarn. | [#173](https://github.com/krazyjakee/wobu/issues/173)–[#177](https://github.com/krazyjakee/wobu/issues/177) |
+| [N5 — Portable engine integrations](https://github.com/krazyjakee/wobu/milestone/19) | **Excluded from current work** | Play matching native traces in Unity, Godot, and Unreal; export supported graphs to Yarn. | [#173](https://github.com/krazyjakee/wobu/issues/173)–[#177](https://github.com/krazyjakee/wobu/issues/177) |
 | [N6 — Production pipeline and release readiness](https://github.com/krazyjakee/wobu/milestone/20) | **Planned** | Localise, voice, build reproducibly in CI, recover shared work, and record release acceptance. | [#178](https://github.com/krazyjakee/wobu/issues/178)–[#183](https://github.com/krazyjakee/wobu/issues/183) |
 
-The current [authoring increment](19-narrative-authoring.md) advances #154/#156/#157/#191;
-these issues remain open for their explicitly documented remaining criteria.
+The current [authoring and Preview increment](19-narrative-authoring.md) advances world records
+(#155), typed scene forms (#156), compiler/runtime foundations (#158/#159), playable Preview
+(#161) and quest discovery (#191). The guide separates implemented behavior from pending
+acceptance. Release packages, persistent scenarios, generation/review and dependency analysis
+remain planned. N5 (#173–#177) is not implemented, as requested.
