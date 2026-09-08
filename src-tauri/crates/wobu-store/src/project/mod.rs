@@ -26,6 +26,7 @@ pub mod narrative_media;
 mod narrative_records;
 pub mod narrative_review;
 pub mod narrative_sync;
+pub mod narrative_variants;
 pub use narrative_deletions::NarrativeDeletionView;
 mod narrative_repair;
 mod narrative_world;
