@@ -355,6 +355,120 @@ it('uses identical canonical operations from actual Flow and Script controls', a
   expect(calls('narrative_scene_save')[0]!.scene).toEqual(flow)
 })
 
+// Independent authoring gestures correctly mint independent identities/times.
+// Normalize only those newly authored identities and tombstone timestamps when
+// comparing complete documents; existing source identities must match exactly.
+function comparableEdit(scene: Scene, original: Scene) {
+  const existing = new Set<string>()
+  JSON.stringify(original, (key, value) => {
+    if (key === 'id') existing.add(value)
+    return value
+  })
+  const fresh = new Map<string, string>()
+  JSON.stringify(scene, (key, value) => {
+    if (key === 'id' && !existing.has(value)) fresh.set(value, `new-identity-${fresh.size}`)
+    return value
+  })
+  return JSON.parse(
+    JSON.stringify(scene, (key, value) =>
+      key === 'deleted_at'
+        ? 'deletion time'
+        : typeof value === 'string'
+          ? (fresh.get(value) ?? value)
+          : value,
+    ),
+  ) as Scene
+}
+
+it.each(['Add beat', 'Duplicate beat', 'Delete beat'])(
+  'produces equivalent complete source and shared undo for %s in Flow and Script',
+  async (action) => {
+    const target = action === 'Delete beat' ? VERDICT : ARRIVAL
+    useUI.getState().selectNarrative({ sceneId: SCENE, beatId: target }, 'library')
+    const view = open()
+    await screen.findByTestId(`flow-node-${nodeId.beat(target)}`)
+    fireEvent.click(screen.getByRole('button', { name: action }))
+    const flow = structuredClone(workingScene())
+    expect(flow.beats![0]).toEqual(council().beats![0])
+    if (action === 'Add beat') {
+      expect(flow.beats!.map((beat) => beat.title)).toEqual([
+        'Arrival at the hearing',
+        'New beat',
+        'The verdict',
+      ])
+      expect(flow.beats![1]!.id).not.toBe(ARRIVAL)
+    } else if (action === 'Duplicate beat') {
+      const copy = flow.beats![1]!
+      expect(copy.title).toBe('Arrival at the hearing (copy)')
+      expect(copy.id).not.toBe(ARRIVAL)
+      expect(copy.dialogue![0]!.id).not.toBe(SLOT)
+      expect(copy.dialogue![0]!.variants![0]!.id).not.toBe(VARIANT)
+      expect(copy.dialogue![0]!.variants![0]!.text).toEqual({
+        ...council().beats![0]!.dialogue![0]!.variants![0]!.text,
+        lifecycle: { policy: 'locked', review: 'draft', freshness: 'out_of_date' },
+      })
+      expect(screen.getByRole('button', { name: 'Delete beat' })).toBeDisabled()
+    } else {
+      expect(flow.beats).toHaveLength(1)
+      expect(flow.beats![0]!.choices![0]!.to).toEqual({ beat: VERDICT })
+      expect(flow.tombstones).toEqual([expect.objectContaining({ target: { beat: VERDICT } })])
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }))
+    expect(workingScene()).toEqual(council())
+    fireEvent.click(screen.getByRole('button', { name: 'Redo draft' }))
+    expect(workingScene()).toEqual(flow)
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+    useUI.getState().selectNarrative({ sceneId: SCENE, beatId: target }, 'script')
+    view.showScript()
+    fireEvent.click(await screen.findByRole('button', { name: action }))
+    expect(comparableEdit(workingScene(), council())).toEqual(comparableEdit(flow, council()))
+    if (action === 'Duplicate beat')
+      expect(screen.getByRole('button', { name: 'Delete beat' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }))
+    expect(workingScene()).toEqual(council())
+    expect(calls('narrative_scene_save')).toHaveLength(0)
+  },
+)
+
+it('reconverges three routes identically from Flow and Script while preserving locked dialogue', async () => {
+  const original = council()
+  original.beats![0]!.choices = ['Show logbook', 'Appeal to duty', 'Threaten council'].map(
+    (label) => ({ id: mintId(), label, to: { unresolved: {} } }),
+  )
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+    Promise.resolve(
+      command === 'narrative_scene_get' && args.sceneId === SCENE
+        ? file(original)
+        : answer(command, args),
+    ),
+  )
+  useUI.getState().selectNarrative({ sceneId: SCENE, beatId: ARRIVAL }, 'library')
+  const view = open()
+  for (const route of original.beats![0]!.choices!) {
+    fireEvent.click(await screen.findByTestId(`flow-node-${nodeId.choice(route.id)}`))
+    fireEvent.change(screen.getByLabelText('Route destination'), {
+      target: { value: `beat:${VERDICT}` },
+    })
+  }
+  const flow = structuredClone(workingScene())
+  expect(flow.beats![0]!.choices!.map((route) => route.to)).toEqual(
+    Array(3).fill({ beat: VERDICT }),
+  )
+  expect(flow.beats![0]!.dialogue).toEqual(original.beats![0]!.dialogue)
+  fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+  view.showScript()
+  for (let index = 1; index <= 3; index++)
+    fireEvent.change(await screen.findByLabelText(`Choice ${index} destination`), {
+      target: { value: `beat:${VERDICT}` },
+    })
+  expect(workingScene()).toEqual(flow)
+  expect(screen.getByRole('button', { name: 'Delete beat' })).toBeDisabled()
+  for (let index = 0; index < 3; index++)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }))
+  expect(workingScene()).toEqual(original)
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+})
+
 describe('the canvas draws what is in the file', () => {
   it('shows a beat’s counts, never its lines', async () => {
     await enterCouncil()

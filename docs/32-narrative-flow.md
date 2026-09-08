@@ -13,7 +13,8 @@ comparisons and effects use the declared bool, integer and enum variables; host 
 structured authored effects, executed only by the deterministic runtime's host contract.
 
 The **Add** controls create beats, choices, conditional outcomes, ordinary outcomes, and explicit
-endings. Choices and unfinished outcomes start with an unresolved destination. A condition is the
+endings. **Add beat** inserts after the selected beat in both Script and Flow, or appends when no beat
+is selected. Choices and unfinished outcomes start with an unresolved destination. A condition is the
 guard on a route; it does not create a second story model. Several routes can target the same beat
 without copying that beat or its dialogue.
 
@@ -85,3 +86,9 @@ records both themes, visible minimap nodes, and keyboard creation/deletion with 
 150% scaling. Reveals preserve the current zoom and wait for automatic layout to finish before
 focusing a node. The footer checks the same unsaved scene shown in Flow, rather than reporting
 the saved source's problem count beside a changed draft.
+
+Additional mounted parity cases compare Add beat, Duplicate beat and Delete beat through both views,
+normalizing only freshly minted identities and deletion timestamps. They check selected-anchor order,
+locked text and provenance, preserved incoming references, tombstones and shared undo/redo. A
+three-choice reconvergence case compares the complete resulting source and restores all routes with
+Script undo while retaining locked dialogue.
