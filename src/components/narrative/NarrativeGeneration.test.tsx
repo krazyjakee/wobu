@@ -93,13 +93,13 @@ beforeEach(() => {
 it('shows request count, model and skipped locks before explicit queue submission', async () => {
   mount()
   fireEvent.click(screen.getByRole('button', { name: 'Plan generation' }))
-  expect(await screen.findByText('1 requests · 1 skipped')).toBeInTheDocument()
+  expect(await screen.findByText('1 request · 1 skipped')).toBeInTheDocument()
   expect(screen.getByText(/anthropic \/ fixture-model/)).toBeInTheDocument()
   expect(screen.getByText(/Locked dialogue is excluded/)).toBeInTheDocument()
   expect(api.start).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Queue 1 provider requests' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Queue 1 provider request' }))
   await waitFor(() => expect(api.start).toHaveBeenCalledWith('batch'))
-  await waitFor(() => expect(screen.queryByText('1 requests · 1 skipped')).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByText('1 request · 1 skipped')).not.toBeInTheDocument())
 })
 it('preserves raw numeric spelling and selected variant intent for backend validation', async () => {
   mount()
@@ -162,4 +162,25 @@ it('displays planning errors without submitting a request', async () => {
     'Save or reload source before planning.',
   )
   expect(api.start).not.toHaveBeenCalled()
+})
+
+it('shows an active retry ahead of its retained older terminal attempt', async () => {
+  api.history.mockResolvedValue([{ ...item, status: 'failed', attempts: 1 }])
+  api.jobs.mockResolvedValue({
+    jobs: [
+      { id: 'old-failed', kind: 'narrative', subjectId: 'request', state: 'failed' },
+      { id: 'new-running', kind: 'narrative', subjectId: 'request', state: 'running' },
+    ],
+    queued: 0,
+    running: 1,
+    retrying: 0,
+  })
+  mount()
+  expect(await screen.findByText('slot · running')).toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Retry request — may incur charges' }),
+  ).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }))
+  await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('new-running'))
+  expect(api.cancel).not.toHaveBeenCalledWith('old-failed')
 })

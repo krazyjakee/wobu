@@ -172,7 +172,8 @@ export function NarrativeGeneration({
         {plan && (
           <section className="nrt-generation-plan" aria-label="Frozen generation plan">
             <h3>
-              {plan.requests.length} requests · {plan.skipped.length} skipped
+              {plan.requests.length} {plan.requests.length === 1 ? 'request' : 'requests'} ·{' '}
+              {plan.skipped.length} skipped
             </h3>
             <p>
               {plan.provider} / {plan.model} · one line per request · at most 32 per batch
@@ -211,7 +212,8 @@ export function NarrativeGeneration({
                 })
               }
             >
-              Queue {plan.requests.length} provider requests
+              Queue {plan.requests.length} provider{' '}
+              {plan.requests.length === 1 ? 'request' : 'requests'}
             </button>
           </section>
         )}
@@ -231,9 +233,14 @@ export function NarrativeGeneration({
         </div>
         <ul className="nrt-generation-history">
           {(history.data ?? []).map((item) => {
-            const job = jobs.data?.jobs.find(
-              (one) => one.subjectId === item.request_id && one.kind === 'narrative',
-            )
+            const matchingJobs =
+              jobs.data?.jobs.filter(
+                (one) => one.subjectId === item.request_id && one.kind === 'narrative',
+              ) ?? []
+            // Queue snapshots retain older terminal attempts in submission order.
+            const job =
+              matchingJobs.find((one) => ['queued', 'running', 'retrying'].includes(one.state)) ??
+              matchingJobs.at(-1)
             const running = job && ['queued', 'running', 'retrying'].includes(job.state)
             const status = running
               ? job.state
