@@ -108,3 +108,24 @@ export function canonicalLocale(value: string) {
     )
     .join('-')
 }
+
+/** LocaleDirection uses the explicit script before likely subtags; see docs/37. */
+export function localeDirection(locale: string): 'rtl' | 'ltr' | 'auto' {
+  try {
+    const parsed = new Intl.Locale(locale).maximize() as Intl.Locale & {
+      getTextInfo?: () => { direction?: string }
+      textInfo?: { direction?: string }
+    }
+    const script = parsed.script
+    if (!script || script === 'Zzzz' || /^Q[a-b]/.test(script)) return 'auto'
+    const direction = (parsed.getTextInfo?.() ?? parsed.textInfo)?.direction
+    if (direction === 'rtl' || direction === 'ltr') return direction
+    // Older webviews without locale-info still handle these documented scripts.
+    if (['Arab', 'Hebr', 'Thaa', 'Nkoo', 'Adlm', 'Rohg', 'Syrc', 'Samr', 'Mand'].includes(script)) {
+      return 'rtl'
+    }
+    return script === 'Latn' ? 'ltr' : 'auto'
+  } catch {
+    return 'auto'
+  }
+}

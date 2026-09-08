@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { NarrativeLocale } from './NarrativeLocale'
-import type { LocaleView } from '../../lib/api/narrativeLocale'
+import { localeDirection, type LocaleView } from '../../lib/api/narrativeLocale'
 import { advanceProjectSession } from '../../lib/projectSession'
 const h = vi.hoisted(() => ({ invoke: vi.fn(), save: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
@@ -40,20 +40,20 @@ beforeEach(() => {
       view.translations = [
         {
           version: 1,
-          locale: 'fr',
+          locale: 'ar',
           variant_id: 'line',
           history: [
             {
               source_revision: 'rev',
               source_guard: 'source-v1',
-              forms: { other: 'مرحبا {name}\n"<script>"' },
+              forms: { other: '{name} مرحبا\n"<script>"' },
               approved: false,
               actor: 'Translator',
             },
           ],
         },
       ]
-      view.translation_guards['fr/line'] = 'translation-v1'
+      view.translation_guards['ar/line'] = 'translation-v1'
       return { applied: ['line'], diagnostics: [], conflicts: {} }
     }
     if (command === 'narrative_locale_approve') {
@@ -78,6 +78,7 @@ function draw(readOnly = false) {
 it('previews before guarded partial import, displays RTL safely and approves independently', async () => {
   draw()
   await screen.findByText('Hello {name}')
+  fireEvent.change(screen.getByLabelText('Locale'), { target: { value: 'ar' } })
   expect(screen.getByRole('button', { name: 'Import eligible rows' })).toBeDisabled()
   fireEvent.change(screen.getByLabelText('Interchange contents'), {
     target: { value: 'returned csv' },
@@ -86,12 +87,12 @@ it('previews before guarded partial import, displays RTL safely and approves ind
   await screen.findByText(/No row problems/)
   fireEvent.click(screen.getByRole('button', { name: 'Import eligible rows' }))
   await screen.findByText(/1 rows imported/)
-  const translation = screen.getByText('مرحبا {name} "<script>"')
-  expect(translation.closest('[dir]')).toHaveAttribute('dir', 'auto')
+  const translation = screen.getByText('{name} مرحبا "<script>"')
+  expect(translation.closest('[dir]')).toHaveAttribute('dir', 'rtl')
   // Native dir=auto chooses the first strong character. A Latin category label
   // inside this paragraph would force Arabic wording into an LTR paragraph.
   expect(translation.tagName).toBe('P')
-  expect(translation.textContent).toBe('مرحبا {name}\n"<script>"')
+  expect(translation.textContent).toBe('{name} مرحبا\n"<script>"')
   expect(translation.querySelector('strong')).toBeNull()
   expect(translation.previousElementSibling).toHaveTextContent('other:')
   expect(document.querySelector('script')).toBeNull()
@@ -105,7 +106,7 @@ it('previews before guarded partial import, displays RTL safely and approves ind
       row: expect.objectContaining({
         translation_guard: 'translation-v1',
         source: expect.objectContaining({ guard: 'source-v1' }),
-        forms: { other: 'مرحبا {name}\n"<script>"' },
+        forms: { other: '{name} مرحبا\n"<script>"' },
       }),
     }),
   )
@@ -165,4 +166,13 @@ it('does not export into a different project after a delayed destination chooser
   await Promise.resolve()
   await Promise.resolve()
   expect(h.invoke.mock.calls.some(([command]) => command === 'narrative_locale_export')).toBe(false)
+})
+
+it('respects explicit locale scripts and tolerates an unfinished locale input', () => {
+  expect(localeDirection('ar')).toBe('rtl')
+  expect(localeDirection('ar-Latn')).toBe('ltr')
+  expect(localeDirection('en-Arab')).toBe('rtl')
+  expect(localeDirection('ar-')).toBe('auto')
+  expect(localeDirection('zz')).toBe('auto')
+  expect(localeDirection('zz-Zzzz')).toBe('auto')
 })

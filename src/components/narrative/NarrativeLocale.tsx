@@ -14,6 +14,7 @@ import {
   translationStatus,
   translationIndex,
   canonicalLocale,
+  localeDirection,
   type LocaleDiagnostic,
 } from '../../lib/api/narrativeLocale'
 import './locale.css'
@@ -330,7 +331,7 @@ export function NarrativeLocale({
                             ? Object.entries(latest.forms).map(([category, text]) => (
                                 <div key={category}>
                                   <strong>{category}: </strong>
-                                  <p dir="auto">{text}</p>
+                                  <p dir={localeDirection(locale)}>{text}</p>
                                 </div>
                               ))
                             : 'No translation'}
@@ -363,7 +364,7 @@ export function NarrativeLocale({
                           <details>
                             <summary>{translation?.history.length ?? 0} versions</summary>
                             {translation?.history.map((version, i) => (
-                              <p dir="auto" key={i}>
+                              <p dir={localeDirection(locale)} key={i}>
                                 {version.approved ? 'Approved' : 'Draft'} ·{' '}
                                 {version.source_revision}: {JSON.stringify(version.forms)}
                               </p>

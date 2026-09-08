@@ -109,3 +109,14 @@ Unity, Godot, Unreal, Yarn and cross-language adapter conformance are excluded N
 reference/package fixtures establish the native contract; they do not satisfy an engine-adapter-only
 verification requirement. Native screenshots and observed walkthrough results belong in the
 integration evidence record, separately from browser fixture tests.
+
+Translation paragraphs use the locale's explicit script, or `Intl.Locale.maximize()` likely
+script, for direction. Where available, the webview's locale text-info API supplies direction;
+older webviews recognize Arab, Hebr, Thaa, Nkoo, Adlm, Rohg, Syrc, Samr and Mand as RTL, and Latn
+as LTR. Unrecognized or incomplete locales fall back to automatic text direction. Explicit
+`ar-Latn` therefore remains LTR, while a leading `{name}` cannot reverse Arabic. This follows the
+[ECMA-402 LocaleDirection algorithm](https://tc39.es/proposal-intl-locale-info/#sec-Intl.Locale.prototype.getTextInfo)
+and its [Unicode script metadata](https://unicode.org/reports/tr35/#Script_Metadata) reference.
+CSS uses bidi isolation, preserving stored text order and the chosen paragraph direction;
+`plaintext` would instead derive direction from the first strong character according to
+[CSS Writing Modes](https://www.w3.org/TR/css-writing-modes-3/#valdef-unicode-bidi-plaintext).

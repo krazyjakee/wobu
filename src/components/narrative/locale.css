@@ -32,8 +32,8 @@
   overflow-wrap: anywhere;
   border-bottom: 1px solid var(--border);
 }
-.nrt-locale [dir='auto'] {
-  unicode-bidi: plaintext;
+.nrt-locale [dir] {
+  unicode-bidi: isolate;
   white-space: pre-wrap;
 }
 .nrt-locale fieldset {
