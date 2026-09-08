@@ -33,6 +33,9 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     // against the payload. That ordering is deliberate: capability equality is
     // still exact, it is just checked once the answer is knowable.
     let mut base_capabilities = manifest.required_capabilities.clone();
+    if base_capabilities.remove(crate::PREPARED_MEDIA).is_some_and(|version| version != 1) {
+        return Err(invalid("Unsupported media capability."));
+    }
     if base_capabilities.remove(crate::LOCALISATION).is_some_and(|version| version != 1) {
         return Err(invalid("Unsupported localisation capability."));
     }
@@ -50,7 +53,9 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     let mut total = 0u64;
     for (path, record) in &manifest.files {
         portable_path(path)?;
-        if path != "locales.json"
+        if !(path.starts_with("assets/media/")
+            && manifest.required_capabilities.contains_key(crate::PREPARED_MEDIA))
+            && path != "locales.json"
             && path != &source_path
             && !REQUIRED.contains(&path.as_str())
             && !(path == "debug/source-map.json" && manifest.profile == Profile::Development)

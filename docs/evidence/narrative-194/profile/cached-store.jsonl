@@ -1,0 +1,46 @@
+{"ms":8795.613929,"ok":true,"phase":"project_open"}
+{"iteration":0,"scope":"filesystem/store, not native UI; index writes only"}
+{"ms":73.399418,"ok":true,"phase":"selected_scene"}
+{"ms":20.985542,"ok":true,"phase":"reconcile_plan"}
+{"ms":44.647363000000006,"ok":true,"phase":"reconcile_observe"}
+{"ms":43.433167000000005,"ok":true,"phase":"reconcile_revalidate"}
+{"ms":22.045708,"ok":true,"phase":"reconcile_apply"}
+{"ms":33.098869,"ok":true,"phase":"source_fingerprint"}
+{"ms":61.340612,"ok":true,"phase":"scene_catalog"}
+{"ms":262.960406,"ok":true,"phase":"review_capture"}
+{"ms":16.279571,"ok":true,"phase":"review_proposals"}
+{"ms":73.244957,"ok":true,"phase":"review_view_contexts"}
+{"ms":0.002064,"ok":true,"phase":"review_evidence"}
+{"ms":32.930132,"ok":true,"phase":"review_final_verify"}
+{"json_bytes":3677,"ms":484.837721,"phase":"library_query","rows":1}
+{"review_lines":50,"scenes":1000,"selected_bytes":18512}
+{"iteration":1,"scope":"filesystem/store, not native UI; index writes only"}
+{"ms":62.30018,"ok":true,"phase":"selected_scene"}
+{"ms":21.853807,"ok":true,"phase":"reconcile_plan"}
+{"ms":44.221601,"ok":true,"phase":"reconcile_observe"}
+{"ms":43.071416,"ok":true,"phase":"reconcile_revalidate"}
+{"ms":22.866303000000002,"ok":true,"phase":"reconcile_apply"}
+{"ms":33.694801000000005,"ok":true,"phase":"source_fingerprint"}
+{"ms":52.710043,"ok":true,"phase":"scene_catalog"}
+{"ms":261.659537,"ok":true,"phase":"review_capture"}
+{"ms":15.993803000000002,"ok":true,"phase":"review_proposals"}
+{"ms":71.74911,"ok":true,"phase":"review_view_contexts"}
+{"ms":0.0018440000000000002,"ok":true,"phase":"review_evidence"}
+{"ms":33.6992,"ok":true,"phase":"review_final_verify"}
+{"json_bytes":3677,"ms":198.906573,"phase":"library_query","rows":1}
+{"review_lines":50,"scenes":1000,"selected_bytes":18512}
+{"iteration":2,"scope":"filesystem/store, not native UI; index writes only"}
+{"ms":60.229369999999996,"ok":true,"phase":"selected_scene"}
+{"ms":24.046545,"ok":true,"phase":"reconcile_plan"}
+{"ms":42.867913,"ok":true,"phase":"reconcile_observe"}
+{"ms":41.227242999999994,"ok":true,"phase":"reconcile_revalidate"}
+{"ms":22.109518,"ok":true,"phase":"reconcile_apply"}
+{"ms":32.740114,"ok":true,"phase":"source_fingerprint"}
+{"ms":52.754988000000004,"ok":true,"phase":"scene_catalog"}
+{"ms":267.428077,"ok":true,"phase":"review_capture"}
+{"ms":15.971842,"ok":true,"phase":"review_proposals"}
+{"ms":72.155786,"ok":true,"phase":"review_view_contexts"}
+{"ms":0.001954,"ok":true,"phase":"review_evidence"}
+{"ms":33.80598,"ok":true,"phase":"review_final_verify"}
+{"json_bytes":3677,"ms":203.130126,"phase":"library_query","rows":1}
+{"review_lines":50,"scenes":1000,"selected_bytes":18512}

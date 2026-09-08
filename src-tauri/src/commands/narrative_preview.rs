@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use wobu_narrative::{Name, SceneId, VarType};
-use wobu_narrative_compiler::{CompileOptions, CompileReport, Graph, compile};
+use wobu_narrative_compiler::{CompileOptions, CompileReport, Graph, compile_with_analysis};
 use wobu_narrative_runtime::{
     CommandResult as HostResult, Runtime, Snapshot, State as Values, Yield,
 };
@@ -25,7 +25,9 @@ pub(super) fn compile_project(
     project: &Project,
     commands: BTreeMap<Name, Vec<VarType>>,
 ) -> CommandResult<CompileReport> {
+    let analysis = project.narrative_analysis_capture()?;
     let before = project.narrative_fingerprint()?;
+    let world = project.world_document()?.map(|(world, _)| world).unwrap_or_default();
     let catalog = project.scene_catalog()?;
     if !catalog.unreadable.is_empty() {
         return Err(WobuError::new(
@@ -58,12 +60,21 @@ pub(super) fn compile_project(
     // checked above walks `narrative/texts/` too, so an asset edited during
     // compilation aborts here rather than producing a graph nobody asked for.
     let texts = project.text_assets()?;
-    let report = compile(
+    let report = compile_with_analysis(
         &scenes,
         &texts,
         &schema,
         &CompileOptions { known_entities, commands, verified_reviews, ..CompileOptions::default() },
+        &world,
+        &analysis.policies,
     );
+    analysis.check_current(project)?;
+    if project.narrative_fingerprint()? != before {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Narrative source changed during analysis compilation.",
+        ));
+    }
     if let Some(graph) = &report.graph {
         bridge_integers(graph)?;
     }

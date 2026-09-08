@@ -397,6 +397,10 @@ pub fn place(root: &Path, rel_path: &str) -> std::result::Result<PathBuf, Unplac
 /// race for one that does not exist here yet, and losing that race means
 /// receiving somebody else's generation record rather than losing our own.
 pub fn agrees(rel_path: &str, hash: &str) -> bool {
+    if let Some(file) = rel_path.strip_prefix("assets/media/") {
+        return is_content_hash(hash)
+            && (file == format!("{hash}.wav") || file == format!("{hash}.json"));
+    }
     if rel_path.starts_with("assets/loras/") {
         return lora_hash_from_path(rel_path).is_some_and(|path_hash| path_hash == hash);
     }

@@ -83,3 +83,73 @@ it('filters actual Review rows by locale freshness and opens its localisation wo
   fireEvent.click(screen.getByRole('button', { name: 'Localisation…' }))
   expect(await screen.findByRole('heading', { name: 'Localisation' })).toBeInTheDocument()
 })
+
+it('filters actual Review rows by recording readiness and opens the recording workflow', async () => {
+  ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  const view = reviewFixture()
+  view.lines.push({
+    ...view.lines[0]!,
+    target: { ...view.lines[0]!.target, variant: 'other' },
+    text: { body: 'Other line', revision: 'other' },
+  })
+  const recording = {
+    version: 1,
+    key: { id: 'warning-main', locale: 'fr', form: 'other' },
+    source: {
+      id: 'warning-main',
+      speaker: 'Mara',
+      context: 'Beacon',
+      text: 'The beacon failed.',
+      guard: 'current',
+      revision: 'rev',
+    },
+    origin: 'fr',
+    text: 'Le phare est éteint.',
+    notes: { pronunciation: '', delivery: '' },
+    ready: true,
+  }
+  invoke.mockImplementation(async (command: string) => {
+    if (command === 'narrative_review_list')
+      return {
+        scenes: [view],
+        errors: [],
+        next_offset: null,
+        total_scenes: 1,
+        catalog_revision: 'catalog',
+      }
+    if (command === 'narrative_generation_history') return []
+    if (command === 'narrative_media_get')
+      return {
+        policy: { version: 1, required: {}, notes: {}, timing: [] },
+        policy_guard: 'policy',
+        locale: 'fr',
+        rows: [recording],
+        bindings: {},
+        diagnostics: [],
+      }
+    return null
+  })
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <NarrativeReview
+        projectKey="/recording-world"
+        readOnly={false}
+        sceneName={() => 'Beacon'}
+        speakerName={() => 'Mara'}
+        onSource={() => {}}
+        onClose={() => {}}
+      />
+    </QueryClientProvider>,
+  )
+  const queue = within(await screen.findByRole('region', { name: 'Project review queue' }))
+  await queue.findByText('Other line')
+  fireEvent.change(screen.getByLabelText('Media readiness'), { target: { value: 'missing' } })
+  await queue.findByText('The beacon failed.')
+  expect(queue.queryByText('Other line')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Recording…' }))
+  expect(
+    await screen.findByRole('heading', { name: 'Recording and prepared media' }),
+  ).toBeInTheDocument()
+})

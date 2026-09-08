@@ -24,8 +24,20 @@ impl Project {
         if ids.windows(2).any(|w| w[0] == w[1]) {
             return Err(invalid("Scene and text identities collide."));
         }
+        let result = self.locale_capture_selected(&ids)?;
+        if fingerprint != self.narrative_fingerprint()? {
+            return Err(invalid("Narrative membership changed during production capture."));
+        }
+        Ok(result)
+    }
+    pub(super) fn locale_capture_selected(
+        &self,
+        ids: &[wobu_narrative::SceneId],
+    ) -> Result<(BTreeMap<String, SourceLine>, Vec<super::super::narrative_review::ReviewSnapshot>)>
+    {
+        let fingerprint = self.narrative_fingerprint()?;
         let mut result = BTreeMap::new();
-        let snapshots = self.review_snapshots(&ids, None)?;
+        let snapshots = self.review_snapshots(ids, None)?;
         for snapshot in &snapshots {
             let id = snapshot.scene().id;
             let view = snapshot.view_with_proposals(Vec::new())?;

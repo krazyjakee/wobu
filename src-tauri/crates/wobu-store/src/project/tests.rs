@@ -893,3 +893,17 @@ fn filetime_bump(path: &Path) {
     let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
     f.set_modified(later).unwrap();
 }
+
+#[test]
+fn reconcile_index_guard_includes_row_bytes_even_when_source_hash_is_unchanged() {
+    let (_dir, mut project) = new_project();
+    let file = project.create_scene("First").unwrap();
+    project.reconcile().unwrap();
+    let observation = project.reconcile_plan().unwrap().observe().unwrap();
+    assert!(observation.revalidate().unwrap());
+    let mut indexed =
+        project.narrative_index().unwrap().into_iter().find(|entry| entry.rel == file.rel).unwrap();
+    indexed.name = "An overlapping derived-index update".into();
+    project.index.upsert_narrative(&indexed).unwrap();
+    assert_eq!(project.apply_reconcile(observation).unwrap(), None);
+}

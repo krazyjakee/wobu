@@ -10,6 +10,7 @@ export interface ExportOptions {
 export interface ExportCheck {
   diagnostics: CompileDiagnostic[]
   localeDiagnostics?: import('./narrativeLocale').LocaleDiagnostic[]
+  mediaDiagnostics?: import('./narrativeMedia').MediaDiagnostic[]
   payloadHash: string | null
   scenes: number
   strings: number

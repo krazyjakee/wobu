@@ -54,29 +54,7 @@ pub async fn narrative_locale_export(
     work(&state, move |p| {
         let text = p.locale_export(&locale, csv)?;
         if let Some(destination) = destination {
-            use std::io::Write;
-            let path = std::path::PathBuf::from(destination);
-            let parent = path.parent().and_then(|p| p.canonicalize().ok()).ok_or_else(|| {
-                WobuError::new(Code::Invalid, "Choose an existing destination directory.")
-            })?;
-            if parent.starts_with(
-                p.root()
-                    .canonicalize()
-                    .map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?,
-            ) {
-                return Err(WobuError::new(
-                    Code::Invalid,
-                    "Choose an interchange file outside the project.",
-                ));
-            }
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(path)
-                .map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?;
-            file.write_all(text.as_bytes())
-                .and_then(|()| file.sync_all())
-                .map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?;
+            export_file(p, &text, destination)?;
         }
         Ok(text)
     })
@@ -101,4 +79,30 @@ pub async fn narrative_locale_import(
 #[tauri::command]
 pub async fn narrative_locale_approve(state: State<'_, AppState>, row: Row) -> CommandResult<()> {
     work(&state, move |p| saved(p.locale_approve(&row)?)).await
+}
+
+pub(super) fn export_file(p: &Project, text: &str, destination: String) -> CommandResult<()> {
+    use std::io::Write;
+    let path = std::path::PathBuf::from(destination);
+    let parent = path.parent().and_then(|p| p.canonicalize().ok()).ok_or_else(|| {
+        WobuError::new(Code::Invalid, "Choose an existing destination directory.")
+    })?;
+    if parent.starts_with(
+        p.root().canonicalize().map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?,
+    ) {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Choose an interchange file outside the project.",
+        ));
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?;
+    file.write_all(text.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|e| WobuError::new(Code::Invalid, e.to_string()))?;
+
+    Ok(())
 }

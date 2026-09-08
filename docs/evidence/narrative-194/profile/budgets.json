@@ -1,0 +1,31 @@
+{
+  "defined_before_optimization": true,
+  "baseline_commit": "730ab3a",
+  "fixture": "1000 scenes, 50000 dialogue slots, 20 overlapping quests; separate 483 affected-line case",
+  "machine": "AMD Ryzen 9 5900X, 24 logical CPUs, 31 GiB RAM, Linux 6.8.0-138; actual run records versions and load",
+  "profile": "Rust debug, actual Tauri/WebKitGTK when marked native; store spans are not UI measurements",
+  "budgets_ms": {
+    "warm_search_and_combined_filter_p95": 250,
+    "cached_scene_open_and_return_p95_each": 200,
+    "uncached_scene_open_p95": 500,
+    "scene_review_50_slots_p95": 500,
+    "review_first_bounded_483_line_page": 1000,
+    "cancel_acknowledgement_p95": 200,
+    "interactive_frame_interval_p95": 50,
+    "maximum_task_caused_interactive_stall": 100,
+    "warm_index_project_open": 2000,
+    "cold_index_project_open": 10000
+  },
+  "budgets_memory_bytes": {
+    "combined_native_and_webview_peak_rss": 1073741824,
+    "retained_rss_growth_after_50_open_return_cycles": 134217728
+  },
+  "bounds": {
+    "react_flow_store_nodes": 300,
+    "react_flow_dom_nodes": 300,
+    "scene_library_rows": 25,
+    "review_container_page": 32,
+    "review_page_lines": 10000
+  },
+  "measurement": "At least 30 warm samples; retain first/cold samples separately and all outliers. Record IPC bytes/counts, exact requested text/IDs, focus, selection, scroll, frames and RSS. Cold index does not imply cold disk. Planner total-time/state limits remain #170 ownership; measure plan latency and cancellation with that owner's declared limits. Any unmeasured budget remains open."
+}

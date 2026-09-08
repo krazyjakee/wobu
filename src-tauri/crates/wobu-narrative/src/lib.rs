@@ -40,6 +40,7 @@
 
 pub mod diagnose;
 pub mod error;
+pub mod evaluate;
 pub mod expr;
 pub mod id;
 pub mod lifecycle;

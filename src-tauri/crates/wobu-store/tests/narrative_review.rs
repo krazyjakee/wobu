@@ -438,3 +438,50 @@ fn version_one_review_history_survives_open_rebuild_and_explicit_scene_upgrade()
     loaded.stamp = obsolete;
     assert!(matches!(p.save_scene(&mut loaded).unwrap(), SourceSave::Conflict { .. }));
 }
+
+#[test]
+fn final_batch_verification_rejects_late_receipt_changes_with_unchanged_source() {
+    let (_dir, mut project, _, target) = fixture();
+    let approved = apply(&mut project, &target, EditorialAction::Approve);
+    let other = project.create_scene("Other").unwrap();
+    let snapshots = project.review_snapshots(&[target.scene, other.scene.id], None).unwrap();
+    assert!(snapshots[0].evidence().unwrap()[&target.variant.unwrap()].binding.approved);
+    project.verify_review_snapshots(&snapshots).unwrap();
+    let source = project.narrative_fingerprint().unwrap();
+    let receipt = project
+        .root()
+        .join(format!("narrative/receipts/{}.json", approved.scene.editorial_head.unwrap()));
+    let raw = std::fs::read_to_string(&receipt).unwrap();
+    assert!(raw.contains("Welcome."));
+    std::fs::write(receipt, raw.replace("Welcome.", "Goodbye.")).unwrap();
+    assert_eq!(source, project.narrative_fingerprint().unwrap());
+    assert!(project.verify_review_snapshots(&snapshots).is_err());
+}
+#[test]
+fn final_batch_verification_preserves_missing_character_observations() {
+    let (_dir, mut project, mut file, target) = fixture();
+    let actor = project.create_node(wobu_core::NodeKind::Character, "Late", None).unwrap();
+    let path = project.root().join("nodes/character/late.md");
+    let character = std::fs::read_to_string(&path).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    project.reconcile().unwrap();
+    file.scene.beats[0].dialogue[0].speaker = Speaker::Entity(actor.id);
+    project.save_scene(&mut file).unwrap();
+    let other = project.create_scene("Other").unwrap();
+    let snapshots = project.review_snapshots(&[target.scene, other.scene.id], None).unwrap();
+    project.verify_review_snapshots(&snapshots).unwrap();
+    let source = project.narrative_fingerprint().unwrap();
+    std::fs::write(&path, character).unwrap();
+    project.reconcile().unwrap();
+    assert_eq!(source, project.narrative_fingerprint().unwrap());
+    assert!(project.verify_review_snapshots(&snapshots).is_err());
+}
+#[test]
+fn final_batch_verification_rejects_mixed_capture_revisions() {
+    let (_dir, mut project, mut file, target) = fixture();
+    let first = project.review_snapshot(target.scene, None).unwrap();
+    file.scene.summary = "Later context".into();
+    project.save_scene(&mut file).unwrap();
+    let second = project.review_snapshot(target.scene, None).unwrap();
+    assert!(project.verify_review_snapshots([&first, &second]).is_err());
+}

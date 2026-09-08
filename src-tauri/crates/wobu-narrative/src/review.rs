@@ -318,6 +318,7 @@ pub enum PolicyScope {
 pub enum EditorialAction {
     ManualSave,
     Restore,
+    Materialize { report_id: Id },
     Edit { body: String },
     Policy { scope: PolicyScope, policy: GenerationPolicy },
     Approve,

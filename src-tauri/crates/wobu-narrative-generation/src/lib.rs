@@ -22,6 +22,13 @@ pub struct Settings {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct AnalysisBinding {
+    pub policy_guard: String,
+    pub report: Option<Id>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FrozenRequest {
     pub version: u32,
     /// Source-language capability used to interpret the frozen inputs, not the
@@ -33,6 +40,8 @@ pub struct FrozenRequest {
     /// Existing selected variant, or an identity reserved for a currently empty slot.
     pub candidate_variant_id: VariantId,
     pub speaker: Speaker,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis: Option<AnalysisBinding>,
     pub expected_scene_hash: String,
     pub compiled_graph_hash: String,
     pub expected_text_revision: Option<Revision>,
@@ -55,7 +64,8 @@ impl FrozenRequest {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if !(1..=REQUEST_VERSION).contains(&self.version)
+        if (self.version == 1 && self.analysis.is_some())
+            || !(1..=REQUEST_VERSION).contains(&self.version)
             || !(1..=wobu_narrative::SCENE_SCHEMA_VERSION).contains(&self.source_schema_version)
             || self.prompt_version != PROMPT_VERSION
             || self.output_schema_version != OUTPUT_SCHEMA_VERSION

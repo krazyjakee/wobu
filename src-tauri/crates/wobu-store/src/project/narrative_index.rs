@@ -12,14 +12,11 @@ impl Project {
         self.index.narrative_entries()
     }
     pub(crate) fn reconcile_narrative(&self) -> Result<bool> {
-        let entries = registry::observe(self.root())?;
-        if self.index.narrative_entries()? == entries {
+        let entries = self.narrative_cache.observe(self.root())?;
+        if self.index.narrative_signature()? == entries.signature {
             return Ok(false);
         }
-        self.index.replace_narrative(&entries)?;
+        self.index.replace_narrative(entries.entries.iter().map(|entry| &entry.entry))?;
         Ok(true)
     }
-}
-pub(super) fn observe(root: &std::path::Path) -> Result<Vec<NarrativeIndexEntry>> {
-    registry::observe(root)
 }

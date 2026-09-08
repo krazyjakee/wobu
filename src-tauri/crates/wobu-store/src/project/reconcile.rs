@@ -32,7 +32,8 @@ pub struct ReconcilePlan {
     corrupt: HashSet<String>,
     assets: HashSet<String>,
     generations: HashSet<String>,
-    narrative: Vec<crate::NarrativeIndexEntry>,
+    narrative: String,
+    narrative_cache: std::sync::Arc<crate::narrative::registry::cache::SourceCache>,
     layout_observation: String,
 }
 
@@ -51,7 +52,7 @@ pub struct ReconcileObservation {
     seen_assets: HashSet<String>,
     generations: Vec<(Generation, String, Stamp)>,
     seen_generations: HashSet<String>,
-    narrative: Vec<crate::NarrativeIndexEntry>,
+    narrative: crate::narrative::registry::cache::Observation,
     layout_observation: String,
 }
 
@@ -124,7 +125,7 @@ impl ReconcilePlan {
             return Err(Error::Disconnected);
         }
 
-        let narrative = super::narrative_index::observe(&self.root)?;
+        let narrative = self.narrative_cache.observe(&self.root)?;
         let layout_observation = crate::narrative::layout::observation(&self.root);
         Ok(ReconcileObservation {
             layout_observation,
@@ -203,7 +204,8 @@ impl ReconcileObservation {
                 return Ok(false);
             }
         }
-        if super::narrative_index::observe(&self.plan.root)? != self.narrative {
+        if self.plan.narrative_cache.observe(&self.plan.root)?.signature != self.narrative.signature
+        {
             return Ok(false);
         }
         Ok(true)
@@ -304,8 +306,14 @@ impl Project {
         // recorded so the navigator can say so. The clear and every refill are
         // one transaction, so a malformed row or SQLite failure restores the
         // previous complete read model rather than exposing a partial rebuild.
-        let narrative = super::narrative_index::observe(&self.root)?;
-        self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken, &narrative)?;
+        let narrative = self.narrative_cache.observe(&self.root)?;
+        self.index.rebuild_from_scan(
+            &blobs,
+            &generation_records,
+            &fresh,
+            &broken,
+            narrative.entries.iter().map(|entry| &entry.entry),
+        )?;
         self.refresh_narrative_dependencies()?;
         on_progress(ScanProgress { done: total, total });
         Ok(())
@@ -344,7 +352,8 @@ impl Project {
             corrupt: self.index.corrupt_paths()?.into_iter().collect(),
             assets: self.index.asset_paths()?,
             generations: self.index.generation_paths()?,
-            narrative: self.index.narrative_entries()?,
+            narrative: self.index.narrative_signature()?,
+            narrative_cache: self.narrative_cache.clone(),
             layout_observation: self.layout_observation.clone(),
         })
     }
@@ -375,7 +384,7 @@ impl Project {
             || self.index.corrupt_paths()?.into_iter().collect::<HashSet<_>>() != plan.corrupt
             || self.index.asset_paths()? != plan.assets
             || self.index.generation_paths()? != plan.generations
-            || self.index.narrative_entries()? != plan.narrative
+            || self.index.narrative_signature()? != plan.narrative
         {
             return Ok(None);
         }
@@ -424,8 +433,8 @@ impl Project {
             self.index.remove_generation_by_rel_path(rel)?;
             changed = true;
         }
-        if narrative != plan.narrative {
-            self.index.replace_narrative(&narrative)?;
+        if narrative.signature != plan.narrative {
+            self.index.replace_narrative(narrative.entries.iter().map(|entry| &entry.entry))?;
             changed = true;
         }
         if changed {

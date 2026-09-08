@@ -6,11 +6,11 @@ use crate::{
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use wobu_narrative::{SceneId, review::ReviewTarget};
 use wobu_store::{
     Project,
-    project::narrative_review::{ReviewRequest, ReviewSceneView},
+    project::narrative_review::{ReviewRequest, ReviewSceneView, ReviewSnapshot},
 };
 
 const SCENES_PER_PAGE: usize = 32;
@@ -30,21 +30,51 @@ struct ListError {
     reason: String,
 }
 #[tauri::command]
-pub fn narrative_review_list(
-    state: State<'_, AppState>,
+pub async fn narrative_review_list(
+    app: AppHandle,
     state_json: Option<String>,
     offset: usize,
     expected_catalog: Option<String>,
 ) -> CommandResult<ReviewList> {
-    state.reconcile_now()?;
-    state.with(|p| list(p, state_json.as_deref(), offset, expected_catalog.as_deref()))
+    let (ticket, ()) = app.state::<AppState>().ticket(|_| Ok(()))?;
+    super::super::blocking("The review queue thread stopped unexpectedly.", move || {
+        let state = app.state::<AppState>();
+        state.reconcile_ticket_now(&ticket)?;
+        let captured = state.with_ticket(&ticket, |project| {
+            capture_list(project, state_json.as_deref(), offset, expected_catalog.as_deref())
+        })?;
+        let rendered = captured.render()?;
+        state.with_ticket(&ticket, |project| rendered.finish(project))
+    })
+    .await?
 }
+struct CapturedList {
+    output: ReviewList,
+    snapshots: Vec<(SceneId, wobu_store::Result<ReviewSnapshot>)>,
+    proposals: BTreeMap<SceneId, Vec<wobu_store::project::narrative_review::ReviewProposal>>,
+    proposal_bytes: Vec<u8>,
+    scene_ids: BTreeSet<SceneId>,
+    text_ids: Vec<wobu_narrative::TextAssetId>,
+}
+struct RenderedList {
+    captured: CapturedList,
+    views: Vec<(ReviewSnapshot, ReviewSceneView)>,
+}
+#[cfg(test)]
 fn list(
     project: &Project,
     state: Option<&str>,
     offset: usize,
     expected_catalog: Option<&str>,
 ) -> CommandResult<ReviewList> {
+    capture_list(project, state, offset, expected_catalog)?.render()?.finish(project)
+}
+fn capture_list(
+    project: &Project,
+    state: Option<&str>,
+    offset: usize,
+    expected_catalog: Option<&str>,
+) -> CommandResult<CapturedList> {
     let catalog = project.scene_catalog()?;
     let texts = project.text_catalog()?;
     let mut ids = catalog
@@ -65,7 +95,7 @@ fn list(
     }
     let proposals = project.review_proposals()?;
     let proposal_bytes = serde_json::to_vec(&proposals).map_err(invalid)?;
-    let mut output = ReviewList {
+    let output = ReviewList {
         scenes: vec![],
         errors: catalog
             .unreadable
@@ -81,43 +111,74 @@ fn list(
         total_scenes: ids.len(),
         catalog_revision,
     };
-    let mut captures = Vec::new();
-    let mut lines = 0;
-    for id in ids.iter().skip(offset).take(SCENES_PER_PAGE) {
-        let result = (|| {
-            let snapshot = project.review_snapshot(*id, state)?;
-            let view =
-                snapshot.view_with_proposals(proposals.get(id).cloned().unwrap_or_default())?;
-            Ok::<_, wobu_store::Error>((snapshot, view))
-        })();
-        match result {
-            Ok((snapshot,view)) if lines + view.lines.len() <= MAX_PAGE_LINES => {
-                bridge(&view)?;
-                lines += view.lines.len();
-                captures.push((snapshot, view));
+    let page = ids.into_iter().skip(offset).take(SCENES_PER_PAGE).collect::<Vec<_>>();
+    // The common path captures membership/fingerprints once. A malformed source
+    // retains the queue's per-container errors and other reviewable results.
+    let snapshots = match project.review_snapshots(&page, state) {
+        Ok(snapshots) => page.into_iter().zip(snapshots.into_iter().map(Ok)).collect(),
+        Err(_) => page.into_iter().map(|id| (id, project.review_snapshot(id, state))).collect(),
+    };
+    Ok(CapturedList {
+        output,
+        snapshots,
+        proposals,
+        proposal_bytes,
+        scene_ids: catalog.ids(),
+        text_ids: texts.assets.iter().map(|asset| asset.id).collect(),
+    })
+}
+impl CapturedList {
+    /// Pure context/evidence work uses only frozen values, outside the slot mutex.
+    fn render(mut self) -> CommandResult<RenderedList> {
+        let mut views = Vec::new();
+        let mut lines = 0;
+        for (id, snapshot) in std::mem::take(&mut self.snapshots) {
+            let result = snapshot.and_then(|snapshot| {
+                let view =
+                    snapshot.view_with_proposals(self.proposals.remove(&id).unwrap_or_default())?;
+                Ok((snapshot, view))
+            });
+            match result {
+                Ok((snapshot, view)) if lines + view.lines.len() <= MAX_PAGE_LINES => {
+                    bridge(&view)?;
+                    lines += view.lines.len();
+                    views.push((snapshot, view));
+                }
+                Ok(_) => self.output.errors.push(ListError { scene_id: Some(id), reason: "This page exceeds 10,000 lines. Open the scene in Script to review it directly.".into() }),
+                Err(error) => self.output.errors.push(ListError { scene_id: Some(id), reason: error.to_string() }),
             }
-            Ok(_) => output.errors.push(ListError {scene_id:Some(*id),reason:"This page exceeds 10,000 lines. Open the scene in Script to review it directly.".into()}),
-            Err(error) => output.errors.push(ListError {scene_id:Some(*id),reason:error.to_string()}),
         }
+        Ok(RenderedList { captured: self, views })
     }
-    for (snapshot, view) in captures {
-        match snapshot.verify_current(project) {
-            Ok(()) => output.scenes.push(view),
-            Err(error) => output
-                .errors
-                .push(ListError { scene_id: Some(view.scene_id), reason: error.to_string() }),
+}
+impl RenderedList {
+    fn finish(mut self, project: &Project) -> CommandResult<ReviewList> {
+        let batch_current = project
+            .verify_review_snapshots(self.views.iter().map(|(snapshot, _)| snapshot))
+            .is_ok();
+        for (snapshot, view) in self.views {
+            let checked = if batch_current { Ok(()) } else { snapshot.verify_current(project) };
+            match checked {
+                Ok(()) => self.captured.output.scenes.push(view),
+                Err(error) => self
+                    .captured
+                    .output
+                    .errors
+                    .push(ListError { scene_id: Some(view.scene_id), reason: error.to_string() }),
+            }
         }
+        if self.captured.text_ids
+            != project.text_catalog()?.assets.iter().map(|asset| asset.id).collect::<Vec<_>>()
+            || self.captured.scene_ids != project.scene_catalog()?.ids()
+            || self.captured.proposal_bytes
+                != serde_json::to_vec(&project.review_proposals()?).map_err(invalid)?
+        {
+            return Err(invalid(
+                "Narrative sources or proposals changed during review listing. Refresh and compare before deciding.",
+            ));
+        }
+        bridge(self.captured.output)
     }
-    if texts.assets.iter().map(|asset| asset.id).collect::<Vec<_>>()
-        != project.text_catalog()?.assets.iter().map(|asset| asset.id).collect::<Vec<_>>()
-        || catalog.ids() != project.scene_catalog()?.ids()
-        || proposal_bytes != serde_json::to_vec(&project.review_proposals()?).map_err(invalid)?
-    {
-        return Err(invalid(
-            "Narrative sources or proposals changed during review listing. Refresh and compare before deciding.",
-        ));
-    }
-    bridge(output)
 }
 #[derive(Serialize)]
 pub struct BatchResult {

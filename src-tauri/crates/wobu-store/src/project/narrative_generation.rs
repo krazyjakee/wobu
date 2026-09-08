@@ -193,6 +193,7 @@ pub fn source_unchanged(file: &crate::SceneFile, request: &FrozenRequest) -> boo
 /// Shared execution/publication check; the editorial transaction still owns the
 /// container lock and compares the current file stamp at the write boundary.
 pub fn checks(project: &Project, request: &FrozenRequest) -> Result<PublicationChecks> {
+    check_analysis(project, request)?;
     let file = project.load_editorial_source(request.target.scene)?;
     let current =
         super::narrative_context::capture(project, request.context.options.clone(), || {})?;
@@ -201,6 +202,7 @@ pub fn checks(project: &Project, request: &FrozenRequest) -> Result<PublicationC
     {
         return Err(invalid("Source changed while checking generation eligibility."));
     }
+    check_analysis(project, request)?;
     let mut checks = checks_captured(&file.scene, &current, request);
     checks.scene_unchanged = source_unchanged(&file, request);
     Ok(checks)
@@ -245,4 +247,43 @@ pub fn checks_captured(
             || policy == Some(GenerationPolicy::Locked)
             || slot.is_some_and(|s| s.policy == GenerationPolicy::Locked),
     }
+}
+
+/// Receipt provenance stays immutable while eligibility uses portable policy content.
+pub fn check_analysis(project: &Project, request: &FrozenRequest) -> Result<()> {
+    let capture = project.narrative_analysis_capture()?;
+    let target =
+        wobu_narrative_variants::Target { scene: request.target.scene, beat: request.target.beat };
+    let current = capture.binding(&target, None);
+    if current.as_ref().map(|b| &b.policy_guard)
+        != request.analysis.as_ref().map(|b| &b.policy_guard)
+    {
+        return Err(invalid(
+            "Declared analysis policy changed; replan before generation or acceptance.",
+        ));
+    }
+    if let Some(id) = request.analysis.as_ref().and_then(|b| b.report) {
+        let saved = project.narrative_analysis_report(id)?;
+        let world = project.world_document()?.map(|(w, _)| w).unwrap_or_default();
+        let schema = project.state_schema()?;
+        if saved.world_guard
+            != wobu_narrative_variants::hash(&(&world, schema.iter().collect::<Vec<_>>()))
+            || saved.report.target != target
+            || saved.policies.guard != capture.guard
+            || !saved.report.rows.iter().any(|row| {
+                row.classification == wobu_narrative_variants::Classification::Included
+                    && row
+                        .witness
+                        .as_ref()
+                        .is_some_and(|w| w.state == request.context.options.state)
+                    && wobu_narrative_variants::candidate_id(&target, request.target.slot, row)
+                        == request.candidate_variant_id
+            })
+        {
+            return Err(invalid(
+                "Generation target/state does not match its immutable analysis witness.",
+            ));
+        }
+    }
+    capture.check_current(project)
 }

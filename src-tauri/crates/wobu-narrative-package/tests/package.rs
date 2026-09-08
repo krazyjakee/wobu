@@ -403,3 +403,131 @@ fn native_locale_payload_roundtrips_rtl_and_explicit_fallback_without_changing_s
     assert_eq!(beat.dialogue[0].variants[0].text, "ميناء النجوم\nمرحبا");
     assert_eq!(beat.choices[0].label, "続ける");
 }
+
+#[path = "../../wobu-narrative-media/tests/support/mod.rs"]
+mod media_support;
+#[test]
+fn prepared_media_package_roundtrip_native_timing_and_fallback_validation() {
+    use std::collections::{BTreeMap, BTreeSet};
+    use wobu_narrative_media::{
+        self as media,
+        release::{Bundle, Prepared},
+    };
+    let graph = fixture(Profile::Release);
+    let variant = &graph.scenes.values().next().unwrap().beats.values().next().unwrap().dialogue[0]
+        .variants[0];
+    let key = media::Key {
+        id: variant.id.clone(),
+        locale: "en".parse().unwrap(),
+        form: wobu_narrative_locale::PluralCategory::Other,
+    };
+    let audio = media_support::wav();
+    let hash = blake3::hash(&audio).to_hex().to_string();
+    let track = media::timing::Track {
+        version: 1,
+        audio_hash: hash.clone(),
+        duration_ms: 1000,
+        cues: vec![media::timing::Cue {
+            start_ms: 0,
+            end_ms: 800,
+            kind: media::timing::Kind::Viseme,
+            value: "aa".into(),
+        }],
+    };
+    let timing = serde_json::to_vec(&track).unwrap();
+    let timing_hash = blake3::hash(&timing).to_hex().to_string();
+    let take = Prepared {
+        key: key.clone(),
+        origin: key.locale.clone(),
+        source_revision: variant.revision.clone(),
+        translation_revision: None,
+        template: variant.text.clone(),
+        spoken_text: variant.text.clone(),
+        parameters: BTreeMap::new(),
+        audio: media::Blob {
+            path: format!("assets/media/{hash}.wav"),
+            hash,
+            bytes: audio.len() as u64,
+        },
+        info: media::wav::inspect(&audio).unwrap(),
+        timing: Some(media::Blob {
+            path: format!("assets/media/{timing_hash}.json"),
+            hash: timing_hash,
+            bytes: timing.len() as u64,
+        }),
+    };
+    let fallback = media::Key { id: "00000000000000000000000005".into(), ..key.clone() }.token();
+    let bundle = Bundle {
+        version: 1,
+        required: BTreeMap::from([(key.locale.clone(), true)]),
+        timing: BTreeSet::from([key.locale.clone()]),
+        takes: BTreeMap::from([(key.token(), take.clone())]),
+        fallback: BTreeSet::from([fallback]),
+    };
+    let files = BTreeMap::from([
+        (take.audio.path.clone(), audio.clone()),
+        (take.timing.as_ref().unwrap().path.clone(), timing),
+    ]);
+    let package = Package::build(graph.clone(), false)
+        .unwrap()
+        .with_media(bundle.clone(), files.clone())
+        .unwrap();
+    let temp = Temp::new();
+    publish(&package, &temp.0.join("voiced")).unwrap();
+    let reopened = read(&temp.0.join("voiced")).unwrap();
+    let media = reopened.media().unwrap().unwrap();
+    let selected = media.lookup(&key, &BTreeMap::new()).unwrap();
+    assert_eq!(reopened.media_audio(selected).unwrap(), audio);
+    assert_eq!(reopened.media_timing(selected).unwrap().unwrap().active(200).count(), 1);
+    let mut missing = bundle.clone();
+    missing.required.insert(key.locale.clone(), false);
+    missing.fallback.clear();
+    assert!(
+        Package::build(graph.clone(), false).unwrap().with_media(missing, files.clone()).is_err()
+    );
+    let mut stale = bundle.clone();
+    stale.takes.get_mut(&key.token()).unwrap().source_revision = "wrong".into();
+    assert!(
+        Package::build(graph.clone(), false).unwrap().with_media(stale, files.clone()).is_err()
+    );
+    let mut wrong_form = bundle.clone();
+    wrong_form.required.clear();
+    wrong_form.timing.clear();
+    wrong_form.fallback.clear();
+    assert!(
+        Package::build(graph.clone(), false)
+            .unwrap()
+            .with_media(wrong_form.clone(), files.clone())
+            .is_ok()
+    );
+    let mut take = wrong_form.takes.remove(&key.token()).unwrap();
+    take.key.form = wobu_narrative_locale::PluralCategory::One;
+    wrong_form.takes.insert(take.key.token(), take);
+    assert!(
+        Package::build(graph.clone(), false)
+            .unwrap()
+            .with_media(wrong_form, files.clone())
+            .is_err()
+    );
+    for invalid_key in [
+        "en/unknown/other",
+        "en/00000000000000000000000005/one",
+        "en/00000000000000000000000005/not_a_form",
+        "EN/00000000000000000000000005/other",
+        "en/00000000000000000000000005/other/extra",
+    ] {
+        let mut malformed = bundle.clone();
+        malformed.required.insert(key.locale.clone(), true);
+        malformed.fallback.insert(invalid_key.into());
+        assert!(
+            Package::build(graph.clone(), false)
+                .unwrap()
+                .with_media(malformed, files.clone())
+                .is_err(),
+            "{invalid_key}"
+        );
+    }
+    let mut untimed = bundle;
+    untimed.takes.get_mut(&key.token()).unwrap().timing = None;
+    assert!(Package::build(graph, false).unwrap().with_media(untimed, files).is_err());
+}

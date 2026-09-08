@@ -45,6 +45,7 @@ pub struct ReviewTransaction {
     decisions: BTreeMap<Id, ProposalDecision>,
     events: Vec<EditorialEvent>,
     _lock: File,
+    analysis: Option<super::super::narrative_variants::AnalysisCapture>,
 }
 impl Project {
     /// Guarded document undo. Only review mirrors and the generated history head
@@ -67,6 +68,64 @@ impl Project {
             return Err(invalid(
                 "Scene changed since this undo entry. Your collaborator's changes were preserved.",
             ));
+        }
+        // A redo may restore only the exact structural result already authorized
+        // by a verified materialization event. Manual saves still cannot mint Generated text.
+        if let Some(current) = &current {
+            let snapshot = self.review_snapshot(scene.id, None)?;
+            if snapshot.history_problem.is_none()
+                && let Some(prior) = snapshot.history.iter().find(|event| {
+                    matches!(event.action, EditorialAction::Materialize { .. })
+                        && undo_content(&event.after) == undo_content(&scene)
+                        && undo_content(&event.before) == undo_content(&current.scene)
+                })
+            {
+                let EditorialAction::Materialize { report_id } = prior.action else {
+                    unreachable!()
+                };
+                let saved = self.narrative_analysis_report(report_id)?;
+                saved.policies.check_current(self)?;
+                let mut checked = scene.clone();
+                for slot in checked.beats.iter_mut().flat_map(|b| b.dialogue.iter_mut()) {
+                    for variant in &mut slot.variants {
+                        if !current
+                            .scene
+                            .dialogue_slots()
+                            .any(|(_, s)| s.variants.iter().any(|v| v.id == variant.id))
+                        {
+                            variant.text.lifecycle.policy = GenerationPolicy::Edited;
+                        }
+                    }
+                }
+                checked.editorial_head = current.scene.editorial_head;
+                validate_manual(Some(&current.scene), &checked)?;
+                scene.editorial_head = current.scene.editorial_head;
+                let bindings = snapshot.bindings();
+                let decisions =
+                    snapshot.history.first().map(|e| e.decisions.clone()).unwrap_or_default();
+                let event = event(
+                    self,
+                    Id::generate(),
+                    current.scene.clone(),
+                    scene,
+                    None,
+                    EditorialAction::Restore,
+                    None,
+                    bindings.clone(),
+                    decisions.clone(),
+                );
+                let mut scene = event.after.clone();
+                scene.editorial_head = Some(event.id);
+                return self.commit_review(ReviewTransaction {
+                    snapshot,
+                    scene,
+                    bindings,
+                    decisions,
+                    events: vec![event],
+                    _lock,
+                    analysis: Some(saved.policies),
+                });
+            }
         }
         scene.editorial_head = current.as_ref().and_then(|f| f.scene.editorial_head);
         for beat in &mut scene.beats {
@@ -165,6 +224,99 @@ impl Project {
         self.commit_review(tx)?;
         Ok(true)
     }
+    /// Explicit structural authoring: share lock, receipt, reducer and publication guards.
+    pub(crate) fn materialize_analysis_variants(
+        &mut self,
+        saved: &super::super::narrative_variants::AnalysisReport,
+        slot_id: wobu_narrative::DialogueSlotId,
+        variants: Vec<Variant>,
+    ) -> Result<SceneFile> {
+        let target = &saved.report.target;
+        let lock = scene_lock(self, target.scene)?;
+        let snapshot = self.review_snapshot(target.scene, None)?;
+        if snapshot.fingerprint != saved.source_guard {
+            return Err(invalid("Sources changed before variant materialization."));
+        }
+        saved.policies.check_current(self)?;
+        if let Some(reason) = &snapshot.history_problem {
+            return Err(invalid(reason.clone()));
+        }
+        let before = snapshot.file.scene.clone();
+        let mut scene = before.clone();
+        let mut identities: std::collections::BTreeSet<_> = self
+            .scene_catalog()?
+            .scenes
+            .iter()
+            .map(|entry| self.load_scene(entry.id))
+            .collect::<Result<Vec<_>>>()?
+            .iter()
+            .flat_map(|file| {
+                file.scene.dialogue_slots().flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+            })
+            .collect();
+        identities.extend(self.text_assets()?.iter().flat_map(|a| {
+            a.entries
+                .iter()
+                .flat_map(|e| e.lines.iter().flat_map(|s| s.variants.iter().map(|v| v.id)))
+        }));
+        let slot = scene
+            .beat_mut(target.beat)
+            .and_then(|b| b.dialogue.iter_mut().find(|s| s.id == slot_id))
+            .ok_or_else(|| invalid("Matrix slot no longer exists."))?;
+        if slot.policy == GenerationPolicy::Locked
+            || slot.variants.iter().any(|v| v.text.lifecycle.policy == GenerationPolicy::Locked)
+        {
+            return Err(invalid(
+                "Unlock the slot and all its variants before changing conditional priority.",
+            ));
+        }
+        let mut inserted = Vec::new();
+        for variant in variants {
+            if let Some(existing) = slot.variants.iter().find(|v| v.id == variant.id) {
+                if existing.when != variant.when {
+                    return Err(invalid(
+                        "Configuration identity collides with different authored conditions.",
+                    ));
+                }
+                continue;
+            }
+            if identities.contains(&variant.id) {
+                return Err(invalid("Configuration identity already belongs to another slot."));
+            }
+            inserted.push(variant);
+        }
+        if inserted.is_empty() {
+            return Ok(snapshot.file);
+        }
+        // Predicates are disjoint exact configurations; preserve all existing priority.
+        inserted.append(&mut slot.variants);
+        slot.variants = inserted;
+        let bindings = snapshot.bindings();
+        let decisions = snapshot.history.first().map(|e| e.decisions.clone()).unwrap_or_default();
+        let event = event(
+            self,
+            Id::generate(),
+            before,
+            scene,
+            None,
+            EditorialAction::Materialize { report_id: saved.id },
+            None,
+            bindings.clone(),
+            decisions.clone(),
+        );
+        let mut scene = event.after.clone();
+        scene.editorial_head = Some(event.id);
+        saved.policies.check_current(self)?;
+        self.commit_review(ReviewTransaction {
+            snapshot,
+            scene,
+            bindings,
+            decisions,
+            events: vec![event],
+            _lock: lock,
+            analysis: Some(saved.policies.clone()),
+        })
+    }
     pub fn begin_review(&self, request: &ReviewRequest) -> Result<ReviewTransaction> {
         self.ensure_writable()?;
         let lock = scene_lock(self, request.target.scene)?;
@@ -178,7 +330,23 @@ impl Project {
         let scene = snapshot.file.scene.clone();
         let bindings = snapshot.bindings();
         let decisions = snapshot.history.first().map(|e| e.decisions.clone()).unwrap_or_default();
-        Ok(ReviewTransaction { snapshot, scene, bindings, decisions, events: vec![], _lock: lock })
+        let analysis = if matches!(
+            request.action,
+            EditorialAction::Accept { .. } | EditorialAction::Generated { .. }
+        ) {
+            Some(self.narrative_analysis_capture()?)
+        } else {
+            None
+        };
+        Ok(ReviewTransaction {
+            snapshot,
+            scene,
+            bindings,
+            decisions,
+            events: vec![],
+            _lock: lock,
+            analysis,
+        })
     }
     /// All requests in a grouped decision use the original snapshot guard. A
     /// caller cannot silently refresh a conflicting guard midway through a batch.
@@ -198,6 +366,7 @@ impl Project {
             request.action,
             EditorialAction::ManualSave
                 | EditorialAction::Restore
+                | EditorialAction::Materialize { .. }
                 | EditorialAction::Generated { .. }
         ) {
             return Err(invalid("This action is reserved for guarded storage operations."));
@@ -210,6 +379,11 @@ impl Project {
         target: ReviewTarget,
         action: EditorialAction,
     ) -> Result<()> {
+        if tx.analysis.is_none()
+            && matches!(action, EditorialAction::Accept { .. } | EditorialAction::Generated { .. })
+        {
+            tx.analysis = Some(self.narrative_analysis_capture()?);
+        }
         // Work on a clone so a rejected item cannot partly mutate a batch.
         let mut scene = tx.scene.clone();
         let mut bindings = tx.bindings.clone();
@@ -425,6 +599,9 @@ impl Project {
         Ok(())
     }
     pub fn commit_review(&mut self, tx: ReviewTransaction) -> Result<SceneFile> {
+        if let Some(analysis) = &tx.analysis {
+            analysis.check_current(self)?;
+        }
         tx.snapshot.check_current(self)?;
         if tx.events.is_empty() {
             return Err(invalid("No review decisions were staged."));
@@ -440,6 +617,9 @@ impl Project {
                 tx.events.iter().any(|event| event.id == binding.event_id).then_some(*id)
             })
             .collect();
+        if let Some(analysis) = &tx.analysis {
+            analysis.check_current(self)?;
+        }
         let mut file = tx.snapshot.file;
         file.scene = tx.scene;
         match self.write_review_scene(&mut file)? {

@@ -264,13 +264,13 @@ impl Index {
     /// see either the previous complete index or the new complete index, and a
     /// failed row restores the previous one. Statements are prepared once for
     /// the batch rather than once per node, edge, asset, or generation.
-    pub(crate) fn rebuild_from_scan(
+    pub(crate) fn rebuild_from_scan<'a>(
         &self,
         assets: &[Asset],
         generations: &[(Generation, String, Stamp)],
         nodes: &[(Node, String, Stamp)],
         corrupt: &[(String, String)],
-        narrative: &[crate::NarrativeIndexEntry],
+        narrative: impl IntoIterator<Item = &'a crate::NarrativeIndexEntry>,
     ) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch(CLEAR_DERIVED_SQL)?;

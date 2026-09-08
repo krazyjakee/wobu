@@ -1,10 +1,12 @@
 //! Locale records use the production registry, immutable receipts and guarded conflict siblings.
+mod production;
 mod sources;
 use super::Project;
 use crate::{
     Error, NarrativeRecordDocument as Document, NarrativeRecordFile as File,
     NarrativeRecordKind as Kind, Result, SourceSave,
 };
+pub(crate) use production::ProductionCapture;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wobu_core::Id;
@@ -60,11 +62,7 @@ impl Project {
         Ok(LocaleView { policy, policy_guard, sources, translations, translation_guards })
     }
     pub fn locale_policy(&self) -> Result<(Policy, String)> {
-        let file = self.narrative_record(Kind::Policy, policy_id())?;
-        let policy: Policy = match file {
-            Some(file) => serde_json::from_value(file.document.payload["policy"].clone())?,
-            None => Policy::default(),
-        };
+        let policy: Policy = self.production_policy(policy_id())?;
         policy.validate().map_err(invalid)?;
         Ok((policy.clone(), hash(&policy)))
     }

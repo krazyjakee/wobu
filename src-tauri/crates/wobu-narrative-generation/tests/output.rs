@@ -38,6 +38,7 @@ fn fixture() -> (FrozenRequest, serde_json::Value) {
         target,
         candidate_variant_id: candidate.variant_id,
         speaker: Speaker::Narrator,
+        analysis: None,
         expected_scene_hash: "scene".into(),
         compiled_graph_hash: "graph".into(),
         expected_text_revision: None,

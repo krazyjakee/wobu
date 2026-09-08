@@ -250,6 +250,26 @@ impl AppState {
         Ok(changed)
     }
 
+    /// A scheduled read retains the exact open session, including close/reopen
+    /// of the same project. Filesystem observation stays outside the mutex.
+    pub fn reconcile_ticket_now(&self, ticket: &ProjectTicket) -> CommandResult<bool> {
+        self.with_ticket(ticket, |_| Ok(()))?;
+        let changed = match self.reconcile_full_wait_with(
+            &ticket.root,
+            ticket.generation,
+            false,
+            ReconcilePlan::observe,
+        ) {
+            Outcome::Reconciled(changed) => changed,
+            Outcome::WentOffline => return Err(StoreError::Disconnected.into()),
+        };
+        self.with_ticket(ticket, |_| Ok(()))?;
+        if changed {
+            self.announce_local_change(ticket.project);
+        }
+        Ok(changed)
+    }
+
     /// Identity-checked form used by sync, whose round was planned for one
     /// project even if the window changes worlds before the observation starts.
     pub fn reconcile_project_now(&self, project: Id) -> CommandResult<bool> {

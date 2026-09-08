@@ -20,7 +20,7 @@ impl Package {
         self.graph()?;
         Ok(self)
     }
-    fn rehash(&mut self) {
+    pub(super) fn rehash(&mut self) {
         self.manifest.files = self
             .files
             .iter()

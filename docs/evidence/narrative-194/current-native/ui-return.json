@@ -1,0 +1,30 @@
+{
+  "ms": 64,
+  "frameIntervals": [],
+  "rows": 1,
+  "active": {
+    "tag": "TEXTAREA",
+    "role": null,
+    "label": null,
+    "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.",
+    "id": "",
+    "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.",
+    "disabled": false,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "tabIndex": 0
+  },
+  "text": "Scene search resultsSceneActArcTagsQuestsParticipantsText coverageRecorded statusOpenPinAshfall hearing 0731RenameWitness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.Showing 5 of 50 passages. Refine the search for another line.Matching passage1: Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.2: Witness 01 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.3: Witness 02 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.4: Witness 03 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.5: Witness 04 recalls the harbor bell. ASHFALL-PHRASE-0731 records district 3 evidence.UnassignedUnassignedNo tagsHarbor inquiry 11Harbor inquiry 12None declared50 / 50 slots0 generated \u00b7 50 edited \u00b7 0 locked49 draft \u00b7 1 approved1 out of dateFlowScriptPin",
+  "selection": {
+    "sceneId": "00000000000000000000000732",
+    "beatId": "00000000000000000000100731",
+    "lineId": "00000000000000000001036550",
+    "variantId": "00000000000000000002036550"
+  },
+  "scroll": [],
+  "errors": []
+}

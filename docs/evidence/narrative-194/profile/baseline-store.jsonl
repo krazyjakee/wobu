@@ -1,0 +1,46 @@
+{"ms":22417.636884,"ok":true,"phase":"project_open"}
+{"iteration":0,"scope":"filesystem/store, not native UI; index writes only"}
+{"ms":54.879714,"ok":true,"phase":"selected_scene"}
+{"ms":423.76676499999996,"ok":true,"phase":"reconcile_plan"}
+{"ms":5844.611121,"ok":true,"phase":"reconcile_observe"}
+{"ms":6111.708142,"ok":true,"phase":"reconcile_revalidate"}
+{"ms":1025.523663,"ok":true,"phase":"reconcile_apply"}
+{"ms":36.673277,"ok":true,"phase":"source_fingerprint"}
+{"ms":48.899088,"ok":true,"phase":"scene_catalog"}
+{"ms":241.19133100000002,"ok":true,"phase":"review_capture"}
+{"ms":14.919512,"ok":true,"phase":"review_proposals"}
+{"ms":72.68227200000001,"ok":true,"phase":"review_view_contexts"}
+{"ms":0.0017430000000000002,"ok":true,"phase":"review_evidence"}
+{"ms":38.510284,"ok":true,"phase":"review_final_verify"}
+{"json_bytes":3677,"ms":209.389173,"phase":"library_query","rows":1}
+{"review_lines":50,"scenes":1000,"selected_bytes":18512}
+{"iteration":1,"scope":"filesystem/store, not native UI; index writes only"}
+{"ms":56.836076999999996,"ok":true,"phase":"selected_scene"}
+{"ms":415.82856400000003,"ok":true,"phase":"reconcile_plan"}
+{"ms":5788.852022,"ok":true,"phase":"reconcile_observe"}
+{"ms":6019.255731,"ok":true,"phase":"reconcile_revalidate"}
+{"ms":1016.662505,"ok":true,"phase":"reconcile_apply"}
+{"ms":30.539201,"ok":true,"phase":"source_fingerprint"}
+{"ms":48.577242,"ok":true,"phase":"scene_catalog"}
+{"ms":236.25457899999998,"ok":true,"phase":"review_capture"}
+{"ms":14.851473,"ok":true,"phase":"review_proposals"}
+{"ms":68.10680099999999,"ok":true,"phase":"review_view_contexts"}
+{"ms":0.001613,"ok":true,"phase":"review_evidence"}
+{"ms":30.673794,"ok":true,"phase":"review_final_verify"}
+{"json_bytes":3677,"ms":174.68261800000002,"phase":"library_query","rows":1}
+{"review_lines":50,"scenes":1000,"selected_bytes":18512}
+{"iteration":2,"scope":"filesystem/store, not native UI; index writes only"}
+{"ms":54.403238,"ok":true,"phase":"selected_scene"}
+{"ms":406.217934,"ok":true,"phase":"reconcile_plan"}
+{"ms":5795.063894,"ok":true,"phase":"reconcile_observe"}
+{"ms":5977.182409,"ok":true,"phase":"reconcile_revalidate"}
+{"ms":1015.421139,"ok":true,"phase":"reconcile_apply"}
+{"ms":32.261773,"ok":true,"phase":"source_fingerprint"}
+{"ms":50.777804,"ok":true,"phase":"scene_catalog"}
+{"ms":234.47133300000002,"ok":true,"phase":"review_capture"}
+{"ms":14.979324,"ok":true,"phase":"review_proposals"}
+{"ms":69.554757,"ok":true,"phase":"review_view_contexts"}
+{"ms":0.0014529999999999999,"ok":true,"phase":"review_evidence"}
+{"ms":30.516639,"ok":true,"phase":"review_final_verify"}
+{"json_bytes":3677,"ms":178.104729,"phase":"library_query","rows":1}
+{"review_lines":50,"scenes":1000,"selected_bytes":18512}

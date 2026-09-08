@@ -183,79 +183,31 @@ pub(super) fn evaluate_recording(
     path: &mut Vec<usize>,
     record: &mut impl FnMut(TraceEvent),
 ) -> Result<bool> {
-    let mut child = |index, inner: &Condition| {
-        path.push(index);
-        let result = evaluate_recording(inner, state, path, record);
-        path.pop();
-        result
-    };
-    let result = match condition {
-        Condition::Always => true,
-        Condition::Never => false,
-        Condition::Not(inner) => !child(0, inner)?,
-        Condition::All(items) => {
-            let mut passed = true;
-            for (index, item) in items.iter().enumerate() {
-                if !child(index, item)? {
-                    passed = false;
-                    break;
-                }
-            }
-            passed
-        }
-        Condition::Any(items) => {
-            let mut passed = false;
-            for (index, item) in items.iter().enumerate() {
-                if child(index, item)? {
-                    passed = true;
-                    break;
-                }
-            }
-            passed
-        }
-        Condition::Compare(cmp) => {
-            let left =
-                state.get(&cmp.var).ok_or_else(|| Error::MissingState(cmp.var.to_string()))?;
-            let right = operand(&cmp.value, state)?;
-            if left.kind_name() != right.kind_name() {
-                return Err(Error::InvalidState(cmp.var.to_string()));
-            }
-            match cmp.op {
-                CompareOp::Eq => left == &right,
-                CompareOp::Ne => left != &right,
-                op => {
-                    let (Value::Int(a), Value::Int(b)) = (left, right) else {
-                        return Err(Error::InvalidState(cmp.var.to_string()));
-                    };
-                    match op {
-                        CompareOp::Lt => *a < b,
-                        CompareOp::Le => *a <= b,
-                        CompareOp::Gt => *a > b,
-                        CompareOp::Ge => *a >= b,
-                        _ => unreachable!(),
-                    }
-                }
-            }
-        }
-    };
-    // Composite records report their result, while only comparison leaves claim
-    // reads. Short-circuited siblings produce no evaluation record at all.
-    let inputs = if matches!(condition, Condition::Compare(_)) {
-        condition
-            .variables()
-            .into_iter()
-            .filter_map(|name| state.get(name).map(|value| (name.clone(), value.clone())))
-            .collect()
-    } else {
-        State::new()
-    };
-    record(TraceEvent::Condition {
-        path: path.clone(),
-        expression: condition.clone(),
-        passed: result,
-        inputs,
-    });
-    Ok(result)
+    wobu_narrative::evaluate::evaluate_recording(
+        condition,
+        state,
+        path,
+        &mut |path, condition, result| {
+            // Composite records report their result, while only comparison leaves claim
+            // reads. Short-circuited siblings produce no evaluation record at all.
+            let inputs = if matches!(condition, Condition::Compare(_)) {
+                condition
+                    .variables()
+                    .into_iter()
+                    .filter_map(|name| state.get(name).map(|value| (name.clone(), value.clone())))
+                    .collect()
+            } else {
+                State::new()
+            };
+            record(TraceEvent::Condition {
+                path: path.to_vec(),
+                expression: condition.clone(),
+                passed: result,
+                inputs,
+            });
+        },
+    )
+    .map_err(Into::into)
 }
 
 /// Effects report only the variables they read/write, not a copy of the entire

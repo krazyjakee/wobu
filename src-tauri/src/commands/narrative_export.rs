@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use tauri::State;
 use wobu_narrative::{Name, VarType};
-use wobu_narrative_compiler::{CompileDiagnostic, CompileOptions, Profile, compile};
+use wobu_narrative_compiler::{CompileDiagnostic, CompileOptions, Profile, compile_with_analysis};
 use wobu_narrative_package::Package;
 use wobu_store::Project;
 
@@ -17,6 +17,7 @@ use wobu_store::Project;
 pub struct ExportCheck {
     pub diagnostics: Vec<CompileDiagnostic>,
     pub locale_diagnostics: Vec<wobu_narrative_locale::Diagnostic>,
+    pub media_diagnostics: Vec<wobu_narrative_media::Diagnostic>,
     pub payload_hash: Option<String>,
     pub scenes: usize,
     pub strings: usize,
@@ -125,7 +126,9 @@ fn prepare_checked(
             "Debug source maps are available only for development exports.",
         ));
     }
+    let analysis = project.narrative_analysis_capture()?;
     let fingerprint = project.narrative_fingerprint()?;
+    let world = project.world_document()?.map(|(world, _)| world).unwrap_or_default();
     let catalog = project.scene_catalog()?;
     if !catalog.unreadable.is_empty()
         || (catalog.scenes.is_empty() && project.text_catalog()?.assets.is_empty())
@@ -178,19 +181,30 @@ fn prepare_checked(
     // asset edited mid-export aborts rather than shipping half of an edit.
     let texts = project.text_assets()?;
     let mut verified_text_reviews = BTreeMap::new();
-    for asset in &texts {
-        let snapshot =
-            project.review_snapshot(wobu_narrative::SceneId::from_raw(asset.id.raw()), None)?;
+    let snapshots = project.review_snapshots(
+        &texts
+            .iter()
+            .map(|asset| wobu_narrative::SceneId::from_raw(asset.id.raw()))
+            .collect::<Vec<_>>(),
+        None,
+    )?;
+    for (asset, snapshot) in texts.iter().zip(&snapshots) {
+        if snapshot.scene().editorial_text().as_ref() != Some(asset) {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Supporting text changed while capturing its approvals.",
+            ));
+        }
         verified_text_reviews.extend(snapshot.text_evidence()?);
-        snapshot.verify_current(project)?;
     }
+    project.verify_review_snapshots(&snapshots)?;
     if project.narrative_fingerprint()? != fingerprint {
         return Err(WobuError::new(
             Code::Invalid,
             "Narrative source changed while capturing text approvals. Check again.",
         ));
     }
-    let report = compile(
+    let report = compile_with_analysis(
         &scenes,
         &texts,
         &schema,
@@ -201,7 +215,10 @@ fn prepare_checked(
             verified_reviews,
             verified_text_reviews,
         },
+        &world,
+        &analysis.policies,
     );
+    analysis.check_current(project)?;
     let (mut locales, locale_diagnostics) = project.locale_release()?;
     let locale_blocked = locale_diagnostics.iter().any(|d| d.code == "missing_translation");
     if locale_blocked {
@@ -210,9 +227,34 @@ fn prepare_checked(
         locales.policy.required.clear();
         locales.strings.clear();
     }
+    let mut media = project.media_release()?;
+    let media_blocked = media.diagnostics.iter().any(|d| d.code == "missing_media");
+    if profile == Profile::Development {
+        media.bundle.required.clear();
+        media.bundle.timing.clear();
+        media.bundle.fallback.clear();
+        if locale_blocked {
+            media.bundle.takes.retain(|_, take| take.key.locale == locales.policy.source);
+            let paths: BTreeSet<_> = media
+                .bundle
+                .takes
+                .values()
+                .flat_map(|take| {
+                    std::iter::once(&take.audio.path).chain(take.timing.iter().map(|b| &b.path))
+                })
+                .cloned()
+                .collect();
+            media.files.retain(|path, _| paths.contains(path));
+        }
+    }
     let package = report
         .graph
-        .map(|graph| Package::build(graph, debug).and_then(|p| p.with_locales(locales)))
+        .filter(|_| profile != Profile::Release || (!locale_blocked && !media_blocked))
+        .map(|graph| {
+            Package::build(graph, debug)
+                .and_then(|p| p.with_locales(locales))
+                .and_then(|p| p.with_media(media.bundle, media.files))
+        })
         .transpose()
         .map_err(package_error)?;
     let package = if locale_blocked && profile == Profile::Release { None } else { package };
@@ -222,7 +264,9 @@ fn prepare_checked(
             "Narrative changed while checking locales. Check export again.",
         ));
     }
+    analysis.check_current(project)?;
     let check = ExportCheck {
+        media_diagnostics: media.diagnostics,
         locale_diagnostics,
         diagnostics: report.diagnostics,
         payload_hash: package.as_ref().map(|p| p.manifest.payload_hash.clone()),

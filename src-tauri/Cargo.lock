@@ -7903,9 +7903,11 @@ dependencies = [
  "wobu-narrative-deps",
  "wobu-narrative-generation",
  "wobu-narrative-locale",
+ "wobu-narrative-media",
  "wobu-narrative-package",
  "wobu-narrative-runtime",
  "wobu-narrative-scenarios",
+ "wobu-narrative-variants",
  "wobu-store",
  "wobu-sync",
 ]
@@ -8033,6 +8035,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wobu-narrative",
+ "wobu-narrative-variants",
 ]
 
 [[package]]
@@ -8087,6 +8090,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wobu-narrative-media"
+version = "0.1.11"
+dependencies = [
+ "blake3",
+ "csv",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "wobu-core",
+ "wobu-narrative",
+ "wobu-narrative-locale",
+]
+
+[[package]]
 name = "wobu-narrative-package"
 version = "0.1.11"
 dependencies = [
@@ -8097,6 +8114,7 @@ dependencies = [
  "wobu-narrative",
  "wobu-narrative-compiler",
  "wobu-narrative-locale",
+ "wobu-narrative-media",
 ]
 
 [[package]]
@@ -8120,6 +8138,17 @@ dependencies = [
  "wobu-narrative",
  "wobu-narrative-compiler",
  "wobu-narrative-runtime",
+]
+
+[[package]]
+name = "wobu-narrative-variants"
+version = "0.1.11"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "wobu-narrative",
 ]
 
 [[package]]
@@ -8147,6 +8176,8 @@ dependencies = [
  "wobu-narrative-deps",
  "wobu-narrative-generation",
  "wobu-narrative-locale",
+ "wobu-narrative-media",
+ "wobu-narrative-variants",
 ]
 
 [[package]]

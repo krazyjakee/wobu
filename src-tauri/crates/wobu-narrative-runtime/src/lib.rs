@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use wobu_narrative::{CompareOp, Condition, Effect, Name, Operand, Owner, Speaker, Value};
+use wobu_narrative::{Condition, Effect, Name, Operand, Owner, Speaker, Value};
 use wobu_narrative_compiler::{CompiledBeat, GRAPH_VERSION, Graph, Target, accepts};
 
 mod migration;
@@ -648,20 +648,9 @@ impl Runtime {
         for (index, effect) in effects.iter().enumerate() {
             let before = trace::effect_values(&state, effect);
             match effect {
-                Effect::Set(a) => {
-                    let value = operand(&a.value, &state)?;
-                    self.write(&mut state, &a.var, value)?;
-                }
-                Effect::Add(a) => {
-                    let Value::Int(before) =
-                        state.get(&a.var).ok_or_else(|| Error::MissingState(a.var.to_string()))?
-                    else {
-                        return Err(Error::InvalidState(a.var.to_string()));
-                    };
-                    let after = before
-                        .checked_add(a.by)
-                        .ok_or_else(|| Error::Overflow(a.var.to_string()))?;
-                    self.write(&mut state, &a.var, Value::Int(after))?;
+                Effect::Set(_) | Effect::Add(_) => {
+                    let (name, value) = wobu_narrative::evaluate::assignment(effect, &state)?;
+                    self.write(&mut state, &name, value)?;
                 }
                 Effect::Command(c) => {
                     let args: Vec<_> =
@@ -722,28 +711,24 @@ impl Runtime {
     fn write(&self, state: &mut State, name: &Name, value: Value) -> Result<()> {
         let decl =
             self.graph.state.get(name).ok_or_else(|| Error::MissingState(name.to_string()))?;
-        if decl.owner != Owner::Narrative {
-            return Err(Error::InvalidState(format!("{name} is host-owned")));
-        }
-        if !accepts(&decl.ty, &value) {
-            return Err(if matches!(value, Value::Int(_)) {
-                Error::Overflow(name.to_string())
-            } else {
-                Error::InvalidState(name.to_string())
-            });
-        }
+        wobu_narrative::evaluate::validate_write(name, &decl.ty, decl.owner, &value)?;
         state.insert(name.clone(), value);
         Ok(())
     }
 }
 
-fn operand(value: &Operand, state: &State) -> Result<Value> {
-    match value {
-        Operand::Literal(value) => Ok(value.clone()),
-        Operand::Var(name) => {
-            state.get(name).cloned().ok_or_else(|| Error::MissingState(name.to_string()))
+impl From<wobu_narrative::evaluate::EvaluationError> for Error {
+    fn from(error: wobu_narrative::evaluate::EvaluationError) -> Self {
+        use wobu_narrative::evaluate::EvaluationError;
+        match error {
+            EvaluationError::MissingState(value) => Self::MissingState(value),
+            EvaluationError::InvalidState(value) => Self::InvalidState(value),
+            EvaluationError::Overflow(value) => Self::Overflow(value),
         }
     }
+}
+fn operand(value: &Operand, state: &State) -> Result<Value> {
+    wobu_narrative::evaluate::operand(value, state).map_err(Into::into)
 }
 
 /// Evaluation is deterministic and short-circuits left-to-right. The compiler

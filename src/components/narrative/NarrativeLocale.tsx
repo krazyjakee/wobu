@@ -19,6 +19,7 @@ import {
 } from '../../lib/api/narrativeLocale'
 import './locale.css'
 import { PageControls } from './PageControls'
+import { InterchangeFormat } from './InterchangeFormat'
 import {
   assertProjectSession,
   isProjectSession,
@@ -125,19 +126,14 @@ export function NarrativeLocale({
                   explicitly enabled, truncates the target tag and finally uses source. No
                   sibling-region substitution.
                 </p>
-                <label>
-                  Interchange format{' '}
-                  <select
-                    value={csv ? 'csv' : 'json'}
-                    onChange={(e) => {
-                      setCsv(e.target.value === 'csv')
-                      setPreview(null)
-                    }}
-                  >
-                    <option value="csv">CSV</option>
-                    <option value="json">JSON</option>
-                  </select>
-                </label>
+                <InterchangeFormat
+                  label="Interchange format"
+                  csv={csv}
+                  onChange={(value) => {
+                    setCsv(value)
+                    setPreview(null)
+                  }}
+                />
                 <button
                   className="btn"
                   onClick={() =>

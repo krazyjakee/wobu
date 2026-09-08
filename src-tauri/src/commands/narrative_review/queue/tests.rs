@@ -140,3 +140,17 @@ fn supporting_text_is_listed_and_approved_in_the_project_wide_queue() {
     assert_eq!(batch(project, &[request], true).unwrap().items[0].status, "applied");
     assert!(list(project, None, 0, None).unwrap().scenes[0].lines[0].approval_valid);
 }
+
+#[test]
+fn frozen_queue_results_reject_edits_after_context_computation() {
+    let mut holder = TestProject::new();
+    let project = &mut holder.0;
+    let requests = fixture(project, "First");
+    let rendered = capture_list(project, None, 0, None).unwrap().render().unwrap();
+    let mut file = project.load_scene(requests[0].target.scene).unwrap();
+    file.scene.summary = "Context changed while the worker computed".into();
+    project.save_scene(&mut file).unwrap();
+    let result = rendered.finish(project).unwrap();
+    assert!(result.scenes.is_empty());
+    assert!(result.errors.iter().any(|error| error.scene_id == Some(file.scene.id)));
+}

@@ -1,0 +1,28 @@
+{
+  "phase": "actions",
+  "time": 1788900508.8495436,
+  "loadavg": [13.68408203125, 17.142578125, 12.2353515625],
+  "scope": "actual Tauri/WebKit public IPC; harness-assisted calls, no provider calls and no mocked IPC",
+  "processes": [
+    "    PID COMMAND         %CPU %MEM",
+    "3911991 population_cont  457  0.1",
+    "3910827 industrial-7d90  173  0.4",
+    "3910862 morrow-quay      113  2.4",
+    "3909570 recenter_memory  100  0.0",
+    "3912037 rustc            100  2.4",
+    "3909381 rustc           99.9  8.6",
+    "3855011 morrow-quay-02  99.4  2.9",
+    "3912337 python3         66.6  0.0",
+    "3911334 openclaw-node   34.9  0.7",
+    "3660316 Isolated Web Co 23.1  1.5",
+    "2769724 Paseo           15.2  1.9",
+    "3750426 wobu            11.7  1.2",
+    "3912005 cargo            7.6  0.3",
+    "2769695 Paseo            5.5  0.2",
+    "  13653 firefox-bin      5.3  2.2",
+    "2424832 WebKitWebProces  4.6  0.3",
+    "3750494 WebKitWebProces  4.5  0.9",
+    "1468491 synbadd          4.0  2.7",
+    " 125220 cinnamon         3.9  0.7"
+  ]
+}

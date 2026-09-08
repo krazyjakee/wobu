@@ -1,4 +1,6 @@
 //! Deterministic, offline source validation and lowering. No generation or IO.
+mod analysis;
+pub use analysis::compile_with_analysis;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -232,13 +234,8 @@ impl TryFrom<&Destination> for Target {
     }
 }
 
-pub fn accepts(ty: &VarType, value: &Value) -> bool {
-    match (ty, value) {
-        (VarType::Bool, Value::Bool(_)) => true,
-        (VarType::Int { min, max }, Value::Int(n)) => min <= n && n <= max,
-        (VarType::Enum { members }, Value::Enum(n)) => members.contains(n),
-        _ => false,
-    }
+pub fn accepts(ty: &wobu_narrative::VarType, value: &Value) -> bool {
+    wobu_narrative::evaluate::accepts(ty, value)
 }
 
 /// Whether a source argument fits a registered command domain; shared with package validation.

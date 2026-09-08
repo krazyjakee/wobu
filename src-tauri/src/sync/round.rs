@@ -146,11 +146,17 @@ pub async fn run(
 
     let (nodes, mut announce, generation_paths) = replica.with(|project| {
         let nodes = project.manifest()?;
-        let blobs: Vec<Blob> = project
+        let mut blobs: Vec<Blob> = project
             .list_assets()?
             .into_iter()
             .map(|asset| Blob { rel_path: asset.rel_path, hash: asset.hash })
             .collect();
+        blobs.extend(
+            project
+                .media_sync_blobs()?
+                .into_iter()
+                .map(|blob| Blob { rel_path: blob.path, hash: blob.hash }),
+        );
         Ok((nodes, blobs, project.generation_sync_paths()?))
     })?;
     let local_archives: Vec<String> = generation_paths

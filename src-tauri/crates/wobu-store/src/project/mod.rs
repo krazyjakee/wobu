@@ -22,9 +22,11 @@ pub mod narrative_deps;
 pub mod narrative_generation;
 mod narrative_index;
 pub mod narrative_locale;
+pub mod narrative_media;
 mod narrative_records;
 pub mod narrative_review;
 pub mod narrative_sync;
+pub mod narrative_variants;
 pub use narrative_deletions::NarrativeDeletionView;
 mod narrative_repair;
 mod narrative_world;
@@ -129,6 +131,7 @@ pub struct Project {
     /// which is a folder nobody can read back.
     peer: String,
     layout_observation: String,
+    narrative_cache: std::sync::Arc<crate::narrative::registry::cache::SourceCache>,
     /// Every node, whole, for the influence engine. Empty until something asks —
     /// see [`world_nodes`](Project::world_nodes), which is also where the cost
     /// of holding this is argued.
@@ -172,6 +175,7 @@ impl Project {
         let index = Index::open_for(&meta.id)?;
         index.clear()?;
         let mut project = Project {
+            narrative_cache: Default::default(),
             layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
@@ -254,6 +258,7 @@ impl Project {
             None => (Index::open_for(&meta.id)?, paths::index_path(&meta.id)),
         };
         let mut project = Project {
+            narrative_cache: Default::default(),
             layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
