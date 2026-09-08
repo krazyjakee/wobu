@@ -29,6 +29,72 @@ impl Project {
         state_json: Option<&str>,
     ) -> Result<ReviewSnapshot> {
         let fingerprint = self.narrative_fingerprint()?;
+        self.review_source_captured(file, state_json, fingerprint, true, &self.scene_ids()?)
+    }
+    /// Batch consumers freeze membership once, while retaining every document/character stamp.
+    pub fn review_snapshots(
+        &self,
+        ids: &[SceneId],
+        state_json: Option<&str>,
+    ) -> Result<Vec<ReviewSnapshot>> {
+        let fingerprint = self.narrative_fingerprint()?;
+        let scenes = self.scene_catalog()?;
+        let texts = self.text_catalog()?;
+        let known_scenes = scenes.ids();
+        let mut paths = BTreeMap::new();
+        for entry in &scenes.scenes {
+            if paths.insert(entry.id, (&entry.rel, false)).is_some() {
+                return Err(invalid("Duplicate scene identity."));
+            }
+        }
+        for entry in &texts.assets {
+            if paths.insert(SceneId::from_raw(entry.id.raw()), (&entry.rel, true)).is_some() {
+                return Err(invalid("Scene and text identity collision."));
+            }
+        }
+        let snapshots = ids
+            .iter()
+            .map(|id| {
+                let (rel, text) =
+                    paths.get(id).ok_or_else(|| invalid("Missing editorial source."))?;
+                let file = if *text {
+                    let source = crate::narrative::read_text(self.root(), rel)?;
+                    SceneFile {
+                        scene: source.asset.editorial_scene(),
+                        rel: source.rel,
+                        stamp: source.stamp,
+                    }
+                } else {
+                    crate::narrative::read_scene(self.root(), rel)?
+                };
+                if file.scene.id != *id {
+                    return Err(invalid("Source identity changed during batch capture."));
+                }
+                self.review_source_captured(
+                    file,
+                    state_json,
+                    fingerprint.clone(),
+                    false,
+                    &known_scenes,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        for snapshot in &snapshots {
+            snapshot.check_observations(self)?;
+        }
+        if fingerprint != self.narrative_fingerprint()? {
+            return Err(invalid("Narrative changed during batch review capture."));
+        }
+        Ok(snapshots)
+    }
+    fn review_source_captured(
+        &self,
+        file: SceneFile,
+        state_json: Option<&str>,
+        fingerprint: String,
+        verify: bool,
+        known_scenes: &BTreeSet<SceneId>,
+    ) -> Result<ReviewSnapshot> {
         let world_file = self.world_document()?;
         let world = world_file.as_ref().map(|(w, _)| w.clone()).unwrap_or_default();
         let schema_file = self.state_document()?;
@@ -129,11 +195,11 @@ impl Project {
         let known_entities =
             character_stamps.iter().filter_map(|(id, s)| s.is_some().then_some(*id)).collect();
         let mut input_problem = world
-            .diagnose(&checked, &known_characters, &known_entities, &self.scene_ids()?)
+            .diagnose(&checked, &known_characters, &known_entities, known_scenes)
             .first()
             .map(|d| format!("{}: {}", d.field, d.message));
         if let Some(asset) = file.scene.editorial_text() {
-            let scenes = self.scene_ids()?;
+            let scenes = known_scenes;
             if asset.sources.iter().any(|link| match link {
                 wobu_narrative::SourceLink::Scene(id) => !scenes.contains(id),
                 wobu_narrative::SourceLink::Fact(id) => {
@@ -181,97 +247,7 @@ impl Project {
                 input_problem = Some(e.to_string());
             }
         }
-        let mut history = Vec::new();
-        let mut seen = BTreeSet::new();
-        let mut cursor = file.scene.editorial_head;
-        let mut history_problem = None;
-        while let Some(id) = cursor {
-            if !seen.insert(id) || seen.len() > 100_000 {
-                history_problem =
-                    Some("Editorial history is cyclic or exceeds the supported limit.".into());
-                break;
-            }
-            let record = match self.narrative_record(NarrativeRecordKind::Receipt, id) {
-                Ok(Some(record)) => record,
-                _ => {
-                    history_problem = Some(
-                        "An editorial receipt is missing or invalid. Approval cannot be verified."
-                            .into(),
-                    );
-                    break;
-                }
-            };
-            observations.insert(record.document.rel(), record.stamp);
-            let event = match serde_json::from_value::<EditorialEvent>(record.document.payload) {
-                Ok(event) if event.id == id && event.after.id == file.scene.id && event.valid() => {
-                    event
-                }
-                _ => {
-                    history_problem = Some(
-                        "Editorial receipt identity, version or context binding is invalid.".into(),
-                    );
-                    break;
-                }
-            };
-            cursor = event.parent;
-            history.push(event);
-        }
-        for pair in history.windows(2) {
-            let mut parent = pair[1].after.clone();
-            parent.editorial_head = Some(pair[1].id);
-            if super::write::without_freshness(&pair[0].before)
-                != super::write::without_freshness(&parent)
-            {
-                history_problem = Some(
-                    "Editorial history has a discontinuity. Approval cannot be verified.".into(),
-                );
-            }
-        }
-        if let Some(head) = history.first() {
-            let mut current = file.scene.clone();
-            current.editorial_head = None;
-            if super::write::without_freshness(&head.after)
-                != super::write::without_freshness(&current)
-            {
-                history_problem=Some("Scene changed outside its recorded editorial history. Save the manual change before reviewing.".into());
-            }
-            let by_id = history.iter().map(|event| (event.id, event)).collect::<BTreeMap<_, _>>();
-            for binding in head.bindings.values() {
-                let verified = by_id.get(&binding.event_id).is_some_and(|event| {
-                    let Some(context) = &event.context else { return false };
-                    let Some(id) = binding.target.variant else { return false };
-                    let text = event
-                        .after
-                        .beat(binding.target.beat)
-                        .and_then(|b| b.dialogue.iter().find(|s| s.id == binding.target.slot))
-                        .and_then(|s| s.variants.iter().find(|v| v.id == id).map(|v| (s, v)));
-                    event.bindings.get(&id) == Some(binding)
-                        && origin_matches(event, binding)
-                        && (!binding.approved
-                            || matches!(
-                                event.action,
-                                wobu_narrative::review::EditorialAction::Approve
-                                    | wobu_narrative::review::EditorialAction::Attest
-                            ))
-                        && text.is_some_and(|(s, v)| {
-                            binding.matches(&binding.target, &s.speaker, &v.text)
-                        })
-                        && context.valid()
-                        && context.state == binding.state
-                        && binding.context_revision
-                            == historical_context(
-                                context,
-                                &event.after,
-                                &binding.target,
-                                binding.state.clone(),
-                            )
-                            .revision
-                });
-                if !verified {
-                    history_problem=Some("Approval context, target or wording does not match its immutable decision.".into());
-                }
-            }
-        }
+        let (history, history_problem) = source_history(self, &file, &mut observations);
         let snapshot = ReviewSnapshot {
             file,
             world,
@@ -286,7 +262,9 @@ impl Project {
             observations,
             character_stamps,
         };
-        snapshot.check_current(self)?;
+        if verify {
+            snapshot.check_current(self)?;
+        }
         Ok(snapshot)
     }
 }
@@ -306,6 +284,9 @@ impl ReviewSnapshot {
                 "Narrative source changed during review capture. Reload before deciding.",
             ));
         }
+        self.check_observations(project)
+    }
+    pub(crate) fn check_observations(&self, project: &Project) -> Result<()> {
         for (rel, stamp) in &self.observations {
             if atomic::read_stamped(&project.root().join(rel))?.map(|(_, s)| s) != *stamp {
                 return Err(invalid(
@@ -531,4 +512,104 @@ fn origin_matches(event: &EditorialEvent, binding: &ReviewBinding) -> bool {
         }
         _ => false,
     }
+}
+
+/// Verify canonical editorial evidence without capturing unrelated project inputs.
+pub(super) fn source_history(
+    project: &Project,
+    file: &SceneFile,
+    observations: &mut BTreeMap<String, Option<Stamp>>,
+) -> (Vec<EditorialEvent>, Option<String>) {
+    let mut history = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut cursor = file.scene.editorial_head;
+    let mut history_problem = None;
+    while let Some(id) = cursor {
+        if !seen.insert(id) || seen.len() > 100_000 {
+            history_problem =
+                Some("Editorial history is cyclic or exceeds the supported limit.".into());
+            break;
+        }
+        let record = match project.narrative_record(NarrativeRecordKind::Receipt, id) {
+            Ok(Some(record)) => record,
+            _ => {
+                history_problem = Some(
+                    "An editorial receipt is missing or invalid. Approval cannot be verified."
+                        .into(),
+                );
+                break;
+            }
+        };
+        observations.insert(record.document.rel(), record.stamp);
+        let event = match serde_json::from_value::<EditorialEvent>(record.document.payload) {
+            Ok(event) if event.id == id && event.after.id == file.scene.id && event.valid() => {
+                event
+            }
+            _ => {
+                history_problem = Some(
+                    "Editorial receipt identity, version or context binding is invalid.".into(),
+                );
+                break;
+            }
+        };
+        cursor = event.parent;
+        history.push(event);
+    }
+    for pair in history.windows(2) {
+        let mut parent = pair[1].after.clone();
+        parent.editorial_head = Some(pair[1].id);
+        if super::write::without_freshness(&pair[0].before)
+            != super::write::without_freshness(&parent)
+        {
+            history_problem =
+                Some("Editorial history has a discontinuity. Approval cannot be verified.".into());
+        }
+    }
+    if let Some(head) = history.first() {
+        let mut current = file.scene.clone();
+        current.editorial_head = None;
+        if super::write::without_freshness(&head.after) != super::write::without_freshness(&current)
+        {
+            history_problem=Some("Scene changed outside its recorded editorial history. Save the manual change before reviewing.".into());
+        }
+        let by_id = history.iter().map(|event| (event.id, event)).collect::<BTreeMap<_, _>>();
+        for binding in head.bindings.values() {
+            let verified = by_id.get(&binding.event_id).is_some_and(|event| {
+                let Some(context) = &event.context else { return false };
+                let Some(id) = binding.target.variant else { return false };
+                let text = event
+                    .after
+                    .beat(binding.target.beat)
+                    .and_then(|b| b.dialogue.iter().find(|s| s.id == binding.target.slot))
+                    .and_then(|s| s.variants.iter().find(|v| v.id == id).map(|v| (s, v)));
+                event.bindings.get(&id) == Some(binding)
+                    && origin_matches(event, binding)
+                    && (!binding.approved
+                        || matches!(
+                            event.action,
+                            wobu_narrative::review::EditorialAction::Approve
+                                | wobu_narrative::review::EditorialAction::Attest
+                        ))
+                    && text
+                        .is_some_and(|(s, v)| binding.matches(&binding.target, &s.speaker, &v.text))
+                    && context.valid()
+                    && context.state == binding.state
+                    && binding.context_revision
+                        == historical_context(
+                            context,
+                            &event.after,
+                            &binding.target,
+                            binding.state.clone(),
+                        )
+                        .revision
+            });
+            if !verified {
+                history_problem = Some(
+                    "Approval context, target or wording does not match its immutable decision."
+                        .into(),
+                );
+            }
+        }
+    }
+    (history, history_problem)
 }

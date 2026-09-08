@@ -16,7 +16,7 @@ dependency cannot be added without its notice arriving with it.
 
 | | |
 | --- | --- |
-| Rust crates linked into the binary | 747 |
+| Rust crates linked into the binary | 749 |
 | npm packages bundled into the frontend | 37 |
 | npm packages used only to build and test Wobu | 377 |
 | Distinct licence texts reproduced below | 410 |
@@ -41,6 +41,7 @@ the installer, so their notices are not reproduced in full.
 | Apache-2.0/MIT | 5 |
 | MIT OR Apache-2.0 OR Zlib | 5 |
 | Unlicense OR MIT | 5 |
+| Unlicense/MIT | 4 |
 | Apache-2.0 | 3 |
 | Apache-2.0 OR ISC OR MIT | 3 |
 | Unlicense | 3 |
@@ -50,7 +51,6 @@ the installer, so their notices are not reproduced in full.
 | CC0-1.0 OR MIT-0 OR Apache-2.0 | 2 |
 | CDLA-Permissive-2.0 | 2 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |
-| Unlicense/MIT | 2 |
 | (MIT OR Apache-2.0) AND Apache-2.0 | 1 |
 | (MIT OR Apache-2.0) AND Unicode-3.0 | 1 |
 | 0BSD OR MIT OR Apache-2.0 | 1 |
@@ -205,6 +205,8 @@ one of these and not publishing the patch is not.
 | crypto-common | 0.2.2 | MIT OR Apache-2.0 | [4] [84] |
 | cssparser | 0.36.0 | MPL-2.0 | [85] |
 | cssparser-macros | 0.6.1 | MPL-2.0 | [85] |
+| csv | 1.4.0 | Unlicense/MIT | [8] [9] [10] |
+| csv-core | 0.1.13 | Unlicense/MIT | [8] [9] [10] |
 | ctor | 0.8.0 | Apache-2.0 OR MIT | [66] [86] |
 | ctor-proc-macro | 0.0.7 | Apache-2.0 OR MIT | [66] [86] |
 | ctr | 0.9.2 | MIT OR Apache-2.0 | [4] [55] |
@@ -1831,7 +1833,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### [8] aho-corasick 1.1.4, byteorder 1.5.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.0, winapi-util 0.1.11
+### [8] aho-corasick 1.1.4, byteorder 1.5.0, csv 1.4.0, csv-core 0.1.13, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.0, winapi-util 0.1.11
 
 ```
 This project is dual-licensed under the Unlicense and MIT licenses.
@@ -1839,7 +1841,7 @@ This project is dual-licensed under the Unlicense and MIT licenses.
 You may use this code under the terms of either license.
 ```
 
-### [9] aho-corasick 1.1.4, byteorder 1.5.0, byteorder-lite 0.1.0, memchr 2.8.3, walkdir 2.5.0
+### [9] aho-corasick 1.1.4, byteorder 1.5.0, byteorder-lite 0.1.0, csv 1.4.0, csv-core 0.1.13, memchr 2.8.3, walkdir 2.5.0
 
 ```
 The MIT License (MIT)
@@ -1865,7 +1867,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [10] aho-corasick 1.1.4, byteorder 1.5.0, byteorder-lite 0.1.0, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.0, winapi-util 0.1.11
+### [10] aho-corasick 1.1.4, byteorder 1.5.0, byteorder-lite 0.1.0, csv 1.4.0, csv-core 0.1.13, memchr 2.8.3, same-file 1.0.6, walkdir 2.5.0, and 1 more
 
 ```
 This is free and unencumbered software released into the public domain.

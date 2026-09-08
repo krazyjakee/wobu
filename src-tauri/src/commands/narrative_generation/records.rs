@@ -1,5 +1,4 @@
 use super::*;
-use wobu_narrative::GenerationPolicy;
 use wobu_narrative_generation::{AttemptStatus, PublicationChecks, Receipt, VERSION};
 use wobu_store::{NarrativeRecordDocument, NarrativeRecordFile, NarrativeRecordKind, SourceSave};
 
@@ -41,6 +40,7 @@ pub fn request(project: &Project, id: Id) -> CommandResult<FrozenRequest> {
 }
 
 /// Parse the canonical receipt set once and group attempts before serving history.
+#[derive(Default)]
 pub struct RecordSet {
     pub requests: BTreeMap<Id, FrozenRequest>,
     by_request: BTreeMap<Id, Vec<(Id, Receipt)>>,
@@ -98,40 +98,7 @@ pub fn attempts(project: &Project, request: &FrozenRequest) -> CommandResult<Vec
 }
 
 pub fn checks(project: &Project, request: &FrozenRequest) -> CommandResult<PublicationChecks> {
-    let file = project.load_editorial_source(request.target.scene)?;
-    let slot = file
-        .scene
-        .beats
-        .iter()
-        .find(|b| b.id == request.target.beat)
-        .and_then(|b| b.dialogue.iter().find(|s| s.id == request.target.slot));
-    let variant =
-        slot.and_then(|s| s.variants.iter().find(|v| Some(v.id) == request.target.variant));
-    let text_unchanged = if request.target.variant.is_none() {
-        slot.is_some_and(|s| s.variants.is_empty() && s.speaker == request.speaker)
-    } else {
-        variant.is_some_and(|v| {
-            Some(&v.text.revision) == request.expected_text_revision.as_ref()
-                && v.text.revision_matches()
-        })
-    };
-    let policy = variant.map(|v| v.text.lifecycle.policy);
-    let current =
-        super::super::narrative_context::capture(project, request.context.options.clone(), || {});
-    Ok(PublicationChecks {
-        scene_unchanged: file.stamp.as_ref().is_some_and(|s| s.hash == request.expected_scene_hash),
-        text_unchanged,
-        policy_unchanged: policy == request.expected_policy
-            && slot.is_some_and(|s| s.policy == request.expected_slot_policy),
-        context_unchanged: current.is_ok_and(|c| c.ready && c.hash == request.context.hash),
-        locked_now: file
-            .scene
-            .supporting_text
-            .as_ref()
-            .is_some_and(|a| a.policy == GenerationPolicy::Locked)
-            || policy == Some(GenerationPolicy::Locked)
-            || slot.is_some_and(|s| s.policy == GenerationPolicy::Locked),
-    })
+    Ok(wobu_store::project::narrative_generation::checks(project, request)?)
 }
 
 /// A successful receipt is written first. Publication can be repaired without another paid call.

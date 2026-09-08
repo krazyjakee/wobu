@@ -1,0 +1,19 @@
+[package]
+name = "wobu-narrative-build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+wobu-narrative-context.workspace = true
+blake3 = "1.8.5"
+serde_json = "1.0.151"
+thiserror = "2.0.19"
+wobu-core.workspace = true
+wobu-narrative.workspace = true
+wobu-narrative-deps.workspace = true
+wobu-narrative-generation.workspace = true
+
+[lints]
+workspace = true

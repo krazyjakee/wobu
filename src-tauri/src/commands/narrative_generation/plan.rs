@@ -1,12 +1,9 @@
 use super::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use wobu_narrative::{Name, SceneId, VarType, VariantId};
+use wobu_narrative::{Name, SceneId, VarType};
 use wobu_narrative_context::{Options, Selection};
-use wobu_narrative_generation::{
-    Candidate, MAX_BATCH, OUTPUT_SCHEMA_VERSION, PROMPT_VERSION, SYSTEM, Settings, VERSION,
-    output_schema, prompt,
-};
+use wobu_narrative_generation::MAX_BATCH;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -49,8 +46,7 @@ pub fn build(
         .graph
         .ok_or_else(|| invalid("Repair compiler errors before generating dialogue."))?;
     let file = project.load_editorial_source(input.scene)?;
-    let scene_hash =
-        file.stamp.as_ref().ok_or_else(|| invalid("Save the scene first."))?.hash.clone();
+    file.stamp.as_ref().ok_or_else(|| invalid("Save the scene first."))?;
     if input.selection.as_ref().is_some_and(|selection| selection.scene != input.scene) {
         return Err(invalid("Selected line belongs to another scene."));
     }
@@ -147,37 +143,17 @@ pub fn build(
             });
             continue;
         }
-        let candidate_variant_id = variant.map(|v| v.id).unwrap_or_else(VariantId::new);
-        let candidate = Candidate {
-            slot_id: slot.id,
-            variant_id: candidate_variant_id,
-            speaker: slot.speaker.clone(),
-            text: String::new(),
-        };
-        let request = FrozenRequest {
-            version: VERSION,
-            source_schema_version: wobu_narrative::SCENE_SCHEMA_VERSION,
-            request_id: wobu_core::new_id(),
-            batch_id: plan.id,
+        let request = super::freeze::request(super::freeze::Input {
+            batch: plan.id,
+            scene: &file.scene,
+            slot,
             target,
-            candidate_variant_id,
-            speaker: slot.speaker.clone(),
-            expected_scene_hash: scene_hash.clone(),
-            compiled_graph_hash: graph.hash(),
-            expected_text_revision: variant.map(|v| v.text.revision.clone()),
-            expected_policy: variant.map(|v| v.text.lifecycle.policy),
-            expected_slot_policy: slot.policy,
-            provider: provider.into(),
-            model: model.into(),
-            settings: Settings { max_output_tokens: input.max_output_tokens },
-            prompt_version: PROMPT_VERSION,
-            output_schema_version: OUTPUT_SCHEMA_VERSION,
-            output_schema: output_schema(),
-            system: SYSTEM.into(),
-            prompt: prompt(&context, &candidate),
             context,
-        };
-        request.validate().map_err(invalid)?;
+            graph: graph.hash(),
+            provider,
+            model,
+            max_output_tokens: input.max_output_tokens,
+        })?;
         plan.requests.push(request);
     }
     if fingerprint != project.narrative_fingerprint()? {

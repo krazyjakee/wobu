@@ -401,7 +401,9 @@ export const SceneNode = memo(function SceneNode({ data }: NodeProps<FlowRFNode>
   return (
     <NodeShell node={data.node} tone="scene">
       {scene && scene.participants.length > 0 && (
-        <p className="nrt-node-line">{scene.participants.join(' · ')}</p>
+        <p className="nrt-node-line">
+          {scene.participants.map((id) => scene.participantLabels?.[id] ?? id).join(' · ')}
+        </p>
       )}
       {scene && (
         <p className="nrt-node-line is-count">
@@ -474,5 +476,13 @@ export const GroupFrameNode = memo(function GroupFrameNode({ data }: NodeProps<F
         </button>
       </div>
     </div>
+  )
+})
+
+export const QuestStageNode = memo(function QuestStageNode({ data }: NodeProps<FlowRFNode>) {
+  return (
+    <NodeShell node={data.node} tone="scene">
+      <p className="nrt-node-line">Authored World stage</p>
+    </NodeShell>
   )
 })

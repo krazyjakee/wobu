@@ -209,7 +209,7 @@ struct TextProbeAsset {
 }
 
 /// A scene file the catalog could see but not understand.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct UnreadableSource {
     pub rel: String,
     pub reason: String,

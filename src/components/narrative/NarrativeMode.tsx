@@ -12,6 +12,7 @@ import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
+import { NarrativeBuild } from './NarrativeBuild'
 import { NarrativeScenarioTests } from './NarrativeScenarioTests'
 import { NarrativeRecovery } from './NarrativeRecovery'
 import { NarrativeReview } from './NarrativeReview'
@@ -50,6 +51,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const [generationOpen, setGenerationOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
+  const [scenarioTestsOpen, setScenarioTestsOpen] = useState(false)
   const [sidePane, setSidePane] = useState<'outline' | 'context' | null>(null)
   const sidePaneButtons = useRef<HTMLDivElement>(null)
   const editorRoot = useRef<HTMLDivElement>(null)
@@ -248,9 +250,35 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         />
       )}
       {buildOpen && (
-        <NarrativeScenarioTests
+        <NarrativeBuild
+          projectKey={project.path}
+          currentScene={selected?.id}
           readOnly={project.readOnly}
           onClose={() => setBuildOpen(false)}
+          onScenarios={() => {
+            setBuildOpen(false)
+            setScenarioTestsOpen(true)
+          }}
+          onSource={(target, asset) => {
+            setBuildOpen(false)
+            if (asset) {
+              setTextTarget(target)
+              setTextLibraryOpen(true)
+              closeWorld()
+              return
+            }
+            open(
+              { sceneId: target.scene, beatId: target.beat, lineId: target.slot },
+              'script',
+              target.variant ?? undefined,
+            )
+          }}
+        />
+      )}
+      {scenarioTestsOpen && (
+        <NarrativeScenarioTests
+          readOnly={project.readOnly}
+          onClose={() => setScenarioTestsOpen(false)}
           onSource={(site) =>
             open(
               {

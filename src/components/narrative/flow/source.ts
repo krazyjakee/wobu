@@ -110,7 +110,8 @@ export function narrativeIdOf(node: string): { kind: string; id: string } | null
  * save that #185 promises can never fail would start failing.
  */
 export function layoutKeyOf(node: string, level: 'scene' | 'arc'): string | null {
-  if (level === 'arc') return ULID.test(node) ? `scene:${node}` : null
+  if (level === 'arc')
+    return node.startsWith('stage:') ? node : ULID.test(node) ? `scene:${node}` : null
   const parsed = narrativeIdOf(node)
   if (parsed === null) return null
   return ['beat', 'choice', 'outcome'].includes(parsed.kind) ? node : null
@@ -118,6 +119,7 @@ export function layoutKeyOf(node: string, level: 'scene' | 'arc'): string | null
 
 /** The canvas node a stored coordinate belongs to, or null for a key we do not draw. */
 export function nodeOfLayoutKey(key: string, level: 'scene' | 'arc'): string | null {
+  if (level === 'arc' && key.startsWith('stage:')) return key
   const parsed = narrativeIdOf(key)
   if (parsed === null) return null
   if (level === 'arc') return parsed.kind === 'scene' ? parsed.id : null

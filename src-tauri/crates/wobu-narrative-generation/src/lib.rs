@@ -6,6 +6,8 @@ use wobu_narrative::{DialogueSlotId, GenerationPolicy, Revision, Speaker, Varian
 use wobu_narrative_context::{FrozenContext, Selection, content_hash};
 
 pub const VERSION: u32 = 1;
+/// Version 2 guards the selected target instead of unrelated container bytes.
+pub const REQUEST_VERSION: u32 = 2;
 pub const PROMPT_VERSION: u32 = 1;
 pub const OUTPUT_SCHEMA_VERSION: u32 = 1;
 pub const MAX_BATCH: usize = 32;
@@ -53,7 +55,7 @@ impl FrozenRequest {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != VERSION
+        if !(1..=REQUEST_VERSION).contains(&self.version)
             || !(1..=wobu_narrative::SCENE_SCHEMA_VERSION).contains(&self.source_schema_version)
             || self.prompt_version != PROMPT_VERSION
             || self.output_schema_version != OUTPUT_SCHEMA_VERSION
@@ -132,6 +134,31 @@ impl FrozenRequest {
         }
         Ok(candidate)
     }
+}
+
+/// Frozen context retains its full integrity hash. Version-2 eligibility uses
+/// the resolver's individual reads, excluding the legacy whole-scene read that
+/// also hashed unrelated sibling wording and editorial history.
+pub fn context_key(context: &FrozenContext) -> String {
+    let mut semantic = context.clone();
+    semantic.hash.clear();
+    semantic.dependencies.remove(&format!("scene/{}", context.options.selection.scene));
+    // Linked scene fragments freeze exactly the authored name and summary read
+    // by the prompt. Their legacy aggregate dependency also includes dialogue.
+    for fragment in &context.fragments {
+        if fragment.kind == "linked_scene" {
+            semantic.dependencies.remove(&fragment.source);
+        }
+    }
+    content_hash(&semantic)
+}
+pub fn context_matches(request: &FrozenRequest, current: &FrozenContext) -> bool {
+    current.ready
+        && if request.version == 1 {
+            current.hash == request.context.hash
+        } else {
+            context_key(current) == context_key(&request.context)
+        }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -120,6 +120,12 @@ export interface FlowState {
    * back does not dump the writer at the origin of a graph they had panned
    * across. Null until the plane has been moved at least once.
    */
+  nodeReveal: { id: string; seq: number } | null
+  requestNodeReveal: (id: string | null) => void
+
+  outlinePage: number
+  setOutlinePage: (page: number) => void
+
   viewport: FlowViewport | null
   setViewport: (viewport: FlowViewport | null) => void
 
@@ -171,6 +177,11 @@ export function createFlowStore() {
         },
       })),
 
+    nodeReveal: null,
+    requestNodeReveal: (id) => set({ nodeReveal: id ? { id, seq: ++announceSeq } : null }),
+    outlinePage: 0,
+    setOutlinePage: (outlinePage) => set({ outlinePage }),
+
     viewport: null,
     setViewport: (viewport) => set({ viewport }),
 
@@ -210,6 +221,8 @@ export function resetFlowStore(store: FlowStoreApi = useFlowStore) {
     connectFrom: null,
     closedGroups: [],
     participant: null,
+    nodeReveal: null,
+    outlinePage: 0,
     badges: ALL_BADGES,
     viewport: null,
     announcement: { text: '', seq: ++announceSeq },

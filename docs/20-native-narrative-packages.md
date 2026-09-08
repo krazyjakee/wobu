@@ -149,3 +149,12 @@ Switching to Release [blocked publication](screenshots/narrative-export-release-
 because the three handwritten dialogue variants were unapproved drafts. All 22 canonical file
 hashes from the Preview audit remained unchanged. This native check establishes desktop export;
 it does not claim engine integration or a voiced production package.
+
+## Configured locales
+
+[Revision-aware localisation](37-narrative-localisation.md) adds an optional `localisation: 1`
+capability and `locales.json`. Release preflight checks configured locale approvals/freshness or an
+explicit fallback policy and reports missing rows and fallback origins in Export. Source-only
+packages retain their existing files and hashes. Locale payloads contain prepared text and formatting
+forms; they contain no authoring receipts or provider calls. Rust reference lookup is implemented;
+N5 engine adapters and their conformance remain excluded.

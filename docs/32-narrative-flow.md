@@ -55,21 +55,32 @@ panes above the editor. Escape closes a pane and returns focus to its button. Se
 beat closes the pane and reveals that beat. The validation explanation is available under
 **About validation and affected text**, leaving room for the canvas and authoring controls.
 
-The arc's **Group** control carves the same scenes up without editing them. *By arrangement group*
-shows the groups drawn in the sidecar and is what a project arc opens on. *By quest* and *by quest
-state* read `narrative/world.yaml`: a scene sits in the quest whose `scene_ids` name it, and a
-quest's state is the stage it starts in, because a project records no running quest state. A scene
-listed by several quests appears in the first and the pane says how many are affected. Quest groups
-collapse and expand on the canvas and in the outline, but they last for the session only: the
-arrangement file keeps the collapse of the groups a writer drew, not of a grouping derived from
-World. Switching the control writes nothing to source, to World or to the arrangement. When World
-cannot be read the quest groupings are refused with that reason instead of grouping by something
-else.
+The arc reads one content-checked, prose-free project projection. Every authored cross-scene
+choice/outcome retains its route and owning beat ID, including unresolved destinations. World
+quest stages appear as separate nodes with exactly their authored transitions. Stage membership
+never invents a scene-to-stage edge, an entry scene, or a runtime scene order. Broken transitions
+link to their quest in World; scene destination diagnostics open the owning route field.
 
-The project arrangement reads complete scene source only for its current page of 50 scenes, after
-applying the selected quest scope. Previous/next controls show the range and total; connections to
-scenes outside the current page are not drawn. Use the Library to find a scene directly. Opening an
-individual scene does not load the arc's scene files, and hidden arc panels defer their source reads.
+**By quest** is the initial grouping. A scene listed by several quests appears once in a combined
+membership group. **By quest state** groups by authored initial stage, since runtime quest state
+belongs to a player's session. Each grouping has a separate cosmetic arrangement, including collapse;
+**By arrangement group** restores explicitly drawn groups. Layout format 3 adds quest-stage keys;
+versions 1 and 2 remain readable without rewriting them, and older peers refuse version 3 safely.
+Stage rename changes its presentation key because the authored World model identifies stages by name.
+
+Canvas and outline create scenes through the same native command as the Library. Select a scene to
+read its source and edit its existing exits or add an outcome on an explicitly selected beat. Empty
+scenes offer **Add first beat for scene exits**. These edits use the shared Script draft, unsafe-integer
+and locked-text guards, explicit Save, draft undo/redo and guarded persisted undo. Quest stages are
+edited in World. Source-read failures and destination blockers remain named even when nodes are
+filtered, folded or outside the viewport.
+
+The canvas hands React Flow at most 300 nodes, using collapsed groups and a selection neighborhood
+when necessary. The outline offers 25 rows per page, an all-node chooser, and editable destinations
+for the selected scene. Participant filters use entity IDs with names as labels; work counts read real
+text lifecycle state and include filtered or collapsed scenes. Enter/double-click drills into a scene;
+Escape and the breadcrumb return to the saved arc scope, grouping, cursor, viewport and outline page.
+Opening one scene does not fetch every scene document; hidden arcs defer the compact projection.
 
 ## Verification
 
@@ -92,3 +103,7 @@ normalizing only freshly minted identities and deletion timestamps. They check s
 locked text and provenance, preserved incoming references, tombstones and shared undo/redo. A
 three-choice reconvergence case compares the complete resulting source and restores all routes with
 Script undo while retaining locked dialogue.
+
+[Native project/quest acceptance](evidence/narrative-187/README.md) records exact destination focus,
+shared draft/save behavior, cosmetic source/compiler invariance, both themes, and the real
+1,000-scene projection with bounded React Flow store/DOM counts and a paged outline alternative.

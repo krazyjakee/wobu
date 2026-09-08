@@ -31,6 +31,61 @@ pub struct Projection {
     pub filled: usize,
     pub beats: usize,
     pub counts: Counts,
+    /// Rebuildable arc-only metadata. None marks a projection from an older app.
+    #[serde(default)]
+    pub arc: Option<ArcDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArcExit {
+    pub beat_id: String,
+    pub route_id: String,
+    pub choice: bool,
+    pub label: String,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArcDetails {
+    pub exits: Vec<ArcExit>,
+    pub needs_text: usize,
+}
+
+pub fn arc_details(scene: &Scene) -> ArcDetails {
+    use wobu_narrative::Destination;
+    let mut exits = Vec::new();
+    let mut needs_text = 0;
+    for beat in &scene.beats {
+        needs_text += usize::from(beat.dialogue.is_empty());
+        needs_text += beat
+            .dialogue
+            .iter()
+            .filter(|slot| {
+                slot.variants.is_empty()
+                    || slot.variants.iter().any(|v| v.text.body.trim().is_empty())
+            })
+            .count();
+        for (route_id, choice, label, to) in beat
+            .choices
+            .iter()
+            .map(|route| (route.id.to_string(), true, route.label.clone(), &route.to))
+            .chain(
+                beat.outcomes
+                    .iter()
+                    .map(|route| (route.id.to_string(), false, "Outcome".into(), &route.to)),
+            )
+        {
+            let to = match to {
+                Destination::Scene(id) => Some(id.to_string()),
+                Destination::Unresolved {} => None,
+                _ => continue,
+            };
+            exits.push(ArcExit { beat_id: beat.id.to_string(), route_id, choice, label, to });
+        }
+    }
+    ArcDetails { exits, needs_text }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +125,7 @@ pub(crate) fn project(scene: &Scene, rel: &str) -> (Projection, Vec<TextRow>, Ve
         filled: 0,
         beats: scene.beats.len(),
         counts: Counts::default(),
+        arc: Some(arc_details(scene)),
     };
     let mut texts = Vec::new();
     let mut variants = Vec::new();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphKey, Layout } from '../../../lib/api'
 import { graphKeyId } from '../../../lib/api'
 import { useSaveLayout, useSceneLayout } from '../../../lib/queries'
@@ -6,6 +6,7 @@ import { useSaveLayout, useSceneLayout } from '../../../lib/queries'
 export interface FlowPresentation {
   layout: Layout
   onChange: (layout: Layout) => void
+  derivedGroups?: boolean
   saveFailed?: boolean
 }
 
@@ -38,7 +39,7 @@ export function useFlowPresentation(graph: GraphKey) {
   const save = mutation.mutateAsync
   const onChange = useCallback(
     (layout: Layout) => {
-      const next = { ...layout, schemaVersion: 2 }
+      const next = { ...layout, schemaVersion: 3 }
       setFailure(null)
       setDraft(next)
       latest.current = next
@@ -67,17 +68,22 @@ export function useFlowPresentation(graph: GraphKey) {
     [save],
   )
   const layout = draft ?? stored.data?.layout
+  const presentation = useMemo(
+    () =>
+      layout
+        ? {
+            layout,
+            onChange,
+            saveFailed:
+              !!draft &&
+              (!!failure || (mutation.data != null && mutation.data.outcome !== 'written')),
+          }
+        : undefined,
+    [layout, onChange, draft, failure, mutation.data],
+  )
   return {
     stored,
     outcome: failure ? { outcome: 'unwritable' as const, reason: failure } : mutation.data,
-    presentation: layout
-      ? {
-          layout,
-          onChange,
-          saveFailed:
-            !!draft &&
-            (!!failure || (mutation.data != null && mutation.data.outcome !== 'written')),
-        }
-      : undefined,
+    presentation,
   }
 }

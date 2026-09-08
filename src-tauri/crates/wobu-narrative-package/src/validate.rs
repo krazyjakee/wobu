@@ -13,18 +13,35 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     if manifest.format != "wobu-narrative"
         || manifest.version != FORMAT_VERSION
         || manifest.graph_version != GRAPH_VERSION
-        || manifest.locale != "en"
     {
         return Err(invalid("unsupported format, schema, graph version or locale"));
+    }
+    let source: wobu_narrative_locale::LocaleId = manifest
+        .locale
+        .parse()
+        .map_err(|e: wobu_narrative_locale::Error| invalid(e.to_string()))?;
+    if source.as_str() != manifest.locale {
+        return Err(invalid("Noncanonical source locale."));
+    }
+    let source_path = format!("strings/{}.json", source.file_stem());
+    if !manifest.files.contains_key(&source_path) {
+        return Err(invalid("Source locale string table missing."));
     }
     // Either exactly the base set or exactly the base set plus supporting text.
     // Which one is required cannot be known here — the graph has not been parsed
     // yet — so both are admitted and `Package::graph` makes the final comparison
     // against the payload. That ordering is deliberate: capability equality is
     // still exact, it is just checked once the answer is knowable.
-    if manifest.required_capabilities != capabilities(false)
-        && manifest.required_capabilities != capabilities(true)
+    let mut base_capabilities = manifest.required_capabilities.clone();
+    if base_capabilities.remove(crate::LOCALISATION).is_some_and(|version| version != 1) {
+        return Err(invalid("Unsupported localisation capability."));
+    }
+    if manifest.files.contains_key("locales.json")
+        != manifest.required_capabilities.contains_key(crate::LOCALISATION)
     {
+        return Err(invalid("Localisation capability does not match payload."));
+    }
+    if base_capabilities != capabilities(false) && base_capabilities != capabilities(true) {
         return Err(invalid("unsupported or missing required capabilities"));
     }
     if REQUIRED.iter().any(|name| !manifest.files.contains_key(*name)) {
@@ -33,7 +50,9 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     let mut total = 0u64;
     for (path, record) in &manifest.files {
         portable_path(path)?;
-        if !REQUIRED.contains(&path.as_str())
+        if path != "locales.json"
+            && path != &source_path
+            && !REQUIRED.contains(&path.as_str())
             && !(path == "debug/source-map.json" && manifest.profile == Profile::Development)
         {
             return Err(invalid(format!("unexpected payload path {path}")));

@@ -84,3 +84,44 @@ cargo run -p wobu-store --example narrative_library_query -- /path/to/narrative-
 ```
 
 That example reports filesystem/store timings, independently of the native measurements above.
+
+## Integrated native UI checkpoint after PR #202
+
+[Recorded samples](integrated-native-ui.json) exercise the actual Scene library and Script editor
+with the same 1,000-scene / 50,000-slot fixture, the PR #202 implementation, a Rust debug build,
+and native WebKitGTK. The machine is an AMD Ryzen 9 5900X (24 logical CPUs), 31 GiB RAM,
+Linux 6.8.0-138, WebKitGTK 2.52.6 and GTK 3.24.41. Parallel implementation/build activity was present.
+
+The temporary harness dispatches DOM input and click events inside the native application and
+measures from dispatch to the requested rendered result, polling every 16 ms. These are assisted
+interaction measurements, not a keyboard-only walkthrough. The second search series waits for the
+exact new dialogue phrase to appear in the table. Cached navigation verifies that phrase in Script
+and again in the returned library; the focused textarea contains the requested passage. No source
+files were edited and no providers were invoked.
+
+| Native UI operation | Samples | p95 | Existing budget |
+| --- | --- | --- | --- |
+| First search series, settled matching count | 30 | 260 ms | 250 ms — missed |
+| Second search series, exact new passage visible | 30 | 241 ms | 250 ms — met in this run |
+| Cached Script open | 20 | 114 ms | 200 ms — met |
+| Cached return to the matching library row | 20 | 53 ms | 200 ms — met |
+
+The first search in the first series took 1,235 ms; all samples remain in its percentile calculation.
+The first uncached Script open took **3,827 ms**, with a **3,669 ms frame interval**. It is reported
+separately from cached navigation and establishes a remaining interaction stall. Direct library
+command calls through the same bridge, including the harness's 16 ms settling wait, took 192–219 ms
+(p95 214 ms). This suggests most warm search time is outside React rendering, but it is not a
+profile of individual backend functions.
+
+A subsequent five-sample command check isolated an additional delay: `narrative_review_get` for
+the selected 50-slot scene took **20,595–21,206 ms**, with frame intervals of **20,085–20,845 ms**.
+In the same series, warmed `narrative_scene_get` took 74–88 ms and `narrative_diagnostics` took
+152–170 ms. The first scene-get sample took 3,910 ms and is retained separately from its four warm
+samples. These figures include the same 16 ms settling wait. Review explicitly reconciles the
+project before capturing its evidence; the measured command boundary does not yet distinguish
+reconciliation time from review capture. This long Review stall remains unresolved.
+
+These observations do not establish repeatable search-budget compliance, combined-filter UI
+performance, cold project-open acceptance, or the full accessibility workflow. #194 and #182 remain
+open; both successful and unsuccessful measurements must be retained when evaluating subsequent
+optimisations.

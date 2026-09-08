@@ -76,7 +76,9 @@ export const qk = {
  * scene both keep their boxes, so there is nothing a refetch would rescue.
  */
 export function invalidateNarrative(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ['narrative_arc'] })
   void qc.invalidateQueries({ queryKey: ['narrative_affected'] })
+  void qc.invalidateQueries({ queryKey: ['narrative_locale'] })
   void qc.invalidateQueries({ queryKey: ['narrative_library'] })
   void qc.invalidateQueries({ queryKey: ['narrative_review'] })
   void qc.invalidateQueries({ queryKey: ['narrative_world'] })
@@ -100,7 +102,9 @@ export function invalidateNarrative(qc: QueryClient) {
  * Draft keys are explicitly project-scoped and remain until saved/discarded. */
 export async function clearNarrativeReads(qc: QueryClient) {
   const families = new Set([
+    'narrative_arc',
     'narrative_affected',
+    'narrative_locale',
     'narrative_scenes',
     'narrative_library',
     'narrative_scene',
@@ -153,11 +157,8 @@ export function invalidateWorld(qc: QueryClient) {
   // Reference pins, provider selection, and the entity's attached weight all
   // participate in LoRA readiness.
   void qc.invalidateQueries({ queryKey: ['lora_status'] })
-  // Scenes are not in the SQLite index yet (the remaining half of #153), so a
-  // reconcile is the only signal this side gets that a collaborator edited one.
-  // Until they are indexed that signal is coarse — the watcher raises this for
-  // the folder, not for the scene — which is exactly why the whole narrative
-  // family moves together rather than one key at a time.
+  // The watcher observes source changes even when discovery uses indexed projections.
+  // Invalidate the complete narrative family so drafts, catalogs and arc views agree.
   invalidateNarrative(qc)
   // Row thumbnails are keyed by node rather than by query, so they are not in
   // the client's cache at all — see `lib/nodeThumbs.ts`. Choosing a cover or

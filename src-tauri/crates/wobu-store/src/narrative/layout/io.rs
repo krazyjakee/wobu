@@ -38,7 +38,10 @@ impl Layout {
                 (
                     GraphKey::Scene { .. },
                     NodeKey::Scene(_) | NodeKey::Beat(_) | NodeKey::Choice(_) | NodeKey::Outcome(_)
-                ) | (GraphKey::Arc { .. } | GraphKey::Quest { .. }, NodeKey::Scene(_))
+                ) | (
+                    GraphKey::Arc { .. } | GraphKey::Quest { .. },
+                    NodeKey::Scene(_) | NodeKey::QuestStage { .. }
+                )
             )
         };
         for (key, node) in &self.nodes {
@@ -60,7 +63,7 @@ impl Layout {
         }
         for (id, note) in &self.annotations {
             if id != &note.id
-                || note.attached_to.is_some_and(|key| !valid_key(&key))
+                || note.attached_to.as_ref().is_some_and(|key| !valid_key(key))
                 || note.body.len() > 8192
                 || !coordinate(note.x)
                 || !coordinate(note.y)

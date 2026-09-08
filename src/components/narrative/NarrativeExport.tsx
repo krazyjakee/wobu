@@ -132,8 +132,9 @@ export function NarrativeExport({ onClose }: { onClose: () => void }) {
           </p>
         </fieldset>
         <p>
-          Release requires approved, current, non-empty text. Freshness uses recorded source status.
-          Media bindings are not authored yet; this package contains no media assets.
+          Release requires approved, current, non-empty text and each configured locale, or its
+          explicit fallback policy. Configure locales in Review → Localisation. Media bindings are
+          not authored yet; this package contains no media assets.
         </p>
         <div className="nrt-export-actions">
           <button className="btn" disabled={busy || !validCommands} onClick={() => void validate()}>
@@ -166,6 +167,16 @@ export function NarrativeExport({ onClose }: { onClose: () => void }) {
             ))}
           </ul>
         )}
+        {!!check?.localeDiagnostics?.length && (
+          <ul aria-label="Locale export diagnostics">
+            {check.localeDiagnostics.map((d, i) => (
+              <li key={i}>
+                {d.id}: {d.message}
+              </li>
+            ))}
+          </ul>
+        )}
+        {check && !check.localeDiagnostics?.length && <p>Configured locale checks passed.</p>}
         {error && <p role="alert">{error}</p>}
         {report && (
           <div role="status">

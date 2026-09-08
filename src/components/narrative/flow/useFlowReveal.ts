@@ -1,7 +1,7 @@
-import { useEffect, useRef, type RefObject } from 'react'
-import { useUI } from '../../../store/ui'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
+import { useUI, type NarrativeReveal } from '../../../store/ui'
 import { flowNodeForTarget } from './canonicalFlow'
-import { useFlowLevelApi } from './flowStore'
+import { useFlowLevel, useFlowLevelApi } from './flowStore'
 import type { FlowLevel } from './model'
 import type { FlowGraph } from './graph'
 
@@ -21,35 +21,63 @@ export function useFlowReveal({
   center?: (id: string) => void
   enabled?: boolean
 }) {
-  const reveal = useUI((state) => state.narrativeReveal)
+  const globalReveal = useUI((state) => state.narrativeReveal)
+  const local = useFlowLevel((state) => state.nodeReveal)
+  const reveal = useMemo<NarrativeReveal | null>(
+    () =>
+      local
+        ? {
+            sceneId: scene.id,
+            beatId: null,
+            lineId: null,
+            variantId: null,
+            choiceId: null,
+            outcomeId: null,
+            field: null,
+            seq: local.seq,
+            origin: 'flow',
+            projectKey: projectKey ?? null,
+            focus: true,
+          }
+        : globalReveal,
+    [local, scene.id, projectKey, globalReveal],
+  )
   const store = useFlowLevelApi()
   const honoured = useRef(0)
+  const sequence = reveal ? (local ? -reveal.seq : reveal.seq) : 0
   useEffect(() => {
     if (
       !enabled ||
       !reveal ||
-      reveal.seq === honoured.current ||
+      sequence === honoured.current ||
       reveal.sceneId !== scene.id ||
       (projectKey !== undefined && reveal.projectKey !== null && reveal.projectKey !== projectKey)
     )
       return
-    if (reveal.origin === 'flow' && (!reveal.focus || projectKey === undefined)) {
-      honoured.current = reveal.seq
+    if (!local && reveal.origin === 'flow' && (!reveal.focus || projectKey === undefined)) {
+      honoured.current = sequence
       return
     }
     const root = container.current
     if (!root) return
     let frame = 0
     let centred = false
-    const requested = flowNodeForTarget(reveal)
+    const requested = local?.id ?? flowNodeForTarget(reveal)
     const exact = scene.elements.find((element) => element.id === requested)
-    const target =
+    if (local && !exact) return
+    const fallback =
       exact ??
       scene.elements.find(
         (element) => element.kind === 'beat' && element.beatId === reveal.beatId,
       ) ??
       scene.elements.find((element) => element.id === scene.entryId) ??
       scene.elements[0]
+    const target =
+      requested === null &&
+      fallback?.groupId &&
+      store.getState().closedGroups.includes(fallback.groupId)
+        ? { id: fallback.groupId, groupId: null }
+        : fallback
     const observer = new MutationObserver(() => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(attempt)
@@ -63,12 +91,12 @@ export function useFlowReveal({
           empty.focus({ preventScroll: true })
           if (document.activeElement !== empty) return
         }
-        honoured.current = reveal!.seq
+        honoured.current = sequence
         observer.disconnect()
         return
       }
-      if (requested === null) {
-        honoured.current = reveal!.seq
+      if (requested === null && !reveal!.focus) {
+        honoured.current = sequence
         observer.disconnect()
         return
       }
@@ -108,7 +136,8 @@ export function useFlowReveal({
         store
           .getState()
           .announce('The requested element is gone. Showing its surviving beat or scene instead.')
-      honoured.current = reveal!.seq
+      honoured.current = sequence
+      if (local) store.getState().requestNodeReveal(null)
       observer.disconnect()
     }
     function centered() {
@@ -127,7 +156,7 @@ export function useFlowReveal({
       observer.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [scene, container, projectKey, graph, center, reveal, store, enabled])
+  }, [scene, container, projectKey, graph, center, reveal, local, sequence, store, enabled])
 }
 
 function visible(target: HTMLElement) {

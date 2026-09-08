@@ -140,6 +140,15 @@ impl Project {
         };
         let state_json = serde_json::to_string(&proposal.request.context.options.state)?;
         let snapshot = self.review_snapshot(target.scene, Some(&state_json))?;
+        if snapshot
+            .file
+            .scene
+            .supporting_text
+            .as_ref()
+            .is_some_and(|a| a.policy != GenerationPolicy::Generated)
+        {
+            return Ok(false);
+        }
         if snapshot.history.first().is_some_and(|e| e.decisions.contains_key(&id)) {
             return Ok(false);
         }
@@ -288,7 +297,14 @@ impl Project {
                     return Err(invalid("Wording or policy changed before proposal acceptance."));
                 }
                 let automatic = matches!(action, EditorialAction::Generated { .. });
-                let generated = slot.policy == GenerationPolicy::Generated
+                let generated = tx
+                    .snapshot
+                    .file
+                    .scene
+                    .supporting_text
+                    .as_ref()
+                    .is_none_or(|a| a.policy == GenerationPolicy::Generated)
+                    && slot.policy == GenerationPolicy::Generated
                     && index.is_none_or(|i| {
                         slot.variants[i].text.lifecycle.policy == GenerationPolicy::Generated
                     });

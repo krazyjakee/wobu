@@ -9,6 +9,7 @@ export interface ExportOptions {
 }
 export interface ExportCheck {
   diagnostics: CompileDiagnostic[]
+  localeDiagnostics?: import('./narrativeLocale').LocaleDiagnostic[]
   payloadHash: string | null
   scenes: number
   strings: number

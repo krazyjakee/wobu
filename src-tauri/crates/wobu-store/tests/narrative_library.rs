@@ -279,3 +279,37 @@ fn intent_participant_and_lifecycle_filters_keep_exact_saved_targets() {
         Some(scene.beats[0].dialogue[0].variants[1].id.to_string().as_str())
     );
 }
+
+#[test]
+fn whole_arc_keeps_authored_exit_ids_without_prose_and_observes_external_damage() {
+    use wobu_narrative::{Choice, Destination, Outcome};
+    let (_dir, project, mut a, b) = fixture();
+    a.beats[0].choices.push(Choice::new("Take the ferry", Destination::Scene(b.id)));
+    a.beats[0].outcomes.push(Outcome::new(Destination::Unresolved {}));
+    a.beats[0].outcomes.push(Outcome::new(Destination::End { label: "Harbour".into() }));
+    put(&project, "council", &a);
+    let arc = project.narrative_arc().unwrap();
+    assert_eq!(arc.scenes.len(), 2);
+    let details = arc
+        .scenes
+        .iter()
+        .find(|one| one.summary.id == a.id.to_string())
+        .unwrap()
+        .arc
+        .as_ref()
+        .unwrap();
+    assert_eq!(details.exits.len(), 2);
+    assert_eq!(details.exits[0].route_id, a.beats[0].choices[0].id.to_string());
+    assert_eq!(details.exits[0].beat_id, a.beats[0].id.to_string());
+    assert_eq!(details.exits[0].to, Some(b.id.to_string()));
+    assert_eq!(details.exits[1].to, None);
+    let wire = serde_json::to_string(&arc).unwrap();
+    assert!(!wire.contains("The beacon went dark."));
+    assert!(!wire.contains("A witness arrived."));
+    fs::write(project.root().join("narrative/scenes/harbour.yaml"), "scene: [").unwrap();
+    let damaged = project.narrative_arc().unwrap();
+    assert_eq!(damaged.scenes.len(), 1);
+    assert_eq!(damaged.unreadable.len(), 1);
+    assert_ne!(damaged.revision, arc.revision);
+    assert_eq!(damaged.scenes[0].arc.as_ref().unwrap().exits[0].to, Some(b.id.to_string()));
+}

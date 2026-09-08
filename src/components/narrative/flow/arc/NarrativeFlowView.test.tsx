@@ -1,3 +1,4 @@
+import { groupIdentity } from './projectArcModel'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useUI } from '../../../../store/ui'
@@ -128,15 +129,23 @@ describe('what survives the round trip', () => {
   it('keeps the quests the writer opened and closed', () => {
     render(<NarrativeFlowView />)
     fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
-    expect(ARC_STORE.getState().closedGroups).toEqual(['quest.beacon', 'quest.aftermath'])
+    expect(ARC_STORE.getState().closedGroups).toEqual([
+      groupIdentity('quest:["quest.beacon"]'),
+      groupIdentity('quest:["quest.aftermath"]'),
+    ])
 
     // In through a diagnostic rather than a box, because with the quests closed
     // there is no scene box left to double-click — which is the point.
     fireEvent.click(screen.getAllByRole('button', { name: 'Open the scene' })[0]!)
     escape()
     // Redrawn from the same closed set, not re-defaulted to open.
-    expect(ARC_STORE.getState().closedGroups).toEqual(['quest.beacon', 'quest.aftermath'])
-    expect(screen.getByTestId('flow-node-quest.beacon')).toBeInTheDocument()
+    expect(ARC_STORE.getState().closedGroups).toEqual([
+      groupIdentity('quest:["quest.beacon"]'),
+      groupIdentity('quest:["quest.aftermath"]'),
+    ])
+    expect(
+      screen.getByTestId(`flow-node-${groupIdentity('quest:["quest.beacon"]')}`),
+    ).toBeInTheDocument()
   })
 
   it('keeps an unsaved edit to the arc', () => {

@@ -1,0 +1,2939 @@
+{
+  "implementation": "PR #202 implementation; debug Rust and instrumented real Tauri/WebKit dev frontend",
+  "machine": {
+    "cpu": "AMD Ryzen 9 5900X",
+    "logical_cpus": 24,
+    "memory_gib": 31,
+    "os": "Linux 6.8.0-138",
+    "webkitgtk": "2.52.6",
+    "gtk": "3.24.41"
+  },
+  "fixture": {
+    "scenes": 1000,
+    "slots": 50000,
+    "source_bytes": 22406000
+  },
+  "scope": "Real Tauri IPC and native WebKit DOM. Harness dispatches DOM input/click and waits for committed selector/text at 16 ms intervals. Frame intervals are requestAnimationFrame deltas. No providers, source writes or physical cold-disk claim. Parallel implementation/build activity was present. Samples are retained, not cherry-picked.",
+  "budgets_ms": {
+    "warm_search_filter_p95": 250,
+    "cached_open_return_p95": 200
+  },
+  "search_count_settled": {
+    "samples": [
+      {
+        "query": "ASHFALL-PHRASE-0763",
+        "ms": 1235,
+        "frameIntervals": [9, 1031, 186],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0764",
+        "ms": 260,
+        "frameIntervals": [6, 15, 12, 13, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 11],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0765",
+        "ms": 231,
+        "frameIntervals": [4, 13, 9, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 25],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0766",
+        "ms": 235,
+        "frameIntervals": [4, 16, 9, 10, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 11],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0767",
+        "ms": 236,
+        "frameIntervals": [5, 12, 12, 10, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 14],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0768",
+        "ms": 209,
+        "frameIntervals": [4, 10, 7, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 21],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0769",
+        "ms": 222.00000000000728,
+        "frameIntervals": [3, 9, 7, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 22],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0770",
+        "ms": 211.00000000000728,
+        "frameIntervals": [3, 10, 13, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 15],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0771",
+        "ms": 229.00000000000728,
+        "frameIntervals": [5, 12, 8, 9, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 10],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0772",
+        "ms": 215,
+        "frameIntervals": [4, 13, 9, 13, 16, 16, 16, 16, 16, 16, 17, 16, 16, 22],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0773",
+        "ms": 231.99999999999272,
+        "frameIntervals": [
+          3.999999999992724, 15, 10, 13, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16, 19
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0774",
+        "ms": 218,
+        "frameIntervals": [4, 14, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 19],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0775",
+        "ms": 230,
+        "frameIntervals": [5, 12, 9, 4, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 14],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0776",
+        "ms": 221,
+        "frameIntervals": [4, 9, 8, 15, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 15, 9],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0777",
+        "ms": 210,
+        "frameIntervals": [4.999999999992724, 11, 9, 8, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0778",
+        "ms": 238,
+        "frameIntervals": [4, 16, 9, 4, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0779",
+        "ms": 227.00000000000728,
+        "frameIntervals": [4, 12, 9, 14, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0780",
+        "ms": 213,
+        "frameIntervals": [5, 9, 8, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 20],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0781",
+        "ms": 235.99999999999272,
+        "frameIntervals": [
+          2.999999999992724, 12, 13, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 23
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0782",
+        "ms": 242,
+        "frameIntervals": [4, 15, 11, 13, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 13],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0783",
+        "ms": 248.99999999999272,
+        "frameIntervals": [
+          3.999999999992724, 11, 10, 11, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 11
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0784",
+        "ms": 207,
+        "frameIntervals": [3, 11, 7, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0785",
+        "ms": 223.00000000000728,
+        "frameIntervals": [3, 8, 14, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 13],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0786",
+        "ms": 228,
+        "frameIntervals": [4, 12, 8, 12, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 22],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0787",
+        "ms": 235.99999999999272,
+        "frameIntervals": [
+          3.999999999992724, 12, 12, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 23
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0788",
+        "ms": 231,
+        "frameIntervals": [5, 11, 11, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0789",
+        "ms": 228,
+        "frameIntervals": [4, 11, 9, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 20],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0790",
+        "ms": 230,
+        "frameIntervals": [4, 12, 8, 7, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 13],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0791",
+        "ms": 225,
+        "frameIntervals": [4, 10, 8, 15, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 18],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0792",
+        "ms": 221.99999999999272,
+        "frameIntervals": [
+          2.999999999992724, 9, 7, 12, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 7
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      }
+    ],
+    "p95_ms": 260
+  },
+  "search_exact_passage": {
+    "samples": [
+      {
+        "query": "ASHFALL-PHRASE-0793",
+        "ms": 244,
+        "frameIntervals": [4, 10, 8, 10, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 9],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0794",
+        "ms": 227.99999999998545,
+        "frameIntervals": [
+          3.999999999985448, 11, 8, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 20
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0795",
+        "ms": 233,
+        "frameIntervals": [5, 12, 12, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 19],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0796",
+        "ms": 238.00000000001455,
+        "frameIntervals": [4, 15, 12, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 21],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0797",
+        "ms": 231,
+        "frameIntervals": [3, 10, 9, 5, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 19],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0798",
+        "ms": 233,
+        "frameIntervals": [4, 13, 8, 6, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0799",
+        "ms": 232,
+        "frameIntervals": [4, 13, 11, 5, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 12],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0800",
+        "ms": 235,
+        "frameIntervals": [
+          2.999999999985448, 10, 9, 14, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 14
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0801",
+        "ms": 227,
+        "frameIntervals": [4, 12, 8, 11, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 18],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0802",
+        "ms": 225.00000000001455,
+        "frameIntervals": [4, 11, 12, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 11],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0803",
+        "ms": 227,
+        "frameIntervals": [4, 12, 8, 12, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 21],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0804",
+        "ms": 236,
+        "frameIntervals": [4, 13, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 23],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0805",
+        "ms": 234,
+        "frameIntervals": [5, 14, 9, 14, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0806",
+        "ms": 223.99999999998545,
+        "frameIntervals": [2.999999999985448, 8, 9, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 18],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0807",
+        "ms": 228,
+        "frameIntervals": [4, 12, 12, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 14],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0808",
+        "ms": 237,
+        "frameIntervals": [4, 11, 9, 8, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 20],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0809",
+        "ms": 241,
+        "frameIntervals": [
+          3.999999999985448, 14, 12, 15, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 10
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0810",
+        "ms": 237,
+        "frameIntervals": [4, 12, 9, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 15],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0811",
+        "ms": 231,
+        "frameIntervals": [4, 15, 11, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 11, 6],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0812",
+        "ms": 232,
+        "frameIntervals": [3, 14, 8, 10, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 13],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0813",
+        "ms": 226,
+        "frameIntervals": [3, 9, 8, 14, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 9],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0814",
+        "ms": 227,
+        "frameIntervals": [3, 11, 10, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0815",
+        "ms": 212,
+        "frameIntervals": [3, 10, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 19],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0816",
+        "ms": 223.99999999998545,
+        "frameIntervals": [
+          2.999999999985448, 12, 8, 7, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 20, 12
+        ],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0817",
+        "ms": 228,
+        "frameIntervals": [3, 11, 11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0818",
+        "ms": 221,
+        "frameIntervals": [3, 9, 7, 8, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 6, 10],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0819",
+        "ms": 207,
+        "frameIntervals": [3, 9, 13, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 14],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0820",
+        "ms": 222,
+        "frameIntervals": [3, 8, 8, 15, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 18],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0821",
+        "ms": 209.99999999998545,
+        "frameIntervals": [3.999999999985448, 13, 9, 6, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      },
+      {
+        "query": "ASHFALL-PHRASE-0822",
+        "ms": 231,
+        "frameIntervals": [3, 13, 9, 8, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 12],
+        "rows": 1,
+        "active": {
+          "tag": "BODY",
+          "role": null,
+          "label": null,
+          "text": "\n    wobuNarrative scalenothing selectedJump to\u2026Ctrl+K?Narrative scale / NarrativeGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.Pinned scenesNo pinned scenes yet.Recent scenesNo r",
+          "id": "",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1440,
+            "height": 900
+          },
+          "tabIndex": -1
+        },
+        "selection": {
+          "sceneId": null,
+          "beatId": null,
+          "lineId": null
+        }
+      }
+    ],
+    "p95_ms": 241
+  },
+  "search_direct_ipc_plus_settle": {
+    "samples": [
+      {
+        "query": "ASHFALL-PHRASE-0823",
+        "ms": 199,
+        "frameIntervals": [2, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0824",
+        "ms": 205.00000000001455,
+        "frameIntervals": [5, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0825",
+        "ms": 192,
+        "frameIntervals": [3, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0826",
+        "ms": 198,
+        "frameIntervals": [13, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0827",
+        "ms": 192,
+        "frameIntervals": [1, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0828",
+        "ms": 203,
+        "frameIntervals": [11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0829",
+        "ms": 192,
+        "frameIntervals": [10, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0830",
+        "ms": 196,
+        "frameIntervals": [4, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0831",
+        "ms": 203,
+        "frameIntervals": [10, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0832",
+        "ms": 201,
+        "frameIntervals": [9, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0833",
+        "ms": 197.99999999998545,
+        "frameIntervals": [9.999999999985448, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0834",
+        "ms": 206,
+        "frameIntervals": [15, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0835",
+        "ms": 212,
+        "frameIntervals": [12, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0836",
+        "ms": 212,
+        "frameIntervals": [2, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0837",
+        "ms": 206,
+        "frameIntervals": [9, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0838",
+        "ms": 212,
+        "frameIntervals": [5, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0839",
+        "ms": 212.99999999998545,
+        "frameIntervals": [11.999999999985448, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0840",
+        "ms": 205,
+        "frameIntervals": [1, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0841",
+        "ms": 206,
+        "frameIntervals": [7, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0842",
+        "ms": 205,
+        "frameIntervals": [3, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0843",
+        "ms": 205,
+        "frameIntervals": [1, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0844",
+        "ms": 203,
+        "frameIntervals": [16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0845",
+        "ms": 204,
+        "frameIntervals": [15, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0846",
+        "ms": 198.00000000001455,
+        "frameIntervals": [14, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0847",
+        "ms": 209,
+        "frameIntervals": [2, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0848",
+        "ms": 204.00000000001455,
+        "frameIntervals": [12, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0849",
+        "ms": 209,
+        "frameIntervals": [10, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0850",
+        "ms": 214,
+        "frameIntervals": [3, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0851",
+        "ms": 213,
+        "frameIntervals": [9, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "query": "ASHFALL-PHRASE-0852",
+        "ms": 219,
+        "frameIntervals": [13, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16]
+      }
+    ],
+    "p95_ms": 214
+  },
+  "first_scene_open": {
+    "ms": 3827.000000000029,
+    "frameIntervals": [17, 3669, 131],
+    "rows": 1,
+    "active": {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+      "id": "",
+      "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 478,
+        "width": 1283,
+        "height": 80
+      },
+      "tabIndex": 0
+    },
+    "selection": {
+      "sceneId": "00000000000000000000000823",
+      "beatId": "00000000000000000000100822",
+      "lineId": "00000000000000000001041100",
+      "variantId": "00000000000000000002041100"
+    }
+  },
+  "cached_open_return": {
+    "samples": [
+      {
+        "return": {
+          "ms": 43,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 103,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 41,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 105,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 43,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 93.9999999999709,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 41,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 107,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 37.000000000029104,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 107,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 34,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 94,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 44,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 112,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 52.999999999970896,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 96,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 38,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 108,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 48.999999999970896,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 136,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 43,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 114,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 52,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 107,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 53.000000000029104,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 111.0000000000291,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 45.000000000029104,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 107,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 46,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 96,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 52,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 103,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 45,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 105,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 49,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 113,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 61,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 109.9999999999709,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      },
+      {
+        "return": {
+          "ms": 42,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        },
+        "open": {
+          "ms": 106.0000000000291,
+          "frameIntervals": [],
+          "rows": 1,
+          "active": {
+            "tag": "TEXTAREA",
+            "role": null,
+            "label": null,
+            "text": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "id": "",
+            "value": "Witness 00 recalls the harbor bell. ASHFALL-PHRASE-0822 records district 6 evidence.",
+            "disabled": false,
+            "rect": {
+              "x": 100,
+              "y": 478,
+              "width": 1283,
+              "height": 80
+            },
+            "tabIndex": 0
+          },
+          "selection": {
+            "sceneId": "00000000000000000000000823",
+            "beatId": "00000000000000000000100822",
+            "lineId": "00000000000000000001041100",
+            "variantId": "00000000000000000002041100"
+          }
+        }
+      }
+    ],
+    "p95_ms": {
+      "open": 114,
+      "return": 53.000000000029104
+    }
+  },
+  "single_scene_command_samples_plus_16ms_settle": {
+    "narrative_scene_get": [
+      {
+        "ms": 3910,
+        "frameIntervals": [3833, 60, 4]
+      },
+      {
+        "ms": 83,
+        "frameIntervals": [10, 16, 16, 16, 16]
+      },
+      {
+        "ms": 85,
+        "frameIntervals": [15, 16, 16, 16, 16]
+      },
+      {
+        "ms": 88,
+        "frameIntervals": [2, 16, 16, 16, 21, 11]
+      },
+      {
+        "ms": 74,
+        "frameIntervals": [1, 17, 16, 16, 16]
+      }
+    ],
+    "narrative_diagnostics": [
+      {
+        "ms": 157,
+        "frameIntervals": [15, 16, 16, 16, 17, 16, 16, 16, 16]
+      },
+      {
+        "ms": 159,
+        "frameIntervals": [10, 16, 116, 13]
+      },
+      {
+        "ms": 163.00000000011642,
+        "frameIntervals": [3, 17, 16, 16, 16, 16, 16, 16, 16, 16]
+      },
+      {
+        "ms": 151.99999999988358,
+        "frameIntervals": [7.999999999883585, 16, 16, 16, 16, 16, 16, 31, 1]
+      },
+      {
+        "ms": 170.00000000011642,
+        "frameIntervals": [7, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16]
+      }
+    ],
+    "narrative_review_get": [
+      {
+        "ms": 21045,
+        "frameIntervals": [5, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 20845, 14]
+      },
+      {
+        "ms": 21205.999999999884,
+        "frameIntervals": [
+          9.999999999883585, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16,
+          16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 20712, 5
+        ]
+      },
+      {
+        "ms": 20595,
+        "frameIntervals": [
+          11, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+          16, 16, 16, 17, 16, 16, 16, 16, 16, 20085, 13
+        ]
+      },
+      {
+        "ms": 20977,
+        "frameIntervals": [
+          3, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+          16, 16, 17, 16, 16, 16, 16, 16, 20475, 11
+        ]
+      },
+      {
+        "ms": 20960,
+        "frameIntervals": [
+          2, 16, 16, 16, 16, 16, 16, 16, 16, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+          16, 17, 16, 16, 16, 16, 16, 16, 20458, 13
+        ]
+      }
+    ]
+  }
+}

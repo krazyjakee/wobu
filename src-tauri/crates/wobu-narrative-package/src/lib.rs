@@ -1,5 +1,7 @@
 //! Versioned native JSON assets. No authoring database, providers or engine adapter.
 mod disk;
+mod locales;
+pub use locales::LOCALISATION;
 mod validate;
 
 use serde::{Deserialize, Serialize};
@@ -15,7 +17,7 @@ pub const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 pub const MAX_STRINGS: usize = 100_000;
 pub const MAX_STRING_BYTES: usize = 1024 * 1024;
 pub const INCOMPLETE: &str = ".incomplete";
-const REQUIRED: [&str; 4] = ["graph.json", "state.json", "strings/en.json", "media.json"];
+const REQUIRED: [&str; 3] = ["graph.json", "state.json", "media.json"];
 /// Declared by a package whose graph contains supporting text assets (#167).
 ///
 /// A capability rather than a silent addition, because a reader written against
@@ -181,7 +183,12 @@ impl Package {
         Ok(self.strings()?.len())
     }
     fn strings(&self) -> Result<Strings> {
-        parse(self.file("strings/en.json")?)
+        let locale: wobu_narrative_locale::LocaleId = self
+            .manifest
+            .locale
+            .parse()
+            .map_err(|e: wobu_narrative_locale::Error| invalid(e.to_string()))?;
+        parse(self.file(&format!("strings/{}.json", locale.file_stem()))?)
     }
     fn file(&self, name: &str) -> Result<&[u8]> {
         self.files.get(name).map(Vec::as_slice).ok_or_else(|| invalid(format!("missing {name}")))
@@ -265,7 +272,11 @@ impl Package {
         // first point at which the declared capability can be compared with what
         // the payload actually contains. A package claiming supporting text and
         // shipping none — or the reverse — is malformed either way.
-        if self.manifest.required_capabilities != validate::capabilities(!graph.texts.is_empty()) {
+        let mut expected_capabilities = validate::capabilities(!graph.texts.is_empty());
+        if self.locales()?.is_some() {
+            expected_capabilities.insert(LOCALISATION.into(), 1);
+        }
+        if self.manifest.required_capabilities != expected_capabilities {
             return Err(invalid("declared capabilities disagree with the packaged graph"));
         }
         if !strings.is_empty() {

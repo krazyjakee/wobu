@@ -1,0 +1,65 @@
+{
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "text": "wobu\nArc acceptance\nnothing selected\nJump to\u2026\nCtrl+K\n\n\n\n\n\n\n\n\n?\n\nArc acceptance / Narrative\nBack to scenes\nScene outline\nContext\nGenerate\u2026\nWorld state\nText library\nReview\nBuild\u2026\nRecovery\u2026\nExport\u2026\nCouncil hearing\nFlow, Script, Preview and Source are four views of this one scene.\nFlow\nScript\nPreview\nSource\nEvery scene\nFlow scope \n3 scenes \u00b7 3 missing text \u00b7 0 needs review \u00b7 0 out of date. Counts include filtered and collapsed scenes.\nReading scene exits and quest stages\nCouncil hearing\nSave scene\nDiscard changes\nUndo draft\nRedo draft\nSaved scene\nNew exit belongs to beat Open selected scene\nCanvas\nOutline list\n1 blocking arc problems \u00b7 2 scenes without an incoming exit. Includes filtered and collapsed nodes.\nCouncil hearing \u2014 \u201cOutcome\u201d has no destination.\nOpen the scene\nNo authored scene exit leads to Harbour evidence. Story entry is not declared.\nOpen the scene\nNo authored scene exit leads to New scene. Story entry is not declared.\nOpen the scene\nGroup\n\nArrangement \nGroups & notes\nClose all groups\nAdd scene\nParticipant\n\nNeeds text\nNeeds review\nOut of date\nBadges\nScene exit updated in the shared draft. Save scene to commit it.\nPrevious scenesPage 1 of 1 \u00b7 6 scenes and stagesNext scenesFind scene or stage \nClose group Shared: Witness account + Beacon inquiry\n1 elements\nClose group Beacon inquiry\n4 elements\nClose group Witness account\n1 elements\n\nSCENE\nCouncil hearing\nOpen scene or quest\nDelete\nOutcome\n\nno destination\nExit 2\n\nError\nCouncil hearing \u2014 \u201cOutcome\u201d has no destination.\nAdd scene after\n\nSCENE\nHarbour evidence\nOpen scene or quest\nDelete\nExit 1\nNothing yet \u00b7 Select this scene to edit exits\nWarning\nNo authored scene exit leads to Harbour evidence. Story entry is not declared.\n\nSCENE\nNew scene\nOpen scene or quest\nDelete\nOutcome\nCouncil hearing \u00b7 Select this scene to edit exits\nExit 2\nNothing yet \u00b7 Select this scene to edit exits\nWarning\nNo authored scene exit leads to New scene. Story entry is not declared.\n\nQUEST STAGE\nBeacon inquiry \u00b7 investigating\nOpen scene or quest\nDelete\ninvestigating \u2192 resolved \u2014 requires always\nBeacon inquiry \u00b7 resolved \u00b7 Select this scene to edit exits\n\nQUEST STAGE\nBeacon inquiry \u00b7 resolved\nOpen scene or quest\nDelete\n\nQUEST STAGE\nWitness account \u00b7 open\nOpen scene or quest\nDelete\n1 problem in this scene. Checks cover source errors and missing text. Branch reachability has not been checked.\nArc acceptance\n/tmp/wobu-acceptance-20260908/arc-acceptance.wobu\n3 nodes\n[ navigator \u00b7 inspector ]\nno image provider chosen\n\u00b7 queue 0\n\u00b7 claude-sonnet-5 \u00b7 1m context\n\u00b7 notifications",
+  "active": {
+    "tag": "BUTTON",
+    "role": null,
+    "label": null,
+    "text": "SceneCouncil hearing",
+    "id": "",
+    "value": "",
+    "disabled": false,
+    "rect": {
+      "x": 71,
+      "y": 951.5,
+      "width": 145.328125,
+      "height": 18
+    },
+    "tabIndex": 0
+  },
+  "ui": {
+    "mode": "narrative",
+    "selectedId": null,
+    "recentIds": [],
+    "tab": "notes",
+    "narrative": {
+      "sceneId": "01M214J08X6VQGQYWZTJ4GFZJT",
+      "beatId": "01M214KQRXYHYX0XXPDKF2SMHP",
+      "lineId": null,
+      "outcomeId": "01M214KQRXDPFKTQ4N43EVZXWB"
+    },
+    "narrativeEntityTarget": null,
+    "narrativeWorldTarget": null,
+    "narrativeReveal": {
+      "sceneId": "01M214J08X6VQGQYWZTJ4GFZJT",
+      "beatId": "01M214KQRXYHYX0XXPDKF2SMHP",
+      "lineId": null,
+      "outcomeId": "01M214KQRXDPFKTQ4N43EVZXWB",
+      "seq": 2,
+      "origin": "diagnostic",
+      "projectKey": "/tmp/wobu-acceptance-20260908/arc-acceptance.wobu",
+      "focus": true,
+      "variantId": null,
+      "choiceId": null,
+      "field": "destination"
+    },
+    "narrativeTab": "flow",
+    "narrativeFilters": {
+      "needsText": false,
+      "needsReview": false,
+      "outOfDate": false
+    },
+    "filter": "",
+    "navWidth": 272,
+    "navCollapsed": false,
+    "inspCollapsed": false,
+    "closedGroups": {},
+    "collapsedNodes": {},
+    "bands": {},
+    "paletteOpen": false,
+    "shortcutsOpen": false,
+    "toasts": [],
+    "banners": []
+  },
+  "errors": []
+}

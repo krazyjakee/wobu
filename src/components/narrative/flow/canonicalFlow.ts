@@ -8,6 +8,7 @@ import { narrativeIdOf, nodeId } from './source'
 export interface CanonicalFlowActions {
   projectKey?: string
   disabled?: boolean
+  connectionsDisabled?: boolean
   add: (kind: FlowKind, anchor: string | null) => boolean
   connect: (from: FlowConnection, to: string | null) => boolean
   remove: (id: string) => boolean

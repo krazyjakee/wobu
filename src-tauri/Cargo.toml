@@ -60,6 +60,8 @@ wobu-narrative-generation = { path = "crates/wobu-narrative-generation" }
 # scenes, texts, the world and the declared state, and structurally cannot see
 # the Flow layout sidecars.
 wobu-narrative-deps = { path = "crates/wobu-narrative-deps" }
+wobu-narrative-build = { path = "crates/wobu-narrative-build" }
+wobu-narrative-locale = { path = "crates/wobu-narrative-locale" }
 
 [package]
 name = "wobu"
@@ -89,6 +91,9 @@ workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+wobu-narrative-build.workspace = true
+wobu-narrative-locale.workspace = true
+
 async-trait = "0.1.91"
 blake3 = "1.8.5"
 chrono = "0.4.45"

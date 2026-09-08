@@ -85,3 +85,23 @@ describe('Narrative export', () => {
     expect(screen.getByLabelText('Destination folder')).toHaveValue('/exports/story')
   })
 })
+
+it('shows configured locale blockers independently of source dialogue diagnostics', async () => {
+  vi.mocked(narrativeExportCheck).mockResolvedValue({
+    ...ready,
+    payloadHash: null,
+    localeDiagnostics: [
+      {
+        id: 'variant',
+        code: 'missing_translation',
+        message: 'fr: current approved translation required; fallback is disabled.',
+      },
+    ],
+  })
+  render(<NarrativeExport onClose={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Check export' }))
+  expect(await screen.findByRole('list', { name: 'Locale export diagnostics' })).toHaveTextContent(
+    'fr: current approved translation required',
+  )
+  expect(screen.getByRole('button', { name: 'Export package' })).toBeDisabled()
+})

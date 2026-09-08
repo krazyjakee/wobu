@@ -371,8 +371,13 @@ impl Project {
     pub fn arc_layout(&self, arc: &str) -> LayoutLoad {
         let mut loaded = layout::load(&self.root, &GraphKey::Arc { arc: arc.to_string() });
         if let Ok(catalog) = self.scene_catalog() {
-            let present =
+            let mut present =
                 catalog.ids().into_iter().map(layout::NodeKey::Scene).collect::<BTreeSet<_>>();
+            if let Ok(Some((world, _))) = self.world_document() {
+                for quest in &world.quests {
+                    present.extend(quest_stage_keys(quest));
+                }
+            }
             layout::reconcile(&mut loaded, &present);
         }
         loaded
@@ -381,8 +386,13 @@ impl Project {
     pub fn save_arc_layout(&self, arrangement: &Layout) -> Result<LayoutSave> {
         self.ensure_writable()?;
         let catalog = self.scene_catalog()?;
-        let present =
+        let mut present =
             catalog.ids().into_iter().map(layout::NodeKey::Scene).collect::<BTreeSet<_>>();
+        if let Some((world, _)) = self.world_document()? {
+            for quest in &world.quests {
+                present.extend(quest_stage_keys(quest));
+            }
+        }
         layout::save(&self.root, &self.peer, arrangement, Some(&present))
     }
 
@@ -404,7 +414,13 @@ impl Project {
             .iter()
             .find(|record| record.id == quest)
             .ok_or_else(|| crate::Error::NoSuchNode(quest.to_string()))?;
-        Ok(quest.scene_ids.iter().copied().map(layout::NodeKey::Scene).collect())
+        Ok(quest
+            .scene_ids
+            .iter()
+            .copied()
+            .map(layout::NodeKey::Scene)
+            .chain(quest_stage_keys(quest))
+            .collect())
     }
     pub fn save_quest_layout(
         &self,
@@ -424,4 +440,11 @@ impl Project {
         self.ensure_writable()?;
         layout::sweep(&self.root, &self.scene_catalog()?.ids())
     }
+}
+
+fn quest_stage_keys(quest: &wobu_narrative::Quest) -> impl Iterator<Item = layout::NodeKey> + '_ {
+    quest
+        .stages
+        .iter()
+        .map(|stage| layout::NodeKey::QuestStage { quest: quest.id, stage: stage.to_string() })
 }

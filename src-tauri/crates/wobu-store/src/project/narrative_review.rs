@@ -75,6 +75,70 @@ fn invalid(reason: impl Into<String>) -> Error {
     Error::Malformed { path: "narrative/review".into(), reason: reason.into() }
 }
 impl Project {
+    /// Progress only: decisions are read from a verified canonical source/head
+    /// chain. Actual acceptance still acquires its lock and rechecks all inputs.
+    pub fn narrative_decided_proposals(
+        &self,
+        scenes: &std::collections::BTreeMap<SceneId, std::collections::BTreeSet<Id>>,
+    ) -> Result<std::collections::BTreeSet<Id>> {
+        let mut decided = std::collections::BTreeSet::new();
+        for (id, requested) in scenes {
+            let file = self.load_editorial_source(*id)?;
+            let mut observations = std::collections::BTreeMap::new();
+            let (history, problem) = capture::source_history(self, &file, &mut observations);
+            if let Some(reason) = problem {
+                return Err(invalid(reason));
+            }
+            if let Some(head) = history.first() {
+                use wobu_narrative::review::ProposalDecision;
+                let origins = history
+                    .iter()
+                    .filter_map(|event| {
+                        let (id, hash, decision) = match &event.action {
+                            EditorialAction::Generated { proposal_id, proposal_hash }
+                            | EditorialAction::Accept { proposal_id, proposal_hash, .. } => {
+                                (proposal_id, proposal_hash, ProposalDecision::Accepted)
+                            }
+                            EditorialAction::Reject { proposal_id, proposal_hash } => {
+                                (proposal_id, proposal_hash, ProposalDecision::Rejected)
+                            }
+                            _ => return None,
+                        };
+                        Some((*id, (event, hash, decision)))
+                    })
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                for (proposal_id, decision) in
+                    head.decisions.iter().filter(|(id, _)| requested.contains(id))
+                {
+                    let origin = origins.get(proposal_id).and_then(|(event, hash, expected)| {
+                        (expected == decision).then_some((*event, *hash))
+                    });
+                    let Some((event, hash)) = origin else {
+                        return Err(invalid(
+                            "Proposal decision has no canonical editorial origin.",
+                        ));
+                    };
+                    let proposal = proposals::checked(self, *proposal_id)?;
+                    let target = &proposal.request.target;
+                    if *hash != proposal.hash
+                        || event.target.as_ref()
+                            != Some(&ReviewTarget {
+                                scene: target.scene,
+                                beat: target.beat,
+                                slot: target.slot,
+                                variant: target.variant,
+                            })
+                    {
+                        return Err(invalid(
+                            "Editorial decision differs from its frozen proposal.",
+                        ));
+                    }
+                    decided.insert(*proposal_id);
+                }
+            }
+        }
+        Ok(decided)
+    }
     pub fn review_proposals(
         &self,
     ) -> Result<std::collections::BTreeMap<SceneId, Vec<ReviewProposal>>> {

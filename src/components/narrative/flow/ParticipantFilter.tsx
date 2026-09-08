@@ -9,15 +9,19 @@ export function ParticipantFilter({ scene }: { scene: FlowLevel }) {
   const participant = useFlowLevel((s) => s.participant)
   const setParticipant = useFlowLevel((s) => s.setParticipant)
   const people = useMemo(() => {
-    const names = new Set<string>()
+    const names = new Map<string, string>()
     for (const element of scene.elements) {
       // Beats have participants and so do whole scenes, which is what makes
       // "show me only Mira's thread" mean the same thing at both levels.
       if (element.kind === 'beat' || element.kind === 'scene') {
-        for (const name of element.participants) names.add(name)
+        for (const name of element.participants)
+          names.set(
+            name,
+            element.kind === 'scene' ? (element.participantLabels?.[name] ?? name) : name,
+          )
       }
     }
-    return [...names].sort()
+    return [...names].sort((a, b) => a[1].localeCompare(b[1]))
   }, [scene])
 
   return (
@@ -28,8 +32,8 @@ export function ParticipantFilter({ scene }: { scene: FlowLevel }) {
         onChange={(event) => setParticipant(event.target.value || null)}
       >
         <option value="">Anyone</option>
-        {people.map((name) => (
-          <option key={name} value={name}>
+        {people.map(([id, name]) => (
+          <option key={id} value={id}>
             {name}
           </option>
         ))}

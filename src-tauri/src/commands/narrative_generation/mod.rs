@@ -1,7 +1,8 @@
 //! Provider jobs produce immutable evidence and review proposals, never accepted dialogue.
+pub(super) mod freeze;
 mod plan;
-mod records;
-mod task;
+pub(super) mod records;
+pub(super) mod task;
 
 use crate::{
     error::{Code, CommandResult, WobuError},
@@ -38,7 +39,7 @@ impl Drop for GenerationPermit {
     }
 }
 impl GenerationPlans {
-    fn reserve(&self, project: Id, request: Id) -> CommandResult<GenerationPermit> {
+    pub(super) fn reserve(&self, project: Id, request: Id) -> CommandResult<GenerationPermit> {
         let key = (project, request);
         if !self.active.lock().insert(key) {
             return Err(invalid("This request is already queued or running."));
@@ -50,7 +51,6 @@ impl GenerationPlans {
 #[tauri::command]
 pub async fn narrative_generation_plan(
     state: State<'_, AppState>,
-    keys: State<'_, Keys>,
     plans: State<'_, GenerationPlans>,
     source: String,
 ) -> CommandResult<plan::Plan> {
@@ -58,25 +58,10 @@ pub async fn narrative_generation_plan(
     state.reconcile_now()?;
     let (ticket, selection) =
         state.ticket(|project| Ok(crate::enhance::selection(&project.meta().providers)))?;
-    let key = keys
-        .secret(&selection.provider)
-        .await?
-        .ok_or_else(|| crate::enhance::no_key(&selection.provider))?;
-    let provider = crate::enhance::text_provider(&selection.provider, &key)?;
-    if !provider.supports_structured() {
-        return Err(invalid(
-            "Selected text provider does not support structured narrative output.",
-        ));
-    }
-    let model = selection.model.unwrap_or_else(|| provider.default_model().into());
-    let plan =
-        state.with_ticket(&ticket, |project| plan::build(project, input, provider.id(), &model))?;
+    let model = crate::enhance::planning_model(&selection)?;
+    let plan = state
+        .with_ticket(&ticket, |project| plan::build(project, input, &selection.provider, &model))?;
     super::narrative_preview::bridge_integers(&plan)?;
-    if serde_json::to_string(&plan).map_err(invalid)?.contains(key.expose()) {
-        return Err(invalid(
-            "Generation context contains a configured credential. Remove it from narrative source before continuing.",
-        ));
-    }
     let mut retained = plans.plans.lock();
     retained.retain(|_, (existing, _)| *existing == ticket);
     if retained.len() >= 16 {
@@ -141,19 +126,7 @@ pub async fn narrative_generation_start(
         .into_iter()
         .zip(permits)
         .map(|(request, permit)| {
-            let request_id = request.request_id;
-            let job_id = jobs
-                .queue()
-                .submit(task::GenerationTask::new(
-                    app.clone(),
-                    ticket.clone(),
-                    request,
-                    provider.clone(),
-                    key.clone(),
-                    permit,
-                ))
-                .to_string();
-            Queued { request_id, job_id }
+            submit(&app, &ticket, &jobs, request, provider.clone(), key.clone(), permit)
         })
         .collect())
 }
@@ -175,10 +148,18 @@ pub struct HistoryItem {
     pub proposal_published: bool,
     pub proposal_current_at_publication: Option<bool>,
 }
-fn history(project: &Project) -> CommandResult<Vec<HistoryItem>> {
+pub(super) fn history(project: &Project) -> CommandResult<Vec<HistoryItem>> {
+    history_for(project, None)
+}
+pub(super) fn history_for(
+    project: &Project,
+    only: Option<&BTreeSet<Id>>,
+) -> CommandResult<Vec<HistoryItem>> {
     let mut history = Vec::new();
     let receipts = records::RecordSet::load(project)?;
-    for request in receipts.requests.values() {
+    for request in
+        receipts.requests.values().filter(|r| only.is_none_or(|ids| ids.contains(&r.request_id)))
+    {
         let attempts = receipts.attempts(request)?;
         let mut item = HistoryItem {
             request_id: request.request_id,
@@ -301,3 +282,27 @@ pub fn narrative_generation_recover(
 
 #[cfg(test)]
 mod tests;
+
+pub(super) fn submit(
+    app: &AppHandle,
+    ticket: &ProjectTicket,
+    jobs: &Jobs,
+    request: FrozenRequest,
+    provider: Arc<dyn wobu_llm::TextProvider>,
+    key: Arc<crate::keys::Secret>,
+    permit: GenerationPermit,
+) -> Queued {
+    let request_id = request.request_id;
+    let job_id = jobs
+        .queue()
+        .submit(task::GenerationTask::new(
+            app.clone(),
+            ticket.clone(),
+            request,
+            provider,
+            key,
+            permit,
+        ))
+        .to_string();
+    Queued { request_id, job_id }
+}

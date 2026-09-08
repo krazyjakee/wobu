@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+wobu-narrative-build.workspace = true
+wobu-narrative-locale.workspace = true
+
 blake3 = "1.8.5"
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"

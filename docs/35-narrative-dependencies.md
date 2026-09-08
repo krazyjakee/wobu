@@ -3,8 +3,8 @@
 Changing a character's voice automatically marks the lines that read it out of date.
 Narrative → Context → Why affected explains each change as **source field → context/query →
 variant**. The old words, IDs, revisions, locks, approval decisions and provider receipts remain
-available. This implements US-06 and N4 issue #168; build scheduling and Flow affected-scope
-highlighting belong to #169.
+available. This implements US-06 and N4 issue #168. [Affected build planning](36-narrative-builds.md)
+adds explicit selection, generation and resume for #169.
 
 ## What a line depends on
 

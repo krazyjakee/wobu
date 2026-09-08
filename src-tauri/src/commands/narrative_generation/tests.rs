@@ -703,6 +703,9 @@ fn old_frozen_requests_and_completed_publications_survive_the_v2_toolchain_witho
         "new planning describes interpretation capability, not the disk envelope"
     );
     request.source_schema_version = 1;
+    request.version = 1;
+    request.expected_scene_hash =
+        wobu_store::atomic::read_stamped(&source_path).unwrap().unwrap().1.hash;
     records::save_receipt(
         &mut project,
         request.request_id,
