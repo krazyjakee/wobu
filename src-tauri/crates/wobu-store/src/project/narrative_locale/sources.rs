@@ -83,18 +83,16 @@ impl Project {
             }
             // Choice labels depend on the containing dialogue's protection. Retain
             // unlock decisions so relocking cannot revive a prior translation approval.
-            let choice_unlocks: Vec<_> = snapshot
-                .history
-                .iter()
-                .filter(|event| {
-                    event.before.dialogue_slots().any(|(_, slot)| {
-                        slot.variants.iter().any(|variant| {
-                            locked(&event.before, variant.id) && !locked(&event.after, variant.id)
-                        })
-                    })
-                })
-                .map(|event| event.id)
-                .collect();
+            let choice_unlocks: Vec<_> = if scene.beats.iter().all(|beat| beat.choices.is_empty()) {
+                Vec::new()
+            } else {
+                snapshot
+                    .history
+                    .iter()
+                    .filter(|event| has_unlock(&event.before, &event.after))
+                    .map(|event| event.id)
+                    .collect()
+            };
             // Choice labels are structural authored text, without a separate review policy.
             // Their containing dialogue must be approved and locked before export.
             for beat in &scene.beats {
@@ -114,13 +112,64 @@ impl Project {
     }
 }
 fn locked(scene: &Scene, id: VariantId) -> bool {
+    locked_variants(scene).any(|variant| variant == id)
+}
+fn locked_variants(scene: &Scene) -> impl Iterator<Item = VariantId> + '_ {
     let asset_lock = scene.supporting_text.as_ref().is_some_and(|a| a.policy == PolicyKind::Locked);
-    scene.dialogue_slots().any(|(_, slot)| {
-        slot.variants.iter().any(|v| {
-            v.id == id
-                && (asset_lock
+    scene.dialogue_slots().flat_map(move |(_, slot)| {
+        slot.variants
+            .iter()
+            .filter(move |v| {
+                asset_lock
                     || slot.policy == PolicyKind::Locked
-                    || v.text.lifecycle.policy == PolicyKind::Locked)
-        })
+                    || v.text.lifecycle.policy == PolicyKind::Locked
+            })
+            .map(|v| v.id)
     })
+}
+fn has_unlock(before: &Scene, after: &Scene) -> bool {
+    // Collect each historical scene once instead of rescanning all its variants
+    // for every ID. Hash-set iteration order never enters the persisted guard.
+    let before: std::collections::HashSet<_> = locked_variants(before).collect();
+    let after: std::collections::HashSet<_> = locked_variants(after).collect();
+    !before.is_subset(&after)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wobu_narrative::{DialogueSlot, Name, Text, TextAsset, TextEntry, TextKind, Variant};
+
+    #[test]
+    fn effective_lock_sets_preserve_asset_slot_and_variant_protection() {
+        let mut asset = TextAsset::new(TextKind::Codex, "Harbor", Name::new("read").unwrap());
+        let mut entry = TextEntry::new("Arrival");
+        let mut slot = DialogueSlot::new(Speaker::Narrator);
+        slot.variants.push(Variant::new(Text::written("The harbor is quiet.")));
+        slot.variants.push(Variant::new(Text::written("The harbor is busy.")));
+        let first = slot.variants[0].id;
+        let second = slot.variants[1].id;
+        entry.lines.push(slot);
+        asset.entries.push(entry);
+        let mut before = asset.editorial_scene();
+        before.beats[0].dialogue[0].variants[0].text.lifecycle.policy = PolicyKind::Locked;
+        let mut after = before.clone();
+        after.beats[0].dialogue[0].variants[0].text.lifecycle.policy = PolicyKind::Edited;
+        after.beats[0].dialogue[0].variants[1].text.lifecycle.policy = PolicyKind::Locked;
+        // Equal lock counts are not equal protected identities.
+        assert!(has_unlock(&before, &after));
+        assert!(locked(&before, first));
+        assert!(!locked(&before, second));
+        before.beats[0].dialogue[0].policy = PolicyKind::Locked;
+        after.beats[0].dialogue[0].policy = PolicyKind::Locked;
+        assert!(!has_unlock(&before, &after));
+        assert!(locked(&after, first));
+        assert!(locked(&after, second));
+        before.supporting_text.as_mut().unwrap().policy = PolicyKind::Locked;
+        after.supporting_text.as_mut().unwrap().policy = PolicyKind::Locked;
+        after.beats[0].dialogue[0].policy = PolicyKind::Edited;
+        assert!(!has_unlock(&before, &after));
+        after.supporting_text.as_mut().unwrap().policy = PolicyKind::Edited;
+        assert!(has_unlock(&before, &after));
+    }
 }
