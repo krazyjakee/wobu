@@ -60,6 +60,8 @@ wobu-narrative-generation = { path = "crates/wobu-narrative-generation" }
 # scenes, texts, the world and the declared state, and structurally cannot see
 # the Flow layout sidecars.
 wobu-narrative-deps = { path = "crates/wobu-narrative-deps" }
+wobu-narrative-build = { path = "crates/wobu-narrative-build" }
+wobu-narrative-locale = { path = "crates/wobu-narrative-locale" }
 
 [package]
 name = "wobu"
