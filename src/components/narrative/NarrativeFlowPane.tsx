@@ -385,12 +385,11 @@ function FlowSceneEditor({
       </div>
 
       {demo && (
-        // The honest label. This build has no narrative storage, so what is on
-        // the canvas is a demonstration and nothing a writer does to it is kept.
+        // Demonstration edits are held in memory.
         <p className="nrt-note" role="status">
           <Icon name="lock" size="sm" />
-          Demonstration data. {NARRATIVE_UNAVAILABLE.source} Everything below is a fixture of the
-          Ashfall council hearing, held in memory: edits work, and none of them are saved.
+          Demonstration data. Everything below is a fixture of the Ashfall council hearing, held in
+          memory: edits work, and none of them are saved.
         </p>
       )}
 

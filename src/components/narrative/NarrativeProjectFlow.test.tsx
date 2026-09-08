@@ -468,16 +468,16 @@ describe('the arrangement', () => {
 describe('what is honestly out of reach', () => {
   it('says a badge cannot open a witness scenario, and why', async () => {
     await enterCouncil()
-    expect(screen.getByText(/cannot open a witness scenario yet/)).toHaveTextContent(
-      /deterministic runtime and the Preview overlay/,
-    )
+    expect(
+      screen.getByText(/Opening a witness needs generated reachability scenarios/),
+    ).toHaveTextContent(/generated reachability scenarios and a Flow overlay/)
   })
 
   it('says an affected-build scope cannot be highlighted, and why', async () => {
     await enterCouncil()
-    expect(screen.getByText(/cannot open a witness scenario yet/)).toHaveTextContent(
-      /dependency tracker and the build planner/,
-    )
+    expect(
+      screen.getByText(/Opening a witness needs generated reachability scenarios/),
+    ).toHaveTextContent(/dependency tracker and build planner/)
   })
 })
 

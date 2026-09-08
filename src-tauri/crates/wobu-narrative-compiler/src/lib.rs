@@ -178,7 +178,8 @@ pub fn accepts(ty: &VarType, value: &Value) -> bool {
     }
 }
 
-fn argument_fits(ty: &VarType, arg: &Operand, schema: &StateSchema) -> bool {
+/// Whether a source argument fits a registered command domain; shared with package validation.
+pub fn argument_fits(ty: &VarType, arg: &Operand, schema: &StateSchema) -> bool {
     match arg {
         Operand::Literal(value) => accepts(ty, value),
         Operand::Var(name) => schema.get(name).is_some_and(|decl| match (ty, &decl.ty) {

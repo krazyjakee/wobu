@@ -124,7 +124,8 @@ export function NarrativeInspector() {
       <section className="nrt-context">
         <h3>Knowledge and relationships</h3>
         <p className="nrt-note">
-          Attributed facts, beliefs and relationships are not available yet.
+          Open World to edit facts, beliefs and relationships. Resolved generation context is not
+          yet available here.
         </p>
         <TipButton
           className="btn"

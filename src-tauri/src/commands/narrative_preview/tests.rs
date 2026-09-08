@@ -155,3 +155,90 @@ fn preview_rejects_output_counters_that_advance_beyond_the_exact_webview_range()
     let error = narrative_preview_step(graph, snapshot, PreviewAction::Advance).unwrap_err();
     assert!(error.message.contains("9007199254740991"));
 }
+
+#[test]
+fn pending_preview_commands_restore_fail_cancel_and_accept_validated_host_outputs() {
+    let mut scene = wobu_narrative::Scene::new("Ashfall command");
+    let mut beat = Beat::new("Command");
+    let mut outcome = wobu_narrative::Outcome::new(Destination::End { label: "Done".into() });
+    outcome.effects.push(Effect::Command(wobu_narrative::HostCommand {
+        name: Name::new("award").unwrap(),
+        args: vec![],
+    }));
+    beat.outcomes.push(outcome);
+    scene.beats.push(beat);
+    let schema = wobu_narrative::StateSchema::new([wobu_narrative::VariableDecl {
+        name: Name::new("host_ready").unwrap(),
+        ty: VarType::Bool,
+        default: wobu_narrative::Value::Bool(false),
+        owner: wobu_narrative::Owner::Host,
+        description: String::new(),
+    }])
+    .unwrap();
+    let graph = compile(
+        &[scene.clone()],
+        &schema,
+        &CompileOptions {
+            commands: BTreeMap::from([(Name::new("award").unwrap(), vec![])]),
+            ..CompileOptions::default()
+        },
+    )
+    .graph
+    .unwrap();
+    let start = narrative_preview_start(
+        graph.clone(),
+        scene.id,
+        BTreeMap::from([(Name::new("host_ready").unwrap(), wobu_narrative::Value::Bool(false))]),
+    )
+    .unwrap();
+    let Yield::GameCommand { token, .. } = &start.current else { panic!() };
+    let saved = start.snapshot.clone();
+    for result in [HostResult::Failed { message: "retry later".into() }, HostResult::Cancelled] {
+        let restored =
+            narrative_preview_step(graph.clone(), saved.clone(), PreviewAction::Restore).unwrap();
+        let failed = narrative_preview_step(
+            graph.clone(),
+            restored.snapshot,
+            PreviewAction::CompleteCommand { token: token.clone(), result },
+        )
+        .unwrap();
+        assert_eq!(failed.snapshot, saved);
+        assert!(!failed.trace.committed);
+        assert!(failed.trace.error.is_some());
+        assert_eq!(failed.current, start.current);
+    }
+    let bad = HostResult::Success {
+        host_inputs: BTreeMap::from([(
+            Name::new("host_ready").unwrap(),
+            wobu_narrative::Value::Int(1),
+        )]),
+    };
+    assert!(
+        narrative_preview_step(
+            graph.clone(),
+            saved.clone(),
+            PreviewAction::CompleteCommand { token: token.clone(), result: bad }
+        )
+        .is_err()
+    );
+    let result = HostResult::Success {
+        host_inputs: BTreeMap::from([(
+            Name::new("host_ready").unwrap(),
+            wobu_narrative::Value::Bool(true),
+        )]),
+    };
+    let done = narrative_preview_step(
+        graph.clone(),
+        saved,
+        PreviewAction::CompleteCommand { token: token.clone(), result: result.clone() },
+    )
+    .unwrap();
+    assert_eq!(done.state[&Name::new("host_ready").unwrap()], wobu_narrative::Value::Bool(true));
+    let repeated = narrative_preview_step(
+        graph,
+        done.snapshot.clone(),
+        PreviewAction::CompleteCommand { token: token.clone(), result },
+    )
+    .unwrap();
+    assert_eq!(repeated.snapshot, done.snapshot);
+}

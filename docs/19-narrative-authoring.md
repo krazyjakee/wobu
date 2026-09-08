@@ -104,22 +104,23 @@ source ranges.
 6. Use **Save snapshot** and **Restore snapshot** to revisit a checkpoint, or **Restart preview** to
    compile the latest saved source and use the starting inputs again.
 
-A command pauses Preview and displays its name and arguments. **Acknowledge command** simulates
-success without performing a game action. The current UI does not author failed/cancelled results
-or host-state result values, although the reference runtime validates those protocol cases.
+A command pauses Preview and displays its name and arguments. Return success with typed host
+values, failure, or cancellation without performing a game action. Failed and cancelled commands
+remain pending for an explicit retry; restoring a pending checkpoint preserves command identity.
 
 The running session retains its compiled graph. Source edits do not change it mid-play; restarting
 compiles again. Checkpoints and playback history survive view changes within the app session and
-are scoped to the project/scene. They are not persisted scenario assets. Playback history currently
-records step labels and state snapshots, rather than a complete evaluated-condition/effect trace;
-Flow route overlays and failed-predicate explanations remain #188.
+are scoped to the project/scene. They are not persisted scenario assets (#162). Playback history
+shows evaluated conditions, transitions, effects before and after, and command results with source
+links. Each action retains at most 2,048 trace records and reports omissions explicitly; the UI keeps
+100 actions. Flow route overlays remain #188.
 
 ![Playable Preview](screenshots/narrative-preview.png)
 
 The compiler and runtime are pure Rust crates independent of Tauri, providers and the authoring
 store. Preview commands adapt them to the app without writing world/project state. This internal
-graph is not a versioned release package (#160), an engine contract or an engine adapter. There is
-no generation call in compilation or playback. Release validation rejects missing required text
+graph can be exported as a [validated native package](20-native-narrative-packages.md). Engine
+adapters remain excluded N5 work. There is no generation call in compilation or playback. Release validation rejects missing required text
 and wording whose recorded approval/freshness is not ready; dependency freshness recomputation is
 still #168. First-match selection is deterministic; a seed is retained for a future selection policy. The pure
 Rust runtime supports signed 64-bit integers; the JavaScript Preview bridge rejects values or
@@ -131,7 +132,10 @@ Script, Source and World/Variables drafts survive view changes within the sessio
 original file stamps. A later save from another writer produces a conflict rather than silently
 replacing newer work. Late save completion cannot clear a newer reopened draft. Closing a project
 or quitting requires retained drafts to be saved or discarded, including drafts in hidden views.
-Drafts are not crash-persistent.
+Drafts are not crash-persistent. Source can open malformed scene files through the Library repair
+action. Repair preserves the exact original in an immutable recovery file before guarded
+publication; future source versions remain read-only. Canonical YAML uses mappings for nested
+conditions and effects, while existing tagged source remains readable.
 
 World undo/redo compares the expected whole document under the project lock and then performs a
 guarded write using its current stamp. It refuses a changed document from another writer. Ordinary
@@ -147,8 +151,9 @@ in #165. World source participates in the narrative fingerprint; moving Flow box
 ## Evidence and remaining acceptance
 
 Screenshots use the actual React components with explicit in-memory IPC fixtures in Chromium.
-They establish browser rendering, not native Tauri acceptance or real-file persistence. Rust command
-tests separately use temporary project files. Current regression coverage includes attributed
+They establish browser rendering. The separate [native Preview walkthrough](21-native-narrative-preview.md)
+records real Tauri/WebKit and Rust IPC, including command results, restore, bounds and loop failures;
+its canonical project-file audit verifies isolation. Rust command tests use temporary project files. Current regression coverage includes attributed
 three-character knowledge, contradictory/unknown belief, entity backlinks, strict source/version
 checks, guarded world saves and undo, typed forms, multiple quest membership and saved views,
 compiler release gates, runtime yield/snapshot boundaries and Preview's isolated state.
@@ -163,11 +168,11 @@ record, rather than reusing #192's counts for the changed implementation.
 | #155 | World model/forms, provenance, restrictions, quest stages/membership, related entities, diagnostics and guarded world undo. | Complete character/place backlink navigation and full native workflow acceptance. |
 | #156 | Typed conditions/effects, automatic outcomes and variant controls alongside handwritten authoring. | Full public-command fixture/walkthrough and all structural undo/Flow equivalence acceptance. |
 | #158 | Deterministic validated graph, source maps, typed effects/command signatures and development/release text gates. | Full acceptance review; wider analysis belongs to #170/#171. |
-| #159 | Pure runner, typed state, bounded execution, command protocol and version/hash-checked snapshots. | Explicit save-migration callback; no random variant-selection policy is authored yet. |
-| #161 | Isolated playable Preview, starting state, restart/checkpoints, source links and state history. | Complete condition/effect trace, configurable command results, saved scenarios and native walkthrough. |
+| #159 / #195 | Pure runner, bounded typed execution, command protocol, version/hash-checked snapshots and explicit validated migration callback. | No random variant-selection policy is authored yet. |
+| #161 / #195 | Isolated Preview, starting state, checkpoints, evaluated traces, configurable command results and recorded native walkthrough. | Saved scenarios (#162) and Flow route overlays (#188). |
 | #191 | Real multiquest filtering/column and migration of saved views. | Act/tag metadata, rebuildable index and real-load/native acceptance. |
 
-Indexing/sync/recovery (#153), malformed-file repair and semantic source ranges (#157), release
-packages (#160), persistent scenarios (#162), generation/review (#163–#167), incremental analysis
+Source repair and semantic ranges (#157), native packages (#160), and migration/Preview traces
+(#195) are implemented. Indexing/sync/recovery (#153), persistent scenarios (#162), generation/review (#163–#167), incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.

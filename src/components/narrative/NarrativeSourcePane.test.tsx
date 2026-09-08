@@ -7,14 +7,21 @@ import { resetNarrativeDraftGuards } from '../../lib/narrativeDraftGuard'
 import { NarrativeSourcePane } from './NarrativeSourcePane'
 import type { NarrativeSource } from '../../lib/api/narrativeSource'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), check: vi.fn(), save: vi.fn() }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), check: vi.fn(), save: vi.fn(), repair: vi.fn() }))
 vi.mock('../../lib/api/narrativeSource', () => ({
   narrativeSourceGet: mocks.get,
+  narrativeSourceOpen: mocks.get,
+  narrativeSourceRepair: mocks.repair,
   narrativeSourceCheck: mocks.check,
 }))
 vi.mock('../../lib/queries', () => ({ useSaveScene: () => ({ mutateAsync: mocks.save }) }))
 
-const original: NarrativeSource = {
+const original = {
+  rel: 'narrative/scenes/council.yaml',
+  stamp: { mtime_ms: 1, size: 5, hash: 'original' },
+  sceneId: 'scene-1',
+  repairBlocked: false,
+  problem: null,
   yaml: 'schema_version: 1\nscene: original\n',
   file: {
     scene: { id: 'scene-1', name: 'Council' },
@@ -22,7 +29,7 @@ const original: NarrativeSource = {
     rel: 'narrative/scenes/council.yaml',
     stamp: { mtime_ms: 1, size: 5, hash: 'original' },
   },
-}
+} satisfies NarrativeSource
 
 function mount(
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
@@ -65,6 +72,7 @@ it('retains a dirty draft and its original precondition after unmount and a form
     ...original,
     yaml: 'changed outside',
     file: { ...original.file, stamp: { ...original.file.stamp, hash: 'newer' } },
+    stamp: { ...original.stamp, hash: 'newer' },
   })
   mount(qc)
   expect(await screen.findByRole('textbox', { name: 'Scene YAML' })).toHaveValue('draft')
@@ -195,7 +203,101 @@ it('reloads a clean source view after another editor saves the scene', async () 
     ...original,
     yaml: 'latest form source',
     file: { ...original.file, stamp: { mtime_ms: 2, size: 8, hash: 'form-write' } },
+    stamp: { mtime_ms: 2, size: 8, hash: 'form-write' },
   })
   mount(qc)
   await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('latest form source'))
+})
+
+it('repairs already malformed disk source using its original path and stamp', async () => {
+  const malformed: NarrativeSource = {
+    ...original,
+    file: null,
+    yaml: 'schema_version: 1\nscene: [',
+    problem: { message: 'Unclosed sequence', location: { line: 2, column: 8 } },
+  }
+  mocks.get.mockResolvedValue(malformed)
+  mocks.repair.mockResolvedValue({
+    source: original,
+    recoveryRel: 'narrative/recovery/original.yaml',
+  })
+  mount()
+  expect(await screen.findByRole('textbox')).toHaveValue(malformed.yaml)
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: original.yaml } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save source' }))
+  await waitFor(() => expect(mocks.repair).toHaveBeenCalledWith(malformed, original.yaml))
+  expect(mocks.save).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(original.yaml))
+})
+
+it('does not resurrect a reverted draft when an earlier format finishes after remount', async () => {
+  let finish!: (value: unknown) => void
+  mocks.check.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const view = mount()
+  fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'format this' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Format' }))
+  await waitFor(() => expect(finish).toBeDefined())
+  view.unmount()
+  mount(view.qc)
+  fireEvent.change(await screen.findByRole('textbox'), { target: { value: original.yaml } })
+  await act(async () =>
+    finish({
+      scene: original.file.scene,
+      formatted: 'stale formatting',
+      problem: null,
+      diagnostics: [],
+    }),
+  )
+  expect(screen.getByRole('textbox')).toHaveValue(original.yaml)
+  expect(screen.getByRole('button', { name: 'Save source' })).toBeDisabled()
+})
+
+it('selects a semantic diagnostic’s exact source range and invalidates it after typing', async () => {
+  const yaml = 'scene: {beats: [{choices: [{to: {beat: missing}}]}]}\n'
+  mocks.get.mockResolvedValue({ ...original, yaml })
+  mocks.check.mockResolvedValue({
+    scene: original.file.scene,
+    formatted: yaml,
+    problem: null,
+    diagnostics: [
+      {
+        kind: 'choice',
+        code: 'dangling_beat',
+        message: 'Missing beat',
+        destination: true,
+        beatId: 'b',
+        choiceId: 'c',
+        sourcePath: ['scene', 'beats', 0, 'choices', 0, 'to', 'beat'],
+      },
+    ],
+  })
+  mount()
+  await screen.findByRole('textbox')
+  fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
+  fireEvent.click(await screen.findByRole('button', { name: /^Source 1:/ }))
+  const editor = screen.getByRole('textbox') as HTMLTextAreaElement
+  expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toBe('missing')
+  fireEvent.change(editor, { target: { value: yaml + '# changed' } })
+  expect(screen.queryByRole('button', { name: /^Source 1:/ })).not.toBeInTheDocument()
+})
+
+it('keeps unsupported saved schemas visible but refuses destructive downgrade controls', async () => {
+  mocks.get.mockResolvedValue({
+    ...original,
+    file: null,
+    yaml: 'schema_version: 999\nscene: future\n',
+    repairBlocked: true,
+    problem: { message: 'Unsupported schema version 999', location: null },
+  })
+  mount()
+  expect(await screen.findByRole('textbox')).toHaveValue('schema_version: 999\nscene: future\n')
+  expect(screen.getByRole('textbox')).toHaveAttribute('readonly')
+  expect(screen.getByRole('button', { name: 'Format' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Save source' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Validate' })).toBeEnabled()
 })

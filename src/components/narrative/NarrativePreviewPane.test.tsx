@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => {}) }))
 const line: PreviewFrame = {
+  trace: { committed: true, error: null, omitted: 0, records: [] },
   snapshot: { at: 'line' },
   current: {
     line: {
@@ -25,6 +26,7 @@ const line: PreviewFrame = {
   state: { trust: 40 },
 }
 const choices: PreviewFrame = {
+  trace: { committed: true, error: null, omitted: 0, records: [] },
   snapshot: { at: 'choices' },
   current: {
     choices: { scene: 'scene', beat: 'beat', choices: [{ id: 'choice', label: 'Show proof' }] },
@@ -32,11 +34,13 @@ const choices: PreviewFrame = {
   state: { trust: 40 },
 }
 const command: PreviewFrame = {
+  trace: { committed: true, error: null, omitted: 0, records: [] },
   snapshot: { at: 'command' },
   current: { game_command: { token: 'token', name: 'award_badge', args: [true] } },
   state: { trust: 50 },
 }
 const end: PreviewFrame = {
+  trace: { committed: true, error: null, omitted: 0, records: [] },
   snapshot: { at: 'end' },
   current: { end: { label: 'Supported' } },
   state: { trust: 50 },
@@ -97,7 +101,13 @@ describe('deterministic narrative preview', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Scene ended: Supported')
     expect(h.invoke).toHaveBeenCalledWith(
       'narrative_preview_step',
-      expect.objectContaining({ action: { kind: 'completeCommand', token: 'token' } }),
+      expect.objectContaining({
+        action: {
+          kind: 'completeCommand',
+          token: 'token',
+          result: { success: { host_inputs: {} } },
+        },
+      }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Restore snapshot' }))
     expect(await screen.findByText('I have proof.')).toBeInTheDocument()
@@ -172,7 +182,9 @@ describe('deterministic narrative preview', () => {
     view.unmount()
     mount()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
-    await act(async () => reject?.(new Error('Invalid choice state')))
+    await act(async () =>
+      reject?.({ code: 'node.invalid', message: 'Invalid choice state' } as unknown as Error),
+    )
     expect(screen.getByText('I have proof.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })
@@ -201,5 +213,143 @@ describe('deterministic narrative preview', () => {
     })
     expect(screen.getByRole('button', { name: 'Restart preview' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent('Argument types')
+  })
+  it('keeps a restored command pending after failure/cancellation and sends typed host results', async () => {
+    const pending: PreviewFrame = { ...command, state: { trust: 50, ready: false } }
+    usePreviewSessions.getState().put('project:scene', {
+      graph: { state: { ready: { ty: 'bool', default: false, owner: 'host' } } },
+      frame: pending,
+      trace: [],
+    })
+    const prior = h.invoke.getMockImplementation()!
+    h.invoke.mockImplementation((name, args) => {
+      if (name !== 'narrative_preview_step') return prior(name, args)
+      const action = args.action as { kind: string; result?: unknown }
+      if (action.kind === 'restore') return Promise.resolve(pending)
+      if (
+        action.result === 'cancelled' ||
+        (action.result && typeof action.result === 'object' && 'failed' in action.result)
+      )
+        return Promise.resolve({
+          ...pending,
+          trace: {
+            committed: false,
+            error: 'Host command remains pending',
+            omitted: 0,
+            records: [],
+          },
+        })
+      return Promise.resolve({ ...end, state: { trust: 50, ready: true } })
+    })
+    const view = mount()
+    expect(screen.queryByLabelText('Host output trust')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save snapshot' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fail command' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Host command remains pending')
+    expect(usePreviewSessions.getState().sessions['project:scene']?.frame.snapshot).toEqual(
+      command.snapshot,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel command' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith(
+        'narrative_preview_step',
+        expect.objectContaining({
+          action: { kind: 'completeCommand', token: 'token', result: 'cancelled' },
+        }),
+      ),
+    )
+    view.unmount()
+    mount()
+    fireEvent.change(screen.getByLabelText('Host output ready'), { target: { value: 'true' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge command' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Supported')
+    expect(h.invoke).toHaveBeenCalledWith(
+      'narrative_preview_step',
+      expect.objectContaining({
+        action: {
+          kind: 'completeCommand',
+          token: 'token',
+          result: { success: { host_inputs: { ready: true } } },
+        },
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Restore snapshot' }))
+    expect(await screen.findByText('Host command: award_badge')).toBeInTheDocument()
+    expect(usePreviewSessions.getState().sessions['project:scene']?.frame.snapshot).toEqual(
+      command.snapshot,
+    )
+  })
+
+  it('shows runtime predicate/effect evidence and links its stable source identity', () => {
+    const site = {
+      scene: 'scene',
+      beat: 'beat',
+      slot: null,
+      variant: null,
+      choice: 'choice',
+      outcome: null,
+    }
+    usePreviewSessions.getState().put('project:scene', {
+      graph: {},
+      frame: line,
+      trace: [
+        {
+          label: 'Evaluated routes',
+          execution: {
+            committed: true,
+            error: null,
+            omitted: 0,
+            records: [
+              {
+                site,
+                event: {
+                  kind: 'condition',
+                  path: [],
+                  expression: 'never',
+                  passed: false,
+                  inputs: {},
+                },
+              },
+              {
+                site,
+                event: {
+                  kind: 'effect',
+                  index: 0,
+                  effect: { add: { var: 'trust', by: 10 } },
+                  before: { trust: 40 },
+                  after: { trust: 50 },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+    mount()
+    fireEvent.click(screen.getByText(/Playback trace/))
+    expect(screen.getByText('Condition failed')).toBeInTheDocument()
+    expect(screen.getByText('Effect 1: values before → after')).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open choice in Script' })[0]!)
+    expect(useUI.getState().narrative).toMatchObject({ sceneId: 'scene', beatId: 'beat' })
+    expect(useUI.getState().narrativeTab).toBe('script')
+  })
+  it('displays the native command error message rather than an object label', async () => {
+    const prior = h.invoke.getMockImplementation()!
+    h.invoke.mockImplementation((name, args) =>
+      name === 'narrative_preview_step'
+        ? Promise.reject({
+            code: 'node.invalid',
+            message: 'arithmetic overflow for trust',
+            detail: null,
+            retryable: false,
+          })
+        : prior(name, args),
+    )
+    mount()
+    await screen.findByLabelText('Initial trust')
+    fireEvent.click(screen.getByRole('button', { name: 'Start preview' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Arithmetic overflow for trust.')
+    expect(screen.getByText('I have proof.')).toBeInTheDocument()
   })
 })

@@ -6,6 +6,11 @@ use thiserror::Error;
 use wobu_narrative::{CompareOp, Condition, Effect, Name, Operand, Owner, Speaker, Value};
 use wobu_narrative_compiler::{CompiledBeat, GRAPH_VERSION, Graph, Target, accepts};
 
+mod migration;
+mod trace;
+pub use migration::Migration;
+pub use trace::{ExecutionTrace, TraceEvent, TraceRecord, TraceSite};
+
 pub type State = BTreeMap<Name, Value>;
 pub const SNAPSHOT_VERSION: u32 = 1;
 
@@ -87,6 +92,8 @@ struct ResolvedCommand {
     token: String,
     name: Name,
     args: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    site: Option<TraceSite>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +114,8 @@ pub struct Snapshot {
     version: u32,
     graph_version: u32,
     graph_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    command_graph_hash: Option<String>,
     run_id: String,
     seed: u64,
     scene: String,
@@ -122,13 +131,14 @@ pub struct Snapshot {
 enum Action {
     Target(Target),
     Dialogue(usize),
-    Transition(Vec<Effect>, Target),
+    Transition(Vec<Effect>, Target, TraceSite),
 }
 
 #[derive(Debug, Clone)]
 pub struct Runtime {
     graph: Graph,
     saved: Snapshot,
+    trace: ExecutionTrace,
 }
 
 impl Runtime {
@@ -180,6 +190,7 @@ impl Runtime {
                 version: SNAPSHOT_VERSION,
                 graph_version: graph.version,
                 graph_hash: graph.hash(),
+                command_graph_hash: None,
                 run_id,
                 seed,
                 scene: scene.into(),
@@ -192,6 +203,7 @@ impl Runtime {
                 step_limit,
             },
             graph,
+            trace: ExecutionTrace::default(),
         };
         runner.saved.state.extend(initial);
         runner.validate_state()?;
@@ -218,7 +230,7 @@ impl Runtime {
         {
             return Err(Error::Incompatible);
         }
-        let runner = Self { graph, saved: snapshot };
+        let runner = Self { graph, saved: snapshot, trace: ExecutionTrace::default() };
         if runner.saved.run_id.is_empty() || runner.saved.step_limit == 0 {
             return Err(Error::InvalidState("invalid execution settings".into()));
         }
@@ -236,6 +248,24 @@ impl Runtime {
             runner.validate_target(to)?;
             let mut tokens = std::collections::BTreeSet::new();
             for command in commands {
+                if let Some(site) = &command.site {
+                    let beat = runner.beat()?;
+                    if site.scene != runner.saved.scene
+                        || site.beat.as_deref() != Some(&runner.saved.beat)
+                        || site
+                            .choice
+                            .as_ref()
+                            .is_some_and(|id| !beat.choices.iter().any(|c| &c.id == id))
+                        || site
+                            .outcome
+                            .as_ref()
+                            .is_some_and(|id| !beat.outcomes.iter().any(|o| &o.id == id))
+                    {
+                        return Err(Error::InvalidState(
+                            "pending command source no longer resolves".into(),
+                        ));
+                    }
+                }
                 if !tokens.insert(&command.token) || !runner.valid_token(&command.token) {
                     return Err(Error::InvalidCommand);
                 }
@@ -306,10 +336,19 @@ impl Runtime {
     /// Failed actions leave cursor, variables, acknowledgements and visits unchanged.
     fn transaction(&mut self, action: impl FnOnce(&mut Self) -> Result<()>) -> Result<Yield> {
         let mut next = self.clone();
-        action(&mut next)?;
-        let yielded = next.current()?;
-        *self = next;
-        Ok(yielded)
+        next.trace = ExecutionTrace::default();
+        match action(&mut next).and_then(|()| next.current()) {
+            Ok(yielded) => {
+                *self = next;
+                Ok(yielded)
+            }
+            Err(error) => {
+                next.trace.committed = false;
+                next.trace.error = Some(error.to_string());
+                self.trace = next.trace;
+                Err(error)
+            }
+        }
     }
 
     pub fn advance(&mut self) -> Result<Yield> {
@@ -335,11 +374,12 @@ impl Runtime {
                 .find(|c| c.id == choice_id)
                 .cloned()
                 .ok_or_else(|| Error::UnavailableChoice(choice_id.into()))?;
-            if !next.matches(choice.requires.as_ref())? {
+            let site = TraceSite { choice: Some(choice.id.clone()), ..next.site() };
+            if !next.matches_at(choice.requires.as_ref(), site.clone())? {
                 return Err(Error::UnavailableChoice(choice_id.into()));
             }
             let mut budget = next.saved.step_limit;
-            next.drive(Action::Transition(choice.effects, choice.to), &mut budget)
+            next.drive(Action::Transition(choice.effects, choice.to, site), &mut budget)
         })
     }
 
@@ -347,17 +387,25 @@ impl Runtime {
     /// A changed result for an acknowledged token is rejected.
     pub fn complete_command(&mut self, token: &str, result: CommandResult) -> Result<Yield> {
         self.transaction(|next| {
-            if let Some(previous) = next.saved.acknowledged.get(token) {
-                return if matches!(&result, CommandResult::Success { host_inputs } if host_inputs == previous) { Ok(()) } else { Err(Error::InvalidCommand) };
+            if let Some(previous) = next.saved.acknowledged.get(token).cloned() {
+                next.record(next.site(), TraceEvent::CommandResult { token: token.into(), result: result.clone(), before: next.saved.state.clone(), after: next.saved.state.clone(), repeated: true });
+                return if matches!(&result, CommandResult::Success { host_inputs } if host_inputs == &previous) { Ok(()) } else { Err(Error::InvalidCommand) };
             }
             let Phase::Commands { commands, index, to } = next.saved.phase.clone() else { return Err(Error::InvalidCommand); };
             if commands[index].token != token { return Err(Error::InvalidCommand); }
+            let command_site = commands[index].site.clone().unwrap_or_else(|| next.site());
+            let before = next.saved.state.clone();
+            let command_result = result.clone();
+            if !matches!(result, CommandResult::Success { .. }) {
+                next.record(command_site.clone(), TraceEvent::CommandResult { token: token.into(), result: result.clone(), before: before.clone(), after: before.clone(), repeated: false });
+            }
             let inputs = match result {
                 CommandResult::Success { host_inputs } => host_inputs,
                 CommandResult::Failed { message } => return Err(Error::CommandFailed(message)),
                 CommandResult::Cancelled => return Err(Error::CommandCancelled),
             };
             next.apply_host_inputs(&inputs)?;
+            next.record(command_site, TraceEvent::CommandResult { token: token.into(), result: command_result, before, after: next.saved.state.clone(), repeated: false });
             next.saved.acknowledged.insert(token.into(), inputs);
             if index + 1 < commands.len() {
                 next.saved.phase = Phase::Commands { commands, index: index + 1, to };
@@ -449,8 +497,12 @@ impl Runtime {
                         .graph
                         .scenes
                         .get(&id)
+                        .cloned()
                         .ok_or_else(|| Error::InvalidState(format!("missing scene {id}")))?;
-                    if !self.matches(scene.entry.as_ref())? {
+                    if !self.matches_at(
+                        scene.entry.as_ref(),
+                        TraceSite { scene: id.clone(), ..TraceSite::default() },
+                    )? {
                         return Err(Error::EntryDenied(id));
                     }
                     let first = scene.first.clone();
@@ -467,10 +519,15 @@ impl Runtime {
                     Action::Dialogue(0)
                 }
                 Action::Dialogue(index) => {
-                    if let Some(slot) = self.beat()?.dialogue.get(index) {
+                    if let Some(slot) = self.beat()?.dialogue.get(index).cloned() {
                         let mut selected = None;
                         for variant in &slot.variants {
-                            if self.matches(variant.when.as_ref())? {
+                            let site = TraceSite {
+                                slot: Some(slot.id.clone()),
+                                variant: Some(variant.id.clone()),
+                                ..self.site()
+                            };
+                            if self.matches_at(variant.when.as_ref(), site)? {
                                 selected = Some(variant.id.clone());
                                 break;
                             }
@@ -479,23 +536,34 @@ impl Runtime {
                         self.saved.phase = Phase::Dialogue { index, variant };
                         return Ok(());
                     }
-                    if !self.available_choices()?.is_empty() {
+                    let mut available = false;
+                    for choice in self.beat()?.choices.clone() {
+                        let site = TraceSite { choice: Some(choice.id), ..self.site() };
+                        available |= self.matches_at(choice.requires.as_ref(), site)?;
+                    }
+                    if available {
                         self.saved.phase = Phase::Branch;
                         return Ok(());
                     }
                     let mut selected = None;
-                    for outcome in &self.beat()?.outcomes {
-                        if self.matches(outcome.when.as_ref())? {
+                    for outcome in self.beat()?.outcomes.clone() {
+                        let site = TraceSite { outcome: Some(outcome.id.clone()), ..self.site() };
+                        if self.matches_at(outcome.when.as_ref(), site)? {
                             selected = Some(outcome.clone());
                             break;
                         }
                     }
                     let outcome =
                         selected.ok_or_else(|| Error::NoMatch(self.saved.beat.clone()))?;
-                    Action::Transition(outcome.effects, outcome.to)
+                    Action::Transition(
+                        outcome.effects,
+                        outcome.to,
+                        TraceSite { outcome: Some(outcome.id), ..self.site() },
+                    )
                 }
-                Action::Transition(effects, to) => {
-                    if self.prepare_transition(&effects, to.clone())? {
+                Action::Transition(effects, to, site) => {
+                    self.record(site.clone(), TraceEvent::Transition { to: to.clone() });
+                    if self.prepare_transition(&effects, to.clone(), site)? {
                         return Ok(());
                     }
                     Action::Target(to)
@@ -516,12 +584,18 @@ impl Runtime {
     }
 
     /// True means commands are pending; false means the driver can follow to.
-    fn prepare_transition(&mut self, effects: &[Effect], to: Target) -> Result<bool> {
+    fn prepare_transition(
+        &mut self,
+        effects: &[Effect],
+        to: Target,
+        site: TraceSite,
+    ) -> Result<bool> {
         self.validate_target(&to)?;
         let mut state = self.saved.state.clone();
         let mut commands = Vec::new();
         let mut sequence = self.saved.command_sequence;
-        for effect in effects {
+        for (index, effect) in effects.iter().enumerate() {
+            let before = trace::effect_values(&state, effect);
             match effect {
                 Effect::Set(a) => {
                     let value = operand(&a.value, &state)?;
@@ -551,13 +625,27 @@ impl Runtime {
                     commands.push(ResolvedCommand {
                         token: format!(
                             "{}:{}:{sequence}",
-                            self.saved.run_id, self.saved.graph_hash
+                            self.saved.run_id,
+                            self.saved
+                                .command_graph_hash
+                                .as_deref()
+                                .unwrap_or(&self.saved.graph_hash)
                         ),
                         name: c.name.clone(),
                         args,
+                        site: Some(site.clone()),
                     });
                 }
             }
+            self.record(
+                site.clone(),
+                TraceEvent::Effect {
+                    index,
+                    effect: effect.clone(),
+                    before,
+                    after: trace::effect_values(&state, effect),
+                },
+            );
         }
         self.saved.state = state;
         self.saved.command_sequence = sequence;
@@ -571,7 +659,11 @@ impl Runtime {
 
     fn valid_token(&self, token: &str) -> bool {
         token
-            .strip_prefix(&format!("{}:{}:", self.saved.run_id, self.saved.graph_hash))
+            .strip_prefix(&format!(
+                "{}:{}:",
+                self.saved.run_id,
+                self.saved.command_graph_hash.as_deref().unwrap_or(&self.saved.graph_hash)
+            ))
             .and_then(|n| n.parse::<u64>().ok())
             .is_some_and(|n| n > 0 && n <= self.saved.command_sequence)
     }
@@ -606,49 +698,5 @@ fn operand(value: &Operand, state: &State) -> Result<Value> {
 /// Evaluation is deterministic and short-circuits left-to-right. The compiler
 /// has already checked operand types; this also rejects invalid mixed values.
 pub fn evaluate(condition: &Condition, state: &State) -> Result<bool> {
-    match condition {
-        Condition::Always => Ok(true),
-        Condition::Never => Ok(false),
-        Condition::Not(inner) => Ok(!evaluate(inner, state)?),
-        Condition::All(items) => {
-            for item in items {
-                if !evaluate(item, state)? {
-                    return Ok(false);
-                }
-            }
-            Ok(true)
-        }
-        Condition::Any(items) => {
-            for item in items {
-                if evaluate(item, state)? {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
-        }
-        Condition::Compare(cmp) => {
-            let left =
-                state.get(&cmp.var).ok_or_else(|| Error::MissingState(cmp.var.to_string()))?;
-            let right = operand(&cmp.value, state)?;
-            if left.kind_name() != right.kind_name() {
-                return Err(Error::InvalidState(cmp.var.to_string()));
-            }
-            match cmp.op {
-                CompareOp::Eq => Ok(left == &right),
-                CompareOp::Ne => Ok(left != &right),
-                op => {
-                    let (Value::Int(a), Value::Int(b)) = (left, right) else {
-                        return Err(Error::InvalidState(cmp.var.to_string()));
-                    };
-                    Ok(match op {
-                        CompareOp::Lt => *a < b,
-                        CompareOp::Le => *a <= b,
-                        CompareOp::Gt => *a > b,
-                        CompareOp::Ge => *a >= b,
-                        _ => unreachable!(),
-                    })
-                }
-            }
-        }
-    }
+    trace::evaluate_recording(condition, state, &mut Vec::new(), &mut |_| {})
 }

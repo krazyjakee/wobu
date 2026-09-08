@@ -3,13 +3,13 @@ import type {
   CompileDiagnostic,
   PreviewFrame,
   PreviewGraph,
-  PreviewState,
+  ExecutionTrace,
 } from '../../lib/api/narrativePreview'
 
 export interface PreviewSession {
   graph: PreviewGraph
   frame: PreviewFrame
-  trace: { label: string; state: PreviewState }[]
+  trace: { label: string; execution: ExecutionTrace }[]
   bookmark?: PreviewFrame
 }
 export const usePreviewSessions = create<{

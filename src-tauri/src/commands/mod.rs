@@ -127,3 +127,5 @@ pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
 pub mod narrative_world;
 
 pub mod narrative_preview;
+
+pub mod narrative_export;

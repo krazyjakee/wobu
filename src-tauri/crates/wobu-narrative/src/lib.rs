@@ -69,3 +69,6 @@ pub use world::{
     Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, Quest, QuestTransition,
     Relationship, WorldDiagnostic, WorldDocument, WorldEvent,
 };
+
+mod source_paths;
+pub use source_paths::SourcePathPart;

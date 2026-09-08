@@ -46,12 +46,10 @@ describe('what the view says about where its arc came from', () => {
   })
 
   it('says separately that the quests are not read from the project', () => {
-    // Two different claims. The scenes are a fixture because this build has no
-    // narrative storage; the quests are a fixture because the quest model does
-    // not exist, and would still be one the day storage lands.
+    // The demonstration arc remains explicit even though project quests can be authored.
     render(<NarrativeFlowView />)
     expect(document.getElementById('nrt-quests-unavailable')).toHaveTextContent(
-      /Grouping uses demonstration quests\. Quests are not in this build/,
+      /Grouping uses demonstration quests\. Quest membership is available in the Scene library/,
     )
   })
 

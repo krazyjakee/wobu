@@ -30,3 +30,16 @@
   cursor: pointer;
   padding: 8px 0;
 }
+.nrt-preview-trace {
+  max-height: 480px;
+  overflow: auto;
+  padding-left: 24px;
+}
+.nrt-preview-trace li {
+  padding: 8px 0;
+}
+.nrt-preview-trace ol {
+  border-left: 2px solid var(--border);
+  margin: 8px 0;
+  padding-left: 24px;
+}

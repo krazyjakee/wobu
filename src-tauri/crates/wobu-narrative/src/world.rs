@@ -157,7 +157,7 @@ pub struct WorldDiagnostic {
 impl WorldDocument {
     pub fn parse(yaml: &str) -> Result<Self> {
         check_version(yaml)?;
-        serde_norway::from_str(yaml).map_err(|error| Error::from_yaml(&error))
+        crate::source::parse_yaml(yaml)
     }
 
     pub fn to_yaml(&self) -> Result<String> {
@@ -167,7 +167,7 @@ impl WorldDocument {
                 supported: SOURCE_SCHEMA_VERSION,
             });
         }
-        serde_norway::to_string(self).map_err(|error| Error::from_yaml(&error))
+        crate::source::print_yaml(self)
     }
 
     /// Names are presentation. Identity and references survive changing the name.

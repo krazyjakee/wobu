@@ -17,9 +17,9 @@ dependency cannot be added without its notice arriving with it.
 | | |
 | --- | --- |
 | Rust crates linked into the binary | 747 |
-| npm packages bundled into the frontend | 36 |
-| npm packages used only to build and test Wobu | 378 |
-| Distinct licence texts reproduced below | 409 |
+| npm packages bundled into the frontend | 37 |
+| npm packages used only to build and test Wobu | 377 |
+| Distinct licence texts reproduced below | 410 |
 
 The build-and-test packages are listed for completeness. Their code is not in
 the installer, so their notices are not reproduced in full.
@@ -34,7 +34,7 @@ the installer, so their notices are not reproduced in full.
 | MIT/Apache-2.0 | 33 |
 | Zlib OR Apache-2.0 OR MIT | 22 |
 | Unicode-3.0 | 18 |
-| ISC | 13 |
+| ISC | 14 |
 | BSD-3-Clause | 7 |
 | MPL-2.0 | 6 |
 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 5 |
@@ -889,8 +889,9 @@ one of these and not publishing the patch is not.
 | scheduler | 0.27.0 | MIT | [407] |
 | three | 0.185.1 | MIT | [408] |
 | use-sync-external-store | 1.6.0 | MIT | [407] |
-| zustand | 4.5.7 | MIT | [409] |
-| zustand | 5.0.14 | MIT | [409] |
+| yaml | 2.9.0 | ISC | [409] |
+| zustand | 4.5.7 | MIT | [410] |
+| zustand | 5.0.14 | MIT | [410] |
 
 ## npm packages used only to build and test Wobu
 
@@ -1272,7 +1273,6 @@ Not redistributed. Listed so the notice covers the whole lockfile.
 | xml-name-validator | 5.0.0 | Apache-2.0 |
 | xmlchars | 2.2.0 | MIT |
 | yallist | 3.1.1 | ISC |
-| yaml | 2.9.0 | ISC |
 | yocto-queue | 0.1.0 | MIT |
 | zod | 4.4.3 | MIT |
 | zod-validation-error | 4.0.2 | MIT |
@@ -24822,7 +24822,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### [409] zustand 4.5.7, zustand 5.0.14
+### [409] yaml 2.9.0
+
+```
+Copyright Eemeli Aro <eemeli@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+```
+
+### [410] zustand 4.5.7, zustand 5.0.14
 
 ```
 MIT License

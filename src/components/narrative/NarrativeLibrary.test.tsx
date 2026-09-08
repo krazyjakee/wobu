@@ -100,6 +100,19 @@ describe('Scene library', () => {
     expect(screen.getByRole('button', { name: 'New scene' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Open Council hearing in Flow' })).toBeEnabled()
   })
+  it('opens unidentifiable on-disk source for repair without inventing a scene ID', () => {
+    const onRepair = vi.fn()
+    renderLibrary({
+      rows: [],
+      catalog: {
+        scenes: [],
+        unreadable: [{ rel: 'narrative/scenes/broken.yaml', reason: 'invalid YAML' }],
+      },
+      onRepair,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Repair source' }))
+    expect(onRepair).toHaveBeenCalledWith('narrative/scenes/broken.yaml')
+  })
   it('recovers malformed saved preferences', () => {
     localStorage.setItem('wobu:narrative-library:v1:/world', '{broken')
     renderLibrary()

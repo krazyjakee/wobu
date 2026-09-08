@@ -106,10 +106,11 @@ describe('Narrative discovery and editor handoff', () => {
     expect(screen.queryByRole('navigation', { name: 'Current scene outline' })).toBeNull()
     expect(screen.queryByRole('complementary', { name: 'Narrative context' })).toBeNull()
   })
-  it('keeps unimplemented review, compilation and export explicit', () => {
+  it('keeps unimplemented review and builds explicit while enabling native export', () => {
     renderMode()
-    for (const name of ['Review', 'Build…', 'Export…'])
+    for (const name of ['Review', 'Build…'])
       expect(screen.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('button', { name: 'Export…' })).toBeEnabled()
     expect(screen.getByRole('contentinfo', { name: 'Narrative diagnostics' })).toHaveTextContent(
       'Branch reachability has not been checked',
     )

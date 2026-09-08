@@ -2,8 +2,8 @@
 
 The `wobu-narrative-compiler` and `wobu-narrative-runtime` crates implement the pure Rust
 foundation for #158 and #159. They do not perform generation, open files, use Tauri or access a
-provider. Engine adapters, portable export packaging and cross-language conformance are N5 work
-and are intentionally excluded from this implementation.
+provider. Engine adapters and cross-language conformance are N5 work and are intentionally excluded.
+Portable export packaging is tracked separately in #160.
 
 ## Compilation
 
@@ -107,10 +107,46 @@ variable domains, cursor, visits and pending command signatures before exposing 
 Line, Choices, each pending command and End resume at the same boundary without reapplying effects.
 Snapshots are not a signed anti-tampering format; hosts own save integrity and size limits.
 
-Different graph content or versions are rejected. There is currently no automatic migration and no
-migration callback API. An explicit, reviewed save migration facility remains an open #159 criterion;
-restarting a scenario is not a substitute for migrating an existing game save. No cross-language
-save compatibility or engine execution has been implemented or claimed.
+Different graph content or versions are rejected by ordinary `restore`. Content migration is an
+explicit opt-in API: `Runtime::restore_with_migration(old_graph, new_graph, snapshot, hook)` validates
+the original save against its original graph before calling the hook. The hook receives a `Migration`
+plan with exact source/target graph hashes, state, cursor, selected variant and visit history. It may
+add or transform state, map stable cursor identities and deliberately remove obsolete visit entries.
+Changing either expected graph hash fails. The result then passes the same complete restore validation
+against the new graph, including its state schema. Unsupported graph/snapshot protocol versions remain
+rejected; this is a content migration hook, not an unchecked deserialization escape hatch.
+
+Pending commands and successful acknowledgement records cannot be edited through the hook. Migration
+preserves their original playthrough token namespace and captured arguments, so a previously performed
+external operation does not acquire a new identity. Pending command signatures/destinations and saved
+host results must still validate in the target graph; incompatible changes fail rather than replaying
+side effects. Ordinary save/restore and repeated acknowledgements continue to work after migration.
+The hook exists in the pure Rust API; desktop Preview checkpoints stay pinned to their compiled graph
+and do not silently migrate when source is edited.
+
+## Decision and effect traces
+
+`Runtime::trace()` returns the most recent action's `ExecutionTrace`. Each record contains stable
+scene, beat and applicable choice/outcome/slot/variant IDs. Condition records describe the exact
+expression, result and path within a nested expression; comparison leaves include the actual input
+values they read. Short-circuited subexpressions produce no record. Transition records identify the
+route actually taken, separately from conditions that merely passed. Ordered effect records include
+the authored effect and before/after values for the variables it reads or writes. Command result
+records capture failure/cancellation/success, host state changes and repeated acknowledgement status.
+
+A failed transaction leaves the runtime snapshot unchanged and marks its trace `committed: false`
+with the error. Any tentative effect values in that trace were rolled back. Traces are observational:
+reading `current()` does not append decisions or replay effects. They are returned separately from
+snapshots, so restoring a checkpoint starts a new trace boundary. At most 2,048 records are retained
+per action; `omitted` explicitly counts later records and the UI labels the trace as incomplete.
+Effect records contain only relevant variables to avoid duplicating the entire world per effect.
+The desktop keeps the latest 100 action traces, with scrollable history and links into Script.
+
+While paused at a host command, Preview offers success, failure and cancellation controls. Success
+may return typed host-owned values using the paused graph's schema, even if saved source changes
+meanwhile. Rust validates output ownership, domains and transport integer limits. Failure and
+cancellation retain the pending command and its token, and display the error and rollback trace for
+an explicit retry. No Preview result performs a host game action or writes canonical project state.
 
 ## Desktop Preview boundary
 
@@ -133,4 +169,5 @@ ordered effects and captured command arguments, host ownership, invalid actions,
 entry conditions and cross-scene transitions, no-match, bounded loops, scenario overrides and save
 roundtrips at every yield. They also exercise command failure/cancellation, duplicate acknowledgements,
 invalid host results and incompatible/tampered snapshot fields. These are reference Rust tests;
-N5 engine fixtures and native-engine validation remain excluded.
+N5 engine fixtures and native-engine validation remain excluded. The separate
+[native Wobu walkthrough](21-native-narrative-preview.md) records desktop validation and its evidence.

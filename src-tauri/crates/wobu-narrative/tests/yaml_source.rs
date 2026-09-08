@@ -267,3 +267,48 @@ scene:
     assert_eq!(scene.beats[0].choices[0].effects.len(), 2);
     assert!(scene.destination_issues(&wobu_narrative::SceneCatalog::unknown()).is_empty());
 }
+
+#[test]
+fn nested_conditions_write_canonical_maps_and_read_mixed_legacy_tags() {
+    use wobu_narrative::{CompareOp, Comparison, Condition, Name, Operand, Value};
+    let mut scene = council_hearing().scene;
+    scene.entry = Some(Condition::Not(Box::new(Condition::Compare(Comparison {
+        var: Name::new("has_logbook").unwrap(),
+        op: CompareOp::Eq,
+        value: Operand::Literal(Value::Bool(true)),
+    }))));
+    let document = SceneDocument::new(scene);
+    let yaml = document.to_yaml().unwrap();
+    assert!(yaml.contains("not:\n"));
+    assert!(!yaml.contains("!compare"));
+    assert_eq!(SceneDocument::parse(&yaml).unwrap(), document);
+    let mixed = yaml.replace("not:\n      compare:", "not: !compare");
+    assert_ne!(mixed, yaml);
+    assert_eq!(SceneDocument::parse(&mixed).unwrap(), document);
+    assert_eq!(SceneDocument::parse(&mixed).unwrap().to_yaml().unwrap(), yaml);
+    assert!(SceneDocument::parse(&mixed.replace("var: has_logbook", "typo: has_logbook")).is_err());
+}
+
+#[test]
+fn state_enum_and_integer_declarations_normalize_legacy_tags_without_changing_values() {
+    let legacy = "schema_version: 1\nvariables:\n- name: trust\n  type: !int {min: -100, max: 100}\n  default: -17\n- name: quest\n  type: !enum {members: [started, finished]}\n  default: started\n";
+    let document = StateDocument::parse(legacy).unwrap();
+    let yaml = document.to_yaml().unwrap();
+    assert!(yaml.contains("int:"));
+    assert!(yaml.contains("enum:"));
+    assert!(!yaml.contains("!int"));
+    assert_eq!(StateDocument::parse(&yaml).unwrap(), document);
+    assert_eq!(StateDocument::parse(&yaml).unwrap().to_yaml().unwrap(), yaml);
+    assert!(StateDocument::parse(&yaml.replace("min:", "minimum:")).is_err());
+}
+
+#[test]
+fn a_bad_legacy_payload_reports_the_field_instead_of_rejecting_its_valid_tag() {
+    let source = "schema_version: 1\nscene:\n  id: 01J00000000000000000000001\n  name: Council\n  entry: !compare\n    var: has_logbook\n    op: eq\n    typo: !literal true\n";
+    let error = SceneDocument::parse(source).unwrap_err();
+    assert!(error.to_string().contains("unknown field `typo`"), "{error}");
+    let Error::Source { location: Some(location), .. } = error else {
+        panic!("located error required")
+    };
+    assert_eq!(location.line, 8);
+}
