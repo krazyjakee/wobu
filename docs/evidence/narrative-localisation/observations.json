@@ -1,0 +1,745 @@
+{
+  "platform": "Native Tauri 2 GTK/WebKit on Linux, DISPLAY :97",
+  "fixture": "wobu-store localisation_fixture example; Harbor Voices, all six supporting text types",
+  "source_strings": 20,
+  "initial_source_ready": true,
+  "initial_french_approved": 0,
+  "initial_arabic_approved": 20,
+  "german_partial_imported": 15,
+  "old_guard_applied": [],
+  "old_guard_diagnostic_codes": ["missing_id", "translation_conflict"],
+  "export": {
+    "rows": 20,
+    "csv_file": "/tmp/wobu-178-native-fixture/native-fr-export.csv.csv",
+    "csv_deterministic": true,
+    "json_deterministic": true,
+    "placeholder_rows": ["00000000000000000000000164"]
+  },
+  "rtl": {
+    "width": 1440,
+    "height": 900,
+    "sheet": {
+      "tag": "DIV",
+      "role": "dialog",
+      "label": null,
+      "text": "LocalisationExport approved, current, locked source wording. Imported translations begin Draft; approval is a separate decision. Source unlocks and edits retain earlier versions and withdraw freshness.Locale Language[-Script][-REGION]. Source locale:",
+      "id": "",
+      "rect": {
+        "x": 170,
+        "y": 23,
+        "width": 1100,
+        "height": 854
+      },
+      "tabIndex": -1
+    },
+    "section": {
+      "tag": "SECTION",
+      "role": null,
+      "label": null,
+      "text": "LocalisationExport approved, current, locked source wording. Imported translations begin Draft; approval is a separate decision. Source unlocks and edits retain earlier versions and withdraw freshness.Locale Language[-Script][-REGION]. Source locale:",
+      "id": "",
+      "rect": {
+        "x": 171,
+        "y": 24,
+        "width": 1098,
+        "height": 852
+      },
+      "tabIndex": -1,
+      "scrollWidth": 1089,
+      "clientWidth": 1089
+    },
+    "translations": [
+      {
+        "text": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "direction": "rtl"
+      },
+      {
+        "text": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "direction": "rtl"
+      }
+    ],
+    "theme": "dark",
+    "bg": "rgb(13, 14, 18)",
+    "errors": []
+  },
+  "minimum": {
+    "width": 960,
+    "height": 620,
+    "sheet": {
+      "tag": "DIV",
+      "role": "dialog",
+      "label": null,
+      "text": "LocalisationExport approved, current, locked source wording. Imported translations begin Draft; approval is a separate decision. Source unlocks and edits retain earlier versions and withdraw freshness.Locale Language[-Script][-REGION]. Source locale:",
+      "id": "",
+      "rect": {
+        "x": 16,
+        "y": 23,
+        "width": 928,
+        "height": 574
+      },
+      "tabIndex": -1
+    },
+    "section": {
+      "tag": "SECTION",
+      "role": null,
+      "label": null,
+      "text": "LocalisationExport approved, current, locked source wording. Imported translations begin Draft; approval is a separate decision. Source unlocks and edits retain earlier versions and withdraw freshness.Locale Language[-Script][-REGION]. Source locale:",
+      "id": "",
+      "rect": {
+        "x": 17,
+        "y": 24,
+        "width": 926,
+        "height": 572
+      },
+      "tabIndex": -1,
+      "scrollWidth": 917,
+      "clientWidth": 917
+    },
+    "translations": [
+      {
+        "text": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "direction": "rtl"
+      },
+      {
+        "text": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "direction": "rtl"
+      }
+    ],
+    "theme": "light",
+    "bg": "rgb(238, 235, 230)",
+    "errors": []
+  },
+  "minimum_150": {
+    "width": 960,
+    "height": 620,
+    "sheet": {
+      "tag": "DIV",
+      "role": "dialog",
+      "label": null,
+      "text": "LocalisationExport approved, current, locked source wording. Imported translations begin Draft; approval is a separate decision. Source unlocks and edits retain earlier versions and withdraw freshness.Locale Language[-Script][-REGION]. Source locale:",
+      "id": "",
+      "rect": {
+        "x": 24,
+        "y": 35,
+        "width": 912,
+        "height": 550
+      },
+      "tabIndex": -1
+    },
+    "section": {
+      "tag": "SECTION",
+      "role": null,
+      "label": null,
+      "text": "LocalisationExport approved, current, locked source wording. Imported translations begin Draft; approval is a separate decision. Source unlocks and edits retain earlier versions and withdraw freshness.Locale Language[-Script][-REGION]. Source locale:",
+      "id": "",
+      "rect": {
+        "x": 25,
+        "y": 36,
+        "width": 910,
+        "height": 548
+      },
+      "tabIndex": -1,
+      "scrollWidth": 598,
+      "clientWidth": 598
+    },
+    "translations": [
+      {
+        "text": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "direction": "rtl"
+      },
+      {
+        "text": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "direction": "rtl"
+      }
+    ],
+    "theme": "dark",
+    "bg": "rgb(13, 14, 18)",
+    "errors": []
+  },
+  "themes": {
+    "dark": {
+      "theme": "dark",
+      "bg": "#0d0e12",
+      "bodyBg": "rgb(13, 14, 18)"
+    },
+    "light": {
+      "theme": "light",
+      "bg": "#eeebe6",
+      "bodyBg": "rgb(238, 235, 230)"
+    }
+  },
+  "no_provider_calls": true,
+  "verification_limit": "No N5 engine adapters or live translation provider quality claims.",
+  "backend_final_commit": "6aad208",
+  "rtl_frontend_commit": "7824d00",
+  "source_id": "00000000000000000000000164",
+  "release_ready": {
+    "diagnostics": [],
+    "localeDiagnostics": [],
+    "payloadHash": "343ca5db29d2967ac1c7a91f2e115b7ef0186e04b7b171b24e2eb5ffd0f4d298",
+    "scenes": 0,
+    "strings": 20,
+    "bytes": 14704
+  },
+  "release_missing_locale": {
+    "diagnostics": [],
+    "localeDiagnostics": [
+      {
+        "id": "00000000000000000000000104",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000107",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000110",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000113",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000124",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000126",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000128",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000131",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000133",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000135",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000144",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000147",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000164",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000166",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000184",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000187",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000190",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000204",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000207",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000210",
+        "code": "missing_translation",
+        "message": "de-CH: current approved translation required; fallback is disabled."
+      }
+    ],
+    "payloadHash": null,
+    "scenes": 0,
+    "strings": 0,
+    "bytes": 0
+  },
+  "release_fallback": {
+    "diagnostics": [],
+    "localeDiagnostics": [
+      {
+        "id": "00000000000000000000000104",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000107",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000110",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000113",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted de fallback."
+      },
+      {
+        "id": "00000000000000000000000124",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000126",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000128",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000131",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000133",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000135",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000144",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000147",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000164",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000166",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000184",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000187",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000190",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000204",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000207",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000210",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      }
+    ],
+    "payloadHash": "8413af49249552efc42c4fa7da7e03535b6f066615ac23da313345d0dc5bad7f",
+    "scenes": 0,
+    "strings": 20,
+    "bytes": 17298
+  },
+  "native_package_fallback": {
+    "origins": {
+      "en": 19,
+      "de": 1
+    },
+    "manifest": {
+      "format": "wobu-narrative",
+      "version": 1,
+      "graph_version": 1,
+      "profile": "release",
+      "locale": "en",
+      "required_capabilities": {
+        "deterministic_graph": 1,
+        "localisation": 1,
+        "separate_strings": 1,
+        "supporting_text": 1
+      },
+      "files": {
+        "graph.json": {
+          "bytes": 5334,
+          "hash": "27f4f45ec2bc71103d3f848fdbbda27727a2728b4845dc8fae313a7a1fb6af9b"
+        },
+        "locales.json": {
+          "bytes": 8743,
+          "hash": "1e537f5cb0183b7e35ed96751a0e4d9b37fb486753fcbb9a4fb899ad5c044fee"
+        },
+        "media.json": {
+          "bytes": 2,
+          "hash": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279"
+        },
+        "state.json": {
+          "bytes": 237,
+          "hash": "012216b817b40fc3054fdb9fd6c6be2daf401af0946f535d61fda0988ce08fe5"
+        },
+        "strings/en.json": {
+          "bytes": 2982,
+          "hash": "a092ccfe329c64867b393b16cb111b47666e7fd7af7941a84de96dcf7c334109"
+        }
+      },
+      "payload_hash": "8413af49249552efc42c4fa7da7e03535b6f066615ac23da313345d0dc5bad7f"
+    },
+    "named_arabic": {
+      "locale": "ar",
+      "forms": {
+        "one": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً».",
+        "other": "{name}، لديك {count:number} أضواء في الميناء.\nقال الحارس: «أهلاً»."
+      }
+    }
+  },
+  "development_source_locale": {
+    "check": {
+      "diagnostics": [],
+      "localeDiagnostics": [
+        {
+          "id": "00000000000000000000000104",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000107",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000110",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000113",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000124",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000126",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000128",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000131",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000133",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000135",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000144",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000147",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000164",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000166",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000184",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000187",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000190",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000204",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000207",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        },
+        {
+          "id": "00000000000000000000000210",
+          "code": "missing_translation",
+          "message": "ja: current approved translation required; fallback is disabled."
+        }
+      ],
+      "payloadHash": "fe68c8365dfa78e701e6252b07bcb39d110b5b258a2f7896203cfae67bf23027",
+      "scenes": 0,
+      "strings": 20,
+      "bytes": 8636
+    },
+    "report": {
+      "destination": "/tmp/wobu-178-native-fixture/native-development-fr-source",
+      "payloadHash": "fe68c8365dfa78e701e6252b07bcb39d110b5b258a2f7896203cfae67bf23027",
+      "scenes": 0,
+      "strings": 20,
+      "bytes": 8636
+    },
+    "manifest": {
+      "format": "wobu-narrative",
+      "version": 1,
+      "graph_version": 1,
+      "profile": "development",
+      "locale": "fr",
+      "required_capabilities": {
+        "deterministic_graph": 1,
+        "localisation": 1,
+        "separate_strings": 1,
+        "supporting_text": 1
+      },
+      "files": {
+        "graph.json": {
+          "bytes": 5338,
+          "hash": "1d89068dee590996bce37f73ad4e6d89c9d1f5e61a910afd95078a1b987e6f8a"
+        },
+        "locales.json": {
+          "bytes": 77,
+          "hash": "e3d3fbe49356425386d5fc6fc842c889877ec7e0e53a7bf54b77798e8aff692a"
+        },
+        "media.json": {
+          "bytes": 2,
+          "hash": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279"
+        },
+        "state.json": {
+          "bytes": 237,
+          "hash": "012216b817b40fc3054fdb9fd6c6be2daf401af0946f535d61fda0988ce08fe5"
+        },
+        "strings/fr.json": {
+          "bytes": 2982,
+          "hash": "a092ccfe329c64867b393b16cb111b47666e7fd7af7941a84de96dcf7c334109"
+        }
+      },
+      "payload_hash": "fe68c8365dfa78e701e6252b07bcb39d110b5b258a2f7896203cfae67bf23027"
+    }
+  },
+  "production_filter": {
+    "rows": 1
+  },
+  "freshness": {
+    "original_revision": "81feab86c53d3325820d8c58f51d228f",
+    "edited_revision": "ec0be3df311b16b785c8d89e9268fb24",
+    "unlocked_not_ready": true,
+    "unlock_changes_guard": true,
+    "relocked_ready": true,
+    "relocking_keeps_changed_guard": true,
+    "unlock_history_preserved": true,
+    "edit_history_preserved": true,
+    "fresh_french_history_versions": 4,
+    "fresh_french_approved": true
+  },
+  "final_release_stale_ar": {
+    "diagnostics": [],
+    "localeDiagnostics": [
+      {
+        "id": "00000000000000000000000164",
+        "code": "missing_translation",
+        "message": "ar: current approved translation required; fallback is disabled."
+      },
+      {
+        "id": "00000000000000000000000104",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000107",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000110",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000113",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted de fallback."
+      },
+      {
+        "id": "00000000000000000000000124",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000126",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000128",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000131",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000133",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000135",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000144",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000147",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000164",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000166",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000184",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000187",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000190",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000204",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000207",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      },
+      {
+        "id": "00000000000000000000000210",
+        "code": "fallback",
+        "message": "de-CH: using explicitly permitted en fallback."
+      }
+    ],
+    "payloadHash": null,
+    "scenes": 0,
+    "strings": 0,
+    "bytes": 0
+  },
+  "handback": {
+    "width": 1440,
+    "height": 900,
+    "sheet": null,
+    "section": null,
+    "translations": [],
+    "theme": "dark",
+    "bg": "rgb(13, 14, 18)",
+    "errors": []
+  },
+  "benchmark_limit": "Functional checks ran while combined Rust gates were active; no quiet timing claims."
+}

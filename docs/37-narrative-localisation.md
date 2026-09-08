@@ -108,8 +108,9 @@ French rows, inspect Release, then unlock source and observe retained stale tran
 
 Unity, Godot, Unreal, Yarn and cross-language adapter conformance are excluded N5 work. The Rust
 reference/package fixtures establish the native contract; they do not satisfy an engine-adapter-only
-verification requirement. Native screenshots and observed walkthrough results belong in the
-integration evidence record, separately from browser fixture tests.
+verification requirement. The [native acceptance record](evidence/narrative-localisation/README.md) includes real export,
+partial import, approval, RTL, source freshness and Release/fallback results, separately from browser
+fixture tests.
 
 Translation paragraphs use the locale's explicit script, or `Intl.Locale.maximize()` likely
 script, for direction. Where available, the webview's locale text-info API supplies direction;
