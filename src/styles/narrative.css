@@ -971,7 +971,7 @@
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  box-shadow: 0 12px 32px #0005;
+  box-shadow: var(--shadow-1);
 }
 .nrt-flow-bar {
   position: relative;
@@ -988,11 +988,11 @@
   pointer-events: auto;
   position: absolute;
   padding: 10px;
-  border: 1px solid #bb9656;
+  border: 1px solid var(--border-str);
   border-radius: 6px;
-  background: #eadcb5;
-  color: #352f23;
-  box-shadow: 0 3px 12px #0003;
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
 }
 .nrt-pinned-note textarea {
   width: 100%;
