@@ -38,6 +38,10 @@ function file(over: Partial<SceneFile> & { scene: Scene }): SceneFile {
   }
 }
 
+function typingScene(title: string): SceneFile {
+  return file({ scene: scene({ id: 's1', beats: [beat({ id: 'b1', title })] }) })
+}
+
 /** An entry with only the fields a given test cares about spelled out. */
 function entry(over: Partial<UndoEntry> & { subjectId: string }): NewEntry {
   return {
@@ -406,7 +410,7 @@ describe('narrative source on the same stack as nodes', () => {
 
     expect(fromCanvas).toEqual(fromForm)
     expect(fromCanvas?.undo).toEqual([
-      { type: 'sceneSave', scene: before.scene, slug: before.slug },
+      { type: 'sceneSave', scene: before.scene, slug: before.slug, expected: wired },
     ])
     expect(fromCanvas?.label).toContain('branch change')
   })
@@ -507,6 +511,41 @@ describe('narrative source on the same stack as nodes', () => {
     const { push } = useUndoStack.getState()
     push(entry({ subjectId: 'kell', coalesce: true, at: 1000 }))
     push(entry({ subjectId: 's1', coalesce: true, at: 1100 }))
+    expect(useUndoStack.getState().past).toHaveLength(2)
+  })
+
+  it('undoes and redoes coalesced scene typing with guards for the whole run', async () => {
+    const original = typingScene('C')
+    const middle = typingScene('Co')
+    const final = typingScene('Council')
+    const { push, undo, redo } = useUndoStack.getState()
+    push({ ...sceneEditEntry(original, middle)!, at: 1000 })
+    push({ ...sceneEditEntry(middle, final)!, at: 1100 })
+    expect(useUndoStack.getState().past).toHaveLength(1)
+    let saved = final.scene
+    const guardedSave = async (cmd: WorldCommand) => {
+      if (cmd.type !== 'sceneSave') throw new Error('Expected a scene restore')
+      if (JSON.stringify(saved) !== JSON.stringify(cmd.expected)) throw new Error('Conflict')
+      saved = cmd.scene
+    }
+    await undo(guardedSave)
+    expect(saved).toEqual(original.scene)
+    await redo(guardedSave)
+    expect(saved).toEqual(final.scene)
+    saved = { ...saved, summary: 'A collaborator added this' }
+    await expect(undo(guardedSave)).rejects.toThrow('Conflict')
+    expect(saved.summary).toBe('A collaborator added this')
+    expect(useUndoStack.getState().past).toHaveLength(1)
+  })
+
+  it('does not coalesce scene typing across a collaborator change', () => {
+    const original = typingScene('C')
+    const first = typingScene('Co')
+    const peer = { ...first, scene: { ...first.scene, summary: 'Peer notes' } }
+    const last = { ...peer, scene: { ...peer.scene, beats: typingScene('Council').scene.beats } }
+    const { push } = useUndoStack.getState()
+    push({ ...sceneEditEntry(original, first)!, at: 1000 })
+    push({ ...sceneEditEntry(peer, last)!, at: 1100 })
     expect(useUndoStack.getState().past).toHaveLength(2)
   })
 })
