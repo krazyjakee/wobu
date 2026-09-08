@@ -2,7 +2,7 @@
 
 Status: **In progress**. Flow, scene discovery and manual Script/Source are merged. The current
 increment adds attributed World state, typed scene forms, deterministic compiler/runtime
-foundations and isolated Preview. Full acceptance, generation and production workflows remain
+foundations, isolated Preview and cancellable prose-generation jobs. Full editorial acceptance and production workflows remain
 in progress or planned; N5 engine integrations are excluded from current work. See
 [current authoring scope and evidence](19-narrative-authoring.md).
 GitHub milestones and issues below track the remaining acceptance criteria.
@@ -364,7 +364,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Multiple-quest arc grouping, route overlays and native acceptance (#187/#188/#186). |
 | Separate layout | Sidecars stay outside source fingerprints, including world source. | Layout-specific index and peer merging (#185). |
 | Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | Scene-library use of the rebuildable record index, act/tag metadata and real-load benchmarks (#194/#182). |
-| World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); provider jobs remain #164. |
+| World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); [provider jobs](25-narrative-generation.md) now retain separate prose proposals. |
 | Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
 | Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and production recovery (#181). |
 | Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |

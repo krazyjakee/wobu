@@ -6,8 +6,9 @@ once — art style, lore, species, cultures, places — and every image you gene
 that context automatically.
 
 The [narrative system](17-narrative-system.md) now has scene/world authoring, typed dialogue
-structure, source repair, native package export and an isolated deterministic Preview with evaluated traces. Editorial review, generation, production builds
-and engine integrations remain planned; the [authoring guide](19-narrative-authoring.md) records
+structure, source repair, portable sync/recovery, saved scenarios, native packages and isolated
+deterministic Preview. Attributed context and cancellable prose-generation jobs are implemented.
+Editorial review and production builds remain planned; the [authoring guide](19-narrative-authoring.md) records
 the implemented behavior and remaining acceptance. N5 integrations are excluded from current work.
 
 | Doc | What's in it |
@@ -34,6 +35,7 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [22 — Narrative Scenarios](22-narrative-scenarios.md) | Saved Preview runs, partial assertions, offline replay and first-divergence reports |
 | [23 — Narrative Generation Context](23-narrative-context.md) | Speaker knowledge, attributed constraints, bounded frozen inputs and freshness |
 | [24 — Narrative Storage](24-narrative-storage.md) | Canonical records, immutable receipts, publication and rebuildable local indexes |
+| [25 — Narrative Generation](25-narrative-generation.md) | Frozen plans, provider jobs, protected proposals, cancellation, receipts and recovery |
 
 Two constraints shape most of the above and are worth knowing up front:
 

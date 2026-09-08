@@ -180,6 +180,7 @@ record, rather than reusing #192's counts for the changed implementation.
 Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
 (#195), saved regression scenarios (#162), and attributed frozen generation context (#163) are
 implemented alongside portable record indexing, peer sync and explicit recovery (#153).
-Generation jobs/review (#164–#167), incremental analysis
+[Cancellable generation jobs](25-narrative-generation.md) (#164) retain prose proposals and immutable
+receipts. Editorial review/supporting text (#165–#167), incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.
