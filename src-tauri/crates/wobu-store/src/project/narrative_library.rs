@@ -22,7 +22,7 @@ impl Project {
         let mut hashes = BTreeMap::new();
         for (rel, path) in narrative::scene_paths(self.root())? {
             let Some((text, stamp)) = atomic::read_stamped(&path)? else { continue };
-            if existing.get(&rel).is_none_or(|entry| entry.hash != stamp.hash) {
+            if existing.get(&rel).is_none_or(|entry| entry.hash != stamp.hash || !entry.arc_ready) {
                 let entry = narrative::registry::entry(self.root(), &rel, &text, stamp.clone());
                 self.index.upsert_narrative(&entry)?;
             }

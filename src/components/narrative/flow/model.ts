@@ -44,7 +44,15 @@ import type { NarrativeStatus } from '../narrativeModel'
  * all of those, drifting apart from the first commit onwards.
  */
 export type FlowKind =
-  'beat' | 'choice' | 'condition' | 'outcome' | 'end' | 'sceneLink' | 'scene' | 'missing'
+  | 'beat'
+  | 'choice'
+  | 'condition'
+  | 'outcome'
+  | 'end'
+  | 'sceneLink'
+  | 'scene'
+  | 'questStage'
+  | 'missing'
 
 /** The label each kind wears, for its node face and its accessible name. */
 export const FLOW_KIND_LABEL: Record<FlowKind, string> = {
@@ -55,6 +63,7 @@ export const FLOW_KIND_LABEL: Record<FlowKind, string> = {
   end: 'End',
   sceneLink: 'Scene link',
   scene: 'Scene',
+  questStage: 'Quest stage',
   missing: 'Unresolved destination',
 }
 
@@ -71,6 +80,7 @@ export const FLOW_KIND_ICON: Record<FlowKind, string> = {
   end: 'x',
   sceneLink: 'link',
   scene: 'place',
+  questStage: 'folder',
   missing: 'x',
 }
 
@@ -116,6 +126,8 @@ export interface FlowPort {
    * scene the port already is the field.
    */
   via?: string | null
+  routeId?: string
+  choice?: boolean
 }
 
 /** One typed effect on an outcome: `support` `+` `10`. */
@@ -301,8 +313,10 @@ export type FlowDiagnosticCategory =
 export interface FlowSceneNode extends FlowElementBase {
   kind: 'scene'
   participants: string[]
+  participantLabels?: Record<string, string>
   counts: FlowSceneCounts
   questId?: string | null
+  questIds?: string[]
 }
 
 /**
@@ -322,7 +336,14 @@ export interface FlowMissing extends FlowElementBase {
   targetId: string | null
 }
 
+export interface FlowQuestStage extends FlowElementBase {
+  kind: 'questStage'
+  questId: string
+  stage: string
+}
+
 export type FlowElement =
+  | FlowQuestStage
   | FlowBeat
   | FlowChoice
   | FlowCondition
@@ -397,6 +418,7 @@ const OUT_ARITY: Record<FlowKind, number | null> = {
   // A scene has as many exits as somebody authored, and none is also fine: a
   // quest's last scene is a real thing, not a scene missing an exit.
   scene: null,
+  questStage: null,
   missing: 0,
 }
 
@@ -493,6 +515,7 @@ function initialPorts(kind: FlowKind): FlowPort[] {
     case 'end':
     case 'sceneLink':
     case 'scene':
+    case 'questStage':
     case 'missing':
       return []
   }
@@ -537,6 +560,8 @@ export function newElement(scene: FlowScene, kind: FlowKind, groupId?: string | 
         questId: null,
         status: 'needsText',
       }
+    case 'questStage':
+      return { ...base, kind, questId: '', stage: '', derived: true }
     case 'missing':
       return { ...base, kind, targetId: null }
   }

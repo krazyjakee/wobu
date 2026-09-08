@@ -69,20 +69,9 @@ export function useScene(sceneId: string | null): UseQueryResult<SceneFile> {
   })
 }
 
-/**
- * Every scene's whole document, one query per scene.
- *
- * The arc view needs this and cannot avoid it: an arc edge is an *authored*
- * `sceneLink`, which lives on a choice or an outcome inside a scene file, so
- * the only way to know where scenes lead is to read them. #187 forbids the
- * cheap alternative in as many words — nothing may infer an edge from a name,
- * a summary or a line of prose — and a catalog-only arc would have no edges at
- * all.
- *
- * `useQueries` rather than one command that returns everything, and under the
- * *same* key `useScene` uses, so entering a scene from the arc draws instantly
- * from a document that is already cached, and a save updates one entry rather
- * than invalidating a project-sized blob.
+/** Full documents for bounded form callers such as variable-reference inspection.
+ * Arc navigation uses the compact narrative_arc projection and fetches a full
+ * scene only when the writer selects its exit controls or enters it.
  */
 export function useSceneFiles(ids: readonly string[], enabled = true) {
   return useQueries({

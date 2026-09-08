@@ -40,6 +40,7 @@ import {
   OutcomeNode,
   SceneLinkNode,
   SceneNode,
+  QuestStageNode,
   type FlowRFNode,
 } from './FlowNodes'
 import { useFlowLevel, useFlowLevelApi } from './flowStore'
@@ -120,6 +121,7 @@ const NODE_TYPES = {
   end: EndNode,
   sceneLink: SceneLinkNode,
   scene: SceneNode,
+  questStage: QuestStageNode,
   missing: MissingNode,
   group: GroupNode,
   groupFrame: GroupFrameNode,
@@ -562,9 +564,12 @@ function Canvas({
           // Double-click is the nested-flow gesture articy uses and #187 names.
           // The keyboard equivalent is Enter, in `useFlowKeyboard`.
           onNodeDoubleClick={(_event, node) => onActivate?.(node.id)}
+          onConnectStart={(_event, { nodeId }) => {
+            if (nodeId) select(nodeId)
+          }}
           onConnect={onPointerConnect}
           onPaneClick={() => select(null)}
-          nodesConnectable={!sourceDisabled}
+          nodesConnectable={!sourceDisabled && !actions?.connectionsDisabled}
           nodesDraggable={!readOnly}
           // Ours, not React Flow's: an edge is deleted by disconnecting the port
           // that made it, so the diagnostic can name the field.

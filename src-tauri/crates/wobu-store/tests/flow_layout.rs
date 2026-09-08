@@ -380,12 +380,12 @@ fn two_writers_dragging_different_boxes_both_keep_their_move() {
     let mut nadia = project.scene_layout(&file.scene).layout;
 
     // She drags her box and her machine's write lands first.
-    nadia.place(hers, 1000.0, 1000.0);
+    nadia.place(hers.clone(), 1000.0, 1000.0);
     fs::write(layout_path(&project, file.scene.id), serde_json::to_string_pretty(&nadia).unwrap())
         .unwrap();
 
     // We drag ours, from the copy we read before hers arrived.
-    ours.place(mine, 2000.0, 2000.0);
+    ours.place(mine.clone(), 2000.0, 2000.0);
     project.save_scene_layout(&file.scene, &ours).unwrap();
 
     let merged = project.scene_layout(&file.scene).layout;
@@ -403,13 +403,13 @@ fn two_writers_dragging_the_same_box_resolve_to_the_later_edit() {
     let contested = NodeKey::Beat(file.scene.beats[0].id);
 
     let mut nadia = project.scene_layout(&file.scene).layout;
-    nadia.place(contested, 1000.0, 1000.0);
+    nadia.place(contested.clone(), 1000.0, 1000.0);
     nadia.nodes.get_mut(&contested).unwrap().updated_at = Utc::now() + Duration::seconds(30);
     fs::write(layout_path(&project, file.scene.id), serde_json::to_string_pretty(&nadia).unwrap())
         .unwrap();
 
     let mut ours = project.scene_layout(&file.scene).layout;
-    ours.place(contested, 5.0, 5.0);
+    ours.place(contested.clone(), 5.0, 5.0);
     project.save_scene_layout(&file.scene, &ours).unwrap();
 
     let merged = project.scene_layout(&file.scene).layout;
@@ -787,7 +787,7 @@ fn quest_identity_survives_rename_and_prunes_membership_and_unpositioned_anchors
     let mut scene_layout = project.scene_layout(&file.scene).layout;
     let unknown = NodeKey::Beat(wobu_narrative::BeatId::new());
     let mut group = test_group("Deleted branch");
-    group.members.push(unknown);
+    group.members.push(unknown.clone());
     scene_layout.upsert_group(group);
     let mut note = test_note("Keep these review words");
     note.attached_to = Some(unknown);
@@ -906,4 +906,36 @@ fn unsafe_quest_sidecar_cleanup_cannot_fail_or_escape_a_successful_world_save() 
     assert!(project.world_document().unwrap().unwrap().0.quests.is_empty());
     assert!(path.symlink_metadata().unwrap().is_symlink());
     assert_eq!(fs::read_to_string(outside).unwrap(), "retain these bytes");
+}
+
+#[test]
+fn quest_stage_layout_v3_roundtrips_without_a_source_migration_and_guards_future_versions() {
+    let (_dir, mut project, file) = arranged();
+    let (world, quest) = quest_world(file.scene.id);
+    project.save_world(&world, None).unwrap();
+    let before = witness(&project, &file);
+    let key = NodeKey::QuestStage { quest, stage: "open".into() };
+    let mut arrangement = project.quest_layout(quest).layout;
+    arrangement.place(key.clone(), 620.0, 140.0);
+    project.save_quest_layout(&arrangement, quest).unwrap();
+    assert_eq!(project.quest_layout(quest).layout.nodes[&key].x, 620.0);
+    assert_eq!(project.quest_layout(quest).layout.schema_version, 3);
+    assert_eq!(witness(&project, &file), before);
+    let colon = NodeKey::QuestStage { quest, stage: "open: café".into() };
+    assert_eq!(colon.to_string().parse::<NodeKey>().unwrap(), colon);
+    let path = wobu_store::narrative::layout::path_of(project.root(), &arrangement.graph).unwrap();
+    let mut old = arrangement.clone();
+    old.schema_version = 2;
+    old.nodes.clear();
+    let old_bytes = serde_json::to_vec(&old).unwrap();
+    fs::write(&path, &old_bytes).unwrap();
+    assert_eq!(project.quest_layout(quest).layout.schema_version, 2);
+    assert_eq!(fs::read(&path).unwrap(), old_bytes);
+    let future_bytes = b"{\"schemaVersion\":4,\"nodes\":{\"future:key\":{}}}";
+    fs::write(&path, future_bytes).unwrap();
+    assert!(matches!(
+        project.save_quest_layout(&arrangement, quest).unwrap(),
+        LayoutSave::Deferred { found: 4, .. }
+    ));
+    assert_eq!(fs::read(&path).unwrap(), future_bytes);
 }

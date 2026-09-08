@@ -198,6 +198,7 @@ pub fn run() {
             commands::narrative_source::narrative_source_repair,
             commands::narrative_source::narrative_source_check,
             commands::narrative::narrative_scenes,
+            commands::narrative_arc::narrative_arc,
             commands::narrative_library::narrative_library_query,
             commands::narrative_text::narrative_texts,
             commands::narrative_text::narrative_text_get,

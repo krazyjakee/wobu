@@ -142,6 +142,7 @@ pub mod narrative_recovery;
 #[cfg(test)]
 mod narrative_layout_contract;
 
+pub mod narrative_arc;
 pub mod narrative_library;
 pub mod narrative_locale;
 pub mod narrative_text;

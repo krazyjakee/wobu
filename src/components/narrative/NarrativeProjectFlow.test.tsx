@@ -1,3 +1,6 @@
+import { groupIdentity, draftArcScene } from './flow/arc/projectArcModel'
+import type { ArcScene } from '../../lib/api/narrativeArc'
+import { projectArcSession } from './flow/arc/projectArcSession'
 import { resetNarrativeDraftGuards } from '../../lib/narrativeDraftGuard'
 import { qk } from '../../lib/queries/keys'
 import { useScriptDrafts, sceneEditKey } from './scriptDrafts'
@@ -83,13 +86,35 @@ function file(scene: Scene): SceneFile {
   }
 }
 
+function arcScene(scene: Scene): ArcScene {
+  return draftArcScene(scene, {
+    summary: { id: scene.id, name: scene.name, slug: 'scene', rel: 'scene.yaml' },
+    actId: null,
+    arcId: null,
+    tagIds: [],
+    participants: [],
+    slots: 0,
+    filled: 0,
+    beats: 0,
+    counts: { generated: 0, edited: 0, locked: 0, needsReview: 0, outOfDate: 0 },
+    arc: { exits: [], needsText: 0 },
+  })
+}
+
 let diagnostics: NarrativeDiagnostic[] = []
 let layoutSave: unknown = { outcome: 'written' }
+const layouts = new Map<string, unknown>()
 let layoutLoad: unknown
 let quests: Quest[] = []
 
 function answer(command: string, args: Record<string, unknown>): unknown {
   switch (command) {
+    case 'narrative_arc':
+      return {
+        revision: 'first',
+        scenes: [arcScene(council()), arcScene({ id: OTHER, name: 'The long road', beats: [] })],
+        unreadable: [],
+      }
     case 'narrative_scenes':
       return {
         scenes: [
@@ -106,11 +131,30 @@ function answer(command: string, args: Record<string, unknown>): unknown {
       return { ...file(args.scene as Scene), stamp: { mtime_ms: 9, size: 3, hash: 'second' } }
     case 'narrative_diagnostics':
       return diagnostics
-    case 'narrative_layout_get':
-      return layoutLoad
+    case 'narrative_layout_get': {
+      const loaded = layoutLoad as { layout: Layout; notices: unknown[] }
+      return (
+        layouts.get(JSON.stringify(args.graph)) ??
+        (JSON.stringify(loaded.layout.graph) === JSON.stringify(args.graph)
+          ? loaded
+          : {
+              layout: {
+                ...loaded.layout,
+                graph: args.graph,
+                nodes: {},
+                groups: {},
+                annotations: {},
+              },
+              notices: [],
+            })
+      )
+    }
     case 'narrative_layout_save':
       if ((layoutSave as { outcome: string }).outcome === 'written')
-        layoutLoad = { layout: args.layout, notices: [] }
+        layouts.set(JSON.stringify((args.layout as Layout).graph), {
+          layout: args.layout,
+          notices: [],
+        })
       return layoutSave
     case 'narrative_world_get':
       return {
@@ -197,6 +241,12 @@ async function enterCouncil(readOnly = false) {
 }
 
 beforeEach(() => {
+  const arcSession = projectArcSession(PROJECT)
+  layouts.clear()
+  arcSession.scope = ''
+  arcSession.views.clear()
+  arcSession.stores.clear()
+  arcSession.scroll = 0
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   h.invoke.mockReset()
   h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
@@ -827,10 +877,12 @@ describe('shared presentation controls', () => {
     await screen.findByRole('option', { name: 'Ashfall inquiry' })
     fireEvent.change(screen.getByLabelText('Flow scope'), { target: { value: id } })
     await waitFor(() =>
-      expect(calls('narrative_layout_get')).toContainEqual({ graph: { kind: 'quest', quest: id } }),
+      expect(calls('narrative_layout_get')).toContainEqual({
+        graph: { kind: 'arc', arc: `${id}-group-quest` },
+      }),
     )
     await screen.findByTestId(`flow-node-${SCENE}`)
-    expect(screen.queryByTestId(`flow-node-${OTHER}`)).toBeNull()
+    expect(screen.getByTestId(`flow-node-${OTHER}`)).toBeInTheDocument()
     expect(calls('narrative_scene_save')).toHaveLength(0)
     expect(calls('narrative_world_save')).toHaveLength(0)
   })
@@ -848,13 +900,17 @@ describe('shared presentation controls', () => {
 
     // Membership is the project's: each scene is inside the quest whose
     // scene_ids name it, and nothing was derived from either scene's name.
-    expect(await screen.findByTestId(`flow-node-${beacon}`)).toHaveTextContent('1 elements')
-    expect(screen.getByTestId(`flow-node-${aftermath}`)).toHaveTextContent('1 elements')
+    expect(
+      await screen.findByTestId(`flow-node-${groupIdentity(`quest:["${beacon}"]`)}`),
+    ).toHaveTextContent('2 elements')
+    expect(projectArcSession(PROJECT).stores.get(':quest')!.getState().closedGroups).toContain(
+      groupIdentity(`quest:["${aftermath}"]`),
+    )
     expect(screen.queryByTestId(`flow-node-${SCENE}`)).toBeNull()
-    // Reading the arc a different way is not an edit to anything.
+    // Collapse persists presentation only; canonical source remains unchanged.
     expect(calls('narrative_scene_save')).toHaveLength(0)
     expect(calls('narrative_world_save')).toHaveLength(0)
-    expect(calls('narrative_layout_save')).toHaveLength(0)
+    await waitFor(() => expect(calls('narrative_layout_save').length).toBeGreaterThan(0))
   })
 
   it('groups by the stage each quest starts in, folding two quests into one box', async () => {
@@ -866,10 +922,15 @@ describe('shared presentation controls', () => {
     await screen.findByTestId(`flow-node-${SCENE}`)
 
     fireEvent.change(await screen.findByLabelText('Group'), { target: { value: 'questState' } })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Close all groups' })).toBeEnabled(),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
 
-    expect(await screen.findByTestId('flow-node-state:open')).toHaveTextContent('2 elements')
-    expect(calls('narrative_layout_save')).toHaveLength(0)
+    expect(
+      await screen.findByTestId(`flow-node-${groupIdentity('questState:["open"]')}`),
+    ).toHaveTextContent('4 elements')
+    await waitFor(() => expect(calls('narrative_layout_save').length).toBeGreaterThan(0))
   })
 
   it('leaves the saved arrangement folded while the arc is read by quest', async () => {
@@ -896,7 +957,8 @@ describe('shared presentation controls', () => {
       notices: [],
     }
     open()
-    // The arc opens on the arrangement, closed the way the sidecar says.
+    fireEvent.change(await screen.findByLabelText('Group'), { target: { value: 'arrangement' } })
+    // The stored arrangement retains its own collapsed groups.
     await screen.findByTestId(`flow-node-${group}`)
     expect(screen.queryByTestId(`flow-node-${SCENE}`)).toBeNull()
 
@@ -1014,38 +1076,32 @@ it.each(['library', 'script', 'diagnostic', 'preview'] as const)(
     expect(calls('narrative_scene_get').map((call) => call.sceneId)).toEqual([SCENE])
   },
 )
-it('defers arc source reads while hidden and pages the project scope', async () => {
-  const scenes = Array.from({ length: 120 }, (_, index) => ({
-    id: `scene-${index}`,
-    name: `Scene ${index}`,
-    slug: `scene-${index}`,
-    rel: `${index}.yaml`,
-  }))
+it('reads one compact arc when activated and pages the outline without fetching full scenes', async () => {
+  const scenes = Array.from({ length: 120 }, (_, index) =>
+    arcScene({ id: mintId(), name: `Scene ${index}`, beats: [] }),
+  )
   h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
     Promise.resolve(
-      command === 'narrative_scenes'
-        ? { scenes, unreadable: [] }
-        : command === 'narrative_scene_get'
-          ? file({ id: String(args.sceneId), name: String(args.sceneId), beats: [] })
-          : answer(command, args),
+      command === 'narrative_arc'
+        ? { revision: 'scale', scenes, unreadable: [] }
+        : answer(command, args),
     ),
   )
   const view = open(false, false)
-  await screen.findByRole('button', { name: 'Next scenes' })
+  expect(calls('narrative_arc')).toHaveLength(0)
   expect(calls('narrative_scene_get')).toHaveLength(0)
   view.setActive(true)
-  await waitFor(() => expect(calls('narrative_scene_get')).toHaveLength(50))
-  expect(screen.getByRole('navigation', { name: 'Flow scene pages' })).toHaveTextContent(
-    'Scenes 1–50 of 120',
+  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
+  expect(screen.getByRole('navigation', { name: 'Arc outline pages' })).toHaveTextContent(
+    'Page 1 of 5',
   )
+  expect(document.querySelectorAll('.nrt-outline-row')).toHaveLength(25)
   fireEvent.click(screen.getByRole('button', { name: 'Next scenes' }))
-  await waitFor(() => expect(calls('narrative_scene_get')).toHaveLength(100))
-  expect(screen.getByRole('navigation', { name: 'Flow scene pages' })).toHaveTextContent(
-    'Scenes 51–100 of 120',
+  expect(screen.getByRole('navigation', { name: 'Arc outline pages' })).toHaveTextContent(
+    'Page 2 of 5',
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Next scenes' }))
-  await waitFor(() => expect(calls('narrative_scene_get')).toHaveLength(120))
-  expect(screen.getByRole('button', { name: 'Next scenes' })).toBeDisabled()
+  expect(calls('narrative_arc')).toHaveLength(1)
+  expect(calls('narrative_scene_get')).toHaveLength(0)
 })
 
 it('keeps canvas keyboard focus and the refusal announcement when locked deletion is refused', async () => {
@@ -1240,3 +1296,91 @@ it.each(['canvas', 'outline'])(
     expect(calls('narrative_layout_save')).toHaveLength(0)
   },
 )
+
+it('edits authored arc exits through the shared draft and retains them across scene drill-down, Escape and undo', async () => {
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
+  fireEvent.click(screen.getByRole('button', { name: 'SceneCouncil hearing' }))
+  await screen.findByRole('region', { name: 'Selected scene exits' })
+  const exit = screen.getByLabelText('Council hearing — Outcome leads to')
+  fireEvent.change(exit, { target: { value: '' } })
+  expect(workingScene().beats![1]!.outcomes![0]!.to).toEqual({ unresolved: {} })
+  expect(workingScene().beats![0]!.dialogue).toEqual(council().beats![0]!.dialogue)
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Open selected scene' }))
+  await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+  fireEvent.click(screen.getByRole('button', { name: /Every scene/ }))
+  expect(await screen.findByRole('button', { name: 'Canvas' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Council hearing — Outcome leads to')).toHaveValue('')
+  fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }))
+  expect(screen.getByLabelText('Council hearing — Outcome leads to')).toHaveValue(OTHER)
+  fireEvent.click(screen.getByRole('button', { name: 'Redo draft' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
+  await waitFor(() => expect(calls('narrative_scene_save')).toHaveLength(1))
+  expect((calls('narrative_scene_save')[0]!.scene as Scene).beats![1]!.outcomes![0]!.to).toEqual({
+    unresolved: {},
+  })
+})
+
+it('refuses arc exit mutation when unrelated authored integers cannot be represented exactly', async () => {
+  const unsafe = {
+    ...council(),
+    variables: [{ name: 'large', type: 'int', initial: Number.MAX_SAFE_INTEGER + 1 }],
+  } as unknown as Scene
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) =>
+    Promise.resolve(
+      command === 'narrative_scene_get' && args.sceneId === SCENE
+        ? file(unsafe)
+        : answer(command, args),
+    ),
+  )
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
+  fireEvent.click(screen.getByRole('button', { name: 'SceneCouncil hearing' }))
+  await screen.findByRole('region', { name: 'Selected scene exits' })
+  fireEvent.change(screen.getByLabelText('Council hearing — Outcome leads to'), {
+    target: { value: '' },
+  })
+  expect(useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, SCENE)]).toBeUndefined()
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+  expect(screen.getByText(/integer the webview cannot represent exactly/)).toBeInTheDocument()
+})
+
+it('creates a native-ID scene in the arc and connects its first authored beat without entering another editor', async () => {
+  const created = file({ id: mintId(), name: 'New scene', beats: [] })
+  let made = false
+  h.invoke.mockImplementation((command: string, args: Record<string, unknown>) => {
+    if (command === 'narrative_scene_create') {
+      made = true
+      return Promise.resolve(created)
+    }
+    if (command === 'narrative_scene_get' && args.sceneId === created.scene.id)
+      return Promise.resolve(created)
+    if (command === 'narrative_arc')
+      return Promise.resolve({
+        revision: made ? 'created' : 'original',
+        scenes: [
+          arcScene(council()),
+          arcScene({ id: OTHER, name: 'The long road', beats: [] }),
+          ...(made ? [arcScene(created.scene)] : []),
+        ],
+        unreadable: [],
+      })
+    return Promise.resolve(answer(command, args))
+  })
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add scene' }))
+  await screen.findByRole('region', { name: 'Selected scene exits' })
+  expect(calls('narrative_scene_create')).toEqual([{ name: 'New scene' }])
+  expect(useUI.getState().narrative.sceneId).toBe(created.scene.id)
+  fireEvent.click(await screen.findByRole('button', { name: 'Add first beat for scene exits' }))
+  fireEvent.change(screen.getByLabelText('New scene — Exit 1 leads to'), {
+    target: { value: SCENE },
+  })
+  const draft = useScriptDrafts.getState().drafts[sceneEditKey(PROJECT, created.scene.id)]!.scene
+  expect(draft.beats![0]!.outcomes![0]!.to).toEqual({ scene: SCENE })
+  expect(draft.beats![0]!.id).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+  expect(draft.beats![0]!.outcomes![0]!.id).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+  expect(calls('narrative_scene_save')).toHaveLength(0)
+})

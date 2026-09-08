@@ -1,3 +1,4 @@
+import { groupIdentity } from './projectArcModel'
 import { useState } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,7 +105,7 @@ describe('what the arc draws', () => {
     render(<Harness initial={beaconArc()} />)
     expect(
       screen.getByRole('group', {
-        name: 'Scene, The beacon chamber, 2 beats, 1 needing text, 1 out of date',
+        name: /Scene, The beacon chamber, 2 beats, 1 needing text, 1 out of date/,
       }),
     ).toBeInTheDocument()
   })
@@ -118,7 +119,11 @@ describe('what the arc draws', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Open the scene' })[0]!)
     // Not the scene alone: the beat that authored the destination, which is
     // the field a writer has to change.
-    expect(onEnter).toHaveBeenCalledWith('scene.road', 'beat.2')
+    expect(onEnter).toHaveBeenCalledWith(
+      'scene.road',
+      'beat.2',
+      expect.objectContaining({ sceneId: 'scene.road', beatId: 'beat.2' }),
+    )
   })
 })
 
@@ -128,7 +133,9 @@ describe('grouping, collapse and filters', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
 
     expect(container.querySelector('.react-flow__node[data-id="scene.road"]')).toBeNull()
-    expect(screen.getByTestId('flow-node-quest.beacon')).toHaveTextContent('3 elements')
+    expect(
+      screen.getByTestId(`flow-node-${groupIdentity('quest:["quest.beacon"]')}`),
+    ).toHaveTextContent('3 elements')
     // The dangling boxes go with the scenes that owned them: collapse is the
     // writer's own choice, and the group box's counts are the signal there.
     expect(container.querySelector('[data-id="scene.road:link.back:unresolved"]')).toBeNull()
@@ -140,7 +147,9 @@ describe('grouping, collapse and filters', () => {
     fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'questState' } })
     fireEvent.click(screen.getByRole('button', { name: 'Close all groups' }))
 
-    expect(screen.getByTestId('flow-node-state:Investigating')).toHaveTextContent('3 elements')
+    expect(
+      screen.getByTestId(`flow-node-${groupIdentity('questState:["Investigating"]')}`),
+    ).toHaveTextContent('3 elements')
     // Changing a grouping control is not an edit, so nothing was reported.
     expect(latest).toBeNull()
   })

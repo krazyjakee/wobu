@@ -132,7 +132,12 @@ export function PresentationTools({
           <button
             type="button"
             className="btn btn-sm"
-            disabled={readOnly || !label.trim() || Object.keys(layout.groups).length >= 1000}
+            disabled={
+              readOnly ||
+              presentation.derivedGroups ||
+              !label.trim() ||
+              Object.keys(layout.groups).length >= 1000
+            }
             onClick={() => {
               const id = mintId()
               onChange({
@@ -157,7 +162,7 @@ export function PresentationTools({
             Selected node group{' '}
             <select
               aria-label="Selected node group"
-              disabled={readOnly || !key}
+              disabled={readOnly || presentation.derivedGroups || !key}
               value={
                 Object.values(layout.groups).find((group) =>
                   (group.members ?? []).includes(key ?? ''),
@@ -199,7 +204,7 @@ export function PresentationTools({
                 <input
                   aria-label={`Rename group ${group.label || group.id}`}
                   value={group.label ?? ''}
-                  disabled={readOnly}
+                  disabled={readOnly || presentation.derivedGroups}
                   maxLength={256}
                   onChange={(event) => {
                     if (new TextEncoder().encode(event.target.value).length <= 256)
@@ -233,7 +238,7 @@ export function PresentationTools({
                   type="button"
                   className="btn btn-sm"
                   aria-label={`Delete group ${group.label ?? group.id}`}
-                  disabled={readOnly}
+                  disabled={readOnly || presentation.derivedGroups}
                   onClick={() => {
                     const groups = { ...layout.groups }
                     delete groups[group.id]

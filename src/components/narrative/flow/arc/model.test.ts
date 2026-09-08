@@ -1,5 +1,5 @@
+import { groupIdentity } from './projectArcModel'
 import { describe, expect, it } from 'vitest'
-import type { Quest } from '../../../../lib/api/narrativeWorld'
 import { buildGraph } from '../graph'
 import { addElement, connectPort, removeElement, type FlowElement, type FlowScene } from '../model'
 import { beaconArc, beaconScenes } from './fixture'
@@ -10,22 +10,8 @@ import {
   arcTarget,
   sceneNode,
   scenesOf,
-  worldQuests,
   type FlowArc,
 } from './model'
-
-/** A World quest, with only the fields the arc reads made interesting. */
-function quest(id: string, name: string, initial: string, scenes: string[]): Quest {
-  return {
-    id,
-    name,
-    summary: '',
-    stages: [initial],
-    initial,
-    transitions: [],
-    scene_ids: scenes,
-  }
-}
 
 /**
  * A scene that talks about other scenes constantly and links to none of them.
@@ -198,7 +184,7 @@ describe('grouping, which is presentation and never an edit', () => {
     const arc = beaconArc()
     const { groups, of } = arcGrouping(arc, 'quest')
     expect(groups.map((group) => group.name)).toEqual(['The beacon inquiry', 'Aftermath'])
-    expect(of(scenesOf(arc)[0]!)).toBe('quest.beacon')
+    expect(of(scenesOf(arc)[0]!)).toBe(groupIdentity('quest:["quest.beacon"]'))
   })
 
   it('groups by quest state, folding the three beacon scenes into one box', () => {
@@ -206,10 +192,10 @@ describe('grouping, which is presentation and never an edit', () => {
     const { groups, of } = arcGrouping(arc, 'questState')
     expect(groups.map((group) => group.name)).toEqual(['Investigating', 'Not started'])
     expect(scenesOf(arc).map(of)).toEqual([
-      'state:Investigating',
-      'state:Investigating',
-      'state:Investigating',
-      'state:Not started',
+      groupIdentity('questState:["Investigating"]'),
+      groupIdentity('questState:["Investigating"]'),
+      groupIdentity('questState:["Investigating"]'),
+      groupIdentity('questState:["Not started"]'),
     ])
   })
 
@@ -246,89 +232,6 @@ describe('grouping, which is presentation and never an edit', () => {
     for (const mode of ['none', 'arrangement', 'quest', 'questState'] as const)
       arcGrouping(arc, mode)
     expect(JSON.stringify(arc.level)).toBe(before)
-  })
-})
-
-describe('the quests the arc groups by, read from World', () => {
-  it('files each scene under the quest whose scene_ids name it', () => {
-    const { quests, questOf, shared } = worldQuests([
-      quest('quest.beacon', 'The beacon inquiry', 'investigating', ['scene.council', 'scene.road']),
-      quest('quest.aftermath', 'Aftermath', 'not_started', ['scene.ruins']),
-    ])
-    expect(questOf('scene.road')).toBe('quest.beacon')
-    expect(questOf('scene.ruins')).toBe('quest.aftermath')
-    // A scene no quest lists belongs to none, which is not the same as
-    // belonging to the first one.
-    expect(questOf('scene.beacon')).toBeNull()
-    expect(quests).toEqual([
-      { id: 'quest.beacon', name: 'The beacon inquiry', state: 'investigating' },
-      { id: 'quest.aftermath', name: 'Aftermath', state: 'not_started' },
-    ])
-    expect(shared).toEqual([])
-  })
-
-  it('takes a quest’s state from the stage it starts in, and says nothing when there is none', () => {
-    // A running quest state lives in a save file this toolchain never sees, so
-    // the starting stage is the only state a project records. An empty one is
-    // "not recorded" rather than a stage whose name is the empty string.
-    const [started, blank] = worldQuests([
-      quest('quest.1', 'Started somewhere', 'open', []),
-      quest('quest.2', 'Half written', '', []),
-    ]).quests!
-    expect(started!.state).toBe('open')
-    expect(blank!.state).toBeNull()
-  })
-
-  it('files a scene two quests both claim under the first, and reports it', () => {
-    // A canvas cannot draw one box inside two frames, so the tie is broken in
-    // document order — and the scene is named, because a designer who cannot
-    // find it in the quest they opened is owed the reason.
-    const { questOf, shared } = worldQuests([
-      quest('quest.1', 'First', 'open', ['scene.shared', 'scene.shared']),
-      quest('quest.2', 'Second', 'open', ['scene.shared']),
-    ])
-    expect(questOf('scene.shared')).toBe('quest.1')
-    expect(shared).toEqual(['scene.shared'])
-  })
-
-  it('says “cannot tell” for a World that has not answered, rather than “no quests”', () => {
-    const unread = worldQuests(undefined)
-    expect(unread.quests).toBeNull()
-    expect(unread.questOf('scene.council')).toBeNull()
-    // And an empty document is the other claim: quests were read, there are none.
-    expect(worldQuests([]).quests).toEqual([])
-  })
-
-  it('carves a real arc up by quest and by the stage those quests start in', () => {
-    const scenes = beaconScenes()
-    const { quests, questOf } = worldQuests([
-      quest('quest.beacon', 'The beacon inquiry', 'Investigating', [
-        'scene.council',
-        'scene.road',
-        'scene.beacon',
-      ]),
-      quest('quest.aftermath', 'Aftermath', 'Investigating', ['scene.ruins']),
-    ])
-    const arc: FlowArc = {
-      level: {
-        id: 'arc.world',
-        name: 'Every scene',
-        groups: [],
-        elements: Object.values(scenes).map((one) => sceneNode(one, questOf(one.id))),
-        entryId: 'scene.council',
-      },
-      quests,
-    }
-    expect(arcGrouping(arc, 'quest').groups.map((group) => group.id)).toEqual([
-      'quest.beacon',
-      'quest.aftermath',
-    ])
-    // Two quests, one starting stage: four scenes in a single box.
-    const byState = arcGrouping(arc, 'questState')
-    expect(byState.groups).toEqual([{ id: 'state:Investigating', name: 'Investigating' }])
-    expect(
-      arc.level.elements.every((element) => byState.of(element) === 'state:Investigating'),
-    ).toBe(true)
   })
 })
 

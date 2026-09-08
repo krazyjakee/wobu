@@ -44,6 +44,7 @@ export const NODE_SIZE: Record<FlowKind | 'group', { width: number; height: numb
   // participants and four rolled-up work counts, and the counts are the reason
   // the arc view exists.
   scene: { width: 248, height: 132 },
+  questStage: { width: 248, height: 132 },
   missing: { width: 200, height: 76 },
   group: { width: 224, height: 88 },
 }

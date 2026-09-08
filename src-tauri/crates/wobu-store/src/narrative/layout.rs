@@ -93,7 +93,7 @@ use crate::error::{Error, Result};
 /// `wobu_narrative::SOURCE_SCHEMA_VERSION`, and that separation is load
 /// bearing: bumping the layout format must never look like a source migration,
 /// or moving a box would make every project claim it needed one.
-pub const LAYOUT_SCHEMA_VERSION: u32 = 2;
+pub const LAYOUT_SCHEMA_VERSION: u32 = 3;
 
 /// The presentation tree. Everything that must not see layout — a compiler
 /// input set, a build fingerprint, an export, a `git add` of source — excludes
@@ -154,13 +154,14 @@ impl GraphKey {
 /// hand-edited or written by a build that disagreed. The tag costs six bytes
 /// per entry and buys the same guarantee `wobu-narrative`'s distinct id types
 /// buy in memory.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]
 pub enum NodeKey {
     Scene(SceneId),
     Beat(BeatId),
     Choice(ChoiceId),
     Outcome(OutcomeId),
+    QuestStage { quest: EntityId, stage: String },
 }
 
 impl fmt::Display for NodeKey {
@@ -170,6 +171,7 @@ impl fmt::Display for NodeKey {
             NodeKey::Beat(id) => write!(f, "beat:{id}"),
             NodeKey::Choice(id) => write!(f, "choice:{id}"),
             NodeKey::Outcome(id) => write!(f, "outcome:{id}"),
+            NodeKey::QuestStage { quest, stage } => write!(f, "stage:{quest}:{stage}"),
         }
     }
 }
@@ -186,6 +188,16 @@ impl FromStr for NodeKey {
             "beat" => BeatId::from_str(id).map(NodeKey::Beat).map_err(|_| bad()),
             "choice" => ChoiceId::from_str(id).map(NodeKey::Choice).map_err(|_| bad()),
             "outcome" => OutcomeId::from_str(id).map(NodeKey::Outcome).map_err(|_| bad()),
+            "stage" => {
+                let (quest, stage) = id.split_once(':').ok_or_else(bad)?;
+                if stage.is_empty() || stage.len() > 1024 {
+                    return Err(bad());
+                }
+                Ok(NodeKey::QuestStage {
+                    quest: quest.parse().map_err(|_| bad())?,
+                    stage: stage.into(),
+                })
+            }
             _ => Err(bad()),
         }
     }
@@ -410,7 +422,7 @@ impl Layout {
     /// else added, and every beat in a scene that has never been arranged all
     /// arrive here, which is why it is a list and not an error.
     pub fn unplaced(&self, wanted: &BTreeSet<NodeKey>) -> Vec<NodeKey> {
-        wanted.iter().copied().filter(|key| !self.nodes.contains_key(key)).collect()
+        wanted.iter().cloned().filter(|key| !self.nodes.contains_key(key)).collect()
     }
 
     fn to_json(&self) -> Result<String> {
@@ -573,9 +585,9 @@ pub fn reconcile(loaded: &mut LayoutLoad, present: &BTreeSet<NodeKey>) {
         .layout
         .nodes
         .keys()
-        .copied()
-        .chain(loaded.layout.groups.values().flat_map(|group| group.members.iter().copied()))
-        .chain(loaded.layout.annotations.values().filter_map(|note| note.attached_to))
+        .cloned()
+        .chain(loaded.layout.groups.values().flat_map(|group| group.members.iter().cloned()))
+        .chain(loaded.layout.annotations.values().filter_map(|note| note.attached_to.clone()))
         .filter(|key| !present.contains(key))
         .collect::<BTreeSet<_>>()
         .into_iter()
@@ -591,7 +603,9 @@ pub fn reconcile(loaded: &mut LayoutLoad, present: &BTreeSet<NodeKey>) {
             .layout
             .annotations
             .values_mut()
-            .filter(|annotation| annotation.attached_to.is_some_and(|key| !present.contains(&key)))
+            .filter(|annotation| {
+                annotation.attached_to.as_ref().is_some_and(|key| !present.contains(key))
+            })
             // An annotation pinned to a deleted beat keeps its words and loses
             // its anchor. Deleting the note would throw away the one thing in
             // this file a person typed.

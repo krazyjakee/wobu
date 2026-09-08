@@ -5,27 +5,17 @@ import { canonicalFlowActions, flowNodeForTarget } from './flow/canonicalFlow'
 import { FlowElementEditor } from './flow/FlowElementEditor'
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { LayoutNotice, NarrativeDiagnostic, SceneFile } from '../../lib/api'
-import {
-  useDiagnoseScene,
-  useScene,
-  useSceneDiagnostics,
-  useSceneFiles,
-  useScenes,
-} from '../../lib/queries'
-import { useUI } from '../../store/ui'
+import { useDiagnoseScene, useScene, useSceneDiagnostics, useScenes } from '../../lib/queries'
+import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativeFlowPane } from './NarrativeFlowPane'
-import { NarrativeFlowView } from './flow/arc/NarrativeFlowView'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
-import { ArcFlow } from './flow/arc/ArcFlow'
-import { sceneNode, worldQuests, type ArcQuests, type FlowArc } from './flow/arc/model'
+import { ProjectArc } from './flow/arc/ProjectArc'
 import { attachDiagnostics } from './flow/badges'
 import { useFlowStore } from './flow/flowStore'
 import { PreviewOverlayProvider, RouteBanner, RouteDetail } from './flow/PreviewOverlay'
 import { usePlayedScenes, usePreviewRoute } from './flow/overlay'
 import { useFlowPresentation } from './flow/useFlowPresentation'
-import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
-import type { Quest } from '../../lib/api/narrativeWorld'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import type { LayoutRunner } from './flow/layout'
 import type { FlowElement, FlowKind, FlowPort, FlowPositions } from './flow/model'
@@ -45,16 +35,6 @@ const EMPTY: NarrativeDiagnostic[] = []
  * canonical reducer operations; only explicit Save commits source and records
  * canonical undo. Arrangement autosave remains a separate cosmetic sidecar.
  */
-
-/** Stable legacy slug for the all-scenes arrangement; quests use EntityId. */
-const PROJECT_ARC = 'project'
-
-/** Nothing is creatable at the arc level: see `authoring` below. */
-const ARC_CREATABLE: readonly FlowKind[] = []
-
-/** What a source-backed scene allows, in the source model's own terms. */
-/** What a source-backed arc allows, which is looking and going in. */
-const ARC_AUTHORING = { refuse: flowAuthoring.arcReadOnly } as const
 
 /** A beat's offer of one more way out. Connecting from it authors an outcome. */
 function beatSpare(element: FlowElement): FlowPort | null {
@@ -109,6 +89,7 @@ export function NarrativeProjectFlow({
     setHonoured(reveal.seq)
     if (
       (reveal.projectKey === null || reveal.projectKey === projectKey) &&
+      reveal.focus &&
       reveal.sceneId !== null &&
       ids.includes(reveal.sceneId)
     ) {
@@ -117,15 +98,19 @@ export function NarrativeProjectFlow({
   }
 
   const enter = useCallback(
-    (sceneId: string, beatId?: string | null) => {
+    (sceneId: string, beatId?: string | null, target?: Partial<NarrativeTarget>) => {
       setEntered(sceneId)
       // The whole path, and the origin that raised it. `diagnostic` is what
       // carries a writer following a broken destination to the beat that
       // authored it rather than to the scene's start; the reveal is latched, so
       // the canvas honours it when it mounts a moment later.
-      selectNarrative({ sceneId, beatId: beatId ?? null }, beatId ? 'diagnostic' : 'flow')
+      selectNarrative(
+        { sceneId, beatId: beatId ?? null, ...target },
+        beatId ? 'diagnostic' : 'flow',
+        { projectKey },
+      )
     },
-    [selectNarrative],
+    [selectNarrative, projectKey],
   )
 
   /** Back to the arc. The selection is left alone: leaving is not deselecting. */
@@ -148,30 +133,6 @@ export function NarrativeProjectFlow({
         <p className="nrt-note inline-error" role="alert">
           Could not read this project’s scenes: {String(catalog.error)}
         </p>
-      </div>
-    )
-  }
-
-  /*
-   * An empty project gets the demonstration, and is told that is what it is.
-   *
-   * This is the *only* place the beacon fixture is drawn now. #186 built the
-   * canvas against it because there was no backend; there is one, so a project
-   * with scenes draws its own and a fixture would be a lie. A project with none
-   * has nothing to draw at all, and a canvas somebody can push around while
-   * they decide whether this is the tool for them is worth more than an empty
-   * rectangle — as long as the banner says, in the pane, that nothing they do
-   * to it is saved.
-   */
-  if (ids.length === 0) {
-    return (
-      <div className="nrt-project-demo">
-        <p className="nrt-note" role="status">
-          <Icon name="lock" size="sm" />
-          This project has no scenes yet, so the arc below is a demonstration. Create the first
-          scene in the Library and this becomes your own.
-        </p>
-        <NarrativeFlowView readOnly={readOnly} layout={layout} />
       </div>
     )
   }
@@ -200,283 +161,14 @@ export function NarrativeProjectFlow({
      */
     <PreviewOverlayProvider value={played}>
       <RouteBanner />
-      <ArcLevel ids={ids} active={active} readOnly={readOnly} layout={layout} onEnter={enter} />
-    </PreviewOverlayProvider>
-  )
-}
-
-/* ── the arc ──────────────────────────────────────────────────────────────── */
-
-function ArcLevel(props: {
-  ids: string[]
-  active: boolean
-  readOnly: boolean
-  layout?: LayoutRunner
-  onEnter: (sceneId: string, beatId?: string | null) => void
-}) {
-  const world = useNarrativeWorld()
-  const [questId, setQuestId] = useState('')
-  const quest = world.data?.document.quests.find((quest) => quest.id === questId)
-  /*
-   * The project's own quest membership, for #187's grouping.
-   *
-   * `world.data` and not `world.data ?? []`: a read that has not answered, or
-   * that failed, produces `quests: null` — "this build cannot say" — and the
-   * grouping control refuses itself with that reason. An empty list would say
-   * the project has no quests, which is a different and possibly false claim.
-   */
-  const quests = useMemo(() => worldQuests(world.data?.document.quests), [world.data])
-  return (
-    <div className="nrt-quest-arrangement">
-      <label className="nrt-quest-selector">
-        Flow scope{' '}
-        <select
-          aria-label="Flow scope"
-          disabled={world.isPending}
-          value={quest?.id ?? ''}
-          onChange={(event) => setQuestId(event.target.value)}
-        >
-          <option value="">Every scene</option>
-          {world.data?.document.quests.map((quest) => (
-            <option key={quest.id} value={quest.id}>
-              {quest.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {world.isError && (
-        <p className="nrt-note" role="status">
-          Quest scopes could not be loaded; the project arrangement is still available.
-        </p>
-      )}
-      <ArcPage key={quest?.id ?? 'project'} {...props} quest={quest} quests={quests} />
-    </div>
-  )
-}
-
-/** Load complete source only for the displayed arc page, never a hidden scene editor. */
-const ARC_PAGE_SIZE = 50
-function ArcPage({
-  ids,
-  active,
-  quest,
-  ...props
-}: {
-  ids: string[]
-  active: boolean
-  quest?: Quest
-  quests: ArcQuests
-  readOnly: boolean
-  layout?: LayoutRunner
-  onEnter: (sceneId: string, beatId?: string | null) => void
-}) {
-  const [page, setPage] = useState(0)
-  const scoped = useMemo(
-    () => (quest ? ids.filter((id) => quest.scene_ids.includes(id)) : ids),
-    [ids, quest],
-  )
-  const last = Math.max(0, Math.ceil(scoped.length / ARC_PAGE_SIZE) - 1)
-  const current = Math.min(page, last)
-  const visible = useMemo(
-    () => scoped.slice(current * ARC_PAGE_SIZE, (current + 1) * ARC_PAGE_SIZE),
-    [scoped, current],
-  )
-  const files = useSceneFiles(visible, active)
-  return (
-    <>
-      {scoped.length > ARC_PAGE_SIZE && (
-        <nav className="nrt-crumbs" aria-label="Flow scene pages">
-          <button
-            type="button"
-            className="btn"
-            disabled={current === 0}
-            onClick={() => setPage(current - 1)}
-          >
-            Previous scenes
-          </button>
-          <span role="status">
-            Scenes {current * ARC_PAGE_SIZE + 1}–
-            {Math.min((current + 1) * ARC_PAGE_SIZE, scoped.length)} of {scoped.length}. Connections
-            outside this page are not shown; narrow Flow scope or use the Library to open any scene.
-          </span>
-          <button
-            type="button"
-            className="btn"
-            disabled={current === last}
-            onClick={() => setPage(current + 1)}
-          >
-            Next scenes
-          </button>
-        </nav>
-      )}
-      {files.some((one) => one.isError) && (
-        <p role="alert" className="nrt-note inline-error">
-          Some scenes on this page could not be read. Open the Library to inspect their source.
-        </p>
-      )}
-      <ArcArrangement
-        {...props}
-        quest={quest}
-        files={files}
-        loading={files.some((one) => one.isPending)}
-      />
-    </>
-  )
-}
-
-function ArcArrangement({
-  files,
-  loading,
-  readOnly,
-  layout,
-  onEnter,
-  quest,
-  quests,
-}: {
-  quest?: Quest
-  quests: ArcQuests
-  files: { data?: SceneFile }[]
-  loading: boolean
-  readOnly: boolean
-  layout?: LayoutRunner
-  onEnter: (sceneId: string, beatId?: string | null) => void
-}) {
-  const graph = useMemo(
-    () =>
-      quest
-        ? { kind: 'quest' as const, quest: quest.id }
-        : { kind: 'arc' as const, arc: PROJECT_ARC },
-    [quest],
-  )
-  const { stored, outcome, presentation } = useFlowPresentation(graph)
-  const { nameOf, sceneName } = useNarrativeNames()
-
-  /*
-   * The arc, built only from authored `sceneLink` destinations.
-   *
-   * `sceneToFlow` produces a `sceneLink` element for a `Destination::Scene` and
-   * for nothing else, and `sceneNode` reads those and nothing else. No name, no
-   * summary and no line of prose is inspected anywhere on this path, which is
-   * the property #187 requires and `arc/model.test.ts` holds to with a scene
-   * whose prose is nothing but other scenes' names.
-   */
-  const arc: FlowArc = useMemo(() => {
-    const scenes = files.flatMap((one) =>
-      one.data && (!quest || quest.scene_ids.includes(one.data.scene.id))
-        ? [sceneToFlow(one.data.scene, { nameOf, sceneName })]
-        : [],
-    )
-    return {
-      level: {
-        id: quest ? `quest:${quest.id}` : `arc:${PROJECT_ARC}`,
-        name: quest?.name ?? 'Every scene',
-        groups: Object.values(presentation?.layout.groups ?? {}).map((group) => ({
-          id: group.id,
-          name: group.label ?? group.id,
-        })),
-        elements: scenes.map((scene) => ({
-          // Two independent memberships on one node, and neither is written
-          // anywhere: the arrangement group a writer drew (#185), and the World
-          // quest that lists this scene (#187). Which one carves the canvas up
-          // is the grouping control's business, not the model's.
-          ...sceneNode(scene, quests.questOf(scene.id)),
-          groupId:
-            Object.values(presentation?.layout.groups ?? {}).find((group) =>
-              (group.members ?? []).includes(`scene:${scene.id}`),
-            )?.id ?? null,
-        })),
-        // The first scene in the catalog, which is alphabetical by file. There
-        // is nothing in a project that declares where the story starts, and
-        // Names remain labels; World scene_ids determines the selected scope.
-        entryId: scenes[0]?.id ?? null,
-      },
-      // Presentation groups are separate from World quest membership; the arc
-      // can be carved up by either, and by neither.
-      quests: quests.quests,
-    }
-  }, [files, nameOf, sceneName, quest, quests, presentation?.layout.groups])
-
-  const positions = useMemo(
-    () => positionsFromLayout(presentation?.layout, 'arc'),
-    [presentation?.layout],
-  )
-
-  const onPositions = useCallback(
-    (next: FlowPositions) => {
-      const base = presentation?.layout
-      if (!base) return
-      presentation?.onChange(layoutWithPositions(base, next, 'arc'))
-    },
-    [presentation],
-  )
-
-  if (loading || stored.isPending) {
-    return (
-      <div className="nrt-pane nrt-flow">
-        <p className="nrt-note" aria-busy="true">
-          <Icon name="clock" size="sm" />
-          Reading the scenes…
-        </p>
-      </div>
-    )
-  }
-
-  if (arc.level.elements.length === 0) {
-    return (
-      <div className="nrt-pane nrt-flow">
-        <div className="nrt-empty">
-          <p>
-            This project has no scenes yet. A scene is a place in the story where people speak and
-            choices are made; the Library is where the first one is created.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="nrt-pane nrt-flow">
-      <nav className="nrt-crumbs" aria-label="Flow level">
-        <span className="chip is-on" aria-current="true">
-          <Icon name="layers" size="sm" />
-          {arc.level.name}
-        </span>
-      </nav>
-
-      <LayoutNotices notices={stored.data?.notices} outcome={outcome} />
-
-      <p className="nrt-note" role="note">
-        <Icon name="lock" size="sm" />
-        {flowAuthoring.arcReadOnly} {NARRATIVE_UNAVAILABLE.affectedScope}
-      </p>
-
-      {/* The id is what the grouping control points at when it refuses itself,
-          so the refusal has somewhere to be read. */}
-      <p className="nrt-note" id="nrt-quests-unavailable" role="note">
-        <Icon name="folder" size="sm" />
-        {quests.quests === null
-          ? `The project’s quests could not be read, so the arc cannot be grouped by them. ${NARRATIVE_UNAVAILABLE.quests}`
-          : NARRATIVE_UNAVAILABLE.quests}
-        {quests.shared.length > 0 &&
-          ` ${quests.shared.length} scene${quests.shared.length === 1 ? ' is' : 's are'} listed by more than one quest, and appear under the first.`}
-      </p>
-
-      <ArcFlow
-        arc={arc}
-        // Never called: every edit at this level is refused before it reaches
-        // `onChange`. Present because `ArcFlow` is the same component the
-        // demonstration arc uses, where edits are real.
-        onChange={() => {}}
-        onEnter={onEnter}
+      <ProjectArc
+        projectKey={projectKey}
+        active={active}
         readOnly={readOnly}
         layout={layout}
-        positions={positions}
-        presentation={presentation}
-        onPositionsChange={onPositions}
-        authoring={ARC_AUTHORING}
-        creatable={ARC_CREATABLE}
+        onEnter={enter}
       />
-    </div>
+    </PreviewOverlayProvider>
   )
 }
 

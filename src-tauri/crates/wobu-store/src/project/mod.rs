@@ -419,4 +419,5 @@ impl Project {
     }
 }
 
+pub mod narrative_arc;
 pub mod narrative_library;
