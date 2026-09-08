@@ -1,4 +1,5 @@
 //! One allowlist for canonical file discovery, indexing and replication.
+pub(crate) mod cache;
 use super::records::{NarrativeRecordDocument, NarrativeRecordKind};
 use crate::{
     Error, Result,

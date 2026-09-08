@@ -68,3 +68,39 @@ evidence work outside the mutex uses immutable captured inputs and final ticket/
 Keep these changes separate from #170 materialization and #179 media/package writes. Add real-file
 regressions for same-size edits, deleted/duplicate members, changed referenced receipts and index
 mutation between plan/apply. Reprofile before expanding to shared batch captures or query work.
+
+## Source-cache slice
+
+The first optimization keeps independently parsed, valid Scene/Text/World/State entries in a
+session-owned cache. Both passes still enumerate safe paths and read/hash every file. Records,
+publications and receipt bindings always rerun reference validation. Immutable `Arc` values avoid
+cloning the structured graph in each observation. Index overlap guards now hash the exact row bytes;
+a same-hash metadata change still rejects an old plan. Local watcher reconciliation uses the same
+content-checked path. No canonical source/schema format changed.
+
+Before optimized measurements, the cache was capped at **2,048 entries and 384 MiB of conservatively
+accounted structured allocations**. The initial proposed 256 MiB cap was raised before any optimized
+run: a representative 50-slot scene accounts for 324,349 bytes, approximately 309 MiB across this
+fixture. Accounting includes owned string/vector capacities, entry/Arc allocations and conservative
+B-tree spare-node/link storage. Oversized entries remain in the current observation but are not
+retained; eviction never removes a scene from results. This cache cap does not change the predefined
+**1 GiB combined native/WebKit RSS budget**. Current observations and other application allocations
+are additional memory; the standalone process measurement below does not prove combined compliance.
+
+[Optimized raw samples](cached-store.jsonl), [summary](cached-store-summary.json),
+[environment](cached-environment.json), and [resource usage](cached-store-time.txt) retain the complete
+three-iteration run. No root Cargo/npm checks ran during its 11.87 seconds; unrelated desktop activity
+remained. Median plan/observe/revalidate/apply fell to **21.9 / 44.2 / 43.1 / 22.1 ms** (approximately
+131 ms total). Every iteration's final source-fingerprint assertion passed. Standalone peak RSS fell
+from **596,172 to 195,072 KiB**. Project open was 8.80 seconds with uncontrolled index/disk cache
+state. Review capture remained 263 ms and view contexts 72 ms; those were not optimized in this slice.
+The first Library query was **485 ms**, followed by 199/203 ms; the outlier is retained, not discarded.
+These three samples establish the phase improvement, not native p95 acceptance.
+
+Validation: 253 store unit tests; four real-file cache/reconciliation regressions; eight existing
+record/publication tests; ten Library integration tests; store all-target Clippy and workspace
+formatting passed. New regressions cover same-size source edits with the exact original mtime,
+deleted/duplicate scene membership, tampered referenced receipt bytes, stale index plans including
+same-source-hash row changes, malformed-source non-retention and memory/entry limits. The original
+proposal/approval-empty fixture still leaves nonempty history/batch performance to a later measured
+slice. Captured-ticket native worker reads and final integrated measurements remain outstanding.

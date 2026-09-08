@@ -131,6 +131,7 @@ pub struct Project {
     /// which is a folder nobody can read back.
     peer: String,
     layout_observation: String,
+    narrative_cache: std::sync::Arc<crate::narrative::registry::cache::SourceCache>,
     /// Every node, whole, for the influence engine. Empty until something asks —
     /// see [`world_nodes`](Project::world_nodes), which is also where the cost
     /// of holding this is argued.
@@ -174,6 +175,7 @@ impl Project {
         let index = Index::open_for(&meta.id)?;
         index.clear()?;
         let mut project = Project {
+            narrative_cache: Default::default(),
             layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
@@ -256,6 +258,7 @@ impl Project {
             None => (Index::open_for(&meta.id)?, paths::index_path(&meta.id)),
         };
         let mut project = Project {
+            narrative_cache: Default::default(),
             layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
