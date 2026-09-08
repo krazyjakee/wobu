@@ -113,6 +113,10 @@ fn reopening_the_same_folder_invalidates_an_old_project_ticket() {
 
     let error = state.with_ticket(&ticket, |_| Ok(())).unwrap_err();
     assert_eq!(error.code, crate::error::Code::NoProjectOpen);
+    assert_eq!(
+        state.reconcile_ticket_now(&ticket).unwrap_err().code,
+        crate::error::Code::NoProjectOpen
+    );
 }
 
 #[test]
@@ -433,4 +437,49 @@ fn narrative_build_publication_cannot_follow_a_changed_project_session() {
             vec![current.id]
         );
     }
+}
+
+#[test]
+fn scheduled_review_computation_releases_the_mutex_and_rejects_later_source_edits() {
+    use crate::commands::narrative_review::{capture_read, finish_read};
+    let (_dir, root, state) = open_test_state("Review read guard");
+    let file = state.with(|project| Ok(project.create_scene("First")?)).unwrap();
+    let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+    let snapshot = capture_read(&state, &ticket, file.scene.id, None).unwrap();
+    let worker = state.handle();
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        started_tx.send(()).unwrap();
+        release_rx.recv().unwrap();
+        let view = snapshot.view_with_proposals(vec![]).unwrap();
+        finish_read(&worker, &ticket, &snapshot, view)
+    });
+    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let started = Instant::now();
+    assert_eq!(state.with(|project| Ok(project.list_nodes()?.len())).unwrap(), 2);
+    assert!(started.elapsed() < Duration::from_millis(100));
+    let path = root.join(file.rel);
+    let raw = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(path, raw.replace("First", "Other")).unwrap();
+    release_tx.send(()).unwrap();
+    assert!(
+        thread.join().unwrap().is_err(),
+        "late source edits must not return a stale review snapshot"
+    );
+}
+
+#[test]
+fn scheduled_review_completion_rejects_a_closed_project_session() {
+    use crate::commands::narrative_review::{capture_read, finish_read};
+    let (_dir, _root, state) = open_test_state("Review session guard");
+    let file = state.with(|project| Ok(project.create_scene("First")?)).unwrap();
+    let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+    let snapshot = capture_read(&state, &ticket, file.scene.id, None).unwrap();
+    let view = snapshot.view_with_proposals(vec![]).unwrap();
+    state.close();
+    assert_eq!(
+        finish_read(&state, &ticket, &snapshot, view).err().unwrap().code,
+        crate::error::Code::NoProjectOpen
+    );
 }

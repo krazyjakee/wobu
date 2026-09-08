@@ -79,13 +79,53 @@ impl Project {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        for snapshot in &snapshots {
-            snapshot.check_observations(self)?;
-        }
-        if fingerprint != self.narrative_fingerprint()? {
+        self.verify_review_snapshots(&snapshots)?;
+        if snapshots.is_empty() && fingerprint != self.narrative_fingerprint()? {
             return Err(invalid("Narrative changed during batch review capture."));
         }
         Ok(snapshots)
+    }
+    /// Verify a completed batch against one corpus revision and the union of
+    /// canonical present/absent observations. Call AFTER context/evidence work.
+    pub fn verify_review_snapshots<'a>(
+        &self,
+        snapshots: impl IntoIterator<Item = &'a ReviewSnapshot>,
+    ) -> Result<()> {
+        let mut fingerprint = None;
+        let mut observations = BTreeMap::new();
+        let mut characters = BTreeMap::new();
+        for snapshot in snapshots {
+            if fingerprint.is_some_and(|value| value != snapshot.fingerprint.as_str()) {
+                return Err(invalid("Review snapshots belong to different source revisions."));
+            }
+            fingerprint = Some(snapshot.fingerprint.as_str());
+            for (rel, stamp) in &snapshot.observations {
+                if observations.insert(rel, stamp).is_some_and(|previous| previous != stamp) {
+                    return Err(invalid("Review snapshots observed different canonical inputs."));
+                }
+            }
+            for (id, stamp) in &snapshot.character_stamps {
+                if characters.insert(*id, stamp).is_some_and(|previous| previous != stamp) {
+                    return Err(invalid(
+                        "Review snapshots observed different character membership.",
+                    ));
+                }
+            }
+        }
+        if let Some(fingerprint) = fingerprint {
+            for (rel, stamp) in observations {
+                check_observed_file(self, rel, stamp)?;
+            }
+            for (id, stamp) in characters {
+                check_observed_character(self, id, stamp)?;
+            }
+            if self.narrative_fingerprint()? != fingerprint {
+                return Err(invalid(
+                    "Narrative source changed during review capture. Reload before deciding.",
+                ));
+            }
+        }
+        Ok(())
     }
     fn review_source_captured(
         &self,
@@ -288,24 +328,10 @@ impl ReviewSnapshot {
     }
     pub(crate) fn check_observations(&self, project: &Project) -> Result<()> {
         for (rel, stamp) in &self.observations {
-            if atomic::read_stamped(&project.root().join(rel))?.map(|(_, s)| s) != *stamp {
-                return Err(invalid(
-                    "Review inputs changed during capture. Reload before deciding.",
-                ));
-            }
+            check_observed_file(project, rel, stamp)?;
         }
         for (id, stamp) in &self.character_stamps {
-            let current = match project.get_node_stamped(*id) {
-                Ok((node, stamp)) if node.id == *id => Some(stamp),
-                Err(Error::NoSuchNode(_)) => None,
-                Ok(_) => return Err(invalid("Character identity changed during capture.")),
-                Err(e) => return Err(e),
-            };
-            if &current != stamp {
-                return Err(invalid(
-                    "Character membership or wording changed during capture. Reload before deciding.",
-                ));
-            }
+            check_observed_character(project, *id, stamp)?;
         }
         Ok(())
     }
@@ -612,4 +638,29 @@ pub(super) fn source_history(
         }
     }
     (history, history_problem)
+}
+
+fn check_observed_file(project: &Project, rel: &str, stamp: &Option<Stamp>) -> Result<()> {
+    if atomic::read_stamped(&project.root().join(rel))?.map(|(_, current)| current) != *stamp {
+        return Err(invalid("Review inputs changed during capture. Reload before deciding."));
+    }
+    Ok(())
+}
+fn check_observed_character(
+    project: &Project,
+    id: wobu_narrative::EntityId,
+    stamp: &Option<Stamp>,
+) -> Result<()> {
+    let current = match project.get_node_stamped(id) {
+        Ok((node, stamp)) if node.id == id => Some(stamp),
+        Err(Error::NoSuchNode(_)) => None,
+        Ok(_) => return Err(invalid("Character identity changed during capture.")),
+        Err(error) => return Err(error),
+    };
+    if &current != stamp {
+        return Err(invalid(
+            "Character membership or wording changed during capture. Reload before deciding.",
+        ));
+    }
+    Ok(())
 }

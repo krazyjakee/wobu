@@ -104,3 +104,28 @@ deleted/duplicate scene membership, tampered referenced receipt bytes, stale ind
 same-source-hash row changes, malformed-source non-retention and memory/entry limits. The original
 proposal/approval-empty fixture still leaves nonempty history/batch performance to a later measured
 slice. Captured-ticket native worker reads and final integrated measurements remain outstanding.
+
+## Scheduled reads and coherent batch verification
+
+Scene, Library, single-source Review/context and the project Review queue now schedule their work
+on blocking workers with the exact open-project ticket captured before scheduling. Review context
+computation uses immutable snapshots outside the project mutex, then checks the original ticket and
+canonical observations before returning. Closing/reopening the same folder invalidates the ticket.
+Capture/index work still uses the project mutex; this change does not claim every command has zero
+lock contention.
+
+Batch capture and final verification share one corpus fingerprint plus the union of exact
+source/receipt and present/absent character observations. Mixed revisions or conflicting observations
+fail. The queue retains its 32-container/10,000-line caps, cursor and collision checks, per-source
+errors, and final proposal-list comparison. Its normal path captures the page together; malformed
+capture falls back to per-source reads so one broken file does not remove other reviewable results.
+Scene and supporting-text export evidence use the same batch boundary, including equality with the
+captured source that will be compiled. Policy/approval/publication writes retain their guards.
+
+Validation for this slice: 22 store Review tests, six locale tests, three supporting editorial tests;
+16 application state tests, five queue tests and five export tests; store/application all-target
+Clippy and workspace formatting passed. The new cases exercise late receipt changes without a
+source-fingerprint change, absent-character membership, mixed capture revisions, source edits after
+queue computation, and closed/reopened session rejection. Code-health remains at its unchanged
+baseline. Native read, frame and combined RSS measurements, plus an actual approve/unlock/save
+measurement, are still required before any interactive-budget claim.

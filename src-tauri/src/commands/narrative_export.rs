@@ -179,12 +179,23 @@ fn prepare_checked(
     // asset edited mid-export aborts rather than shipping half of an edit.
     let texts = project.text_assets()?;
     let mut verified_text_reviews = BTreeMap::new();
-    for asset in &texts {
-        let snapshot =
-            project.review_snapshot(wobu_narrative::SceneId::from_raw(asset.id.raw()), None)?;
+    let snapshots = project.review_snapshots(
+        &texts
+            .iter()
+            .map(|asset| wobu_narrative::SceneId::from_raw(asset.id.raw()))
+            .collect::<Vec<_>>(),
+        None,
+    )?;
+    for (asset, snapshot) in texts.iter().zip(&snapshots) {
+        if snapshot.scene().editorial_text().as_ref() != Some(asset) {
+            return Err(WobuError::new(
+                Code::Invalid,
+                "Supporting text changed while capturing its approvals.",
+            ));
+        }
         verified_text_reviews.extend(snapshot.text_evidence()?);
-        snapshot.verify_current(project)?;
     }
+    project.verify_review_snapshots(&snapshots)?;
     if project.narrative_fingerprint()? != fingerprint {
         return Err(WobuError::new(
             Code::Invalid,

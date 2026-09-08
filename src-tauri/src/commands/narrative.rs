@@ -55,7 +55,7 @@
 //! one file.
 
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use wobu_narrative::{
     BeatId, ChoiceId, DestinationSite, Diagnostic, DialogueSlotId, OutcomeId, Problem, Scene,
     SceneCatalog, SceneId, Site, StateDocument, TextEntryId, VariantId,
@@ -489,11 +489,16 @@ fn scenes(project: &Project) -> CommandResult<SceneCatalogView> {
 
 /// One scene, whole, with the precondition for saving it back.
 #[tauri::command]
-pub fn narrative_scene_get(
-    state: State<'_, AppState>,
+pub async fn narrative_scene_get(
+    app: AppHandle,
     scene_id: SceneId,
 ) -> CommandResult<SceneFileView> {
-    state.with(|project| Ok(SceneFileView::of(&project.load_scene(scene_id)?)))
+    let (ticket, ()) = app.state::<AppState>().ticket(|_| Ok(()))?;
+    super::blocking("The scene read thread stopped unexpectedly.", move || {
+        app.state::<AppState>()
+            .with_ticket(&ticket, |project| Ok(SceneFileView::of(&project.load_scene(scene_id)?)))
+    })
+    .await?
 }
 
 #[tauri::command]
