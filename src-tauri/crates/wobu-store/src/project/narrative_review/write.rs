@@ -14,7 +14,11 @@ use wobu_narrative::{Provenance, Scene, Variant, VariantId};
 /// The lock is local coordination, never canonical content. Dropping it releases
 /// the OS lock, including on a process crash; acquisition never blocks the UI.
 pub(crate) fn scene_lock(project: &Project, id: SceneId) -> Result<File> {
-    let dir = project.root().join(".wobu/locks");
+    let local = project.root().join(".wobu");
+    if std::fs::symlink_metadata(&local).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(invalid("Project metadata cannot be a symbolic link for editorial writes."));
+    }
+    let dir = local.join("locks");
     if std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink()) {
         return Err(invalid("Editorial lock directory cannot be a symbolic link."));
     }
@@ -453,6 +457,7 @@ impl Project {
         }
         validate_manual(previous.as_ref().map(|f| &f.scene), &file.scene)?;
         let mut bindings = BTreeMap::new();
+        let mut drafted = std::collections::BTreeSet::new();
         let mut decisions = BTreeMap::new();
         if let Some(old) = &previous {
             if let Ok(snapshot) = self.review_snapshot(old.scene.id, None) {
@@ -474,7 +479,11 @@ impl Project {
                                 || t.provenance != variant.text.provenance
                                 || t.revision != variant.text.revision
                         }) {
-                            variant.text.set_body(variant.text.body.clone(), Provenance::Human);
+                            if old_text.is_some() || !variant.text.revision_matches() {
+                                variant.text.set_body(variant.text.body.clone(), Provenance::Human);
+                            }
+                            variant.text.lifecycle.review = ReviewState::Draft;
+                            drafted.insert(variant.id);
                             if variant.text.lifecycle.policy != GenerationPolicy::Locked {
                                 variant.text.lifecycle.policy = GenerationPolicy::Edited;
                             }
@@ -483,10 +492,17 @@ impl Project {
                             .is_some_and(|t| t.lifecycle.review != variant.text.lifecycle.review)
                         {
                             bindings.remove(&variant.id);
+                            drafted.insert(variant.id);
                         }
                     }
                 }
             }
+        } else {
+            drafted.extend(
+                file.scene
+                    .dialogue_slots()
+                    .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id)),
+            );
         }
         bindings.retain(|id, b| {
             file.scene.dialogue_slots().any(|(beat, s)| {
@@ -505,6 +521,55 @@ impl Project {
                 })
             })
         });
+        let event_id = Id::generate();
+        let mut manual_context = None;
+        if !drafted.is_empty() {
+            // One shared environment per receipt, individual target hashes per
+            // wording. No approval is inferred from authoring a draft.
+            if let Ok(snapshot) = self.review_source(file.clone(), None)
+                && snapshot.input_problem.is_none()
+            {
+                for (beat, slot) in file.scene.dialogue_slots() {
+                    for variant in &slot.variants {
+                        if !drafted.contains(&variant.id) || !variant.text.revision_matches() {
+                            continue;
+                        }
+                        let target = ReviewTarget {
+                            scene: file.scene.id,
+                            beat,
+                            slot: slot.id,
+                            variant: Some(variant.id),
+                        };
+                        let context = snapshot.context(&target)?;
+                        bindings.insert(
+                            variant.id,
+                            ReviewBinding {
+                                target,
+                                speaker: slot.speaker.clone(),
+                                text_revision: variant.text.revision.clone(),
+                                context_revision: context.revision.clone(),
+                                state: context.state.clone(),
+                                approved: false,
+                                event_id,
+                            },
+                        );
+                        if manual_context.is_none() {
+                            manual_context = Some(context);
+                        }
+                    }
+                }
+                snapshot.check_current(self)?;
+            }
+        }
+        for beat in &mut file.scene.beats {
+            for slot in &mut beat.dialogue {
+                for variant in &mut slot.variants {
+                    if bindings.get(&variant.id).is_some_and(|b| b.event_id == event_id) {
+                        variant.text.lifecycle.freshness = Freshness::Current;
+                    }
+                }
+            }
+        }
         let before = if let Some(old) = previous {
             if let Some(id) = old.scene.editorial_head {
                 let record =
@@ -530,12 +595,12 @@ impl Project {
         };
         let event = event(
             self,
-            Id::generate(),
+            event_id,
             before,
             file.scene.clone(),
             None,
             EditorialAction::ManualSave,
-            None,
+            manual_context,
             bindings,
             decisions,
         );

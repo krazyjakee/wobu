@@ -20,8 +20,14 @@ pub struct ReviewSnapshot {
 }
 impl Project {
     pub fn review_snapshot(&self, id: SceneId, state_json: Option<&str>) -> Result<ReviewSnapshot> {
+        self.review_source(self.load_scene(id)?, state_json)
+    }
+    pub(crate) fn review_source(
+        &self,
+        file: SceneFile,
+        state_json: Option<&str>,
+    ) -> Result<ReviewSnapshot> {
         let fingerprint = self.narrative_fingerprint()?;
-        let file = self.load_scene(id)?;
         let world_file = self.world_document()?;
         let world = world_file.as_ref().map(|(w, _)| w.clone()).unwrap_or_default();
         let schema_file = self.state_document()?;
@@ -194,9 +200,8 @@ impl Project {
                             binding.matches(&binding.target, &s.speaker, &v.text)
                         })
                         && context.valid()
-                        && context.revision == binding.context_revision
                         && context.state == binding.state
-                        && *context
+                        && binding.context_revision
                             == ReviewContext::capture(
                                 &event.after,
                                 &binding.target,
@@ -205,6 +210,7 @@ impl Project {
                                 context.inputs["characters"].clone(),
                                 binding.state.clone(),
                             )
+                            .revision
                 });
                 if !verified {
                     history_problem=Some("Approval context, target or wording does not match its immutable decision.".into());

@@ -602,17 +602,7 @@ fn published_candidates_are_visible_and_only_both_generated_policies_allow_repla
             );
             assert!(!line.approval_valid);
             if !automatic {
-                let decision = wobu_store::project::narrative_review::ReviewRequest {
-                    guard: view.guard.clone(),
-                    target: line.target.clone(),
-                    context_revision: line.context_revision.clone(),
-                    state_json: view.state_json.clone(),
-                    action: wobu_narrative::review::EditorialAction::Accept {
-                        proposal_id: id,
-                        proposal_hash: line.proposals[0].hash.clone(),
-                        reviewed_text: Some("Human reviewed alternative".into()),
-                    },
-                };
+                let decision = accept_request(&view, Some("Human reviewed alternative".into()));
                 project.apply_review(&decision).unwrap();
                 let accepted = project.review_scene(file.scene.id, None).unwrap();
                 assert_eq!(
@@ -634,12 +624,7 @@ fn published_candidates_are_visible_and_only_both_generated_policies_allow_repla
 #[test]
 fn deleting_redundant_attempt_receipt_does_not_allow_another_paid_request() {
     let temp = Temp::new();
-    let (mut project, input) = fixture(&temp);
-    let request = freeze(&mut project, input);
-    let id = wobu_core::new_id();
-    let receipt = success_receipt(&request);
-    records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt).unwrap();
-    records::publish(&mut project, &request, id, &receipt).unwrap();
+    let (project, request, id) = published_fixture(&temp);
     std::fs::remove_file(project.root().join(format!("narrative/receipts/{id}.json"))).unwrap();
     assert_eq!(records::attempts(&project, &request).unwrap().len(), 1);
     assert!(history(&project).unwrap()[0].proposal_published);
@@ -652,28 +637,13 @@ fn deleting_redundant_attempt_receipt_does_not_allow_another_paid_request() {
 #[test]
 fn stale_proposal_never_rebases_and_reject_is_a_guarded_durable_decision() {
     let temp = Temp::new();
-    let (mut project, input) = fixture(&temp);
-    let request = freeze(&mut project, input);
-    let id = wobu_core::new_id();
-    let receipt = success_receipt(&request);
-    records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt).unwrap();
-    records::publish(&mut project, &request, id, &receipt).unwrap();
+    let (mut project, request, id) = published_fixture(&temp);
     let mut file = project.load_scene(request.target.scene).unwrap();
     file.scene.summary = "Context changed".into();
     project.save_scene(&mut file).unwrap();
     let view = project.review_scene(request.target.scene, None).unwrap();
     let line = &view.lines[0];
-    let mut decision = wobu_store::project::narrative_review::ReviewRequest {
-        guard: view.guard.clone(),
-        target: line.target.clone(),
-        context_revision: line.context_revision.clone(),
-        state_json: view.state_json.clone(),
-        action: wobu_narrative::review::EditorialAction::Accept {
-            proposal_id: id,
-            proposal_hash: line.proposals[0].hash.clone(),
-            reviewed_text: None,
-        },
-    };
+    let mut decision = accept_request(&view, None);
     assert!(project.apply_review(&decision).is_err());
     decision.action = wobu_narrative::review::EditorialAction::Reject {
         proposal_id: id,
@@ -686,4 +656,31 @@ fn stale_proposal_never_rebases_and_reject_is_a_guarded_durable_decision() {
         project.review_scene(request.target.scene, None).unwrap().lines[0].proposals[0].status,
         "rejected"
     );
+}
+
+fn published_fixture(temp: &Temp) -> (Project, FrozenRequest, Id) {
+    let (mut project, input) = fixture(temp);
+    let request = freeze(&mut project, input);
+    let id = wobu_core::new_id();
+    let receipt = success_receipt(&request);
+    records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt).unwrap();
+    records::publish(&mut project, &request, id, &receipt).unwrap();
+    (project, request, id)
+}
+fn accept_request(
+    view: &wobu_store::project::narrative_review::ReviewSceneView,
+    reviewed_text: Option<String>,
+) -> wobu_store::project::narrative_review::ReviewRequest {
+    let line = &view.lines[0];
+    wobu_store::project::narrative_review::ReviewRequest {
+        guard: view.guard.clone(),
+        target: line.target.clone(),
+        context_revision: line.context_revision.clone(),
+        state_json: view.state_json.clone(),
+        action: wobu_narrative::review::EditorialAction::Accept {
+            proposal_id: line.proposals[0].id,
+            proposal_hash: line.proposals[0].hash.clone(),
+            reviewed_text,
+        },
+    }
 }

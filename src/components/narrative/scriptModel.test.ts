@@ -24,7 +24,10 @@ describe('Script structural edits', () => {
     expect(copy.id).not.toBe(beat.id)
     expect(copy.dialogue?.[0]?.id).not.toBe(beat.dialogue?.[0]?.id)
     expect(copy.dialogue?.[0]?.variants?.[0]?.id).not.toBe(beat.dialogue?.[0]?.variants?.[0]?.id)
-    expect(copy.dialogue?.[0]?.variants?.[0]?.text).toEqual(beat.dialogue?.[0]?.variants?.[0]?.text)
+    expect(copy.dialogue?.[0]?.variants?.[0]?.text).toEqual({
+      ...beat.dialogue?.[0]?.variants?.[0]?.text,
+      lifecycle: { policy: 'edited', review: 'draft' },
+    })
     expect(copy.choices?.[0]?.to).toEqual({ beat: beat.id })
     expect(beat.choices?.[0]?.to).toEqual({ beat: beat.id })
   })

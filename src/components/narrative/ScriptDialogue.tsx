@@ -15,8 +15,10 @@ export function ScriptDialogue({
   variables,
   onDeleteVariant,
   onDeleteSlot,
+  reviewControls,
 }: {
   variables: VariableDecl[]
+  reviewControls?: (slotId: string, variantId: string | null) => ReactNode
   onDeleteVariant: (slotId: string, variantId: string) => void
   onDeleteSlot: (slotId: string) => void
   beat: Beat
@@ -60,45 +62,7 @@ export function ScriptDialogue({
               {locked ? 'Locked' : (slot.policy ?? 'edited')} · {slot.variants?.length ?? 0}{' '}
               variants
             </span>
-            {locked ? (
-              <button
-                className="btn"
-                onClick={() =>
-                  changeSlot({
-                    ...slot,
-                    policy: 'edited',
-                    variants: slot.variants?.map((v) => ({
-                      ...v,
-                      text: {
-                        ...v.text,
-                        lifecycle: { ...v.text.lifecycle, policy: 'edited' },
-                      },
-                    })),
-                  })
-                }
-              >
-                Unlock dialogue {slotIndex + 1}
-              </button>
-            ) : (
-              <button
-                className="btn"
-                onClick={() =>
-                  changeSlot({
-                    ...slot,
-                    policy: 'locked',
-                    variants: slot.variants?.map((v) => ({
-                      ...v,
-                      text: {
-                        ...v.text,
-                        lifecycle: { ...v.text.lifecycle, policy: 'locked' },
-                      },
-                    })),
-                  })
-                }
-              >
-                Lock dialogue {slotIndex + 1}
-              </button>
-            )}
+            {reviewControls?.(slot.id, null)}
             {!slot.variants?.length && (
               <p className="nrt-note">Missing text — this slot is intentionally empty.</p>
             )}
@@ -110,8 +74,6 @@ export function ScriptDialogue({
                     {variant.when && variant.when !== 'always'
                       ? 'Conditional variant'
                       : 'Unconditional variant'}{' '}
-                    · {variant.text.lifecycle?.review ?? 'Draft'} ·{' '}
-                    {variant.text.lifecycle?.freshness ?? 'current'}
                   </span>
                   <textarea
                     disabled={locked}
@@ -121,7 +83,6 @@ export function ScriptDialogue({
                     onChange={(e) =>
                       changeSlot({
                         ...slot,
-                        policy: 'edited',
                         variants: slot.variants?.map((v) =>
                           v.id === variant.id
                             ? {
@@ -142,6 +103,7 @@ export function ScriptDialogue({
                     }
                   />
                 </label>
+                {reviewControls?.(slot.id, variant.id)}
                 <fieldset disabled={locked}>
                   <TypedCondition
                     label={`Dialogue ${slotIndex + 1} variant ${index + 1}`}
@@ -183,7 +145,6 @@ export function ScriptDialogue({
               onClick={() =>
                 changeSlot({
                   ...slot,
-                  policy: 'edited',
                   variants: [
                     ...(slot.variants ?? []),
                     {
@@ -193,7 +154,6 @@ export function ScriptDialogue({
                         body: '',
                         provenance: 'human',
                         lifecycle: {
-                          policy: 'edited',
                           review: 'draft',
                           freshness: 'current',
                         },

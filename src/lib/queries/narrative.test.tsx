@@ -117,7 +117,9 @@ describe('the one choke point for a narrative edit', () => {
 
     const [entry] = useUndoStack.getState().past
     expect(entry?.label).toContain('rename')
-    expect(entry?.undo).toEqual([{ type: 'sceneSave', scene: before.scene, slug: before.slug }])
+    expect(entry?.undo).toEqual([
+      { type: 'sceneSave', scene: before.scene, slug: before.slug, expected: after.scene },
+    ])
   })
 
   it('records a rename made from a row that never held the document', async () => {
@@ -136,7 +138,7 @@ describe('the one choke point for a narrative edit', () => {
 
     expect(argsOf('narrative_scene_rename')).toEqual({ sceneId: 's1', name: 'The hearing' })
     expect(useUndoStack.getState().past[0]?.undo).toEqual([
-      { type: 'sceneSave', scene: before.scene, slug: before.slug },
+      { type: 'sceneSave', scene: before.scene, slug: before.slug, expected: after.scene },
     ])
   })
 
@@ -365,23 +367,17 @@ describe('declared state', () => {
 })
 
 describe('running an undo against the backend', () => {
-  it('asks for the version on disk rather than the one it recorded', async () => {
-    // The same guarantee `node_upsert` gives — it reads its precondition out of
-    // the index — rather than a weaker one. An entry recorded before three
-    // later saves would otherwise present a precondition three versions stale
-    // and park itself as a conflict: a ⌘Z that fails on every press but the
-    // first.
+  it('sends the recorded expected document without renewing its guard', async () => {
+    const expected = scene({ id: 's1', summary: 'The saved edit' })
     h.invoke.mockResolvedValue(file({ scene: scene({ id: 's1' }) }))
     await applyCommand({
       type: 'sceneSave',
       scene: scene({ id: 's1' }),
       slug: 'council-hearing',
+      expected,
     })
-
-    expect(argsOf('narrative_scene_save')).toMatchObject({
-      expected: { kind: 'current' },
-      slug: 'council-hearing',
-    })
+    expect(argsOf('narrative_scene_restore')).toMatchObject({ expected, slug: 'council-hearing' })
+    expect(argsOf('narrative_scene_get')).toBeUndefined()
   })
 
   it('undoes a create through the delete command, not through a second create', async () => {
