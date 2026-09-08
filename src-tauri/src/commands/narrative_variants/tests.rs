@@ -183,16 +183,23 @@ fn success(
         raw_accepted_output: Some(raw),
     }
 }
+fn frozen_matrix_request(
+    project: &mut Project,
+    policy: &Policy,
+    slot: DialogueSlotId,
+) -> wobu_narrative_generation::FrozenRequest {
+    let saved = planned(project, policy.clone());
+    let rows = selected(&saved);
+    project.materialize_narrative_analysis(saved.id, slot, &rows).unwrap();
+    let build = build(project, saved.id, slot, &rows).unwrap();
+    let records = super::super::narrative_generation::records::RecordSet::load(project).unwrap();
+    records.requests[&build.items[0].request_id.unwrap()].clone()
+}
 #[test]
 fn successful_output_after_a_policy_race_is_retained_without_automatic_acceptance() {
     let temp = Temp::new();
     let (mut project, policy, slot) = fixture(&temp);
-    let saved = planned(&mut project, policy.clone());
-    let rows = selected(&saved);
-    project.materialize_narrative_analysis(saved.id, slot, &rows).unwrap();
-    let build = build(&mut project, saved.id, slot, &rows).unwrap();
-    let records = super::super::narrative_generation::records::RecordSet::load(&project).unwrap();
-    let request = records.requests[&build.items[0].request_id.unwrap()].clone();
+    let request = frozen_matrix_request(&mut project, &policy, slot);
     let receipt = success(&request);
     let receipt_id = Id::generate();
     let capture = project.narrative_analysis_capture().unwrap();
@@ -271,12 +278,7 @@ fn a_grouped_review_staging_acceptance_later_keeps_the_policy_guard_until_commit
             },
         })
         .unwrap();
-    let saved = planned(&mut project, policy.clone());
-    let rows = selected(&saved);
-    project.materialize_narrative_analysis(saved.id, slot, &rows).unwrap();
-    let build = build(&mut project, saved.id, slot, &rows).unwrap();
-    let records = super::super::narrative_generation::records::RecordSet::load(&project).unwrap();
-    let request = records.requests[&build.items[0].request_id.unwrap()].clone();
+    let request = frozen_matrix_request(&mut project, &policy, slot);
     let receipt = success(&request);
     let id = Id::generate();
     super::super::narrative_generation::records::publish(&mut project, &request, id, &receipt)
