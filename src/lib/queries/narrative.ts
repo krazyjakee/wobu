@@ -40,7 +40,7 @@ import { invalidateNarrative, qk } from './keys'
 /**
  * Every scene in the project, and the files that could not be identified.
  *
- * Read from the folder on every fetch: scenes are not in the local index yet,
+ * Content-checked on each fetch; the rebuildable index accelerates scene discovery,
  * so there is no cheaper answer that is also a correct one.
  */
 export function useScenes(): UseQueryResult<api.SceneCatalog> {
