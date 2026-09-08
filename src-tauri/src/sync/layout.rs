@@ -6,7 +6,7 @@ use super::{
 };
 use crate::error::{Code, CommandResult, WobuError};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use wobu_store::{LayoutManifest, LayoutOffer, LayoutSave};
 use wobu_sync::Session;
 
@@ -59,13 +59,52 @@ fn validate(manifest: &LayoutManifest) -> CommandResult<()> {
     Ok(())
 }
 
+/// Freeze exact offered bytes before either direction can merge into local files.
+/// The independent wire budget still accounts for JSON escaping and framing.
+pub(super) struct Snapshot {
+    manifest: LayoutManifest,
+    bodies: BTreeMap<String, String>,
+}
+impl Snapshot {
+    pub(super) fn capture(project: &wobu_store::Project) -> CommandResult<Self> {
+        Self::capture_with_budget(project, TOTAL)
+    }
+    fn capture_with_budget(
+        project: &wobu_store::Project,
+        mut remaining: usize,
+    ) -> CommandResult<Self> {
+        let mut manifest = project.layout_manifest();
+        validate(&manifest)?;
+        let mut bodies = BTreeMap::new();
+        let offered = std::mem::take(&mut manifest.entries);
+        for entry in offered {
+            if let Some(text) = project.layout_outgoing(&entry)? {
+                remaining = remaining.checked_sub(text.len()).ok_or_else(|| {
+                    WobuError::new(
+                        Code::Malformed,
+                        "Flow arrangements exceed the snapshot size limit.",
+                    )
+                })?;
+                bodies.insert(entry.rel.clone(), text);
+                manifest.entries.push(entry);
+            } else if manifest.notices.len() < 20 {
+                manifest.notices.push(
+                    "An arrangement changed while preparing the transfer; sync again to share it."
+                        .into(),
+                );
+            }
+        }
+        Ok(Self { manifest, bodies })
+    }
+}
+
 pub(super) async fn exchange(
     manager: &SyncManager,
     replica: &Replica,
     session: &Session,
 ) -> CommandResult<(bool, Option<String>)> {
-    let local = replica.with(|p| Ok(p.layout_manifest()))?;
-    validate(&local)?;
+    permission(manager, replica)?;
+    let local = replica.with(|p| Snapshot::capture(p))?;
     let (sent, received) = tokio::try_join!(
         Box::pin(offer(manager, replica, session, local)),
         Box::pin(receive(manager, replica, session))
@@ -73,12 +112,13 @@ pub(super) async fn exchange(
     let notice = sent.or(received.1);
     Ok((received.0, notice))
 }
-async fn offer(
+pub(super) async fn offer(
     manager: &SyncManager,
     replica: &Replica,
     session: &Session,
-    manifest: LayoutManifest,
+    snapshot: Snapshot,
 ) -> CommandResult<Option<String>> {
+    let Snapshot { manifest, mut bodies } = snapshot;
     let announced = manifest.entries.clone();
     let mut notice = manifest.notices.first().cloned();
     let (mut send, mut recv) = bodies::open(session.connection()).await?;
@@ -98,10 +138,10 @@ async fn offer(
     }
     for entry in &entries {
         permission(manager, replica)?;
-        let text = replica.with(|p| Ok(p.layout_outgoing(entry)?))?;
+        let text = bodies.remove(&entry.rel).ok_or_else(bad)?;
         bodies::write_bounded(
             &mut send,
-            &Message::Content { entry: entry.clone(), text },
+            &Message::Content { entry: entry.clone(), text: Some(text) },
             FRAME,
             &mut budget,
         )
@@ -131,7 +171,7 @@ async fn offer(
     }
     Ok(notice)
 }
-async fn receive(
+pub(super) async fn receive(
     manager: &SyncManager,
     replica: &Replica,
     session: &Session,
@@ -216,4 +256,33 @@ async fn receive(
     })
     .await?;
     Ok((changed, notice))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_bounds_total_bytes_without_changing_layout_files() {
+        let home =
+            std::env::temp_dir().join(format!("wobu-layout-snapshot-{}", wobu_core::new_id()));
+        std::fs::create_dir_all(&home).unwrap();
+        let project = wobu_store::Project::create(&home, "Ashfall").unwrap();
+        for arc in ["first", "second"] {
+            let layout = wobu_store::Layout::empty(wobu_store::GraphKey::Arc { arc: arc.into() });
+            wobu_store::narrative::layout::save(project.root(), "test", &layout, None).unwrap();
+        }
+        let before = project.layout_manifest().entries;
+        let total =
+            before.iter().map(|entry| project.layout_outgoing(entry).unwrap().unwrap().len()).sum();
+        let exact = Snapshot::capture_with_budget(&project, total).unwrap();
+        assert_eq!(exact.manifest.entries, before);
+        assert_eq!(exact.bodies.values().map(String::len).sum::<usize>(), total);
+        assert!(Snapshot::capture_with_budget(&project, total - 1).is_err());
+        assert_eq!(project.layout_manifest().entries, before);
+        let index = project.index_path();
+        drop(project);
+        std::fs::remove_dir_all(home).unwrap();
+        let _ = std::fs::remove_file(index);
+    }
 }

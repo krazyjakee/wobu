@@ -93,7 +93,10 @@ use bounded content plus size/mtime so a giant sidecar cannot allocate or hash a
 A layout is limited to 2 MiB, 10,000 node entries, 1,000 groups, 1,000 notes and 10,000 markers per
 deletion map. Coordinates must be finite and within ±10,000,000; note dimensions are 1–10,000. Group
 labels have a 256-byte limit, note bodies 8,192 bytes. Peer exchanges allow 2,000 files and 64 MiB per
-stream, with bounded frames. Unsupported arrangements are reported separately from source sync.
+stream, with bounded frames. Each side freezes at most 64 MiB of validated outgoing layout bytes
+before receiving any peer merges; an incoming merge cannot invalidate this round’s advertised hashes.
+Changed-hash records are omitted with a retry notice; unreadable capture ends the cosmetic stage
+with a non-blocking arrangement notice. Unsupported arrangements are reported separately from source sync.
 
 React Flow's actual store remains capped at 300 nodes, **including decorative group frames**. When
 story nodes use the available budget, excess decorative frames are omitted; groups remain available

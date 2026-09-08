@@ -888,3 +888,60 @@ fn flow_layouts_merge_per_node_and_equal_time_mode_then_sync_deleted_notes() {
         pair.stop().await;
     });
 }
+
+#[test]
+fn a_layout_offer_survives_receiving_the_peer_merge_before_sending_its_body() {
+    run_async(async {
+        use super::layout::{Snapshot, offer, receive};
+        use wobu_store::{GraphKey, Layout, NodeKey};
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let mut left = Layout::empty(GraphKey::Arc { arc: "project".into() });
+        let mut right = left.clone();
+        left.place(NodeKey::Scene(wobu_narrative::SceneId::new()), 15.0, 60.0);
+        right.place(NodeKey::Scene(wobu_narrative::SceneId::new()), 450.0, 60.0);
+        for (replica, arrangement) in [(&a, &left), (&b, &right)] {
+            replica
+                .with(|p| {
+                    wobu_store::narrative::layout::save(p.root(), "test", arrangement, None)?;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let original = a.with(|p| Ok(p.layout_manifest().entries.remove(0))).unwrap();
+        let frozen_a = a.with(|p| Snapshot::capture(p)).unwrap();
+        let frozen_b = b.with(|p| Snapshot::capture(p)).unwrap();
+        let (client, server, outbound, inbound) = wire_pair(pair.project).await;
+        // Force the CI interleaving: finish merging B into A before A can
+        // answer a request for its original advertised hash. No timing sleeps.
+        let first = tokio::try_join!(
+            offer(pair.b.manager(), &b, &inbound, frozen_b),
+            receive(pair.a.manager(), &a, &outbound),
+        )
+        .unwrap();
+        assert_eq!(first, (None, (true, None)));
+        assert!(a.with(|p| Ok(p.layout_outgoing(&original)?)).unwrap().is_none());
+        let second = tokio::try_join!(
+            offer(pair.a.manager(), &a, &outbound, frozen_a),
+            receive(pair.b.manager(), &b, &inbound),
+        )
+        .unwrap();
+        assert_eq!(second, (None, (true, None)));
+        let read = |replica: &super::manager::Replica| {
+            replica
+                .with(|p| {
+                    Ok(wobu_store::narrative::layout::read_document(p.root(), &original.rel)?
+                        .unwrap()
+                        .0)
+                })
+                .unwrap()
+        };
+        let merged = read(&a);
+        assert_eq!(merged.nodes.len(), 2);
+        assert_eq!(merged, read(&b));
+        client.shutdown().await.unwrap();
+        server.shutdown().await.unwrap();
+        pair.stop().await;
+    });
+}
