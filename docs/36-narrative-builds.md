@@ -26,7 +26,10 @@ project files.
 
 Reopen a saved build to inspect completion and explicitly select unfinished or failed items.
 Completed requests never call the provider again. A successful attempt whose proposal publication
-was interrupted is recovered through the existing generation publication path. Failed, cancelled or
+was interrupted is recovered through the existing generation publication path. If an editorial lock
+interrupted automatic Generated acceptance after publication, the item remains selectable to resume
+acceptance without a provider call. Completion follows the exact canonical editorial decision; a
+later writer edit does not reopen completed work or restore older wording. Failed, cancelled or
 interrupted calls may have incurred charges; another attempt is an explicit writer decision.
 Opening a project, inspecting a build or restarting the application never queues paid work.
 
@@ -54,7 +57,9 @@ result as evidence and a review proposal, while the editorial write boundary pre
 New version-2 generation requests guard the selected target instead of the entire container file.
 Their frozen context keeps its complete integrity hash; semantic eligibility excludes the legacy
 aggregate scene dependency while retaining the resolver's individual reads, fragments and queries.
-An independent sibling's acceptance therefore does not invalidate the next planned line. Actual
+An independent sibling's acceptance therefore does not invalidate the next planned line. Linked
+scene inputs retain their authored name and summary; unrelated dialogue in that scene does not
+invalidate supporting text. Actual
 context dependencies still do: changing an earlier ambient line can stop a later line whose prompt
 read it. Replan that remaining work against the newly accepted context. Container locks and file
 stamps remain the atomic editorial publication guards. Version-1 requests retain their original

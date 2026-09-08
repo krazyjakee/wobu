@@ -143,6 +143,13 @@ pub fn context_key(context: &FrozenContext) -> String {
     let mut semantic = context.clone();
     semantic.hash.clear();
     semantic.dependencies.remove(&format!("scene/{}", context.options.selection.scene));
+    // Linked scene fragments freeze exactly the authored name and summary read
+    // by the prompt. Their legacy aggregate dependency also includes dialogue.
+    for fragment in &context.fragments {
+        if fragment.kind == "linked_scene" {
+            semantic.dependencies.remove(&fragment.source);
+        }
+    }
     content_hash(&semantic)
 }
 pub fn context_matches(request: &FrozenRequest, current: &FrozenContext) -> bool {

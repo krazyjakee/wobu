@@ -452,3 +452,113 @@ fn policy(
         .unwrap()
         .0
 }
+
+#[test]
+fn resume_recovers_generated_acceptance_after_a_temporary_editorial_lock() {
+    use wobu_narrative::review::EditorialAction;
+    use wobu_store::project::narrative_review::ReviewRequest;
+    let temp = Temp::new();
+    let (mut project, scene) = fixture(&temp, 1);
+    let build = make(&mut project, Scope::Missing);
+    assert!(!build.items[0].reusable);
+    let request = prepare(&mut project, build.id, &selected(&build)).unwrap().remove(0);
+    let mut view = project.review_scene(scene, None).unwrap();
+    let line = view.lines.remove(0);
+    let held = project
+        .begin_review(&ReviewRequest {
+            guard: view.guard,
+            target: line.target,
+            context_revision: line.context_revision,
+            state_json: view.state_json,
+            action: EditorialAction::Policy {
+                scope: PolicyScope::Slot,
+                policy: GenerationPolicy::Generated,
+            },
+        })
+        .unwrap();
+    let receipt_id = wobu_core::new_id();
+    task::persist(&mut project, &request, receipt_id, &success(&request)).unwrap();
+    let pending = status(&project, build.id).unwrap();
+    assert!(pending.history[0].proposal_published);
+    assert!(!pending.decided.contains(&receipt_id));
+    assert!(project.load_scene(scene).unwrap().scene.beats[0].dialogue[0].variants.is_empty());
+    assert!(prepare(&mut project, build.id, &selected(&build)).is_err());
+    assert_eq!(records::attempts(&project, &request).unwrap().len(), 1);
+    drop(held);
+    assert!(prepare(&mut project, build.id, &selected(&build)).unwrap().is_empty());
+    assert_eq!(records::attempts(&project, &request).unwrap().len(), 1);
+    assert!(status(&project, build.id).unwrap().decided.contains(&receipt_id));
+    assert_eq!(
+        project.load_scene(scene).unwrap().scene.beats[0].dialogue[0].variants[0].text.body,
+        "The beacon is dark."
+    );
+    // Completion is historical: a later deliberate edit never restores old output.
+    let mut view = project.review_scene(scene, None).unwrap();
+    let line = view.lines.remove(0);
+    project
+        .apply_review(&ReviewRequest {
+            guard: view.guard,
+            target: line.target,
+            context_revision: line.context_revision,
+            state_json: view.state_json,
+            action: EditorialAction::Edit { body: "Writer's revision".into() },
+        })
+        .unwrap();
+    assert!(status(&project, build.id).unwrap().decided.contains(&receipt_id));
+    assert!(prepare(&mut project, build.id, &selected(&build)).unwrap().is_empty());
+    assert_eq!(
+        project.load_scene(scene).unwrap().scene.beats[0].dialogue[0].variants[0].text.body,
+        "Writer's revision"
+    );
+}
+
+#[test]
+fn linked_scene_v2_eligibility_reads_intent_but_not_dialogue_or_history() {
+    use wobu_narrative::{Name, SourceLink, TextEntry, TextKind};
+    use wobu_narrative_generation::context_matches;
+    let temp = Temp::new();
+    let (mut project, scene) = fixture(&temp, 1);
+    let mut asset =
+        project.create_text_asset(TextKind::Codex, "Codex", Name::new("read").unwrap()).unwrap();
+    asset.asset.policy = GenerationPolicy::Generated;
+    asset.asset.sources.push(SourceLink::Scene(scene));
+    let mut entry = TextEntry::new("Summary");
+    let mut slot = DialogueSlot::new(Speaker::Narrator);
+    slot.policy = GenerationPolicy::Generated;
+    entry.lines.push(slot);
+    asset.asset.entries.push(entry);
+    project.save_text_asset(&mut asset).unwrap();
+    let build = make(&mut project, Scope::Missing);
+    let requests = prepare(&mut project, build.id, &selected(&build)).unwrap();
+    let linked = requests.iter().find(|r| r.target.scene == scene).unwrap();
+    let supporting = requests.iter().find(|r| r.target.scene != scene).unwrap();
+    task::persist(&mut project, linked, wobu_core::new_id(), &success(linked)).unwrap();
+    let current = wobu_store::project::narrative_context::capture(
+        &project,
+        supporting.context.options.clone(),
+        || {},
+    )
+    .unwrap();
+    assert_ne!(current.hash, supporting.context.hash);
+    assert!(context_matches(supporting, &current));
+    let mut tampered = supporting.clone();
+    tampered.context.dependencies = current.dependencies.clone();
+    assert!(tampered.validate().is_err(), "Full frozen evidence still binds aggregate reads");
+    let mut legacy = supporting.clone();
+    legacy.version = 1;
+    assert!(!context_matches(&legacy, &current));
+    assert!(task::prepare(&project, supporting).is_ok());
+    let mut file = project.load_scene(scene).unwrap();
+    file.scene.summary = "Changed intent".into();
+    project.save_scene(&mut file).unwrap();
+    assert!(task::prepare(&project, supporting).is_err());
+    file.scene.summary.clear();
+    project.save_scene(&mut file).unwrap();
+    task::persist(&mut project, supporting, wobu_core::new_id(), &success(supporting)).unwrap();
+    assert_eq!(
+        project.load_text_asset(asset.asset.id).unwrap().asset.entries[0].lines[0].variants[0]
+            .text
+            .body,
+        "The beacon is dark."
+    );
+}

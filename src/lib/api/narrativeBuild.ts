@@ -31,6 +31,7 @@ export interface BuildStatus {
   build: NarrativeBuild
   history: GenerationHistory[]
   dispatched: string[]
+  decided: string[]
 }
 export interface BuildSummary {
   id: string

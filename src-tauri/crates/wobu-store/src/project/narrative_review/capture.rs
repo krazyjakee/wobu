@@ -247,97 +247,7 @@ impl Project {
                 input_problem = Some(e.to_string());
             }
         }
-        let mut history = Vec::new();
-        let mut seen = BTreeSet::new();
-        let mut cursor = file.scene.editorial_head;
-        let mut history_problem = None;
-        while let Some(id) = cursor {
-            if !seen.insert(id) || seen.len() > 100_000 {
-                history_problem =
-                    Some("Editorial history is cyclic or exceeds the supported limit.".into());
-                break;
-            }
-            let record = match self.narrative_record(NarrativeRecordKind::Receipt, id) {
-                Ok(Some(record)) => record,
-                _ => {
-                    history_problem = Some(
-                        "An editorial receipt is missing or invalid. Approval cannot be verified."
-                            .into(),
-                    );
-                    break;
-                }
-            };
-            observations.insert(record.document.rel(), record.stamp);
-            let event = match serde_json::from_value::<EditorialEvent>(record.document.payload) {
-                Ok(event) if event.id == id && event.after.id == file.scene.id && event.valid() => {
-                    event
-                }
-                _ => {
-                    history_problem = Some(
-                        "Editorial receipt identity, version or context binding is invalid.".into(),
-                    );
-                    break;
-                }
-            };
-            cursor = event.parent;
-            history.push(event);
-        }
-        for pair in history.windows(2) {
-            let mut parent = pair[1].after.clone();
-            parent.editorial_head = Some(pair[1].id);
-            if super::write::without_freshness(&pair[0].before)
-                != super::write::without_freshness(&parent)
-            {
-                history_problem = Some(
-                    "Editorial history has a discontinuity. Approval cannot be verified.".into(),
-                );
-            }
-        }
-        if let Some(head) = history.first() {
-            let mut current = file.scene.clone();
-            current.editorial_head = None;
-            if super::write::without_freshness(&head.after)
-                != super::write::without_freshness(&current)
-            {
-                history_problem=Some("Scene changed outside its recorded editorial history. Save the manual change before reviewing.".into());
-            }
-            let by_id = history.iter().map(|event| (event.id, event)).collect::<BTreeMap<_, _>>();
-            for binding in head.bindings.values() {
-                let verified = by_id.get(&binding.event_id).is_some_and(|event| {
-                    let Some(context) = &event.context else { return false };
-                    let Some(id) = binding.target.variant else { return false };
-                    let text = event
-                        .after
-                        .beat(binding.target.beat)
-                        .and_then(|b| b.dialogue.iter().find(|s| s.id == binding.target.slot))
-                        .and_then(|s| s.variants.iter().find(|v| v.id == id).map(|v| (s, v)));
-                    event.bindings.get(&id) == Some(binding)
-                        && origin_matches(event, binding)
-                        && (!binding.approved
-                            || matches!(
-                                event.action,
-                                wobu_narrative::review::EditorialAction::Approve
-                                    | wobu_narrative::review::EditorialAction::Attest
-                            ))
-                        && text.is_some_and(|(s, v)| {
-                            binding.matches(&binding.target, &s.speaker, &v.text)
-                        })
-                        && context.valid()
-                        && context.state == binding.state
-                        && binding.context_revision
-                            == historical_context(
-                                context,
-                                &event.after,
-                                &binding.target,
-                                binding.state.clone(),
-                            )
-                            .revision
-                });
-                if !verified {
-                    history_problem=Some("Approval context, target or wording does not match its immutable decision.".into());
-                }
-            }
-        }
+        let (history, history_problem) = source_history(self, &file, &mut observations);
         let snapshot = ReviewSnapshot {
             file,
             world,
@@ -602,4 +512,104 @@ fn origin_matches(event: &EditorialEvent, binding: &ReviewBinding) -> bool {
         }
         _ => false,
     }
+}
+
+/// Verify canonical editorial evidence without capturing unrelated project inputs.
+pub(super) fn source_history(
+    project: &Project,
+    file: &SceneFile,
+    observations: &mut BTreeMap<String, Option<Stamp>>,
+) -> (Vec<EditorialEvent>, Option<String>) {
+    let mut history = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut cursor = file.scene.editorial_head;
+    let mut history_problem = None;
+    while let Some(id) = cursor {
+        if !seen.insert(id) || seen.len() > 100_000 {
+            history_problem =
+                Some("Editorial history is cyclic or exceeds the supported limit.".into());
+            break;
+        }
+        let record = match project.narrative_record(NarrativeRecordKind::Receipt, id) {
+            Ok(Some(record)) => record,
+            _ => {
+                history_problem = Some(
+                    "An editorial receipt is missing or invalid. Approval cannot be verified."
+                        .into(),
+                );
+                break;
+            }
+        };
+        observations.insert(record.document.rel(), record.stamp);
+        let event = match serde_json::from_value::<EditorialEvent>(record.document.payload) {
+            Ok(event) if event.id == id && event.after.id == file.scene.id && event.valid() => {
+                event
+            }
+            _ => {
+                history_problem = Some(
+                    "Editorial receipt identity, version or context binding is invalid.".into(),
+                );
+                break;
+            }
+        };
+        cursor = event.parent;
+        history.push(event);
+    }
+    for pair in history.windows(2) {
+        let mut parent = pair[1].after.clone();
+        parent.editorial_head = Some(pair[1].id);
+        if super::write::without_freshness(&pair[0].before)
+            != super::write::without_freshness(&parent)
+        {
+            history_problem =
+                Some("Editorial history has a discontinuity. Approval cannot be verified.".into());
+        }
+    }
+    if let Some(head) = history.first() {
+        let mut current = file.scene.clone();
+        current.editorial_head = None;
+        if super::write::without_freshness(&head.after) != super::write::without_freshness(&current)
+        {
+            history_problem=Some("Scene changed outside its recorded editorial history. Save the manual change before reviewing.".into());
+        }
+        let by_id = history.iter().map(|event| (event.id, event)).collect::<BTreeMap<_, _>>();
+        for binding in head.bindings.values() {
+            let verified = by_id.get(&binding.event_id).is_some_and(|event| {
+                let Some(context) = &event.context else { return false };
+                let Some(id) = binding.target.variant else { return false };
+                let text = event
+                    .after
+                    .beat(binding.target.beat)
+                    .and_then(|b| b.dialogue.iter().find(|s| s.id == binding.target.slot))
+                    .and_then(|s| s.variants.iter().find(|v| v.id == id).map(|v| (s, v)));
+                event.bindings.get(&id) == Some(binding)
+                    && origin_matches(event, binding)
+                    && (!binding.approved
+                        || matches!(
+                            event.action,
+                            wobu_narrative::review::EditorialAction::Approve
+                                | wobu_narrative::review::EditorialAction::Attest
+                        ))
+                    && text
+                        .is_some_and(|(s, v)| binding.matches(&binding.target, &s.speaker, &v.text))
+                    && context.valid()
+                    && context.state == binding.state
+                    && binding.context_revision
+                        == historical_context(
+                            context,
+                            &event.after,
+                            &binding.target,
+                            binding.state.clone(),
+                        )
+                        .revision
+            });
+            if !verified {
+                history_problem = Some(
+                    "Approval context, target or wording does not match its immutable decision."
+                        .into(),
+                );
+            }
+        }
+    }
+    (history, history_problem)
 }

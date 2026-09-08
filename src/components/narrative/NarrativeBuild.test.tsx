@@ -91,6 +91,7 @@ it('reopens completed work without spending and selects only failed items for ex
   ])
   const previous = (id: string, status: string) => ({
     request_id: `request-${id}`,
+    receipt_id: `receipt-${id}`,
     attempts: 1,
     status,
     proposal_published: status === 'succeeded',
@@ -99,6 +100,7 @@ it('reopens completed work without spending and selects only failed items for ex
   api.status.mockResolvedValue({
     build,
     history: [previous('generated', 'succeeded'), previous('edited', 'failed')],
+    decided: ['receipt-generated'],
   })
   mount()
   fireEvent.change(await screen.findByLabelText('Resume a saved build'), {
@@ -161,4 +163,30 @@ it('requires an explicit reuse action for a successful result referenced by a ne
   expect(api.start).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Generate / resume 1 selected' }))
   await waitFor(() => expect(api.start).toHaveBeenCalledWith('build', ['edited']))
+})
+
+it('keeps a published Generated result selectable until canonical acceptance is recorded', async () => {
+  const pending = { ...build, items: [row('generated', 'generate')] }
+  api.plan.mockResolvedValue(pending)
+  api.status.mockResolvedValue({
+    build: pending,
+    dispatched: ['request-generated'],
+    decided: [],
+    history: [
+      {
+        request_id: 'request-generated',
+        receipt_id: 'receipt-generated',
+        status: 'succeeded',
+        attempts: 1,
+        proposal_published: true,
+      },
+    ],
+  })
+  mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Plan work' }))
+  expect(await screen.findByText('Resume acceptance; no provider call')).toBeInTheDocument()
+  expect(screen.getByLabelText('Select generated')).toBeEnabled()
+  expect(api.start).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Generate / resume 1 selected' }))
+  await waitFor(() => expect(api.start).toHaveBeenCalledWith('build', ['generated']))
 })

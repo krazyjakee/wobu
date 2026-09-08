@@ -40,6 +40,7 @@ pub struct Status {
     pub build: Build,
     pub history: Vec<generation::HistoryItem>,
     pub dispatched: BTreeSet<Id>,
+    pub decided: BTreeSet<Id>,
 }
 #[tauri::command]
 pub async fn narrative_build_status(
@@ -51,11 +52,27 @@ pub async fn narrative_build_status(
 fn status(project: &Project, id: Id) -> CommandResult<Status> {
     let build = project.narrative_build(id)?;
     let requests: BTreeSet<_> = build.items.iter().filter_map(|i| i.request_id).collect();
-    let history = generation::history_for(project, Some(&requests))?
+    let history: Vec<_> = generation::history_for(project, Some(&requests))?
         .into_iter()
         .filter(|i| requests.contains(&i.request_id))
         .collect();
-    Ok(Status { build, history, dispatched: project.narrative_build_dispatched(id)? })
+    let automatic: BTreeSet<_> = build
+        .items
+        .iter()
+        .filter(|item| item.action == Action::Generate)
+        .filter_map(|item| item.request_id)
+        .collect();
+    let mut scenes = BTreeMap::<_, BTreeSet<_>>::new();
+    for item in history
+        .iter()
+        .filter(|item| item.proposal_published && automatic.contains(&item.request_id))
+    {
+        if let Some(receipt) = item.receipt_id {
+            scenes.entry(item.target.scene).or_default().insert(receipt);
+        }
+    }
+    let decided = project.narrative_decided_proposals(&scenes)?;
+    Ok(Status { build, history, dispatched: project.narrative_build_dispatched(id)?, decided })
 }
 #[derive(Serialize)]
 pub struct Summary {
@@ -129,17 +146,17 @@ fn prepare(
             if item.reusable {
                 fresh.push(request.clone());
             }
-            recover.push((request, *id, receipt.clone(), item.reusable));
+            recover.push((request, *id, receipt.clone(), item.action));
             continue;
         }
         queued.push(request.clone());
         fresh.push(request.clone());
     }
     check_batch(project, &fresh)?;
-    for (request, id, receipt, reusable) in recover {
+    for (request, id, receipt, action) in recover {
         records::publish(project, request, id, &receipt)?;
-        if reusable {
-            let _ = project.apply_generated_proposal(id);
+        if action == Action::Generate {
+            project.apply_generated_proposal(id)?;
         }
     }
     Ok(queued)

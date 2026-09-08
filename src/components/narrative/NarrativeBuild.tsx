@@ -10,6 +10,7 @@ import {
   narrativeBuildStatus,
   type BuildAction,
   type BuildScope,
+  type BuildItem,
   type NarrativeBuild as Build,
 } from '../../lib/api/narrativeBuild'
 import type { ContextSelection } from '../../lib/api/narrativeContext'
@@ -69,6 +70,7 @@ export function NarrativeBuild({
   })
   const build = status.data?.build
   const dispatched = new Set(status.data?.dispatched ?? [])
+  const decided = new Set(status.data?.decided ?? [])
   const history = new Map(status.data?.history.map((item) => [item.request_id, item]))
   const buildRequests = new Set(build?.items.map((item) => item.request_id))
   const running = active.filter((job) => buildRequests.has(job.subjectId ?? ''))
@@ -99,6 +101,7 @@ export function NarrativeBuild({
       build: next,
       history: [],
       dispatched: [],
+      decided: [],
     })
   }
   const plan = () =>
@@ -115,28 +118,22 @@ export function NarrativeBuild({
         (previous?.status !== 'succeeded' && jobsByRequest.get(item.request_id)?.state === 'failed')
       )
     }) ?? []
-  const completed =
-    build?.items.filter((item) => {
-      const previous = item.request_id ? history.get(item.request_id) : undefined
-      return (
-        previous?.status === 'succeeded' &&
-        previous.proposal_published &&
-        (!item.reusable || dispatched.has(item.request_id ?? ''))
-      )
-    }).length ?? 0
+  const isDone = (item: BuildItem) => {
+    const previous = item.request_id ? history.get(item.request_id) : undefined
+    return (
+      previous?.status === 'succeeded' &&
+      previous.proposal_published &&
+      (item.action !== 'generate' ||
+        decided.has(previous.receipt_id ?? '') ||
+        previous.proposal_current_at_publication === false) &&
+      (!item.reusable || dispatched.has(item.request_id ?? ''))
+    )
+  }
+  const completed = build?.items.filter(isDone).length ?? 0
   const ready =
-    build?.items.filter((item) => {
-      const previous = item.request_id ? history.get(item.request_id) : undefined
-      return (
-        item.request_id &&
-        !runningByRequest.has(item.request_id) &&
-        !(
-          previous?.status === 'succeeded' &&
-          previous.proposal_published &&
-          (!item.reusable || dispatched.has(item.request_id))
-        )
-      )
-    }) ?? []
+    build?.items.filter(
+      (item) => item.request_id && !runningByRequest.has(item.request_id) && !isDone(item),
+    ) ?? []
   const chosen = ready.filter((item) => selected.has(item.id))
 
   return (
@@ -306,10 +303,7 @@ export function NarrativeBuild({
                     const previous = item.request_id ? history.get(item.request_id) : undefined
                     const live = runningByRequest.get(item.request_id)
                     const lastJob = jobsByRequest.get(item.request_id)
-                    const done =
-                      previous?.status === 'succeeded' &&
-                      previous.proposal_published &&
-                      (!item.reusable || dispatched.has(item.request_id ?? ''))
+                    const done = isDone(item)
                     return (
                       <tr key={item.id}>
                         <td>
@@ -362,12 +356,14 @@ export function NarrativeBuild({
                               : previous?.status === 'succeeded'
                                 ? item.reusable
                                   ? 'Stored result ready'
-                                  : 'Recover publication'
+                                  : previous.proposal_published
+                                    ? 'Resume acceptance; no provider call'
+                                    : 'Recover publication'
                                 : previous?.attempts
                                   ? previous.status
                                   : item.request_id
                                     ? dispatched.has(item.request_id)
-                                      ? 'Interrupted; explicit resume required'
+                                      ? 'Interrupted; charge unknown; explicit resume required'
                                       : 'Ready'
                                     : 'Excluded')}
                           {lastJob?.state === 'failed' && !done && <p>{lastJob.failure.message}</p>}
