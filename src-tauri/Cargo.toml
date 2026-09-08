@@ -52,6 +52,7 @@ wobu-narrative = { path = "crates/wobu-narrative" }
 wobu-narrative-compiler = { path = "crates/wobu-narrative-compiler" }
 wobu-narrative-runtime = { path = "crates/wobu-narrative-runtime" }
 wobu-narrative-package = { path = "crates/wobu-narrative-package" }
+wobu-narrative-context = { path = "crates/wobu-narrative-context" }
 
 [package]
 name = "wobu"
@@ -148,6 +149,7 @@ wobu-narrative = { workspace = true }
 wobu-narrative-compiler = { workspace = true }
 wobu-narrative-runtime = { workspace = true }
 wobu-narrative-package = { workspace = true }
+wobu-narrative-context = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
 

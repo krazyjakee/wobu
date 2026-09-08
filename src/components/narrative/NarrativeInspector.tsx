@@ -5,7 +5,7 @@ import { useUI } from '../../store/ui'
 import { TipButton } from '../Tooltip'
 import { conditionText } from './flow/source'
 import { useNarrativeNames } from './flow/useNarrativeNames'
-import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
+import { NarrativeContext } from './NarrativeContext'
 import './narrativeInspector.css'
 
 /** The saved scene context, shared by Flow, Script and Source selection. */
@@ -121,20 +121,15 @@ export function NarrativeInspector() {
           )}
         </>
       )}
-      <section className="nrt-context">
-        <h3>Knowledge and relationships</h3>
-        <p className="nrt-note">
-          Open World to edit facts, beliefs and relationships. Resolved generation context is not
-          yet available here.
-        </p>
-        <TipButton
-          className="btn"
-          disabledReason={NARRATIVE_UNAVAILABLE.source}
-          tip="Show the exact context and prompt a generation would be sent"
-        >
-          Inspect generation request
-        </TipButton>
-      </section>
+      {sceneId && beatId && lineId && slot ? (
+        <NarrativeContext
+          key={`${sceneId}/${beatId}/${lineId}`}
+          selection={{ scene: sceneId, beat: beatId, slot: lineId }}
+          slot={slot}
+        />
+      ) : (
+        <p className="nrt-note">Select a dialogue line to resolve attributed generation context.</p>
+      )}
     </aside>
   )
 }

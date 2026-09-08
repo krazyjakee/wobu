@@ -7877,6 +7877,7 @@ dependencies = [
  "wobu-mcp",
  "wobu-narrative",
  "wobu-narrative-compiler",
+ "wobu-narrative-context",
  "wobu-narrative-package",
  "wobu-narrative-runtime",
  "wobu-store",
@@ -7989,6 +7990,20 @@ dependencies = [
  "serde",
  "serde_json",
  "wobu-narrative",
+]
+
+[[package]]
+name = "wobu-narrative-context"
+version = "0.1.11"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+ "wobu-core",
+ "wobu-influence",
+ "wobu-narrative",
+ "wobu-narrative-compiler",
+ "wobu-narrative-runtime",
 ]
 
 [[package]]

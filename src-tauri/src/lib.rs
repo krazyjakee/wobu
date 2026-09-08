@@ -161,6 +161,8 @@ pub fn run() {
             commands::nodes::node_backlinks,
             commands::narrative_export::narrative_export_check,
             commands::narrative_export::narrative_export,
+            commands::narrative_context::narrative_context_capture,
+            commands::narrative_context::narrative_context_freshness,
             commands::narrative_preview::narrative_compile,
             commands::narrative_preview::narrative_preview_start,
             commands::narrative_preview::narrative_preview_step,

@@ -45,7 +45,7 @@ Events reference established facts and an applicable condition. Quests declare t
 initial stage, conditional transitions and scene memberships. Future knowledge restrictions name
 a fact and the characters who must not reveal it until a condition holds. An empty character list
 means everyone; **Never** keeps the restriction in force indefinitely. These records author intent
-and constraints; automatic attribution into generation requests remains #163.
+and constraints. Select a dialogue line to [inspect attributed generation context](23-narrative-context.md), including its speaker’s knowledge and frozen source dependencies.
 
 **Variables** declares the finite domains used by conditions: booleans, bounded integers and named
 values. Names use lowercase letters, digits and underscores, starting with a letter; reserved YAML
@@ -172,7 +172,8 @@ record, rather than reusing #192's counts for the changed implementation.
 | #161 / #195 | Isolated Preview, starting state, checkpoints, evaluated traces, configurable command results and recorded native walkthrough. | Saved scenarios (#162) and Flow route overlays (#188). |
 | #191 | Real multiquest filtering/column and migration of saved views. | Act/tag metadata, rebuildable index and real-load/native acceptance. |
 
-Source repair and semantic ranges (#157), native packages (#160), and migration/Preview traces
-(#195) are implemented. Indexing/sync/recovery (#153), persistent scenarios (#162), generation/review (#163–#167), incremental analysis
+Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
+(#195), and attributed frozen generation context (#163) are implemented. Indexing/sync/recovery
+(#153), persistent scenarios (#162), generation jobs/review (#164–#167), incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.

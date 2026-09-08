@@ -31,6 +31,7 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [19 — Narrative Authoring](19-narrative-authoring.md) | Scene/quest discovery, World, typed Script, Preview, draft safety and acceptance gaps |
 | [20 — Native Narrative Packages](20-native-narrative-packages.md) | Export profiles, native JSON layout, identity, validation limits and safe publication |
 | [21 — Native Narrative Preview](21-native-narrative-preview.md) | Real Tauri walkthrough, command results, restore, bounds and project isolation evidence |
+| [23 — Narrative Generation Context](23-narrative-context.md) | Speaker knowledge, attributed constraints, bounded frozen inputs and freshness |
 
 Two constraints shape most of the above and are worth knowing up front:
 
