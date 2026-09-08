@@ -33,7 +33,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use wobu_core::NodeKind;
 use wobu_narrative::{
-    EntityId, Provenance, Scene, StateSchema, TextAsset, VariantId, WorldDocument,
+    EntityId, Provenance, Revision, Scene, StateSchema, TextAsset, VariantId, WorldDocument,
 };
 use wobu_narrative_context::Character;
 use wobu_narrative_deps::{
@@ -75,9 +75,97 @@ pub struct DependencySnapshot {
     /// The source fingerprint this snapshot was read at, kept so a caller can
     /// prove a later publication is describing the same project.
     pub fingerprint: String,
+    observed: CharacterRead,
+}
+
+/// Immutable evidence of the input revision a particular wording was authored against.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DependencyReceipt {
+    #[serde(rename = "type")]
+    kind: String,
+    entries: Vec<DependencyBaseline>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DependencyBaseline {
+    parent: Option<wobu_core::Id>,
+    revision: Revision,
+    dependencies: DependencySet,
+}
+
+/// Chunk below the shared sync limit, including pretty-printed envelope bytes.
+/// The conservative per-entry estimate avoids repeatedly serializing a growing
+/// batch; the exact final length is checked before any chunk is published.
+fn dependency_documents(
+    entries: Vec<DependencyBaseline>,
+) -> Result<Vec<crate::NarrativeRecordDocument>> {
+    let limit = super::narrative_sync::MAX_NARRATIVE_FILE_BYTES;
+    let mut chunks = Vec::new();
+    let mut chunk = Vec::new();
+    let mut size = 1024;
+    for entry in entries {
+        let json = serde_json::to_string_pretty(&entry)?;
+        let cost = json.len() + json.lines().count() * 8 + 4;
+        if cost + 1024 > limit {
+            return Err(invalid("One dependency entry exceeds the portable narrative file limit."));
+        }
+        if size + cost > limit {
+            chunks.push(std::mem::take(&mut chunk));
+            size = 1024;
+        }
+        size += cost;
+        chunk.push(entry);
+    }
+    if !chunk.is_empty() {
+        chunks.push(chunk);
+    }
+    chunks
+        .into_iter()
+        .map(|entries| {
+            let document = crate::NarrativeRecordDocument::new(
+                NarrativeRecordKind::Receipt,
+                wobu_core::new_id(),
+                "Narrative dependency baseline",
+                serde_json::to_value(DependencyReceipt {
+                    kind: "narrative_dependency_baseline".into(),
+                    entries,
+                })?,
+            );
+            if crate::narrative::publication::canonical_record_text(&document)?.len() > limit {
+                return Err(invalid(
+                    "Dependency receipt exceeds the portable narrative file limit.",
+                ));
+            }
+            Ok(document)
+        })
+        .collect()
 }
 
 impl DependencySnapshot {
+    /// Refuse publication from a snapshot whose canonical inputs moved.
+    pub fn check_current(&self, project: &Project) -> Result<()> {
+        if project.narrative_fingerprint()? != self.fingerprint
+            || project.read_characters(&self.observed.keys().copied().collect())? != self.observed
+        {
+            return Err(invalid(
+                "Narrative source changed while reading dependencies. Reload and try again.",
+            ));
+        }
+        Ok(())
+    }
+
+    fn revisions(&self) -> BTreeMap<VariantId, Revision> {
+        self.scenes
+            .iter()
+            .flat_map(|s| s.dialogue_slots().map(|(_, slot)| slot))
+            .chain(self.texts.iter().flat_map(|a| a.lines().map(|(_, slot)| slot)))
+            .flat_map(|slot| slot.variants.iter())
+            .map(|v| (v.id, v.text.revision.clone()))
+            .collect()
+    }
+
     pub fn sets(&self) -> Vec<DependencySet> {
         capture(&Snapshot {
             scenes: &self.scenes,
@@ -130,10 +218,16 @@ impl Project {
     /// Read every canonical input a dependency capture needs, and refuse to
     /// return one that moved while it was being read.
     ///
-    /// Rebuilding from canonical data after cache loss is exactly this call
-    /// followed by [`DependencySnapshot::index`]; there is no second, cheaper
-    /// path that could disagree with it.
+    /// This is today's source input, compared with the immutable historical
+    /// baseline reconstructed separately from canonical receipts.
     pub fn narrative_dependency_snapshot(&self) -> Result<DependencySnapshot> {
+        self.read_dependency_snapshot(|| Ok(()))
+    }
+
+    fn read_dependency_snapshot(
+        &self,
+        before_check: impl FnOnce() -> Result<()>,
+    ) -> Result<DependencySnapshot> {
         let fingerprint = self.narrative_fingerprint()?;
         let scenes = self.scenes()?;
         let texts = self.text_assets()?;
@@ -143,6 +237,7 @@ impl Project {
         let observed = self.read_characters(&ids)?;
         let producers = self.narrative_producers(&scenes, &texts)?;
 
+        before_check()?;
         // The coherence check. Character nodes are Markdown files outside the
         // narrative tree, so the source fingerprint says nothing about them and
         // they have to be re-read by hand.
@@ -157,6 +252,7 @@ impl Project {
             texts,
             world,
             schema,
+            observed: observed.clone(),
             characters: observed
                 .into_iter()
                 .filter_map(|(id, (character, _))| character.map(|value| (id, value)))
@@ -167,38 +263,174 @@ impl Project {
         })
     }
 
-    /// What the local index remembers each line was written against.
-    ///
-    /// An empty answer is not "everything is current" — it is "nothing has been
-    /// recorded", which [`DependencyIndex::diff`] reports as every line being
-    /// untracked rather than as every line being stale.
+    /// Reconstruct historical baselines from immutable canonical receipts. SQLite
+    /// is only an accelerator; deleting it cannot acknowledge an outstanding change.
     pub fn narrative_dependencies(&self) -> Result<DependencyIndex> {
-        self.index.narrative_dependencies()
+        let index = DependencyIndex::rebuild(
+            self.dependency_receipts()?.into_values().map(|(_, r)| r.dependencies),
+        );
+        if self.index.narrative_dependencies()? != index {
+            self.index.replace_narrative_dependencies(&index)?;
+        }
+        Ok(index)
     }
 
-    /// Forget what every line was written against.
-    ///
-    /// Exactly what deleting the local database would cost, spelled as an
-    /// operation so that the recovery path is exercised rather than assumed.
-    /// Afterwards every line reports as
-    /// [`Untracked`](wobu_narrative_deps::AffectedKind::Untracked) — which is
-    /// the correct answer and not a soft one: nothing is known about what these
-    /// lines were written against, so nothing can be claimed to have gone stale,
-    /// and the freshness flags already in the documents are left exactly as they
-    /// are.
+    fn dependency_receipts(
+        &self,
+    ) -> Result<BTreeMap<VariantId, (wobu_core::Id, DependencyBaseline)>> {
+        let mut histories: BTreeMap<VariantId, BTreeMap<wobu_core::Id, DependencyBaseline>> =
+            BTreeMap::new();
+        for file in self.narrative_records(NarrativeRecordKind::Receipt)? {
+            if file.document.payload.get("type").and_then(serde_json::Value::as_str)
+                != Some("narrative_dependency_baseline")
+            {
+                continue;
+            }
+            let receipt: DependencyReceipt = serde_json::from_value(file.document.payload)?;
+            for entry in receipt.entries {
+                if entry.dependencies.version != wobu_narrative_deps::DEPENDENCY_VERSION {
+                    return Err(invalid(
+                        "Unsupported dependency receipt version; do not downgrade canonical evidence.",
+                    ));
+                }
+                if histories
+                    .entry(entry.dependencies.variant())
+                    .or_default()
+                    .insert(file.document.id, entry)
+                    .is_some()
+                {
+                    return Err(invalid("Duplicate variant in a dependency receipt."));
+                }
+            }
+        }
+        let mut result = BTreeMap::new();
+        for (variant, mut history) in histories {
+            let parents: BTreeSet<_> = history.values().filter_map(|entry| entry.parent).collect();
+            if parents.iter().any(|id| !history.contains_key(id)) {
+                return Err(invalid("A canonical dependency parent receipt is missing."));
+            }
+            let leaves: Vec<_> =
+                history.keys().filter(|id| !parents.contains(id)).copied().collect();
+            if leaves.len() != 1 {
+                return Err(invalid(
+                    "Concurrent or cyclic dependency baselines require reconciliation; no baseline was acknowledged.",
+                ));
+            }
+            // A chain, not wall-clock/ULID ordering, decides what supersedes what.
+            let mut cursor = Some(leaves[0]);
+            let mut seen = BTreeSet::new();
+            while let Some(id) = cursor {
+                if !seen.insert(id) {
+                    return Err(invalid("Cyclic dependency history."));
+                }
+                cursor = history[&id].parent;
+            }
+            if seen.len() != history.len() {
+                return Err(invalid("Disconnected dependency history."));
+            }
+            result.insert(variant, (leaves[0], history.remove(&leaves[0]).unwrap()));
+        }
+        Ok(result)
+    }
+
+    /// Drop only the local projection. Canonical historical receipts are retained.
     pub fn forget_narrative_dependencies(&self) -> Result<()> {
         self.index.forget_narrative_dependencies()
     }
 
-    /// Capture from canonical data and replace the stored index with it.
-    ///
-    /// The recovery path from cache loss, and also the way a caller says "I have
-    /// acted on the current affected set; this is the new baseline". It writes
-    /// no project file.
+    /// Rebuild the historical index from canonical receipts, never from today's
+    /// world. New authoring is recorded separately by `refresh_narrative_dependencies`.
     pub fn rebuild_narrative_dependencies(&self) -> Result<DependencyIndex> {
-        let index = self.narrative_dependency_snapshot()?.index();
-        self.index.replace_narrative_dependencies(&index)?;
-        Ok(index)
+        self.narrative_dependencies()
+    }
+
+    /// Persist the inputs for explicitly authored/accepted wording. The caller's
+    /// snapshot is checked immediately before publication, including characters
+    /// outside narrative/. Immutable old receipts remain available for inspection.
+    pub fn record_narrative_dependency_snapshot(
+        &mut self,
+        snapshot: &DependencySnapshot,
+        variants: &BTreeSet<VariantId>,
+    ) -> Result<()> {
+        self.ensure_writable()?;
+        snapshot.check_current(self)?;
+        if variants.is_empty() {
+            return Ok(());
+        }
+        let previous = self.dependency_receipts()?;
+        let revisions = snapshot.revisions();
+        let entries: Vec<_> = snapshot
+            .sets()
+            .into_iter()
+            .filter(|s| variants.contains(&s.variant()))
+            .map(|dependencies| DependencyBaseline {
+                parent: previous.get(&dependencies.variant()).map(|(id, _)| *id),
+                revision: revisions[&dependencies.variant()].clone(),
+                dependencies,
+            })
+            .collect();
+        let documents = dependency_documents(entries)?;
+        snapshot.check_current(self)?;
+        // Bounded chunks use the existing portable sync cap. Serialize and check
+        // every chunk before publishing; do not recapture/rebuild per entry.
+        for document in documents {
+            let mut file = crate::NarrativeRecordFile { document, stamp: None };
+            if !matches!(self.save_narrative_record(&mut file)?, SourceSave::Saved(_)) {
+                return Err(invalid(
+                    "Dependency receipt publication conflicted; no baseline was acknowledged.",
+                ));
+            }
+        }
+        self.rebuild_narrative_dependencies()?;
+        Ok(())
+    }
+
+    /// Record a completed explicit edit, acceptance or context attestation.
+    pub fn record_narrative_dependencies_for(
+        &mut self,
+        variants: &BTreeSet<VariantId>,
+    ) -> Result<()> {
+        let snapshot = self.narrative_dependency_snapshot()?;
+        self.record_narrative_dependency_snapshot(&snapshot, variants)
+    }
+
+    /// Enroll only the wording this local authoring operation actually wrote.
+    /// Watchers must never infer a remote line's baseline while its receipt is
+    /// still in transit.
+    pub fn record_authored_narrative_dependencies_for(
+        &mut self,
+        variants: &BTreeSet<VariantId>,
+    ) -> Result<()> {
+        let snapshot = self.narrative_dependency_snapshot()?;
+        let previous = self.dependency_receipts()?;
+        let new_wording = snapshot
+            .revisions()
+            .into_iter()
+            .filter_map(|(id, revision)| {
+                (variants.contains(&id)
+                    && previous.get(&id).is_none_or(|(_, r)| r.revision != revision))
+                .then_some(id)
+            })
+            .collect();
+        self.record_narrative_dependency_snapshot(&snapshot, &new_wording)
+    }
+
+    /// Propagate changes against canonical evidence on saves and reconciliation.
+    /// Unknown remote wording remains untracked until its receipt arrives.
+    pub fn refresh_narrative_dependencies(&mut self) -> Result<()> {
+        if self.is_read_only() {
+            return Ok(());
+        }
+        // Reconciliation must still expose damaged files for repair. Explicit
+        // reads report the error; automatic maintenance publishes no baseline
+        // from a partial or invalid project.
+        if self.narrative_index()?.iter().any(|entry| entry.error.is_some())
+            || !self.index.corrupt_paths()?.is_empty()
+        {
+            return Ok(());
+        }
+        self.mark_narrative_affected()?;
+        Ok(())
     }
 
     /// Which lines have been affected since the stored index was recorded, and
@@ -220,10 +452,11 @@ impl Project {
         &self,
         keys: &BTreeSet<String>,
     ) -> Result<BTreeSet<VariantId>> {
+        self.narrative_dependencies()?;
         self.index.narrative_dependency_candidates(keys)
     }
 
-    /// Propagate invalidation into authored text, and record the new baseline.
+    /// Propagate invalidation without acknowledging or replacing the historical baseline.
     ///
     /// Returns the full affected report, including the lines it did not write
     /// to — an untracked line has nothing to invalidate and an absent line has
@@ -233,7 +466,9 @@ impl Project {
     /// Nothing is written for a document whose affected lines are all already
     /// out of date, so running this twice touches no file the second time.
     pub fn mark_narrative_affected(&mut self) -> Result<Vec<Affected>> {
-        let affected = self.narrative_affected()?;
+        let snapshot = self.narrative_dependency_snapshot()?;
+        let affected = self.narrative_dependencies()?.diff(&snapshot.index());
+        snapshot.check_current(self)?;
         let mut scenes: BTreeMap<String, BTreeSet<VariantId>> = BTreeMap::new();
         let mut texts: BTreeMap<String, BTreeSet<VariantId>> = BTreeMap::new();
         for item in &affected {
@@ -255,15 +490,22 @@ impl Project {
         }
         for (scene, variants) in scenes {
             if let Ok(id) = scene.parse() {
-                self.mark_scene_out_of_date(id, &variants)?;
+                let expected =
+                    snapshot.scenes.iter().find(|scene| scene.id == id).ok_or_else(|| {
+                        invalid("Affected scene is absent from the captured snapshot.")
+                    })?;
+                self.mark_scene_out_of_date(id, &variants, expected)?;
             }
         }
         for (asset, variants) in texts {
             if let Ok(id) = asset.parse() {
-                self.mark_text_out_of_date(id, &variants)?;
+                let expected =
+                    snapshot.texts.iter().find(|asset| asset.id == id).ok_or_else(|| {
+                        invalid("Affected text is absent from the captured snapshot.")
+                    })?;
+                self.mark_text_out_of_date(id, &variants, expected)?;
             }
         }
-        self.rebuild_narrative_dependencies()?;
         Ok(affected)
     }
 
@@ -328,6 +570,7 @@ impl Project {
         &mut self,
         id: wobu_narrative::SceneId,
         variants: &BTreeSet<VariantId>,
+        expected: &Scene,
     ) -> Result<()> {
         self.ensure_writable()?;
         let _lock = super::narrative_review::scene_lock(self, id)?;
@@ -338,6 +581,11 @@ impl Project {
             Err(Error::NoSuchNode(_)) => return Ok(()),
             Err(error) => return Err(error),
         };
+        if &file.scene != expected {
+            return Err(invalid(
+                "Scene revision changed before dependency publication. Reload and try again.",
+            ));
+        }
         let mut touched = false;
         for beat in &mut file.scene.beats {
             for slot in &mut beat.dialogue {
@@ -364,6 +612,7 @@ impl Project {
         &mut self,
         id: wobu_narrative::TextAssetId,
         variants: &BTreeSet<VariantId>,
+        expected: &TextAsset,
     ) -> Result<()> {
         self.ensure_writable()?;
         let mut file: TextFile = match self.load_text_asset(id) {
@@ -371,6 +620,11 @@ impl Project {
             Err(Error::NoSuchNode(_)) => return Ok(()),
             Err(error) => return Err(error),
         };
+        if &file.asset != expected {
+            return Err(invalid(
+                "Text revision changed before dependency publication. Reload and try again.",
+            ));
+        }
         let mut touched = false;
         for entry in &mut file.asset.entries {
             for slot in &mut entry.lines {
@@ -384,8 +638,8 @@ impl Project {
         if !touched {
             return Ok(());
         }
-        match self.save_text_asset(&mut file)? {
-            SourceSave::Saved(_) => Ok(()),
+        match crate::narrative::write_text(self.root(), &mut file, &self.peer)? {
+            SourceSave::Saved(_) => self.index_narrative_path(&file.rel),
             SourceSave::Conflict { .. } => Err(invalid(
                 "A supporting text asset changed while marking it out of date. Reload and try again.",
             )),
@@ -512,4 +766,31 @@ fn referenced_entities(
         _ => None,
     }));
     ids
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_world_edit_between_capture_and_validation_refuses_the_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = Project::create(dir.path(), "Capture race").unwrap();
+        project.save_world(&WorldDocument::default(), None).unwrap();
+        let result = project.read_dependency_snapshot(|| {
+            let mut changed = WorldDocument::default();
+            changed.facts.push(wobu_narrative::Fact {
+                id: wobu_core::new_id(),
+                name: "Arrived during capture".into(),
+                assertion: "This world did not exist when reading began.".into(),
+                sources: vec![],
+                entity_ids: vec![],
+            });
+            let path = project.root().join("narrative/world.yaml");
+            std::fs::write(&path, changed.to_yaml().unwrap()).map_err(|e| Error::io(path, e))
+        });
+        assert!(
+            matches!(result, Err(Error::Malformed { reason, .. }) if reason.contains("changed while reading dependencies"))
+        );
+    }
 }

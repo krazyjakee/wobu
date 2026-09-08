@@ -210,12 +210,10 @@ impl Project {
                         && context.valid()
                         && context.state == binding.state
                         && binding.context_revision
-                            == ReviewContext::capture(
+                            == historical_context(
+                                context,
                                 &event.after,
                                 &binding.target,
-                                context.inputs["world"].clone(),
-                                context.inputs["schema"].clone(),
-                                context.inputs["characters"].clone(),
                                 binding.state.clone(),
                             )
                             .revision
@@ -291,7 +289,7 @@ impl ReviewSnapshot {
         if target.variant.is_some_and(|id| !slot.variants.iter().any(|v| v.id == id)) {
             return Err(invalid("Review variant is missing."));
         }
-        Ok(ReviewContext::capture(
+        Ok(capture_context(
             &self.file.scene,
             target,
             serde_json::to_value(&self.world)?,
@@ -310,7 +308,7 @@ impl ReviewSnapshot {
         let mut proofs = BTreeMap::new();
         for (id, binding) in self.bindings() {
             // An approval retains its reviewed scenario, not whichever preview is selected now.
-            let context = ReviewContext::capture(
+            let context = capture_context(
                 &self.file.scene,
                 &binding.target,
                 serde_json::to_value(&self.world)?,

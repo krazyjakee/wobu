@@ -71,7 +71,9 @@ fn upstream_edit_keeps_locked_words_stale_until_explicit_attestation() {
     let view = p.review_scene(t.scene, None).unwrap();
     assert_eq!(view.lines[0].freshness, Freshness::OutOfDate);
     assert!(!view.lines[0].approval_valid);
-    assert_eq!(view.lines[0].text.as_ref(), Some(&text));
+    let mut stale_text = text.clone();
+    stale_text.lifecycle.freshness = Freshness::OutOfDate;
+    assert_eq!(view.lines[0].text.as_ref(), Some(&stale_text));
     apply(&mut p, &t, EditorialAction::Attest);
     assert!(p.review_scene(t.scene, None).unwrap().lines[0].approval_valid);
     assert_eq!(p.review_scene(t.scene, None).unwrap().history[0].action, "attest");
@@ -188,7 +190,7 @@ fn missing_character_and_invalid_state_cannot_be_approved() {
     assert!(p.review_scene(t.scene, Some("{\"undeclared\":true}")).is_err());
 }
 #[test]
-fn semantic_projection_ignores_flags_but_not_other_words_or_identity() {
+fn legacy_context_projection_remains_verifiable_after_precise_context_upgrade() {
     let (_d, p, file, t) = fixture();
     let context = p.review_context(&t, None).unwrap();
     let mut scene = file.scene.clone();
@@ -205,9 +207,14 @@ fn semantic_projection_ignores_flags_but_not_other_words_or_identity() {
             context.state.clone(),
         )
     };
-    assert_eq!(capture(&scene).revision, context.revision);
+    let legacy = capture(&file.scene);
+    assert_eq!(legacy.version, 1);
+    assert!(legacy.valid());
+    assert_eq!(context.version, 2);
+    assert!(context.valid());
+    assert_eq!(capture(&scene).revision, legacy.revision);
     scene.beats[0].title = "Changed intent".into();
-    assert_ne!(capture(&scene).revision, context.revision);
+    assert_ne!(capture(&scene).revision, legacy.revision);
 }
 
 #[test]

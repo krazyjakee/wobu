@@ -102,7 +102,17 @@ impl Project {
             stamp: current.and_then(|f| f.stamp),
         };
         match self.save_editorial_scene_locked(&mut file)? {
-            SourceSave::Saved(_) => Ok(file),
+            SourceSave::Saved(_) => {
+                drop(_lock);
+                let authored = file
+                    .scene
+                    .dialogue_slots()
+                    .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+                    .collect();
+                self.record_authored_narrative_dependencies_for(&authored)?;
+                self.refresh_narrative_dependencies()?;
+                self.load_scene(file.scene.id)
+            }
             SourceSave::Conflict { .. } => {
                 Err(invalid("Scene changed during undo. Reload before restoring."))
             }
@@ -337,7 +347,7 @@ impl Project {
         }
         // Selected wording is excluded from this semantic projection, while
         // variant identity and conditions remain. Capture after insertion.
-        let context = ReviewContext::capture(
+        let context = capture_context(
             &scene,
             &binding_target,
             serde_json::to_value(&tx.snapshot.world)?,
@@ -398,10 +408,22 @@ impl Project {
             self.write_editorial_event(event)?;
         }
         tx.snapshot.check_current(self)?;
+        let reviewed = tx
+            .bindings
+            .iter()
+            .filter_map(|(id, binding)| {
+                tx.events.iter().any(|event| event.id == binding.event_id).then_some(*id)
+            })
+            .collect();
         let mut file = tx.snapshot.file;
         file.scene = tx.scene;
         match self.write_review_scene(&mut file)? {
-            SourceSave::Saved(_) => Ok(file),
+            SourceSave::Saved(_) => {
+                drop(tx._lock);
+                self.record_narrative_dependencies_for(&reviewed)?;
+                self.refresh_narrative_dependencies()?;
+                self.load_scene(file.scene.id)
+            }
             SourceSave::Conflict { .. } => Err(invalid(
                 "Scene changed before review publication. Receipts remain uncommitted; reload before deciding.",
             )),

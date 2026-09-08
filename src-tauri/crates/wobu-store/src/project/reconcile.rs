@@ -306,6 +306,7 @@ impl Project {
         // previous complete read model rather than exposing a partial rebuild.
         let narrative = super::narrative_index::observe(&self.root)?;
         self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken, &narrative)?;
+        self.refresh_narrative_dependencies()?;
         on_progress(ScanProgress { done: total, total });
         Ok(())
     }
@@ -427,6 +428,9 @@ impl Project {
             self.index.replace_narrative(&narrative)?;
             changed = true;
         }
+        if changed {
+            self.refresh_narrative_dependencies()?;
+        }
         changed |= self.layout_observation != layout_observation;
         self.layout_observation = layout_observation;
         Ok(Some(changed))
@@ -518,6 +522,9 @@ impl Project {
         let layout_observation = crate::narrative::layout::observation(&self.root);
         let layout_changed = self.layout_observation != layout_observation;
         self.layout_observation = layout_observation;
+        if changed || narrative_changed || recovered {
+            self.refresh_narrative_dependencies()?;
+        }
         Ok(changed || narrative_changed || recovered || layout_changed)
     }
 

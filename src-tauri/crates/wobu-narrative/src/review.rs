@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use wobu_core::Id;
 
 pub const REVIEW_VERSION: u32 = 1;
+/// Current context fingerprint contract; editorial envelope version remains stable.
+pub const REVIEW_CONTEXT_VERSION: u32 = 2;
 
 /// Strip a serialized document down to what a reviewer actually read.
 ///
@@ -135,9 +137,36 @@ impl ReviewContext {
         Self { version: REVIEW_VERSION, revision, state, inputs }
     }
 
+    /// Version 2 binds only the target's dependency inputs and referenced state
+    /// values. Full frozen inputs remain in the receipt; v1 verification is kept.
+    pub fn with_dependencies(mut self, dependencies: Json) -> Self {
+        self.version = REVIEW_CONTEXT_VERSION;
+        self.inputs["dependencies"] = dependencies;
+        self.revision = self.dependency_revision();
+        self
+    }
+
+    fn dependency_revision(&self) -> String {
+        let fields = self.inputs["dependencies"]["fields"].as_object();
+        let state: BTreeMap<_, _> = self
+            .state
+            .iter()
+            .filter(|(name, _)| {
+                fields.is_some_and(|fields| fields.contains_key(&format!("state/{name}")))
+            })
+            .collect();
+        hash(&(self.version, &self.inputs["dependencies"], state))
+    }
+
     pub fn valid(&self) -> bool {
-        self.version == REVIEW_VERSION
-            && self.revision == hash(&(self.version, &self.inputs, &self.state))
+        match self.version {
+            1 => self.revision == hash(&(self.version, &self.inputs, &self.state)),
+            2 => {
+                self.inputs["dependencies"].is_object()
+                    && self.revision == self.dependency_revision()
+            }
+            _ => false,
+        }
     }
 }
 

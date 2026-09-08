@@ -94,7 +94,21 @@ impl Project {
     /// exception and lives in a different file, so nothing on this path can be
     /// blocked by an arrangement.
     pub fn save_scene(&mut self, file: &mut SceneFile) -> Result<SourceSave> {
-        self.save_editorial_scene(file)
+        let outcome = self.save_editorial_scene(file)?;
+        if matches!(outcome, SourceSave::Saved(_)) {
+            let authored = file
+                .scene
+                .dialogue_slots()
+                .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+                .collect();
+            self.record_authored_narrative_dependencies_for(&authored)?;
+            self.refresh_narrative_dependencies()?;
+            *file = self.load_scene(file.scene.id)?;
+            if let Some(stamp) = &file.stamp {
+                return Ok(SourceSave::Saved(stamp.clone()));
+            }
+        }
+        Ok(outcome)
     }
 
     /// Delete a scene and the arrangement that described it.
@@ -133,6 +147,7 @@ impl Project {
                 reason: format!("{noun} changed before deletion; reload it before trying again."),
             });
         }
+        self.refresh_narrative_dependencies()?;
         Ok(())
     }
 
@@ -224,6 +239,17 @@ impl Project {
         let outcome = source::write_text(&self.root, file, &self.peer)?;
         if matches!(outcome, SourceSave::Saved(_)) {
             self.index_narrative_path(&file.rel)?;
+            let authored = file
+                .asset
+                .lines()
+                .flat_map(|(_, slot)| slot.variants.iter().map(|v| v.id))
+                .collect();
+            self.record_authored_narrative_dependencies_for(&authored)?;
+            self.refresh_narrative_dependencies()?;
+            *file = self.load_text_asset(file.asset.id)?;
+            if let Some(stamp) = &file.stamp {
+                return Ok(SourceSave::Saved(stamp.clone()));
+            }
         }
         Ok(outcome)
     }
@@ -267,6 +293,7 @@ impl Project {
         let outcome = source::write_state(&self.root, document, expected, &self.peer)?;
         if matches!(outcome, SourceSave::Saved(_)) {
             self.index_narrative_path(source::STATE_FILE)?;
+            self.refresh_narrative_dependencies()?;
         }
         Ok(outcome)
     }
