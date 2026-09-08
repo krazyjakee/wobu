@@ -362,7 +362,7 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 
 | Plan element | Implemented foundation | Remaining work |
 | --- | --- | --- |
-| Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Multiple-quest arc grouping, route overlays and native acceptance (#187/#188/#186). |
+| Scene and arc Flow | React Flow, scene drill-down, guarded structural saves and arc grouping by World quest or starting quest stage. | A scene several quests list draws in the first only; route overlays and native acceptance (#187/#188/#186). |
 | Separate layout | Versioned scene/quest sidecars, shared mode/groups/notes, separate watcher and peer merging; native canvas and Release invariance evidence. | Platform coverage and broader accessibility acceptance (#182/#186). |
 | Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | Scene-library use of the rebuildable record index, act/tag metadata and real-load benchmarks (#194/#182). |
 | World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); [provider jobs](25-narrative-generation.md) now retain separate prose proposals. |

@@ -18,7 +18,7 @@ import { NarrativeFlowPane } from './NarrativeFlowPane'
 import { NarrativeFlowView } from './flow/arc/NarrativeFlowView'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 import { ArcFlow } from './flow/arc/ArcFlow'
-import { sceneNode, type FlowArc } from './flow/arc/model'
+import { sceneNode, worldQuests, type ArcQuests, type FlowArc } from './flow/arc/model'
 import { attachDiagnostics } from './flow/badges'
 import { useFlowStore } from './flow/flowStore'
 import { useFlowPresentation } from './flow/useFlowPresentation'
@@ -201,6 +201,15 @@ function ArcLevel(props: {
   const world = useNarrativeWorld()
   const [questId, setQuestId] = useState('')
   const quest = world.data?.document.quests.find((quest) => quest.id === questId)
+  /*
+   * The project's own quest membership, for #187's grouping.
+   *
+   * `world.data` and not `world.data ?? []`: a read that has not answered, or
+   * that failed, produces `quests: null` — "this build cannot say" — and the
+   * grouping control refuses itself with that reason. An empty list would say
+   * the project has no quests, which is a different and possibly false claim.
+   */
+  const quests = useMemo(() => worldQuests(world.data?.document.quests), [world.data])
   return (
     <div className="nrt-quest-arrangement">
       <label className="nrt-quest-selector">
@@ -224,7 +233,7 @@ function ArcLevel(props: {
           Quest scopes could not be loaded; the project arrangement is still available.
         </p>
       )}
-      <ArcPage key={quest?.id ?? 'project'} {...props} quest={quest} />
+      <ArcPage key={quest?.id ?? 'project'} {...props} quest={quest} quests={quests} />
     </div>
   )
 }
@@ -240,6 +249,7 @@ function ArcPage({
   ids: string[]
   active: boolean
   quest?: Quest
+  quests: ArcQuests
   readOnly: boolean
   layout?: LayoutRunner
   onEnter: (sceneId: string, beatId?: string | null) => void
@@ -305,8 +315,10 @@ function ArcArrangement({
   layout,
   onEnter,
   quest,
+  quests,
 }: {
   quest?: Quest
+  quests: ArcQuests
   files: { data?: SceneFile }[]
   loading: boolean
   readOnly: boolean
@@ -347,7 +359,11 @@ function ArcArrangement({
           name: group.label ?? group.id,
         })),
         elements: scenes.map((scene) => ({
-          ...sceneNode(scene),
+          // Two independent memberships on one node, and neither is written
+          // anywhere: the arrangement group a writer drew (#185), and the World
+          // quest that lists this scene (#187). Which one carves the canvas up
+          // is the grouping control's business, not the model's.
+          ...sceneNode(scene, quests.questOf(scene.id)),
           groupId:
             Object.values(presentation?.layout.groups ?? {}).find((group) =>
               (group.members ?? []).includes(`scene:${scene.id}`),
@@ -358,10 +374,11 @@ function ArcArrangement({
         // Names remain labels; World scene_ids determines the selected scope.
         entryId: scenes[0]?.id ?? null,
       },
-      // Presentation groups are separate from World quest membership.
-      quests: null,
+      // Presentation groups are separate from World quest membership; the arc
+      // can be carved up by either, and by neither.
+      quests: quests.quests,
     }
-  }, [files, nameOf, sceneName, quest, presentation?.layout.groups])
+  }, [files, nameOf, sceneName, quest, quests, presentation?.layout.groups])
 
   const positions = useMemo(
     () => positionsFromLayout(presentation?.layout, 'arc'),
@@ -415,6 +432,17 @@ function ArcArrangement({
       <p className="nrt-note" role="note">
         <Icon name="lock" size="sm" />
         {flowAuthoring.arcReadOnly} {NARRATIVE_UNAVAILABLE.affectedScope}
+      </p>
+
+      {/* The id is what the grouping control points at when it refuses itself,
+          so the refusal has somewhere to be read. */}
+      <p className="nrt-note" id="nrt-quests-unavailable" role="note">
+        <Icon name="folder" size="sm" />
+        {quests.quests === null
+          ? `The project’s quests could not be read, so the arc cannot be grouped by them. ${NARRATIVE_UNAVAILABLE.quests}`
+          : NARRATIVE_UNAVAILABLE.quests}
+        {quests.shared.length > 0 &&
+          ` ${quests.shared.length} scene${quests.shared.length === 1 ? ' is' : 's are'} listed by more than one quest, and appear under the first.`}
       </p>
 
       <ArcFlow
