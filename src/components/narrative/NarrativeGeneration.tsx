@@ -104,7 +104,7 @@ export function NarrativeGeneration({
         <p id="nrt-generation-description">
           Generate prose for saved dialogue slots. Slots and variants that are both Generated may
           update automatically. Edited wording produces a review proposal; Locked wording is
-          skipped. Every result is retained in Review.
+          skipped. Validated results are retained in Review.
         </p>
         <p>
           Uses the text provider and model from Settings. Provider charges may apply; Wobu has no
