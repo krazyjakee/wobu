@@ -47,6 +47,30 @@ sampler is active. Those observations are credential-, model-, and host-specific
 so release notes should record the versions used rather than pretending the
 repository can prove them offline.
 
+## v0.2.0 — narrative workspace
+
+This minor release includes narrative scene authoring and Flow, deterministic Preview and native
+export, saved scenarios, guarded prose generation and review, dependency-aware builds, localisation,
+bounded variant matrices, and prepared recording playback. Feature-specific evidence and remaining
+acceptance work are linked from [the narrative roadmap](09-roadmap.md#narrative-extension-in-progress).
+
+The release base, `e45699e` ([PR #205](https://github.com/krazyjakee/wobu/pull/205)), passed
+[CI](https://github.com/krazyjakee/wobu/actions/runs/34277730734): frontend checks and code health;
+Rust formatting, Clippy, tests, dependency and public-surface checks; licence verification; and
+Linux, macOS and Windows packaging. Release preparation checks the version stamps and the release
+tool's regression suite again.
+
+The app version is 0.2.0 and the project schema remains 1. The release audit record now reflects
+the already-implemented index schema 13; opening an older index rebuilds the disposable cache.
+This release stamp does not change either schema constant.
+
+Manual boundary: release preparation does not add a new packaged desktop or live-provider smoke
+pass. Existing native evidence retains its recorded scope; large-project Review performance and
+complete accessibility acceptance remain open in
+[#194](https://github.com/krazyjakee/wobu/issues/194) and
+[#182](https://github.com/krazyjakee/wobu/issues/182). Feature statuses and Settings/help/shortcut
+flows are not affected by the version stamp.
+
 ## v0.1.11 — local sync and concept defaults
 
 [PR #150](https://github.com/krazyjakee/wobu/pull/150) adds these repeatable contracts:
