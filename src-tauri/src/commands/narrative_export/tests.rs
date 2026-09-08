@@ -106,3 +106,58 @@ fn supporting_only_project_releases_after_shared_approval_and_stale_context_bloc
     project.save_text_asset(&mut file).unwrap();
     assert!(prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap().1.is_none());
 }
+
+#[test]
+fn configured_locales_gate_release_and_native_reference_runtime_uses_fallback() {
+    use wobu_narrative::{
+        GenerationPolicy,
+        review::{EditorialAction, PolicyScope},
+    };
+    use wobu_store::project::narrative_review::ReviewRequest;
+    let temp = Temp::new();
+    let mut project = project(&temp);
+    let id = project.scene_catalog().unwrap().scenes[0].id;
+    for action in [
+        EditorialAction::Approve,
+        EditorialAction::Policy { scope: PolicyScope::Slot, policy: GenerationPolicy::Locked },
+    ] {
+        let view = project.review_scene(id, None).unwrap();
+        let line = &view.lines[0];
+        project
+            .apply_review(&ReviewRequest {
+                guard: view.guard.clone(),
+                target: line.target.clone(),
+                context_revision: line.context_revision.clone(),
+                state_json: view.state_json.clone(),
+                action,
+            })
+            .unwrap();
+    }
+    let (mut policy, guard) = project.locale_policy().unwrap();
+    let locale: wobu_narrative_locale::LocaleId = "fr-CA".parse().unwrap();
+    policy.required.insert(locale.clone(), false);
+    project.save_locale_policy(policy.clone(), &guard).unwrap();
+    let (check, package) = prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap();
+    assert!(package.is_none());
+    assert!(check.locale_diagnostics.iter().any(|d| d.code == "missing_translation"));
+    let (_, guard) = project.locale_policy().unwrap();
+    policy.required.insert(locale.clone(), true);
+    project.save_locale_policy(policy, &guard).unwrap();
+    let (check, package) = prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap();
+    assert!(check.locale_diagnostics.iter().all(|d| d.code == "fallback"));
+    let package = package.unwrap();
+    let graph = package.graph_locale(&locale).unwrap();
+    assert_eq!(graph, package.graph().unwrap());
+    let runtime = wobu_narrative_runtime::Runtime::start(
+        graph,
+        &id.to_string(),
+        BTreeMap::new(),
+        "localised-run".into(),
+        1,
+        100,
+    )
+    .unwrap();
+    assert!(
+        matches!(runtime.current().unwrap(),wobu_narrative_runtime::Yield::Line {text,..} if text=="Draft line")
+    );
+}

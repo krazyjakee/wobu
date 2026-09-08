@@ -16,6 +16,7 @@ use wobu_store::Project;
 #[serde(rename_all = "camelCase")]
 pub struct ExportCheck {
     pub diagnostics: Vec<CompileDiagnostic>,
+    pub locale_diagnostics: Vec<wobu_narrative_locale::Diagnostic>,
     pub payload_hash: Option<String>,
     pub scenes: usize,
     pub strings: usize,
@@ -201,12 +202,25 @@ fn prepare_checked(
             verified_text_reviews,
         },
     );
+    let (locales, locale_diagnostics) = project.locale_release()?;
+    let locale_blocked = locale_diagnostics.iter().any(|d| d.code == "missing_translation");
     let package = report
         .graph
-        .map(|graph| Package::build(graph, debug))
+        .map(|graph| {
+            Package::build(graph, debug)
+                .and_then(|p| if locale_blocked { Ok(p) } else { p.with_locales(locales) })
+        })
         .transpose()
         .map_err(package_error)?;
+    let package = if locale_blocked && profile == Profile::Release { None } else { package };
+    if project.narrative_fingerprint()? != fingerprint {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "Narrative changed while checking locales. Check export again.",
+        ));
+    }
     let check = ExportCheck {
+        locale_diagnostics,
         diagnostics: report.diagnostics,
         payload_hash: package.as_ref().map(|p| p.manifest.payload_hash.clone()),
         scenes: scenes.len(),

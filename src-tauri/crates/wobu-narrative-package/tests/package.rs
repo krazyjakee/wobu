@@ -352,3 +352,54 @@ fn release_packaging_still_refuses_empty_supporting_wording() {
     let error = Package::build(graph, false).unwrap_err().to_string();
     assert!(error.contains("empty"), "{error}");
 }
+
+#[test]
+fn native_locale_payload_roundtrips_rtl_and_explicit_fallback_without_changing_source() {
+    use std::collections::BTreeMap;
+    use wobu_narrative_locale::{
+        PluralCategory, Policy,
+        release::{Bundle, Localized},
+    };
+    let mut graph = fixture(Profile::Release);
+    graph.source_map.clear();
+    let original = Package::build(graph.clone(), false).unwrap();
+    let locale: wobu_narrative_locale::LocaleId = "ar".parse().unwrap();
+    let bundle = Bundle {
+        version: 1,
+        policy: Policy { required: BTreeMap::from([(locale.clone(), true)]), ..Policy::default() },
+        strings: BTreeMap::from([(
+            locale.clone(),
+            BTreeMap::from([
+                (
+                    "00000000000000000000000004".into(),
+                    Localized {
+                        locale: locale.clone(),
+                        forms: BTreeMap::from([(
+                            PluralCategory::Other,
+                            "ميناء النجوم\nمرحبا".into(),
+                        )]),
+                    },
+                ),
+                (
+                    "00000000000000000000000005".into(),
+                    Localized {
+                        locale: "en".parse().unwrap(),
+                        forms: BTreeMap::from([(PluralCategory::Other, "続ける".into())]),
+                    },
+                ),
+            ]),
+        )]),
+    };
+    let package = original.with_locales(bundle.clone()).unwrap();
+    assert_eq!(package.manifest.required_capabilities["localisation"], 1);
+    let temp = Temp::new();
+    let out = temp.0.join("localised");
+    publish(&package, &out).unwrap();
+    let reopened = read(&out).unwrap();
+    assert_eq!(reopened.graph().unwrap(), graph);
+    assert_eq!(reopened.locales().unwrap(), Some(bundle));
+    let translated = reopened.graph_locale(&locale).unwrap();
+    let beat = translated.scenes.values().next().unwrap().beats.values().next().unwrap();
+    assert_eq!(beat.dialogue[0].variants[0].text, "ميناء النجوم\nمرحبا");
+    assert_eq!(beat.choices[0].label, "続ける");
+}

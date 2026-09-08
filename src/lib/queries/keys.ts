@@ -77,6 +77,7 @@ export const qk = {
  */
 export function invalidateNarrative(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ['narrative_affected'] })
+  void qc.invalidateQueries({ queryKey: ['narrative_locale'] })
   void qc.invalidateQueries({ queryKey: ['narrative_library'] })
   void qc.invalidateQueries({ queryKey: ['narrative_review'] })
   void qc.invalidateQueries({ queryKey: ['narrative_world'] })
@@ -101,6 +102,7 @@ export function invalidateNarrative(qc: QueryClient) {
 export async function clearNarrativeReads(qc: QueryClient) {
   const families = new Set([
     'narrative_affected',
+    'narrative_locale',
     'narrative_scenes',
     'narrative_library',
     'narrative_scene',

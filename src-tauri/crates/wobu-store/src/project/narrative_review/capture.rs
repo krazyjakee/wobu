@@ -29,6 +29,72 @@ impl Project {
         state_json: Option<&str>,
     ) -> Result<ReviewSnapshot> {
         let fingerprint = self.narrative_fingerprint()?;
+        self.review_source_captured(file, state_json, fingerprint, true, &self.scene_ids()?)
+    }
+    /// Batch consumers freeze membership once, while retaining every document/character stamp.
+    pub fn review_snapshots(
+        &self,
+        ids: &[SceneId],
+        state_json: Option<&str>,
+    ) -> Result<Vec<ReviewSnapshot>> {
+        let fingerprint = self.narrative_fingerprint()?;
+        let scenes = self.scene_catalog()?;
+        let texts = self.text_catalog()?;
+        let known_scenes = scenes.ids();
+        let mut paths = BTreeMap::new();
+        for entry in &scenes.scenes {
+            if paths.insert(entry.id, (&entry.rel, false)).is_some() {
+                return Err(invalid("Duplicate scene identity."));
+            }
+        }
+        for entry in &texts.assets {
+            if paths.insert(SceneId::from_raw(entry.id.raw()), (&entry.rel, true)).is_some() {
+                return Err(invalid("Scene and text identity collision."));
+            }
+        }
+        let snapshots = ids
+            .iter()
+            .map(|id| {
+                let (rel, text) =
+                    paths.get(id).ok_or_else(|| invalid("Missing editorial source."))?;
+                let file = if *text {
+                    let source = crate::narrative::read_text(self.root(), rel)?;
+                    SceneFile {
+                        scene: source.asset.editorial_scene(),
+                        rel: source.rel,
+                        stamp: source.stamp,
+                    }
+                } else {
+                    crate::narrative::read_scene(self.root(), rel)?
+                };
+                if file.scene.id != *id {
+                    return Err(invalid("Source identity changed during batch capture."));
+                }
+                self.review_source_captured(
+                    file,
+                    state_json,
+                    fingerprint.clone(),
+                    false,
+                    &known_scenes,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        for snapshot in &snapshots {
+            snapshot.check_observations(self)?;
+        }
+        if fingerprint != self.narrative_fingerprint()? {
+            return Err(invalid("Narrative changed during batch review capture."));
+        }
+        Ok(snapshots)
+    }
+    fn review_source_captured(
+        &self,
+        file: SceneFile,
+        state_json: Option<&str>,
+        fingerprint: String,
+        verify: bool,
+        known_scenes: &BTreeSet<SceneId>,
+    ) -> Result<ReviewSnapshot> {
         let world_file = self.world_document()?;
         let world = world_file.as_ref().map(|(w, _)| w.clone()).unwrap_or_default();
         let schema_file = self.state_document()?;
@@ -129,11 +195,11 @@ impl Project {
         let known_entities =
             character_stamps.iter().filter_map(|(id, s)| s.is_some().then_some(*id)).collect();
         let mut input_problem = world
-            .diagnose(&checked, &known_characters, &known_entities, &self.scene_ids()?)
+            .diagnose(&checked, &known_characters, &known_entities, known_scenes)
             .first()
             .map(|d| format!("{}: {}", d.field, d.message));
         if let Some(asset) = file.scene.editorial_text() {
-            let scenes = self.scene_ids()?;
+            let scenes = known_scenes;
             if asset.sources.iter().any(|link| match link {
                 wobu_narrative::SourceLink::Scene(id) => !scenes.contains(id),
                 wobu_narrative::SourceLink::Fact(id) => {
@@ -286,7 +352,9 @@ impl Project {
             observations,
             character_stamps,
         };
-        snapshot.check_current(self)?;
+        if verify {
+            snapshot.check_current(self)?;
+        }
         Ok(snapshot)
     }
 }
@@ -306,6 +374,9 @@ impl ReviewSnapshot {
                 "Narrative source changed during review capture. Reload before deciding.",
             ));
         }
+        self.check_observations(project)
+    }
+    pub(crate) fn check_observations(&self, project: &Project) -> Result<()> {
         for (rel, stamp) in &self.observations {
             if atomic::read_stamped(&project.root().join(rel))?.map(|(_, s)| s) != *stamp {
                 return Err(invalid(

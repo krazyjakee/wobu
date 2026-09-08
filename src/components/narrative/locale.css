@@ -1,0 +1,31 @@
+.nrt-locale {
+  width: min(1100px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 1rem;
+}
+.nrt-locale label {
+  display: block;
+  margin-block: 0.6rem;
+}
+.nrt-locale textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.nrt-locale table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.nrt-locale td,
+.nrt-locale th {
+  padding: 0.5rem;
+  vertical-align: top;
+  text-align: start;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+}
+.nrt-locale [dir='auto'] {
+  unicode-bidi: plaintext;
+  white-space: pre-wrap;
+}
