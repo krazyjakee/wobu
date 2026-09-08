@@ -81,11 +81,25 @@ impl Project {
                     return Err(invalid("Duplicate localisation stable ID."));
                 }
             }
+            // Choice labels depend on the containing dialogue's protection. Retain
+            // unlock decisions so relocking cannot revive a prior translation approval.
+            let choice_unlocks: Vec<_> = snapshot
+                .history
+                .iter()
+                .filter(|event| {
+                    event.before.dialogue_slots().any(|(_, slot)| {
+                        slot.variants.iter().any(|variant| {
+                            locked(&event.before, variant.id) && !locked(&event.after, variant.id)
+                        })
+                    })
+                })
+                .map(|event| event.id)
+                .collect();
             // Choice labels are structural authored text, without a separate review policy.
             // Their containing dialogue must be approved and locked before export.
             for beat in &scene.beats {
                 for choice in &beat.choices {
-                    let source=SourceLine {id:choice.id.to_string(),slot:choice.id.to_string(),container:id.to_string(),speaker:"Player".into(),text:choice.label.clone(),revision:hash(&choice.label),guard:hash(&(choice,(&beat.must_convey,&beat.must_not_reveal))),context:format!("{} / {} / choice",scene.name,beat.title),delivery_notes:"Structural choice label; source guard includes its condition and effects.".into(),placeholders:locale::format::placeholders(&choice.label),ready:view.lines.iter().all(|l|l.approval_valid&&l.freshness==Freshness::Current&&l.target.variant.is_some_and(|v|locked(scene,v)))};
+                    let source=SourceLine {id:choice.id.to_string(),slot:choice.id.to_string(),container:id.to_string(),speaker:"Player".into(),text:choice.label.clone(),revision:hash(&choice.label),guard:hash(&(choice,(&beat.must_convey,&beat.must_not_reveal),&choice_unlocks)),context:format!("{} / {} / choice",scene.name,beat.title),delivery_notes:"Structural choice label; source guard includes its condition and effects.".into(),placeholders:locale::format::placeholders(&choice.label),ready:view.lines.iter().all(|l|l.approval_valid&&l.freshness==Freshness::Current&&l.target.variant.is_some_and(|v|locked(scene,v)))};
                     if result.insert(source.id.clone(), source).is_some() {
                         return Err(invalid("Duplicate choice localisation ID."));
                     }

@@ -30,7 +30,10 @@ fn fixture() -> (tempfile::TempDir, Project, wobu_narrative::TextAssetId) {
     (dir, project, id)
 }
 fn action(p: &mut Project, id: wobu_narrative::TextAssetId, action: EditorialAction) {
-    let view = p.review_scene(SceneId::from_raw(id.raw()), None).unwrap();
+    scene_action(p, SceneId::from_raw(id.raw()), action);
+}
+fn scene_action(p: &mut Project, id: SceneId, action: EditorialAction) {
+    let view = p.review_scene(id, None).unwrap();
     let line = &view.lines[0];
     let request = ReviewRequest {
         guard: view.guard.clone(),
@@ -147,4 +150,73 @@ fn batch_review_capture_preserves_single_target_proofs_and_observes_external_sou
     text.push_str("\n# external collaborator\n");
     std::fs::write(&path, text).unwrap();
     assert!(batch[0].verify_current(&project).is_err());
+}
+
+#[test]
+fn relocking_dialogue_does_not_revive_approved_choice_translations() {
+    use wobu_narrative::{Beat, Choice, Destination};
+    let dir = tempfile::tempdir().unwrap();
+    let mut project = Project::create(dir.path(), "Choice locale").unwrap();
+    let mut file = project.create_scene("Harbor").unwrap();
+    let mut beat = Beat::new("Arrival");
+    let mut slot = DialogueSlot::new(Speaker::Narrator);
+    slot.variants.push(Variant::new(Text::written("The harbor is quiet.")));
+    beat.dialogue.push(slot);
+    let choice = Choice::new("Enter", Destination::End { label: "done".into() });
+    let choice_id = choice.id.to_string();
+    beat.choices.push(choice);
+    file.scene.beats.push(beat);
+    project.save_scene(&mut file).unwrap();
+    let id = file.scene.id;
+    let policy = |policy| EditorialAction::Policy { scope: PolicyScope::Slot, policy };
+    scene_action(&mut project, id, EditorialAction::Approve);
+    scene_action(&mut project, id, policy(GenerationPolicy::Locked));
+    let locale: LocaleId = "fr".parse().unwrap();
+    let mut row = decode(&project.locale_export(&locale, false).unwrap(), false)
+        .unwrap()
+        .into_iter()
+        .find(|row| row.source.id == choice_id)
+        .unwrap();
+    row.forms.insert(PluralCategory::Other, "Entrer".into());
+    let report = project.locale_import(&encode(&[row], false).unwrap(), false).unwrap();
+    assert_eq!(report.applied, vec![choice_id.clone()]);
+    let mut reviewed = decode(&project.locale_export(&locale, false).unwrap(), false)
+        .unwrap()
+        .into_iter()
+        .find(|row| row.source.id == choice_id)
+        .unwrap();
+    assert!(matches!(project.locale_approve(&reviewed).unwrap(), SourceSave::Saved(_)));
+    let translation =
+        project.locale_translations().unwrap()[&(locale.clone(), choice_id.clone())].clone();
+    reviewed.translation_guard = Some(translation.token());
+    let initial = project.locale_sources().unwrap()[&choice_id].clone();
+    assert!(translation.current(&initial));
+    // An unrelated reaffirmed approval does not rotate the choice's source guard.
+    scene_action(&mut project, id, EditorialAction::Approve);
+    assert_eq!(project.locale_sources().unwrap()[&choice_id].guard, initial.guard);
+    scene_action(&mut project, id, policy(GenerationPolicy::Edited));
+    assert!(!project.locale_sources().unwrap()[&choice_id].ready);
+    scene_action(&mut project, id, policy(GenerationPolicy::Locked));
+    let source = project.locale_sources().unwrap()[&choice_id].clone();
+    assert!(source.ready);
+    assert_eq!(source.revision, initial.revision);
+    assert_ne!(source.guard, initial.guard);
+    assert!(!translation.current(&source));
+    assert!(project.locale_approve(&reviewed).is_err());
+    let (mut required, guard) = project.locale_policy().unwrap();
+    required.required.insert(locale, false);
+    project.save_locale_policy(required, &guard).unwrap();
+    assert!(
+        project
+            .locale_release()
+            .unwrap()
+            .1
+            .iter()
+            .any(|d| d.id == choice_id && d.code == "missing_translation")
+    );
+    let root = project.root().to_owned();
+    drop(project);
+    let reopened = Project::open(&root).unwrap();
+    assert_eq!(reopened.locale_translations().unwrap().values().next().unwrap(), &translation);
+    assert!(!translation.current(&reopened.locale_sources().unwrap()[&choice_id]));
 }

@@ -13,8 +13,8 @@ Choose a target locale and CSV or JSON, then export to a new file outside the pr
 files are never overwritten. Each UTF-8 row carries format version, target locale, stable wording
 ID and slot/container IDs, speaker, source text and revision, source guard, scene/context,
 delivery notes, placeholder tokens, previous translation guard and plural forms. Choice labels use
-their stable choice ID and a hash of their structural source; their containing dialogue must be
-approved and locked before export. Only ready source is exported; the dialog still lists unready
+their stable choice ID and a guard over their structural source and recorded dialogue unlocks;
+their containing dialogue must be approved and locked before export. Only ready source is exported; the dialog still lists unready
 source and missing translations so omissions are visible.
 
 One file contains one target locale. JSON is an array of typed rows. CSV uses the exported column
@@ -59,8 +59,9 @@ Each configured Release locale explicitly either requires its own current approv
 permits fallback. Enabled fallback tries the requested locale, removes its final subtag repeatedly,
 and finally tries source. It never substitutes a sibling region. Export reports every fallback and
 every missing required translation. Development can export source-only content when required locale
-rows are missing, with those diagnostics; Release blocks. Configuring no target locales preserves the
-existing source-only package contract.
+rows are missing, with those diagnostics; its package retains the configured source locale and
+omits target locales. Release blocks. Configuring no target locales preserves the existing
+source-only package contract.
 
 A placeholder is `{name}` or `{name:format}`; names start with an ASCII letter/underscore and may
 continue with letters, digits, underscores or dots. A translation must preserve the complete token

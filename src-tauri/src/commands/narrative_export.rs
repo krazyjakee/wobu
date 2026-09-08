@@ -202,14 +202,17 @@ fn prepare_checked(
             verified_text_reviews,
         },
     );
-    let (locales, locale_diagnostics) = project.locale_release()?;
+    let (mut locales, locale_diagnostics) = project.locale_release()?;
     let locale_blocked = locale_diagnostics.iter().any(|d| d.code == "missing_translation");
+    if locale_blocked {
+        // Development can omit unavailable target locales, but its source table
+        // must still use the configured source locale rather than Package's default.
+        locales.policy.required.clear();
+        locales.strings.clear();
+    }
     let package = report
         .graph
-        .map(|graph| {
-            Package::build(graph, debug)
-                .and_then(|p| if locale_blocked { Ok(p) } else { p.with_locales(locales) })
-        })
+        .map(|graph| Package::build(graph, debug).and_then(|p| p.with_locales(locales)))
         .transpose()
         .map_err(package_error)?;
     let package = if locale_blocked && profile == Profile::Release { None } else { package };

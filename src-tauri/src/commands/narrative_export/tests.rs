@@ -135,11 +135,26 @@ fn configured_locales_gate_release_and_native_reference_runtime_uses_fallback() 
     }
     let (mut policy, guard) = project.locale_policy().unwrap();
     let locale: wobu_narrative_locale::LocaleId = "fr-CA".parse().unwrap();
+    policy.source = "ar".parse().unwrap();
     policy.required.insert(locale.clone(), false);
     project.save_locale_policy(policy.clone(), &guard).unwrap();
     let (check, package) = prepare(&project, Profile::Release, BTreeMap::new(), false).unwrap();
     assert!(package.is_none());
     assert!(check.locale_diagnostics.iter().any(|d| d.code == "missing_translation"));
+    let (development, package) =
+        prepare(&project, Profile::Development, BTreeMap::new(), false).unwrap();
+    assert!(development.locale_diagnostics.iter().any(|d| d.code == "missing_translation"));
+    let package = package.unwrap();
+    assert_eq!(package.manifest.locale, "ar");
+    assert!(package.manifest.files.contains_key("strings/ar.json"));
+    assert!(!package.manifest.files.contains_key("strings/en.json"));
+    let destination = temp.0.join("arabic-development");
+    wobu_narrative_package::publish(&package, &destination).unwrap();
+    let reopened = wobu_narrative_package::read(&destination).unwrap();
+    assert_eq!(reopened.manifest.locale, "ar");
+    assert!(reopened.locales().unwrap().unwrap().policy.required.is_empty());
+    assert_eq!(reopened.graph_locale(&policy.source).unwrap(), reopened.graph().unwrap());
+    assert!(reopened.graph_locale(&locale).is_err());
     let (_, guard) = project.locale_policy().unwrap();
     policy.required.insert(locale.clone(), true);
     project.save_locale_policy(policy, &guard).unwrap();
