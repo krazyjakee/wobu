@@ -9,6 +9,7 @@ import { NarrativeInspector } from './NarrativeInspector'
 import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
+import { NarrativeSourcePane } from './NarrativeSourcePane'
 import { NarrativeLibrary } from './NarrativeLibrary'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
@@ -27,6 +28,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
+  const [repairRel, setRepairRel] = useState<string | null>(null)
   const [worldOpen, setWorldOpen] = useState(false)
   const [editorOpened, setEditorOpened] = useState(false)
   const world = useNarrativeWorld()
@@ -49,6 +51,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           : null,
     })
     selectNarrative(target, 'library')
+    setRepairRel(null)
     setTab(tab)
     setEditorOpened(true)
     setLibraryOpen(false)
@@ -124,6 +127,12 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           navCollapsed={navCollapsed}
           nameOf={nameOf}
           onOpen={open}
+          onRepair={(rel) => {
+            setRepairRel(rel)
+            setEditorOpened(true)
+            setLibraryOpen(false)
+            setWorldOpen(false)
+          }}
           onCreateScene={() =>
             createScene.mutate('New scene', {
               onSuccess: (file) => open({ sceneId: file.scene.id }, 'flow'),
@@ -150,7 +159,15 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
               ))}
             </nav>
           )}
-          <NarrativeCentre readOnly={project.readOnly} projectKey={project.path} />
+          {repairRel ? (
+            <NarrativeSourcePane
+              rel={repairRel}
+              readOnly={project.readOnly}
+              projectKey={project.path}
+            />
+          ) : (
+            <NarrativeCentre readOnly={project.readOnly} projectKey={project.path} />
+          )}
           {!inspCollapsed && <NarrativeInspector />}
         </div>
       )}

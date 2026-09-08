@@ -17,7 +17,7 @@
 //! fields. Reporting the shape errors first would invite exactly the wrong
 //! response: hand-deleting the fields this build does not know about.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::error::{Error, Result};
 use crate::scene::Scene;
@@ -59,6 +59,69 @@ pub(crate) fn check_version(yaml: &str) -> Result<()> {
     }
 }
 
+/// All authored document types share this adapter. Singleton maps support nested
+/// enums (not/compare, restrictions, enum state) that YAML tags cannot serialize.
+/// Keep the direct readers first so ordinary syntax/shape errors retain libyaml
+/// locations. The Value fallback accepts mixed legacy tags and canonical maps;
+/// it is never used as a second, permissive schema or to discard unknown fields.
+pub(crate) fn parse_yaml<T: DeserializeOwned>(yaml: &str) -> Result<T> {
+    use serde_norway::with::singleton_map_recursive;
+    let canonical_error =
+        match singleton_map_recursive::deserialize(serde_norway::Deserializer::from_str(yaml)) {
+            Ok(value) => return Ok(value),
+            Err(error) => error,
+        };
+    let legacy_error = match serde_norway::from_str(yaml) {
+        Ok(value) => return Ok(value),
+        Err(error) => error,
+    };
+    if let Ok(mut value) = serde_norway::from_str::<serde_norway::Value>(yaml)
+        && normalize_tags(&mut value)
+        && let Ok(document) = singleton_map_recursive::deserialize(value)
+    {
+        return Ok(document);
+    }
+    // Use the reader that got furthest, so a valid legacy tag does not mask an
+    // unknown field or malformed value later in its payload.
+    let position = |error: &serde_norway::Error| {
+        error.location().map(|location| (location.line(), location.column()))
+    };
+    let error = if position(&legacy_error) > position(&canonical_error) {
+        legacy_error
+    } else {
+        canonical_error
+    };
+    Err(Error::from_yaml(&error))
+}
+
+fn normalize_tags(value: &mut serde_norway::Value) -> bool {
+    use serde_norway::{Mapping, Value};
+    match value {
+        Value::Tagged(tagged) => {
+            let key = Value::String(tagged.tag.to_string().trim_start_matches('!').into());
+            let mut payload = std::mem::take(&mut tagged.value);
+            normalize_tags(&mut payload);
+            *value = Value::Mapping(Mapping::from_iter([(key, payload)]));
+            true
+        }
+        Value::Sequence(values) => {
+            values.iter_mut().fold(false, |found, value| normalize_tags(value) | found)
+        }
+        Value::Mapping(values) => {
+            values.values_mut().fold(false, |found, value| normalize_tags(value) | found)
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn print_yaml<T: Serialize>(value: &T) -> Result<String> {
+    #[derive(Serialize)]
+    struct Canonical<'a, T: Serialize>(
+        #[serde(with = "serde_norway::with::singleton_map_recursive")] &'a T,
+    );
+    serde_norway::to_string(&Canonical(value)).map_err(|error| Error::from_yaml(&error))
+}
+
 /// One scene as a file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -74,11 +137,11 @@ impl SceneDocument {
 
     pub fn parse(yaml: &str) -> Result<SceneDocument> {
         check_version(yaml)?;
-        serde_norway::from_str(yaml).map_err(|e| Error::from_yaml(&e))
+        parse_yaml(yaml)
     }
 
     pub fn to_yaml(&self) -> Result<String> {
-        serde_norway::to_string(self).map_err(|e| Error::from_yaml(&e))
+        print_yaml(self)
     }
 }
 
@@ -104,11 +167,11 @@ impl StateDocument {
 
     pub fn parse(yaml: &str) -> Result<StateDocument> {
         check_version(yaml)?;
-        serde_norway::from_str(yaml).map_err(|e| Error::from_yaml(&e))
+        parse_yaml(yaml)
     }
 
     pub fn to_yaml(&self) -> Result<String> {
-        serde_norway::to_string(self).map_err(|e| Error::from_yaml(&e))
+        print_yaml(self)
     }
 
     /// Build the checked schema. Fails on a declaration that is wrong on its own

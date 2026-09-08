@@ -168,6 +168,8 @@ pub fn run() {
             commands::narrative_world::narrative_world_save,
             commands::narrative_world::narrative_world_restore,
             commands::narrative_source::narrative_source_get,
+            commands::narrative_source::narrative_source_open,
+            commands::narrative_source::narrative_source_repair,
             commands::narrative_source::narrative_source_check,
             commands::narrative::narrative_scenes,
             commands::narrative::narrative_scene_get,

@@ -154,3 +154,32 @@ fn three_characters_hold_independent_accounts_of_one_event_with_place_backlinks(
     assert_eq!(issues[0].field, "entity_ids");
     assert_eq!(WorldDocument::parse(&world.to_yaml().unwrap()).unwrap(), world);
 }
+
+#[test]
+fn nested_world_conditions_and_legacy_provenance_share_canonical_map_source() {
+    let mut world = fixture();
+    world.knowledge[0].when = Condition::Not(Box::new(Condition::Compare(Comparison {
+        var: Name::new("secret_known").unwrap(),
+        op: CompareOp::Eq,
+        value: Operand::Literal(Value::Bool(true)),
+    })));
+    world.restrictions.push(FutureRestriction {
+        id: wobu_core::new_id(),
+        name: "Secret".into(),
+        fact: world.facts[0].id,
+        characters: vec![],
+        until: Condition::Not(Box::new(Condition::Never)),
+    });
+    let yaml = world.to_yaml().unwrap();
+    assert!(yaml.contains("not:"));
+    assert!(yaml.contains("rumour:"));
+    assert_eq!(WorldDocument::parse(&yaml).unwrap(), world);
+    let mixed = yaml.replace("provenance:\n    rumour:", "provenance: !rumour");
+    assert_ne!(mixed, yaml);
+    assert_eq!(WorldDocument::parse(&mixed).unwrap(), world);
+    assert_eq!(WorldDocument::parse(&mixed).unwrap().to_yaml().unwrap(), yaml);
+    let old = fixture();
+    let legacy = serde_norway::to_string(&old).unwrap();
+    assert!(legacy.contains("!rumour"));
+    assert_eq!(WorldDocument::parse(&legacy).unwrap(), old);
+}

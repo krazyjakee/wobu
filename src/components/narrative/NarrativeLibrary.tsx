@@ -29,6 +29,7 @@ export function NarrativeLibrary({
   nameOf,
   onOpen,
   onCreateScene,
+  onRepair,
 }: {
   projectKey: string
   rows: LibraryRow[]
@@ -43,6 +44,7 @@ export function NarrativeLibrary({
   nameOf: (id: string) => string | undefined
   onOpen: (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => void
   onCreateScene: () => void
+  onRepair?: (rel: string) => void
 }) {
   const [prefs, setPrefs] = useState(() => readPreferences(projectKey))
   const [viewName, setViewName] = useState('')
@@ -319,6 +321,11 @@ export function NarrativeLibrary({
         {(catalog?.unreadable ?? []).map((one) => (
           <p role="alert" key={one.rel}>
             {one.rel} could not be read: {one.reason}. It is still on disk.
+            {onRepair && (
+              <button type="button" className="btn" onClick={() => onRepair(one.rel)}>
+                Repair source
+              </button>
+            )}
           </p>
         ))}
         <div

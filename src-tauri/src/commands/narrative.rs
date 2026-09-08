@@ -67,6 +67,7 @@ use crate::error::{Code, CommandResult, WobuError};
 use crate::state::AppState;
 
 mod editorial;
+pub(super) use editorial::validate_approval;
 
 /* ── what the webview sees ────────────────────────────────────────────────── */
 
@@ -252,7 +253,7 @@ fn problem_code(problem: &Problem) -> &'static str {
 }
 
 impl DiagnosticView {
-    fn of(diagnostic: &Diagnostic) -> DiagnosticView {
+    pub(super) fn of(diagnostic: &Diagnostic) -> DiagnosticView {
         let mut view = DiagnosticView {
             kind: "scene",
             code: problem_code(&diagnostic.problem),

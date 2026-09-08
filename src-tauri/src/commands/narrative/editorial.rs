@@ -7,7 +7,7 @@ use wobu_narrative::{ReviewState, Scene};
 
 use crate::error::{Code, CommandResult, WobuError};
 
-pub(super) fn validate_approval(
+pub(in crate::commands) fn validate_approval(
     previous: Option<&Scene>,
     next: &Scene,
     restoring: bool,
