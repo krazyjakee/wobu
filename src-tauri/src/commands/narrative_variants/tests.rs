@@ -160,7 +160,11 @@ fn locked_slot_and_unknown_rows_never_materialize() {
         .iter()
         .find(|r| r.classification == variants::Classification::Excluded)
         .unwrap();
-    assert!(project.materialize_narrative_analysis(saved.id, slot, &[row.id.clone()]).is_err());
+    assert!(
+        project
+            .materialize_narrative_analysis(saved.id, slot, std::slice::from_ref(&row.id))
+            .is_err()
+    );
 }
 fn success(
     request: &wobu_narrative_generation::FrozenRequest,
@@ -246,4 +250,75 @@ fn a_copy_with_new_mtimes_and_deleted_local_index_keeps_policy_and_request_evide
     assert!(
         wobu_store::project::narrative_generation::checks(&project, &request).unwrap().current()
     );
+}
+#[test]
+fn a_grouped_review_staging_acceptance_later_keeps_the_policy_guard_until_commit() {
+    use wobu_narrative::review::{EditorialAction, PolicyScope};
+    use wobu_store::project::narrative_review::ReviewRequest;
+    let temp = Temp::new();
+    let (mut project, policy, slot) = fixture(&temp);
+    let view = project.review_scene(policy.target.scene, None).unwrap();
+    let line = view.lines.iter().find(|l| l.target.slot == slot).unwrap();
+    project
+        .apply_review(&ReviewRequest {
+            guard: view.guard.clone(),
+            target: line.target.clone(),
+            context_revision: line.context_revision.clone(),
+            state_json: view.state_json.clone(),
+            action: EditorialAction::Policy {
+                scope: PolicyScope::Slot,
+                policy: GenerationPolicy::Edited,
+            },
+        })
+        .unwrap();
+    let saved = planned(&mut project, policy.clone());
+    let rows = selected(&saved);
+    project.materialize_narrative_analysis(saved.id, slot, &rows).unwrap();
+    let build = build(&mut project, saved.id, slot, &rows).unwrap();
+    let records = super::super::narrative_generation::records::RecordSet::load(&project).unwrap();
+    let request = records.requests[&build.items[0].request_id.unwrap()].clone();
+    let receipt = success(&request);
+    let id = Id::generate();
+    super::super::narrative_generation::records::publish(&mut project, &request, id, &receipt)
+        .unwrap();
+    let state_json = serde_json::to_string(&request.context.options.state).unwrap();
+    let view = project.review_scene(policy.target.scene, Some(&state_json)).unwrap();
+    let first = &view.lines[0];
+    let first_request = ReviewRequest {
+        guard: view.guard.clone(),
+        target: first.target.clone(),
+        context_revision: first.context_revision.clone(),
+        state_json: state_json.clone(),
+        action: EditorialAction::Policy {
+            scope: PolicyScope::Variant,
+            policy: GenerationPolicy::Edited,
+        },
+    };
+    let mut tx = project.begin_review(&first_request).unwrap();
+    project.stage_review(&mut tx, &first_request).unwrap();
+    let target = view.lines.iter().find(|l| l.target.variant == request.target.variant).unwrap();
+    let proposal = target.proposals.iter().find(|p| p.id == id).unwrap();
+    project
+        .stage_review(
+            &mut tx,
+            &ReviewRequest {
+                guard: view.guard,
+                state_json,
+                target: target.target.clone(),
+                context_revision: target.context_revision.clone(),
+                action: EditorialAction::Accept {
+                    proposal_id: id,
+                    proposal_hash: proposal.hash.clone(),
+                    reviewed_text: None,
+                },
+            },
+        )
+        .unwrap();
+    let capture = project.narrative_analysis_capture().unwrap();
+    let mut changed = policy;
+    changed.external = true;
+    project.save_narrative_analysis_policy(changed, &capture).unwrap();
+    assert!(project.commit_review(tx).is_err());
+    let scene = project.load_scene(request.target.scene).unwrap().scene;
+    assert!(scene.beats[0].dialogue[1].variants.iter().all(|v| v.text.body.is_empty()));
 }

@@ -379,6 +379,11 @@ impl Project {
         target: ReviewTarget,
         action: EditorialAction,
     ) -> Result<()> {
+        if tx.analysis.is_none()
+            && matches!(action, EditorialAction::Accept { .. } | EditorialAction::Generated { .. })
+        {
+            tx.analysis = Some(self.narrative_analysis_capture()?);
+        }
         // Work on a clone so a rejected item cannot partly mutate a batch.
         let mut scene = tx.scene.clone();
         let mut bindings = tx.bindings.clone();
