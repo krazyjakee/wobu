@@ -491,6 +491,15 @@ fn prepared_media_package_roundtrip_native_timing_and_fallback_validation() {
         Package::build(graph.clone(), false).unwrap().with_media(stale, files.clone()).is_err()
     );
     let mut wrong_form = bundle.clone();
+    wrong_form.required.clear();
+    wrong_form.timing.clear();
+    wrong_form.fallback.clear();
+    assert!(
+        Package::build(graph.clone(), false)
+            .unwrap()
+            .with_media(wrong_form.clone(), files.clone())
+            .is_ok()
+    );
     let mut take = wrong_form.takes.remove(&key.token()).unwrap();
     take.key.form = wobu_narrative_locale::PluralCategory::One;
     wrong_form.takes.insert(take.key.token(), take);
@@ -508,6 +517,7 @@ fn prepared_media_package_roundtrip_native_timing_and_fallback_validation() {
         "en/00000000000000000000000005/other/extra",
     ] {
         let mut malformed = bundle.clone();
+        malformed.required.insert(key.locale.clone(), true);
         malformed.fallback.insert(invalid_key.into());
         assert!(
             Package::build(graph.clone(), false)
