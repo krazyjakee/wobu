@@ -1,85 +1,53 @@
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import type { ProjectSummary } from '../../lib/api'
 import { useCreateScene, useSceneDiagnostics, useSceneFiles, useScenes } from '../../lib/queries'
-import { useUI } from '../../store/ui'
+import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
-import { TipButton, Tooltip } from '../Tooltip'
+import { TipButton } from '../Tooltip'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
 import { NarrativeLibrary } from './NarrativeLibrary'
-import { sceneNode } from './flow/arc/model'
-import { sceneToFlow, summaryStatus } from './flow/source'
-import {
-  NARRATIVE_UNAVAILABLE,
-  NO_NARRATIVE_SOURCE,
-  type NarrativeListState,
-  type NarrativeSectionId,
-} from './narrativeModel'
+import { useNarrativeNames } from './flow/useNarrativeNames'
+import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
+import { useSceneLibrary } from './sceneLibraryStore'
 
-/**
- * The Narrative workspace: Library, the centre views, and the context pane.
- *
- * Laid out inside one grid cell rather than as three siblings of the mode rail,
- * so the Library's column widths and collapse rules stay where they are. What
- * it does share is the store: the same `[` and `]` that hide the navigator and
- * the inspector in the Library hide them here, and the width the reader dragged
- * there is the width they get here. Those are facts about this person's screen
- * — machine-local, like every other layout preference in `store/ui.ts`, and
- * never written into the project folder where they would follow the world to
- * somebody else's desk.
- *
- * ── what fetches, and what still cannot ─────────────────────────────────────
- *
- * Scenes are real: the Scenes list is the project's own folder, read through
- * `useScenes`, and "Create first scene" writes one. The other three sections
- * are still refused with a reason, because the models behind them — facts and
- * knowledge (#155), quests, the text library (#167) — do not exist. An empty
- * list and "this build cannot answer" are different claims, and a workspace
- * that showed the second as the first would tell a writer their project was
- * empty when it is not.
- */
 export function NarrativeMode({ project }: { project: ProjectSummary }) {
+  return <NarrativeWorkspace key={project.path} project={project} />
+}
+
+function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const navWidth = useUI((s) => s.navWidth)
   const navCollapsed = useUI((s) => s.navCollapsed)
   const inspCollapsed = useUI((s) => s.inspCollapsed)
+  const selection = useUI((s) => s.narrative)
   const selectNarrative = useUI((s) => s.selectNarrative)
+  const setTab = useUI((s) => s.setNarrativeTab)
+  const [libraryOpen, setLibraryOpen] = useState(true)
+  const [editorOpened, setEditorOpened] = useState(false)
   const catalog = useScenes()
   const ids = useMemo(() => (catalog.data?.scenes ?? []).map((one) => one.id), [catalog.data])
   const files = useSceneFiles(ids)
   const createScene = useCreateScene()
-
-  /*
-   * The Scenes section, with each scene's outstanding work.
-   *
-   * The status is the same lossy summary the canvas's chips use, and for the
-   * same reason: a row is one badge wide. The real per-dimension counts are on
-   * the arc's scene nodes and on every beat, where there is room to show all
-   * four without one hiding the others.
-   */
-  const sections: Record<NarrativeSectionId, NarrativeListState> = {
-    ...NO_NARRATIVE_SOURCE,
-    scenes: catalog.isPending
-      ? { kind: 'loading' }
-      : catalog.isError
-        ? { kind: 'error', message: String(catalog.error) }
-        : {
-            kind: 'ready',
-            items: (catalog.data?.scenes ?? []).map((summary, index) => {
-              const file = files[index]?.data
-              const counts = file ? sceneNode(sceneToFlow(file.scene)).counts : null
-              return {
-                id: summary.id,
-                name: summary.name,
-                // Left off until the document has actually been read: a row
-                // that said "Ready" while its file was still loading would be
-                // asserting something nobody has looked at.
-                status: counts ? summaryStatus(counts) : undefined,
-              }
-            }),
-          },
+  const { nameOf } = useNarrativeNames()
+  const rows = (catalog.data?.scenes ?? []).map((summary, index) => ({
+    summary,
+    scene: files[index]?.data?.scene,
+    error: files[index]?.isError ? String(files[index]?.error) : undefined,
+  }))
+  const selected = rows.find((row) => row.summary.id === selection.sceneId)?.scene
+  const open = (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => {
+    useSceneLibrary.setState({
+      searchVariant:
+        target.sceneId && target.lineId && variantId
+          ? { sceneId: target.sceneId, slotId: target.lineId, variantId }
+          : null,
+    })
+    selectNarrative(target, 'library')
+    setTab(tab)
+    setEditorOpened(true)
+    setLibraryOpen(false)
   }
-
-  const style: CSSProperties = {
+  const editorStyle: CSSProperties = {
     gridTemplateColumns: [
       navCollapsed ? null : `${navWidth}px`,
       'minmax(0, 1fr)',
@@ -88,29 +56,17 @@ export function NarrativeMode({ project }: { project: ProjectSummary }) {
       .filter(Boolean)
       .join(' '),
   }
-
   return (
-    <div className="narrative-mode" style={style}>
+    <div className="narrative-mode">
       <header className="nrt-head">
         <h1>
           {project.name} <span aria-hidden>/</span> <b>Narrative</b>
         </h1>
-
-        {/* `readOnly` and `aria-disabled` rather than `disabled`, the same
-            choice `Combobox` makes: a disabled field cannot be focused, so it
-            cannot explain itself to a keyboard, and "why is the search box
-            dead" is the question this build most needs to answer. */}
-        <Tooltip tip={NARRATIVE_UNAVAILABLE.search} placement="bottom">
-          <input
-            className="nrt-search"
-            type="search"
-            readOnly
-            aria-disabled="true"
-            aria-label="Find a scene or a line"
-            placeholder="Find scene or line…"
-          />
-        </Tooltip>
-
+        {!libraryOpen && (
+          <button type="button" className="btn" onClick={() => setLibraryOpen(true)}>
+            Back to scenes
+          </button>
+        )}
         <div className="nrt-head-actions">
           <TipButton
             className="btn"
@@ -135,26 +91,47 @@ export function NarrativeMode({ project }: { project: ProjectSummary }) {
           </TipButton>
         </div>
       </header>
-
-      {!navCollapsed && (
+      <div className="nrt-library-view" hidden={!libraryOpen}>
         <NarrativeLibrary
-          sections={sections}
+          projectKey={project.path}
+          rows={rows}
+          catalog={catalog.data}
+          loading={catalog.isPending}
+          error={catalog.isError ? String(catalog.error) : undefined}
           readOnly={project.readOnly}
-          onCreateScene={
-            project.readOnly
-              ? undefined
-              : () => {
-                  createScene.mutate('New scene', {
-                    onSuccess: (file) => selectNarrative({ sceneId: file.scene.id }, 'library'),
-                  })
-                }
+          navCollapsed={navCollapsed}
+          nameOf={nameOf}
+          onOpen={open}
+          onCreateScene={() =>
+            createScene.mutate('New scene', {
+              onSuccess: (file) => open({ sceneId: file.scene.id }, 'flow'),
+            })
           }
-          sectionNotes={{ scenes: <UnreadableScenes catalog={catalog.data} /> }}
         />
+      </div>
+      {editorOpened && (
+        <div className="nrt-editor-view" style={editorStyle} hidden={libraryOpen}>
+          {!navCollapsed && (
+            <nav className="nrt-scene-outline" aria-label="Current scene outline">
+              <h3>{selected?.name ?? 'Selected scene'}</h3>
+              {(selected?.beats ?? []).map((beat) => (
+                <button
+                  key={beat.id}
+                  type="button"
+                  aria-current={selection.beatId === beat.id ? 'true' : undefined}
+                  onClick={() =>
+                    selectNarrative({ sceneId: selected!.id, beatId: beat.id }, 'library')
+                  }
+                >
+                  {beat.title}
+                </button>
+              ))}
+            </nav>
+          )}
+          <NarrativeCentre readOnly={project.readOnly} projectKey={project.path} />
+          {!inspCollapsed && <NarrativeInspector />}
+        </div>
       )}
-      <NarrativeCentre readOnly={project.readOnly} />
-      {!inspCollapsed && <NarrativeInspector />}
-
       <SceneDiagnosticsFooter />
     </div>
   )
@@ -186,34 +163,5 @@ function SceneDiagnosticsFooter() {
             : `${count} problem${count === 1 ? '' : 's'} in this scene. `}
       {NARRATIVE_UNAVAILABLE.diagnostics}
     </footer>
-  )
-}
-
-/**
- * Files in the scenes folder that could not be identified.
- *
- * Said rather than dropped. A scene a sync client copied half-written has no
- * readable id, so it cannot be a row in the list — and a list that quietly
- * omitted it would present somebody's file as deleted, which is the one wrong
- * answer here.
- */
-function UnreadableScenes({
-  catalog,
-}: {
-  catalog?: { unreadable: { rel: string; reason: string }[] }
-}) {
-  const bad = catalog?.unreadable ?? []
-  if (bad.length === 0) return null
-  return (
-    <ul className="nrt-arc-diagnostics" aria-label="Scene files that could not be read">
-      {bad.map((one) => (
-        <li key={one.rel} className="is-bad">
-          <Icon name="x" size="sm" />
-          <span>
-            <code>{one.rel}</code> could not be read: {one.reason}. It is still on disk.
-          </span>
-        </li>
-      ))}
-    </ul>
   )
 }

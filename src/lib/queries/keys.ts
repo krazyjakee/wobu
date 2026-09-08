@@ -87,6 +87,24 @@ export function invalidateNarrative(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: qk.narrativeState })
 }
 
+/** A different project must never render the previous project's scene cache.
+ * Draft keys are explicitly project-scoped and remain until saved/discarded. */
+export async function clearNarrativeReads(qc: QueryClient) {
+  const families = new Set([
+    'narrative_scenes',
+    'narrative_scene',
+    'narrative_diagnostics',
+    'narrative_state',
+    'narrative_layout',
+    'narrative_source',
+  ])
+  const filter = {
+    predicate: (query: { queryKey: readonly unknown[] }) => families.has(String(query.queryKey[0])),
+  }
+  await qc.cancelQueries(filter)
+  qc.removeQueries(filter)
+}
+
 /** Everything that the file watcher can invalidate. */
 export function invalidateWorld(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: qk.nodes })

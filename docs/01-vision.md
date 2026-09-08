@@ -1,5 +1,11 @@
 # 01 — Vision & Principles
 
+The principles below describe Wobu's original concept-art scope. The planned
+[narrative extension](17-narrative-system.md) broadens the product to structured story authoring
+and production narrative assets, including facts that do not affect a render. Its compiler uses
+LLMs during authoring; exported games run prepared dialogue and deterministic logic offline.
+The extension is planned, and does not make the existing art tools a finishing pipeline.
+
 ## The problem
 
 Every image-generation tool treats a prompt as a blank page. But world building is not a

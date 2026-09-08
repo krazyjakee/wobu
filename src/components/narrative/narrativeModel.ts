@@ -13,8 +13,6 @@ import type { NarrativeFilter } from '../../store/ui'
  * all.
  */
 
-export type NarrativeSectionId = 'scenes' | 'quests' | 'world' | 'text'
-
 /**
  * A row's condition, said in words.
  *
@@ -32,62 +30,6 @@ export const NARRATIVE_STATUS: Record<NarrativeStatus, { label: string; icon: st
   locked: { label: 'Locked', icon: 'lock' },
   ready: { label: 'Ready', icon: 'check' },
 }
-
-/** One row of a Library section. Identified, never positioned. */
-export interface NarrativeItem {
-  id: string
-  name: string
-  status?: NarrativeStatus
-  /**
-   * Set when this element has an unresolved conflict on disk. The row stays
-   * selectable: a conflict is a thing to open and resolve, not a thing to hide.
-   */
-  conflict?: string
-}
-
-/**
- * What a list can be, including the two answers that are not a list.
- *
- * `ready` with no items is the *empty* state and is a real answer — the project
- * has no scenes yet — which is why it is not a separate variant: only an empty
- * `ready` may offer to create the first one. `unavailable` is the different
- * claim that Wobu cannot answer the question at all.
- */
-export type NarrativeListState =
-  | { kind: 'unavailable'; reason: string }
-  | { kind: 'loading' }
-  | { kind: 'error'; message: string }
-  | { kind: 'ready'; items: NarrativeItem[] }
-
-export interface NarrativeSectionDef {
-  id: NarrativeSectionId
-  label: string
-  /** Said in the empty state, so a writer knows what belongs in the section. */
-  empty: string
-}
-
-export const NARRATIVE_SECTIONS: NarrativeSectionDef[] = [
-  {
-    id: 'scenes',
-    label: 'Scenes',
-    empty: 'A scene is a place in the story where people speak and choices are made.',
-  },
-  {
-    id: 'quests',
-    label: 'Quests',
-    empty: 'A quest groups the scenes of one thread and the state that drives it.',
-  },
-  {
-    id: 'world',
-    label: 'World state',
-    empty: 'Facts, variables, and who knows what — the canon a scene is allowed to draw on.',
-  },
-  {
-    id: 'text',
-    label: 'Text library',
-    empty: 'Barks, ambient exchanges, codex entries and other text with no player choice in it.',
-  },
-]
 
 /**
  * Why each control is refused today.
@@ -134,21 +76,5 @@ export const NARRATIVE_UNAVAILABLE = {
   export:
     'Export packages a compiled story for a game engine. This build has no compiler, so there is nothing to package.',
   diagnostics:
-    'These are read from the scene source: destinations that do not resolve, conditions and effects that do not type, duplicated ids, revisions that no longer describe their words, and slots still waiting for text. They are not a compilation (#158) and they are not a reachability proof — a beat no state can reach is not something this build can find.',
+    'Checks cover source errors and missing text. Branch reachability has not been checked.',
 } as const
-
-/**
- * The default for every Library section, and the honest answer for the three
- * that keep it.
- *
- * `NarrativeMode` replaces the Scenes entry with the project's own catalog. The
- * other three stay: quests, world state and the text library have no model in
- * this build, and an empty list would say "this project has none of these",
- * which is a different and false claim.
- */
-export const NO_NARRATIVE_SOURCE = Object.fromEntries(
-  NARRATIVE_SECTIONS.map((section) => [
-    section.id,
-    { kind: 'unavailable', reason: NARRATIVE_UNAVAILABLE.source },
-  ]),
-) as Record<NarrativeSectionId, NarrativeListState>

@@ -4,6 +4,7 @@ import { useUI, NARRATIVE_TABS, type NarrativeTab } from '../../store/ui'
 import { NarrativeProjectFlow } from './NarrativeProjectFlow'
 import { NarrativePlaceholder } from './NarrativePlaceholder'
 import { NarrativeScriptPane } from './NarrativeScriptPane'
+import { NarrativeSourcePane } from './NarrativeSourcePane'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 
 const TAB_LABEL: Record<NarrativeTab, string> = {
@@ -22,7 +23,13 @@ const TAB_LABEL: Record<NarrativeTab, string> = {
  * included. Switching between them changes `narrativeTab` and nothing else, so
  * the beat a writer was reading on the canvas is the beat Script opens on.
  */
-export function NarrativeCentre({ readOnly = false }: { readOnly?: boolean }) {
+export function NarrativeCentre({
+  readOnly = false,
+  projectKey = '',
+}: {
+  readOnly?: boolean
+  projectKey?: string
+}) {
   const tab = useUI((s) => s.narrativeTab)
   const setTab = useUI((s) => s.setNarrativeTab)
   const sceneId = useUI((s) => s.narrative.sceneId)
@@ -112,19 +119,14 @@ export function NarrativeCentre({ readOnly = false }: { readOnly?: boolean }) {
             scene, and the arc is the only view that shows where scenes sit in
             relation to each other; the scene canvas is one double-click in. */}
         {tab === 'flow' && <NarrativeProjectFlow readOnly={readOnly} />}
-        {tab === 'script' && <NarrativeScriptPane />}
+        {tab === 'script' && <NarrativeScriptPane readOnly={readOnly} projectKey={projectKey} />}
         {tab === 'preview' && (
           <NarrativePlaceholder
             title="Preview is not in this build"
             reason={NARRATIVE_UNAVAILABLE.preview}
           />
         )}
-        {tab === 'source' && (
-          <NarrativePlaceholder
-            title="Source editing is not in this build"
-            reason={NARRATIVE_UNAVAILABLE.sourceView}
-          />
-        )}
+        {tab === 'source' && <NarrativeSourcePane readOnly={readOnly} projectKey={projectKey} />}
       </div>
     </main>
   )
