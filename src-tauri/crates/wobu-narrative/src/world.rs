@@ -5,8 +5,15 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::source::{SOURCE_SCHEMA_VERSION, check_version};
+use crate::source::{SOURCE_SCHEMA_VERSION, WORLD_SCHEMA_VERSION, check_version_for};
 use crate::{Condition, EntityId, Name, SceneId, StateSchema, Value};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NamedClassification {
+    pub id: EntityId,
+    pub name: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -118,6 +125,12 @@ pub struct FutureRestriction {
 #[serde(deny_unknown_fields)]
 pub struct WorldDocument {
     pub schema_version: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acts: Vec<NamedClassification>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arcs: Vec<NamedClassification>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<NamedClassification>,
     #[serde(default)]
     pub facts: Vec<Fact>,
     #[serde(default)]
@@ -136,6 +149,9 @@ impl Default for WorldDocument {
     fn default() -> Self {
         Self {
             schema_version: SOURCE_SCHEMA_VERSION,
+            acts: vec![],
+            arcs: vec![],
+            tags: vec![],
             facts: vec![],
             knowledge: vec![],
             relationships: vec![],
@@ -156,18 +172,42 @@ pub struct WorldDiagnostic {
 
 impl WorldDocument {
     pub fn parse(yaml: &str) -> Result<Self> {
-        check_version(yaml)?;
+        let version = check_version_for(yaml, WORLD_SCHEMA_VERSION)?;
+        if version == 1 {
+            let value: serde_json::Value = crate::source::parse_yaml(yaml)?;
+            if ["acts", "arcs", "tags"].iter().any(|key| value.get(key).is_some()) {
+                return Err(crate::source::require_v2());
+            }
+        }
         crate::source::parse_yaml(yaml)
     }
 
     pub fn to_yaml(&self) -> Result<String> {
-        if self.schema_version != SOURCE_SCHEMA_VERSION {
+        if !(1..=WORLD_SCHEMA_VERSION).contains(&self.schema_version) {
             return Err(Error::UnsupportedSchemaVersion {
                 found: self.schema_version,
-                supported: SOURCE_SCHEMA_VERSION,
+                supported: WORLD_SCHEMA_VERSION,
             });
         }
+        if self.schema_version == 1
+            && (!self.acts.is_empty() || !self.arcs.is_empty() || !self.tags.is_empty())
+        {
+            return Err(crate::source::require_v2());
+        }
         crate::source::print_yaml(self)
+    }
+
+    /// Only explicit guarded writes upgrade a parsed or absent version-1 world.
+    pub fn for_save(&self) -> Result<Self> {
+        if !(1..=WORLD_SCHEMA_VERSION).contains(&self.schema_version) {
+            return Err(Error::UnsupportedSchemaVersion {
+                found: self.schema_version,
+                supported: WORLD_SCHEMA_VERSION,
+            });
+        }
+        let mut document = self.clone();
+        document.schema_version = WORLD_SCHEMA_VERSION;
+        Ok(document)
     }
 
     /// Names are presentation. Identity and references survive changing the name.
@@ -180,6 +220,13 @@ impl WorldDocument {
             .chain(self.events.iter().map(|r| (r.id, r.name.as_str())))
             .chain(self.quests.iter().map(|r| (r.id, r.name.as_str())))
             .chain(self.restrictions.iter().map(|r| (r.id, r.name.as_str())))
+            .chain(
+                self.acts
+                    .iter()
+                    .chain(&self.arcs)
+                    .chain(&self.tags)
+                    .map(|r| (r.id, r.name.as_str())),
+            )
     }
 
     pub fn diagnose(

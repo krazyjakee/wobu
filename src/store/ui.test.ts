@@ -304,3 +304,50 @@ describe('the shared narrative selection', () => {
     })
   })
 })
+
+it('retains an exact project-scoped reveal across tabs and repeats the same target', () => {
+  const target = {
+    sceneId: 'scene',
+    beatId: 'beat',
+    choiceId: 'choice',
+    field: 'destination' as const,
+  }
+  useUI.getState().selectNarrative(target, 'diagnostic', { projectKey: '/project', focus: true })
+  const first = useUI.getState().narrativeReveal!
+  useUI.getState().setNarrativeTab('script')
+  useUI.getState().setNarrativeTab('flow')
+  expect(useUI.getState().narrativeReveal).toBe(first)
+  useUI.getState().selectNarrative(target, 'diagnostic', { projectKey: '/project', focus: true })
+  expect(useUI.getState().narrativeReveal).toMatchObject({
+    ...target,
+    projectKey: '/project',
+    focus: true,
+    seq: first.seq + 1,
+  })
+  useUI.getState().forgetNarrative(['choice'])
+  expect(useUI.getState().narrative).toEqual({ sceneId: 'scene', beatId: 'beat', lineId: null })
+  expect(useUI.getState().narrativeReveal).toBeNull()
+})
+
+it('retains route and variant selection across tabs and clears descendants when selecting ancestors', () => {
+  useUI.getState().selectNarrative({ sceneId: 'scene', beatId: 'beat', choiceId: 'choice' }, 'flow')
+  useUI.getState().setNarrativeTab('script')
+  expect(useUI.getState().narrative.choiceId).toBe('choice')
+  useUI
+    .getState()
+    .selectNarrative({ sceneId: 'scene', beatId: 'beat', outcomeId: 'outcome' }, 'flow')
+  expect(useUI.getState().narrative.choiceId).toBeUndefined()
+  useUI.getState().forgetNarrative(['outcome'])
+  expect(useUI.getState().narrative).toEqual({ sceneId: 'scene', beatId: 'beat', lineId: null })
+  useUI
+    .getState()
+    .selectNarrative(
+      { sceneId: 'scene', beatId: 'beat', lineId: 'slot', variantId: 'variant' },
+      'search',
+    )
+  expect(useUI.getState().narrative.variantId).toBe('variant')
+  useUI.getState().forgetNarrative(['variant'])
+  expect(useUI.getState().narrative.lineId).toBe('slot')
+  useUI.getState().selectNarrative({ sceneId: 'scene' }, 'inspector')
+  expect(useUI.getState().narrative).toEqual({ sceneId: 'scene', beatId: null, lineId: null })
+})

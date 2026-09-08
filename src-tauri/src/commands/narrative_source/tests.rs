@@ -52,7 +52,7 @@ fn invalid_unknown_and_future_source_never_get_a_saveable_scene() {
     let cases = [
         "schema_version: 1\nscene: [".to_string(),
         format!("{yaml}\nunknown: true\n"),
-        yaml.replace("schema_version: 1", "schema_version: 999"),
+        yaml.replace("schema_version: 2", "schema_version: 999"),
         yaml.replace(&file.scene.id.to_string(), &SceneId::new().to_string()),
     ];
     for invalid in cases {
@@ -117,7 +117,7 @@ fn repair_keeps_concurrent_winner_and_rejects_identity_collisions_and_future_ver
     let error = source_repair(&mut project, &original.rel, &valid, &raw.stamp, None).unwrap_err();
     assert_eq!(error.code, Code::Conflict);
     assert!(std::fs::read_to_string(&path).unwrap().contains("colleague"));
-    let future = valid.replace("schema_version: 1", "schema_version: 999");
+    let future = valid.replace("schema_version: 2", "schema_version: 999");
     std::fs::write(&path, &future).unwrap();
     let future_source = source_at(&project, &original.rel, None).unwrap();
     assert!(

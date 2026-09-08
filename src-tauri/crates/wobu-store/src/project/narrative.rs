@@ -4,14 +4,9 @@
 //! preconditions (`ensure_writable`), this installation's peer alias, and the
 //! one place that knows both a scene and its layout — deleting one.
 //!
-//! Scenes are deliberately **not** in the SQLite index yet. That is the
-//! remaining half of #153, and it is a cache question rather than a
-//! correctness one: the folder is canonical, and every function here reads it.
-//! The cost today is that listing scenes re-reads the scenes directory, which
-//! on a share is the asymmetry `docs/07-file-shares.md` warns about; the thing
-//! that must not happen in the meantime is a scene's guarded-write
-//! precondition living only in a local cache, and it does not — the stamp
-//! travels on [`SceneFile`].
+//! Canonical content stamps refresh derived locators; only changed scenes are
+//! parsed again. A selected scene is then read from its unique canonical path
+//! with its actual stamp. No cached document grants permission to save.
 
 use std::collections::BTreeSet;
 
@@ -29,7 +24,7 @@ impl Project {
     /// Every scene in the folder, plus any file in the scenes directory that
     /// could not be identified.
     pub fn scene_catalog(&self) -> Result<Catalog> {
-        source::catalog(&self.root)
+        Ok(self.scene_inventory()?.catalog)
     }
 
     /// The scene ids the destination checker in `wobu-narrative` needs.
@@ -38,7 +33,16 @@ impl Project {
     }
 
     pub fn load_scene(&self, id: SceneId) -> Result<SceneFile> {
-        let catalog = self.scene_catalog()?;
+        let inventory = self.scene_inventory()?;
+        if inventory.ambiguous.contains(&id.to_string()) {
+            return Err(Error::Malformed {
+                path: self.root.join("narrative/scenes"),
+                reason: format!(
+                    "Scene ID {id} is ambiguous. Repair duplicate scene identities before opening it."
+                ),
+            });
+        }
+        let catalog = inventory.catalog;
         let entry = catalog.find(id).ok_or_else(|| {
             // The folder having gone is a different fact from the scene not
             // existing, and telling a writer their scene is missing when the
@@ -46,7 +50,14 @@ impl Project {
             // distinction `get_node` makes.
             if self.is_present() { Error::NoSuchNode(id.to_string()) } else { Error::Disconnected }
         })?;
-        source::read_scene(&self.root, &entry.rel)
+        let file = source::read_scene(&self.root, &entry.rel)?;
+        if file.scene.id != id {
+            return Err(Error::Malformed {
+                path: entry.rel.clone().into(),
+                reason: "Scene identity changed while opening it. Refresh the library.".into(),
+            });
+        }
+        Ok(file)
     }
 
     /// Create a scene and write it.

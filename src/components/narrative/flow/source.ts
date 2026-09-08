@@ -1,3 +1,5 @@
+import { mintId } from '../sceneIdentity'
+export { mintId } from '../sceneIdentity'
 import type {
   Beat,
   Condition,
@@ -185,31 +187,6 @@ export function layoutWithPositions(
 
 /* ── minting ──────────────────────────────────────────────────────────────── */
 
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
-
-/**
- * A fresh ULID, in the spelling `wobu_core::Id` parses.
- *
- * Minted here rather than asked for, because the command surface is coarse on
- * purpose: a scene is saved as a whole document, so there is no
- * `narrative_beat_add` to hand back an id, and adding one would be the first
- * step towards two implementations of every structural edit. The identity is
- * short-lived either way — the save returns the document the backend wrote, and
- * the canvas redraws from that.
- */
-export function mintId(now = Date.now(), random = crypto.getRandomValues.bind(crypto)): string {
-  let time = ''
-  let remaining = now
-  for (let index = 0; index < 10; index++) {
-    time = CROCKFORD[remaining % 32] + time
-    remaining = Math.floor(remaining / 32)
-  }
-  const bytes = random(new Uint8Array(16))
-  let tail = ''
-  for (const byte of bytes) tail += CROCKFORD[byte % 32]
-  return time + tail
-}
-
 /* ── conditions and effects, in words ─────────────────────────────────────── */
 
 const COMPARE: Record<string, string> = {
@@ -300,10 +277,10 @@ export function beatCounts(beat: Beat): FlowWorkCounts {
 }
 
 /**
- * The single-valued status the *participant and work filters* switch on.
+ * The single-valued display status, and fallback for views without work counts.
  *
  * Deliberately a lossy summary, and deliberately not what the badges show. The
- * badges read `counts` and show each dimension separately; this exists because
+ * badges and work filters read `counts` independently; this exists because
  * `NarrativeStatus` is one value and a chip row is one row. Nothing derived
  * from it is ever shown as "the state of this beat".
  */
@@ -450,10 +427,10 @@ function destinationPort(holder: string, to: Destination): FlowPort {
  * diagnostic is what names it, which is better than this file inventing a
  * second opinion about what is missing.
  */
-function destinationNode(holder: string, to: Destination): string {
+function destinationNode(holder: string, to: Destination): string | null {
   if ('beat' in to) return nodeId.beat(to.beat)
   if ('scene' in to) return nodeId.link(holder)
-  return nodeId.end(holder)
+  return 'end' in to ? nodeId.end(holder) : null
 }
 
 /** The derived box an ending or a way out of the scene is drawn as. */
@@ -479,6 +456,7 @@ function pushDestinationBox(
     })
     return
   }
+  if (!('end' in to)) return
   elements.push({
     kind: 'end',
     id: nodeId.end(holder),
@@ -708,6 +686,7 @@ export function patchScene(doc: Scene, after: FlowLevel): ScenePatch {
 }
 
 function sameDestination(a: Destination, b: Destination): boolean {
+  if ('unresolved' in a && 'unresolved' in b) return true
   if ('beat' in a && 'beat' in b) return a.beat === b.beat
   if ('scene' in a && 'scene' in b) return a.scene === b.scene
   if ('end' in a && 'end' in b) return (a.end.label ?? '') === (b.end.label ?? '')

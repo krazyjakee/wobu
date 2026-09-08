@@ -15,6 +15,10 @@ use crate::atomic::Stamp;
 use crate::error::Result;
 
 pub(super) const SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS narrative_scene_summary (rel TEXT PRIMARY KEY, hash TEXT NOT NULL, scene_id TEXT, name TEXT NOT NULL, projection TEXT, error TEXT);
+CREATE INDEX IF NOT EXISTS narrative_scene_identity ON narrative_scene_summary(scene_id);
+CREATE TABLE IF NOT EXISTS narrative_scene_text (rel TEXT NOT NULL, ordinal INTEGER NOT NULL, text TEXT NOT NULL, folded TEXT NOT NULL, target TEXT NOT NULL, draft INTEGER NOT NULL, PRIMARY KEY(rel,ordinal));
+CREATE TABLE IF NOT EXISTS narrative_scene_variant (rel TEXT NOT NULL, ordinal INTEGER NOT NULL, policy TEXT NOT NULL, review TEXT NOT NULL, freshness TEXT NOT NULL, PRIMARY KEY(rel,ordinal));
 CREATE TABLE IF NOT EXISTS narrative_files (rel TEXT PRIMARY KEY, hash TEXT NOT NULL, entry TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS narrative_sync (peer TEXT NOT NULL, rel TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(peer,rel));
 CREATE TABLE IF NOT EXISTS meta (
@@ -269,7 +273,10 @@ pub(super) const UPSERT_GENERATION_SQL: &str = "INSERT INTO generations
 pub(super) const CLEAR_DERIVED_SQL: &str =
     "DELETE FROM nodes; DELETE FROM links; DELETE FROM asset_links;
      DELETE FROM node_fts; DELETE FROM assets; DELETE FROM generations;
-     DELETE FROM corrupt; DELETE FROM narrative_files;";
+     DELETE FROM corrupt; DELETE FROM narrative_files;
+DELETE FROM narrative_scene_summary;
+DELETE FROM narrative_scene_text;
+DELETE FROM narrative_scene_variant;";
 
 #[cfg(test)]
 pub(super) const NODE_WRITE_STATEMENT_COUNT: usize = 10;

@@ -30,7 +30,10 @@ use crate::state::{StateSchema, VariableDecl};
 /// narrative source is additive to a project that may contain none of it, and
 /// making every existing art project look like it needed a migration would be a
 /// migration nobody asked for.
+/// Legacy shared version, retained for State and absent-World semantic defaults.
 pub const SOURCE_SCHEMA_VERSION: u32 = 1;
+pub const SCENE_SCHEMA_VERSION: u32 = 2;
+pub const WORLD_SCHEMA_VERSION: u32 = 2;
 
 /// Read `schema_version` and nothing else.
 ///
@@ -45,17 +48,21 @@ struct VersionProbe {
 
 /// Reject a file this build should not touch, before trying to understand it.
 pub(crate) fn check_version(yaml: &str) -> Result<()> {
+    check_version_for(yaml, SOURCE_SCHEMA_VERSION).map(|_| ())
+}
+pub(crate) fn check_version_for(yaml: &str, latest: u32) -> Result<u32> {
     let probe: VersionProbe = serde_norway::from_str(yaml).map_err(|e| Error::from_yaml(&e))?;
     match probe.schema_version {
         None => Err(Error::MissingSchemaVersion),
-        Some(SOURCE_SCHEMA_VERSION) => Ok(()),
-        // Older versions are refused here too, rather than silently accepted.
-        // A migration is a deliberate, tested step (#152's acceptance criteria);
-        // reading a v0 file as if it were a v1 file is how a format acquires
-        // undocumented shapes it can never drop.
-        Some(found) => {
-            Err(Error::UnsupportedSchemaVersion { found, supported: SOURCE_SCHEMA_VERSION })
-        }
+        Some(found) if (1..=latest).contains(&found) => Ok(found),
+        Some(found) => Err(Error::UnsupportedSchemaVersion { found, supported: latest }),
+    }
+}
+pub(crate) fn require_v2() -> Error {
+    Error::Source {
+        location: None,
+        message: "This source uses version 2 fields. Set schema_version: 2 before saving it."
+            .into(),
     }
 }
 
@@ -132,15 +139,48 @@ pub struct SceneDocument {
 
 impl SceneDocument {
     pub fn new(scene: Scene) -> SceneDocument {
-        SceneDocument { schema_version: SOURCE_SCHEMA_VERSION, scene }
+        SceneDocument { schema_version: SCENE_SCHEMA_VERSION, scene }
     }
 
     pub fn parse(yaml: &str) -> Result<SceneDocument> {
-        check_version(yaml)?;
-        parse_yaml(yaml)
+        let version = check_version_for(yaml, SCENE_SCHEMA_VERSION)?;
+        let document: Self = parse_yaml(yaml)?;
+        if version == 1 {
+            let value: serde_json::Value = parse_yaml(yaml)?;
+            if ["act_id", "arc_id", "tag_ids"].iter().any(|key| value["scene"].get(key).is_some())
+                || document
+                    .scene
+                    .beats
+                    .iter()
+                    .flat_map(|b| b.destinations())
+                    .any(|(_, d)| matches!(d, crate::Destination::Unresolved {}))
+            {
+                return Err(require_v2());
+            }
+        }
+        Ok(document)
     }
 
     pub fn to_yaml(&self) -> Result<String> {
+        if !(1..=SCENE_SCHEMA_VERSION).contains(&self.schema_version) {
+            return Err(Error::UnsupportedSchemaVersion {
+                found: self.schema_version,
+                supported: SCENE_SCHEMA_VERSION,
+            });
+        }
+        if self.schema_version == 1
+            && (self.scene.act_id.is_some()
+                || self.scene.arc_id.is_some()
+                || !self.scene.tag_ids.is_empty()
+                || self
+                    .scene
+                    .beats
+                    .iter()
+                    .flat_map(|b| b.destinations())
+                    .any(|(_, d)| matches!(d, crate::Destination::Unresolved {})))
+        {
+            return Err(require_v2());
+        }
         print_yaml(self)
     }
 }
@@ -171,6 +211,12 @@ impl StateDocument {
     }
 
     pub fn to_yaml(&self) -> Result<String> {
+        if self.schema_version != SOURCE_SCHEMA_VERSION {
+            return Err(Error::UnsupportedSchemaVersion {
+                found: self.schema_version,
+                supported: SOURCE_SCHEMA_VERSION,
+            });
+        }
         print_yaml(self)
     }
 

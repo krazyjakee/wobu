@@ -3,18 +3,28 @@ import { hasUnsafeInteger } from './integerInput'
 import { mintId } from './flow/source'
 
 export type WorldCollection = Exclude<keyof WorldDocument, 'schema_version'>
-export type WorldItem = WorldDocument[WorldCollection][number]
-export const WORLD_COLLECTIONS: { key: WorldCollection; label: string }[] = [
+export type WorldItem = NonNullable<WorldDocument[WorldCollection]>[number]
+export const WORLD_ENTITY_COLLECTIONS = [
   { key: 'facts', label: 'Facts' },
   { key: 'knowledge', label: 'Knowledge' },
   { key: 'relationships', label: 'Relationships' },
   { key: 'events', label: 'Events' },
   { key: 'quests', label: 'Quests' },
   { key: 'restrictions', label: 'Future knowledge' },
+] as const
+export const WORLD_COLLECTIONS: { key: WorldCollection; label: string }[] = [
+  ...WORLD_ENTITY_COLLECTIONS,
+  { key: 'acts', label: 'Acts' },
+  { key: 'arcs', label: 'Arcs' },
+  { key: 'tags', label: 'Tags' },
 ]
 export function createWorldRecord(collection: WorldCollection): WorldItem {
   const common = { id: mintId(), name: 'New record' }
   switch (collection) {
+    case 'acts':
+    case 'arcs':
+    case 'tags':
+      return common
     case 'facts':
       return { ...common, assertion: '', sources: [] }
     case 'knowledge':
@@ -63,7 +73,7 @@ export function requiredWorldFields(
 ): { collection: WorldCollection; id: string; message: string }[] {
   const problems: { collection: WorldCollection; id: string; message: string }[] = []
   for (const { key } of WORLD_COLLECTIONS) {
-    for (const record of document[key]) {
+    for (const record of document[key] ?? []) {
       if (hasUnsafeInteger(record))
         problems.push({
           collection: key,

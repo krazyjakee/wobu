@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ViewportPortal, useReactFlow } from '@xyflow/react'
 import type { LayoutAnnotation, NodeKey } from '../../../lib/api'
 import type { FlowPresentation } from './useFlowPresentation'
@@ -11,16 +11,17 @@ export function PresentationTools({
   presentation,
   level,
   readOnly,
+  notePosition,
 }: {
   presentation: FlowPresentation
   level: 'scene' | 'arc'
   readOnly: boolean
+  notePosition?: () => { x: number; y: number }
 }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [groupPage, setGroupPage] = useState(0)
   const selected = useFlowLevel((s) => s.selectedId)
-  const flow = useReactFlow()
   const { layout, onChange } = presentation
   const key = selected ? layoutKeyOf(selected, level) : null
   const groups = Object.values(layout.groups).sort((a, b) => a.id.localeCompare(b.id))
@@ -135,7 +136,7 @@ export function PresentationTools({
           </label>
           <div className="nrt-presentation-groups">
             {groups.length > 40 && (
-              <div role="status">
+              <div role="status" className="nrt-presentation-pagination">
                 Groups {currentGroupPage * 40 + 1}–
                 {Math.min((currentGroupPage + 1) * 40, groups.length)} of {groups.length}
                 <button
@@ -215,14 +216,12 @@ export function PresentationTools({
             disabled={readOnly || Object.keys(layout.annotations).length >= 1000}
             onClick={() => {
               const id = mintId()
-              const at = flow.screenToFlowPosition({
-                x: window.innerWidth / 2,
-                y: window.innerHeight / 2,
-              })
+              const at = notePosition?.() ?? (key ? layout.nodes[key] : undefined) ?? { x: 0, y: 0 }
               const note: LayoutAnnotation = {
                 id,
                 body: 'New pinned note',
-                ...at,
+                x: at.x,
+                y: at.y,
                 updatedAt: now(),
                 ...(key ? { attachedTo: key } : {}),
               }
@@ -246,10 +245,12 @@ export function PinnedNotes({
   presentation,
   readOnly,
   positions,
+  outline = false,
 }: {
   presentation: FlowPresentation
   readOnly: boolean
   positions: Record<NodeKey, { x: number; y: number }>
+  outline?: boolean
 }) {
   const [page, setPage] = useState(0)
   const { layout, onChange } = presentation
@@ -275,10 +276,11 @@ export function PinnedNotes({
           </button>
         </div>
       )}
-      <ViewportPortal>
+      <NoteContainer outline={outline}>
         {notes.slice(current * MAX_VISIBLE_NOTES, (current + 1) * MAX_VISIBLE_NOTES).map((note) => (
           <PinnedNote
             key={note.id}
+            outline={outline}
             note={note}
             readOnly={readOnly}
             onChange={change}
@@ -297,11 +299,36 @@ export function PinnedNotes({
             anchor={note.attachedTo ? positions[note.attachedTo] : undefined}
           />
         ))}
-      </ViewportPortal>
+      </NoteContainer>
     </>
   )
 }
-function PinnedNote({
+function NoteContainer({ outline, children }: { outline: boolean; children: ReactNode }) {
+  return outline ? (
+    <div className="nrt-outline-notes" aria-label="Pinned notes">
+      {children}
+    </div>
+  ) : (
+    <ViewportPortal>{children}</ViewportPortal>
+  )
+}
+interface NoteProps {
+  note: LayoutAnnotation
+  onChange: (note: LayoutAnnotation) => void
+  onDelete: () => void
+  readOnly: boolean
+  anchor?: { x: number; y: number }
+}
+function PinnedNote({ outline, ...props }: NoteProps & { outline: boolean }) {
+  return outline ? (
+    <aside className="nrt-outline-note" aria-label="Pinned note">
+      <NoteFields {...props} coordinates />
+    </aside>
+  ) : (
+    <CanvasPinnedNote {...props} />
+  )
+}
+function CanvasPinnedNote({
   note,
   onChange,
   onDelete,
@@ -314,12 +341,6 @@ function PinnedNote({
   readOnly: boolean
   anchor?: { x: number; y: number }
 }) {
-  const [text, setText] = useState(note.body ?? '')
-  const [seen, setSeen] = useState(note.body)
-  if (seen !== note.body) {
-    setSeen(note.body)
-    setText(note.body ?? '')
-  }
   const [drag, setDrag] = useState<{ startX: number; startY: number; x: number; y: number } | null>(
     null,
   )
@@ -358,6 +379,52 @@ function PinnedNote({
       >
         Pinned note · drag
       </button>
+      <NoteFields
+        note={note}
+        onChange={onChange}
+        onDelete={onDelete}
+        readOnly={readOnly}
+        anchor={anchor}
+      />
+    </aside>
+  )
+}
+
+function NoteFields({
+  note,
+  onChange,
+  onDelete,
+  readOnly,
+  anchor,
+  coordinates = false,
+}: NoteProps & { coordinates?: boolean }) {
+  const [text, setText] = useState(note.body ?? '')
+  const [seen, setSeen] = useState(note.body)
+  if (seen !== note.body) {
+    setSeen(note.body)
+    setText(note.body ?? '')
+  }
+  return (
+    <>
+      {coordinates && (
+        <div className="nrt-script-actions">
+          {(['x', 'y'] as const).map((axis) => (
+            <label key={axis}>
+              Note {axis.toUpperCase()}
+              <input
+                type="number"
+                value={note[axis]}
+                disabled={readOnly}
+                onChange={(event) => {
+                  const value = event.target.valueAsNumber
+                  if (Number.isFinite(value))
+                    onChange({ ...note, [axis]: value, updatedAt: new Date().toISOString() })
+                }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
       <textarea
         aria-label="Pinned note text"
         value={text}
@@ -398,6 +465,6 @@ function PinnedNote({
           Remove note
         </button>
       </div>
-    </aside>
+    </>
   )
 }

@@ -1,4 +1,14 @@
-import { useMemo } from 'react'
+import { PresentationTools, PinnedNotes } from './PresentationTools'
+import { useFlowGroupPresentation } from './useFlowGroupPresentation'
+import type { FlowPresentation } from './useFlowPresentation'
+import { ParticipantFilter, FlowStatusFilters } from './ParticipantFilter'
+import { FlowBadgeFilters } from './FlowBadgeFilters'
+import { isFlowElementMuted } from './flowFilters'
+import { badgeShown } from './badges'
+import { useUI } from '../../../store/ui'
+import type { CanonicalFlowActions } from './canonicalFlow'
+import { useMemo, useRef } from 'react'
+import { useFlowReveal } from './useFlowReveal'
 import { Icon } from '../../Icon'
 import { NARRATIVE_STATUS } from '../narrativeModel'
 import { useFlowLevel } from './flowStore'
@@ -70,12 +80,16 @@ export function FlowOutline({
   activateLabel = 'Open',
   targetOf,
   authoring,
+  actions,
+  presentation,
 }: {
   scene: FlowLevel
   onChange: (scene: FlowLevel) => void
   readOnly?: boolean
   /** What this level allows, and the sentence for each refusal. See `useSceneEdits`. */
   authoring?: FlowAuthoring
+  actions?: CanonicalFlowActions
+  presentation?: FlowPresentation
   /** Which kinds this level can create. The arc creates scenes and nothing else. */
   creatable?: readonly FlowKind[]
   /** The unauthored way out this level offers, if any. See `FlowGraphNode.spare`. */
@@ -85,170 +99,256 @@ export function FlowOutline({
   activateLabel?: string
   targetOf?: Parameters<typeof useSceneEdits>[0]['targetOf']
 }) {
+  const container = useRef<HTMLOListElement>(null)
+  useFlowGroupPresentation(presentation, readOnly)
+  const closedGroups = useFlowLevel((state) => state.closedGroups)
+  const setClosedGroups = useFlowLevel((state) => state.setClosedGroups)
+  const participant = useFlowLevel((state) => state.participant)
+  const badges = useFlowLevel((state) => state.badges)
+  const statuses = useUI((state) => state.narrativeFilters)
+  const level = presentation?.layout.graph.kind === 'scene' ? 'scene' : 'arc'
+  useFlowReveal({ scene, container, projectKey: actions?.projectKey })
+  const sourceDisabled = readOnly || !!actions?.disabled
   const selectedId = useFlowLevel((s) => s.selectedId)
+  const announcement = useFlowLevel((s) => s.announcement)
   const { select, connect, remove, add } = useSceneEdits({
     scene,
     onChange,
-    readOnly,
+    readOnly: sourceDisabled,
     targetOf,
     authoring,
+    actions,
   })
   const rows = useMemo(() => readingOrder(scene), [scene])
-  const destinations = scene.elements
+  const destinations = actions
+    ? scene.elements.filter((element) =>
+        ['beat', 'end', 'sceneLink', 'missing'].includes(element.kind),
+      )
+    : scene.elements
 
   return (
-    <ol className="nrt-outline" aria-label={`${scene.name} outline`}>
-      {rows.map(({ element, reachable }) => {
-        const status = element.status ? NARRATIVE_STATUS[element.status] : null
-        const selected = element.id === selectedId
-        return (
-          <li
-            key={element.id}
-            className={selected ? 'nrt-outline-row is-selected' : 'nrt-outline-row'}
-          >
-            <div className="nrt-outline-head">
-              <button
-                type="button"
-                className="nrt-outline-name"
-                aria-current={selected ? 'true' : undefined}
-                onClick={() => select(element.id)}
+    <>
+      <div className="nrt-flow-bar" role="toolbar" aria-label="Flow outline actions">
+        {presentation && (
+          <PresentationTools presentation={presentation} level={level} readOnly={readOnly} />
+        )}
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={!scene.groups.length}
+          onClick={() =>
+            setClosedGroups(closedGroups.length ? [] : scene.groups.map((group) => group.id))
+          }
+        >
+          {closedGroups.length ? 'Open all groups' : 'Close all groups'}
+        </button>
+        <ParticipantFilter scene={scene} />
+        <FlowStatusFilters />
+        {scene.elements.some((element) => element.diagnostics || element.counts) && (
+          <FlowBadgeFilters />
+        )}
+      </div>
+      {presentation && (
+        <PinnedNotes
+          presentation={presentation}
+          positions={presentation.layout.nodes}
+          readOnly={readOnly}
+          outline
+        />
+      )}
+      <p className="sr-only" role="status" aria-live="polite">
+        <span key={announcement.seq}>{announcement.text}</span>
+      </p>
+      <ol ref={container} className="nrt-outline" aria-label={`${scene.name} outline`}>
+        {scene.groups.map((group) => (
+          <li className="nrt-outline-group" key={`group:${group.id}`}>
+            <button
+              type="button"
+              className="btn"
+              aria-expanded={!closedGroups.includes(group.id)}
+              onClick={() =>
+                setClosedGroups(
+                  closedGroups.includes(group.id)
+                    ? closedGroups.filter((id) => id !== group.id)
+                    : [...closedGroups, group.id],
+                )
+              }
+            >
+              {closedGroups.includes(group.id) ? 'Open' : 'Close'} group {group.name}
+            </button>
+            <span>
+              {scene.elements.filter((element) => element.groupId === group.id).length} elements
+            </span>
+          </li>
+        ))}
+        {rows
+          .filter(({ element }) => !element.groupId || !closedGroups.includes(element.groupId))
+          .map(({ element, reachable }) => {
+            const status = element.status ? NARRATIVE_STATUS[element.status] : null
+            const selected = element.id === selectedId
+            const blocking = (element.diagnostics ?? []).some((found) => found.severity === 'error')
+            const muted = isFlowElementMuted(element, blocking, participant, statuses)
+            const diagnostics = (element.diagnostics ?? []).filter((found) =>
+              badgeShown(found, badges),
+            )
+            return (
+              <li
+                key={element.id}
+                className={`nrt-outline-row${selected ? ' is-selected' : ''}${muted ? ' is-muted' : ''}`}
               >
-                <Icon name={FLOW_KIND_ICON[element.kind]} size="sm" />
-                <span className="nrt-node-kind">{FLOW_KIND_LABEL[element.kind]}</span>
-                {element.title}
-              </button>
-              {element.kind === 'beat' && (
-                <span className="nrt-badge">
-                  {element.lines} lines · {element.variants} variants
-                </span>
-              )}
-              {status && (
-                <span className="nrt-badge">
-                  <Icon name={status.icon} size="sm" />
-                  {status.label}
-                </span>
-              )}
-              {!reachable && (
-                <span className="nrt-badge is-conflict">
-                  <Icon name="x" size="sm" />
-                  Not reachable from the start
-                </span>
-              )}
-              {onActivate && (
-                /* The drill-down, as an ordinary button. Double-click is not
+                <div className="nrt-outline-head">
+                  <button
+                    type="button"
+                    className="nrt-outline-name"
+                    data-flow-id={element.id}
+                    aria-current={selected ? 'true' : undefined}
+                    onClick={() => select(element.id)}
+                  >
+                    <Icon name={FLOW_KIND_ICON[element.kind]} size="sm" />
+                    <span className="nrt-node-kind">{FLOW_KIND_LABEL[element.kind]}</span>
+                    {element.title}
+                  </button>
+                  {element.kind === 'beat' && (
+                    <span className="nrt-badge">
+                      {element.lines} lines · {element.variants} variants
+                    </span>
+                  )}
+                  {muted && <span className="nrt-badge">Filtered</span>}
+                  {status && (
+                    <span className="nrt-badge">
+                      <Icon name={status.icon} size="sm" />
+                      {status.label}
+                    </span>
+                  )}
+                  {!reachable && (
+                    <span className="nrt-badge is-conflict">
+                      <Icon name="x" size="sm" />
+                      Not reachable from the start
+                    </span>
+                  )}
+                  {onActivate && (
+                    /* The drill-down, as an ordinary button. Double-click is not
                    an operation a keyboard has, so the outline cannot leave
                    entering a scene to the canvas's gesture. */
-                <button type="button" className="btn btn-sm" onClick={() => onActivate(element.id)}>
-                  {activateLabel}
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={readOnly}
-                /* Not `disabled` for a derived box: `remove` refuses it out
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => onActivate(element.id)}
+                    >
+                      {activateLabel}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={sourceDisabled}
+                    /* Not `disabled` for a derived box: `remove` refuses it out
                    loud, in the same live region every other refusal uses, and a
                    dead button explains nothing. */
-                onClick={() => remove(element.id)}
-              >
-                Delete
-              </button>
-            </div>
+                    onClick={() => remove(element.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
 
-            {(element.out.length > 0 || spare?.(element)) && (
-              <ul className="nrt-outline-ports">
-                {portsOf(element, spare).map((port) => (
-                  <li key={port.id}>
-                    <label>
-                      <span className="nrt-port-label">
-                        {port.label}
-                        {port.requires ? ` — requires ${port.requires}` : ''}
-                      </span>
-                      {/* The connection, as a control rather than a gesture.
+                {(element.out.length > 0 || spare?.(element)) && (
+                  <ul className="nrt-outline-ports">
+                    {portsOf(element, spare).map((port) => (
+                      <li key={port.id}>
+                        <label>
+                          <span className="nrt-port-label">
+                            {port.label}
+                            {port.requires ? ` — requires ${port.requires}` : ''}
+                          </span>
+                          {/* The connection, as a control rather than a gesture.
                           Choosing "Nothing yet" is how a destination is
                           disconnected without a pointer or a canvas. */}
-                      <select
-                        value={port.to ?? ''}
-                        /* A structural port is read here rather than edited: a
+                          <select
+                            value={port.to ?? ''}
+                            /* A structural port is read here rather than edited: a
                            beat leads to its own choices because they belong to
                            it, so there is no destination on it to choose. */
-                        disabled={readOnly || (port.fixed && !!authoring?.fixedPort)}
-                        aria-label={`${element.title} — ${port.label} leads to`}
-                        onChange={(event) =>
-                          connect(
-                            { elementId: element.id, portId: port.id, label: port.label },
-                            event.target.value || null,
-                          )
-                        }
-                      >
-                        {/* Left out when the source model has no "nowhere":
+                            disabled={sourceDisabled || (port.fixed && !!authoring?.fixedPort)}
+                            aria-label={`${element.title} — ${port.label} leads to`}
+                            onChange={(event) =>
+                              connect(
+                                { elementId: element.id, portId: port.id, label: port.label },
+                                event.target.value || null,
+                              )
+                            }
+                          >
+                            {/* Left out when the source model has no "nowhere":
                             offering a choice that will be refused is worse than
                             not offering it, and the reason is on the row. The
                             unauthored row keeps it, because that *is* its
                             current value — nobody has asked for a way out yet. */}
-                        {(!authoring?.destinationRequired || port.unauthored) && (
-                          <option value="">Nothing yet</option>
+                            {(!authoring?.destinationRequired || port.unauthored) && (
+                              <option value="">Nothing yet</option>
+                            )}
+                            {destinations
+                              .filter((candidate) => candidate.id !== element.id)
+                              .map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.title}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        {port.to === null && !port.unauthored && (
+                          <span className="nrt-chip is-bad">
+                            <Icon name="x" size="sm" />
+                            no destination
+                          </span>
                         )}
-                        {destinations
-                          .filter((candidate) => candidate.id !== element.id)
-                          .map((candidate) => (
-                            <option key={candidate.id} value={candidate.id}>
-                              {candidate.title}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                    {port.to === null && !port.unauthored && (
-                      <span className="nrt-chip is-bad">
-                        <Icon name="x" size="sm" />
-                        no destination
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-            {(element.diagnostics?.length ?? 0) > 0 && (
-              /* The full wording, which a fixed-size box on the canvas cannot
+                {diagnostics.length > 0 && (
+                  /* The full wording, which a fixed-size box on the canvas cannot
                  carry. #151 requires the outline to be a complete alternative
                  to the canvas, and a badge that only counts problems is not. */
-              <ul className="nrt-outline-diagnostics" aria-label={`Problems with ${element.title}`}>
-                {element.diagnostics!.map((found) => (
-                  <li key={found.id} className={found.severity === 'error' ? 'is-bad' : ''}>
-                    <Icon name={found.severity === 'error' ? 'x' : 'clock'} size="sm" />
-                    <span className="nrt-badge">
-                      {found.severity === 'error' ? 'Error' : 'Warning'}
-                    </span>
-                    <span>{found.message}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {selected && (
-              <div
-                className="nrt-outline-add"
-                role="group"
-                aria-label={`Add after ${element.title}`}
-              >
-                {creatable.map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={readOnly}
-                    onClick={() => add(kind, element.id)}
+                  <ul
+                    className="nrt-outline-diagnostics"
+                    aria-label={`Problems with ${element.title}`}
                   >
-                    Add {FLOW_KIND_LABEL[kind].toLocaleLowerCase()} after
-                  </button>
-                ))}
-              </div>
-            )}
-          </li>
-        )
-      })}
-    </ol>
+                    {diagnostics.map((found) => (
+                      <li key={found.id} className={found.severity === 'error' ? 'is-bad' : ''}>
+                        <Icon name={found.severity === 'error' ? 'x' : 'clock'} size="sm" />
+                        <span className="nrt-badge">
+                          {found.severity === 'error' ? 'Error' : 'Warning'}
+                        </span>
+                        <span>{found.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {selected && (
+                  <div
+                    className="nrt-outline-add"
+                    role="group"
+                    aria-label={`Add after ${element.title}`}
+                  >
+                    {creatable.map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={sourceDisabled}
+                        onClick={() => add(kind, element.id)}
+                      >
+                        Add {FLOW_KIND_LABEL[kind].toLocaleLowerCase()} after
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+      </ol>
+    </>
   )
 }
 

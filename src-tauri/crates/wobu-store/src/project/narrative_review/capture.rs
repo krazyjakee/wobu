@@ -106,6 +106,9 @@ impl Project {
             .diagnose(&checked, &known_characters, &known_entities, &self.scene_ids()?)
             .first()
             .map(|d| format!("{}: {}", d.field, d.message));
+        if let Some((diagnostic, _)) = file.scene.classification_diagnostics(&world).first() {
+            input_problem = Some(diagnostic.to_string());
+        }
         if file.scene.participants.iter().any(|p| !known_characters.contains(&p.entity))
             || file
                 .scene

@@ -7,14 +7,25 @@ import { conditionText } from './flow/source'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NarrativeContext } from './NarrativeContext'
 import './narrativeInspector.css'
+import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
+import { SceneOrganization } from './SceneOrganization'
 
-/** The saved scene context, shared by Flow, Script and Source selection. */
-export function NarrativeInspector() {
+/** The current scene draft, shared by Flow, Script and outline selection. */
+export function NarrativeInspector({
+  projectKey = '',
+  readOnly = false,
+}: {
+  projectKey?: string
+  readOnly?: boolean
+}) {
   const { sceneId, beatId, lineId } = useUI((s) => s.narrative)
   const selectNarrative = useUI((s) => s.selectNarrative)
   const query = useScene(sceneId)
   const { nameOf } = useNarrativeNames()
-  const scene = query.data?.scene
+  const draft = useScriptDrafts((state) =>
+    sceneId ? state.drafts[sceneEditKey(projectKey, sceneId)] : undefined,
+  )
+  const scene = draft?.scene ?? query.data?.scene
   const beat = scene?.beats?.find((item) => item.id === beatId)
   const slot = beat?.dialogue?.find((item) => item.id === lineId)
   const speakerName = (speaker: Speaker) =>
@@ -58,7 +69,10 @@ export function NarrativeInspector() {
       )}
       {scene && (
         <>
-          <p className="nrt-note">Saved context. Save edits to update this pane.</p>
+          <p className="nrt-note">{draft ? 'Unsaved scene draft.' : 'Saved scene context.'}</p>
+          {query.data && (
+            <SceneOrganization file={query.data} projectKey={projectKey} readOnly={readOnly} />
+          )}
           {scene.summary && <p>{scene.summary}</p>}
           <section className="nrt-context">
             <h3>Participants</h3>
@@ -121,14 +135,18 @@ export function NarrativeInspector() {
           )}
         </>
       )}
-      {sceneId && beatId && lineId && slot ? (
+      {sceneId && beatId && lineId && slot && !draft ? (
         <NarrativeContext
           key={`${sceneId}/${beatId}/${lineId}`}
           selection={{ scene: sceneId, beat: beatId, slot: lineId }}
           slot={slot}
         />
       ) : (
-        <p className="nrt-note">Select a dialogue line to resolve attributed generation context.</p>
+        <p className="nrt-note">
+          {draft
+            ? 'Save the scene draft to resolve attributed generation context.'
+            : 'Select a dialogue line to resolve attributed generation context.'}
+        </p>
       )}
     </aside>
   )

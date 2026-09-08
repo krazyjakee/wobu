@@ -1,27 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Beat, Scene, SceneFile, Speaker } from '../../lib/api'
-import { prepareScriptText } from './scriptText'
+import { useSceneEditSession } from './useSceneEditSession'
+import { SceneEditControls } from './SceneEditControls'
 import { ScriptDialogue } from './ScriptDialogue'
 import { ScriptReviewControls } from './ScriptReviewControls'
 import { useScriptReview } from './useScriptReview'
 import { ScriptRoutes } from './ScriptRoutes'
 import { ScriptDiagnostics } from './ScriptDiagnostics'
-import { diagnosticField } from './scriptDiagnosticField'
+import { useNarrativeReveal } from './useNarrativeReveal'
 import { TypedCondition } from './TypedCondition'
-import { hasUnsafeInteger } from './integerInput'
-import { useNodes, useSaveScene, useScene, useScenes, useNarrativeState } from '../../lib/queries'
+import { useNodes, useScene, useScenes, useNarrativeState } from '../../lib/queries'
 import { useUI } from '../../store/ui'
-import { mintId } from './flow/source'
-import {
-  beatHasLockedText,
-  duplicateScriptBeat,
-  removeScriptBeat,
-  removeScriptVariant,
-  removeScriptSlot,
-  speakerFromKey,
-  speakerKey,
-} from './scriptModel'
-import { useScriptDrafts } from './scriptDrafts'
+import { applySceneEdit, type SceneEditOperation } from './sceneEdits'
+import { beatHasLockedText, speakerFromKey, speakerKey } from './scriptModel'
 import { useSceneLibrary } from './sceneLibraryStore'
 import './script.css'
 
@@ -49,10 +40,9 @@ function ScriptEditor({
   readOnly: boolean
   projectKey: string
 }) {
-  const key = `${projectKey}:${file.scene.id}`
-  const draft = useScriptDrafts((s) => s.drafts[key])
-  const scene = draft?.scene ?? file.scene
-  const unsafeInteger = hasUnsafeInteger(scene)
+  const review = useScriptReview(file, projectKey)
+  const session = useSceneEditSession(file, projectKey, readOnly || review.mutation.isPending)
+  const { draft, scene, unsafeInteger, disabled } = session
   const selected = useUI((s) => s.narrative)
   const select = useUI((s) => s.selectNarrative)
   const beat = scene.beats?.find((one) => one.id === selected.beatId) ?? scene.beats?.[0]
@@ -60,84 +50,68 @@ function ScriptEditor({
   const catalog = useScenes()
   const state = useNarrativeState()
   const variables = state.data?.document?.variables ?? []
-  const save = useSaveScene()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  const [focusField, setFocusField] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
+  const typing = useRef<string | null>(null)
+  const fields = useRef(new WeakMap<HTMLElement, string>())
+  const fieldSerial = useRef(0)
+  const [operationMessage, setOperationMessage] = useState('')
   const searchVariant = useSceneLibrary((s) => s.searchVariant)
-  const review = useScriptReview(file, projectKey)
-  const disabled = readOnly || busy || save.isPending || review.mutation.isPending
   const characters = (nodes.data ?? []).filter((node) => node.kind === 'character')
 
-  useEffect(() => {
-    if (!selected.lineId) return
-    root.current
-      ?.querySelector<HTMLElement>(`[data-slot-id="${selected.lineId}"]`)
-      ?.scrollIntoView?.({
-        block: 'nearest',
-      })
-  }, [selected.lineId, selected.beatId])
-
+  useNarrativeReveal(root, projectKey, scene.id)
   useEffect(() => {
     if (searchVariant?.sceneId !== scene.id) return
-    const field = root.current?.querySelector<HTMLTextAreaElement>(
-      `[data-variant-id="${searchVariant.variantId}"]`,
+    select(
+      {
+        sceneId: scene.id,
+        beatId: selected.beatId,
+        lineId: searchVariant.slotId,
+        variantId: searchVariant.variantId,
+        field: 'text',
+      },
+      'search',
+      { projectKey },
     )
-    field?.scrollIntoView?.({ block: 'center' })
-    field?.focus()
-  }, [searchVariant, scene.id])
+  }, [searchVariant, scene.id, selected.beatId, select, projectKey])
 
-  useEffect(() => {
-    if (!focusField) return
-    const field = Array.from(
-      root.current?.querySelectorAll<HTMLElement>('[data-narrative-field]') ?? [],
-    ).find((element) => element.dataset.narrativeField === focusField)
-    const control = field?.matches('input, select, textarea')
-      ? field
-      : field?.querySelector<HTMLElement>('input, select, textarea')
-    control?.scrollIntoView?.({ block: 'center' })
-    control?.focus()
-    if (control) setFocusField(null)
-  }, [focusField, selected.beatId])
-
-  const edit = (next: Scene) => {
-    if (disabled) return
-    useScriptDrafts.getState().put(key, { file: draft?.file ?? file, scene: next })
-    setMessage('')
-  }
+  const edit = (next: Scene) =>
+    session.edit(next, typing.current ? { coalesceKey: typing.current } : undefined)
   const changeBeat = (next: Beat) =>
     edit({ ...scene, beats: scene.beats?.map((one) => (one.id === next.id ? next : one)) })
   const chooseBeat = (id: string) => select({ sceneId: scene.id, beatId: id }, 'script')
-  const moveBeat = (by: number) => {
-    if (!beat) return
-    const beats = [...(scene.beats ?? [])]
-    const from = beats.findIndex((one) => one.id === beat.id)
-    const to = from + by
-    if (to < 0 || to >= beats.length) return
-    ;[beats[from], beats[to]] = [beats[to]!, beats[from]!]
-    edit({ ...scene, beats })
-  }
-
-  const submit = async () => {
-    if (!draft || disabled || unsafeInteger) return
-    setBusy(true)
-    setError('')
-    try {
-      const next = await prepareScriptText(draft.file.scene, draft.scene)
-      await save.mutateAsync({ file: draft.file, scene: next })
-      // A remounted editor can contain newer typing while this save finishes.
-      // Keep its original stamp so the next write detects the intervening save.
-      if (useScriptDrafts.getState().drafts[key] === draft) {
-        useScriptDrafts.getState().clear(key)
-      }
-      setMessage('Script saved. Changes are available in Flow and can be undone.')
-    } catch (failure) {
-      setError(String(failure))
-    } finally {
-      setBusy(false)
+  const dispatchSceneEdit = (operation: SceneEditOperation) => {
+    if (disabled) return
+    const result = applySceneEdit(session.scene, operation)
+    if ('refused' in result) {
+      setOperationMessage(result.refused)
+      return
     }
+    if (!result.changed || !edit(result.scene)) return
+    const removed = result.removed
+      .map(
+        (target) =>
+          target.variantId ?? target.lineId ?? target.choiceId ?? target.outcomeId ?? target.beatId,
+      )
+      .filter((id): id is string => !!id)
+    useUI.getState().forgetNarrative(removed)
+    select(
+      { ...result.target, field: result.target.field ?? (result.target.beatId ? 'title' : 'name') },
+      'script',
+      { projectKey },
+    )
+    setOperationMessage(
+      result.removed.length
+        ? 'Removed from the scene draft. Undo draft restores it.'
+        : 'Scene draft updated.',
+    )
+  }
+  const moveBeat = (by: number) => {
+    if (beat)
+      dispatchSceneEdit({
+        kind: 'moveBeat',
+        beatId: beat.id,
+        index: (scene.beats ?? []).findIndex((one) => one.id === beat.id) + by,
+      })
   }
 
   const speakerOptions = (speaker: Speaker) => {
@@ -161,34 +135,41 @@ function ScriptEditor({
   }
 
   return (
-    <div className="nrt-script-editor" ref={root}>
+    <div
+      className="nrt-script-editor"
+      ref={root}
+      onKeyDown={(event) => {
+        if (!draft || !(event.metaKey || event.ctrlKey) || event.altKey) return
+        const key = event.key.toLowerCase()
+        if (key !== 'z' && key !== 'y') return
+        event.preventDefault()
+        event.stopPropagation()
+        if (key === 'y' || event.shiftKey) session.redo()
+        else session.undo()
+      }}
+      onClickCapture={() => {
+        typing.current = null
+      }}
+      onChangeCapture={(event) => {
+        const field = event.target
+        if (
+          field instanceof HTMLTextAreaElement ||
+          (field instanceof HTMLInputElement && field.type === 'text')
+        ) {
+          if (!fields.current.has(field))
+            fields.current.set(field, `field:${++fieldSerial.current}`)
+          typing.current = fields.current.get(field)!
+        } else typing.current = null
+      }}
+    >
       {unsafeInteger && (
         <p role="alert">
           This scene contains an integer outside the desktop editor’s exact range. Saving is
           disabled to preserve the source value; correct it in Source before editing this script.
         </p>
       )}
-      <div className="nrt-script-toolbar">
-        <button
-          type="button"
-          className="btn is-primary"
-          disabled={disabled || !draft || unsafeInteger}
-          onClick={() => void submit()}
-        >
-          {busy ? 'Saving…' : 'Save script'}
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={busy || save.isPending || !draft}
-          onClick={() => useScriptDrafts.getState().clear(key)}
-        >
-          Discard changes
-        </button>
-        <span role="status">
-          {draft ? 'Unsaved draft — kept while switching tabs.' : message || 'Saved script'}
-        </span>
-      </div>
+      <SceneEditControls session={session} />
+      {operationMessage && <p role="status">{operationMessage}</p>}
       <ScriptDiagnostics
         scene={scene}
         onSelect={(diagnostic) => {
@@ -197,23 +178,22 @@ function ScriptEditor({
               sceneId: scene.id,
               beatId: diagnostic.beatId ?? beat?.id ?? null,
               lineId: diagnostic.slotId ?? null,
+              variantId: diagnostic.variantId,
+              choiceId: diagnostic.choiceId,
+              outcomeId: diagnostic.outcomeId,
+              field: diagnostic.destination
+                ? 'destination'
+                : diagnostic.kind === 'entry'
+                  ? 'entry'
+                  : diagnostic.kind === 'participant'
+                    ? 'participants'
+                    : 'condition',
             },
-            'script',
+            'diagnostic',
+            { projectKey },
           )
-          setFocusField(diagnosticField(diagnostic))
         }}
       />
-      {error && (
-        <p className="inline-error" role="alert">
-          Could not save: {error}. Your draft is kept.
-        </p>
-      )}
-      {draft && draft.file.stamp?.hash !== file.stamp?.hash && (
-        <p role="alert">
-          The scene changed since this draft began. Saving will check for a conflict; discard to
-          load the latest version.
-        </p>
-      )}
       {readOnly && <p className="nrt-note">This project folder is read-only.</p>}
       <fieldset disabled={disabled}>
         <legend>Scene</legend>
@@ -294,11 +274,7 @@ function ScriptEditor({
         <button
           className="btn"
           disabled={disabled}
-          onClick={() => {
-            const next = { id: mintId(), title: 'New beat' }
-            edit({ ...scene, beats: [...(scene.beats ?? []), next] })
-            chooseBeat(next.id)
-          }}
+          onClick={() => dispatchSceneEdit({ kind: 'addBeat', title: 'New beat' })}
         >
           Add beat
         </button>
@@ -321,13 +297,7 @@ function ScriptEditor({
             <button
               className="btn"
               disabled={disabled}
-              onClick={() => {
-                const copy = duplicateScriptBeat(beat)
-                const beats = [...(scene.beats ?? [])]
-                beats.splice(beats.findIndex((one) => one.id === beat.id) + 1, 0, copy)
-                edit({ ...scene, beats })
-                chooseBeat(copy.id)
-              }}
+              onClick={() => dispatchSceneEdit({ kind: 'duplicateBeat', beatId: beat.id })}
             >
               Duplicate beat
             </button>
@@ -337,11 +307,7 @@ function ScriptEditor({
               title={
                 beatHasLockedText(beat) ? 'Unlock dialogue before deleting this beat.' : undefined
               }
-              onClick={() => {
-                const next = removeScriptBeat(scene, beat.id)
-                edit(next)
-                select({ sceneId: scene.id, beatId: next.beats?.[0]?.id ?? null }, 'script')
-              }}
+              onClick={() => dispatchSceneEdit({ kind: 'removeBeat', beatId: beat.id })}
             >
               Delete beat
             </button>
@@ -466,17 +432,15 @@ function ScriptEditor({
             }}
             beat={beat}
             variables={variables}
-            onDeleteVariant={(slotId, variantId) =>
-              edit(removeScriptVariant(scene, beat.id, slotId, variantId))
-            }
-            onDeleteSlot={(slotId) => edit(removeScriptSlot(scene, beat.id, slotId))}
+            onEditOperation={dispatchSceneEdit}
             disabled={disabled}
             selectedLineId={selected.lineId}
-            changeBeat={changeBeat}
             speakerOptions={speakerOptions}
-            onSelectSlot={(lineId) =>
-              select({ sceneId: scene.id, beatId: beat.id, lineId }, 'script')
-            }
+            onSelectSlot={(lineId, variantId) => {
+              const current = useUI.getState().narrative
+              if (current.lineId !== lineId || current.variantId !== variantId)
+                select({ sceneId: scene.id, beatId: beat.id, lineId, variantId }, 'script')
+            }}
           />
           <ScriptRoutes
             beat={beat}
@@ -484,7 +448,7 @@ function ScriptEditor({
             scenes={catalog.data?.scenes ?? []}
             variables={variables}
             disabled={disabled}
-            changeBeat={changeBeat}
+            onEditOperation={dispatchSceneEdit}
           />
         </>
       )}

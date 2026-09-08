@@ -1,3 +1,8 @@
+import { isProjectSession, projectSessionEpoch } from '../../lib/projectSession'
+import { useQueryClient } from '@tanstack/react-query'
+import { useUndoStack } from '../../lib/undo'
+import { qk } from '../../lib/queries/keys'
+import type { ProjectSummary } from '../../lib/api'
 import { useMemo, useState } from 'react'
 import { errorMessage, preconditionOf, type StateFile, type VariableDecl } from '../../lib/api'
 import {
@@ -36,12 +41,13 @@ function VariablesEditor({
   readOnly: boolean
   file: StateFile
 }) {
+  const client = useQueryClient()
   const draft = useWorldDrafts((s) => s.variables[projectKey])
   const document = draft?.document ?? file.document
   const [selected, setSelected] = useState(0)
   const [message, setMessage] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const save = useSaveNarrativeState()
+  const save = useSaveNarrativeState(projectKey)
   const world = useNarrativeWorld()
   const scenes = useScenes()
   const ids = useMemo(() => (scenes.data?.scenes ?? []).map((scene) => scene.id), [scenes.data])
@@ -74,15 +80,26 @@ function VariablesEditor({
     : []
   const allUsers = [...users, ...worldUsers]
   const submit = async () => {
+    const epoch = projectSessionEpoch()
     if (!draft || disabled || unsafeInteger) return
+    const undoProject = useUndoStack.getState().projectId
     try {
       await save.mutateAsync({
         document: draft.document,
+        file: draft.file,
         expected: preconditionOf(draft.file.stamp),
       })
+      if (
+        !isProjectSession(epoch) ||
+        client.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path !== projectKey ||
+        useUndoStack.getState().projectId !== undoProject
+      )
+        throw new Error(
+          'The save finished in the previous project session. Reopen it to inspect the saved declarations before discarding this draft.',
+        )
       if (useWorldDrafts.getState().variables[projectKey] === draft)
         useWorldDrafts.getState().putVariables(projectKey, null)
-      setMessage('Variables saved. Scene conditions now use these declarations.')
+      setMessage('Variables saved. This declaration change can be undone.')
     } catch (error) {
       setMessage(`${errorMessage(error)} Your draft is kept.`)
     }

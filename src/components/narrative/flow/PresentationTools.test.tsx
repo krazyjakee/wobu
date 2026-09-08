@@ -1,3 +1,4 @@
+import { FlowOutline } from './FlowOutline'
 import { useEffect, useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -27,7 +28,15 @@ beforeEach(() => {
 const scene = chainScene(300, 3)
 const onScene = vi.fn()
 const at = '2026-09-08T12:00:00Z'
-function Harness({ readOnly = false }: { readOnly?: boolean }) {
+function Harness({
+  readOnly = false,
+  story = scene,
+  mode = 'canvas',
+}: {
+  readOnly?: boolean
+  story?: typeof scene
+  mode?: 'canvas' | 'outline'
+}) {
   const [layout, setLayout] = useState<Layout>(() => ({
     schemaVersion: 2,
     graph: { kind: 'scene', scene: mintId() },
@@ -47,9 +56,10 @@ function Harness({ readOnly = false }: { readOnly?: boolean }) {
       }),
     ),
   }))
+  const View = mode === 'outline' ? FlowOutline : FlowCanvas
   return (
-    <FlowCanvas
-      scene={scene}
+    <View
+      scene={story}
       onChange={onScene}
       readOnly={readOnly}
       presentation={{ layout, onChange: setLayout }}
@@ -74,13 +84,20 @@ it('bounds actual React Flow store including frames while paging notes and group
   expect(onScene).not.toHaveBeenCalled()
 }, 20000)
 
-it('lets a read-only writer page presentation while disabling every mutation', () => {
-  render(<Harness readOnly />)
-  expect(screen.getByRole('combobox', { name: 'Arrangement mode' })).toBeDisabled()
-  expect(screen.getAllByRole('textbox', { name: 'Pinned note text' })[0]).toBeDisabled()
-  expect(screen.getAllByRole('button', { name: 'Delete pinned note' })[0]).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
-  expect(screen.getByRole('button', { name: 'Create group' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Add pinned note' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Next groups' })).toBeEnabled()
-})
+it.each(['canvas', 'outline'] as const)(
+  'lets a read-only writer page %s presentation while disabling every mutation',
+  (mode) => {
+    render(<Harness mode={mode} readOnly story={chainScene(2, 0)} />)
+    expect(screen.getByRole('combobox', { name: 'Arrangement mode' })).toBeDisabled()
+    expect(screen.getAllByRole('textbox', { name: 'Pinned note text' })[0]).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Delete pinned note' })[0]).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Groups & notes' }))
+    expect(screen.getByRole('button', { name: 'Create group' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add pinned note' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next groups' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Next notes' }))
+    expect(screen.getByText(/Showing pinned notes 41–80 of 1000/)).toBeInTheDocument()
+    expect(screen.getAllByRole('textbox', { name: 'Pinned note text' })).toHaveLength(40)
+    if (mode === 'outline') expect(screen.getAllByLabelText('Note X')[0]).toBeDisabled()
+  },
+)

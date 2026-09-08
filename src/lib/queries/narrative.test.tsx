@@ -356,11 +356,8 @@ describe('declared state', () => {
     expect(result.current.data?.stamp).toBeNull()
   })
 
-  it('reruns every diagnostic when the variables change, and records no undo', async () => {
-    // Every condition and effect in the project is typed against these, so what
-    // is wrong with a scene just changed in files nobody has open. Undo is
-    // deliberately absent: restoring a declaration would leave scenes written
-    // since then failing to type, in files the user never opened.
+  it('reruns diagnostics without adding undo for identical declarations', async () => {
+    // A stamp-only write has no authored change to put on the history stack.
     h.invoke.mockResolvedValue({ document, stamp: { mtime_ms: 1, size: 1, hash: 'h' } })
     const { qc, Wrapper } = wrapper()
     const invalidate = vi.spyOn(qc, 'invalidateQueries')

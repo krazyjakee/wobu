@@ -23,9 +23,11 @@ const TAB_LABEL: Record<NarrativeTab, string> = {
  * the beat a writer was reading on the canvas is the beat Script opens on.
  */
 export function NarrativeCentre({
+  active = true,
   readOnly = false,
   projectKey = '',
 }: {
+  active?: boolean
   readOnly?: boolean
   projectKey?: string
 }) {
@@ -117,7 +119,9 @@ export function NarrativeCentre({
         {/* Flow opens at the arc. A designer opens this workspace to find a
             scene, and the arc is the only view that shows where scenes sit in
             relation to each other; the scene canvas is one double-click in. */}
-        {tab === 'flow' && <NarrativeProjectFlow readOnly={readOnly} />}
+        {tab === 'flow' && (
+          <NarrativeProjectFlow active={active} readOnly={readOnly} projectKey={projectKey} />
+        )}
         {tab === 'script' && <NarrativeScriptPane readOnly={readOnly} projectKey={projectKey} />}
         {tab === 'preview' && <NarrativePreviewPane readOnly={readOnly} projectKey={projectKey} />}
         {tab === 'source' && <NarrativeSourcePane readOnly={readOnly} projectKey={projectKey} />}

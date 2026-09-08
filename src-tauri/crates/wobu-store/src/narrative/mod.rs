@@ -52,6 +52,7 @@
 //! through a name.
 
 pub mod layout;
+pub mod library;
 pub mod publication;
 pub mod records;
 pub mod registry;
@@ -199,11 +200,24 @@ struct ProbeScene {
 /// project's structure into the filesystem, where a rename would move files
 /// and orphan everything keyed to their paths — the same argument that keeps
 /// `nodes/<kind>/` two levels deep and no more.
-fn scene_paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
-    Ok(registry::paths(root)?
-        .into_iter()
-        .filter(|(rel, _)| registry::classify(rel) == Some(registry::NarrativeFileKind::Scene))
-        .collect())
+pub(crate) fn scene_paths(root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    let probe = registry::safe_path(root, "narrative/scenes/probe.yaml")?;
+    let directory = probe.parent().expect("scene parent");
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(error) => return Err(Error::io(directory, error)),
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| Error::io(directory, error))?;
+        let rel = format!("narrative/scenes/{}", entry.file_name().to_string_lossy());
+        if registry::classify(&rel) == Some(registry::NarrativeFileKind::Scene) {
+            paths.push((rel.clone(), registry::safe_path(root, &rel)?));
+        }
+    }
+    paths.sort();
+    Ok(paths)
 }
 
 /// Whether a project-relative path is canonical narrative source.
@@ -428,6 +442,12 @@ pub fn source_fingerprint(root: &Path) -> Result<String> {
         }
     }
     Ok(hasher.finalize().to_hex().to_string())
+}
+
+pub(crate) fn probe_scene(text: &str) -> Option<(String, String)> {
+    serde_norway::from_str::<Probe>(text)
+        .ok()
+        .map(|probe| (probe.scene.id.to_string(), probe.scene.name))
 }
 
 #[cfg(test)]

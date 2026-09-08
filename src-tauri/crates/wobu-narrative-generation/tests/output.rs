@@ -128,3 +128,18 @@ fn frozen_contract_rejects_future_versions_tampered_context_and_lock() {
     bad.target.variant = Some(VariantId::new());
     assert!(bad.validate().is_err());
 }
+
+#[test]
+fn source_capabilities_preserve_frozen_v1_and_reject_future_versions() {
+    let (mut request, _) = fixture();
+    let bytes = serde_json::to_vec(&request).unwrap();
+    let hash = request.hash();
+    request.validate().unwrap();
+    let decoded: FrozenRequest = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(decoded.hash(), hash);
+    assert_eq!(serde_json::to_vec(&decoded).unwrap(), bytes);
+    request.source_schema_version = 2;
+    request.validate().unwrap();
+    request.source_schema_version = 3;
+    assert!(request.validate().is_err());
+}

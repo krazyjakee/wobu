@@ -1,6 +1,6 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import type { ProjectSummary } from '../../lib/api'
-import { useCreateScene, useSceneDiagnostics, useSceneFiles, useScenes } from '../../lib/queries'
+import { useCreateScene, useSceneDiagnostics, useScene, useScenes } from '../../lib/queries'
 import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativeCentre } from './NarrativeCentre'
@@ -11,12 +11,13 @@ import { NarrativeReview } from './NarrativeReview'
 import { NarrativeGeneration } from './NarrativeGeneration'
 import { NarrativeExport } from './NarrativeExport'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
-import { useNarrativeWorld } from '../../lib/queries/narrativeWorld'
 import { NarrativeSourcePane } from './NarrativeSourcePane'
+import { NarrativeExample } from './NarrativeExample'
 import { NarrativeLibrary } from './NarrativeLibrary'
 import { useNarrativeNames } from './flow/useNarrativeNames'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
 import { useSceneLibrary } from './sceneLibraryStore'
+import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
 
 export function NarrativeMode({ project }: { project: ProjectSummary }) {
   return <NarrativeWorkspace key={project.path} project={project} />
@@ -27,29 +28,38 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const navCollapsed = useUI((s) => s.navCollapsed)
   const inspCollapsed = useUI((s) => s.inspCollapsed)
   const selection = useUI((s) => s.narrative)
+  const selectionTab = useUI((s) => s.narrativeTab)
   const selectNarrative = useUI((s) => s.selectNarrative)
   const setTab = useUI((s) => s.setNarrativeTab)
   const [libraryOpen, setLibraryOpen] = useState(true)
+  const [exampleOpen, setExampleOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [generationOpen, setGenerationOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
   const [repairRel, setRepairRel] = useState<string | null>(null)
-  const [worldOpen, setWorldOpen] = useState(false)
+  const worldTarget = useUI((state) => state.narrativeWorldTarget)
+  const [closedWorldSeq, setClosedWorldSeq] = useState<number | null>(null)
+  const [localWorldOpen, setWorldOpen] = useState(false)
+  const worldOpen =
+    localWorldOpen ||
+    (worldTarget?.projectKey === project.path && worldTarget.seq !== closedWorldSeq)
+  const closeWorld = () => {
+    setClosedWorldSeq(worldTarget?.seq ?? null)
+    setWorldOpen(false)
+  }
   const [editorOpened, setEditorOpened] = useState(false)
-  const world = useNarrativeWorld()
   const catalog = useScenes()
-  const ids = useMemo(() => (catalog.data?.scenes ?? []).map((one) => one.id), [catalog.data])
-  const files = useSceneFiles(ids)
+  const file = useScene(selection.sceneId)
+  const draft = useScriptDrafts((state) =>
+    selection.sceneId ? state.drafts[sceneEditKey(project.path, selection.sceneId)] : undefined,
+  )
+  const libraryRoot = useRef<HTMLDivElement>(null)
+  const libraryReturn = useRef<HTMLElement | null>(null)
   const createScene = useCreateScene()
   const { nameOf } = useNarrativeNames()
-  const rows = (catalog.data?.scenes ?? []).map((summary, index) => ({
-    summary,
-    scene: files[index]?.data?.scene,
-    error: files[index]?.isError ? String(files[index]?.error) : undefined,
-  }))
-  const selected = rows.find((row) => row.summary.id === selection.sceneId)?.scene
+  const selected = draft?.scene ?? file.data?.scene
   const open = (target: NarrativeTarget, tab: 'flow' | 'script', variantId?: string) => {
     useSceneLibrary.setState({
       searchVariant:
@@ -57,12 +67,16 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           ? { sceneId: target.sceneId, slotId: target.lineId, variantId }
           : null,
     })
-    selectNarrative(target, 'library')
+    if (libraryRoot.current?.contains(document.activeElement))
+      libraryReturn.current = document.activeElement as HTMLElement
+    selectNarrative({ ...target, ...(variantId ? { variantId, field: 'text' } : {}) }, 'library', {
+      projectKey: project.path,
+    })
     setRepairRel(null)
     setTab(tab)
     setEditorOpened(true)
     setLibraryOpen(false)
-    setWorldOpen(false)
+    closeWorld()
   }
   const editorStyle: CSSProperties = {
     gridTemplateColumns: [
@@ -85,7 +99,18 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
             className="btn"
             onClick={() => {
               setLibraryOpen(true)
-              setWorldOpen(false)
+              closeWorld()
+              requestAnimationFrame(() => {
+                const original = libraryReturn.current
+                const fallback = Array.from(
+                  libraryRoot.current?.querySelectorAll<HTMLElement>('[data-library-scene]') ?? [],
+                ).find(
+                  (button) =>
+                    button.dataset.libraryScene === selection.sceneId &&
+                    button.dataset.libraryTab === selectionTab,
+                )
+                ;(original?.isConnected ? original : fallback)?.focus()
+              })
             }}
           >
             Back to scenes
@@ -117,6 +142,14 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           </button>
         </div>
       </header>
+      {exampleOpen && (
+        <NarrativeExample
+          projectKey={project.path}
+          readOnly={project.readOnly}
+          onClose={() => setExampleOpen(false)}
+          onOpen={(sceneId) => open({ sceneId }, 'script')}
+        />
+      )}
       {reviewOpen && (
         <NarrativeReview
           projectKey={project.path}
@@ -162,25 +195,19 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         <NarrativeRecovery readOnly={project.readOnly} onClose={() => setRecoveryOpen(false)} />
       )}
       {exportOpen && <NarrativeExport onClose={() => setExportOpen(false)} />}
-      <div className="nrt-library-view" hidden={!libraryOpen || worldOpen}>
+      <div ref={libraryRoot} className="nrt-library-view" hidden={!libraryOpen || worldOpen}>
         <NarrativeLibrary
           projectKey={project.path}
-          rows={rows}
-          quests={world.data?.document.quests}
-          questsLoading={world.isLoading}
-          questsError={world.isError ? String(world.error) : undefined}
-          catalog={catalog.data}
-          loading={catalog.isPending}
-          error={catalog.isError ? String(catalog.error) : undefined}
           readOnly={project.readOnly}
           navCollapsed={navCollapsed}
           nameOf={nameOf}
           onOpen={open}
+          onOpenExample={() => setExampleOpen(true)}
           onRepair={(rel) => {
             setRepairRel(rel)
             setEditorOpened(true)
             setLibraryOpen(false)
-            setWorldOpen(false)
+            closeWorld()
           }}
           onCreateScene={() =>
             createScene.mutate('New scene', {
@@ -215,9 +242,15 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
               projectKey={project.path}
             />
           ) : (
-            <NarrativeCentre readOnly={project.readOnly} projectKey={project.path} />
+            <NarrativeCentre
+              active={!libraryOpen && !worldOpen}
+              readOnly={project.readOnly}
+              projectKey={project.path}
+            />
           )}
-          {!inspCollapsed && <NarrativeInspector />}
+          {!inspCollapsed && (
+            <NarrativeInspector projectKey={project.path} readOnly={project.readOnly} />
+          )}
         </div>
       )}
       {worldOpen && <NarrativeWorldPane projectKey={project.path} readOnly={project.readOnly} />}

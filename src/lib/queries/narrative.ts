@@ -1,3 +1,5 @@
+import { assertProjectSession, projectSessionEpoch } from '../projectSession'
+import { useProjectMutation } from './useProjectMutation'
 import {
   useMutation,
   useQueries,
@@ -82,11 +84,12 @@ export function useScene(sceneId: string | null): UseQueryResult<SceneFile> {
  * from a document that is already cached, and a save updates one entry rather
  * than invalidating a project-sized blob.
  */
-export function useSceneFiles(ids: readonly string[]) {
+export function useSceneFiles(ids: readonly string[], enabled = true) {
   return useQueries({
     queries: ids.map((id) => ({
       queryKey: qk.narrativeScene(id),
       queryFn: () => api.narrativeSceneGet(id),
+      enabled,
       retry: false,
     })),
   })
@@ -178,25 +181,47 @@ function useSceneWrite<V>(options: {
   before: (value: V) => Promise<SceneFile | null> | SceneFile | null
   run: (value: V) => Promise<SceneFile>
   whileDoing: string
+  projectKey?: string
 }) {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: options.run,
-    onMutate: async (value: V) => ({ before: await options.before(value) }),
+  return useProjectMutation({
+    mutationFn: (value: V) => {
+      if (
+        options.projectKey !== undefined &&
+        qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path !== options.projectKey
+      )
+        throw new Error('The project changed before the scene could be saved.')
+      return options.run(value)
+    },
+    onMutate: async (value: V) => ({
+      project: qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path,
+      undoProject: useUndoStack.getState().projectId,
+      before: await options.before(value),
+    }),
     onSuccess: (file, _value, context) => {
+      if (
+        context?.project !== qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path ||
+        context?.undoProject !== useUndoStack.getState().projectId
+      )
+        return
       // The authoritative answer, including the refreshed precondition, and it
       // is set rather than invalidated on purpose: a refetch would replace a
       // correct stamp with an equal one, and the window where the cache holds
       // neither is a window where the next save sends a stale precondition.
       qc.setQueryData(qk.narrativeScene(file.scene.id), file)
       const entry = context?.before && sceneEditEntry(context.before, file)
-      if (entry) useUndoStack.getState().push(entry)
+      if (entry)
+        useUndoStack
+          .getState()
+          .push(options.projectKey === undefined ? entry : { ...entry, coalesce: false })
       void qc.invalidateQueries({ queryKey: qk.narrativeScenes })
       // A scene's own problems changed, and so did every other scene's: a
       // destination that named a beat in here is checked against this document.
       void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })
     },
-    onError: (error) => {
+    onError: (error, _value, context) => {
+      if (context?.project !== qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path)
+        return
       // A save that lost the race parked a sibling on disk a moment ago, and
       // the conflict card has to appear now rather than whenever the watcher
       // next fires — on a share that is a five-second poll, and five seconds of
@@ -216,12 +241,13 @@ function useSceneWrite<V>(options: {
  * precondition lives, and separating the two is how a save ends up guarded by
  * a stamp from some other version.
  */
-export function useSaveScene() {
+export function useSaveScene(projectKey?: string) {
   return useSceneWrite({
     before: (value: { file: SceneFile; scene: Scene }) => value.file,
     run: (value) =>
       api.narrativeSceneSave(value.scene, api.preconditionOf(value.file.stamp), value.file.slug),
     whileDoing: 'Could not save that scene',
+    projectKey,
   })
 }
 
@@ -245,7 +271,7 @@ export function useRenameScene() {
 
 export function useCreateScene() {
   const qc = useQueryClient()
-  return useMutation({
+  return useProjectMutation({
     mutationFn: (name: string) => api.narrativeSceneCreate(name),
     onSuccess: (file) => {
       qc.setQueryData(qk.narrativeScene(file.scene.id), file)
@@ -267,9 +293,11 @@ export function useCreateScene() {
  */
 export function useDeleteScene() {
   const qc = useQueryClient()
-  return useMutation({
+  return useProjectMutation({
     mutationFn: async (sceneId: string) => {
+      const epoch = projectSessionEpoch()
       const before = await api.narrativeSceneGet(sceneId).catch(() => null)
+      assertProjectSession(epoch)
       await api.narrativeSceneDelete(sceneId)
       return before
     },
@@ -284,29 +312,51 @@ export function useDeleteScene() {
 
 /* ── declared state ───────────────────────────────────────────────────────── */
 
-/**
- * Write the declared variables.
- *
- * Not on the undo stack, and this one is a judgement rather than a rule.
- * Undoing a variable declaration would restore a schema that scenes written
- * since then no longer type against, so ⌘Z would leave a project full of
- * diagnostics in files the user never opened. The declaration screen offers its
- * own edit and delete instead; that is the shape of "take that back" this
- * document actually supports.
- */
-export function useSaveNarrativeState() {
+/** Save declarations with exact authored-state guards for canonical undo and redo. */
+export function useSaveNarrativeState(projectKey?: string) {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (value: { document: api.StateDocument; expected: api.Precondition }) =>
-      api.narrativeStateSave(value.document, value.expected),
-    onSuccess: (file) => {
+  return useProjectMutation({
+    mutationFn: (value: {
+      document: api.StateDocument
+      expected: api.Precondition
+      file?: api.StateFile
+    }) => {
+      if (
+        projectKey !== undefined &&
+        qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path !== projectKey
+      )
+        throw new Error('The project changed before variables could be saved.')
+      return api.narrativeStateSave(value.document, value.expected)
+    },
+    onMutate: async (value) => ({
+      project: qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path,
+      undoProject: useUndoStack.getState().projectId,
+      file: value.file ?? (await api.narrativeStateGet()),
+    }),
+    onSuccess: (file, _value, before) => {
+      if (
+        before?.project !== qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path ||
+        before?.undoProject !== useUndoStack.getState().projectId
+      )
+        return
+      if (before && JSON.stringify(before.file.document) !== JSON.stringify(file.document)) {
+        useUndoStack.getState().push({
+          subjectId: 'narrative-state',
+          label: 'edit declared variables',
+          coalesce: false,
+          undo: [{ type: 'stateRestore', document: before.file.document, expected: file.document }],
+          redo: [{ type: 'stateRestore', document: file.document, expected: before.file.document }],
+        })
+      }
       qc.setQueryData(qk.narrativeState, file)
       void qc.invalidateQueries({ queryKey: ['narrative_world'] })
       // Every condition and effect in the project is typed against these, so
       // the answer to "what is wrong with this scene" just changed everywhere.
       void qc.invalidateQueries({ queryKey: ['narrative_diagnostics'] })
     },
-    onError: (error) => {
+    onError: (error, _value, before) => {
+      if (before?.project !== qc.getQueryData<api.ProjectSummary | null>(qk.projectCurrent)?.path)
+        return
       if (api.errorCode(error) === 'write.conflict') invalidateNarrative(qc)
       report(error, 'Could not save the declared state')
     },

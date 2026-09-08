@@ -40,6 +40,10 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [26 — Narrative Review Evidence](26-narrative-review.md) | Canonical editorial history, guarded transitions and verified release approval |
 | [27 — Shared Narrative Arrangements](27-narrative-layout.md) | Layout schema, groups/notes, peer merging, native canvas evidence and bounds |
 | [28 — Narrative Review Queue](28-narrative-review-queue.md) | Revision comparison, protected drafts, paged review and grouped bulk decisions |
+| [29 — Narrative Source Version 2](29-narrative-source-v2.md) | Explicit unresolved routes, stable classifications and backward-readable source migration |
+| [30 — Shared Scene Editing](30-narrative-editing-session.md) | Shared drafts, explicit saves, local undo and retained conflicts |
+| [31 — Scene Library](31-narrative-library.md) | Indexed discovery, classifications, saved views and scale evidence |
+| [32 — Narrative Flow](32-narrative-flow.md) | Shared structural editing, explicit destinations, keyboard navigation and bounded arrangements |
 
 Two constraints shape most of the above and are worth knowing up front:
 

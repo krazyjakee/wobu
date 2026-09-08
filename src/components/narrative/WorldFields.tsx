@@ -106,7 +106,7 @@ export function WorldFields({
   variables: VariableDecl[]
   onChange: (item: WorldItem) => void
 }) {
-  let fields: ReactNode
+  let fields: ReactNode = null
   if ('assertion' in item) {
     fields = (
       <>
@@ -394,7 +394,7 @@ export function WorldFields({
         />
       </>
     )
-  } else {
+  } else if ('fact_ids' in item) {
     fields = (
       <>
         <label>

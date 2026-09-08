@@ -1,9 +1,12 @@
+import type { CanonicalFlowActions } from './flow/canonicalFlow'
+import { flowTarget } from './flow/canonicalFlow'
 import type { FlowPresentation } from './flow/useFlowPresentation'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useUI } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativePlaceholder } from './NarrativePlaceholder'
 import { NARRATIVE_UNAVAILABLE } from './narrativeModel'
+import { useFlowReveal } from './flow/useFlowReveal'
 import { FlowCanvas } from './flow/FlowCanvas'
 import { FlowModeTabs, type FlowMode } from './flow/FlowModeTabs'
 import { FlowOutline } from './flow/FlowOutline'
@@ -21,57 +24,9 @@ import {
 import type { FlowAuthoring } from './flow/useSceneEdits'
 
 /**
- * The branching canvas, and the contract it keeps with the rest of the
- * workspace.
- *
- * ── the seam ────────────────────────────────────────────────────────────────
- *
- * The canvas owns no selection of its own. There is one selection for the whole
- * narrative workspace, in `store/ui.ts`, and every surface reads and writes
- * that:
- *
- *   const selected = useUI((s) => s.narrative)          // { sceneId, beatId, lineId }
- *   const select = useUI((s) => s.selectNarrative)
- *   select({ sceneId, beatId: node.id }, 'flow')        // clicking a node
- *
- * Two rules that are easy to get wrong and expensive to discover later:
- *
- * 1. **Write the whole path.** `selectNarrative` takes the scene the beat is
- *    in, not just the beat. A beat id on its own would leave the previous
- *    scene's id above it and Script would open the wrong scene.
- * 2. **Never key a node by index or by position.** Node coordinates are
- *    presentation metadata; the selection is ids. A node that moves, is
- *    reordered or is renamed is the same node, and the selection must not
- *    notice.
- *
- * To scroll or centre on something chosen elsewhere, watch `narrativeReveal`.
- * It carries the same three ids plus a rising `seq` and the `origin` that
- * raised it — skip the ones whose origin is `'flow'`, which are the canvas's
- * own clicks coming back, and honour each `seq` once. It is latched rather than
- * consumed, so a canvas mounting on a tab switch still owes the last reveal.
- *
- * When an element is deleted, call `forgetNarrative([...ids])` so the selection
- * lets go of it instead of pointing at a node that is no longer drawn.
- *
- * All of that is honoured in `flow/useSceneEdits.ts` and `flow/FlowCanvas.tsx`.
- *
- * ── where the scene comes from, and who owns the edits ──────────────────────
- *
- * `source` is the seam. Without `onEdit` the pane owns the scene: it keeps a
- * history, its Undo and Redo buttons work, and nothing is written anywhere —
- * which is what the demonstration fixture and the canvas's own tests want.
- *
- * With `onEdit` the pane is **controlled**. It keeps no history at all, draws
- * exactly the scene it is given, and hands every structural change straight to
- * its owner. That is not a style choice: the owner is `NarrativeProjectFlow`,
- * which patches the real document and saves it through `useSaveScene` — so the
- * undo stack, the guarded-write precondition and the conflict card are the
- * workspace's own rather than a second implementation living in this file. A
- * local history beside them would be a second, disagreeing answer to ⌘Z.
- *
- * The "Demonstration data" banner is shown for `demo` and for nothing else.
- * A banner claiming a fixture while a writer's real scene is on screen would be
- * worse than no banner at all.
+ * Controlled project views render the shared scene session and dispatch canonical
+ * operations. The demonstration alone keeps a disposable visual-model history.
+ * Selection and latched reveals use stable source IDs across every view.
  */
 
 export type FlowPaneSource =
@@ -92,6 +47,7 @@ export function NarrativeFlowPane({
   onPositionsChange,
   presentation,
   authoring,
+  actions,
   creatable,
   spare,
   notes,
@@ -113,6 +69,7 @@ export function NarrativeFlowPane({
   presentation?: FlowPresentation
   /** What this level allows, and the sentence for each refusal. */
   authoring?: FlowAuthoring
+  actions?: CanonicalFlowActions
   /** Which kinds the toolbar offers. Defaults to the canvas's own six. */
   creatable?: readonly FlowKind[]
   /** The unauthored way out this level offers. See `FlowGraphNode.spare`. */
@@ -193,6 +150,7 @@ export function NarrativeFlowPane({
       onPositionsChange={onPositionsChange}
       presentation={presentation}
       authoring={authoring}
+      actions={actions}
       creatable={creatable}
       spare={spare}
       notes={notes}
@@ -218,6 +176,7 @@ function FlowSceneEditor({
   onPositionsChange,
   presentation,
   authoring,
+  actions,
   creatable,
   spare,
   notes,
@@ -232,6 +191,7 @@ function FlowSceneEditor({
   onPositionsChange?: (positions: FlowPositions) => void
   presentation?: FlowPresentation
   authoring?: FlowAuthoring
+  actions?: CanonicalFlowActions
   creatable?: readonly FlowKind[]
   spare?: (element: FlowElement) => FlowPort | null
   notes?: ReactNode
@@ -243,16 +203,8 @@ function FlowSceneEditor({
   // to the scene that just went away.
   useLayoutEffect(() => resetFlowStore(), [])
 
-  /*
-   * Undo, local for now.
-   *
-   * #186 asks for structural edits to join the app's undo stack so canvas and
-   * form edits are indistinguishable in history. There is no narrative undo
-   * stack to join — the model that would own one is being written elsewhere —
-   * so this is a scene-shaped history in the pane. It is honest about its
-   * scope: it undoes structure, it does not survive a tab switch, and the
-   * moment a real stack exists this is the one place that changes.
-   */
+  // This history is used only by the standalone demonstration.
+
   const [history, setHistory] = useState<History>(() => ({
     present: initial,
     past: [],
@@ -268,6 +220,13 @@ function FlowSceneEditor({
    */
   const controlled = onEdit !== undefined
   const scene = controlled ? initial : history.present
+  const emptyRoot = useRef<HTMLDivElement>(null)
+  useFlowReveal({
+    scene,
+    container: emptyRoot,
+    projectKey: actions?.projectKey,
+    enabled: scene.elements.length === 0,
+  })
 
   /*
    * Reported through a ref rather than as an effect dependency.
@@ -310,7 +269,7 @@ function FlowSceneEditor({
 
   if (scene.elements.length === 0) {
     return (
-      <div className="nrt-pane nrt-flow">
+      <div ref={emptyRoot} className="nrt-pane nrt-flow">
         <div className="nrt-empty">
           <p>
             <b>{scene.name}</b> has no beats yet. A scene is a place where people speak and choices
@@ -331,7 +290,13 @@ function FlowSceneEditor({
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => change(addElement(scene, 'beat', null).scene)}
+                  disabled={actions?.disabled}
+                  data-flow-empty
+                  onClick={() =>
+                    actions
+                      ? actions.add('beat', null)
+                      : change(addElement(scene, 'beat', null).scene)
+                  }
                 >
                   Add the first beat
                 </button>
@@ -411,15 +376,20 @@ function FlowSceneEditor({
           onPositionsChange={onPositionsChange}
           presentation={presentation}
           authoring={authoring}
+          actions={actions}
+          targetOf={actions ? flowTarget : undefined}
           creatable={creatable}
           spare={spare}
         />
       ) : (
         <FlowOutline
           scene={scene}
+          presentation={presentation}
           onChange={change}
           readOnly={readOnly}
           authoring={authoring}
+          actions={actions}
+          targetOf={actions ? flowTarget : undefined}
           creatable={creatable}
           spare={spare}
         />

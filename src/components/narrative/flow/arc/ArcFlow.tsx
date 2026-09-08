@@ -220,6 +220,7 @@ function Arc({
         />
       ) : (
         <FlowOutline
+          presentation={presentation}
           scene={arc.level}
           onChange={change}
           readOnly={readOnly}

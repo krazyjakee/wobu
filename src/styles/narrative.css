@@ -1028,3 +1028,77 @@
   background: var(--bg-raised);
   padding: 6px;
 }
+
+.nrt-source-flow-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  flex: 1;
+  min-height: 0;
+}
+.nrt-source-flow-body > .nrt-flow {
+  min-width: 0;
+  min-height: 0;
+}
+.nrt-flow-element-editor {
+  padding: 12px;
+  overflow: auto;
+  min-height: 0;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+}
+.nrt-flow-element-editor fieldset,
+.nrt-flow-element-editor label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.nrt-flow-element-editor input,
+.nrt-flow-element-editor select {
+  width: 100%;
+  min-width: 0;
+}
+.nrt-flow-element-editor .nrt-script-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nrt-presentation-tools .nrt-script-actions,
+.nrt-presentation-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (max-width: 1000px) {
+  .nrt-source-flow-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(300px, 1fr) minmax(180px, 35%);
+  }
+  .nrt-flow-element-editor {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+.nrt-outline-notes {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+.nrt-outline-note {
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  padding: 8px;
+}
+.nrt-outline-note textarea {
+  width: 100%;
+  min-height: 80px;
+}
+.nrt-outline-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+.nrt-outline-row.is-muted {
+  opacity: 0.55;
+}

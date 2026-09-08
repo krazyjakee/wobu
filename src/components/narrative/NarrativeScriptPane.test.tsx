@@ -192,7 +192,7 @@ describe('Script authoring', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: /Dialogue 1, variant 1/ }), {
       target: { value: 'New words' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
     const variant = saved.scene.beats?.[0]?.dialogue?.[0]?.variants?.[0]
     expect(variant).toMatchObject({
@@ -219,7 +219,7 @@ describe('Script authoring', () => {
     mount()
     fireEvent.click(await screen.findByRole('button', { name: 'Duplicate beat' }))
     fireEvent.click(screen.getByRole('button', { name: 'Move up' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
     expect(saved.scene.beats?.[0]?.id).not.toBe('beat')
     expect(saved.scene.beats?.[1]?.id).toBe('beat')
@@ -241,7 +241,7 @@ describe('Script authoring', () => {
       target: { value: 'An authored line.' },
     })
     const slotId = useUI.getState().narrative.lineId
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
     await waitFor(() => expect(screen.getAllByLabelText('Slot policy')).toHaveLength(2))
     fireEvent.change(screen.getAllByLabelText('Slot policy')[1]!, { target: { value: 'locked' } })
@@ -267,7 +267,7 @@ describe('Script authoring', () => {
     view.unmount()
     mount('project', true)
     expect(await screen.findByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Save script' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save scene' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Discard changes' })).toBeDisabled()
   })
   it('retains unsaved edits across tab remounts and isolates projects', async () => {
@@ -291,12 +291,12 @@ describe('Script authoring', () => {
     h.invoke.mockImplementation((command, args) =>
       command === 'narrative_scene_save' ? Promise.reject('write.conflict') : prior(command, args),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is kept')
     expect(screen.getByLabelText('Beat title')).toHaveValue('Kept draft')
     expect(useUndoStack.getState().past).toHaveLength(0)
   })
-  it('does not clear newer typing after a save completes across a tab remount', async () => {
+  it('blocks source edits across a tab remount while a shared save is pending', async () => {
     let release: (() => void) | undefined
     const prior = h.invoke.getMockImplementation()!
     h.invoke.mockImplementation(async (command, args) => {
@@ -310,19 +310,20 @@ describe('Script authoring', () => {
     fireEvent.change(await screen.findByLabelText('Beat title'), {
       target: { value: 'Submitted title' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(release).toBeDefined())
     first.unmount()
     mount()
-    fireEvent.change(await screen.findByLabelText('Beat title'), {
-      target: { value: 'Newer title' },
-    })
+    const title = await screen.findByLabelText('Beat title')
+    expect(title).toBeDisabled()
+    fireEvent.change(title, { target: { value: 'Newer title' } })
+    expect(useScriptDrafts.getState().drafts['project:scene']?.scene.beats?.[0]?.title).toBe(
+      'Submitted title',
+    )
     await act(async () => release?.())
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
-    expect(useScriptDrafts.getState().drafts['project:scene']?.scene.beats?.[0]?.title).toBe(
-      'Newer title',
-    )
-    expect(screen.getByLabelText('Beat title')).toHaveValue('Newer title')
+    expect(useScriptDrafts.getState().drafts['project:scene']).toBeUndefined()
+    expect(saved.scene.beats?.[0]?.title).toBe('Submitted title')
   })
 
   it('reveals the exact searched dialogue variant', async () => {
@@ -350,7 +351,7 @@ describe('Script variant authoring', () => {
     fireEvent.change(screen.getByLabelText('Dialogue 1 variant 2 rule'), {
       target: { value: 'never' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
     const variants = saved.scene.beats![0]!.dialogue![0]!.variants!
     expect(variants[0]).toEqual(original)
@@ -360,7 +361,7 @@ describe('Script variant authoring', () => {
     })
     expect(variants[1]!.id).not.toBe(original.id)
     fireEvent.click(screen.getByRole('button', { name: 'Delete dialogue 1 variant 2' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(2))
     expect(saved.scene.tombstones).toEqual([
       expect.objectContaining({ target: { variant: variants[1]!.id }, label: 'An alternative' }),
@@ -378,7 +379,7 @@ describe('Script variant authoring', () => {
       expect(screen.getByRole('textbox', { name: /Dialogue 1, variant 1/ })).toBeEnabled(),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Delete dialogue 1 slot' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
     await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
     expect(saved.scene.beats![0]!.dialogue).toEqual([])
     expect(saved.scene.tombstones?.map((item) => item.target)).toEqual([
@@ -406,7 +407,7 @@ it('reorders automatic outcomes and dialogue without changing IDs or branch logi
     target: { value: 'Second wording' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Move dialogue 1 variant 2 up' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
   await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
   expect(saved.scene.beats![0]!.outcomes).toEqual([originalOutcomes[1], originalOutcomes[0]])
   expect(saved.scene.beats![0]!.dialogue![0]!.variants![1]!.id).toBe('variant')
@@ -454,7 +455,7 @@ it('refuses to save a loaded scene whose integer would be rounded by the desktop
   mount()
   await screen.findByText(/outside the desktop editor’s exact range/)
   fireEvent.change(screen.getByLabelText('Scene name'), { target: { value: 'Renamed council' } })
-  expect(screen.getByRole('button', { name: 'Save script' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Save scene' })).toBeDisabled()
   expect(h.invoke.mock.calls.some(([command]) => command === 'narrative_scene_save')).toBe(false)
 })
 
@@ -470,7 +471,7 @@ it('manual editing a Generated slot preserves slot policy and protects only the 
     target: { value: 'My corrected wording' },
   })
   expect(screen.getByLabelText('Slot policy')).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: 'Save script' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save scene' }))
   await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
   expect(saved.scene.beats![0]!.dialogue![0]!.policy).toBe('generated')
   expect(saved.scene.beats![0]!.dialogue![0]!.variants![0]!.text.lifecycle?.policy).toBe('edited')

@@ -214,7 +214,12 @@ pub fn entry(root: &Path, rel: &str, text: &str, stamp: Stamp) -> NarrativeIndex
     });
     let (id, name, document, error) = match parsed {
         Ok((id, name, doc)) => (id, name, Some(doc), None),
-        Err(e) => (None, rel.into(), None, Some(e.to_string())),
+        Err(e) => {
+            let probe =
+                (kind == NarrativeFileKind::Scene).then(|| super::probe_scene(text)).flatten();
+            let (id, name) = probe.map_or((None, rel.into()), |(id, name)| (Some(id), name));
+            (id, name, None, Some(e.to_string()))
+        }
     };
     let visible = error.is_none()
         && !matches!(

@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useProjectMutation } from './useProjectMutation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   narrativeWorldGet,
   narrativeWorldSave,
@@ -16,7 +17,7 @@ export function useNarrativeWorld() {
 
 export function useSaveNarrativeWorld() {
   const qc = useQueryClient()
-  return useMutation({
+  return useProjectMutation({
     mutationFn: ({ file, document }: { file: WorldFile; document: WorldDocument }) =>
       narrativeWorldSave(document, preconditionOf(file.stamp)),
     onSuccess: (file, before) => {
@@ -27,7 +28,15 @@ export function useSaveNarrativeWorld() {
           label: 'edit narrative world',
           coalesce: false,
           undo: [{ type: 'worldRestore', document: before.file.document, expected: file.document }],
-          redo: [{ type: 'worldRestore', document: file.document, expected: before.file.document }],
+          redo: [
+            {
+              type: 'worldRestore',
+              document: file.document,
+              // Undo is itself an explicit save and retains the current document
+              // version. Keep every authored field in the original CAS snapshot.
+              expected: { ...before.file.document, schema_version: file.document.schema_version },
+            },
+          ],
         })
       }
       invalidateNarrative(qc)

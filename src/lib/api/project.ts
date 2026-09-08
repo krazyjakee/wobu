@@ -1,13 +1,19 @@
+import { advanceProjectSession } from '../projectSession'
 import { call } from './call'
 import type { KindDef, NodeKind, ProjectSummary } from './model'
 /* ── domain types ─────────────────────────────────────────────────────────── */
 
 export const kindRegistry = () => call<KindDef[]>('kind_registry')
 
-export const projectCreate = (parentDir: string, name: string) =>
-  call<ProjectSummary>('project_create', { parentDir, name })
+export const projectCreate = (parentDir: string, name: string) => {
+  advanceProjectSession()
+  return call<ProjectSummary>('project_create', { parentDir, name })
+}
 
-export const projectOpen = (path: string) => call<ProjectSummary>('project_open', { path })
+export const projectOpen = (path: string) => {
+  advanceProjectSession()
+  return call<ProjectSummary>('project_open', { path })
+}
 
 export interface TransferCandidate {
   rootId: string
@@ -82,7 +88,10 @@ export const projectRecentForget = (id: string) => call<void>('project_recent_fo
 
 export const projectCurrent = () => call<ProjectSummary | null>('project_current')
 
-export const projectClose = () => call<void>('project_close')
+export const projectClose = () => {
+  advanceProjectSession()
+  return call<void>('project_close')
+}
 
 export interface WikiExport {
   destination: string

@@ -3,11 +3,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { NarrativeGeneration } from '../NarrativeGeneration'
 import { NarrativeReview } from '../NarrativeReview'
 import type { reviewLoopFixture } from './reviewLoopFixture.test-support'
+import { qk } from '../../../lib/queries/keys'
 export function ReviewLoop({ fixture }: { fixture: ReturnType<typeof reviewLoopFixture> }) {
   const [mode, setMode] = useState<'generation' | 'review' | null>(null)
-  const [client] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } }),
-  )
+  const [client] = useState(() => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } })
+    client.setQueryData(qk.projectCurrent, { id: 'review-loop', path: '/review-loop' })
+    return client
+  })
   return (
     <QueryClientProvider client={client}>
       <main>

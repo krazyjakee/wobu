@@ -684,3 +684,52 @@ fn accept_request(
         },
     }
 }
+
+#[test]
+fn old_frozen_requests_and_completed_publications_survive_the_v2_toolchain_without_resending() {
+    let temp = Temp::new();
+    let (mut project, input) = fixture(&temp);
+    let file = project.load_scene(input.scene).unwrap();
+    let source_path = project.root().join(&file.rel);
+    std::fs::write(
+        &source_path,
+        wobu_narrative::SceneDocument { schema_version: 1, scene: file.scene }.to_yaml().unwrap(),
+    )
+    .unwrap();
+    let mut request =
+        plan::build(&project, input, "fixture", "local-mock").unwrap().requests.remove(0);
+    assert_eq!(
+        request.source_schema_version, 2,
+        "new planning describes interpretation capability, not the disk envelope"
+    );
+    request.source_schema_version = 1;
+    records::save_receipt(
+        &mut project,
+        request.request_id,
+        "Legacy frozen request",
+        &Receipt::NarrativeGenerationRequest { request: Box::new(request.clone()) },
+    )
+    .unwrap();
+    let id = wobu_core::new_id();
+    let receipt = success_receipt(&request);
+    records::save_receipt(&mut project, id, "Narrative generation attempt", &receipt).unwrap();
+    records::publish(&mut project, &request, id, &receipt).unwrap();
+    let context =
+        super::super::narrative_context::capture(&project, request.context.options.clone(), || {})
+            .unwrap();
+    assert_eq!(context, request.context);
+    let record_path =
+        project.root().join(format!("narrative/receipts/{}.json", request.request_id));
+    let before_receipt = std::fs::read(&record_path).unwrap();
+    let before_source = std::fs::read(&source_path).unwrap();
+    let root = project.root().to_path_buf();
+    drop(project);
+    let mut project = Project::open(&root).unwrap();
+    project.rebuild_index().unwrap();
+    assert_eq!(records::request(&project, request.request_id).unwrap(), request);
+    assert_eq!(std::fs::read(&record_path).unwrap(), before_receipt);
+    assert_eq!(std::fs::read(&source_path).unwrap(), before_source);
+    assert!(history(&project).unwrap()[0].proposal_published);
+    assert!(task::prepare(&project, &request).is_err());
+    assert_eq!(records::attempts(&project, &request).unwrap().len(), 1);
+}

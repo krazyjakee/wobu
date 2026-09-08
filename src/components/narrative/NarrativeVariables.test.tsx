@@ -1,3 +1,5 @@
+import { projectClose, projectOpen } from '../../lib/api/project'
+import { applyCommand, useUndoStack } from '../../lib/undo'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +14,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }))
 let saved: StateFile
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  qc.setQueryData(qk.projectCurrent, { path: 'variables' })
   qc.setQueryData(qk.narrativeState, saved)
   qc.setQueryData(qk.narrativeScenes, { scenes: [], unreadable: [] })
   qc.setQueryData(['narrative_world'], {
@@ -27,15 +30,19 @@ function mount() {
     stamp: null,
     diagnostics: [],
   })
-  return render(
-    <QueryClientProvider client={qc}>
-      <NarrativeVariables projectKey="variables" readOnly={false} />
-    </QueryClientProvider>,
-  )
+  return {
+    qc,
+    ...render(
+      <QueryClientProvider client={qc}>
+        <NarrativeVariables projectKey="variables" readOnly={false} />
+      </QueryClientProvider>,
+    ),
+  }
 }
 beforeEach(() => {
   ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
   resetNarrativeDraftGuards()
+  useUndoStack.setState({ projectId: 'variables', past: [], future: [], busy: false })
   useWorldDrafts.setState({ variables: {}, world: {} })
   saved = {
     document: {
@@ -128,4 +135,77 @@ describe('variable editing precision and preservation', () => {
       'Newer typing',
     )
   })
+})
+
+it('records exact before/after declarations for guarded variable undo and redo', async () => {
+  const original = saved.document
+  mount()
+  fireEvent.change(screen.getByLabelText('Default value'), { target: { value: '50' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save variables' }))
+  await waitFor(() => expect(useUndoStack.getState().past).toHaveLength(1))
+  const entry = useUndoStack.getState().past[0]!
+  expect(entry.undo).toEqual([
+    { type: 'stateRestore', document: original, expected: saved.document },
+  ])
+  expect(entry.redo).toEqual([
+    { type: 'stateRestore', document: saved.document, expected: original },
+  ])
+  await applyCommand(entry.undo[0]!)
+  expect(h.invoke).toHaveBeenCalledWith('narrative_state_restore', {
+    document: original,
+    expected: saved.document,
+  })
+})
+
+it.each(['other', 'variables'])(
+  'retains variable drafts and ignores late replies when the %s identity changes',
+  async (nextProject) => {
+    let finish!: (value: StateFile) => void
+    const prior = h.invoke.getMockImplementation()!
+    h.invoke.mockImplementation((name, args) =>
+      name === 'narrative_state_save'
+        ? new Promise((resolve) => {
+            finish = resolve
+          })
+        : prior(name, args),
+    )
+    const { qc } = mount()
+    fireEvent.change(screen.getByLabelText('Default value'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save variables' }))
+    await waitFor(() => expect(finish).toBeDefined())
+    qc.setQueryData(qk.projectCurrent, { path: nextProject })
+    useUndoStack.setState({ projectId: 'different-undo-owner', past: [], future: [] })
+    const current = { ...saved, stamp: { ...saved.stamp!, hash: 'new-session' } }
+    qc.setQueryData(qk.narrativeState, current)
+    await act(async () => finish({ ...saved, document: { ...saved.document, variables: [] } }))
+    expect(qc.getQueryData(qk.narrativeState)).toStrictEqual(current)
+    expect(useUndoStack.getState().past).toHaveLength(0)
+    expect(useWorldDrafts.getState().variables.variables?.document.variables[0]?.default).toBe(50)
+  },
+)
+
+it('retains the variables draft after public close and reopen with the same path and project id', async () => {
+  let finish!: (value: StateFile) => void
+  const prior = h.invoke.getMockImplementation()!
+  h.invoke.mockImplementation((name, args) =>
+    name === 'narrative_state_save'
+      ? new Promise((resolve) => {
+          finish = resolve
+        })
+      : prior(name, args),
+  )
+  const { qc } = mount()
+  fireEvent.change(screen.getByLabelText('Default value'), { target: { value: '50' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save variables' }))
+  await waitFor(() => expect(finish).toBeDefined())
+  await projectClose()
+  await projectOpen('variables')
+  expect(useUndoStack.getState().projectId).toBe('variables')
+  const current = { ...saved, stamp: { ...saved.stamp!, hash: 'reopened' } }
+  qc.setQueryData(qk.narrativeState, current)
+  await act(async () => finish({ ...saved, document: { ...saved.document, variables: [] } }))
+  expect(qc.getQueryData(qk.narrativeState)).toStrictEqual(current)
+  expect(useUndoStack.getState().past).toHaveLength(0)
+  expect(useWorldDrafts.getState().variables.variables?.document.variables[0]?.default).toBe(50)
+  expect(await screen.findByText(/previous project session/)).toBeVisible()
 })

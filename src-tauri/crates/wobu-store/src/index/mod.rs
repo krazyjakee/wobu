@@ -23,6 +23,7 @@
 mod assets;
 mod generations;
 mod narrative;
+mod narrative_library;
 mod nodes;
 mod peers;
 mod rows;
@@ -54,7 +55,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from the project folder, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 11;
+pub const INDEX_VERSION: u32 = 12;
 
 /// A node file that is on disk and cannot be read.
 ///
@@ -201,6 +202,9 @@ impl Index {
                  DROP TABLE IF EXISTS sync_state;
                  DROP TABLE IF EXISTS sync_rejected;
                  DROP TABLE IF EXISTS narrative_files;
+                 DROP TABLE IF EXISTS narrative_scene_summary;
+                 DROP TABLE IF EXISTS narrative_scene_text;
+                 DROP TABLE IF EXISTS narrative_scene_variant;
                  DROP TABLE IF EXISTS narrative_sync;",
             )?;
             self.conn.execute_batch(SCHEMA)?;

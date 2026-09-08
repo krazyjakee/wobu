@@ -81,6 +81,8 @@ fn persist(
     expected: Option<&Stamp>,
 ) -> CommandResult<WorldFile> {
     // Resolve diagnostics before the mutation, so a failure cannot masquerade as a failed save.
+    let document =
+        document.for_save().map_err(|error| WobuError::new(Code::Invalid, error.to_string()))?;
     let mut result = view(project, document, None)?;
     match project.save_world(&result.document, expected)? {
         SourceSave::Saved(stamp) => {

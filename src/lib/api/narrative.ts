@@ -168,7 +168,11 @@ export interface DialogueSlot {
  * through to the next beat", because an implicit destination would mean
  * reordering beats silently rewired the story.
  */
-export type Destination = { beat: BeatId } | { scene: SceneId } | { end: { label?: string } }
+export type Destination =
+  | { beat: BeatId }
+  | { scene: SceneId }
+  | { end: { label?: string } }
+  | { unresolved: Record<string, never> }
 
 export interface Choice {
   id: ChoiceId
@@ -215,6 +219,9 @@ export interface Tombstone {
 }
 
 export interface Scene {
+  act_id?: string
+  arc_id?: string
+  tag_ids?: string[]
   editorial_head?: string | null
   id: SceneId
   name: string

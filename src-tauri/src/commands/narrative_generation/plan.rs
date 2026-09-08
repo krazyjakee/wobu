@@ -151,7 +151,7 @@ pub fn build(
         };
         let request = FrozenRequest {
             version: VERSION,
-            source_schema_version: wobu_narrative::SOURCE_SCHEMA_VERSION,
+            source_schema_version: wobu_narrative::SCENE_SCHEMA_VERSION,
             request_id: wobu_core::new_id(),
             batch_id: plan.id,
             target,

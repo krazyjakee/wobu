@@ -1,0 +1,18 @@
+.nrt-entity-backlinks {
+  margin: 0.5rem 1rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+}
+.nrt-entity-backlinks summary {
+  cursor: pointer;
+}
+.nrt-entity-backlinks ul {
+  display: grid;
+  gap: 0.4rem;
+  padding-inline-start: 1rem;
+}
+.nrt-entity-backlinks nav {
+  display: flex;
+  gap: 0.5rem;
+}

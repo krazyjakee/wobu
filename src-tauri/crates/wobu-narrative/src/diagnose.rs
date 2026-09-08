@@ -118,6 +118,10 @@ impl fmt::Display for Site {
 /// What is wrong.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Problem {
+    #[error("this route is disconnected; choose a destination or an explicit end")]
+    UnresolvedDestination,
+    #[error("{field} references classification {id}, which is not defined in World")]
+    UnknownClassification { field: &'static str, id: EntityId },
     #[error("this destination names beat {beat}, which is not in this scene")]
     DanglingBeat { beat: BeatId },
 
@@ -165,7 +169,8 @@ impl Problem {
     pub fn is_destination(&self) -> bool {
         matches!(
             self,
-            Problem::DanglingBeat { .. }
+            Problem::UnresolvedDestination
+                | Problem::DanglingBeat { .. }
                 | Problem::DeletedBeat { .. }
                 | Problem::UnknownScene { .. }
                 | Problem::NoDestination
@@ -215,6 +220,9 @@ impl Scene {
             for (site, destination) in beat.destinations() {
                 let site = Site::Destination(site);
                 match destination {
+                    Destination::Unresolved {} => {
+                        out.push(Diagnostic::at(site, Problem::UnresolvedDestination))
+                    }
                     Destination::Beat(target) if !self.has_beat(*target) => {
                         out.push(Diagnostic::at(site, self.explain_missing_beat(*target)));
                     }

@@ -1,3 +1,4 @@
+import { NarrativeBacklinks } from '../narrative/NarrativeBacklinks'
 import { useEffect, useRef, useState } from 'react'
 import type { NodeSummary, QueueSnapshot } from '../../lib/api'
 import { errorMessage } from '../../lib/api'
@@ -25,6 +26,7 @@ const TAB_LABEL: Record<EditorTab, string> = {
 }
 
 export function Editor({
+  projectKey,
   selected,
   kinds,
   readOnly,
@@ -33,6 +35,7 @@ export function Editor({
   loading,
   queue = EMPTY_QUEUE,
 }: {
+  projectKey?: string
   selected: NodeSummary | null
   kinds: KindIndex
   readOnly: boolean
@@ -188,6 +191,14 @@ export function Editor({
         </div>
       </div>
 
+      {projectKey && (selected.kind === 'character' || selected.kind === 'setting') && (
+        <NarrativeBacklinks
+          key={`${projectKey}:${selected.id}`}
+          projectKey={projectKey}
+          entityId={selected.id}
+          character={selected.kind === 'character'}
+        />
+      )}
       <div className="tabs">
         {EDITOR_TABS.map((t, i) => (
           <TipButton

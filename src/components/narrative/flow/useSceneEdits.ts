@@ -1,3 +1,4 @@
+import type { CanonicalFlowActions } from './canonicalFlow'
 import { useCallback, useMemo } from 'react'
 import { useUI, type NarrativeTarget } from '../../../store/ui'
 import { useFlowLevelApi, type FlowConnection } from './flowStore'
@@ -64,6 +65,7 @@ export function useSceneEdits({
   onChange,
   readOnly,
   authoring,
+  actions,
   targetOf = beatTarget,
 }: {
   scene: FlowLevel
@@ -71,6 +73,7 @@ export function useSceneEdits({
   readOnly: boolean
   /** Absent means "anything goes", which is what a fixture wants. */
   authoring?: FlowAuthoring
+  actions?: CanonicalFlowActions
   /**
    * The shared narrative path a selected element means.
    *
@@ -104,7 +107,7 @@ export function useSceneEdits({
     (id: string | null) => {
       store.getState().select(id)
       const element = id === null ? null : (scene.elements.find((e) => e.id === id) ?? null)
-      selectNarrative(targetOf(scene, element), 'flow')
+      selectNarrative(targetOf(scene, element), 'flow', { focus: false })
     },
     [scene, selectNarrative, store, targetOf],
   )
@@ -118,6 +121,15 @@ export function useSceneEdits({
    */
   const connect = useCallback(
     (from: FlowConnection, to: string | null): boolean => {
+      if (actions) {
+        if (readOnly) {
+          store
+            .getState()
+            .announce('Scene editing is currently unavailable in this read-only view.')
+          return false
+        }
+        return actions.connect(from, to)
+      }
       const element = scene.elements.find((one) => one.id === from.elementId)
       const port = element?.out.find((one) => one.id === from.portId)
       if (port?.fixed && authoring?.fixedPort) {
@@ -130,17 +142,26 @@ export function useSceneEdits({
       }
       return edit(connectPort(scene, from, to))
     },
-    [authoring, edit, scene, store],
+    [actions, readOnly, authoring, edit, scene, store],
   )
 
   const remove = useCallback(
     (id: string) => {
+      if (actions) {
+        if (readOnly) {
+          store
+            .getState()
+            .announce('Scene editing is currently unavailable in this read-only view.')
+          return false
+        }
+        return actions.remove(id)
+      }
       const gone = scene.elements.find((element) => element.id === id)
       if (gone?.derived && authoring?.derived) {
         store.getState().announce(authoring.derived)
-        return
+        return false
       }
-      if (!edit(removeElement(scene, id))) return
+      if (!edit(removeElement(scene, id))) return false
       /*
        * The selection must let go of an id nothing draws any more — and of
        * *both* of this element's ids.
@@ -155,12 +176,23 @@ export function useSceneEdits({
       store
         .getState()
         .announce(`Deleted ${gone?.title ?? id}. Every route into it now has no destination.`)
+      return true
     },
-    [authoring, edit, scene, forgetNarrative, store],
+    [actions, readOnly, authoring, edit, scene, forgetNarrative, store],
   )
 
   const add = useCallback(
     (kind: FlowKind, afterId: string | null) => {
+      if (actions) {
+        if (readOnly) {
+          store
+            .getState()
+            .announce('Scene editing is currently unavailable in this read-only view.')
+          return
+        }
+        actions.add(kind, afterId)
+        return
+      }
       // Wired in through the anchor's first *spare* port, never by displacing a
       // destination the writer already chose.
       const result = addElement(scene, kind, afterId)
@@ -169,7 +201,7 @@ export function useSceneEdits({
       selectNarrative(targetOf(result.scene, result.element), 'flow')
       store.getState().announce(`Added ${FLOW_KIND_LABEL[kind].toLocaleLowerCase()}.`)
     },
-    [edit, scene, selectNarrative, store, targetOf],
+    [actions, readOnly, edit, scene, selectNarrative, store, targetOf],
   )
 
   return useMemo(() => ({ select, connect, remove, add }), [select, connect, remove, add])

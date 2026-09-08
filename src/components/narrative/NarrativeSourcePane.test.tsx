@@ -1,3 +1,6 @@
+import { projectClose, projectOpen } from '../../lib/api/project'
+import { qk } from '../../lib/queries/keys'
+import { sceneEditKey, useScriptDrafts } from './scriptDrafts'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -7,7 +10,14 @@ import { resetNarrativeDraftGuards } from '../../lib/narrativeDraftGuard'
 import { NarrativeSourcePane } from './NarrativeSourcePane'
 import type { NarrativeSource } from '../../lib/api/narrativeSource'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), check: vi.fn(), save: vi.fn(), repair: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  check: vi.fn(),
+  save: vi.fn(),
+  repair: vi.fn(),
+  invoke: vi.fn(),
+}))
+vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }))
 vi.mock('../../lib/api/narrativeSource', () => ({
   narrativeSourceGet: mocks.get,
   narrativeSourceOpen: mocks.get,
@@ -36,6 +46,7 @@ function mount(
   readOnly = false,
   projectKey = 'project-a',
 ) {
+  qc.setQueryData(qk.projectCurrent, { path: projectKey })
   return {
     qc,
     ...render(
@@ -49,6 +60,7 @@ function mount(
 afterEach(resetNarrativeDraftGuards)
 
 beforeEach(() => {
+  useScriptDrafts.setState({ drafts: {} })
   resetNarrativeDraftGuards()
   vi.resetAllMocks()
   useUI.setState({ narrative: { sceneId: 'scene-1', beatId: null, lineId: null } })
@@ -300,4 +312,136 @@ it('keeps unsupported saved schemas visible but refuses destructive downgrade co
   expect(screen.getByRole('button', { name: 'Format' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Save source' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Validate' })).toBeEnabled()
+})
+
+it('keeps raw Source readable but prevents writes while a shared scene draft exists', async () => {
+  useScriptDrafts.getState().put(sceneEditKey('project-a', 'scene-1'), {
+    file: original.file,
+    scene: { ...original.file.scene, name: 'Unfinished Script title' },
+  })
+  mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Scene YAML' }), {
+    target: { value: 'raw edits' },
+  })
+  expect(screen.getByRole('button', { name: 'Save source' })).toBeDisabled()
+  expect(
+    screen.getByText('Save or discard the shared scene draft before saving Source.'),
+  ).toBeVisible()
+  expect(mocks.save).not.toHaveBeenCalled()
+})
+
+it('reads the authoritative v2 source bytes after saving checked v1 YAML', async () => {
+  const { qc } = mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Scene YAML' }), {
+    target: { value: 'schema_version: 1\nscene: changed\n' },
+  })
+  const actual = {
+    ...original,
+    yaml: 'schema_version: 2\nscene: canonical\n',
+    stamp: { ...original.stamp, hash: 'v2' },
+  }
+  mocks.get.mockResolvedValue(actual)
+  fireEvent.click(screen.getByRole('button', { name: 'Save source' }))
+  await waitFor(() =>
+    expect(screen.getByRole('textbox', { name: 'Scene YAML' })).toHaveValue(actual.yaml),
+  )
+  expect(qc.getQueryData(['narrative_source', 'project-a', 'scene-1'])).toEqual(actual)
+})
+it('does not write another project after asynchronous Source validation', async () => {
+  let finish!: (value: unknown) => void
+  mocks.check.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const { qc } = mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Scene YAML' }), {
+    target: { value: 'retained draft' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Save source' }))
+  qc.setQueryData(qk.projectCurrent, { path: 'other' })
+  await act(async () =>
+    finish({
+      scene: original.file.scene,
+      formatted: 'parsed draft',
+      diagnostics: [],
+      problem: null,
+    }),
+  )
+  expect(mocks.save).not.toHaveBeenCalled()
+  expect(mocks.repair).not.toHaveBeenCalled()
+  expect(screen.getByRole('textbox', { name: 'Scene YAML' })).toHaveValue('retained draft')
+})
+it('does not install a repair reply into another project or clear its original draft', async () => {
+  const malformed = { ...original, file: null, problem: { message: 'Broken source' } }
+  mocks.get.mockResolvedValue(malformed)
+  let finish!: (value: unknown) => void
+  mocks.repair.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const { qc } = mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Scene YAML' }), {
+    target: { value: 'repaired draft' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Save source' }))
+  await waitFor(() => expect(mocks.repair).toHaveBeenCalled())
+  qc.setQueryData(qk.projectCurrent, { path: 'other' })
+  const other = { ...original.file, scene: { ...original.file.scene, name: 'Other project' } }
+  qc.setQueryData(qk.narrativeScene('scene-1'), other)
+  await act(async () => finish({ source: original, recoveryRel: 'original.bak' }))
+  expect(qc.getQueryData(qk.narrativeScene('scene-1'))).toBe(other)
+  expect(screen.getByRole('textbox', { name: 'Scene YAML' })).toHaveValue('repaired draft')
+})
+
+it('retains an old Source draft when a reload finishes after changing projects', async () => {
+  const { qc } = mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Scene YAML' }), {
+    target: { value: 'keep this draft' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+  let finish!: (value: NarrativeSource) => void
+  mocks.get.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload' }))
+  qc.setQueryData(qk.projectCurrent, { path: 'other' })
+  await act(async () => finish({ ...original, yaml: 'other project source' }))
+  expect(screen.getByRole('textbox', { name: 'Scene YAML' })).toHaveValue('keep this draft')
+  const calls = mocks.check.mock.calls.length
+  fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
+  expect(mocks.check).toHaveBeenCalledTimes(calls)
+})
+
+it('keeps Source validation tied to its original public project session even after same-path reopen', async () => {
+  ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+  mocks.invoke.mockResolvedValue(null)
+  let finish!: (value: unknown) => void
+  mocks.check.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  mount()
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Scene YAML' }), {
+    target: { value: 'retained draft' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Save source' }))
+  await projectClose()
+  await projectOpen('project-a')
+  await act(async () =>
+    finish({
+      scene: original.file.scene,
+      formatted: 'parsed draft',
+      diagnostics: [],
+      problem: null,
+    }),
+  )
+  expect(mocks.save).not.toHaveBeenCalled()
+  expect(mocks.repair).not.toHaveBeenCalled()
+  expect(screen.getByRole('textbox', { name: 'Scene YAML' })).toHaveValue('retained draft')
+  expect(await screen.findByText(/project session changed/)).toBeVisible()
 })

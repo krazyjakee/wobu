@@ -180,3 +180,22 @@
 .nsl-quests li + li {
   margin-top: 5px;
 }
+.nrt-organization fieldset {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.nrt-organization label {
+  display: grid;
+  gap: 4px;
+}
+.nrt-organization select {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px;
+  width: 100%;
+}

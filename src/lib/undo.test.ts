@@ -1,3 +1,5 @@
+import { projectClose, projectOpen } from './api/project'
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(null) }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   COALESCE_MS,
@@ -549,3 +551,68 @@ describe('narrative source on the same stack as nodes', () => {
     expect(useUndoStack.getState().past).toHaveLength(2)
   })
 })
+
+it.each(['undo', 'redo'] as const)(
+  'stops a multi-command %s after same-project reopen without clearing a newer busy operation',
+  async (direction) => {
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+    const history: UndoEntry = {
+      ...entry({
+        subjectId: 'first',
+        undo: [
+          { type: 'delete', id: 'first' },
+          { type: 'delete', id: 'second' },
+        ],
+        redo: [
+          { type: 'delete', id: 'first' },
+          { type: 'delete', id: 'second' },
+        ],
+      }),
+      at: 1,
+    }
+    useUndoStack.setState({
+      projectId: 'same-id',
+      past: direction === 'undo' ? [history] : [],
+      future: direction === 'redo' ? [history] : [],
+      busy: false,
+    })
+    let finishOld!: () => void
+    const oldRunner = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOld = resolve
+        }),
+    )
+    const old = useUndoStack
+      .getState()
+      [direction](oldRunner)
+      .catch((error: unknown) => error)
+    await projectClose()
+    useUndoStack.getState().setProject(null)
+    await projectOpen('/same')
+    useUndoStack.getState().setProject('same-id')
+    useUndoStack.setState({
+      past: direction === 'undo' ? [history] : [],
+      future: direction === 'redo' ? [history] : [],
+    })
+    let finishNew!: () => void
+    const newRunner = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishNew = resolve
+          }),
+      )
+      .mockResolvedValue(undefined)
+    const newer = useUndoStack.getState()[direction](newRunner)
+    finishOld()
+    expect(await old).toMatchObject({ message: expect.stringContaining('session changed') })
+    expect(oldRunner).toHaveBeenCalledTimes(1)
+    expect(useUndoStack.getState().busy).toBe(true)
+    finishNew()
+    await newer
+    expect(useUndoStack.getState().busy).toBe(false)
+    expect(newRunner).toHaveBeenCalledTimes(2)
+  },
+)
