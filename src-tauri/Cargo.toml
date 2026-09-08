@@ -62,6 +62,8 @@ wobu-narrative-generation = { path = "crates/wobu-narrative-generation" }
 wobu-narrative-deps = { path = "crates/wobu-narrative-deps" }
 wobu-narrative-build = { path = "crates/wobu-narrative-build" }
 wobu-narrative-locale = { path = "crates/wobu-narrative-locale" }
+wobu-narrative-variants = { path = "crates/wobu-narrative-variants" }
+wobu-narrative-media = { path = "crates/wobu-narrative-media" }
 
 [package]
 name = "wobu"
@@ -93,6 +95,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 wobu-narrative-build.workspace = true
 wobu-narrative-locale.workspace = true
+wobu-narrative-variants.workspace = true
+wobu-narrative-media.workspace = true
 
 async-trait = "0.1.91"
 blake3 = "1.8.5"
