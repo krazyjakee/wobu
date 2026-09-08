@@ -158,6 +158,15 @@ Restoring words does not revive a previous approval. [Editorial review](26-narra
 records immutable decisions; missing or mismatched history invalidates proof while preserving words
 and locks. World source participates in the narrative fingerprint; moving Flow boxes does not.
 
+## Arrange Flow
+
+Choose a scene or World quest in **Flow scope**. Shared arrangements retain Automatic/Manual mode,
+node positions, collapsed groups and pinned notes. **Groups & notes** edits that presentation; the
+separate save queue offers an explicit retry if a write fails. Viewport and panels remain local.
+[The arrangement guide](27-narrative-layout.md) describes peer merging, schema compatibility and
+native reopening evidence, including the 300-node canvas bound. Layout-only edits preserve canonical
+source, review evidence, context fingerprints and Release package bytes.
+
 ## Generate and review
 
 **Generate…** plans saved dialogue requests before explicitly queuing provider work. Both slot and
@@ -175,7 +184,8 @@ includes the complete workflow recording with its mocked-provider evidence limit
 ## Evidence and remaining acceptance
 
 Screenshots use the actual React components with explicit in-memory IPC fixtures in Chromium.
-They establish browser rendering. The separate [native Preview walkthrough](21-native-narrative-preview.md)
+They establish browser rendering. Native layout evidence is identified separately in the arrangement
+guide. The separate [native Preview walkthrough](21-native-narrative-preview.md)
 records real Tauri/WebKit and Rust IPC, including command results, restore, bounds and loop failures;
 its canonical project-file audit verifies isolation. Rust command tests use temporary project files. Current regression coverage includes attributed
 three-character knowledge, contradictory/unknown belief, entity backlinks, strict source/version

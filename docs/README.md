@@ -38,6 +38,7 @@ the implemented behavior and remaining acceptance. N5 integrations are excluded 
 | [24 — Narrative Storage](24-narrative-storage.md) | Canonical records, immutable receipts, publication and rebuildable local indexes |
 | [25 — Narrative Generation](25-narrative-generation.md) | Frozen plans, provider jobs, protected proposals, cancellation, receipts and recovery |
 | [26 — Narrative Review Evidence](26-narrative-review.md) | Canonical editorial history, guarded transitions and verified release approval |
+| [27 — Shared Narrative Arrangements](27-narrative-layout.md) | Layout schema, groups/notes, peer merging, native canvas evidence and bounds |
 | [28 — Narrative Review Queue](28-narrative-review-queue.md) | Revision comparison, protected drafts, paged review and grouped bulk decisions |
 
 Two constraints shape most of the above and are worth knowing up front:

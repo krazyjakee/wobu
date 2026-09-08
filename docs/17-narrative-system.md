@@ -363,14 +363,14 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | Plan element | Implemented foundation | Remaining work |
 | --- | --- | --- |
 | Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Multiple-quest arc grouping, route overlays and native acceptance (#187/#188/#186). |
-| Separate layout | Sidecars stay outside source fingerprints, including world source. | Layout-specific index and peer merging (#185). |
+| Separate layout | Versioned scene/quest sidecars, shared mode/groups/notes, separate watcher and peer merging; native canvas and Release invariance evidence. | Platform coverage and broader accessibility acceptance (#182/#186). |
 | Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | Scene-library use of the rebuildable record index, act/tag metadata and real-load benchmarks (#194/#182). |
 | World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); [provider jobs](25-narrative-generation.md) now retain separate prose proposals. |
 | Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
 | Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and production recovery (#181). |
 | Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
 | Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests and native walkthrough. | Flow overlays (#188). |
-| Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Layout sync (#185), richer domain payloads and production recovery (#181). |
+| Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Richer domain payloads and production recovery (#181). |
 | Generation and review | Frozen provider requests, immutable results, protected replacement, canonical approval evidence and a paged comparison/bulk Review queue. | Supporting text (#167), precise dependency tracking, localisation/audio and production release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
