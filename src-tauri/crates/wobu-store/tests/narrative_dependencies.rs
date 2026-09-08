@@ -787,3 +787,73 @@ fn tampering_with_full_frozen_inputs_cannot_preserve_a_precise_approval() {
             .approval_valid
     );
 }
+
+#[test]
+fn repairing_a_reviewed_scene_refreshes_stale_context_without_changing_its_history() {
+    let mut fixture = harbour();
+    review_line(&mut fixture, wobu_narrative::review::EditorialAction::Approve);
+    review_line(
+        &mut fixture,
+        wobu_narrative::review::EditorialAction::Policy {
+            scope: wobu_narrative::review::PolicyScope::Variant,
+            policy: GenerationPolicy::Locked,
+        },
+    );
+    let recorded = fixture.scene.scene.clone();
+    let receipts = fixture
+        .project
+        .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+        .unwrap()
+        .into_iter()
+        .map(|file| file.document)
+        .collect::<Vec<_>>();
+    let path = fixture.project.root().join(&fixture.scene.rel);
+    let malformed = format!("{}\nmalformed: [\n", std::fs::read_to_string(&path).unwrap());
+    std::fs::write(&path, &malformed).unwrap();
+    fixture.project.reconcile().unwrap();
+    assert!(!fixture.project.scene_catalog().unwrap().unreadable.is_empty());
+    // While the source is malformed, watcher/save maintenance preserves the
+    // last known dependency evidence instead of inventing a fresh baseline.
+    fixture.set_voice(fixture.kael, "A changed voice while source was unavailable.");
+    let (_, damaged_stamp) = wobu_store::atomic::read_stamped(&path).unwrap().unwrap();
+    let (outcome, backup) = fixture
+        .project
+        .repair_scene_source(
+            &fixture.scene.rel,
+            &wobu_narrative::SceneDocument::new(recorded.clone()),
+            &damaged_stamp,
+            Some(recorded.id),
+        )
+        .unwrap();
+    let SourceSave::Saved(returned_stamp) = outcome else {
+        panic!("receipt-exact repair should save")
+    };
+    let repaired = fixture.project.load_scene(recorded.id).unwrap();
+    let mut expected = recorded.clone();
+    for beat in &mut expected.beats {
+        for slot in &mut beat.dialogue {
+            for variant in &mut slot.variants {
+                variant.text.lifecycle.freshness = Freshness::OutOfDate;
+            }
+        }
+    }
+    assert_eq!(repaired.scene, expected, "repair may change only derived freshness");
+    assert_eq!(repaired.stamp, Some(returned_stamp));
+    assert_eq!(std::fs::read_to_string(fixture.project.root().join(backup)).unwrap(), malformed);
+    assert_eq!(
+        fixture
+            .project
+            .narrative_records(wobu_store::NarrativeRecordKind::Receipt)
+            .unwrap()
+            .into_iter()
+            .map(|file| file.document)
+            .collect::<Vec<_>>(),
+        receipts
+    );
+    let review = fixture.project.review_scene(recorded.id, None).unwrap();
+    let line =
+        review.lines.iter().find(|line| line.target.variant == Some(fixture.kael_line())).unwrap();
+    assert!(!line.approval_valid);
+    assert_eq!(line.reason, "Authored context changed since the last review.");
+    assert!(fixture.project.scene_catalog().unwrap().unreadable.is_empty());
+}
