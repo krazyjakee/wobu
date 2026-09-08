@@ -354,7 +354,7 @@ not merely when backend APIs exist.
 Merged [PR #190](https://github.com/krazyjakee/wobu/pull/190) established Flow, and
 [PR #192](https://github.com/krazyjakee/wobu/pull/192) added working discovery, Script and Source.
 The current implementation includes World state, typed forms, source repair, a compiler/runtime-backed
-Preview with evaluated traces and command results, explicit save migration, and native package export.
+Preview with evaluated traces and command results, explicit save migration, native package export, saved regression scenarios and attributed context.
 Detailed behavior and evidence limits are in [the authoring guide](19-narrative-authoring.md).
 The issue index below retains unchecked full-acceptance items; implementation of a foundation
 is not a claim that every criterion is complete. N5 is excluded from this work by user direction.
@@ -367,8 +367,8 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); provider jobs remain #164. |
 | Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
 | Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and shared recovery (#153/#181). |
-| Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Persistent scenarios (#162), incremental builds and analysis (#168–#171). |
-| Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links and native walkthrough. | Saved scenarios and Flow overlays (#162/#188). |
+| Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
+| Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests and native walkthrough. | Flow overlays (#188). |
 | Production | Authoring lifecycle/revision safeguards. | Generation, review, dependency tracking, localisation/audio and release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
