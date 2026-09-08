@@ -86,7 +86,13 @@ export function NarrativeLocale({
   const lastDiagnosticPage = Math.max(0, Math.ceil((preview?.length ?? 0) / 50) - 1)
   const currentDiagnosticPage = Math.min(diagnosticPage, lastDiagnosticPage)
   return (
-    <Modal onClose={onClose} busy={busy} titleId="locale-title" descriptionId="locale-description">
+    <Modal
+      onClose={onClose}
+      busy={busy}
+      titleId="locale-title"
+      descriptionId="locale-description"
+      className="sheet nrt-locale-sheet"
+    >
       <section className="nrt-locale">
         <h2 id="locale-title">Localisation</h2>
         <p id="locale-description">

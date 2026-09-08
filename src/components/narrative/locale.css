@@ -1,6 +1,13 @@
+.sheet.nrt-locale-sheet {
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+  box-sizing: border-box;
+  padding: 0;
+}
 .nrt-locale {
-  width: min(1100px, 90vw);
-  max-height: 85vh;
+  min-width: 0;
+  max-height: calc(100vh - 48px);
+  box-sizing: border-box;
   overflow: auto;
   padding: 1rem;
 }
@@ -28,4 +35,15 @@
 .nrt-locale [dir='auto'] {
   unicode-bidi: plaintext;
   white-space: pre-wrap;
+}
+.nrt-locale fieldset {
+  min-width: 0;
+}
+.nrt-locale input:not([type='checkbox']),
+.nrt-locale select {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.nrt-locale button {
+  white-space: normal;
 }
