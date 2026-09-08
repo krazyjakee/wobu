@@ -93,12 +93,14 @@ pub struct PreviewFrame {
     snapshot: Snapshot,
     current: Yield,
     state: Values,
+    trace: wobu_narrative_runtime::ExecutionTrace,
 }
 fn frame(runtime: Runtime) -> CommandResult<PreviewFrame> {
     let frame = PreviewFrame {
         snapshot: runtime.snapshot(),
         current: runtime.current().map_err(runtime_error)?,
         state: runtime.state().clone(),
+        trace: runtime.trace().clone(),
     };
     // Valid inputs can still advance counters beyond the exact JS range.
     // Validate the result too, before it leaves Rust and loses precision.
@@ -139,6 +141,7 @@ pub enum PreviewAction {
     },
     CompleteCommand {
         token: String,
+        result: HostResult,
     },
     Restore,
 }
@@ -158,10 +161,14 @@ pub fn narrative_preview_step(
         PreviewAction::Choose { choice_id } => {
             runtime.choose(&choice_id).map_err(runtime_error)?;
         }
-        PreviewAction::CompleteCommand { token } => {
-            runtime
-                .complete_command(&token, HostResult::Success { host_inputs: Values::new() })
-                .map_err(runtime_error)?;
+        PreviewAction::CompleteCommand { token, result } => {
+            bridge_integers(&result)?;
+            match runtime.complete_command(&token, result) {
+                Ok(_)
+                | Err(wobu_narrative_runtime::Error::CommandFailed(_))
+                | Err(wobu_narrative_runtime::Error::CommandCancelled) => {}
+                Err(error) => return Err(runtime_error(error)),
+            }
         }
         PreviewAction::Restore => {}
     }

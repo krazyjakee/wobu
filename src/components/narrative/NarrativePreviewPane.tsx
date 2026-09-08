@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { VarType } from '../../lib/api'
+import { errorMessage, type VarType } from '../../lib/api'
 import {
   narrativeCompile,
   narrativePreviewStart,
@@ -13,6 +13,8 @@ import { useNarrativeState, useNodes } from '../../lib/queries'
 import { useUI } from '../../store/ui'
 import { TypedOperand } from './TypedOperand'
 import { PreviewCommands } from './PreviewCommands'
+import { PreviewCommandResult } from './PreviewCommandResult'
+import { PreviewTrace } from './PreviewTrace'
 import { usePreviewSessions } from './previewStore'
 import './preview.css'
 
@@ -64,9 +66,13 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
         sceneId,
         Object.fromEntries(variables.map((one) => [one.name, initial[one.name] ?? one.default])),
       )
-      put(key, { graph: report.graph, frame, trace: [{ label: 'Started', state: frame.state }] })
+      put(key, {
+        graph: report.graph,
+        frame,
+        trace: [{ label: 'Started', execution: frame.trace }],
+      })
     } catch (failure) {
-      setError(String(failure))
+      setError(errorMessage(failure))
     } finally {
       setBusy(false)
     }
@@ -81,9 +87,14 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
         restore?.snapshot ?? session.frame.snapshot,
         action,
       )
-      put(key, { ...session, frame, trace: [...session.trace, { label, state: frame.state }] })
+      put(key, {
+        ...session,
+        frame,
+        trace: [...session.trace, { label, execution: frame.trace }].slice(-100),
+      })
+      if (frame.trace.error) setError(errorMessage(frame.trace.error))
     } catch (failure) {
-      setError(String(failure))
+      setError(errorMessage(failure))
     } finally {
       setBusy(false)
     }
@@ -141,7 +152,7 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
           Restore snapshot
         </button>
       </div>
-      {error && <p role="alert">Preview stopped: {error}. The previous step is retained.</p>}
+      {error && <p role="alert">Preview stopped: {error} The previous step is retained.</p>}
       {!!diagnostics?.length && (
         <ul aria-label="Compilation diagnostics">
           {diagnostics.map((diagnostic, index) => (
@@ -202,27 +213,28 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
               ))}
             </>
           )}
-          {'game_command' in current && (
-            <>
-              <h3>Host command: {current.game_command.name}</h3>
-              <pre>{JSON.stringify(current.game_command.args)}</pre>
-              <p>
-                Preview pauses here. Acknowledge to simulate completion; no game action is
-                performed.
-              </p>
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={() =>
-                  void step(
-                    { kind: 'completeCommand', token: current.game_command.token },
-                    `Acknowledged ${current.game_command.name}`,
-                  )
-                }
-              >
-                Acknowledge command
-              </button>
-            </>
+          {'game_command' in current && session && (
+            <PreviewCommandResult
+              key={current.game_command.token}
+              name={current.game_command.name}
+              args={current.game_command.args}
+              variables={Object.entries(session.graph.state ?? {})
+                .filter(([, variable]) => variable.owner === 'host')
+                .map(([name, variable]) => ({
+                  name,
+                  type: variable.ty,
+                  default: variable.default,
+                  owner: variable.owner,
+                }))}
+              state={session.frame.state}
+              disabled={busy}
+              onResult={(result) =>
+                void step(
+                  { kind: 'completeCommand', token: current.game_command.token, result },
+                  `Host result: ${current.game_command.name}`,
+                )
+              }
+            />
           )}
           {'end' in current && (
             <p role="status">Scene ended{current.end.label ? `: ${current.end.label}` : '.'}</p>
@@ -247,17 +259,16 @@ function PreviewEditor({ projectKey, sceneId }: { projectKey: string; sceneId: s
               ))}
             </tbody>
           </table>
-          <details>
-            <summary>Playback trace ({session.trace.length} steps)</summary>
-            <ol>
-              {session.trace.map((entry, index) => (
-                <li key={index}>
-                  <strong>{entry.label}</strong>
-                  <pre>{JSON.stringify(entry.state, null, 2)}</pre>
-                </li>
-              ))}
-            </ol>
-          </details>
+          <PreviewTrace
+            entries={session.trace}
+            openSource={(site) => {
+              openScript({
+                sceneId: site.scene,
+                beatId: site.beat,
+                ...(site.slot ? { lineId: site.slot } : {}),
+              })
+            }}
+          />
           <p className="nrt-note">
             Snapshots and playback history are kept for this scene and project in the current app
             session. Restart compiles current saved source.
