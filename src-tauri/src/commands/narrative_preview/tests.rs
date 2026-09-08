@@ -3,6 +3,7 @@ use wobu_narrative::{
     Beat, Choice, Destination, DialogueSlot, Effect, Increment, Speaker, StateDocument, Text,
     Variant,
 };
+use wobu_narrative_compiler::compile;
 
 #[test]
 fn handwritten_project_compiles_and_previews_without_mutating_its_source() {

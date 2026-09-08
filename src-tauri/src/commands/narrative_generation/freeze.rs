@@ -9,6 +9,7 @@ use wobu_narrative_generation::{
 
 pub struct Input<'a> {
     pub batch: Id,
+    pub analysis: Option<wobu_narrative_generation::AnalysisBinding>,
     pub scene: &'a Scene,
     pub slot: &'a DialogueSlot,
     pub target: Selection,
@@ -36,6 +37,7 @@ pub fn request(input: Input<'_>) -> CommandResult<FrozenRequest> {
         target: input.target.clone(),
         candidate_variant_id,
         speaker: input.slot.speaker.clone(),
+        analysis: input.analysis,
         expected_scene_hash: wobu_store::project::narrative_generation::target_guard(
             input.scene,
             &input.target,

@@ -147,5 +147,5 @@ pub mod narrative_arc;
 pub mod narrative_library;
 pub mod narrative_locale;
 pub mod narrative_media;
-pub mod narrative_variants;
 pub mod narrative_text;
+pub mod narrative_variants;

@@ -97,6 +97,7 @@ pub(crate) fn unchanged(
     proposal: &CheckedProposal,
 ) -> Result<()> {
     let request = &proposal.request;
+    super::super::narrative_generation::check_analysis(project, request)?;
     if !super::super::narrative_generation::source_unchanged(&snapshot.file, request) {
         return Err(invalid(
             "Scene changed since this proposal was requested. Generate a new proposal or edit the current wording explicitly.",
@@ -109,5 +110,6 @@ pub(crate) fn unchanged(
             "Generation context changed. The retained proposal cannot replace current wording.",
         ));
     }
+    super::super::narrative_generation::check_analysis(project, request)?;
     Ok(())
 }

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use tauri::State;
 use wobu_narrative::{Name, VarType};
-use wobu_narrative_compiler::{CompileDiagnostic, CompileOptions, Profile, compile};
+use wobu_narrative_compiler::{CompileDiagnostic, CompileOptions, Profile, compile_with_analysis};
 use wobu_narrative_package::Package;
 use wobu_store::Project;
 
@@ -126,7 +126,9 @@ fn prepare_checked(
             "Debug source maps are available only for development exports.",
         ));
     }
+    let analysis = project.narrative_analysis_capture()?;
     let fingerprint = project.narrative_fingerprint()?;
+    let world = project.world_document()?.map(|(world, _)| world).unwrap_or_default();
     let catalog = project.scene_catalog()?;
     if !catalog.unreadable.is_empty()
         || (catalog.scenes.is_empty() && project.text_catalog()?.assets.is_empty())
@@ -202,7 +204,7 @@ fn prepare_checked(
             "Narrative source changed while capturing text approvals. Check again.",
         ));
     }
-    let report = compile(
+    let report = compile_with_analysis(
         &scenes,
         &texts,
         &schema,
@@ -213,7 +215,10 @@ fn prepare_checked(
             verified_reviews,
             verified_text_reviews,
         },
+        &world,
+        &analysis.policies,
     );
+    analysis.check_current(project)?;
     let (mut locales, locale_diagnostics) = project.locale_release()?;
     let locale_blocked = locale_diagnostics.iter().any(|d| d.code == "missing_translation");
     if locale_blocked {
@@ -259,6 +264,7 @@ fn prepare_checked(
             "Narrative changed while checking locales. Check export again.",
         ));
     }
+    analysis.check_current(project)?;
     let check = ExportCheck {
         media_diagnostics: media.diagnostics,
         locale_diagnostics,

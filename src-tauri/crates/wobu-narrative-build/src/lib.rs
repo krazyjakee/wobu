@@ -119,6 +119,7 @@ pub fn reuse_key(request: &FrozenRequest) -> String {
         "text_revision":request.expected_text_revision,
         "policy":request.expected_policy, "slot_policy":request.expected_slot_policy,
         "source_guard":request.expected_scene_hash,
+        "analysis_policy":request.analysis.as_ref().map(|a|&a.policy_guard),
         "context":wobu_narrative_generation::context_key(&request.context),
         "provider":request.provider, "model":request.model, "settings":request.settings,
         "prompt_version":request.prompt_version,"output_schema_version":request.output_schema_version,

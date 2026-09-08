@@ -1,5 +1,5 @@
 //! Explicit authoring builds reuse the generation queue and its canonical evidence.
-mod plan;
+pub(super) mod plan;
 use super::narrative_generation::{self as generation, GenerationPlans, Queued, records};
 use crate::{
     error::{Code, CommandResult, WobuError},
@@ -252,6 +252,7 @@ fn check_batch(project: &Project, requests: &[FrozenRequest]) -> CommandResult<(
         }
     }
     for request in requests {
+        wobu_store::project::narrative_generation::check_analysis(project, request)?;
         let scene = scenes
             .get(&request.target.scene)
             .ok_or_else(|| invalid("Build target no longer exists."))?;

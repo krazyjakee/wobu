@@ -28,6 +28,7 @@ export function NarrativeBuild({
   projectKey,
   readOnly,
   currentScene,
+  initialBuildId,
   onClose,
   onScenarios,
   onSource,
@@ -35,6 +36,7 @@ export function NarrativeBuild({
   projectKey: string
   readOnly: boolean
   currentScene?: string
+  initialBuildId?: string
   onClose: () => void
   onScenarios: () => void
   onSource: (target: ContextSelection, asset: boolean) => void
@@ -45,7 +47,7 @@ export function NarrativeBuild({
   const [container, setContainer] = useState('all')
   const [stateText, setStateText] = useState<string | null>(null)
   const [commands, setCommands] = useState('{}')
-  const [buildId, setBuildId] = useState<string | null>(null)
+  const [buildId, setBuildId] = useState<string | null>(initialBuildId ?? null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [page, setPage] = useState(0)

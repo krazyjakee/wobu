@@ -12,6 +12,7 @@ import { useUI, type NarrativeTarget } from '../../store/ui'
 import { Icon } from '../Icon'
 import { NarrativeCentre } from './NarrativeCentre'
 import { NarrativeInspector } from './NarrativeInspector'
+import { NarrativeVariants } from './NarrativeVariants'
 import { NarrativeBuild } from './NarrativeBuild'
 import { NarrativeScenarioTests } from './NarrativeScenarioTests'
 import { NarrativeRecovery } from './NarrativeRecovery'
@@ -51,6 +52,8 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const [generationOpen, setGenerationOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [buildOpen, setBuildOpen] = useState(false)
+  const [initialBuildId, setInitialBuildId] = useState<string>()
+  const [variantsOpen, setVariantsOpen] = useState(false)
   const [scenarioTestsOpen, setScenarioTestsOpen] = useState(false)
   const [sidePane, setSidePane] = useState<'outline' | 'context' | null>(null)
   const sidePaneButtons = useRef<HTMLDivElement>(null)
@@ -195,7 +198,21 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           <button className="btn" onClick={() => setReviewOpen(true)}>
             Review
           </button>
-          <button className="btn" onClick={() => setBuildOpen(true)}>
+          <button
+            className="btn"
+            disabled={!!draft || !file.data?.scene.beats?.length}
+            title={draft ? 'Save the scene draft before planning variants' : undefined}
+            onClick={() => setVariantsOpen(true)}
+          >
+            Variants…
+          </button>
+          <button
+            className="btn"
+            onClick={() => {
+              setInitialBuildId(undefined)
+              setBuildOpen(true)
+            }}
+          >
             Build…
           </button>
           <button className="btn" onClick={() => setRecoveryOpen(true)}>
@@ -249,10 +266,25 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
           onClose={() => setGenerationOpen(false)}
         />
       )}
+      {variantsOpen && file.data && (
+        <NarrativeVariants
+          projectKey={project.path}
+          scene={file.data.scene}
+          beatId={selection.beatId ?? file.data.scene.beats?.[0]?.id ?? ''}
+          readOnly={project.readOnly}
+          onClose={() => setVariantsOpen(false)}
+          onBuild={(id) => {
+            setVariantsOpen(false)
+            setInitialBuildId(id)
+            setBuildOpen(true)
+          }}
+        />
+      )}
       {buildOpen && (
         <NarrativeBuild
           projectKey={project.path}
           currentScene={selected?.id}
+          initialBuildId={initialBuildId}
           readOnly={project.readOnly}
           onClose={() => setBuildOpen(false)}
           onScenarios={() => {

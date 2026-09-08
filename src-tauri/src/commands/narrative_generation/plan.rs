@@ -40,6 +40,7 @@ pub fn build(
     if project.is_read_only() {
         return Err(wobu_store::Error::ReadOnly.into());
     }
+    let analysis_capture = project.narrative_analysis_capture()?;
     let fingerprint = project.narrative_fingerprint()?;
     let report = super::super::narrative_preview::compile_project(project, input.commands)?;
     let graph = report
@@ -143,7 +144,12 @@ pub fn build(
             });
             continue;
         }
+        let analysis = analysis_capture.binding(
+            &wobu_narrative_variants::Target { scene: target.scene, beat: target.beat },
+            None,
+        );
         let request = super::freeze::request(super::freeze::Input {
+            analysis,
             batch: plan.id,
             scene: &file.scene,
             slot,
@@ -154,8 +160,10 @@ pub fn build(
             model,
             max_output_tokens: input.max_output_tokens,
         })?;
+        analysis_capture.check_current(project)?;
         plan.requests.push(request);
     }
+    analysis_capture.check_current(project)?;
     if fingerprint != project.narrative_fingerprint()? {
         return Err(invalid("Source changed during generation planning. Plan again."));
     }

@@ -8,6 +8,16 @@ pub fn build(
     provider: &str,
     model: &str,
 ) -> CommandResult<Build> {
+    build_with_matrix(project, input, provider, model, None)
+}
+pub(crate) fn build_with_matrix(
+    project: &mut Project,
+    input: wobu_narrative_build::Input,
+    provider: &str,
+    model: &str,
+    matrix: Option<(Id, BTreeMap<wobu_narrative::VariantId, wobu_narrative_variants::State>)>,
+) -> CommandResult<Build> {
+    let analysis_capture = project.narrative_analysis_capture()?;
     if project.is_read_only() {
         return Err(wobu_store::Error::ReadOnly.into());
     }
@@ -106,6 +116,11 @@ pub fn build(
                     slot.variants.iter().map(Some).collect()
                 };
                 for variant in variants {
+                    if matrix.as_ref().is_some_and(|(_, states)| {
+                        variant.is_none_or(|v| !states.contains_key(&v.id))
+                    }) {
+                        continue;
+                    }
                     let missing = variant.is_none_or(|v| v.text.body.trim().is_empty());
                     let why = variant.and_then(|v| affected.get(&v.id));
                     if !match input.scope {
@@ -151,7 +166,11 @@ pub fn build(
                         request_id: None,
                         reusable: false,
                         candidate_variant_id: None,
-                        state: input.state.clone(),
+                        state: matrix
+                            .as_ref()
+                            .and_then(|(_, states)| variant.and_then(|v| states.get(&v.id)))
+                            .cloned()
+                            .unwrap_or_else(|| input.state.clone()),
                     };
                     if item.action == Action::Locked {
                         item.diagnostics.push("Locked content cannot enter generation.".into());
@@ -185,6 +204,13 @@ pub fn build(
                             let mut request =
                                 generation::freeze::request(generation::freeze::Input {
                                     batch: result.id,
+                                    analysis: analysis_capture.binding(
+                                        &wobu_narrative_variants::Target {
+                                            scene: target.scene,
+                                            beat: target.beat,
+                                        },
+                                        matrix.as_ref().map(|m| m.0),
+                                    ),
                                     scene,
                                     slot,
                                     target,
@@ -224,6 +250,7 @@ pub fn build(
     }
     result.validate().map_err(invalid)?;
     snapshot.check_current(project)?;
+    analysis_capture.check_current(project)?;
     for request in requests {
         records::save_receipt(
             project,
@@ -232,6 +259,7 @@ pub fn build(
             &Receipt::NarrativeGenerationRequest { request: Box::new(request) },
         )?;
     }
+    analysis_capture.check_current(project)?;
     project.save_narrative_build(&result)?;
     Ok(result)
 }
