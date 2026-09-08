@@ -1,7 +1,7 @@
 # Native project and quest Flow acceptance
 
 Recorded 8 September 2026 with the actual Tauri/WebKitGTK application, combined backend at
-3db1e14 and frontend through 8efa8ca / 7c77610. The isolated Xephyr display is 1440 × 900,
+3db1e14 and frontend through integrated commits 666e13d / 8d6c756. The isolated Xephyr display is 1440 × 900,
 100% UI scale, using Vite development assets and software rendering. The temporary harness
 uses public Tauri commands for fixture setup and actual DOM focus/click/input for navigation;
 Return, Escape, C and Space use trusted xdotool input. This is harness-assisted desktop proof,
