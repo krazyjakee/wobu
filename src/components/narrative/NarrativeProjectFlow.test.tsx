@@ -1384,3 +1384,33 @@ it('creates a native-ID scene in the arc and connects its first authored beat wi
   expect(draft.beats![0]!.outcomes![0]!.id).toMatch(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
   expect(calls('narrative_scene_save')).toHaveLength(0)
 })
+
+it('restores arc scroll after the first asynchronous read and keeps a Library-selected scene on return', async () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  qc.setQueryData(qk.projectCurrent, { path: PROJECT })
+  const view = render(
+    <QueryClientProvider client={qc}>
+      <div className="nrt-panel" role="tabpanel">
+        <NarrativeProjectFlow projectKey={PROJECT} readOnly={false} layout={layout} />
+      </div>
+    </QueryClientProvider>,
+  )
+  const panel = view.container.querySelector<HTMLElement>('.nrt-panel')!
+  fireEvent.click(await screen.findByRole('button', { name: 'Outline list' }))
+  fireEvent.click(screen.getByRole('button', { name: 'SceneCouncil hearing' }))
+  await screen.findByRole('button', { name: 'Open selected scene' })
+  panel.scrollTop = 350
+  fireEvent.click(screen.getByRole('button', { name: 'Open selected scene' }))
+  await screen.findByTestId(`flow-node-${nodeId.beat(ARRIVAL)}`)
+  panel.scrollTop = 800
+  fireEvent.click(screen.getByRole('button', { name: /Every scene/ }))
+  await screen.findByRole('region', { name: 'Selected scene exits' })
+  expect(panel.scrollTop).toBe(350)
+  useUI.getState().selectNarrative({ sceneId: OTHER }, 'library', { projectKey: PROJECT })
+  await screen.findByRole('button', { name: /Every scene/ })
+  fireEvent.click(screen.getByRole('button', { name: /Every scene/ }))
+  expect(await screen.findByRole('button', { name: 'SceneThe long road' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  )
+})

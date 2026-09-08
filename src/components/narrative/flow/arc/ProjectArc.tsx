@@ -96,6 +96,11 @@ function ArcGraph({
     }
     return found
   }, [sessions, storeKey])
+  useEffect(() => {
+    const current = useUI.getState().narrative.sceneId
+    if (current && query.data?.scenes.some((one) => one.summary.id === current))
+      store.getState().select(current)
+  }, [store, query.data?.scenes])
   const selectedId = useStore(store, (s) => s.selectedId)
   const selected = useScene(
     query.data?.scenes.some((one) => one.summary.id === selectedId) ? selectedId : null,
@@ -290,7 +295,7 @@ function ArcGraph({
     return () => {
       if (parent) sessions.scroll = parent.scrollTop
     }
-  }, [sessions])
+  }, [sessions, query.isSuccess])
   if (query.isPending) return <p role="status">Reading the project arc…</p>
   if (query.isError)
     return (
