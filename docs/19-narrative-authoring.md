@@ -144,8 +144,9 @@ conditions and effects, while existing tagged source remains readable.
 World undo/redo compares the expected whole document under the project lock and then performs a
 guarded write using its current stamp. It refuses a changed document from another writer. Ordinary
 World saves cannot request an unguarded `Current` precondition. Existing scene undo retains the older `Current` limitation documented by PR #190. Variable edits
-use guarded stamp-based saves but do not yet enter undo history; shared recovery hardening remains
-#153/#181.
+use guarded stamp-based saves but do not yet enter undo history.
+[Portable storage and Recovery](24-narrative-storage.md) preserve peer conflicts and explicit deletions;
+crash-persistent drafts and production recovery remain #181.
 
 The scene save command rejects approved wording with a mismatched revision and changed wording
 that carries approval forward during an ordinary edit. Correctly sealed undo snapshots can restore
@@ -178,6 +179,7 @@ record, rather than reusing #192's counts for the changed implementation.
 
 Source repair and semantic ranges (#157), native packages (#160), migration/Preview traces
 (#195), saved regression scenarios (#162), and attributed frozen generation context (#163) are
-implemented. Indexing/sync/recovery (#153), generation jobs/review (#164–#167), incremental analysis
+implemented alongside portable record indexing, peer sync and explicit recovery (#153).
+Generation jobs/review (#164–#167), incremental analysis
 (#168–#172), Flow overlays (#188/#189) and production work (#178–#183) remain tracked. N5
 (#173–#177) is deliberately excluded; no Unity, Godot, Unreal or Yarn integration was added.

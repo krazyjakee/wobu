@@ -362,13 +362,14 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 | Plan element | Implemented foundation | Remaining work |
 | --- | --- | --- |
 | Scene and arc Flow | React Flow, scene drill-down and guarded structural saves. | Multiple-quest arc grouping, route overlays and native acceptance (#187/#188/#186). |
-| Separate layout | Sidecars stay outside source fingerprints, including world source. | Index and peer integration (#153/#185). |
-| Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | SQLite index, act/tag metadata and real-load benchmarks (#153/#191/#182). |
+| Separate layout | Sidecars stay outside source fingerprints, including world source. | Layout-specific index and peer merging (#185). |
+| Scene discovery | Paged text/intent search, lifecycle and multiquest facets, local saved views, pins/recent and return navigation. | Scene-library use of the rebuildable record index, act/tag metadata and real-load benchmarks (#194/#182). |
 | World state | Canonical facts, independent beliefs/provenance, directed relationships, events, quest transitions/membership, restrictions and related entity IDs. | Complete backlink navigation (#155). Attributed context now has a [frozen request inspector](23-narrative-context.md); provider jobs remain #164. |
 | Script and inspector | Manual revisions, beat/slot/variant operations, typed conditions/effects, choices/outcomes and saved context. | Full structural undo/Flow equivalence and native workflow acceptance (#156). |
-| Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and shared recovery (#153/#181). |
+| Source | YAML editing/checking, explicit format/save/reload, guarded saves, malformed-file repair and semantic source ranges. | Crash-persistent drafts and production recovery (#181). |
 | Compiler and runtime | Pure deterministic graph, source maps, release gates, typed runner, command protocol, validated save migration and native packages. | Incremental builds and analysis (#168–#171). |
 | Preview | Isolated starting state, lines/choices, checkpoint restore, evaluated traces, typed command results, source links, saved scenario tests and native walkthrough. | Flow overlays (#188). |
+| Portable records | Canonical source/text/record envelopes, immutable receipts, complete publication manifests, rebuildable index, bounded peer sync and explicit deletion/recovery. | Layout sync (#185), richer domain payloads and production recovery (#181). |
 | Production | Authoring lifecycle/revision safeguards. | Generation, review, dependency tracking, localisation/audio and release workflow. N5 engine integrations are excluded. |
 
 ## GitHub implementation index
@@ -378,12 +379,12 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 ### [N1 — Narrative world and scene authoring](https://github.com/krazyjakee/wobu/milestone/15)
 
 - [ ] [Define typed narrative entities, state, and stable identities](https://github.com/krazyjakee/wobu/issues/152)
-- [ ] [Persist narrative source, text revisions, and receipts safely](https://github.com/krazyjakee/wobu/issues/153)
+- [x] [Persist narrative source, text revisions, and receipts safely](https://github.com/krazyjakee/wobu/issues/153)
 - [ ] [Add the Narrative workspace and scene navigation](https://github.com/krazyjakee/wobu/issues/154)
 - [ ] [Edit narrative facts, knowledge, relationships, events, and quests](https://github.com/krazyjakee/wobu/issues/155)
 - [ ] [Author scenes, beats, choices, consequences, and handwritten dialogue](https://github.com/krazyjakee/wobu/issues/156)
 - [x] [Support structured YAML source with diagnostics and form round trips](https://github.com/krazyjakee/wobu/issues/157)
-- [ ] [Spike: choose the Flow canvas library, layout engine, and node vocabulary](https://github.com/krazyjakee/wobu/issues/184)
+- [x] [Spike: choose the Flow canvas library, layout engine, and node vocabulary](https://github.com/krazyjakee/wobu/issues/184)
 - [ ] [Persist Flow layout as presentation metadata separate from narrative source](https://github.com/krazyjakee/wobu/issues/185)
 - [ ] [Add the scene Flow canvas for beats, choices, conditions, and outcomes](https://github.com/krazyjakee/wobu/issues/186)
 - [ ] [Add a searchable Scene library with saved views and editor navigation](https://github.com/krazyjakee/wobu/issues/191)
@@ -394,14 +395,14 @@ is not a claim that every criterion is complete. N5 is excluded from this work b
 - [ ] [Implement the offline narrative runner and versioned save state](https://github.com/krazyjakee/wobu/issues/159)
 - [x] [Export and validate versioned native narrative packages](https://github.com/krazyjakee/wobu/issues/160)
 - [ ] [Play scenes in Preview with state controls and source-linked traces](https://github.com/krazyjakee/wobu/issues/161)
-- [ ] [Save narrative scenarios and assert branch regression traces](https://github.com/krazyjakee/wobu/issues/162)
+- [x] [Save narrative scenarios and assert branch regression traces](https://github.com/krazyjakee/wobu/issues/162)
 - [ ] [Add the quest and arc Flow view with scene nodes and drill-down](https://github.com/krazyjakee/wobu/issues/187)
 - [ ] [Highlight the played route and unavailable branches in Flow during Preview](https://github.com/krazyjakee/wobu/issues/188)
 - [x] [Complete save migration and Preview decision traces](https://github.com/krazyjakee/wobu/issues/195)
 
 ### [N3 — Generation and editorial review](https://github.com/krazyjakee/wobu/milestone/17)
 
-- [ ] [Resolve attributed narrative generation context for each slot and state](https://github.com/krazyjakee/wobu/issues/163)
+- [x] [Resolve attributed narrative generation context for each slot and state](https://github.com/krazyjakee/wobu/issues/163)
 - [ ] [Generate narrative drafts through cancellable provider jobs](https://github.com/krazyjakee/wobu/issues/164)
 - [ ] [Enforce revision-aware generation policy, approval, and freshness](https://github.com/krazyjakee/wobu/issues/165)
 - [ ] [Build the dialogue review queue and revision comparison UI](https://github.com/krazyjakee/wobu/issues/166)
