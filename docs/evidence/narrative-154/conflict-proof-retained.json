@@ -1,0 +1,2127 @@
+{
+  "url": "http://localhost:1420/",
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "text": "wobu\nNarrative acceptance\nCharacter\n/\nCaptain Irena\nJump to\u2026\nCtrl+K\n\n\n\n\n\n\n\n\n?\n\nNarrative acceptance / Narrative\nBack to scenes\nScene outline\nContext\nGenerate\u2026\nWorld state\nText library\nReview\nBuild\u2026\nRecovery\u2026\nExport\u2026\nAshfall council hearing\nFlow, Script, Preview and Source are four views of this one scene.\nFlow\nScript\nPreview\nSource\nSave scene\nDiscard changes\nUndo draft\nRedo draft\nUnsaved scene \u2014 shared by Script and Flow.\nThe scene changed since this draft began. Saving will check for a conflict; discard to load the latest version.\nCould not save: Somebody else changed this entity while you were editing it. Your version was saved alongside theirs, as narrative/scenes/ashfall-council-hearing.conflict-coral-fern-b8af-20260908T171312Z.yaml, rather than overwriting anything. Open both and decide which text to keep.. Your draft is kept. Retained conflict: narrative/scenes/ashfall-council-hearing.conflict-coral-fern-b8af-20260908T171312Z.yaml\nCheck script\nScene\nScene name\nSummary\nParticipants\n\nScene entry\nScene entry rule\nBeat\nAdd beat\nMove up\nMove down\nDuplicate beat\nDelete beat\nBeat intent\nBeat title\nIntent speaker 1\nIntent 1\nDelete intent 1\nAdd intent\nMust convey (one per line)\nMust not reveal (one per line)\nSave or discard your script draft before changing review or policy.\nDialogue\nSpeaker 1\nedited \u00b7 1 variants\nSlot policy\nDialogue 1, variant 1\nUnconditional variant\n\nWording policy\nDraft \u00b7 Out of date\nAuthored context changed since the last review.\nInspect reviewed context\nApprove wording\nAttest unchanged wording still fits\nDialogue 1 variant 1\nDialogue 1 variant 1 rule\nMove dialogue 1 variant 1 up\nMove dialogue 1 variant 1 down\nDelete dialogue 1 variant 1\nAdd dialogue 1 variant\nMove dialogue 1 slot up\nMove dialogue 1 slot down\nDelete dialogue 1 slot\nAdd dialogue slot\nChoices and outcomes\nChoice 1\nChoice 1 destination\nChoice 1\nChoice 1 rule\nChoice 1 condition 1\nChoice 1 condition 1 rule\nChoice 1 condition 1 variable\nChoice 1 condition 1 operator\nChoice 1 condition 1 value source\nChoice 1 condition 1 value\nRemove Choice 1 condition 1\nChoice 1 condition 2\nChoice 1 condition 2 rule\nChoice 1 condition 2 variable\nChoice 1 condition 2 operator\nChoice 1 condition 2 value source\nChoice 1 condition 2 value\nRemove Choice 1 condition 2\nAdd Choice 1 condition\nChoice 1 effects (in order)\nChoice 1 effect 1 type\nChoice 1 effect 1 variable\nChoice 1 effect 1 amount\nMove Choice 1 effect 1 up\nMove Choice 1 effect 1 down\nDelete Choice 1 effect 1\nChoice 1 effect 2 type\nChoice 1 effect 2 command name\nAdd Choice 1 effect 2 argument\nMove Choice 1 effect 2 up\nMove Choice 1 effect 2 down\nDelete Choice 1 effect 2\nAdd Choice 1 effect\nMove choice 1 up\nMove choice 1 down\nDelete choice 1\nChoice 2\nChoice 2 destination\nChoice 2\nChoice 2 rule\nChoice 2 effects (in order)\nChoice 2 effect 1 type\nChoice 2 effect 1 variable\nChoice 2 effect 1 amount\nMove Choice 2 effect 1 up\nMove Choice 2 effect 1 down\nDelete Choice 2 effect 1\nAdd Choice 2 effect\nMove choice 2 up\nMove choice 2 down\nDelete choice 2\nChoice 3\nChoice 3 destination\nChoice 3\nChoice 3 rule\nChoice 3 effects (in order)\nChoice 3 effect 1 type\nChoice 3 effect 1 variable\nChoice 3 effect 1 amount\nMove Choice 3 effect 1 up\nMove Choice 3 effect 1 down\nDelete Choice 3 effect 1\nAdd Choice 3 effect\nMove choice 3 up\nMove choice 3 down\nDelete choice 3\nNew routes stay unresolved until you choose a destination. Effects run in the listed order.\nAdd choice\nAdd outcome\nAdd ending\n0 problems in this unsaved scene. Checks cover source errors and missing text. Branch reachability has not been checked.\nNarrative acceptance\n/tmp/wobu-acceptance-20260908/narrative-acceptance.wobu\n4 nodes\n[ navigator \u00b7 inspector ]\nno image provider chosen\n\u00b7 queue 0\n\u00b7 claude-sonnet-5 \u00b7 1m context\n\u00b7 notifications\n2\nCould not save that scene \u2014 Somebody else changed this entity while you were editing it. Your version was saved alongside theirs, as narrative/scenes/ashfall-council-hearing.conflict-coral-fern-b8af-20260908T171312Z.yaml, rather than overwriting anything. Open both and decide which text to keep.\n\u00d7",
+  "active": {
+    "tag": "BODY",
+    "role": null,
+    "label": null,
+    "text": "\n    wobuNarrative acceptanceCharacter/Captain IrenaJump to\u2026Ctrl+K?Narrative acceptance / NarrativeBack to scenesScene outlineContextGenerate\u2026World stateText libraryReviewBuild\u2026Recovery\u2026Export\u2026All scenesSaved viewsSave a search and filters for later.",
+    "id": "",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900
+    },
+    "tabIndex": -1
+  },
+  "elements": [
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Narrative acceptance",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 81.046875,
+        "y": 6,
+        "width": 163.765625,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Jump to\u2026Ctrl+K",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1066,
+        "y": 6,
+        "width": 190,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1266,
+        "y": 7,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Minimise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1308,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Maximise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1352,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Close",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1396,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Library",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 49,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Forge",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 87,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Assets",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 125,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Narrative",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 163,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Guide",
+      "text": "?",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 793,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 831,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Back to scenes",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 300.453125,
+        "y": 51,
+        "width": 110,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Scene outline",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 634.203125,
+        "y": 51,
+        "width": 105,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Context",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 745.203125,
+        "y": 51,
+        "width": 70.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Generate\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 821.96875,
+        "y": 51,
+        "width": 88.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "World state",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 916.734375,
+        "y": 51,
+        "width": 92.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Text library",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1015.5,
+        "y": 51,
+        "width": 91.6875,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Review",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1113.1875,
+        "y": 51,
+        "width": 66.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Build\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1185.71875,
+        "y": 51,
+        "width": 66,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Recovery\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1257.71875,
+        "y": 51,
+        "width": 87.28125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Export\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1351,
+        "y": 51,
+        "width": 73,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Flow",
+      "id": "_r_31_-tab-flow",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 68,
+        "y": 157,
+        "width": 48.75,
+        "height": 38
+      },
+      "tabIndex": -1
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Script",
+      "id": "_r_31_-tab-script",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 118.75,
+        "y": 157,
+        "width": 56,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Preview",
+      "id": "_r_31_-tab-preview",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 176.75,
+        "y": 157,
+        "width": 67.25,
+        "height": 38
+      },
+      "tabIndex": -1
+    },
+    {
+      "tag": "BUTTON",
+      "role": "tab",
+      "label": null,
+      "text": "Source",
+      "id": "_r_31_-tab-source",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 246,
+        "y": 157,
+        "width": 62.75,
+        "height": 38
+      },
+      "tabIndex": -1
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Save scene",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 72,
+        "y": 215,
+        "width": 89,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Discard changes",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 169,
+        "y": 215,
+        "width": 121.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Undo draft",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 298.765625,
+        "y": 215,
+        "width": 88.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Redo draft",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 395.53125,
+        "y": 215,
+        "width": 86.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Check script",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 72,
+        "y": 364,
+        "width": 97,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "Local draft",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 470,
+        "width": 1309,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "Native keyboard draft: the council waits for the logbook.",
+      "id": "",
+      "value": "Native keyboard draft: the council waits for the logbook.",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 544.5,
+        "width": 1309,
+        "height": 80
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Captain Irena",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 661.5,
+        "width": 1309,
+        "height": 93
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "always",
+      "disabled": false,
+      "rect": {
+        "x": 102,
+        "y": 858.5,
+        "width": 418.328125,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "1. Present evidence2. Council response",
+      "id": "",
+      "value": "01M20Y1NQ7K181572PPQQCTHKS",
+      "disabled": false,
+      "rect": {
+        "x": 72,
+        "y": 975.5,
+        "width": 159,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add beat",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 239,
+        "y": 970,
+        "width": 78,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 325,
+        "y": 970,
+        "width": 74.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move down",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 407.765625,
+        "y": 970,
+        "width": 91.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Duplicate beat",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 507.296875,
+        "y": 970,
+        "width": 112,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete beat",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 627.296875,
+        "y": 970,
+        "width": 93,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "Present evidence",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 1095.5,
+        "width": 1309,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "NarratorPlayerCaptain Irena",
+      "id": "",
+      "value": "player",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 1170,
+        "width": 433,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "Secure an investigation while preserving the council\u2019s trust.",
+      "id": "",
+      "value": "Secure an investigation while preserving the council\u2019s trust.",
+      "disabled": false,
+      "rect": {
+        "x": 530,
+        "y": 1170,
+        "width": 866,
+        "height": 80
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete intent 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 1260,
+        "width": 433,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add intent",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 1304,
+        "width": 1309,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 1373,
+        "width": 1309,
+        "height": 80
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 1490,
+        "width": 1309,
+        "height": 80
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "NarratorPlayerCaptain Irena",
+      "id": "",
+      "value": "player",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 1707,
+        "width": 1283,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Generated \u2014 allow replacementEdited \u2014 proposals onlyLocked \u2014 protect wording",
+      "id": "",
+      "value": "edited",
+      "disabled": true,
+      "rect": {
+        "x": 100,
+        "y": 1836.1875,
+        "width": 1283,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "I brought the logbook. Let the council judge the evidence.",
+      "id": "",
+      "value": "I brought the logbook. Let the council judge the evidence.",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 1941.1875,
+        "width": 1283,
+        "height": 80
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Generated \u2014 allow replacementEdited \u2014 proposals onlyLocked \u2014 protect wording",
+      "id": "",
+      "value": "edited",
+      "disabled": true,
+      "rect": {
+        "x": 100,
+        "y": 2066.375,
+        "width": 1283,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Inspect reviewed context",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 100,
+        "y": 2149.375,
+        "width": 174.046875,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Approve wording",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 100,
+        "y": 2189.375,
+        "width": 126.28125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Attest unchanged wording still fits",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 234.28125,
+        "y": 2189.375,
+        "width": 231.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "always",
+      "disabled": false,
+      "rect": {
+        "x": 130,
+        "y": 2294.375,
+        "width": 399.65625,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move dialogue 1 variant 1 up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 115,
+        "y": 2367.375,
+        "width": 196.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move dialogue 1 variant 1 down",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 319.765625,
+        "y": 2367.375,
+        "width": 213.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete dialogue 1 variant 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 2411.375,
+        "width": 1253,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add dialogue 1 variant",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 2468.375,
+        "width": 1283,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move dialogue 1 slot up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 100,
+        "y": 2510.375,
+        "width": 165.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move dialogue 1 slot down",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 273.765625,
+        "y": 2510.375,
+        "width": 182.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete dialogue 1 slot",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 2552.375,
+        "width": 1283,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add dialogue slot",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 2609.375,
+        "width": 1309,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "Present the logbook",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 2743.375,
+        "width": 1283,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Unresolved \u2014 choose a destinationEnd sceneBeat: Present evidenceBeat: Council responseScene: Ashfall council hearing",
+      "id": "",
+      "value": "beat:01M20Y1NQ7B7AGJM3YS3SW6DY0",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 2815.875,
+        "width": 1283,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "all",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 2929.875,
+        "width": 409.65625,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "compare",
+      "disabled": false,
+      "rect": {
+        "x": 130,
+        "y": 3045.875,
+        "width": 399.65625,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "ashfall_trustashfall_knows_logbookashfall_record_filed",
+      "id": "",
+      "value": "ashfall_knows_logbook",
+      "disabled": false,
+      "rect": {
+        "x": 541.65625,
+        "y": 3045.875,
+        "width": 399.671875,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "=\u2260",
+      "id": "",
+      "value": "eq",
+      "disabled": false,
+      "rect": {
+        "x": 953.328125,
+        "y": 3045.875,
+        "width": 399.671875,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "LiteralVariable",
+      "id": "",
+      "value": "boolean",
+      "disabled": false,
+      "rect": {
+        "x": 130,
+        "y": 3128.875,
+        "width": 404.328125,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "FalseTrue",
+      "id": "",
+      "value": "true",
+      "disabled": false,
+      "rect": {
+        "x": 544.328125,
+        "y": 3128.875,
+        "width": 808.671875,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Remove Choice 1 condition 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 3189.875,
+        "width": 194.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "compare",
+      "disabled": false,
+      "rect": {
+        "x": 130,
+        "y": 3291.875,
+        "width": 399.65625,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "ashfall_trustashfall_knows_logbookashfall_record_filed",
+      "id": "",
+      "value": "ashfall_trust",
+      "disabled": false,
+      "rect": {
+        "x": 541.65625,
+        "y": 3291.875,
+        "width": 399.671875,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "=\u2260<\u2264>\u2265",
+      "id": "",
+      "value": "ge",
+      "disabled": false,
+      "rect": {
+        "x": 953.328125,
+        "y": 3291.875,
+        "width": 399.671875,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "LiteralVariable",
+      "id": "",
+      "value": "number",
+      "disabled": false,
+      "rect": {
+        "x": 130,
+        "y": 3374.875,
+        "width": 404.328125,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "40",
+      "disabled": false,
+      "rect": {
+        "x": 544.328125,
+        "y": 3374.875,
+        "width": 808.671875,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Remove Choice 1 condition 2",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 3435.875,
+        "width": 194.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add Choice 1 condition",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 3479.875,
+        "width": 409.65625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Set stateAdd integerHost command",
+      "id": "",
+      "value": "add",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 3607.875,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "ashfall_trust",
+      "id": "",
+      "value": "ashfall_trust",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 3688.875,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "10",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 3769.875,
+        "width": 1227,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 1 effect 1 up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 128,
+        "y": 3817.375,
+        "width": 174.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 1 effect 1 down",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 310.765625,
+        "y": 3817.375,
+        "width": 191.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete Choice 1 effect 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 510.296875,
+        "y": 3817.375,
+        "width": 163,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Set stateAdd integerHost command",
+      "id": "",
+      "value": "command",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 3912.375,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "ashfall_file_record",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 3993.375,
+        "width": 1227,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add Choice 1 effect 2 argument",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 4040.875,
+        "width": 1227,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 1 effect 2 up",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 4082.875,
+        "width": 174.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 1 effect 2 down",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 310.765625,
+        "y": 4082.875,
+        "width": 191.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete Choice 1 effect 2",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 510.296875,
+        "y": 4082.875,
+        "width": 163,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add Choice 1 effect",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 4139.875,
+        "width": 1253,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move choice 1 up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 100,
+        "y": 4196.875,
+        "width": 125.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move choice 1 down",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 233.765625,
+        "y": 4196.875,
+        "width": 142.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete choice 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 4238.875,
+        "width": 1283,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "Ask for a fair hearing",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 4333.875,
+        "width": 1283,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Unresolved \u2014 choose a destinationEnd sceneBeat: Present evidenceBeat: Council responseScene: Ashfall council hearing",
+      "id": "",
+      "value": "beat:01M20Y1NQ7B7AGJM3YS3SW6DY0",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 4406.375,
+        "width": 1283,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "always",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 4520.375,
+        "width": 409.65625,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Set stateAdd integerHost command",
+      "id": "",
+      "value": "add",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 4662.375,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "ashfall_trust",
+      "id": "",
+      "value": "ashfall_trust",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 4743.375,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "5",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 4824.375,
+        "width": 1227,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 2 effect 1 up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 128,
+        "y": 4871.875,
+        "width": 174.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 2 effect 1 down",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 310.765625,
+        "y": 4871.875,
+        "width": 191.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete Choice 2 effect 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 510.296875,
+        "y": 4871.875,
+        "width": 163,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add Choice 2 effect",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 4928.875,
+        "width": 1253,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move choice 2 up",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 4985.875,
+        "width": 125.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move choice 2 down",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 233.765625,
+        "y": 4985.875,
+        "width": 142.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete choice 2",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 5027.875,
+        "width": 1283,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "Challenge the council\u2019s silence",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 5122.875,
+        "width": 1283,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Unresolved \u2014 choose a destinationEnd sceneBeat: Present evidenceBeat: Council responseScene: Ashfall council hearing",
+      "id": "",
+      "value": "beat:01M20Y1NQ7B7AGJM3YS3SW6DY0",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 5195.375,
+        "width": 1283,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "AlwaysNeverCompare stateAll conditionsAny conditionNot",
+      "id": "",
+      "value": "always",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 5309.375,
+        "width": 409.65625,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "Set stateAdd integerHost command",
+      "id": "",
+      "value": "add",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 5451.375,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "SELECT",
+      "role": null,
+      "label": null,
+      "text": "ashfall_trust",
+      "id": "",
+      "value": "ashfall_trust",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 5532.375,
+        "width": 1227,
+        "height": 46
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "-10",
+      "disabled": false,
+      "rect": {
+        "x": 128,
+        "y": 5613.375,
+        "width": 1227,
+        "height": 37.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 3 effect 1 up",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 128,
+        "y": 5660.875,
+        "width": 174.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move Choice 3 effect 1 down",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 310.765625,
+        "y": 5660.875,
+        "width": 191.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete Choice 3 effect 1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 510.296875,
+        "y": 5660.875,
+        "width": 163,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add Choice 3 effect",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 115,
+        "y": 5717.875,
+        "width": 1253,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move choice 3 up",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 5774.875,
+        "width": 125.765625,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Move choice 3 down",
+      "id": "",
+      "value": "",
+      "disabled": true,
+      "rect": {
+        "x": 233.765625,
+        "y": 5774.875,
+        "width": 142.53125,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Delete choice 3",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 100,
+        "y": 5816.875,
+        "width": 1283,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add choice",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 87,
+        "y": 5904.875,
+        "width": 89,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add outcome",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 184,
+        "y": 5904.875,
+        "width": 103,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Add ending",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 295,
+        "y": 5904.875,
+        "width": 94,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Open job queue, 0 jobs",
+      "text": "\u00b7 queue 0",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1116.21875,
+        "y": 879,
+        "width": 48,
+        "height": 16
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Notifications, 2 unread",
+      "text": "\u00b7 notifications2",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1337,
+        "y": 879,
+        "width": 91,
+        "height": 16
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Dismiss message: Could not save that scene \u2014 Somebody else changed this entity while you were editing it. Your version was saved alongside theirs, as narrative/scenes/ashfall-council-hearing.conflict-coral-fern-b8af-20260908T171312Z.yaml, rather than overwriting anything. Open both and decide which text to keep.",
+      "text": "\u00d7",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1054,
+        "y": 791,
+        "width": 16,
+        "height": 17
+      },
+      "tabIndex": 0
+    }
+  ],
+  "ui": {
+    "mode": "narrative",
+    "selectedId": "01M2100952N19STAE567YGZD8Z",
+    "recentIds": ["01M2100952N19STAE567YGZD8Z", "01M210098MW5MTKR13WV9QAFEM"],
+    "tab": "notes",
+    "narrative": {
+      "sceneId": "01M20Y1NPQFFHDQRENTY3XDRB6",
+      "beatId": null,
+      "lineId": null
+    },
+    "narrativeEntityTarget": null,
+    "narrativeWorldTarget": {
+      "projectKey": "/tmp/wobu-acceptance-20260908/narrative-acceptance.wobu",
+      "collection": "facts",
+      "recordId": "01M21000000000000000000001",
+      "seq": 6
+    },
+    "narrativeReveal": {
+      "sceneId": "01M20Y1NPQFFHDQRENTY3XDRB6",
+      "beatId": null,
+      "lineId": null,
+      "seq": 7,
+      "origin": "library",
+      "projectKey": "/tmp/wobu-acceptance-20260908/narrative-acceptance.wobu",
+      "focus": true,
+      "variantId": null,
+      "choiceId": null,
+      "outcomeId": null,
+      "field": null
+    },
+    "narrativeTab": "script",
+    "narrativeFilters": {
+      "needsText": false,
+      "needsReview": false,
+      "outOfDate": false
+    },
+    "filter": "",
+    "navWidth": 272,
+    "navCollapsed": false,
+    "inspCollapsed": false,
+    "closedGroups": {},
+    "collapsedNodes": {},
+    "bands": {},
+    "paletteOpen": false,
+    "shortcutsOpen": false,
+    "toasts": [
+      {
+        "id": 5,
+        "revision": 0,
+        "text": "Could not save that scene \u2014 Somebody else changed this entity while you were editing it. Your version was saved alongside theirs, as narrative/scenes/ashfall-council-hearing.conflict-coral-fern-b8af-20260908T171312Z.yaml, rather than overwriting anything. Open both and decide which text to keep.",
+        "kind": "error",
+        "persistent": false,
+        "durationMs": 8000
+      }
+    ],
+    "banners": []
+  },
+  "errors": []
+}

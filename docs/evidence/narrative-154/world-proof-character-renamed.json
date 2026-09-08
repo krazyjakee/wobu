@@ -1,0 +1,965 @@
+{
+  "url": "http://localhost:1420/",
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "text": "wobu\nNarrative acceptance\nCharacter\n/\nCaptain Irena Vale\nJump to\u2026\nCtrl+K\n\n\n\n\n\n\n\n\n?\n\n\n4 entities\nCollapse all\n\nArt Style\n\nWorld Canon\nSETTINGS\n1\n\nCouncil Chamber\nCHARACTERS\n1\n\nCaptain Irena Vale\nNew entity\nImport from another project\u2026\n\nCHARACTER\nINHERITS\nnothing\nsaved\nEnhance\nNarrative records (1)\nHearing witnesses \u00b7 Facts\nNotes\nReferences\nConcepts\n3D\nRelations\nRAW NOTES\nyours\nsaved\n\nATTRIBUTES\n2\nScale\n\nNarrative voice\n\nENHANCED DESCRIPTION\nwritten by Enhance\nnot generated\nNothing enhanced yet.\nThis half is Enhance's. It turns the notes on the left into named sections \u2014 Silhouette \u00b7 Anatomy \u00b7 Costume \u00b7 Materials \u00b7 Palette \u00b7 Signature details \u00b7 Never \u2014 and those sections are what a prompt is built from.\nINFLUENCE STACK\nthis generation only\nSTYLE\nArt Style\n0 text \u00b7 0 images\nWORLD\nWorld Canon\n0 text \u00b7 0 images\nSUBJECT\nCaptain Irena\n0 text \u00b7 0 images\nSHOT\nSingle image\n1 text \u00b7 0 images\nOUTPUT PRESET\n\nASPECT\n\nMODEL\n\nEXTRA SHOT PROMPT\n\nSEED\n\nUnlocked seed\nRe-roll\nLock seed\nVARIANT GRID\n\nGenerate\nCOMPILED PROMPT\nSingle image\nShow sources\nPROMPT\n1 fragment \u00b7 63 characters\nCopy\none complete view of the subject, clearly lit, plain background\nNEGATIVE\nNothing is being excluded.\nHover any part to see where it came from. Click it to open the entity that wrote it.\nNarrative acceptance\n/tmp/wobu-acceptance-20260908/narrative-acceptance.wobu\n4 nodes\n[ navigator \u00b7 inspector ]\nno image provider chosen\n\u00b7 queue 0\n\u00b7 claude-sonnet-5 \u00b7 1m context\n\u00b7 notifications",
+  "active": {
+    "tag": "BODY",
+    "role": null,
+    "label": null,
+    "text": "\n    wobuNarrative acceptanceCharacter/Captain Irena ValeJump to\u2026Ctrl+K?4 entitiesCollapse allArt StyleWorld CanonSettings1Council ChamberCharacters1Captain Irena ValeNew entityImport from another project\u2026CharacterinheritsnothingsavedEnhanceNarrative",
+    "id": "",
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900
+    },
+    "tabIndex": -1
+  },
+  "elements": [
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Narrative acceptance",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 81.046875,
+        "y": 6,
+        "width": 163.765625,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Jump to\u2026Ctrl+K",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1066,
+        "y": 6,
+        "width": 190,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1266,
+        "y": 7,
+        "width": 26,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Minimise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1308,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Maximise",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1352,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Close",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1396,
+        "y": 0,
+        "width": 44,
+        "height": 40
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Library",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 49,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Forge",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 87,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Assets",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 125,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Narrative",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 163,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Guide",
+      "text": "?",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 793,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Settings",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 8.5,
+        "y": 831,
+        "width": 34,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 90,
+        "y": 55,
+        "width": 216,
+        "height": 18
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Collapse all",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 246,
+        "y": 85,
+        "width": 67,
+        "height": 17
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Art Style",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 114,
+        "width": 255,
+        "height": 30
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "World Canon",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 150,
+        "width": 255,
+        "height": 30
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Settings1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 197,
+        "width": 255,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Council Chamber",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 225,
+        "width": 255,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Characters1",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 253,
+        "width": 255,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Captain Irena Vale",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 281,
+        "width": 255,
+        "height": 28
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "New entity",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 799,
+        "width": 255,
+        "height": 34
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Import from another project\u2026",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 60,
+        "y": 839,
+        "width": 255,
+        "height": 26
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": "Entity name",
+      "text": "",
+      "id": "",
+      "value": "Captain Irena Vale",
+      "disabled": false,
+      "rect": {
+        "x": 373,
+        "y": 55,
+        "width": 222,
+        "height": 32.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Enhance",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1005,
+        "y": 67.25,
+        "width": 95,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Hearing witnesses \u00b7 Facts",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 365,
+        "y": 158.5,
+        "width": 174,
+        "height": 32
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Notes",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 340,
+        "y": 207.5,
+        "width": 58,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "References",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 400,
+        "y": 207.5,
+        "width": 86.75,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Concepts",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 488.75,
+        "y": 207.5,
+        "width": 78,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "3D",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 568.75,
+        "y": 207.5,
+        "width": 38,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Relations",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 608.75,
+        "y": 207.5,
+        "width": 77,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 324,
+        "y": 282.5,
+        "width": 397,
+        "height": 488.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": "Scale",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 342,
+        "y": 827,
+        "width": 174.5,
+        "height": 30
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": "Narrative voice",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 528.5,
+        "y": 827,
+        "width": 174.5,
+        "height": 30
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "1",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 170,
+        "width": 214,
+        "height": 20
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Mute",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1365,
+        "y": 173,
+        "width": 45,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Open source",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 244,
+        "width": 60.796875,
+        "height": 15
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "1",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 245,
+        "width": 214,
+        "height": 20
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Mute",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1365,
+        "y": 248,
+        "width": 45,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Open source",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 319,
+        "width": 60.796875,
+        "height": 15
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "1",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 320,
+        "width": 214,
+        "height": 20
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Mute",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1365,
+        "y": 323,
+        "width": 45,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Open source",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 394,
+        "width": 60.796875,
+        "height": 15
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "1",
+      "disabled": false,
+      "rect": {
+        "x": 1143,
+        "y": 395,
+        "width": 214,
+        "height": 20
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Mute",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1365,
+        "y": 398,
+        "width": 45,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": "combobox",
+      "label": "Output preset",
+      "text": "",
+      "id": "",
+      "value": "Single image \u00b7 1 image",
+      "disabled": false,
+      "rect": {
+        "x": 1133,
+        "y": 407,
+        "width": 286,
+        "height": 30.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": "combobox",
+      "label": "Aspect",
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1133,
+        "y": 463.5,
+        "width": 163.515625,
+        "height": 30.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1133,
+        "y": 520,
+        "width": 286,
+        "height": 30.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "TEXTAREA",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1133,
+        "y": 576.5,
+        "width": 286,
+        "height": 47
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": null,
+      "label": null,
+      "text": "",
+      "id": "",
+      "value": "3750468401",
+      "disabled": false,
+      "rect": {
+        "x": 1142,
+        "y": 663.5,
+        "width": 261,
+        "height": 30.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Re-roll",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1283.21875,
+        "y": 723,
+        "width": 52.78125,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Lock seed",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1341,
+        "y": 723,
+        "width": 69,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "INPUT",
+      "role": "combobox",
+      "label": "Variant grid",
+      "text": "",
+      "id": "",
+      "value": "Off",
+      "disabled": false,
+      "rect": {
+        "x": 1142,
+        "y": 789,
+        "width": 130.5,
+        "height": 30.5
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Generate",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1133,
+        "y": 836.5,
+        "width": 286,
+        "height": 30
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": null,
+      "text": "Show sources",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1323.234375,
+        "y": 686.140625,
+        "width": 102.765625,
+        "height": 38
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Copy the prompt",
+      "text": "Copy",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1354.21875,
+        "y": 736.140625,
+        "width": 62.78125,
+        "height": 22
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Open job queue, 0 jobs",
+      "text": "\u00b7 queue 0",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1136.21875,
+        "y": 879,
+        "width": 48,
+        "height": 16
+      },
+      "tabIndex": 0
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "label": "Notifications, nothing unread, 0 in history",
+      "text": "\u00b7 notifications",
+      "id": "",
+      "value": "",
+      "disabled": false,
+      "rect": {
+        "x": 1357,
+        "y": 879,
+        "width": 71,
+        "height": 16
+      },
+      "tabIndex": 0
+    }
+  ],
+  "ui": {
+    "mode": "library",
+    "selectedId": "01M2100952N19STAE567YGZD8Z",
+    "recentIds": ["01M2100952N19STAE567YGZD8Z"],
+    "tab": "notes",
+    "narrative": {
+      "sceneId": null,
+      "beatId": null,
+      "lineId": null
+    },
+    "narrativeEntityTarget": null,
+    "narrativeWorldTarget": null,
+    "narrativeReveal": null,
+    "narrativeTab": "flow",
+    "narrativeFilters": {
+      "needsText": false,
+      "needsReview": false,
+      "outOfDate": false
+    },
+    "filter": "",
+    "navWidth": 272,
+    "navCollapsed": false,
+    "inspCollapsed": false,
+    "closedGroups": {},
+    "collapsedNodes": {},
+    "bands": {},
+    "paletteOpen": false,
+    "shortcutsOpen": false,
+    "toasts": [],
+    "banners": []
+  },
+  "errors": []
+}
