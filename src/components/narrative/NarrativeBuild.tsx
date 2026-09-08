@@ -138,6 +138,7 @@ export function NarrativeBuild({
 
   return (
     <Modal
+      className="sheet nrt-build-sheet"
       onClose={onClose}
       busy={busy}
       titleId="nrt-build-title"
