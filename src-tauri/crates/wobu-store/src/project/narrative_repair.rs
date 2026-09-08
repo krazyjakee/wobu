@@ -115,7 +115,7 @@ impl Project {
                 Err(error) => return Err(error),
             }
         }
-        let saved =
+        let mut saved =
             match atomic::guarded_write(self.root(), &path, &yaml, Some(expected), &self.peer)? {
                 WriteOutcome::Written(stamp) => narrative::SourceSave::Saved(stamp),
                 WriteOutcome::Conflict { conflict_path, .. } => narrative::SourceSave::Conflict {
@@ -124,6 +124,14 @@ impl Project {
                     ),
                 },
             };
+        if matches!(saved, narrative::SourceSave::Saved(_)) {
+            self.index_narrative_path(rel)?;
+            drop(_lock);
+            self.refresh_narrative_dependencies()?;
+            if let Some((_, stamp)) = atomic::read_stamped(&path)? {
+                saved = narrative::SourceSave::Saved(stamp);
+            }
+        }
         Ok((saved, recovery_rel))
     }
 
