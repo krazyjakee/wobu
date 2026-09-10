@@ -52,7 +52,11 @@ export function ConceptsPane({
   const nodes = useNodes(true)
   const links = useNodeLinks(true)
   const signals = useGenerationSignals(node.id)
-  const [viewer, setViewer] = useState<{ src: string | null; generation: Generation } | null>(null)
+  const [viewer, setViewer] = useState<{
+    src: string | null
+    path: string | null
+    generation: Generation
+  } | null>(null)
   const dependents = useMemo(
     () => influenceDependentsOf(node.id, nodes.data ?? [], links.data ?? []),
     [links.data, node.id, nodes.data],
@@ -111,6 +115,7 @@ export function ConceptsPane({
           generation={viewer.generation}
           nodeName={node.name}
           imageSrc={viewer.src}
+          imagePath={viewer.path}
           readOnly={readOnly}
           onClose={() => setViewer(null)}
         />
@@ -140,7 +145,7 @@ function VirtualConceptGrid({
   hasMore: boolean
   loadingMore: boolean
   onLoadMore: () => void
-  onOpen: (viewer: { src: string | null; generation: Generation }) => void
+  onOpen: (viewer: { src: string | null; path: string | null; generation: Generation }) => void
 }) {
   const { viewportRef, start, end, tileWidth, totalHeight, onScroll, position } =
     useVirtualCardWindow({
@@ -314,7 +319,7 @@ function GenerationTile({
   width: number
   top: number
   left: number
-  onOpen: (viewer: { src: string | null; generation: Generation }) => void
+  onOpen: (viewer: { src: string | null; path: string | null; generation: Generation }) => void
 }) {
   const assetId = generation.firstAssetId
   const linkAsset = useLinkAsset()
@@ -345,8 +350,8 @@ function GenerationTile({
             'The full-size image is missing, but the record of how it was made can still be read.',
           )
         }
-        onOpen({ src: null, generation: receipt })
-      } else onOpen({ src: convertFileSrc(path), generation: receipt })
+        onOpen({ src: null, path: null, generation: receipt })
+      } else onOpen({ src: convertFileSrc(path), path, generation: receipt })
     } catch (reason) {
       setError(api.errorMessage(reason))
     } finally {

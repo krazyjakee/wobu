@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::State;
 use tauri::ipc::{InvokeBody, Request};
+use tauri::{AppHandle, State};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 // Aliased because the command below has to *be* called `kind_registry` —
 // Tauri v2 derives the invoke name from the function name, with no rename.
 use wobu_core::{Asset, AssetKind, AssetRole, Id, Node};
@@ -368,6 +369,35 @@ pub fn asset_usage_list(state: State<'_, AppState>) -> CommandResult<Vec<AssetUs
 #[tauri::command]
 pub fn asset_delete(state: State<'_, AppState>, asset_id: Id) -> CommandResult<()> {
     state.with(|p| Ok(p.delete_asset(asset_id)?))
+}
+
+/// Put an original's displayed pixels on the OS clipboard.
+///
+/// The webview names an asset rather than supplying a path. Besides keeping
+/// the command inside the open project, this avoids browser-specific image
+/// clipboard support and applies the same bounded decode and EXIF orientation
+/// as Wobu's own previews.
+#[tauri::command]
+pub async fn asset_copy_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    asset_id: Id,
+) -> CommandResult<()> {
+    let path = state.with(|project| {
+        let missing = || wobu_store::Error::NoSuchAsset(asset_id.to_string());
+        let asset = project.get_asset(asset_id)?.ok_or_else(missing)?;
+        let path = wobu_store::paths::from_rel_string(project.root(), &asset.rel_path);
+        Ok(path.is_file().then_some(path).ok_or_else(missing)?)
+    })?;
+    let (rgba, width, height) =
+        blocking("The image-copy thread stopped unexpectedly.", move || {
+            wobu_store::thumbs::display_pixels(&path)
+        })
+        .await??;
+    let image = tauri::image::Image::new_owned(rgba, width, height);
+    app.clipboard().write_image(&image).map_err(|error| {
+        WobuError::new(Code::Io, "Could not copy the image.").with_detail(error.to_string())
+    })
 }
 
 /// Attach a reference image to a node in a role.

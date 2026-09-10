@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useContextMenu } from '../hooks/useContextMenu'
 import type {
   Generation,
   GenerationSnapshotFragment,
@@ -6,12 +7,19 @@ import type {
   SliderSetting,
 } from '../lib/api'
 import { generationLoraReceipt, sceneComposition } from '../lib/api'
-import { useCompiledPrompt, useInfluenceStack, useReplayGeneration } from '../lib/queries'
+import {
+  useCompiledPrompt,
+  useDeleteGeneration,
+  useInfluenceStack,
+  useReplayGeneration,
+} from '../lib/queries'
 import { generationDrift } from '../lib/generationDiff'
 import { layerLabel } from '../lib/kinds'
 import { sectionLabel } from '../lib/prompt'
 import { loraStateLabel } from '../lib/stateLabels'
+import { ConfirmSheet } from './ConfirmSheet'
 import { GenerationModelSeed, GenerationSubject, GenerationTimestamp } from './GenerationMetadata'
+import { ImageContextMenu } from './ImageContextMenu'
 import { ImageViewer } from './ImageViewer'
 import { Modal } from './Modal'
 
@@ -19,16 +27,20 @@ export function GenerationDetail({
   generation,
   nodeName,
   imageSrc,
+  imagePath,
   readOnly,
   onClose,
 }: {
   generation: Generation
   nodeName: string
   imageSrc: string | null
+  imagePath: string | null
   readOnly: boolean
   onClose: () => void
 }) {
   const [imageOpen, setImageOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const menu = useContextMenu<void>()
   const scene = sceneComposition(generation)
   const shotName = generation.influenceSnapshot.layers.find(
     (layer) => layer.layer === 'shot',
@@ -42,10 +54,21 @@ export function GenerationDetail({
   const currentStack = useInfluenceStack(scene ? null : generation.nodeId, options)
   const currentPrompt = useCompiledPrompt(scene ? null : generation.nodeId, options)
   const replay = useReplayGeneration()
+  const deleteGeneration = useDeleteGeneration()
   const drift = generationDrift(generation, currentStack.data ?? null, currentPrompt.data ?? null)
   const originalCost = numberParam(generation, 'estimatedCostUsdMicros')
   const replaySourceCost = numberParam(generation, 'replayOriginalEstimatedCostUsdMicros')
   const loras = generationLoraReceipt(generation)
+  const imageAssetId = generation.outputAssetIds[0] ?? null
+  const deleteDisabledReason = readOnly
+    ? 'This project folder is read-only, so the concept cannot be deleted.'
+    : deleteGeneration.isPending
+      ? 'This concept is already being deleted.'
+      : null
+  const requestDelete = () => {
+    setImageOpen(false)
+    setConfirmDelete(true)
+  }
 
   return (
     <Modal
@@ -93,9 +116,22 @@ export function GenerationDetail({
               type="button"
               onClick={() => setImageOpen(true)}
               aria-label="View generated image full size"
+              {...menu.trigger()}
             >
               <img src={imageSrc} alt={generation.compiledPrompt} />
             </button>
+          )}
+          {imageAssetId && menu.anchor && (
+            <ImageContextMenu
+              anchor={menu.anchor}
+              onClose={menu.close}
+              assetId={imageAssetId}
+              originalPath={imagePath}
+              label={`Actions for concept ${generation.id} image`}
+              deleteLabel="Delete concept…"
+              deleteDisabledReason={deleteDisabledReason}
+              onDelete={requestDelete}
+            />
           )}
           <dl>
             <dt>Your extra direction</dt>
@@ -291,7 +327,35 @@ export function GenerationDetail({
           alt={generation.compiledPrompt}
           title="Full-size generated image"
           description="The original generated image. Press Escape, or use Close, to go back to the details."
+          actions={
+            imageAssetId && imagePath
+              ? {
+                  assetId: imageAssetId,
+                  originalPath: imagePath,
+                  menuLabel: `Actions for concept ${generation.id} image`,
+                  deleteLabel: 'Delete concept…',
+                  deleteDisabledReason,
+                  onDelete: requestDelete,
+                }
+              : undefined
+          }
           onClose={() => setImageOpen(false)}
+        />
+      )}
+      {confirmDelete && (
+        <ConfirmSheet
+          title="Delete this concept?"
+          body="It will disappear from Concepts and the Asset Library, and its images will be deleted. Any image you pinned as a reference, or set as a cover, is kept — and so is its receipt, with what it cost."
+          confirmLabel="Delete concept"
+          danger
+          busy={deleteGeneration.isPending}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() =>
+            deleteGeneration.mutate(
+              { generationId: generation.id, nodeId: generation.nodeId },
+              { onSuccess: onClose },
+            )
+          }
         />
       )}
     </Modal>

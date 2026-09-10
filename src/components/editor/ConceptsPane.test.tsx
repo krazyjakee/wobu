@@ -18,6 +18,7 @@ import { ConceptsPane } from './ConceptsPane'
 
 const h = vi.hoisted(() => ({
   invoke: vi.fn(),
+  reveal: vi.fn(),
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
 }))
 
@@ -31,6 +32,7 @@ vi.mock('@tauri-apps/api/event', () => ({
     return Promise.resolve(() => h.listeners.delete(name))
   },
 }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ revealItemInDir: h.reveal }))
 
 const node = buildNode({ id: 'kael', name: 'Kael' })
 
@@ -112,6 +114,8 @@ beforeEach(() => {
   worldNodes = [summary({ id: node.id, kind: node.kind, name: node.name })]
   worldLinks = []
   h.invoke.mockReset()
+  h.reveal.mockReset()
+  h.reveal.mockResolvedValue(undefined)
   h.listeners.clear()
   h.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
     if (command === 'generation_list') return Promise.resolve(pageOf(history))
@@ -206,6 +210,43 @@ describe('generation history', () => {
     expect(screen.getByRole('dialog', { name: 'Generation details' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: 'Close generation details' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('offers copy, reveal and confirmed deletion on a concept image', async () => {
+    history = [generation({ id: 'image-actions' })]
+    open()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open generation from/ }))
+    const details = await screen.findByRole('dialog', { name: 'Generation details' })
+    const image = within(details).getByRole('button', { name: 'View generated image full size' })
+    fireEvent.contextMenu(image, { clientX: 20, clientY: 30 })
+
+    let menu = screen.getByRole('menu', { name: 'Actions for concept image-actions image' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['Copy image', 'View in file manager', 'Delete concept…'])
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Copy image' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_copy_image', { assetId: 'asset-1' }),
+    )
+
+    fireEvent.contextMenu(image, { clientX: 20, clientY: 30 })
+    menu = screen.getByRole('menu', { name: 'Actions for concept image-actions image' })
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'View in file manager' }))
+    await waitFor(() => expect(h.reveal).toHaveBeenCalledWith('/original-asset-1'))
+
+    fireEvent.contextMenu(image, { clientX: 20, clientY: 30 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete concept…' }))
+    expect(h.invoke).not.toHaveBeenCalledWith('generation_delete', expect.anything())
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete concept' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('generation_delete', {
+        generationId: 'image-actions',
+      }),
+    )
   })
 
   it('opens the exact snapshot and replays its immutable receipt', async () => {

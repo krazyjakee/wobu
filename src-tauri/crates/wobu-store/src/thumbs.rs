@@ -284,6 +284,20 @@ fn render(path: &Path, bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(encode(&scaled))
 }
 
+/// Decode one original into the displayed RGBA pixels.
+///
+/// Clipboard formats carry pixels rather than Wobu's content-addressed file,
+/// so this deliberately shares the thumbnailer's bounded decoder and EXIF
+/// transform. A phone photograph copied from Wobu therefore lands in another
+/// app the same way up as the image shown here.
+pub fn display_pixels(path: &Path) -> Result<(Vec<u8>, u32, u32)> {
+    let bytes = std::fs::read(path).map_err(|e| Error::io(path, e))?;
+    let orientation = crate::image::probe(&bytes).map(|i| i.orientation).unwrap_or_default();
+    let decoded = turn(decode(path, &bytes)?, orientation).into_rgba8();
+    let (width, height) = decoded.dimensions();
+    Ok((decoded.into_raw(), width, height))
+}
+
 fn decode(path: &Path, bytes: &[u8]) -> Result<DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
