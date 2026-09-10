@@ -25,9 +25,10 @@ all of these conditions. Approval is separate from locking, and a lock does not 
 These checks use the lifecycle stored in source; dependency freshness recomputation and proof that
 all reachable state configurations have text remain separate planned compiler passes.
 
-Runtime IR contains declared typed state, registered command signatures, scene entry conditions,
-explicit beat graphs, dialogue strings and revisions, branches, effects, stable string IDs and
-host-triggered supporting text assets with their triggers, conditions and selection policies.
+Runtime IR contains declared typed state, registered command signatures, scene entry conditions, the
+`setting` node a scene names, explicit beat graphs, dialogue strings and revisions, branches, effects,
+stable string IDs, host-triggered supporting text assets with their triggers, conditions and selection
+policies, and quests with their stages, transitions and objective wording.
 Intents, summaries, world context, source descriptions, generation policy, review records, provenance
 records and canvas layouts are omitted. The source map connects IDs to scene/beat/slot IDs; it does
 not claim YAML byte locations. Conditions and consequences are copied only from authored structured
@@ -91,6 +92,39 @@ round, so a reload resumes a bag rather than re-dealing it. `restore` refuses a 
 asset the graph does not contain, exactly as it refuses an invalid visit history, and migration may
 add, transform or drop these records alongside visits. A graph and a snapshot for a project with no
 supporting text serialize to exactly the bytes they did before this field existed.
+
+## Quests and objectives
+
+A quest (#207) compiles into a `quests` map beside the scenes and the texts: a declared stage list, an
+initial stage, the transitions between them, and the player-facing objective wording for each stage.
+A quest has no beats, no targets and no effects, so advancing one cannot move the story or write a
+variable — it only records where in the story the player is.
+
+After every write to state the runtime walks each quest forward. Transitions are tried in author
+order and the first whose condition holds wins, which is the same first-match rule a beat's outcomes
+follow. Advancement is bounded by the number of stages the quest declares, so a cycle of
+unconditional transitions settles instead of spinning, and it never moves a quest backwards on its
+own.
+
+`quests()` gives the stage each quest is in. `objectives()` gives what the player should be doing, in
+quest id order, with the wording's stable id so a host on a translated build looks it up in the string
+table exactly as it looks up a line of dialogue. Reading either never advances anything. A stage whose
+objective has not been written yields an empty string rather than no row, because "this quest is here
+and nobody wrote what to do" is the honest answer — and the compiler has already said so.
+
+Objective wording lives in `strings/en.json` with every other string, keyed by the same kind of
+identity, so a locale pack is one list rather than two. A reachable stage with no objective is a
+warning in Development and refuses a Release compile, exactly as a dialogue slot with no wording does.
+A stage nothing leads to is exempt: requiring wording for a stage that cannot be entered would be
+busywork with no symptom.
+
+Snapshots carry the reached stage per quest rather than recomputing it on restore, because a quest
+that has passed through a stage has passed through it, and re-deriving from current state would walk
+a quest through a condition that has since stopped holding. `restore` refuses a cursor naming a quest
+the graph does not contain or a stage it does not declare. A graph and a snapshot for a project with
+no quests serialize to exactly the bytes they did before this field existed, and a package containing
+quests declares the `quests` capability so a reader that cannot deliver objectives refuses to load
+rather than shipping an empty quest log.
 
 ## Runner protocol and transaction boundaries
 

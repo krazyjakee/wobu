@@ -446,5 +446,5 @@ fn quest_stage_keys(quest: &wobu_narrative::Quest) -> impl Iterator<Item = layou
     quest
         .stages
         .iter()
-        .map(|stage| layout::NodeKey::QuestStage { quest: quest.id, stage: stage.to_string() })
+        .map(|stage| layout::NodeKey::QuestStage { quest: quest.id, stage: stage.name.to_string() })
 }

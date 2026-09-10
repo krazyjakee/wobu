@@ -107,6 +107,10 @@ pub struct LibraryRow {
     pub summary: Summary,
     pub act: Option<Label>,
     pub arc: Option<Label>,
+    /// Where the scene happens (#206). A [`Label`] like the classifications, so a
+    /// reference to a node that has been deleted shows as a named gap instead of
+    /// disappearing from the row.
+    pub setting: Option<Label>,
     pub tags: Vec<Label>,
     pub quests: Vec<Label>,
     pub participants: Vec<String>,
@@ -123,6 +127,9 @@ pub struct Facets {
     pub participants: Vec<String>,
     pub acts: Vec<Label>,
     pub arcs: Vec<Label>,
+    /// The project's `setting` nodes, which is what the Scene editor's setting
+    /// picker offers and what names a row's setting.
+    pub settings: Vec<Label>,
     pub tags: Vec<Label>,
     pub quests: Vec<Label>,
 }
@@ -193,6 +200,16 @@ impl Project {
                 .collect(),
             acts: labels(&world.acts),
             arcs: labels(&world.arcs),
+            settings: {
+                let mut found = self
+                    .list_nodes()?
+                    .into_iter()
+                    .filter(|node| node.kind == wobu_core::NodeKind::Setting)
+                    .map(|node| Label { id: node.id.to_string(), name: node.name, missing: false })
+                    .collect::<Vec<_>>();
+                found.sort_by_key(|r| (r.name.to_lowercase(), r.id.clone()));
+                found
+            },
             tags: labels(&world.tags),
             quests: world
                 .quests
@@ -303,6 +320,7 @@ fn row(
     LibraryRow {
         act: p.act_id.as_ref().map(|id| label(id, &facets.acts, "act")),
         arc: p.arc_id.as_ref().map(|id| label(id, &facets.arcs, "arc")),
+        setting: p.setting_id.as_ref().map(|id| label(id, &facets.settings, "setting")),
         tags: p.tag_ids.iter().map(|id| label(id, &facets.tags, "tag")).collect(),
         quests: memberships.get(&p.summary.id).cloned().unwrap_or_default(),
         summary: p.summary,

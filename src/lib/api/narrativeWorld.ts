@@ -1,5 +1,5 @@
 import { call } from './call'
-import type { Condition, Precondition, SceneId, Stamp, StateValue } from './narrative'
+import type { Condition, Precondition, SceneId, Stamp, StateValue, Text } from './narrative'
 
 export interface WorldRecord {
   id: string
@@ -47,9 +47,67 @@ export interface QuestTransition {
   when: Condition
 }
 
+/** Player-facing objective wording for one stage, with the identity a locale row
+ * and an approval are filed under. */
+export interface QuestObjective {
+  id: string
+  text: Text
+}
+
+/**
+ * A quest stage: a bare name, or a name with an objective beside it.
+ *
+ * Two shapes because the file has two: a stage nobody has written an objective
+ * for stays a bare name, so opening an existing World file does not rewrite it.
+ * Read one with {@link stageName} rather than branching at each use.
+ */
+export type QuestStage = string | { name: string; objective?: QuestObjective | null }
+
+/** Which stage this is, whichever shape the file used. */
+export const stageName = (stage: QuestStage): string =>
+  typeof stage === 'string' ? stage : stage.name
+
+/** The objective wording for a stage, or null when none is authored. */
+export const stageObjective = (stage: QuestStage): QuestObjective | null =>
+  typeof stage === 'string' ? null : (stage.objective ?? null)
+
+/**
+ * The stage with its objective's words replaced.
+ *
+ * An empty body removes the objective entirely, so clearing the field leaves the
+ * stage in the bare shape it started in rather than storing a blank one. The id
+ * and the revision are left as they are: sealing changed words is the save path's
+ * job ({@link ../../components/narrative/worldText.prepareWorldText}), because a
+ * revision is a digest and a keystroke must not mint one.
+ */
+export function setStageObjective(stage: QuestStage, body: string): QuestStage {
+  const name = stageName(stage)
+  if (!body.trim()) return name
+  const existing = stageObjective(stage)
+  return {
+    name,
+    objective: {
+      id: existing?.id ?? '',
+      text: { ...(existing?.text ?? { revision: '', body: '' }), body },
+    },
+  }
+}
+
+/**
+ * The same stage under a new name, keeping whatever objective it carried.
+ *
+ * Renaming is an edit to the stage, not a replacement of it: the wording
+ * somebody wrote belongs to the stage they are still editing. A stage with no
+ * objective goes back to the bare shape, so a rename never grows the file.
+ */
+export function renameStage(stage: QuestStage, name: string): QuestStage {
+  const objective = stageObjective(stage)
+  return objective ? { name, objective } : name
+}
+
 export interface Quest extends WorldRecord {
   summary: string
-  stages: string[]
+  stages: QuestStage[]
   initial: string
   transitions: QuestTransition[]
   scene_ids: SceneId[]

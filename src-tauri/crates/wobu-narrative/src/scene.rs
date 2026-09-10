@@ -494,6 +494,20 @@ pub struct Scene {
     pub name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub summary: String,
+    /// Where the scene happens: a `setting` node in the project's world model.
+    ///
+    /// An `EntityId` for the same reason [`Participant::entity`] is one — a
+    /// scene's place is the project's place, not a narrative-only copy of it —
+    /// and a field rather than a sentence in [`Scene::summary`] because a
+    /// summary is prose, and prose is inert. A host that had to recover the
+    /// location by looking for `Location: ` in a summary would lose the scene
+    /// the first time somebody reflowed the sentence, with no diagnostic and no
+    /// symptom until a player arrived somewhere and nothing started.
+    ///
+    /// `None` is a scene whose place is not stated, which is the normal state of
+    /// a half-written scene and never an error.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setting_id: Option<EntityId>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub participants: Vec<Participant>,
     /// When this scene may begin. `None` means unconditional, which is a
@@ -526,6 +540,7 @@ impl Scene {
             editorial_head: None,
             name: name.into(),
             summary: String::new(),
+            setting_id: None,
             participants: Vec::new(),
             entry: None,
             beats: Vec::new(),
@@ -645,6 +660,7 @@ impl Scene {
             editorial_head: None,
             name: self.name.clone(),
             summary: self.summary.clone(),
+            setting_id: self.setting_id,
             participants: self.participants.clone(),
             entry: self.entry.clone(),
             beats: self.beats.iter().map(Beat::duplicated).collect(),

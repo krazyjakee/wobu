@@ -71,6 +71,11 @@ pub enum Site {
     Scene,
     /// The scene's entry condition rather than the scene as a whole.
     Entry,
+    /// The scene's setting reference rather than the scene as a whole — the same
+    /// distinction [`Site::Entry`] makes, and for the same reason: a reader
+    /// turning this into a selection should land on the setting picker and not on
+    /// the scene header.
+    Setting,
     Participant {
         entity: EntityId,
     },
@@ -91,6 +96,13 @@ pub enum Site {
         slot: DialogueSlotId,
         variant: VariantId,
     },
+    /// A quest stage's player-facing objective wording (#207).
+    ///
+    /// Unit rather than carrying the quest and stage, because a stage is named by
+    /// a [`Name`](crate::Name) and [`Site`] is `Copy` — every caller copies one
+    /// out of a diagnostic. Which quest and which stage travel beside the site on
+    /// the diagnostic itself, where they can be owned.
+    QuestObjective,
     /// A supporting text asset as a whole (#167).
     ///
     /// The counterpart of [`Site::Scene`], and separate from it rather than
@@ -120,6 +132,7 @@ impl fmt::Display for Site {
         match self {
             Site::Scene => f.write_str("scene"),
             Site::Entry => f.write_str("scene entry condition"),
+            Site::Setting => f.write_str("scene setting"),
             Site::Participant { entity } => write!(f, "participant {entity}"),
             Site::Destination(DestinationSite::Choice { beat, choice }) => {
                 write!(f, "beat {beat}, choice {choice}")
@@ -133,6 +146,7 @@ impl fmt::Display for Site {
             Site::Variant { beat, slot, variant } => {
                 write!(f, "beat {beat}, slot {slot}, variant {variant}")
             }
+            Site::QuestObjective => f.write_str("quest stage objective"),
             Site::TextAsset => f.write_str("text asset"),
             Site::TextTrigger => f.write_str("text asset trigger"),
             Site::TextEntry { entry } => write!(f, "entry {entry}"),
@@ -177,6 +191,12 @@ pub enum Problem {
 
     #[error("{entity} speaks here but is not a participant in this scene")]
     NotAParticipant { entity: EntityId },
+
+    #[error(
+        "this scene's setting names {id}, which is not a setting in this project. A scene's \
+         place is a setting node; a character, a prop or a deleted node cannot be one."
+    )]
+    UnknownSetting { id: EntityId },
 
     #[error("this slot has no text yet")]
     MissingText,

@@ -44,7 +44,11 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
     {
         return Err(invalid("Localisation capability does not match payload."));
     }
-    if base_capabilities != capabilities(false) && base_capabilities != capabilities(true) {
+    if ![false, true]
+        .into_iter()
+        .flat_map(|text| [false, true].map(move |quests| capabilities(text, quests)))
+        .any(|allowed| base_capabilities == allowed)
+    {
         return Err(invalid("unsupported or missing required capabilities"));
     }
     if REQUIRED.iter().any(|name| !manifest.files.contains_key(*name)) {
@@ -82,13 +86,16 @@ pub fn manifest(manifest: &Manifest) -> Result<()> {
 ///
 /// One function, called by the producer and by both validation points, so a
 /// reader can never be checking a set the writer does not write.
-pub fn capabilities(supporting_text: bool) -> BTreeMap<String, u32> {
+pub fn capabilities(supporting_text: bool, quests: bool) -> BTreeMap<String, u32> {
     let mut capabilities = BTreeMap::from([
         ("deterministic_graph".to_string(), 1),
         ("separate_strings".to_string(), 1),
     ]);
     if supporting_text {
         capabilities.insert(SUPPORTING_TEXT.to_string(), 1);
+    }
+    if quests {
+        capabilities.insert(crate::QUESTS.to_string(), 1);
     }
     capabilities
 }
@@ -143,6 +150,9 @@ pub fn graph(graph: &Graph) -> Result<()> {
     if graph.version != GRAPH_VERSION || (graph.scenes.is_empty() && graph.texts.is_empty()) {
         return Err(invalid("unsupported or empty graph"));
     }
+    // A quest-only package is refused above with the same message as an empty one:
+    // quests describe where in a story the player is, and a package with no story
+    // has nowhere for them to be.
     for variable in graph.state.values() {
         domain(&variable.ty)?;
     }
@@ -244,6 +254,33 @@ pub fn graph(graph: &Graph) -> Result<()> {
             for slot in &entry.lines {
                 dialogue(slot, &schema, graph.profile, &mut add)?;
             }
+        }
+    }
+    for (quest_id, quest) in &graph.quests {
+        add(quest_id)?;
+        if quest.stages.is_empty() || !quest.stages.iter().any(|s| s.name == quest.initial) {
+            return Err(invalid("quest has no stages or an undeclared initial stage"));
+        }
+        let declared: BTreeSet<_> = quest.stages.iter().map(|stage| &stage.name).collect();
+        if declared.len() != quest.stages.len() {
+            return Err(invalid("quest declares a stage twice"));
+        }
+        for stage in &quest.stages {
+            if let Some(objective) = &stage.objective {
+                add(&objective.id)?;
+                text(&objective.text, graph.profile)?;
+                if objective.revision.len() != 32
+                    || !objective.revision.bytes().all(|b| b.is_ascii_hexdigit())
+                {
+                    return Err(invalid("invalid objective revision"));
+                }
+            }
+        }
+        for transition in &quest.transitions {
+            if !declared.contains(&transition.from) || !declared.contains(&transition.to) {
+                return Err(invalid("quest transition names an undeclared stage"));
+            }
+            condition(&schema, Some(&transition.when))?;
         }
     }
     for (id, source) in &graph.source_map {

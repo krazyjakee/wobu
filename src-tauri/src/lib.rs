@@ -230,6 +230,8 @@ pub fn run() {
             commands::narrative::narrative_state_save,
             commands::narrative_state_history::narrative_state_restore,
             commands::narrative::narrative_diagnostics,
+            commands::narrative_wording::narrative_wording_report,
+            commands::narrative_wording::narrative_wording_suppress,
             commands::narrative::narrative_layout_get,
             commands::narrative::narrative_layout_save,
             commands::assets::asset_import,

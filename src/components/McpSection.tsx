@@ -195,7 +195,8 @@ export default function McpSection() {
       </div>
       <p className="set-note">
         Opens a port on <code>127.0.0.1</code> only — never your network — and refuses every request
-        that does not carry the access token below. An agent that connects can read:{' '}
+        that does not carry the access token below. An agent that connects can read your world and
+        the story you have written in it — including dialogue nobody has approved yet:{' '}
         {readTools.map((tool) => tool.title.toLowerCase()).join(', ')}. It cannot change anything
         and cannot start a generation, so nothing it does can spend money.
       </p>
@@ -349,9 +350,9 @@ export default function McpSection() {
           body={
             `A connected agent will be able to ${writeTools
               .map((tool) => tool.title.toLowerCase())
-              .join(', ')}. Those write Markdown files in your project folder, and on a shared ` +
-            'project your collaborators will see them. Nothing is deleted, every call is listed ' +
-            'below, and you can turn this off again at any time.'
+              .join(', ')}. Those write files in your project folder, and on a shared ` +
+            'project your collaborators will see them. Nothing is deleted, no line anybody wrote ' +
+            'is replaced, every call is listed below, and you can turn this off again at any time.'
           }
           confirmLabel="Allow changes"
           danger

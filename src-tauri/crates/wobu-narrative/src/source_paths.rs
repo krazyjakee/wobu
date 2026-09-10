@@ -262,6 +262,32 @@ fn operand_path(value: &Operand, path: Vec<SourcePathPart>) -> Vec<SourcePathPar
 }
 
 impl Scene {
+    /// Whether the scene's stated place resolves to a setting node.
+    ///
+    /// `settings` is the project's `setting` node ids, handed in for the reason
+    /// [`SceneCatalog`] is handed in: this crate has no store and cannot look
+    /// them up. An id that is in the project but is not a setting — a character
+    /// picked by mistake, a prop — is reported exactly as an id that is in
+    /// nothing, because both are a scene that cannot be placed and neither is
+    /// repairable by us guessing which one the author meant.
+    ///
+    /// Separate from [`Scene::classification_diagnostics`] rather than folded
+    /// into it, because the two resolve against different things: a classification
+    /// is a record in World and a setting is a node in the project, and a caller
+    /// holding one does not necessarily hold the other.
+    pub fn setting_diagnostics(
+        &self,
+        settings: &std::collections::BTreeSet<crate::EntityId>,
+    ) -> Vec<(Diagnostic, Vec<SourcePathPart>)> {
+        let Some(id) = self.setting_id.filter(|id| !settings.contains(id)) else {
+            return Vec::new();
+        };
+        vec![(
+            Diagnostic { site: Site::Setting, problem: Problem::UnknownSetting { id } },
+            vec!["scene".into(), "setting_id".into()],
+        )]
+    }
+
     /// Organization references are authoring diagnostics, never runtime edges.
     pub fn classification_diagnostics(
         &self,

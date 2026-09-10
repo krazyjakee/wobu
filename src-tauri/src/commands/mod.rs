@@ -38,6 +38,8 @@ pub mod narrative_build;
 pub mod narrative_generation;
 pub mod narrative_source;
 pub mod narrative_state_history;
+/// Repeated wordings across the whole project, and the answers to them (#209).
+pub mod narrative_wording;
 pub mod nodes;
 pub mod project;
 /// The one reader of `project.json`'s `providers` map, shared by images, text,

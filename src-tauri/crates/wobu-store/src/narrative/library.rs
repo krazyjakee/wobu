@@ -26,6 +26,12 @@ pub struct Projection {
     pub act_id: Option<String>,
     pub arc_id: Option<String>,
     pub tag_ids: Vec<String>,
+    /// The scene's setting node (#206). Always written, `null` included, because
+    /// the index reads the key's presence to decide whether a stored projection
+    /// predates this field and has to be rebuilt — a skipped key and an absent
+    /// setting would be indistinguishable.
+    #[serde(default)]
+    pub setting_id: Option<String>,
     pub participants: Vec<String>,
     pub slots: usize,
     pub filled: usize,
@@ -120,6 +126,7 @@ pub(crate) fn project(scene: &Scene, rel: &str) -> (Projection, Vec<TextRow>, Ve
         act_id: scene.act_id.map(|id| id.to_string()),
         arc_id: scene.arc_id.map(|id| id.to_string()),
         tag_ids: scene.tag_ids.iter().map(ToString::to_string).collect(),
+        setting_id: scene.setting_id.map(|id| id.to_string()),
         participants: scene.participants.iter().map(|p| p.entity.to_string()).collect(),
         slots: 0,
         filled: 0,

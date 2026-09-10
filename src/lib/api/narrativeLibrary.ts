@@ -39,6 +39,8 @@ export interface LibrarySceneRow {
   summary: SceneSummary
   act: LibraryLabel | null
   arc: LibraryLabel | null
+  /** The `setting` node the scene names, or null when it names none. */
+  setting: LibraryLabel | null
   tags: LibraryLabel[]
   quests: LibraryLabel[]
   participants: string[]
@@ -68,6 +70,7 @@ export interface LibraryPage {
     participants: string[]
     acts: LibraryLabel[]
     arcs: LibraryLabel[]
+    settings: LibraryLabel[]
     tags: LibraryLabel[]
     quests: LibraryLabel[]
   }

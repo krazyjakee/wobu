@@ -39,7 +39,7 @@ pub fn create(parent: &Path) -> Result<Project, Box<dyn Error>> {
     world.quests.push(Quest {
         id: "00000000000000000000000099".parse()?, name: "The missing light".into(),
         summary: "Investigate why the harbour watch lantern went dark. Distinguish the witnessed failure, reports and rumours; record only what the supplied scenario establishes.".into(),
-        stages: vec!["investigating".parse()?], initial: "investigating".parse()?,
+        stages: vec![wobu_narrative::Name::new("investigating")?.into()], initial: "investigating".parse()?,
         transitions: vec![], scene_ids: vec![],
     });
     project.save_world(&world, None)?;

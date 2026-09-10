@@ -112,7 +112,7 @@ fn combined_classifications_and_multiple_quests_keep_one_scene_row() {
         id: wobu_core::Id::generate(),
         name: name.into(),
         summary: String::new(),
-        stages: vec!["started".parse().unwrap()],
+        stages: vec![wobu_narrative::Name::new("started").unwrap().into()],
         initial: "started".parse().unwrap(),
         transitions: vec![],
         scene_ids: vec![a.id, a.id],

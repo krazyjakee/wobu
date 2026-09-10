@@ -251,6 +251,7 @@ fn problem_code(problem: &Problem) -> &'static str {
         Problem::NoBeats => "no_beats",
         Problem::Type(_) => "type_error",
         Problem::NotAParticipant { .. } => "not_a_participant",
+        Problem::UnknownSetting { .. } => "unknown_setting",
         Problem::MissingText => "missing_text",
         Problem::RevisionMismatch { .. } => "revision_mismatch",
         Problem::DuplicateId { .. } => "duplicate_id",
@@ -280,6 +281,12 @@ impl DiagnosticView {
         match diagnostic.site {
             Site::Scene => {}
             Site::Entry => view.kind = "entry",
+            Site::Setting => {
+                view.kind = "setting";
+                if let Problem::UnknownSetting { id } = diagnostic.problem {
+                    view.entity_id = Some(id);
+                }
+            }
             Site::Participant { entity } => {
                 view.kind = "participant";
                 view.entity_id = Some(entity);
@@ -314,6 +321,7 @@ impl DiagnosticView {
                 view.slot_id = Some(slot);
                 view.variant_id = Some(variant);
             }
+            Site::QuestObjective => view.kind = "questObjective",
             Site::TextAsset => view.kind = "textAsset",
             Site::TextTrigger => view.kind = "textTrigger",
             Site::TextEntry { entry } => {
@@ -699,7 +707,7 @@ pub fn narrative_diagnostics(
     state.with(|project| diagnostics(project, scene_id, scene))
 }
 
-pub(super) fn diagnostics(
+pub(crate) fn diagnostics(
     project: &Project,
     scene_id: SceneId,
     scene: Option<Scene>,
@@ -708,17 +716,64 @@ pub(super) fn diagnostics(
         Some(scene) => scene,
         None => project.load_scene(scene_id)?.scene,
     };
-    let schema = project.state_schema()?;
-    let catalog = SceneCatalog::of(project.scene_ids()?);
-    let world = project.world_document()?.map(|(document, _)| document).unwrap_or_default();
-    Ok(scene
-        .diagnostics(&schema, &catalog)
+    Ok(diagnose(&scene, &project_context(project)?))
+}
+
+/// The project-wide inputs every scene is checked against.
+///
+/// Read once and reused rather than re-read per scene. A caller checking one
+/// scene pays for one read either way; a caller checking three hundred of them
+/// — `narrative_diagnostics` over MCP is the one that does — would otherwise
+/// re-scan the scene folder and re-read the state and world files once per
+/// scene, which is nine hundred file operations to answer one question.
+pub(crate) struct DiagnosticContext {
+    schema: wobu_narrative::StateSchema,
+    catalog: SceneCatalog,
+    world: wobu_narrative::WorldDocument,
+    /// The project's `setting` nodes, for the scene's stated place (#206). Read
+    /// from the index as summaries rather than node by node: the kind is all this
+    /// needs, and a caller checking three hundred scenes must not pay a file read
+    /// per node per scene.
+    settings: std::collections::BTreeSet<wobu_core::Id>,
+}
+
+pub(crate) fn project_context(project: &Project) -> CommandResult<DiagnosticContext> {
+    Ok(DiagnosticContext {
+        schema: project.state_schema()?,
+        // Always the project's, never the caller's: a cross-scene link is
+        // checked against the scenes that really exist rather than against
+        // anything the caller asserted.
+        catalog: SceneCatalog::of(project.scene_ids()?),
+        world: project.world_document()?.map(|(document, _)| document).unwrap_or_default(),
+        settings: setting_ids(project)?,
+    })
+}
+
+/// The ids of every `setting` node in the project.
+pub(crate) fn setting_ids(
+    project: &Project,
+) -> CommandResult<std::collections::BTreeSet<wobu_core::Id>> {
+    Ok(project
+        .list_nodes()?
+        .into_iter()
+        .filter(|node| node.kind == wobu_core::NodeKind::Setting)
+        .map(|node| node.id)
+        .collect())
+}
+
+pub(crate) fn diagnose(scene: &Scene, context: &DiagnosticContext) -> Vec<DiagnosticView> {
+    scene
+        .diagnostics(&context.schema, &context.catalog)
         .into_iter()
         .chain(
-            scene.classification_diagnostics(&world).into_iter().map(|(diagnostic, _)| diagnostic),
+            scene
+                .classification_diagnostics(&context.world)
+                .into_iter()
+                .chain(scene.setting_diagnostics(&context.settings))
+                .map(|(diagnostic, _)| diagnostic),
         )
         .map(|diagnostic| DiagnosticView::of(&diagnostic))
-        .collect())
+        .collect()
 }
 
 /* ── layout ───────────────────────────────────────────────────────────────── */

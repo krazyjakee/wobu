@@ -480,9 +480,17 @@ export const GroupFrameNode = memo(function GroupFrameNode({ data }: NodeProps<F
 })
 
 export const QuestStageNode = memo(function QuestStageNode({ data }: NodeProps<FlowRFNode>) {
+  const element = data.node.element
+  const objective = element?.kind === 'questStage' ? element.objective : null
   return (
     <NodeShell node={data.node} tone="scene">
       <p className="nrt-node-line">Authored World stage</p>
+      {/* What the quest log says while the player is here (#207). Shown rather
+          than hidden behind a click, because the reason this field exists is that
+          nobody could see a stage had nothing to show. */}
+      <p className="nrt-node-line">
+        {objective ? `Objective: ${objective}` : 'No objective written'}
+      </p>
     </NodeShell>
   )
 })

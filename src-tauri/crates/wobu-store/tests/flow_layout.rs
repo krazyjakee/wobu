@@ -759,7 +759,7 @@ fn quest_world(scene: SceneId) -> (wobu_narrative::WorldDocument, wobu_narrative
         id: quest_id,
         name: "Ashfall inquiry".into(),
         summary: String::new(),
-        stages: vec![Name::new("open").unwrap()],
+        stages: vec![Name::new("open").unwrap().into()],
         initial: Name::new("open").unwrap(),
         transitions: vec![],
         scene_ids: vec![scene],

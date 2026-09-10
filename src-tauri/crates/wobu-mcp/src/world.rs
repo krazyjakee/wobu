@@ -1,11 +1,19 @@
 //! The seam between the protocol and the project.
 //!
-//! Everything an MCP tool can do to a Wobu world is one method on [`World`],
-//! and nothing in this crate knows what a `Project`, a `NodeKind` or an
-//! influence layer is. That is not decoupling for its own sake. It is what
-//! makes the guarantee in `lib.rs` checkable: the list of things an agent can
-//! reach is the list of methods on this trait, it fits on one screen, and a new
-//! capability cannot appear without a line being added to it in a review.
+//! Everything an MCP tool can do to a Wobu project is one method on [`World`]
+//! or on [`Narrative`], and nothing in this crate knows what a `Project`, a
+//! `NodeKind`, an influence layer or a beat is. That is not decoupling for its
+//! own sake. It is what makes the guarantee in `lib.rs` checkable: the list of
+//! things an agent can reach is the list of methods on these two traits, each
+//! fits on one screen, and a new capability cannot appear without a line being
+//! added to one of them in a review.
+//!
+//! Two traits rather than one because the two bodies of source are two: the
+//! world model is Markdown nodes with influence edges, the narrative is scene
+//! documents with declared state, and the rules about what may be written to
+//! each are different. Folding them together would produce one trait long
+//! enough that nobody reads it, which is the failure mode the guarantee above
+//! exists to avoid.
 //!
 //! The methods are synchronous and return [`serde_json::Value`], which is
 //! unusual enough to justify. Synchronous because the implementation is a
@@ -136,5 +144,148 @@ pub trait World: Send + Sync + 'static {
         to_id: &str,
         role: &str,
         weight: Option<f32>,
+    ) -> WorldResult;
+
+    // ── the other half of the project ─────────────────────────────────────
+
+    /// The authored story in the same project. See [`Narrative`] for why it is
+    /// a separate trait rather than another nine methods here.
+    fn narrative(&self) -> &dyn Narrative;
+}
+
+/// Which scenes a discovery call wants, in the library's own vocabulary.
+///
+/// Every filter is a string and empty means "not filtered", which is the shape
+/// [`Narrative::scenes`]'s implementor already speaks — the scene library the
+/// writer uses is driven by exactly these fields, and a second vocabulary here
+/// would be a second set of semantics for "act" that could disagree with the
+/// one on screen.
+///
+/// `limit` defaults to twenty-five rather than to zero, because a filter
+/// deserialised from `{}` is an agent asking for the first page and not an
+/// agent asking for nothing. A key that is not a field is refused rather than
+/// dropped: the schema is closed, and a misspelt filter that silently matched
+/// the whole project would answer a question nobody asked.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+pub struct SceneFilter {
+    /// Free text over scene names, beat intent and dialogue.
+    pub query: String,
+    /// World `EntityId`s. A scene may be in several quests, so `quest` selects
+    /// rather than locates.
+    pub act: String,
+    pub arc: String,
+    pub quest: String,
+    pub tag: String,
+    pub participant: String,
+    /// `draft` or `approved`.
+    pub review: String,
+    /// `current` or `out_of_date`.
+    pub freshness: String,
+    /// Only scenes with a dialogue slot that has no words in it yet.
+    pub missing_text: bool,
+    pub offset: usize,
+    pub limit: usize,
+}
+
+impl Default for SceneFilter {
+    fn default() -> SceneFilter {
+        SceneFilter {
+            query: String::new(),
+            act: String::new(),
+            arc: String::new(),
+            quest: String::new(),
+            tag: String::new(),
+            participant: String::new(),
+            review: String::new(),
+            freshness: String::new(),
+            missing_text: false,
+            offset: 0,
+            limit: 25,
+        }
+    }
+}
+
+/// The authored story in one open project, as much of it as MCP is allowed to
+/// see.
+///
+/// A second trait rather than nine more methods on [`World`], and for the
+/// reason stated there: the guarantee is that the list of things an agent can
+/// reach fits on a screen and cannot grow without a line being added in review.
+/// One trait of twenty-one methods does not keep that promise; two traits that
+/// each fit on a screen do, and the split is also the honest one — the world
+/// model and the narrative are two bodies of source with two file formats and
+/// two sets of rules about what may be written.
+///
+/// The write half is [`create_scene`](Narrative::create_scene) and
+/// [`draft_dialogue`](Narrative::draft_dialogue), both additive: one makes a
+/// new file, the other fills a slot that is empty. Neither replaces authored
+/// wording, and there is no method here that writes a whole scene document —
+/// a scene save is guarded by the stamp the reader held, and an agent posting
+/// one request at a time holds no such thing.
+pub trait Narrative: Send + Sync + 'static {
+    /// Scene and asset counts, the declared classifications and how much text
+    /// is still missing. The narrative equivalent of [`World::overview`].
+    fn overview(&self) -> WorldResult;
+
+    /// Scene rows, filtered and paged. With `query` set the rows also carry the
+    /// lines that matched, addressed by beat, slot and variant.
+    fn scenes(&self, filter: &SceneFilter) -> WorldResult;
+
+    /// One whole scene document: beats in author order, dialogue slots,
+    /// variants, choices, outcomes and tombstones.
+    fn scene(&self, id: &str) -> WorldResult;
+
+    /// The declared state variables — name, type, owner, default and range.
+    /// What a condition or an effect is allowed to mention.
+    fn declared_state(&self) -> WorldResult;
+
+    /// World canon: facts, knowledge claims, relationships, events, quests and
+    /// future restrictions, with the diagnostics they currently raise.
+    fn canon(&self) -> WorldResult;
+
+    /// Supporting text assets, as summaries.
+    fn text_assets(&self) -> WorldResult;
+
+    /// One supporting text asset in full, with its entries.
+    fn text_asset(&self, id: &str) -> WorldResult;
+
+    /// What is wrong: with one scene, or with every scene when `scene_id` is
+    /// `None`.
+    fn diagnostics(&self, scene_id: Option<&str>) -> WorldResult;
+
+    // ── writes, behind the second opt-in ──────────────────────────────────
+
+    fn create_scene(&self, name: &str) -> WorldResult;
+
+    /// Put words into a dialogue slot that has none.
+    ///
+    /// Refused for a slot that already has a variant, and refused for a locked
+    /// slot. The wording is recorded as `Imported`, never as `Human` and never
+    /// as `Generated`: a reviewer must not be told a person wrote something
+    /// nobody in the project has read, and there is no generation receipt
+    /// behind it to point at.
+    fn draft_dialogue(&self, scene_id: &str, slot_id: &str, body: &str) -> WorldResult;
+
+    /// Add a new dialogue slot to an existing beat, with one wording in it.
+    ///
+    /// The additive counterpart of [`Narrative::draft_dialogue`], which can only
+    /// fill a slot a person already made — and after an import that is usually
+    /// none of them. The case it exists for is establishing narration: a
+    /// narrator line at the top of a scene's first beat, so the scene does not
+    /// open at its decision point.
+    ///
+    /// It adds a slot and nothing else. No beat, no choice, no outcome, no
+    /// effect, no condition and no destination, so it cannot change where the
+    /// story goes; `speaker` is the narrator or a character already in the
+    /// scene's cast, because inviting somebody into a scene is the writer's
+    /// statement. `position` is `"start"` or `"end"`, defaulting to the end.
+    fn add_dialogue_slot(
+        &self,
+        scene_id: &str,
+        beat_id: &str,
+        speaker: &str,
+        position: Option<&str>,
+        body: &str,
     ) -> WorldResult;
 }

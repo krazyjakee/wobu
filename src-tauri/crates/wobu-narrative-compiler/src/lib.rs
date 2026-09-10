@@ -31,8 +31,20 @@ pub struct CompileOptions {
     pub profile: Profile,
     /// Complete world membership, not just entities used by this scene.
     pub known_entities: BTreeSet<EntityId>,
+    /// The project's `setting` nodes. A separate set rather than a filter over
+    /// `known_entities`, because node kind is not knowable from an id: folding
+    /// them together would let a scene be placed in a character.
+    pub known_settings: BTreeSet<EntityId>,
     /// Registered argument domains. A variable argument must fit the entire domain.
     pub commands: BTreeMap<Name, Vec<VarType>>,
+    /// Repeated wordings somebody has signed off (#209). Empty means every
+    /// duplicate is reported, which is the right default: a suppression is an
+    /// author's statement and absence of one is not consent.
+    pub wording_suppressions: Vec<wobu_narrative::WordingSuppression>,
+    /// The project's quests (#207), so their stage objectives reach the graph and
+    /// the runtime can report one. Empty is a project with no quests, which
+    /// compiles to exactly the graph it did before they were compiled at all.
+    pub quests: Vec<wobu_narrative::Quest>,
 }
 
 impl Default for CompileOptions {
@@ -42,7 +54,10 @@ impl Default for CompileOptions {
             verified_text_reviews: BTreeMap::new(),
             profile: Profile::Development,
             known_entities: BTreeSet::new(),
+            known_settings: BTreeSet::new(),
             commands: BTreeMap::new(),
+            wording_suppressions: Vec::new(),
+            quests: Vec::new(),
         }
     }
 }
@@ -64,6 +79,15 @@ pub struct CompileDiagnostic {
     /// about a scene.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asset: Option<String>,
+    /// The quest responsible (#207), when the diagnostic is about a quest rather
+    /// than a scene or an asset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quest: Option<String>,
+    /// Which stage of that quest. A name rather than an id because a stage has
+    /// no id: it is named by the enum value a condition compares against, and
+    /// giving it a second identity would create two ways to say which stage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<Name>,
     pub site: Site,
     pub severity: Severity,
     pub code: String,
@@ -103,6 +127,14 @@ pub struct Graph {
     /// something it did not say before.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub texts: BTreeMap<String, CompiledText>,
+    /// Quests, keyed by quest id (#207).
+    ///
+    /// Skipped when empty for the reason `texts` is: a project with no quests
+    /// compiles to exactly the bytes it did before this field existed, so
+    /// existing saves, packages and scenario tapes keep validating against the
+    /// same graph hash.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub quests: BTreeMap<String, CompiledQuest>,
     pub source_map: BTreeMap<String, SourceRef>,
 }
 
@@ -131,12 +163,27 @@ pub struct SourceRef {
     pub asset: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry: Option<String>,
+    /// The quest a stage objective belongs to (#207).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<Name>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompiledScene {
     pub entry: Option<Condition>,
+    /// Where the scene happens, as the `setting` node's id (#206).
+    ///
+    /// In the graph rather than only in the debug source map, because a release
+    /// package carries no source map and a host placing a scene in its world
+    /// needs this in a release build — which is the whole point of the field
+    /// existing instead of a `Location:` line in the summary. Skipped when
+    /// absent, so a project that states no settings compiles to exactly the
+    /// bytes it did before and keeps its graph hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setting: Option<String>,
     pub first: String,
     pub beats: BTreeMap<String, CompiledBeat>,
 }
@@ -191,6 +238,53 @@ pub struct CompiledTextEntry {
     /// a scene line's: same variant selection, same string identity, same place
     /// in the exported string table.
     pub lines: Vec<CompiledSlot>,
+}
+
+/// One compiled quest: a stage machine and the objective wording for each stage.
+///
+/// It has no beats, no dialogue and no targets, and that absence is the point —
+/// a quest does not move the story, it describes where in the story the player
+/// is. The runtime advances it from state and reports the current stage's
+/// objective; nothing in here can make a scene happen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompiledQuest {
+    pub initial: Name,
+    /// Stages in author order. The order is presentation, not priority; the
+    /// machine is driven entirely by `transitions`.
+    pub stages: Vec<CompiledStage>,
+    /// Transitions in author order, which *is* the priority: the first one whose
+    /// condition holds wins, exactly as for a beat's outcomes.
+    pub transitions: Vec<CompiledTransition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompiledStage {
+    pub name: Name,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub objective: Option<CompiledObjective>,
+}
+
+/// The player-facing wording for a stage, in the shape the string table moves.
+///
+/// `id`, `text` and `revision` and nothing else, so the package can lift the text
+/// out into `strings/en.json` keyed by the same kind of identity a dialogue line
+/// uses — which is what makes a locale pack one list rather than two.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompiledObjective {
+    pub id: String,
+    pub text: String,
+    pub revision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompiledTransition {
+    pub from: Name,
+    pub to: Name,
+    pub when: Condition,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,6 +376,7 @@ pub fn compile(
         commands: options.commands.clone(),
         scenes: BTreeMap::new(),
         texts: BTreeMap::new(),
+        quests: BTreeMap::new(),
         source_map: BTreeMap::new(),
     };
     let catalog = SceneCatalog::of(scenes.iter().map(|s| s.id));
@@ -293,6 +388,8 @@ pub fn compile(
             diagnostics.push(CompileDiagnostic {
                 scene: scene_id.clone(),
                 asset: None,
+                quest: None,
+                stage: None,
                 site,
                 severity,
                 code: code.into(),
@@ -326,6 +423,14 @@ pub fn compile(
                     format!("world entity {} does not exist", participant.entity),
                 );
             }
+        }
+        for (diagnostic, _) in scene.setting_diagnostics(&options.known_settings) {
+            emit(
+                diagnostic.site,
+                Severity::Error,
+                "unknown_setting",
+                diagnostic.problem.to_string(),
+            );
         }
         let mut beats = BTreeMap::new();
         for beat in &scene.beats {
@@ -466,7 +571,15 @@ pub fn compile(
         // IDs are globally unique, including across scenes and element kinds.
         let mut ids = vec![(
             scene_id.clone(),
-            SourceRef { scene: scene_id.clone(), beat: None, slot: None, asset: None, entry: None },
+            SourceRef {
+                scene: scene_id.clone(),
+                beat: None,
+                slot: None,
+                asset: None,
+                entry: None,
+                quest: None,
+                stage: None,
+            },
         )];
         for beat in &scene.beats {
             let base = SourceRef {
@@ -475,6 +588,8 @@ pub fn compile(
                 slot: None,
                 asset: None,
                 entry: None,
+                quest: None,
+                stage: None,
             };
             ids.push((beat.id.to_string(), base.clone()));
             for choice in &beat.choices {
@@ -505,6 +620,7 @@ pub fn compile(
             scene_id,
             CompiledScene {
                 entry: scene.entry.clone(),
+                setting: scene.setting_id.map(|id| id.to_string()),
                 first: scene.beats.first().map(|b| b.id.to_string()).unwrap_or_default(),
                 beats,
             },
@@ -517,10 +633,179 @@ pub fn compile(
         compile_text(asset, schema, options, &mut graph, &mut diagnostics);
     }
 
+    let mut ordered_quests: Vec<_> = options.quests.iter().collect();
+    ordered_quests.sort_by_key(|quest| quest.id);
+    for quest in ordered_quests {
+        compile_quest(quest, schema, options, &mut graph, &mut diagnostics);
+    }
+
+    // The only check here that cannot be answered by reading one document (#209),
+    // and therefore the only one that runs after both loops: whether a wording is
+    // stored somewhere else as well.
+    //
+    // A warning at both profiles, deliberately. A repeated line is frequently
+    // intended, so refusing a release over one would make the check something to
+    // work around rather than to read; and the suppression exists so an intended
+    // repetition can be answered once rather than re-explained every build.
+    for found in wobu_narrative::duplicated_wording(scenes, texts, &options.wording_suppressions) {
+        let first = &found.sites[0];
+        let (scene, asset) = match first.container {
+            wobu_narrative::WordingContainer::Scene(id) => (id.to_string(), None),
+            wobu_narrative::WordingContainer::TextAsset(id) => {
+                (String::new(), Some(id.to_string()))
+            }
+        };
+        diagnostics.push(CompileDiagnostic {
+            scene,
+            asset,
+            quest: None,
+            stage: None,
+            site: first.site,
+            severity: Severity::Warning,
+            code: "duplicated_wording".into(),
+            message: found.message(),
+        });
+    }
+
     CompileReport {
         graph: (!diagnostics.iter().any(|d| d.severity == Severity::Error)).then_some(graph),
         diagnostics,
     }
+}
+
+/// Lower one quest into its stage machine, and gate its objective wording the way
+/// dialogue is gated (#207).
+///
+/// A stage with no player-facing wording is a task in Development and a blocker
+/// in Release, which is the same rule `missing_text` applies to a dialogue slot —
+/// and for the same reason. Without it a host has nothing authored to show as
+/// "what should I be doing now", so it shows the nearest string it can find; in
+/// practice that was the current beat's title, which is a display name written
+/// for the writer and frequently names a mistake the player has not made yet.
+///
+/// Only *reachable* stages are gated. A stage nothing leads to cannot be entered,
+/// so requiring wording for it would be busywork with no symptom.
+fn compile_quest(
+    quest: &wobu_narrative::Quest,
+    schema: &StateSchema,
+    options: &CompileOptions,
+    graph: &mut Graph,
+    diagnostics: &mut Vec<CompileDiagnostic>,
+) {
+    let quest_id = quest.id.to_string();
+    let gate =
+        if options.profile == Profile::Release { Severity::Error } else { Severity::Warning };
+    let mut emit = |stage: Option<&Name>, severity, code: &str, message: String| {
+        diagnostics.push(CompileDiagnostic {
+            scene: String::new(),
+            asset: None,
+            quest: Some(quest_id.clone()),
+            stage: stage.cloned(),
+            // A quest is not inside a scene, so no scene-internal locator
+            // describes it. The quest and stage fields above are the selection.
+            site: Site::QuestObjective,
+            severity,
+            code: code.into(),
+            message,
+        })
+    };
+
+    // The structural checks `WorldDocument::diagnose` makes are authoring
+    // diagnostics; a compile has to refuse rather than report, because a stage
+    // machine whose initial stage is not declared has no runtime meaning at all.
+    if !quest.declares(&quest.initial) {
+        emit(
+            Some(&quest.initial),
+            Severity::Error,
+            "invalid_quest",
+            format!("quest stage `{}` is the initial stage but is not declared", quest.initial),
+        );
+        return;
+    }
+    for transition in &quest.transitions {
+        for stage in [&transition.from, &transition.to] {
+            if !quest.declares(stage) {
+                emit(
+                    Some(stage),
+                    Severity::Error,
+                    "invalid_quest",
+                    format!("quest transition names stage `{stage}`, which is not declared"),
+                );
+                return;
+            }
+        }
+        if let Err(error) = schema.check_condition(&transition.when) {
+            emit(None, Severity::Error, "invalid_quest", error.to_string());
+            return;
+        }
+    }
+
+    let reachable: BTreeSet<&Name> =
+        quest.reachable_stages().into_iter().map(|stage| &stage.name).collect();
+    let mut stages = Vec::new();
+    for stage in &quest.stages {
+        if reachable.contains(&stage.name) && !stage.has_objective() {
+            emit(
+                Some(&stage.name),
+                gate,
+                "missing_objective",
+                format!(
+                    "stage `{}` has no player-facing objective, so a host has nothing \
+                     authored to show as the current objective",
+                    stage.name
+                ),
+            );
+        }
+        stages.push(CompiledStage {
+            name: stage.name.clone(),
+            objective: stage.objective.as_ref().map(|objective| CompiledObjective {
+                id: objective.id.to_string(),
+                text: objective.text.body.clone(),
+                revision: objective.text.revision.to_string(),
+            }),
+        });
+    }
+
+    // Objective ids join the one namespace every other wording identity is in, so
+    // a string table, a locale row and a recording script are one list.
+    for stage in &quest.stages {
+        let Some(objective) = &stage.objective else { continue };
+        let id = objective.id.to_string();
+        let loc = SourceRef {
+            scene: String::new(),
+            beat: None,
+            slot: None,
+            asset: None,
+            entry: None,
+            quest: Some(quest_id.clone()),
+            stage: Some(stage.name.clone()),
+        };
+        if graph.source_map.insert(id.clone(), loc).is_some() {
+            emit(
+                Some(&stage.name),
+                Severity::Error,
+                "duplicate_id",
+                format!("id {id} is repeated in the compilation input"),
+            );
+        }
+    }
+
+    graph.quests.insert(
+        quest_id,
+        CompiledQuest {
+            initial: quest.initial.clone(),
+            stages,
+            transitions: quest
+                .transitions
+                .iter()
+                .map(|transition| CompiledTransition {
+                    from: transition.from.clone(),
+                    to: transition.to.clone(),
+                    when: transition.when.clone(),
+                })
+                .collect(),
+        },
+    );
 }
 
 /// Lower one supporting text asset, and refuse the same things scene dialogue is
@@ -543,6 +828,8 @@ fn compile_text(
         diagnostics.push(CompileDiagnostic {
             scene: String::new(),
             asset: Some(asset_id.clone()),
+            quest: None,
+            stage: None,
             site,
             severity,
             code: code.into(),
@@ -585,6 +872,8 @@ fn compile_text(
             slot: None,
             asset: Some(asset_id.clone()),
             entry: None,
+            quest: None,
+            stage: None,
         },
     )];
     for entry in &asset.entries {
@@ -594,6 +883,8 @@ fn compile_text(
             slot: None,
             asset: Some(asset_id.clone()),
             entry: Some(entry.id.to_string()),
+            quest: None,
+            stage: None,
         };
         ids.push((entry.id.to_string(), base.clone()));
         for slot in &entry.lines {

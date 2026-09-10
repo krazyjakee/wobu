@@ -50,6 +50,31 @@ pub struct AvailableChoice {
     pub label: String,
 }
 
+/// What the player should be doing, according to the author (#207).
+///
+/// What a quest log or a HUD shows. It exists so a host has something *authored*
+/// to put there: with nothing, the nearest available string is a beat title,
+/// which is a display name written for the writer and is frequently the title of
+/// a beat the player has not reached — an objective that names a mistake before
+/// it happens.
+///
+/// `text` is empty for a stage whose objective wording has not been written. A
+/// row with an empty string rather than no row at all, because "this quest is at
+/// this stage and nobody wrote what to do" is the honest answer, and the compiler
+/// has already said so as a `missing_objective` diagnostic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActiveObjective {
+    pub quest: String,
+    pub stage: Name,
+    /// The wording's stable identity, which is its key in the package string
+    /// table — so a host showing a translated build looks the objective up the
+    /// same way it looks up a line of dialogue.
+    pub id: Option<String>,
+    pub text: String,
+    pub revision: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum CommandResult {
@@ -132,6 +157,18 @@ pub struct Snapshot {
     /// restores unchanged.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     texts: BTreeMap<String, TextProgress>,
+    /// Which stage each quest is in (#207), keyed by quest id.
+    ///
+    /// Saved rather than recomputed on restore. A quest that has passed through a
+    /// stage has passed through it, and re-deriving the whole machine from the
+    /// current state would walk a quest forward through a condition that has since
+    /// stopped holding — or backwards, which is worse.
+    ///
+    /// Skipped when empty so a playthrough of a project without quests serializes
+    /// to exactly the bytes it did before, and an existing save restores
+    /// unchanged.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    quests: BTreeMap<String, Name>,
     command_sequence: u64,
     acknowledged: BTreeMap<String, State>,
     step_limit: u32,
@@ -217,6 +254,7 @@ impl Runtime {
                 state,
                 visits: BTreeMap::new(),
                 texts: BTreeMap::new(),
+                quests: BTreeMap::new(),
                 command_sequence: 0,
                 acknowledged: BTreeMap::new(),
                 step_limit,
@@ -226,6 +264,17 @@ impl Runtime {
         };
         runner.saved.state.extend(initial);
         runner.validate_state()?;
+        // Every quest starts at its declared initial stage, and is then advanced
+        // against the state the run is actually starting with — so a scenario that
+        // begins mid-story begins with the right objective rather than with the
+        // first one.
+        runner.saved.quests = runner
+            .graph
+            .quests
+            .iter()
+            .map(|(id, quest)| (id.clone(), quest.initial.clone()))
+            .collect();
+        runner.advance_quests()?;
         if scene.is_empty() && !runner.graph.texts.is_empty() {
             runner.saved.phase = Phase::End { label: "Supporting text".into() };
             return Ok(runner);
@@ -243,6 +292,104 @@ impl Runtime {
     }
     pub fn visits(&self) -> &BTreeMap<String, u64> {
         &self.saved.visits
+    }
+
+    /// Which stage each quest is in right now, keyed by quest id (#207).
+    pub fn quests(&self) -> &BTreeMap<String, Name> {
+        &self.saved.quests
+    }
+
+    /// What the player should be doing, for every quest, in quest id order.
+    ///
+    /// The answer a quest log or a HUD asks for, and the reason this exists: a
+    /// host with nothing authored to show falls back to the nearest string it can
+    /// find, and the nearest string is a beat title — a display name written for
+    /// the writer, often belonging to a beat the player has not reached.
+    ///
+    /// Reading this never advances anything. Repeated reads give the same answer,
+    /// exactly as [`Runtime::current`] does.
+    pub fn objectives(&self) -> Vec<ActiveObjective> {
+        self.saved
+            .quests
+            .iter()
+            .map(|(id, stage)| {
+                let objective = self
+                    .graph
+                    .quests
+                    .get(id)
+                    .and_then(|quest| quest.stages.iter().find(|one| &one.name == stage))
+                    .and_then(|one| one.objective.as_ref());
+                ActiveObjective {
+                    quest: id.clone(),
+                    stage: stage.clone(),
+                    id: objective.map(|o| o.id.clone()),
+                    text: objective.map(|o| o.text.clone()).unwrap_or_default(),
+                    revision: objective.map(|o| o.revision.clone()),
+                }
+            })
+            .collect()
+    }
+
+    /// Walk every quest forward as far as its transitions allow (#207).
+    ///
+    /// Run after every write to state, because a quest stage is a statement *about*
+    /// state and leaving it behind would mean a host showing an objective for a
+    /// stage the player left two choices ago.
+    ///
+    /// Deterministic in two ways that matter. Quests are visited in id order, and
+    /// within a quest the transitions are tried in author order and the first whose
+    /// condition holds wins — the same first-match rule a beat's outcomes follow,
+    /// so there is one answer to "what does priority mean" in this crate.
+    ///
+    /// Forward only, and bounded: a quest advances at most once per stage it
+    /// declares, so a cycle of always-true transitions settles instead of spinning.
+    /// It never moves a quest backwards on its own — only an authored transition
+    /// does that — and it cannot write state, so a quest cannot change the story.
+    fn advance_quests(&mut self) -> Result<()> {
+        let mut moved = std::mem::take(&mut self.saved.quests);
+        for (id, stage) in &mut moved {
+            let Some(quest) = self.graph.quests.get(id) else {
+                return Err(Error::InvalidState(format!("missing quest {id}")));
+            };
+            for _ in 0..quest.stages.len() {
+                let mut next = None;
+                for transition in &quest.transitions {
+                    if &transition.from == stage && evaluate(&transition.when, &self.saved.state)? {
+                        next = Some(transition.to.clone());
+                        break;
+                    }
+                }
+                match next {
+                    Some(to) => *stage = to,
+                    None => break,
+                }
+            }
+        }
+        self.saved.quests = moved;
+        Ok(())
+    }
+
+    /// Whether the saved quest cursor agrees with the graph it is pinned to.
+    ///
+    /// Strict — every quest present, every stage declared — and that is safe
+    /// rather than optimistic: a snapshot is refused outright unless its
+    /// `graph_hash` matches, so any save reaching here was written by a build that
+    /// compiled exactly these quests.
+    fn validate_quests(&self) -> Result<()> {
+        if self.saved.quests.len() != self.graph.quests.len() {
+            return Err(Error::InvalidState("invalid quest cursor".into()));
+        }
+        for (id, stage) in &self.saved.quests {
+            let quest = self
+                .graph
+                .quests
+                .get(id)
+                .ok_or_else(|| Error::InvalidState(format!("quest {id}")))?;
+            if !quest.stages.iter().any(|one| &one.name == stage) {
+                return Err(Error::InvalidState(format!("quest {id} stage {stage}")));
+            }
+        }
+        Ok(())
     }
 
     /// The compiled content this run is pinned to.
@@ -292,6 +439,7 @@ impl Runtime {
             }
         }
         runner.validate_texts()?;
+        runner.validate_quests()?;
         if let Phase::Commands { commands, index, to } = &runner.saved.phase {
             if commands.is_empty() || *index >= commands.len() {
                 return Err(Error::InvalidCommand);
@@ -486,7 +634,7 @@ impl Runtime {
     fn apply_host_inputs(&mut self, inputs: &State) -> Result<()> {
         self.validate_host_inputs(inputs)?;
         self.saved.state.extend(inputs.clone());
-        Ok(())
+        self.advance_quests()
     }
 
     fn validate_state(&self) -> Result<()> {
@@ -689,6 +837,7 @@ impl Runtime {
         }
         self.saved.state = state;
         self.saved.command_sequence = sequence;
+        self.advance_quests()?;
         if commands.is_empty() {
             Ok(false)
         } else {

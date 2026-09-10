@@ -8,7 +8,13 @@ export type PreviewGraph = Record<string, unknown> & {
 }
 export type PreviewSnapshot = Record<string, unknown>
 export interface CompileDiagnostic {
+  /** Empty when `asset` or `quest` names the responsible document instead. */
   scene: string
+  /** The supporting text asset responsible (#167). */
+  asset?: string
+  /** The quest responsible (#207), and which of its stages. */
+  quest?: string
+  stage?: string
   site: unknown
   severity: 'error' | 'warning'
   code: string

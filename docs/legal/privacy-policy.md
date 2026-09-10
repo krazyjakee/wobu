@@ -161,11 +161,15 @@ another program, so it is described in full:
   carry a bearer token that is generated the first time you enable it; any request arriving with an
   `Origin` header is refused before authentication, and no CORS header is ever sent, so a web page you
   visit cannot reach it. Nothing is sent anywhere by the server — it answers, it does not call out.
-- **What an agent can read.** Nine read-only tools covering your entities, search, links, the
-  resolved influence stack, compiled prompts and generation receipts. That is your project content,
-  disclosed to whichever agent you connected.
+- **What an agent can read.** Eighteen read-only tools covering your entities, search, links, the
+  resolved influence stack, compiled prompts and generation receipts, and the story you have
+  authored in the project — scenes, beats, dialogue including drafts nobody has approved, declared
+  state and canon. That is your project content, disclosed to whichever agent you connected.
 - **What an agent can change** is a second, separate switch, also off by default. Until you grant it,
-  the write tools are not merely refused — they are not advertised at all.
+  the write tools are not merely refused — they are not advertised at all. The six write tools only
+  ever add: they create an entity or a scene, amend fields on an entity, add a link, put words into
+  a dialogue line that is still empty, or add a new line to a beat that already exists. None
+  deletes, none replaces wording somebody else wrote, and none starts a generation.
 - **Programs Wobu runs.** If you configure MCP servers of your own, Wobu launches them directly (never
   through a shell), talks to them over stdin/stdout, and stops them when you disable them or quit. A
   newly added server is added switched off. What those programs do, and where they send anything, is

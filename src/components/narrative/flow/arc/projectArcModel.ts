@@ -1,5 +1,6 @@
 import type { ArcScene } from '../../../../lib/api/narrativeArc'
 import type { Quest } from '../../../../lib/api/narrativeWorld'
+import { stageName, stageObjective } from '../../../../lib/api/narrativeWorld'
 import type { Scene } from '../../../../lib/api'
 import type { FlowElement, FlowSceneNode } from '../model'
 import { conditionText } from '../source'
@@ -121,13 +122,15 @@ export function projectArc(
     }))
   for (const one of quests ?? []) {
     if (quest && one.id !== quest.id) continue
-    for (const stage of new Set(one.stages))
+    for (const stage of new Set(one.stages.map(stageName)))
       elements.push({
         id: questStageId(one.id, stage),
         kind: 'questStage',
         title: `${one.name} · ${stage}`,
         questId: one.id,
         stage,
+        objective:
+          stageObjective(one.stages.find((each) => stageName(each) === stage)!)?.text.body ?? null,
         derived: true,
         out: one.transitions.flatMap((transition, index) =>
           transition.from === stage
@@ -147,7 +150,7 @@ export function projectArc(
     for (const stage of new Set(
       one.transitions
         .map((transition) => transition.from)
-        .filter((stage) => !one.stages.includes(stage)),
+        .filter((stage) => !one.stages.some((each) => stageName(each) === stage)),
     ))
       elements.push({
         id: questStageId(one.id, stage),
@@ -155,6 +158,9 @@ export function projectArc(
         title: `${one.name} · Missing stage ${stage}`,
         questId: one.id,
         stage,
+        // A stage that is not declared cannot carry wording, so there is nothing
+        // to show and nothing to claim is missing.
+        objective: null,
         derived: true,
         out: one.transitions.flatMap((transition, index) =>
           transition.from === stage
@@ -183,7 +189,7 @@ export function projectArc(
         id: q.id,
         name: q.name,
         state: q.initial || null,
-        stages: q.stages,
+        stages: q.stages.map(stageName),
         transitions: q.transitions,
       })) ?? null,
   }

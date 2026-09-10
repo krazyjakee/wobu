@@ -39,6 +39,7 @@
 //! this backwards is unrecoverable.
 
 pub mod diagnose;
+pub mod duplicate;
 pub mod error;
 pub mod evaluate;
 pub mod expr;
@@ -51,6 +52,9 @@ pub mod text;
 pub mod world;
 
 pub use diagnose::{Diagnostic, Problem, SceneCatalog, Site};
+pub use duplicate::{
+    DuplicatedWording, WordingContainer, WordingSite, WordingSuppression, duplicated_wording,
+};
 pub use error::{Error, Result, SourceLocation};
 pub use expr::{
     Assignment, CompareOp, Comparison, Condition, Effect, HostCommand, Increment, Operand,
@@ -76,7 +80,8 @@ pub use text::{
 
 pub use world::{
     Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, NamedClassification,
-    Quest, QuestTransition, Relationship, WorldDiagnostic, WorldDocument, WorldEvent,
+    Quest, QuestObjective, QuestStage, QuestTransition, Relationship, WorldDiagnostic,
+    WorldDocument, WorldEvent,
 };
 
 mod source_paths;

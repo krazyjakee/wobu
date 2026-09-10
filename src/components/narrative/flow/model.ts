@@ -340,6 +340,12 @@ export interface FlowQuestStage extends FlowElementBase {
   kind: 'questStage'
   questId: string
   stage: string
+  /**
+   * The player-facing objective for this stage (#207), or null when none is
+   * authored. Shown on the node so a writer can see what the quest log will say
+   * while the player is here, and see at a glance which stages say nothing.
+   */
+  objective: string | null
 }
 
 export type FlowElement =
@@ -561,7 +567,7 @@ export function newElement(scene: FlowScene, kind: FlowKind, groupId?: string | 
         status: 'needsText',
       }
     case 'questStage':
-      return { ...base, kind, questId: '', stage: '', derived: true }
+      return { ...base, kind, questId: '', stage: '', objective: null, derived: true }
     case 'missing':
       return { ...base, kind, targetId: null }
   }

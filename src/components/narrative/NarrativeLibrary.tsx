@@ -415,6 +415,7 @@ function LibrarySession({
                 <th scope="col">Scene</th>
                 <th scope="col">Act</th>
                 <th scope="col">Arc</th>
+                <th scope="col">Setting</th>
                 <th scope="col">Tags</th>
                 <th scope="col">Quests</th>
                 <th scope="col">Participants</th>
@@ -488,6 +489,7 @@ function LibrarySession({
                     </th>
                     <td>{row.act?.name ?? 'Unassigned'}</td>
                     <td>{row.arc?.name ?? 'Unassigned'}</td>
+                    <td>{row.setting?.name ?? 'Not stated'}</td>
                     <td>{row.tags.map((tag) => tag.name).join(', ') || 'No tags'}</td>
                     <td className="nsl-quests">
                       {row.quests.length ? (

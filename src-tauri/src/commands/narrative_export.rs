@@ -150,7 +150,8 @@ fn prepare_checked(
         .transpose()
         .map_err(|e| WobuError::new(Code::Malformed, e.to_string()))?
         .unwrap_or_default();
-    let known_entities = characters(project)?;
+    let (known_entities, known_settings) = membership(project)?;
+    let (wording_suppressions, _) = project.wording_suppressions()?;
     after_read();
     // Re-read every captured scene stamp as well as the aggregate source tree. This
     // detects a change during capture, including one overwritten back before the hash.
@@ -161,12 +162,12 @@ fn prepare_checked(
             .map(|(_, stamp)| stamp)
             != file.stamp
     });
-    let current_entities = characters(project)?;
+    let current_membership = membership(project)?;
     let current_state_stamp = project.state_document()?.map(|(_, stamp)| stamp);
     let state_changed = current_state_stamp != state_document.map(|(_, stamp)| stamp);
     if changed
         || state_changed
-        || current_entities != known_entities
+        || current_membership != (known_entities.clone(), known_settings.clone())
         || project.narrative_fingerprint()? != fingerprint
     {
         return Err(WobuError::new(
@@ -211,9 +212,15 @@ fn prepare_checked(
         &CompileOptions {
             profile,
             known_entities,
+            known_settings,
             commands,
             verified_reviews,
             verified_text_reviews,
+            // Read before the fingerprint check below, so a suppression added
+            // mid-export aborts the capture rather than silencing a warning in
+            // half of it.
+            wording_suppressions,
+            quests: world.quests.clone(),
         },
         &world,
         &analysis.policies,
@@ -285,8 +292,16 @@ fn prepare_checked(
 #[cfg(test)]
 mod tests;
 
-fn characters(project: &Project) -> CommandResult<BTreeSet<wobu_narrative::EntityId>> {
-    let mut found = BTreeSet::new();
+/// The character and `setting` nodes a compilation has to resolve against.
+///
+/// Read in one pass and returned together, because the export re-reads this to
+/// detect a change during capture: two passes could see the world before an edit
+/// for one kind and after it for the other, and agree with neither.
+type Membership = (BTreeSet<wobu_narrative::EntityId>, BTreeSet<wobu_narrative::EntityId>);
+
+fn membership(project: &Project) -> CommandResult<Membership> {
+    let mut characters = BTreeSet::new();
+    let mut settings = BTreeSet::new();
     for summary in project.list_nodes()? {
         let node = project.get_node(summary.id)?;
         if node.id != summary.id {
@@ -295,9 +310,11 @@ fn characters(project: &Project) -> CommandResult<BTreeSet<wobu_narrative::Entit
                 "World entity identity changed. Reload before exporting.",
             ));
         }
-        if node.kind == wobu_core::NodeKind::Character {
-            found.insert(node.id);
-        }
+        match node.kind {
+            wobu_core::NodeKind::Character => characters.insert(node.id),
+            wobu_core::NodeKind::Setting => settings.insert(node.id),
+            _ => false,
+        };
     }
-    Ok(found)
+    Ok((characters, settings))
 }

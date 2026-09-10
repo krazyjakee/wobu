@@ -34,7 +34,7 @@ fn view(
     Ok(WorldFile { document, stamp, diagnostics })
 }
 
-fn get(project: &Project) -> CommandResult<WorldFile> {
+pub(crate) fn get(project: &Project) -> CommandResult<WorldFile> {
     match project.world_document()? {
         Some((document, stamp)) => view(project, document, Some(stamp)),
         None => view(project, WorldDocument::default(), None),
