@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useModalReport } from './useModalReport'
 import { Modal } from '../Modal'
 import { errorMessage } from '../../lib/api'
 import { invalidateNarrative, qk } from '../../lib/queries/keys'
@@ -19,40 +20,18 @@ export function NarrativeRecovery({
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
-  const [items, setItems] = useState<RetainedNarrativeDeletion[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    data,
+    setData: setItems,
+    loading,
+    error,
+    setError,
+    refresh,
+  } = useModalReport(narrativeRecoveryList)
+  const items = data ?? []
   const [restoring, setRestoring] = useState<string | null>(null)
-  const [error, setError] = useState('')
   const [messages, setMessages] = useState<Record<string, string>>({})
   const busy = loading || restoring !== null
-  useEffect(() => {
-    let mounted = true
-    void narrativeRecoveryList()
-      .then((rows) => {
-        if (mounted) setItems(rows)
-      })
-      .catch((reason: unknown) => {
-        if (mounted) setError(errorMessage(reason))
-      })
-      .finally(() => {
-        if (mounted) setLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
-  const refresh = async () => {
-    if (busy) return
-    setLoading(true)
-    setError('')
-    try {
-      setItems(await narrativeRecoveryList())
-    } catch (reason) {
-      setError(errorMessage(reason))
-    } finally {
-      setLoading(false)
-    }
-  }
   const restore = async (item: RetainedNarrativeDeletion) => {
     if (busy || readOnly) return
     setRestoring(item.id)
@@ -67,7 +46,7 @@ export function NarrativeRecovery({
             : `The newer current file was kept. The deleted version is retained at ${result.conflictPath}. Review it using conflict recovery.`,
       }))
       setItems((previous) =>
-        previous.map((row) => (row.id === item.id ? { ...row, restored: true } : row)),
+        (previous ?? []).map((row) => (row.id === item.id ? { ...row, restored: true } : row)),
       )
       invalidateNarrative(queryClient)
       void queryClient.invalidateQueries({ queryKey: qk.conflicts })
@@ -98,7 +77,7 @@ export function NarrativeRecovery({
           current file; competing versions remain available for review.
         </p>
         <div className="nrt-export-actions">
-          <button className="btn" disabled={busy} onClick={() => void refresh()}>
+          <button className="btn" disabled={busy} onClick={() => void refresh(busy)}>
             Refresh history
           </button>
           <button className="btn" disabled={restoring !== null} onClick={onClose}>
