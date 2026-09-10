@@ -19,6 +19,7 @@ import { NarrativeRecovery } from './NarrativeRecovery'
 import { NarrativeReview } from './NarrativeReview'
 import { NarrativeGeneration } from './NarrativeGeneration'
 import { NarrativeExport } from './NarrativeExport'
+import { NarrativeWording } from './NarrativeWording'
 import { NarrativeWorldPane } from './NarrativeWorldPane'
 import { NarrativeSourcePane } from './NarrativeSourcePane'
 import { NarrativeExample } from './NarrativeExample'
@@ -48,6 +49,7 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
   const [textTarget, setTextTarget] = useState<ReviewTarget | undefined>()
   const [exampleOpen, setExampleOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [wordingOpen, setWordingOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
   const [generationOpen, setGenerationOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -199,6 +201,14 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
             Review
           </button>
           <button
+            type="button"
+            className="btn"
+            aria-pressed={wordingOpen}
+            onClick={() => setWordingOpen(true)}
+          >
+            Repeated wording
+          </button>
+          <button
             className="btn"
             disabled={!!draft || !file.data?.scene.beats?.length}
             title={draft ? 'Save the scene draft before planning variants' : undefined}
@@ -327,6 +337,9 @@ function NarrativeWorkspace({ project }: { project: ProjectSummary }) {
         <NarrativeRecovery readOnly={project.readOnly} onClose={() => setRecoveryOpen(false)} />
       )}
       {exportOpen && <NarrativeExport onClose={() => setExportOpen(false)} />}
+      {wordingOpen && (
+        <NarrativeWording readOnly={project.readOnly} onClose={() => setWordingOpen(false)} />
+      )}
       <div
         ref={libraryRoot}
         className="nrt-library-view"

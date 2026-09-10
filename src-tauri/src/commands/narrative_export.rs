@@ -151,6 +151,7 @@ fn prepare_checked(
         .map_err(|e| WobuError::new(Code::Malformed, e.to_string()))?
         .unwrap_or_default();
     let (known_entities, known_settings) = membership(project)?;
+    let (wording_suppressions, _) = project.wording_suppressions()?;
     after_read();
     // Re-read every captured scene stamp as well as the aggregate source tree. This
     // detects a change during capture, including one overwritten back before the hash.
@@ -215,6 +216,10 @@ fn prepare_checked(
             commands,
             verified_reviews,
             verified_text_reviews,
+            // Read before the fingerprint check below, so a suppression added
+            // mid-export aborts the capture rather than silencing a warning in
+            // half of it.
+            wording_suppressions,
         },
         &world,
         &analysis.policies,

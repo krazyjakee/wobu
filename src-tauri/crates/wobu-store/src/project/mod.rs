@@ -29,6 +29,7 @@ pub mod narrative_sync;
 pub mod narrative_variants;
 pub use narrative_deletions::NarrativeDeletionView;
 mod narrative_repair;
+mod narrative_wording;
 mod narrative_world;
 mod nodes;
 mod peers;

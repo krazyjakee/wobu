@@ -37,6 +37,10 @@ pub struct CompileOptions {
     pub known_settings: BTreeSet<EntityId>,
     /// Registered argument domains. A variable argument must fit the entire domain.
     pub commands: BTreeMap<Name, Vec<VarType>>,
+    /// Repeated wordings somebody has signed off (#209). Empty means every
+    /// duplicate is reported, which is the right default: a suppression is an
+    /// author's statement and absence of one is not consent.
+    pub wording_suppressions: Vec<wobu_narrative::WordingSuppression>,
 }
 
 impl Default for CompileOptions {
@@ -48,6 +52,7 @@ impl Default for CompileOptions {
             known_entities: BTreeSet::new(),
             known_settings: BTreeSet::new(),
             commands: BTreeMap::new(),
+            wording_suppressions: Vec::new(),
         }
     }
 }
@@ -539,6 +544,32 @@ pub fn compile(
     ordered_texts.sort_by_key(|asset| asset.id);
     for asset in ordered_texts {
         compile_text(asset, schema, options, &mut graph, &mut diagnostics);
+    }
+
+    // The only check here that cannot be answered by reading one document (#209),
+    // and therefore the only one that runs after both loops: whether a wording is
+    // stored somewhere else as well.
+    //
+    // A warning at both profiles, deliberately. A repeated line is frequently
+    // intended, so refusing a release over one would make the check something to
+    // work around rather than to read; and the suppression exists so an intended
+    // repetition can be answered once rather than re-explained every build.
+    for found in wobu_narrative::duplicated_wording(scenes, texts, &options.wording_suppressions) {
+        let first = &found.sites[0];
+        let (scene, asset) = match first.container {
+            wobu_narrative::WordingContainer::Scene(id) => (id.to_string(), None),
+            wobu_narrative::WordingContainer::TextAsset(id) => {
+                (String::new(), Some(id.to_string()))
+            }
+        };
+        diagnostics.push(CompileDiagnostic {
+            scene,
+            asset,
+            site: first.site,
+            severity: Severity::Warning,
+            code: "duplicated_wording".into(),
+            message: found.message(),
+        });
     }
 
     CompileReport {
