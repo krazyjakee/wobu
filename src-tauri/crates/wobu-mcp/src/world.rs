@@ -266,4 +266,26 @@ pub trait Narrative: Send + Sync + 'static {
     /// nobody in the project has read, and there is no generation receipt
     /// behind it to point at.
     fn draft_dialogue(&self, scene_id: &str, slot_id: &str, body: &str) -> WorldResult;
+
+    /// Add a new dialogue slot to an existing beat, with one wording in it.
+    ///
+    /// The additive counterpart of [`Narrative::draft_dialogue`], which can only
+    /// fill a slot a person already made — and after an import that is usually
+    /// none of them. The case it exists for is establishing narration: a
+    /// narrator line at the top of a scene's first beat, so the scene does not
+    /// open at its decision point.
+    ///
+    /// It adds a slot and nothing else. No beat, no choice, no outcome, no
+    /// effect, no condition and no destination, so it cannot change where the
+    /// story goes; `speaker` is the narrator or a character already in the
+    /// scene's cast, because inviting somebody into a scene is the writer's
+    /// statement. `position` is `"start"` or `"end"`, defaulting to the end.
+    fn add_dialogue_slot(
+        &self,
+        scene_id: &str,
+        beat_id: &str,
+        speaker: &str,
+        position: Option<&str>,
+        body: &str,
+    ) -> WorldResult;
 }

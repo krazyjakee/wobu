@@ -40,8 +40,8 @@
 use serde_json::{Value, json};
 use wobu_mcp::world::{Narrative, SceneFilter, WorldResult};
 use wobu_narrative::{
-    ContentLifecycle, DialogueSlotId, GenerationPolicy, Provenance, Revision, Scene, SceneId, Text,
-    TextAssetId, Variant,
+    BeatId, ContentLifecycle, DialogueSlot, DialogueSlotId, GenerationPolicy, Provenance, Revision,
+    Scene, SceneId, Speaker, Text, TextAssetId, Variant,
 };
 use wobu_store::SourceSave;
 use wobu_store::project::narrative_library::{LibraryQuery, QueryError};
@@ -67,6 +67,12 @@ fn slot_id(raw: &str) -> CommandResult<DialogueSlotId> {
     raw.trim().parse().map_err(|_| {
         WobuError::new(Code::Invalid, format!("{raw:?} is not a dialogue slot id (a ULID)."))
     })
+}
+
+fn beat_id(raw: &str) -> CommandResult<BeatId> {
+    raw.trim()
+        .parse()
+        .map_err(|_| WobuError::new(Code::Invalid, format!("{raw:?} is not a beat id (a ULID).")))
 }
 
 fn asset_id(raw: &str) -> CommandResult<TextAssetId> {
@@ -270,6 +276,36 @@ impl Narrative for ProjectWorld {
             }
         })
     }
+
+    fn add_dialogue_slot(
+        &self,
+        scene: &str,
+        beat: &str,
+        speaker: &str,
+        position: Option<&str>,
+        body: &str,
+    ) -> WorldResult {
+        self.with(|project| {
+            let scene = scene_id(scene)?;
+            let beat = beat_id(beat)?;
+            let position = Position::parse(position)?;
+            let body = body.trim();
+            if body.is_empty() {
+                return Err(WobuError::new(Code::Invalid, "A line needs words in it."));
+            }
+
+            // One `with`, one read, one save — the same shape as
+            // `draft_dialogue`, so the stamp this save presents is the stamp this
+            // read observed and a stale one becomes a conflict sibling rather
+            // than an overwrite.
+            let mut file = project.load_scene(scene)?;
+            let added = add_slot(&mut file.scene, beat, speaker, position, body)?;
+            match project.save_scene(&mut file)? {
+                SourceSave::Saved(_) => Ok(added),
+                SourceSave::Conflict { conflict_path } => Err(WobuError::conflict(conflict_path)),
+            }
+        })
+    }
 }
 
 /// Put one wording into an empty slot, or say why not.
@@ -306,16 +342,7 @@ fn draft_into(scene: &mut Scene, slot: DialogueSlotId, body: &str) -> CommandRes
         ));
     }
 
-    let provenance = Provenance::Imported { source: MCP_SOURCE.to_owned() };
-    let variant = Variant::new(Text {
-        revision: Revision::of(body, &provenance),
-        body: body.to_owned(),
-        provenance,
-        // The cautious default: `Edited`, so a later generation job may propose
-        // a replacement beside this line but may not overwrite it, and `Draft`,
-        // because nobody has read it.
-        lifecycle: ContentLifecycle::default(),
-    });
+    let variant = imported(body);
     let written = json!({
         "sceneId": scene.id.to_string(),
         "beatId": beat_id.to_string(),
@@ -372,6 +399,137 @@ fn project_diagnostics(project: &wobu_store::Project) -> CommandResult<Value> {
         // scene, and reporting nothing for it would read as "this is fine".
         "unreadable": value(&catalog.unreadable),
     }))
+}
+
+/// One wording as it arrives from outside Wobu.
+///
+/// Shared by both writes so there is exactly one answer to what an MCP-written
+/// line is, and so a change to that answer cannot reach one and miss the other.
+/// `Imported` rather than `Human` or `Generated`, for the reason the module
+/// header gives; `ContentLifecycle::default()` is the cautious pair — `Edited`,
+/// so a later generation job may propose a replacement beside this line but not
+/// over it, and `Draft`, because nobody has read it.
+fn imported(body: &str) -> Variant {
+    let provenance = Provenance::Imported { source: MCP_SOURCE.to_owned() };
+    Variant::new(Text {
+        revision: Revision::of(body, &provenance),
+        body: body.to_owned(),
+        provenance,
+        lifecycle: ContentLifecycle::default(),
+    })
+}
+
+/// Where in a beat a new line goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Position {
+    /// Before every existing line. What establishing narration needs: a scene
+    /// that opens on its first spoken line opens at its decision point.
+    Start,
+    End,
+}
+
+impl Position {
+    /// Absent means the end, which is the additive-by-default answer: appending
+    /// cannot change what a reader already sees first.
+    fn parse(raw: Option<&str>) -> CommandResult<Position> {
+        match raw.map(str::trim) {
+            None | Some("") | Some("end") => Ok(Position::End),
+            Some("start") => Ok(Position::Start),
+            Some(other) => Err(WobuError::new(
+                Code::Invalid,
+                format!("{other:?} is not a position. Use \"start\" or \"end\"."),
+            )),
+        }
+    }
+}
+
+/// Add one new dialogue slot to an existing beat, or say why not.
+///
+/// Split out from the save for the reason [`draft_into`] is: an agent acts on
+/// these sentences, so "there is no such beat", "that character is not in this
+/// scene" and "a line needs words in it" have to be told apart by something
+/// other than tone.
+///
+/// It writes a slot and a wording. Nothing else in the scene is touched — no
+/// beat is added, no choice, outcome, effect, condition or destination — and the
+/// existing slots keep their ids and their order, which is what makes this safe
+/// to offer at all.
+fn add_slot(
+    scene: &mut Scene,
+    beat: BeatId,
+    speaker: &str,
+    position: Position,
+    body: &str,
+) -> CommandResult<Value> {
+    let speaker = parse_speaker(scene, speaker)?;
+    let scene_id = scene.id;
+    let beat = scene.beat_mut(beat).ok_or_else(|| {
+        WobuError::new(
+            Code::Invalid,
+            "There is no beat with that id in this scene. get_scene lists them.",
+        )
+    })?;
+
+    let mut slot = DialogueSlot::new(speaker);
+    let variant = imported(body);
+    let written = json!({
+        "sceneId": scene_id.to_string(),
+        "beatId": beat.id.to_string(),
+        "beatTitle": beat.title,
+        "slotId": slot.id.to_string(),
+        "variantId": variant.id.to_string(),
+        "revision": value(&variant.text.revision),
+        "provenance": value(&variant.text.provenance),
+        "position": match position {
+            Position::Start => "start",
+            Position::End => "end",
+        },
+        "note": "A new line, written as an unreviewed draft from outside Wobu. It is in the \
+                 review queue, not in a build. No beat, choice or outcome was added.",
+    });
+    slot.variants.push(variant);
+    match position {
+        Position::Start => beat.dialogue.insert(0, slot),
+        Position::End => beat.dialogue.push(slot),
+    }
+    Ok(written)
+}
+
+/// The narrator, or a character who is already in the cast.
+///
+/// A non-participant is refused rather than quietly added to `participants`,
+/// because who is in a scene is the writer's statement and the editor already
+/// enforces it. The player is refused too: a player line is a choice's
+/// consequence, and handing one out here would be authoring a branch by
+/// implication.
+fn parse_speaker(scene: &Scene, raw: &str) -> CommandResult<Speaker> {
+    let raw = raw.trim();
+    if raw.eq_ignore_ascii_case("narrator") {
+        return Ok(Speaker::Narrator);
+    }
+    if raw.eq_ignore_ascii_case("player") {
+        return Err(WobuError::new(
+            Code::Invalid,
+            "The player's words come from a choice the writer authored, so they cannot be added \
+             here. Use \"narrator\" or a character already in this scene.",
+        ));
+    }
+    let entity: wobu_core::Id = raw.parse().map_err(|_| {
+        WobuError::new(
+            Code::Invalid,
+            format!("{raw:?} is neither \"narrator\" nor a character id (a ULID)."),
+        )
+    })?;
+    if !scene.participants.iter().any(|participant| participant.entity == entity) {
+        return Err(WobuError::new(
+            Code::Invalid,
+            format!(
+                "{entity} is not a participant in this scene, and adding somebody to a scene is \
+                 the writer's decision. get_scene lists the cast."
+            ),
+        ));
+    }
+    Ok(Speaker::Entity(entity))
 }
 
 /// The scene's setting node, named, or why the reference does not resolve.
@@ -532,6 +690,119 @@ mod tests {
         let (mut scene, _) = scene_with_an_empty_slot();
         let error = draft_into(&mut scene, DialogueSlotId::new(), "Words.").unwrap_err();
         assert!(error.message.contains("get_scene"), "{}", error.message);
+    }
+
+    /* ── add_dialogue_slot (#208) ─────────────────────────────────────────── */
+
+    /// A beat with one character line and then choices — the shape a narrative UX
+    /// audit found in every scene of the downstream project: the scene opens at
+    /// its decision point, with no establishing narration.
+    fn scene_opening_at_its_decision_point() -> (Scene, BeatId, wobu_core::Id) {
+        let rosa = wobu_core::Id::generate();
+        let mut beat = Beat::new("Rosa sizes her up");
+        let mut spoken = DialogueSlot::new(Speaker::Entity(rosa));
+        spoken.variants.push(Variant::new(Text::written("You need a job more than a coffee.")));
+        beat.dialogue.push(spoken);
+        beat.choices.push(wobu_narrative::Choice::new(
+            "Take the apron",
+            wobu_narrative::Destination::End { label: "Hired".into() },
+        ));
+        let beat_id = beat.id;
+        let mut scene = Scene::new("A shift at the diner");
+        scene.participants.push(wobu_narrative::Participant { entity: rosa, role: String::new() });
+        scene.beats.push(beat);
+        (scene, beat_id, rosa)
+    }
+
+    #[test]
+    fn a_narrator_line_can_be_put_in_front_of_a_beats_first_spoken_line() {
+        let (mut scene, beat, _) = scene_opening_at_its_decision_point();
+        let existing = scene.beats[0].dialogue[0].id;
+        let existing_variant = scene.beats[0].dialogue[0].variants[0].id;
+
+        let written =
+            add_slot(&mut scene, beat, "narrator", Position::Start, "The griddle is already hot.")
+                .unwrap();
+
+        let dialogue = &scene.beats[0].dialogue;
+        assert_eq!(dialogue.len(), 2);
+        assert_eq!(dialogue[0].speaker, Speaker::Narrator);
+        assert_eq!(dialogue[0].variants[0].text.body, "The griddle is already hot.");
+        assert_eq!(written["position"], "start");
+        assert_eq!(written["slotId"], dialogue[0].id.to_string());
+        // The round trip that matters: the line somebody wrote is still there,
+        // still second, and still the same identity a recording is filed under.
+        assert_eq!(dialogue[1].id, existing);
+        assert_eq!(dialogue[1].variants[0].id, existing_variant);
+        assert_eq!(dialogue[1].variants[0].text.body, "You need a job more than a coffee.");
+    }
+
+    #[test]
+    fn a_line_added_this_way_is_an_unreviewed_draft_from_outside_wobu() {
+        let (mut scene, beat, rosa) = scene_opening_at_its_decision_point();
+        add_slot(&mut scene, beat, &rosa.to_string(), Position::End, "And bring your own shoes.")
+            .unwrap();
+
+        let added = scene.beats[0].dialogue.last().unwrap();
+        assert_eq!(added.speaker, Speaker::Entity(rosa));
+        let text = &added.variants[0].text;
+        assert_eq!(text.provenance, Provenance::Imported { source: MCP_SOURCE.to_owned() });
+        assert_eq!(text.lifecycle.review, ReviewState::Draft);
+        assert_eq!(text.lifecycle.policy, GenerationPolicy::Edited);
+        assert!(text.revision_matches());
+    }
+
+    #[test]
+    fn adding_a_line_adds_no_beat_choice_outcome_or_condition() {
+        // The line #151 draws around generation, held here too: this writes prose
+        // and prose is inert.
+        let (mut scene, beat, _) = scene_opening_at_its_decision_point();
+        let before = scene.clone();
+        add_slot(&mut scene, beat, "narrator", Position::Start, "The griddle is already hot.")
+            .unwrap();
+
+        assert_eq!(scene.beats.len(), before.beats.len());
+        assert_eq!(scene.beats[0].choices, before.beats[0].choices);
+        assert_eq!(scene.beats[0].outcomes, before.beats[0].outcomes);
+        assert!(scene.beats[0].dialogue[0].variants[0].when.is_none());
+        assert_eq!(scene.participants, before.participants);
+    }
+
+    #[test]
+    fn the_three_ways_to_get_this_wrong_are_told_apart_by_their_messages() {
+        let (mut scene, beat, _) = scene_opening_at_its_decision_point();
+        let stranger = wobu_core::Id::generate();
+
+        // A character who is not in the cast is refused, not quietly invited in:
+        // who is in a scene is the writer's statement.
+        let outsider =
+            add_slot(&mut scene, beat, &stranger.to_string(), Position::End, "Words.").unwrap_err();
+        assert!(outsider.message.contains("not a participant"), "{}", outsider.message);
+
+        let unknown_beat =
+            add_slot(&mut scene, BeatId::new(), "narrator", Position::End, "Words.").unwrap_err();
+        assert!(unknown_beat.message.contains("no beat with that id"), "{}", unknown_beat.message);
+
+        // An empty body is refused before the scene is read, so this checks the
+        // whole write rather than `add_slot`.
+        assert!(Position::parse(Some("middle")).unwrap_err().message.contains("start"));
+
+        // And nothing survived any of it.
+        assert_eq!(scene.beats[0].dialogue.len(), 1);
+    }
+
+    #[test]
+    fn the_player_cannot_be_given_a_line_because_that_would_author_a_branch() {
+        let (scene, _, _) = scene_opening_at_its_decision_point();
+        let error = parse_speaker(&scene, "player").unwrap_err();
+        assert!(error.message.contains("choice the writer authored"), "{}", error.message);
+    }
+
+    #[test]
+    fn an_absent_position_appends_rather_than_changing_what_is_read_first() {
+        assert_eq!(Position::parse(None).unwrap(), Position::End);
+        assert_eq!(Position::parse(Some("")).unwrap(), Position::End);
+        assert_eq!(Position::parse(Some(" start ")).unwrap(), Position::Start);
     }
 
     #[test]

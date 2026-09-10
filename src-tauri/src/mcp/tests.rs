@@ -81,7 +81,14 @@ fn the_view_names_every_tool_and_marks_exactly_the_writes() {
         view.tools.iter().filter(|tool| tool.write).map(|tool| tool.name.as_str()).collect();
     assert_eq!(
         writes,
-        ["create_node", "update_node", "link_nodes", "create_scene", "draft_dialogue"]
+        [
+            "create_node",
+            "update_node",
+            "link_nodes",
+            "create_scene",
+            "draft_dialogue",
+            "add_dialogue_slot"
+        ]
     );
     assert!(view.tools.iter().all(|tool| !tool.description.is_empty()));
 }

@@ -64,6 +64,7 @@ the disclosure cannot drift from the implementation.
 | `link_nodes` | Adds an influence edge, changing what future prompts contain |
 | `create_scene` | Adds an empty scene, writing a new YAML file |
 | `draft_dialogue` | Puts one wording into a dialogue slot that has none |
+| `add_dialogue_slot` | Adds a new narrator or cast line to an existing beat |
 
 There is no tool that deletes anything, and no tool that starts a generation. An agent
 connected to Wobu cannot spend money.
@@ -76,18 +77,30 @@ to contribute prose writes `notes_raw`, which is the field for exactly that.
 The narrative writes are the same shape of decision, and there are three things to say about
 them.
 
-**Both are additive.** `create_scene` writes a new file and touches nothing that exists.
+**All three are additive.** `create_scene` writes a new file and touches nothing that exists.
 `draft_dialogue` is refused for a slot that already has a wording and for a locked slot, so
-nothing an agent does over MCP replaces a line anybody wrote. There is no whole-document scene
-write at all: a scene save is guarded by the stamp the reader held, which is what stops two
-writers clobbering each other on a shared folder, and an agent posting one stateless request
-at a time holds no such thing. Reading the file inside the write and saving over whatever is
-there would turn a detected conflict into a silent overwrite of somebody's afternoon.
+nothing an agent does over MCP replaces a line anybody wrote. `add_dialogue_slot` adds a line
+rather than changing one: every existing slot keeps its id, its wording and its place in the
+beat. There is no whole-document scene write at all: a scene save is guarded by the stamp the
+reader held, which is what stops two writers clobbering each other on a shared folder, and an
+agent posting one stateless request at a time holds no such thing. Reading the file inside the
+write and saving over whatever is there would turn a detected conflict into a silent overwrite
+of somebody's afternoon.
 
-**Neither can author a branch.** `draft_dialogue` writes one unconditional wording into a slot
-a person already made. It cannot add a beat, a choice, an outcome, an effect or a condition.
-That is the line [the narrative system](17-narrative-system.md) draws around generation, held
-here for the same reason: prose is inert, and where the story goes is the writer's statement.
+**None of them can author a branch.** `draft_dialogue` writes one unconditional wording into a
+slot a person already made. `add_dialogue_slot` writes one into a slot it makes, in a beat a
+person already made — and it adds no beat, choice, outcome, effect, condition or destination,
+and moves no cursor. Its speaker is the narrator or a character who is already in the scene's
+cast, because inviting somebody into a scene is the writer's statement; the player cannot be
+given lines at all, since a player line is a choice's consequence. That is the line
+[the narrative system](17-narrative-system.md) draws around generation, held here for the same
+reason: prose is inert, and where the story goes is the writer's statement.
+
+`add_dialogue_slot` exists because `draft_dialogue` can only fill a slot somebody already made,
+and after an import that is usually none of them. The case it was added for is establishing
+narration: a scene whose first beat holds one character line and then choices opens at its
+decision point, and the remedy is a narrator line at the top — which `position: "start"` puts
+there.
 
 **The wording is recorded as `Imported`, never as `Human` and never as `Generated`.**
 Provenance is half of what a revision hashes and the review queue reads it to decide what it is

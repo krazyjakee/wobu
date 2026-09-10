@@ -267,6 +267,39 @@ fn draft_dialogue_schema() -> Value {
     )
 }
 
+fn add_dialogue_slot_schema() -> Value {
+    object(
+        json!({
+            "sceneId": { "type": "string" },
+            "beatId": {
+                "type": "string",
+                "description": "The beat to add the line to, from get_scene.",
+            },
+            "speaker": {
+                "type": "string",
+                "description":
+                    "\"narrator\" for unattributed narration, or the id of a character who is \
+                     already a participant in this scene. The player cannot be given lines here, \
+                     and a character who is not in the cast is refused: adding somebody to a \
+                     scene is the writer's decision.",
+            },
+            "position": {
+                "type": "string",
+                "enum": ["start", "end"],
+                "description":
+                    "Where in the beat the new line goes. Defaults to the end. Use \"start\" for \
+                     establishing narration before a beat's first spoken line.",
+            },
+            "body": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The line, as it would be spoken or read. Not a condition and not a command.",
+            },
+        }),
+        &["sceneId", "beatId", "speaker", "body"],
+    )
+}
+
 /// Everything, in the order an agent should meet it.
 ///
 /// Reads first and writes last is not cosmetic: `tools/list` truncates in some
@@ -471,6 +504,18 @@ static CATALOGUE: &[Tool] = &[
         write: true,
         schema: draft_dialogue_schema,
     },
+    Tool {
+        name: "add_dialogue_slot",
+        title: "Add a line to a beat",
+        description: "Append or prepend a new dialogue line to an existing beat, as an unreviewed \
+             draft marked as coming from outside Wobu. For narration a scene is missing — an \
+             establishing line before a beat's first spoken line — and for an extra line where a \
+             beat has only one. The speaker is the narrator or a character already in the scene's \
+             cast. It adds a line and nothing else: no beat, choice, outcome, effect, condition or \
+             destination, so it cannot change where the story goes.",
+        write: true,
+        schema: add_dialogue_slot_schema,
+    },
 ];
 
 /// The whole catalogue, reads and writes alike.
@@ -512,7 +557,14 @@ mod tests {
         let writes: Vec<_> = CATALOGUE.iter().filter(|t| t.write).map(|t| t.name).collect();
         assert_eq!(
             writes,
-            ["create_node", "update_node", "link_nodes", "create_scene", "draft_dialogue"]
+            [
+                "create_node",
+                "update_node",
+                "link_nodes",
+                "create_scene",
+                "draft_dialogue",
+                "add_dialogue_slot"
+            ]
         );
     }
 
@@ -523,7 +575,7 @@ mod tests {
         // that nothing checks is a count that goes stale on the next commit.
         let reads = CATALOGUE.iter().filter(|tool| !tool.write).count();
         let writes = CATALOGUE.len() - reads;
-        assert_eq!((reads, writes), (18, 5), "update the privacy policy and the guide with these");
+        assert_eq!((reads, writes), (18, 6), "update the privacy policy and the guide with these");
     }
 
     #[test]

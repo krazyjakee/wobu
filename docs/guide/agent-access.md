@@ -62,15 +62,20 @@ single scene.
 
 There is **no deleting and no generating**. An assistant connected to Wobu cannot destroy anything
 and cannot start a job, so nothing it does can spend your money. Even with writing switched on, all
-it can do is make a page, update a page, join two pages together, make an empty scene, and put words
-into a line that is still blank — and it cannot write the machine's description. An assistant
+it can do is make a page, update a page, join two pages together, make an empty scene, put words
+into a line that is still blank, and add a new line to a beat — and it cannot write the machine's
+description. An assistant
 contributing writing puts it in the notes column, where your own words go, and Enhance stays
 something a person presses.
 
 In the story it is stricter still. A line that already has words is left alone, a locked line is
 left alone, and there is no way for an assistant to change a whole scene, add a choice, or decide
-where a branch goes. What it writes arrives as an unreviewed draft, marked as having come from
-outside Wobu rather than from you, and waits in the review queue like any other draft.
+where a branch goes. It can add a line to a beat — useful for the scene-setting narration a scene
+is missing, which it can put ahead of the first line somebody wrote — but only as the narrator or
+as somebody already in that scene's cast, never as the player, and every line that was already
+there keeps its words and its place. What it writes arrives as an unreviewed draft, marked as
+having come from outside Wobu rather than from you, and waits in the review queue like any other
+draft.
 
 When writing is off, those tools are not offered at all, so it does not try and then fail.
 

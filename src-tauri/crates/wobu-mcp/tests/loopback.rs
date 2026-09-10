@@ -92,6 +92,16 @@ impl Narrative for TestWorld {
     fn draft_dialogue(&self, _scene: &str, _slot: &str, _body: &str) -> WorldResult {
         Err(WorldError::new("the test world refuses to be written to"))
     }
+    fn add_dialogue_slot(
+        &self,
+        _scene: &str,
+        _beat: &str,
+        _speaker: &str,
+        _position: Option<&str>,
+        _body: &str,
+    ) -> WorldResult {
+        Err(WorldError::new("the test world refuses to be written to"))
+    }
 }
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

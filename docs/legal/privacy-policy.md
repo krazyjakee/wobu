@@ -166,10 +166,10 @@ another program, so it is described in full:
   authored in the project — scenes, beats, dialogue including drafts nobody has approved, declared
   state and canon. That is your project content, disclosed to whichever agent you connected.
 - **What an agent can change** is a second, separate switch, also off by default. Until you grant it,
-  the write tools are not merely refused — they are not advertised at all. The five write tools only
-  ever add: they create an entity or a scene, amend fields on an entity, add a link, or put words
-  into a dialogue line that is still empty. None deletes, none replaces wording somebody else wrote,
-  and none starts a generation.
+  the write tools are not merely refused — they are not advertised at all. The six write tools only
+  ever add: they create an entity or a scene, amend fields on an entity, add a link, put words into
+  a dialogue line that is still empty, or add a new line to a beat that already exists. None
+  deletes, none replaces wording somebody else wrote, and none starts a generation.
 - **Programs Wobu runs.** If you configure MCP servers of your own, Wobu launches them directly (never
   through a shell), talks to them over stdin/stdout, and stops them when you disable them or quit. A
   newly added server is added switched off. What those programs do, and where they send anything, is

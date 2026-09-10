@@ -314,6 +314,13 @@ impl Dispatcher {
                 required(args, "slotId")?,
                 required(args, "body")?,
             ),
+            "add_dialogue_slot" => self.world.narrative().add_dialogue_slot(
+                required(args, "sceneId")?,
+                required(args, "beatId")?,
+                required(args, "speaker")?,
+                text(args, "position"),
+                required(args, "body")?,
+            ),
 
             other => Err(WorldError::new(format!("no such tool: {other}"))),
         }
@@ -614,6 +621,21 @@ mod tests {
             }
             self.writes.lock().unwrap().push(format!("draft {scene_id} {slot_id} {body}"));
             Ok(json!({ "slotId": slot_id }))
+        }
+        fn add_dialogue_slot(
+            &self,
+            scene_id: &str,
+            beat_id: &str,
+            speaker: &str,
+            position: Option<&str>,
+            body: &str,
+        ) -> WorldResult {
+            self.guard()?;
+            self.writes.lock().unwrap().push(format!(
+                "add {scene_id} {beat_id} {speaker} {} {body}",
+                position.unwrap_or("end")
+            ));
+            Ok(json!({ "beatId": beat_id }))
         }
     }
 
