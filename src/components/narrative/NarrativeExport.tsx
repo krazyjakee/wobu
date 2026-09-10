@@ -162,7 +162,15 @@ export function NarrativeExport({ onClose }: { onClose: () => void }) {
           <ul aria-label="Export diagnostics">
             {check.diagnostics.map((diagnostic, index) => (
               <li key={index}>
-                {diagnostic.severity}: {diagnostic.message} (scene {diagnostic.scene})
+                {diagnostic.severity}: {diagnostic.message}{' '}
+                {/* Name whichever document is responsible. A quest and a
+                    supporting text asset are not scenes, and reporting them as
+                    "scene " with nothing after it read as a bug. */}
+                {diagnostic.quest
+                  ? `(quest ${diagnostic.quest}${diagnostic.stage ? `, stage ${diagnostic.stage}` : ''})`
+                  : diagnostic.asset
+                    ? `(supporting text ${diagnostic.asset})`
+                    : `(scene ${diagnostic.scene})`}
               </li>
             ))}
           </ul>

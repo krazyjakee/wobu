@@ -389,6 +389,8 @@ export type DiagnosticKind =
   | 'textEntry'
   | 'textLine'
   | 'textVariant'
+  /** A quest stage's objective wording (#207). */
+  | 'questObjective'
 
 /**
  * A stable machine-readable name for a problem, distinct from its `message`,
