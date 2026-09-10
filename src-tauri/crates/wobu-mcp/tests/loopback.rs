@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use wobu_mcp::dispatch::Silent;
-use wobu_mcp::world::WorldResult;
+use wobu_mcp::world::{Narrative, SceneFilter, WorldResult};
 use wobu_mcp::{Dispatcher, NodePatch, Running, Server, Token, World, WorldError};
 
 struct TestWorld;
@@ -54,6 +54,42 @@ impl World for TestWorld {
         Err(WorldError::new("the test world refuses to be written to"))
     }
     fn link_nodes(&self, _node: &str, _to: &str, _role: &str, _weight: Option<f32>) -> WorldResult {
+        Err(WorldError::new("the test world refuses to be written to"))
+    }
+    fn narrative(&self) -> &dyn Narrative {
+        self
+    }
+}
+
+impl Narrative for TestWorld {
+    fn overview(&self) -> WorldResult {
+        Ok(json!({ "sceneCount": 0 }))
+    }
+    fn scenes(&self, _filter: &SceneFilter) -> WorldResult {
+        Ok(json!({ "rows": [] }))
+    }
+    fn scene(&self, id: &str) -> WorldResult {
+        Ok(json!({ "id": id }))
+    }
+    fn declared_state(&self) -> WorldResult {
+        Ok(json!({ "variables": [] }))
+    }
+    fn canon(&self) -> WorldResult {
+        Ok(json!({ "facts": [] }))
+    }
+    fn text_assets(&self) -> WorldResult {
+        Ok(json!({ "assets": [] }))
+    }
+    fn text_asset(&self, _id: &str) -> WorldResult {
+        Ok(json!({}))
+    }
+    fn diagnostics(&self, _scene: Option<&str>) -> WorldResult {
+        Ok(json!({ "diagnostics": [] }))
+    }
+    fn create_scene(&self, _name: &str) -> WorldResult {
+        Err(WorldError::new("the test world refuses to be written to"))
+    }
+    fn draft_dialogue(&self, _scene: &str, _slot: &str, _body: &str) -> WorldResult {
         Err(WorldError::new("the test world refuses to be written to"))
     }
 }

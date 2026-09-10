@@ -59,7 +59,7 @@ Taking it would rewind an entire save every time somebody tried to take back a w
 | Providers and models | What this world uses, and the keys on this computer. See [Providers and keys](providers.md). |
 | Legal | The terms and the privacy policy, read from the files that came with the app, and what you agreed to. |
 | Introduction | Runs the opening tour again. It never re-asks you to agree to anything. |
-| Agent access (MCP) | Letting an AI assistant read or change your world. See [Agent access](agent-access.md). |
+| Agent access (MCP) | Letting an AI assistant read or change your world and the story you have written in it. See [Agent access](agent-access.md). |
 | Storage | Where the search index is, how big it is, and **Rebuild search index**. |
 | Editor | How long Wobu waits before saving. Raise it on a slow shared drive. |
 | Appearance | Theme — *Match system*, *Light* or *Dark* — and how big everything is. |

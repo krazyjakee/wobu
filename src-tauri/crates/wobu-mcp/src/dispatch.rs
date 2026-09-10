@@ -35,7 +35,7 @@ use crate::jsonrpc::{
     INTERNAL_ERROR, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, Request, Response,
 };
 use crate::tools;
-use crate::world::{NodePatch, World, WorldError, WorldResult};
+use crate::world::{NodePatch, SceneFilter, World, WorldError, WorldResult};
 
 /// The revisions this server will speak. Newest first; the first entry is what
 /// is offered to a client that asks for something unrecognised.
@@ -164,15 +164,21 @@ impl Dispatcher {
     fn instructions(&self) -> String {
         let mut text = String::from(
             "This is one person's Wobu world-building project, open on their own machine. \
-             Read it with world_overview first. Ids are ULIDs and come from list_nodes or \
-             search_nodes. compile_prompt and resolve_influence explain what a generation \
-             would send without generating anything or spending anything.",
+             It has two halves. The world model is entities and the influence between them: \
+             read it with world_overview first, and note that ids are ULIDs that come from \
+             list_nodes or search_nodes. compile_prompt and resolve_influence explain what a \
+             generation would send without generating anything or spending anything. The other \
+             half is the authored story: narrative_overview, then list_scenes, get_scene and \
+             narrative_state, which is the only list of variables a condition may mention. A \
+             scene's participants are the world model's characters, so the two halves share ids.",
         );
         if self.writes_allowed() {
             text.push_str(
-                " Writes are enabled: create_node, update_node and link_nodes change files in \
-                 the user's project folder, and the user sees every call. Prefer notesRaw over \
-                 rewriting a summary somebody wrote by hand.",
+                " Writes are enabled: create_node, update_node, link_nodes, create_scene and \
+                 draft_dialogue change files in the user's project folder, and the user sees \
+                 every call. Prefer notesRaw over rewriting a summary somebody wrote by hand, \
+                 and note that draft_dialogue only fills a slot that is empty — it will not \
+                 replace a line, and nothing here can author a branch.",
             );
         } else {
             text.push_str(" This connection is read-only. No tool here can change anything.");
@@ -282,6 +288,33 @@ impl Dispatcher {
                 required(args, "role")?,
                 args.get("weight").and_then(Value::as_f64).map(|weight| weight as f32),
             ),
+
+            "narrative_overview" => self.world.narrative().overview(),
+            "list_scenes" => self.world.narrative().scenes(&scene_filter(args)?),
+            // The same call as `list_scenes` with a query, deliberately: one
+            // implementation means a hit found by searching and a row found by
+            // filtering describe the same scene the same way. Two tools because
+            // "find me the line about the logbook" and "show me Act II" are
+            // different questions, and a model given one schema for both picks
+            // the wrong half of it.
+            "search_narrative" => self.world.narrative().scenes(&SceneFilter {
+                query: required(args, "query")?.to_owned(),
+                limit: limit(args, 25).min(SCENE_PAGE_MAX),
+                ..SceneFilter::default()
+            }),
+            "get_scene" => self.world.narrative().scene(required(args, "sceneId")?),
+            "narrative_state" => self.world.narrative().declared_state(),
+            "narrative_world" => self.world.narrative().canon(),
+            "list_text_assets" => self.world.narrative().text_assets(),
+            "get_text_asset" => self.world.narrative().text_asset(required(args, "assetId")?),
+            "narrative_diagnostics" => self.world.narrative().diagnostics(text(args, "sceneId")),
+            "create_scene" => self.world.narrative().create_scene(required(args, "name")?),
+            "draft_dialogue" => self.world.narrative().draft_dialogue(
+                required(args, "sceneId")?,
+                required(args, "slotId")?,
+                required(args, "body")?,
+            ),
+
             other => Err(WorldError::new(format!("no such tool: {other}"))),
         }
     }
@@ -296,9 +329,13 @@ impl Dispatcher {
         let result = match uri {
             "wobu://project" => self.world.overview(),
             "wobu://nodes" => self.world.list_nodes(None),
+            "wobu://scenes" => self.world.narrative().scenes(&SceneFilter::default()),
             other => match other.strip_prefix("wobu://node/") {
                 Some(id) => self.world.get_node(id),
-                None => return Err((INVALID_PARAMS, format!("no such resource: {other}"))),
+                None => match other.strip_prefix("wobu://scene/") {
+                    Some(id) => self.world.narrative().scene(id),
+                    None => return Err((INVALID_PARAMS, format!("no such resource: {other}"))),
+                },
             },
         };
 
@@ -327,6 +364,24 @@ fn required<'a>(args: &'a Args, key: &str) -> std::result::Result<&'a str, World
         .ok_or_else(|| WorldError::new(format!("{key} is required and must be a non-empty string")))
 }
 
+/// The library's own page ceiling. Lower than [`limit`]'s because a scene row
+/// carries beats, cast and coverage counts rather than one line of summary, and
+/// a hundred of those is already more than a model will read.
+const SCENE_PAGE_MAX: usize = 100;
+
+/// The filter object, deserialised whole rather than field by field.
+///
+/// A typo in a filter is a request that is wrong, not a search that found
+/// nothing, and the schema is closed so a client can be told which key it
+/// invented. The limit is clamped after deserialising for the usual reason: an
+/// agent's arithmetic is not a bound.
+fn scene_filter(args: &Args) -> std::result::Result<SceneFilter, WorldError> {
+    let mut filter: SceneFilter = serde_json::from_value(Value::Object(args.clone()))
+        .map_err(|error| WorldError::new(format!("that filter is not usable: {error}")))?;
+    filter.limit = filter.limit.clamp(1, SCENE_PAGE_MAX);
+    Ok(filter)
+}
+
 /// Clamped rather than trusted. An agent that asks for a million rows gets two
 /// hundred: the ceiling is there because the answer is serialised into a model's
 /// context, and a reply nobody can read is worse than a short one.
@@ -351,18 +406,32 @@ fn resources_list() -> Value {
                 "description": "Every entity in the open world, as summaries.",
                 "mimeType": "application/json",
             },
+            {
+                "uri": "wobu://scenes",
+                "name": "Scenes",
+                "description": "The first page of the scene library, with text coverage per scene.",
+                "mimeType": "application/json",
+            },
         ]
     })
 }
 
 fn resource_templates() -> Value {
     json!({
-        "resourceTemplates": [{
-            "uriTemplate": "wobu://node/{id}",
-            "name": "One node",
-            "description": "A single entity in full, by ULID.",
-            "mimeType": "application/json",
-        }]
+        "resourceTemplates": [
+            {
+                "uriTemplate": "wobu://node/{id}",
+                "name": "One node",
+                "description": "A single entity in full, by ULID.",
+                "mimeType": "application/json",
+            },
+            {
+                "uriTemplate": "wobu://scene/{id}",
+                "name": "One scene",
+                "description": "A whole scene document, by ULID.",
+                "mimeType": "application/json",
+            },
+        ]
     })
 }
 
@@ -397,6 +466,7 @@ fn pretty(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::Narrative;
     use std::sync::Mutex;
 
     #[derive(Default)]
@@ -491,6 +561,60 @@ mod tests {
             self.writes.lock().unwrap().push(format!("link {node_id} {to_id} {role}"));
             Ok(json!({ "ok": true }))
         }
+        fn narrative(&self) -> &dyn Narrative {
+            self
+        }
+    }
+
+    impl Narrative for FakeWorld {
+        fn overview(&self) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "sceneCount": 1, "emptySlots": 1 }))
+        }
+        fn scenes(&self, filter: &SceneFilter) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "query": filter.query, "act": filter.act, "limit": filter.limit }))
+        }
+        fn scene(&self, id: &str) -> WorldResult {
+            self.guard()?;
+            if id == "missing" {
+                return Err(WorldError::new("no scene with id missing"));
+            }
+            Ok(json!({ "id": id, "name": "The council hearing" }))
+        }
+        fn declared_state(&self) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "variables": [] }))
+        }
+        fn canon(&self) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "facts": [] }))
+        }
+        fn text_assets(&self) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "assets": [] }))
+        }
+        fn text_asset(&self, id: &str) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "id": id }))
+        }
+        fn diagnostics(&self, scene_id: Option<&str>) -> WorldResult {
+            self.guard()?;
+            Ok(json!({ "sceneId": scene_id, "diagnostics": [] }))
+        }
+        fn create_scene(&self, name: &str) -> WorldResult {
+            self.guard()?;
+            self.writes.lock().unwrap().push(format!("create scene {name}"));
+            Ok(json!({ "id": "scene", "name": name }))
+        }
+        fn draft_dialogue(&self, scene_id: &str, slot_id: &str, body: &str) -> WorldResult {
+            self.guard()?;
+            if slot_id == "taken" {
+                return Err(WorldError::new("that slot already has a wording"));
+            }
+            self.writes.lock().unwrap().push(format!("draft {scene_id} {slot_id} {body}"));
+            Ok(json!({ "slotId": slot_id }))
+        }
     }
 
     struct Fixture {
@@ -529,6 +653,116 @@ mod tests {
         let request = request("tools/call", json!({ "name": tool, "arguments": arguments }));
         let response = fixture.dispatcher.handle(&request).expect("a call is not a notification");
         serde_json::to_value(response).unwrap()
+    }
+
+    #[test]
+    fn the_narrative_tools_reach_the_story_half_and_not_the_world_half() {
+        // The seam this whole split exists for: `get_scene` must not be
+        // answerable by the node reader that happens to share a fixture.
+        let fixture = fixture(false);
+        let answer = call(&fixture, "get_scene", json!({ "sceneId": "abc" }));
+        assert_eq!(answer["result"]["structuredContent"]["name"], "The council hearing");
+
+        let answer = call(&fixture, "narrative_overview", json!({}));
+        assert_eq!(answer["result"]["structuredContent"]["sceneCount"], 1);
+    }
+
+    #[test]
+    fn a_scene_filter_defaults_to_a_page_rather_than_to_nothing() {
+        // `{}` is an agent asking for the first page. A limit of zero would be
+        // a query the library refuses, which reads to a model as "there are no
+        // scenes" rather than as "you asked for none".
+        let fixture = fixture(false);
+        let answer = call(&fixture, "list_scenes", json!({}));
+        assert_eq!(answer["result"]["structuredContent"]["limit"], 25);
+
+        let answer = call(&fixture, "list_scenes", json!({ "limit": 10_000 }));
+        assert_eq!(answer["result"]["structuredContent"]["limit"], SCENE_PAGE_MAX);
+    }
+
+    #[test]
+    fn a_filter_key_that_does_not_exist_is_reported_rather_than_quietly_ignored() {
+        // A typo in a filter is a request that is wrong. Ignoring it would
+        // answer a different question than the one asked and look like a
+        // successful search that found the whole project.
+        let fixture = fixture(false);
+        let answer = call(&fixture, "list_scenes", json!({ "actt": "01J" }));
+        assert_eq!(answer["result"]["isError"], true);
+        let text = answer["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("actt"), "the refusal has to name the key: {text}");
+    }
+
+    #[test]
+    fn searching_the_story_is_the_same_call_as_listing_it_with_a_query() {
+        let fixture = fixture(false);
+        let searched = call(&fixture, "search_narrative", json!({ "query": "logbook" }));
+        let listed = call(&fixture, "list_scenes", json!({ "query": "logbook" }));
+        assert_eq!(
+            searched["result"]["structuredContent"], listed["result"]["structuredContent"],
+            "two tools, one answer",
+        );
+    }
+
+    #[test]
+    fn drafting_a_line_is_refused_until_the_write_opt_in_is_on() {
+        let fixture = fixture(false);
+        let answer = call(
+            &fixture,
+            "draft_dialogue",
+            json!({
+                "sceneId": "scene", "slotId": "slot", "body": "The ridge is burning.",
+            }),
+        );
+        assert_eq!(answer["result"]["isError"], true);
+        assert!(fixture.world.writes.lock().unwrap().is_empty());
+
+        fixture.writes.store(true, Ordering::SeqCst);
+        let answer = call(
+            &fixture,
+            "draft_dialogue",
+            json!({
+                "sceneId": "scene", "slotId": "slot", "body": "The ridge is burning.",
+            }),
+        );
+        assert_eq!(answer["result"]["isError"], false);
+        assert_eq!(
+            fixture.world.writes.lock().unwrap().as_slice(),
+            ["draft scene slot The ridge is burning."]
+        );
+    }
+
+    #[test]
+    fn a_slot_that_already_has_words_is_a_refusal_the_agent_can_read() {
+        // Not a fault: an agent told "that slot already has a wording" can pick
+        // another slot, where one told the request was malformed cannot.
+        let fixture = fixture(true);
+        let answer = call(
+            &fixture,
+            "draft_dialogue",
+            json!({
+                "sceneId": "scene", "slotId": "taken", "body": "words",
+            }),
+        );
+        assert!(answer.get("error").is_none(), "{answer}");
+        assert_eq!(answer["result"]["isError"], true);
+        assert!(fixture.world.writes.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_scene_resources_read_the_story_and_a_made_up_one_is_still_refused() {
+        let fixture = fixture(false);
+        let answer = fixture
+            .dispatcher
+            .handle(&request("resources/read", json!({ "uri": "wobu://scene/abc" })))
+            .unwrap();
+        let text = answer.result.unwrap()["contents"][0]["text"].as_str().unwrap().to_owned();
+        assert!(text.contains("The council hearing"), "{text}");
+
+        let answer = fixture
+            .dispatcher
+            .handle(&request("resources/read", json!({ "uri": "wobu://beat/abc" })))
+            .unwrap();
+        assert!(answer.result.is_none(), "an invented uri answered");
     }
 
     #[test]
@@ -574,7 +808,8 @@ mod tests {
             .map(|tool| tool["name"].as_str().unwrap().to_owned())
             .collect();
 
-        for write in ["create_node", "update_node", "link_nodes"] {
+        for write in ["create_node", "update_node", "link_nodes", "create_scene", "draft_dialogue"]
+        {
             assert!(!listed.contains(&write.to_owned()), "{write} was advertised with writes off");
         }
         assert!(listed.contains(&"get_node".to_owned()));

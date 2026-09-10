@@ -98,7 +98,9 @@ when both the master switch and that server's own switch are on.
 
 `src-tauri/src/mcp.rs` holds the settings (`mcp.json` in app data, `0600`, never in a project),
 the listener handle — dropping it is what "off" means — and the implementation of the crate's
-`World` trait against the open project. Every tool call is emitted as `mcp:activity` and
+`World` trait against the open project; `src-tauri/src/mcp/narrative.rs` implements its
+`Narrative` trait, which is the authored story rather than the world model, and whose only
+writes add a scene or fill a dialogue slot that is empty. Every tool call is emitted as `mcp:activity` and
 written to the diagnostics log. Full detail, including what is deliberately not implemented,
 in [16 — Agent Access (MCP)](16-mcp.md).
 

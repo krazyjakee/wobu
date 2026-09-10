@@ -41,7 +41,7 @@
 //! and the whole argument for this crate rests on being able to reason about it.
 //!
 //! It also holds no domain knowledge. The tools are named and described here
-//! and executed through the [`World`] trait, which the shell
+//! and executed through the [`World`] and [`Narrative`] traits, which the shell
 //! implements against the open project. That split is what lets the tests below
 //! exercise the whole protocol without a Tauri app, a project folder or a disk.
 
@@ -57,7 +57,7 @@ pub use config::{ClientServer, ClientSettings, ServerSettings, Token};
 pub use dispatch::{Audit, CallRecord, Dispatcher};
 pub use server::{Running, Server};
 pub use tools::{Tool, catalogue};
-pub use world::{NodePatch, World, WorldError};
+pub use world::{Narrative, NodePatch, SceneFilter, World, WorldError};
 
 use std::net::SocketAddr;
 

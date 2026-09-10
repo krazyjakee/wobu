@@ -43,16 +43,34 @@ your own machine can.
 | `resolve_influence` | Everything that would feed a picture of it |
 | `compile_prompt` | The prompt that would come out |
 | `list_generations`, `get_generation` | Records of pictures you have made |
+| `narrative_overview` | Whether there is a story here, and how big |
+| `list_scenes` | The scene library, with the same filters you use |
+| `search_narrative` | A search across every scene, beat and line |
+| `get_scene` | One scene, whole — its beats, lines and branches |
+| `narrative_state` | The variables the story is allowed to branch on |
+| `narrative_world` | Who knows what, and what is true |
+| `list_text_assets`, `get_text_asset` | Barks, letters and the rest |
+| `narrative_diagnostics` | What is broken, in one scene or all of them |
 
-It can also fetch the world itself, the list of pages, and any single page.
+Your story is included, and that means the dialogue nobody has approved yet. If an assistant can
+read this project, it can read your unfinished drafts.
+
+It can also fetch the world itself, the list of pages, any single page, the scene list and any
+single scene.
 
 ### What it cannot do
 
 There is **no deleting and no generating**. An assistant connected to Wobu cannot destroy anything
 and cannot start a job, so nothing it does can spend your money. Even with writing switched on, all
-it can do is make a page, update a page, and join two pages together — and it cannot write the
-machine's description. An assistant contributing writing puts it in the notes column, where your own
-words go, and Enhance stays something a person presses.
+it can do is make a page, update a page, join two pages together, make an empty scene, and put words
+into a line that is still blank — and it cannot write the machine's description. An assistant
+contributing writing puts it in the notes column, where your own words go, and Enhance stays
+something a person presses.
+
+In the story it is stricter still. A line that already has words is left alone, a locked line is
+left alone, and there is no way for an assistant to change a whole scene, add a choice, or decide
+where a branch goes. What it writes arrives as an unreviewed draft, marked as having come from
+outside Wobu rather than from you, and waits in the review queue like any other draft.
 
 When writing is off, those tools are not offered at all, so it does not try and then fail.
 

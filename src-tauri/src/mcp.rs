@@ -48,13 +48,16 @@ use wobu_influence::{Budget, Shot, Sliders, World as InfluenceWorld, compile, fr
 use wobu_mcp::client::{Registry, RemoteServer};
 use wobu_mcp::config::{ClientServer, ClientSettings, ServerSettings, Token};
 use wobu_mcp::dispatch::{Audit, CallRecord};
-use wobu_mcp::world::{NodePatch, World, WorldError, WorldResult};
+use wobu_mcp::world::{Narrative, NodePatch, World, WorldError, WorldResult};
 use wobu_mcp::{Dispatcher, Running, Server};
 use wobu_store::{Project, SaveOutcome, paths};
 
 use crate::diag;
 use crate::error::{Code, CommandResult, WobuError};
 use crate::state::AppState;
+
+/// The story half of the same project. See [`wobu_mcp::world::Narrative`].
+mod narrative;
 
 /// One MCP tool call, as it happened. `src/components/McpSection.tsx` listens.
 pub const MCP_ACTIVITY: &str = "mcp:activity";
@@ -625,6 +628,10 @@ impl World for ProjectWorld {
             let role = parse_role(role)?;
             saved(project.add_node_link(node, to, role, weight, None)?)
         })
+    }
+
+    fn narrative(&self) -> &dyn Narrative {
+        self
     }
 }
 

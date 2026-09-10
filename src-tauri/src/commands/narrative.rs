@@ -699,7 +699,7 @@ pub fn narrative_diagnostics(
     state.with(|project| diagnostics(project, scene_id, scene))
 }
 
-pub(super) fn diagnostics(
+pub(crate) fn diagnostics(
     project: &Project,
     scene_id: SceneId,
     scene: Option<Scene>,
@@ -708,17 +708,45 @@ pub(super) fn diagnostics(
         Some(scene) => scene,
         None => project.load_scene(scene_id)?.scene,
     };
-    let schema = project.state_schema()?;
-    let catalog = SceneCatalog::of(project.scene_ids()?);
-    let world = project.world_document()?.map(|(document, _)| document).unwrap_or_default();
-    Ok(scene
-        .diagnostics(&schema, &catalog)
+    Ok(diagnose(&scene, &project_context(project)?))
+}
+
+/// The project-wide inputs every scene is checked against.
+///
+/// Read once and reused rather than re-read per scene. A caller checking one
+/// scene pays for one read either way; a caller checking three hundred of them
+/// — `narrative_diagnostics` over MCP is the one that does — would otherwise
+/// re-scan the scene folder and re-read the state and world files once per
+/// scene, which is nine hundred file operations to answer one question.
+pub(crate) struct DiagnosticContext {
+    schema: wobu_narrative::StateSchema,
+    catalog: SceneCatalog,
+    world: wobu_narrative::WorldDocument,
+}
+
+pub(crate) fn project_context(project: &Project) -> CommandResult<DiagnosticContext> {
+    Ok(DiagnosticContext {
+        schema: project.state_schema()?,
+        // Always the project's, never the caller's: a cross-scene link is
+        // checked against the scenes that really exist rather than against
+        // anything the caller asserted.
+        catalog: SceneCatalog::of(project.scene_ids()?),
+        world: project.world_document()?.map(|(document, _)| document).unwrap_or_default(),
+    })
+}
+
+pub(crate) fn diagnose(scene: &Scene, context: &DiagnosticContext) -> Vec<DiagnosticView> {
+    scene
+        .diagnostics(&context.schema, &context.catalog)
         .into_iter()
         .chain(
-            scene.classification_diagnostics(&world).into_iter().map(|(diagnostic, _)| diagnostic),
+            scene
+                .classification_diagnostics(&context.world)
+                .into_iter()
+                .map(|(diagnostic, _)| diagnostic),
         )
         .map(|diagnostic| DiagnosticView::of(&diagnostic))
-        .collect())
+        .collect()
 }
 
 /* ── layout ───────────────────────────────────────────────────────────────── */
