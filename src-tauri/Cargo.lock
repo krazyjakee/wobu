@@ -7871,7 +7871,7 @@ dependencies = [
 
 [[package]]
 name = "wobu"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -7914,7 +7914,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "indexmap 2.14.0",
@@ -7926,7 +7926,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-imagine"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -7947,7 +7947,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-influence"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -7957,7 +7957,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-jobs"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "serde",
@@ -7969,7 +7969,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-llm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "futures-core",
@@ -7983,7 +7983,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-mcp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bytes",
  "http",
@@ -8000,7 +8000,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "chrono",
@@ -8014,7 +8014,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-build"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "serde",
@@ -8029,7 +8029,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-compiler"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "serde",
@@ -8040,7 +8040,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-context"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "serde",
@@ -8054,7 +8054,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-deps"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "serde",
@@ -8068,7 +8068,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-generation"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -8079,7 +8079,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-locale"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "csv",
  "serde",
@@ -8091,7 +8091,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-media"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "csv",
@@ -8105,7 +8105,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-package"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "serde",
@@ -8119,7 +8119,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-runtime"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -8130,7 +8130,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-scenarios"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -8142,7 +8142,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-narrative-variants"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "serde",
@@ -8153,7 +8153,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-store"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "chrono",
@@ -8182,7 +8182,7 @@ dependencies = [
 
 [[package]]
 name = "wobu-sync"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "iroh",
