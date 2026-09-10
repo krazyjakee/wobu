@@ -351,9 +351,7 @@ impl WorldDocument {
             // A bare stage name is version-1 shape and stays readable; a stage
             // carrying an objective is not, and a version-1 file claiming one is
             // refused rather than read and then written back as something else.
-            if value["quests"]
-                .as_array()
-                .is_some_and(|quests| quests.iter().any(structured_stages))
+            if value["quests"].as_array().is_some_and(|quests| quests.iter().any(structured_stages))
             {
                 return Err(crate::source::require_v2());
             }
