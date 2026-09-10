@@ -265,11 +265,11 @@ impl Scene {
     /// Whether the scene's stated place resolves to a setting node.
     ///
     /// `settings` is the project's `setting` node ids, handed in for the reason
-    /// [`SceneCatalog`](crate::SceneCatalog) is handed in: this crate has no
-    /// store and cannot look them up. An id that is in the project but is not a
-    /// setting — a character picked by mistake, a prop — is reported exactly as
-    /// an id that is in nothing, because both are a scene that cannot be placed
-    /// and neither is repairable by us guessing which one the author meant.
+    /// [`SceneCatalog`] is handed in: this crate has no store and cannot look
+    /// them up. An id that is in the project but is not a setting — a character
+    /// picked by mistake, a prop — is reported exactly as an id that is in
+    /// nothing, because both are a scene that cannot be placed and neither is
+    /// repairable by us guessing which one the author meant.
     ///
     /// Separate from [`Scene::classification_diagnostics`] rather than folded
     /// into it, because the two resolve against different things: a classification
