@@ -34,12 +34,15 @@ describe('Bounded scene discovery', () => {
   it('sends combined canonical filters and reveals the selected stable line identity', () => {
     const { onOpen } = mount()
     const table = screen.getByRole('table')
-    for (const label of ['Act', 'Arc', 'Tags'])
+    for (const label of ['Act', 'Arc', 'Setting', 'Tags'])
       expect(within(table).getByRole('columnheader', { name: label })).toBeInTheDocument()
     const cells = within(within(table).getAllByRole('row')[1]!).getAllByRole('cell')
-    expect(cells.slice(0, 3).map((cell) => cell.textContent)).toEqual([
+    // #206: a scene's place is a column, not a sentence somebody parses out of
+    // the summary.
+    expect(cells.slice(0, 4).map((cell) => cell.textContent)).toEqual([
       'Arrival',
       'Inquiry',
+      'Council chamber',
       'Politics',
     ])
     for (const [label, value] of [

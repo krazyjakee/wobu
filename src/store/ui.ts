@@ -57,6 +57,7 @@ export type NarrativeOrigin =
 export type NarrativeField =
   | 'name'
   | 'entry'
+  | 'setting'
   | 'participants'
   | 'title'
   | 'intent'

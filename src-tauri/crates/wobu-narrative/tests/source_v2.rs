@@ -29,7 +29,7 @@ fn old_documents_read_without_changing_embedded_scene_or_world_shapes() {
 }
 #[test]
 fn v1_cannot_claim_new_fields_even_when_empty_and_future_versions_fail_first() {
-    for field in ["act_id: null", "arc_id: null", "tag_ids: []"] {
+    for field in ["act_id: null", "arc_id: null", "tag_ids: []", "setting_id: null"] {
         let yaml = format!("{}  {field}\n", legacy_scene());
         assert!(SceneDocument::parse(&yaml).unwrap_err().to_string().contains("version 2"));
     }
@@ -109,4 +109,66 @@ fn classification_diagnostics_address_missing_and_repeated_references() {
     assert_eq!(issues[1].1, vec!["scene".into(), "arc_id".into()]);
     assert_eq!(issues[2].1, vec!["scene".into(), "tag_ids".into(), 0usize.into()]);
     assert!(matches!(issues[3].0.problem, Problem::DuplicateId { .. }));
+}
+
+/// #206. A scene's place is a field, so the three ways it can be wrong are three
+/// different answers and none of them is "the summary says something else now".
+#[test]
+fn a_scene_names_one_setting_and_a_reference_that_does_not_resolve_is_reported() {
+    let diner = wobu_core::Id::generate();
+    let rosa = wobu_core::Id::generate();
+    let deleted = wobu_core::Id::generate();
+    let settings = std::collections::BTreeSet::from([diner]);
+
+    let mut placed = Scene::new("A shift at the diner");
+    placed.setting_id = Some(diner);
+    assert!(placed.setting_diagnostics(&settings).is_empty());
+
+    // A character picked by mistake and a node that has been deleted are the
+    // same answer, because both are a scene that cannot be placed and neither is
+    // repairable by guessing which the author meant.
+    for wrong in [rosa, deleted] {
+        let mut scene = Scene::new("Misplaced");
+        scene.setting_id = Some(wrong);
+        let issues = scene.setting_diagnostics(&settings);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].0.site, Site::Setting);
+        assert_eq!(issues[0].0.problem, Problem::UnknownSetting { id: wrong });
+        // Keyed precisely enough to select the field that is wrong.
+        assert_eq!(issues[0].1, vec!["scene".into(), "setting_id".into()]);
+    }
+
+    // A scene that states no place is a half-written scene, not a broken one.
+    assert!(Scene::new("Unplaced").setting_diagnostics(&settings).is_empty());
+}
+
+/// The reference survives a save and a reload unchanged, and a duplicate keeps it
+/// — a copy of a scene happens in the same place as the original.
+#[test]
+fn a_setting_reference_round_trips_and_is_carried_by_a_duplicate() {
+    let diner = wobu_core::Id::generate();
+    let mut scene = Scene::new("A shift at the diner");
+    scene.setting_id = Some(diner);
+    scene.summary = "Rosa puts her to work.".into();
+
+    let document = SceneDocument::new(scene.clone());
+    let yaml = document.to_yaml().unwrap();
+    assert!(yaml.contains(&format!("setting_id: {diner}")));
+    let reparsed = SceneDocument::parse(&yaml).unwrap();
+    assert_eq!(reparsed, document);
+    // Byte-identical, not merely equal: a reformatting save must not move the
+    // file, because a collaborator merges these and a translation is keyed to
+    // what is in them.
+    assert_eq!(reparsed.to_yaml().unwrap(), yaml);
+
+    assert_eq!(scene.duplicated().setting_id, Some(diner));
+}
+
+/// Existing projects are untouched: a scene with no setting serializes to exactly
+/// the keys it did before the field existed.
+#[test]
+fn a_scene_with_no_setting_serializes_as_though_the_field_did_not_exist() {
+    let scene = Scene::new("Unplaced");
+    let yaml = SceneDocument::new(scene).to_yaml().unwrap();
+    assert!(!yaml.contains("setting"), "{yaml}");
 }

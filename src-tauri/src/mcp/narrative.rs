@@ -161,7 +161,15 @@ impl Narrative for ProjectWorld {
             let file = project.load_scene(scene_id(id)?)?;
             // No stamp. It is the precondition for a save this surface does not
             // offer, and handing an agent one would suggest otherwise.
-            Ok(json!({ "rel": file.rel, "scene": value(&file.scene) }))
+            Ok(json!({
+                "rel": file.rel,
+                "scene": value(&file.scene),
+                // The scene's `setting_id` resolved to the node it names (#206),
+                // so an agent asked where a scene happens gets an answer without
+                // a second call and without reading the summary for a sentence
+                // that was never meant to be parsed.
+                "setting": setting(project, &file.scene)?,
+            }))
         })
     }
 
@@ -366,6 +374,30 @@ fn project_diagnostics(project: &wobu_store::Project) -> CommandResult<Value> {
     }))
 }
 
+/// The scene's setting node, named, or why the reference does not resolve.
+///
+/// `null` for a scene that states no setting, which is the normal state of a
+/// half-written scene. A stated id that is not a setting node is reported as a
+/// row with `resolved: false` rather than omitted, because "this scene names a
+/// place that is gone" and "this scene names no place" are different answers and
+/// an agent acting on them would do different things.
+fn setting(project: &wobu_store::Project, scene: &Scene) -> CommandResult<Value> {
+    let Some(id) = scene.setting_id else { return Ok(Value::Null) };
+    let found = project
+        .list_nodes()?
+        .into_iter()
+        .find(|node| node.id == id && node.kind == wobu_core::NodeKind::Setting);
+    Ok(match found {
+        Some(node) => json!({ "id": id.to_string(), "name": node.name, "resolved": true }),
+        None => json!({
+            "id": id.to_string(),
+            "resolved": false,
+            "note": "No setting node has this id. narrative_diagnostics reports it against \
+                     the scene.",
+        }),
+    })
+}
+
 /// What the file records as the origin of an MCP-written line. Short and
 /// stable: it is hashed into every revision written this way, so changing it
 /// would change the identity of wording nobody edited.
@@ -374,7 +406,63 @@ const MCP_SOURCE: &str = "mcp";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wobu_core::NodeKind;
     use wobu_narrative::{Beat, DialogueSlot, ReviewState, Speaker};
+
+    /// A project folder that removes itself.
+    struct Temp(std::path::PathBuf);
+    impl Temp {
+        fn project() -> (Temp, wobu_store::Project) {
+            let dir =
+                std::env::temp_dir().join(format!("wobu-mcp-narrative-{}", wobu_core::new_id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let project = wobu_store::Project::create(&dir, "Ashfall").unwrap();
+            (Temp(dir), project)
+        }
+    }
+    impl Drop for Temp {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// #206. `get_scene` answers where a scene happens without anybody parsing a
+    /// summary for it, and says so plainly when the reference is broken.
+    #[test]
+    fn get_scene_names_the_setting_node_and_reports_one_that_does_not_resolve() {
+        let (_temp, mut project) = Temp::project();
+        let diner = project.create_node(NodeKind::Setting, "Rosa's diner", None).unwrap().id;
+        let rosa = project.create_node(NodeKind::Character, "Rosa", None).unwrap().id;
+
+        let mut file = project.create_scene("A shift at the diner").unwrap();
+        file.scene.setting_id = Some(diner);
+        assert!(matches!(project.save_scene(&mut file).unwrap(), SourceSave::Saved(_)));
+
+        let placed = setting(&project, &file.scene).unwrap();
+        assert_eq!(placed["id"], diner.to_string());
+        assert_eq!(placed["name"], "Rosa's diner");
+        assert_eq!(placed["resolved"], true);
+
+        // A character is not a place. Reported as an unresolved reference rather
+        // than quietly omitted: "names somewhere that is gone" and "names nowhere"
+        // are different answers an agent would act on differently.
+        let mut misplaced = file.scene.clone();
+        misplaced.setting_id = Some(rosa);
+        let wrong = setting(&project, &misplaced).unwrap();
+        assert_eq!(wrong["resolved"], false);
+        assert!(wrong["note"].as_str().unwrap().contains("narrative_diagnostics"));
+
+        // And the same scene is flagged by the Validation list, against the scene.
+        let context = crate::commands::narrative::project_context(&project).unwrap();
+        let found = crate::commands::narrative::diagnose(&misplaced, &context);
+        let reported = found.iter().find(|d| d.code == "unknown_setting").expect("no diagnostic");
+        assert_eq!(reported.kind, "setting");
+        assert_eq!(reported.entity_id, Some(rosa));
+
+        let mut unplaced = file.scene.clone();
+        unplaced.setting_id = None;
+        assert_eq!(setting(&project, &unplaced).unwrap(), Value::Null);
+    }
 
     /// One beat, one empty slot, and the slot's id.
     fn scene_with_an_empty_slot() -> (Scene, DialogueSlotId) {

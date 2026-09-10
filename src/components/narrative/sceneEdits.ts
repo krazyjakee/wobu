@@ -26,7 +26,10 @@ export type SceneEditOperation =
   | {
       kind: 'patchScene'
       changes: Partial<
-        Pick<Scene, 'name' | 'summary' | 'participants' | 'act_id' | 'arc_id' | 'tag_ids'>
+        Pick<
+          Scene,
+          'name' | 'summary' | 'participants' | 'act_id' | 'arc_id' | 'tag_ids' | 'setting_id'
+        >
       >
     }
   | {
@@ -248,6 +251,7 @@ export function applySceneEdit(
           'act_id',
           'arc_id',
           'tag_ids',
+          'setting_id',
         ])
         break
       case 'addChoice':

@@ -71,6 +71,11 @@ pub enum Site {
     Scene,
     /// The scene's entry condition rather than the scene as a whole.
     Entry,
+    /// The scene's setting reference rather than the scene as a whole — the same
+    /// distinction [`Site::Entry`] makes, and for the same reason: a reader
+    /// turning this into a selection should land on the setting picker and not on
+    /// the scene header.
+    Setting,
     Participant {
         entity: EntityId,
     },
@@ -120,6 +125,7 @@ impl fmt::Display for Site {
         match self {
             Site::Scene => f.write_str("scene"),
             Site::Entry => f.write_str("scene entry condition"),
+            Site::Setting => f.write_str("scene setting"),
             Site::Participant { entity } => write!(f, "participant {entity}"),
             Site::Destination(DestinationSite::Choice { beat, choice }) => {
                 write!(f, "beat {beat}, choice {choice}")
@@ -177,6 +183,12 @@ pub enum Problem {
 
     #[error("{entity} speaks here but is not a participant in this scene")]
     NotAParticipant { entity: EntityId },
+
+    #[error(
+        "this scene's setting names {id}, which is not a setting in this project. A scene's \
+         place is a setting node; a character, a prop or a deleted node cannot be one."
+    )]
+    UnknownSetting { id: EntityId },
 
     #[error("this slot has no text yet")]
     MissingText,

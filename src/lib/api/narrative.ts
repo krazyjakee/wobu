@@ -228,6 +228,12 @@ export interface Scene {
   id: SceneId
   name: string
   summary?: string
+  /**
+   * Where the scene happens: a `setting` node's id. Absent means the place is
+   * not stated yet, which is normal and never an error. Never derived from
+   * `summary` — a summary is prose and nothing parses it.
+   */
+  setting_id?: string
   participants?: Participant[]
   /** Absent means unconditional, which is a different claim from `'never'`. */
   entry?: Condition
@@ -369,6 +375,7 @@ export const narrativeStateSave = (document: StateDocument, expected: Preconditi
 export type DiagnosticKind =
   | 'scene'
   | 'entry'
+  | 'setting'
   | 'participant'
   | 'choice'
   | 'outcome'
@@ -399,6 +406,7 @@ export type DiagnosticCode =
   | 'no_beats'
   | 'type_error'
   | 'not_a_participant'
+  | 'unknown_setting'
   | 'missing_text'
   | 'revision_mismatch'
   | 'duplicate_id'

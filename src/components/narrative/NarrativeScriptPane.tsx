@@ -57,6 +57,7 @@ function ScriptEditor({
   const [operationMessage, setOperationMessage] = useState('')
   const searchVariant = useSceneLibrary((s) => s.searchVariant)
   const characters = (nodes.data ?? []).filter((node) => node.kind === 'character')
+  const settings = (nodes.data ?? []).filter((node) => node.kind === 'setting')
 
   useNarrativeReveal(root, projectKey, scene.id)
   useEffect(() => {
@@ -187,7 +188,9 @@ function ScriptEditor({
                   ? 'entry'
                   : diagnostic.kind === 'participant'
                     ? 'participants'
-                    : 'condition',
+                    : diagnostic.kind === 'setting'
+                      ? 'setting'
+                      : 'condition',
             },
             'diagnostic',
             { projectKey },
@@ -211,6 +214,24 @@ function ScriptEditor({
             value={scene.summary ?? ''}
             onChange={(e) => edit({ ...scene, summary: e.target.value })}
           />
+        </label>
+        <label>
+          Setting
+          <select
+            data-narrative-field="scene:setting"
+            value={scene.setting_id ?? ''}
+            onChange={(e) => edit({ ...scene, setting_id: e.target.value || undefined })}
+          >
+            <option value="">Not stated</option>
+            {settings.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.name}
+              </option>
+            ))}
+            {scene.setting_id && !settings.some((n) => n.id === scene.setting_id) && (
+              <option value={scene.setting_id}>Missing setting: {scene.setting_id}</option>
+            )}
+          </select>
         </label>
         <label>
           Participants

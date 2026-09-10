@@ -212,6 +212,7 @@ fn source_check(
         .source_diagnostics(&schema, &catalog)
         .into_iter()
         .chain(document.scene.classification_diagnostics(&world))
+        .chain(document.scene.setting_diagnostics(&super::narrative::setting_ids(project)?))
         .map(|(diagnostic, source_path)| LocatedDiagnostic {
             diagnostic: DiagnosticView::of(&diagnostic),
             source_path,

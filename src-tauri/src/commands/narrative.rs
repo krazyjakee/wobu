@@ -251,6 +251,7 @@ fn problem_code(problem: &Problem) -> &'static str {
         Problem::NoBeats => "no_beats",
         Problem::Type(_) => "type_error",
         Problem::NotAParticipant { .. } => "not_a_participant",
+        Problem::UnknownSetting { .. } => "unknown_setting",
         Problem::MissingText => "missing_text",
         Problem::RevisionMismatch { .. } => "revision_mismatch",
         Problem::DuplicateId { .. } => "duplicate_id",
@@ -280,6 +281,12 @@ impl DiagnosticView {
         match diagnostic.site {
             Site::Scene => {}
             Site::Entry => view.kind = "entry",
+            Site::Setting => {
+                view.kind = "setting";
+                if let Problem::UnknownSetting { id } = diagnostic.problem {
+                    view.entity_id = Some(id);
+                }
+            }
             Site::Participant { entity } => {
                 view.kind = "participant";
                 view.entity_id = Some(entity);
@@ -722,6 +729,11 @@ pub(crate) struct DiagnosticContext {
     schema: wobu_narrative::StateSchema,
     catalog: SceneCatalog,
     world: wobu_narrative::WorldDocument,
+    /// The project's `setting` nodes, for the scene's stated place (#206). Read
+    /// from the index as summaries rather than node by node: the kind is all this
+    /// needs, and a caller checking three hundred scenes must not pay a file read
+    /// per node per scene.
+    settings: std::collections::BTreeSet<wobu_core::Id>,
 }
 
 pub(crate) fn project_context(project: &Project) -> CommandResult<DiagnosticContext> {
@@ -732,7 +744,20 @@ pub(crate) fn project_context(project: &Project) -> CommandResult<DiagnosticCont
         // anything the caller asserted.
         catalog: SceneCatalog::of(project.scene_ids()?),
         world: project.world_document()?.map(|(document, _)| document).unwrap_or_default(),
+        settings: setting_ids(project)?,
     })
+}
+
+/// The ids of every `setting` node in the project.
+pub(crate) fn setting_ids(
+    project: &Project,
+) -> CommandResult<std::collections::BTreeSet<wobu_core::Id>> {
+    Ok(project
+        .list_nodes()?
+        .into_iter()
+        .filter(|node| node.kind == wobu_core::NodeKind::Setting)
+        .map(|node| node.id)
+        .collect())
 }
 
 pub(crate) fn diagnose(scene: &Scene, context: &DiagnosticContext) -> Vec<DiagnosticView> {
@@ -743,6 +768,7 @@ pub(crate) fn diagnose(scene: &Scene, context: &DiagnosticContext) -> Vec<Diagno
             scene
                 .classification_diagnostics(&context.world)
                 .into_iter()
+                .chain(scene.setting_diagnostics(&context.settings))
                 .map(|(diagnostic, _)| diagnostic),
         )
         .map(|diagnostic| DiagnosticView::of(&diagnostic))

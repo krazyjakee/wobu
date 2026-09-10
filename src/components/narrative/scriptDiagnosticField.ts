@@ -12,7 +12,7 @@ export function narrativeField(target: NarrativeTarget): string {
   if (target.lineId) return `slot:${target.lineId}`
   if (
     target.field &&
-    ['entry', 'participants', 'name', 'act', 'arc', 'tags'].includes(target.field)
+    ['entry', 'setting', 'participants', 'name', 'act', 'arc', 'tags'].includes(target.field)
   )
     return `scene:${target.field}`
   return target.beatId ? `beat:${target.beatId}` : 'scene:name'

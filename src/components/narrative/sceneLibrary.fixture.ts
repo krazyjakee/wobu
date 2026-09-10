@@ -8,6 +8,7 @@ export const libraryRow: LibrarySceneRow = {
   },
   act: { id: 'arrival', name: 'Arrival' },
   arc: { id: 'inquiry', name: 'Inquiry' },
+  setting: { id: 'chamber', name: 'Council chamber' },
   tags: [{ id: 'politics', name: 'Politics' }],
   quests: [
     { id: 'attack', name: 'Investigate the attack' },
@@ -51,6 +52,7 @@ export const libraryPage: LibraryPage = {
     participants: ['mira'],
     acts: [libraryRow.act!],
     arcs: [libraryRow.arc!],
+    settings: [libraryRow.setting!],
     tags: libraryRow.tags,
     quests: libraryRow.quests,
   },

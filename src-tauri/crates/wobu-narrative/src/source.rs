@@ -153,7 +153,9 @@ impl SceneDocument {
         }
         if version == 1 {
             let value: serde_json::Value = parse_yaml(yaml)?;
-            if ["act_id", "arc_id", "tag_ids"].iter().any(|key| value["scene"].get(key).is_some())
+            if ["act_id", "arc_id", "tag_ids", "setting_id"]
+                .iter()
+                .any(|key| value["scene"].get(key).is_some())
                 || document
                     .scene
                     .beats
@@ -184,6 +186,7 @@ impl SceneDocument {
             && (self.scene.act_id.is_some()
                 || self.scene.arc_id.is_some()
                 || !self.scene.tag_ids.is_empty()
+                || self.scene.setting_id.is_some()
                 || self
                     .scene
                     .beats

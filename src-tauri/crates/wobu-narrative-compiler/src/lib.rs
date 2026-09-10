@@ -31,6 +31,10 @@ pub struct CompileOptions {
     pub profile: Profile,
     /// Complete world membership, not just entities used by this scene.
     pub known_entities: BTreeSet<EntityId>,
+    /// The project's `setting` nodes. A separate set rather than a filter over
+    /// `known_entities`, because node kind is not knowable from an id: folding
+    /// them together would let a scene be placed in a character.
+    pub known_settings: BTreeSet<EntityId>,
     /// Registered argument domains. A variable argument must fit the entire domain.
     pub commands: BTreeMap<Name, Vec<VarType>>,
 }
@@ -42,6 +46,7 @@ impl Default for CompileOptions {
             verified_text_reviews: BTreeMap::new(),
             profile: Profile::Development,
             known_entities: BTreeSet::new(),
+            known_settings: BTreeSet::new(),
             commands: BTreeMap::new(),
         }
     }
@@ -137,6 +142,16 @@ pub struct SourceRef {
 #[serde(deny_unknown_fields)]
 pub struct CompiledScene {
     pub entry: Option<Condition>,
+    /// Where the scene happens, as the `setting` node's id (#206).
+    ///
+    /// In the graph rather than only in the debug source map, because a release
+    /// package carries no source map and a host placing a scene in its world
+    /// needs this in a release build — which is the whole point of the field
+    /// existing instead of a `Location:` line in the summary. Skipped when
+    /// absent, so a project that states no settings compiles to exactly the
+    /// bytes it did before and keeps its graph hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setting: Option<String>,
     pub first: String,
     pub beats: BTreeMap<String, CompiledBeat>,
 }
@@ -327,6 +342,14 @@ pub fn compile(
                 );
             }
         }
+        for (diagnostic, _) in scene.setting_diagnostics(&options.known_settings) {
+            emit(
+                diagnostic.site,
+                Severity::Error,
+                "unknown_setting",
+                diagnostic.problem.to_string(),
+            );
+        }
         let mut beats = BTreeMap::new();
         for beat in &scene.beats {
             for choice in &beat.choices {
@@ -505,6 +528,7 @@ pub fn compile(
             scene_id,
             CompiledScene {
                 entry: scene.entry.clone(),
+                setting: scene.setting_id.map(|id| id.to_string()),
                 first: scene.beats.first().map(|b| b.id.to_string()).unwrap_or_default(),
                 beats,
             },

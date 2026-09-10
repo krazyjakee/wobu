@@ -62,13 +62,16 @@ pub(crate) struct Locator {
     pub id: Option<String>,
     pub name: String,
     pub error: Option<String>,
-    /// Old index projections predate the coarse arc fields; rebuild them on demand.
-    pub arc_ready: bool,
+    /// Whether the stored projection was built by a version that writes every
+    /// field the library now reads. Older ones predate the coarse arc fields or
+    /// the scene's setting; either way they are rebuilt on demand rather than
+    /// read short.
+    pub projection_current: bool,
 }
 impl Index {
     pub(crate) fn scene_locators(&self) -> Result<Vec<Locator>> {
         let mut statement = self.conn.prepare_cached(
-            "SELECT rel,hash,scene_id,name,error,projection IS NULL OR json_type(projection,'$.arc')='object' FROM narrative_scene_summary ORDER BY rel",
+            "SELECT rel,hash,scene_id,name,error,projection IS NULL OR (json_type(projection,'$.arc')='object' AND json_type(projection,'$.settingId') IS NOT NULL) FROM narrative_scene_summary ORDER BY rel",
         )?;
         Ok(statement
             .query_map([], |r| {
@@ -78,7 +81,7 @@ impl Index {
                     id: r.get(2)?,
                     name: r.get(3)?,
                     error: r.get(4)?,
-                    arc_ready: r.get::<_, Option<bool>>(5)?.unwrap_or(false),
+                    projection_current: r.get::<_, Option<bool>>(5)?.unwrap_or(false),
                 })
             })?
             .collect::<std::result::Result<_, _>>()?)
