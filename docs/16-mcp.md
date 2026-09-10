@@ -3,9 +3,10 @@
 Wobu speaks the Model Context Protocol in both directions, and both are off until somebody
 turns them on.
 
-- **Server** — an agent running on the same computer can read the open world: nodes, links,
-  the resolved influence stack, the compiled prompt, and the receipt for every generation.
-  Writing is a second, separate decision.
+- **Server** — an agent running on the same computer can read the open project: the world
+  model — nodes, links, the resolved influence stack, the compiled prompt, and the receipt
+  for every generation — and the authored story on top of it: scenes, beats, dialogue,
+  declared state and canon. Writing is a second, separate decision.
 - **Client** — Wobu can use MCP servers the user already runs, so their own tools are
   available while they work.
 
@@ -44,6 +45,15 @@ the disclosure cannot drift from the implementation.
 | `compile_prompt` | The positive and negative prompt a generation would send |
 | `list_generations` | Generation receipts for one node — model, seed, cost, outcome |
 | `get_generation` | One receipt in full |
+| `narrative_overview` | Whether there is a story, its scene and asset counts, and the acts, arcs, tags and quests to filter by |
+| `list_scenes` | Scene rows from the library: classification, cast, beat and slot counts, text coverage |
+| `search_narrative` | Full-text search over scene names, beat intent and dialogue, drafts included |
+| `get_scene` | One scene document in full — beats, slots, variants, choices, outcomes, tombstones |
+| `narrative_state` | The declared variables: name, type, owner, default and range |
+| `narrative_world` | Facts, beliefs, relationships, events, quests, restrictions, with their diagnostics |
+| `list_text_assets` | Supporting text assets, as summaries |
+| `get_text_asset` | One asset in full, with its entries |
+| `narrative_diagnostics` | What is wrong with one scene, or with every scene |
 
 **Write (only after the second opt-in)**
 
@@ -52,6 +62,9 @@ the disclosure cannot drift from the implementation.
 | `create_node` | Adds an entity, writing a new Markdown file |
 | `update_node` | Changes name, summary, source notes, tags or attributes |
 | `link_nodes` | Adds an influence edge, changing what future prompts contain |
+| `create_scene` | Adds an empty scene, writing a new YAML file |
+| `draft_dialogue` | Puts one wording into a dialogue slot that has none |
+| `add_dialogue_slot` | Adds a new narrator or cast line to an existing beat |
 
 There is no tool that deletes anything, and no tool that starts a generation. An agent
 connected to Wobu cannot spend money.
@@ -61,8 +74,43 @@ and a stamp of what the last Enhance read, and a write that set the prose withou
 leave a node claiming to be freshly enhanced from notes it has never seen. An agent that wants
 to contribute prose writes `notes_raw`, which is the field for exactly that.
 
-Three resources are offered alongside the tools: `wobu://project`, `wobu://nodes`, and
-`wobu://node/{id}`.
+The narrative writes are the same shape of decision, and there are three things to say about
+them.
+
+**All three are additive.** `create_scene` writes a new file and touches nothing that exists.
+`draft_dialogue` is refused for a slot that already has a wording and for a locked slot, so
+nothing an agent does over MCP replaces a line anybody wrote. `add_dialogue_slot` adds a line
+rather than changing one: every existing slot keeps its id, its wording and its place in the
+beat. There is no whole-document scene write at all: a scene save is guarded by the stamp the
+reader held, which is what stops two writers clobbering each other on a shared folder, and an
+agent posting one stateless request at a time holds no such thing. Reading the file inside the
+write and saving over whatever is there would turn a detected conflict into a silent overwrite
+of somebody's afternoon.
+
+**None of them can author a branch.** `draft_dialogue` writes one unconditional wording into a
+slot a person already made. `add_dialogue_slot` writes one into a slot it makes, in a beat a
+person already made — and it adds no beat, choice, outcome, effect, condition or destination,
+and moves no cursor. Its speaker is the narrator or a character who is already in the scene's
+cast, because inviting somebody into a scene is the writer's statement; the player cannot be
+given lines at all, since a player line is a choice's consequence. That is the line
+[the narrative system](17-narrative-system.md) draws around generation, held here for the same
+reason: prose is inert, and where the story goes is the writer's statement.
+
+`add_dialogue_slot` exists because `draft_dialogue` can only fill a slot somebody already made,
+and after an import that is usually none of them. The case it was added for is establishing
+narration: a scene whose first beat holds one character line and then choices opens at its
+decision point, and the remedy is a narrator line at the top — which `position: "start"` puts
+there.
+
+**The wording is recorded as `Imported`, never as `Human` and never as `Generated`.**
+Provenance is half of what a revision hashes and the review queue reads it to decide what it is
+looking at. `Human` would tell a reviewer a person typed a line nobody in the project has read;
+`Generated` would claim a receipt that does not exist, because there is no job, no model and no
+fingerprint behind an MCP call. The line arrives as an unreviewed draft with the cautious
+generation policy, which is to say in the review queue and not in a build.
+
+Five resources are offered alongside the tools: `wobu://project`, `wobu://nodes`,
+`wobu://node/{id}`, `wobu://scenes`, and `wobu://scene/{id}`.
 
 ## Connecting an agent
 
@@ -144,7 +192,10 @@ The activity list holds the last fifty calls; the diagnostics log holds the rest
 - No per-call confirmation dialog for writes. The gate is the opt-in plus the audit trail; a
   modal raised from a background HTTP request that an agent may be making while nobody is at the
   keyboard is a worse guarantee than it looks.
-- No tool that deletes, and no tool that spends.
+- No tool that deletes, and no tool that spends. In particular nothing here starts a prose
+  generation job, a variant build or an export.
+- No whole scene document write, and no narrative tool that takes a stamp. See above: the
+  precondition that makes a guarded save safe is one an agent cannot hold.
 
 ## Where the code is
 
@@ -152,9 +203,15 @@ The activity list holds the last fifty calls; the diagnostics log holds the rest
 | --- | --- |
 | `src-tauri/crates/wobu-mcp/` | Protocol, the loopback listener, the stdio client, the tool catalogue |
 | `src-tauri/src/mcp.rs` | Settings, the listener handle, the `World` implementation, the audit log |
+| `src-tauri/src/mcp/narrative.rs` | The `Narrative` implementation: scenes, canon, and the two additive writes |
 | `src/components/McpSection.tsx` | The pane, its disclosure and the write confirmation |
 | `src/lib/mcp.ts` | The typed command wrappers |
 
-`wobu-mcp` knows nothing about `Project`, `NodeKind` or influence layers. Everything an agent
-can reach is one method on its `World` trait, that trait fits on a screen, and a new capability
-cannot appear without a line being added to it in review.
+`wobu-mcp` knows nothing about `Project`, `NodeKind`, influence layers or beats. Everything an
+agent can reach is one method on its `World` trait or on its `Narrative` trait, each fits on a
+screen, and a new capability cannot appear without a line being added to one of them in review.
+
+They are two traits rather than one because the two bodies of source are two — Markdown nodes
+with influence edges, and scene documents with declared state — with different rules about what
+may be written to each. One trait long enough to hold both is one nobody reads, which is the
+failure the guarantee above exists to prevent.

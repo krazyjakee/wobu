@@ -32,6 +32,9 @@ pub struct ReconcilePlan {
     corrupt: HashSet<String>,
     assets: HashSet<String>,
     generations: HashSet<String>,
+    narrative: String,
+    narrative_cache: std::sync::Arc<crate::narrative::registry::cache::SourceCache>,
+    layout_observation: String,
 }
 
 enum ObservedNode {
@@ -49,7 +52,8 @@ pub struct ReconcileObservation {
     seen_assets: HashSet<String>,
     generations: Vec<(Generation, String, Stamp)>,
     seen_generations: HashSet<String>,
-    generation_ledger_changed: bool,
+    narrative: crate::narrative::registry::cache::Observation,
+    layout_observation: String,
 }
 
 impl ReconcilePlan {
@@ -105,13 +109,11 @@ impl ReconcilePlan {
 
         let mut generations_seen = HashSet::new();
         let mut generation_updates = Vec::new();
-        let mut generation_ledger_changed = false;
         for (rel, path) in generations::list_paths(&self.root) {
             generations_seen.insert(rel.clone());
             if self.generations.contains(&rel) {
                 continue;
             }
-            generation_ledger_changed = true;
             if let Ok(Some(record)) = generations::read_at(&self.root, &path) {
                 generation_updates.push(record);
             }
@@ -123,8 +125,12 @@ impl ReconcilePlan {
             return Err(Error::Disconnected);
         }
 
+        let narrative = self.narrative_cache.observe(&self.root)?;
+        let layout_observation = crate::narrative::layout::observation(&self.root);
         Ok(ReconcileObservation {
+            layout_observation,
             plan: self,
+            narrative,
             nodes,
             seen_nodes,
             seen_node_stamps,
@@ -132,7 +138,6 @@ impl ReconcilePlan {
             seen_assets: assets_seen,
             generations: generation_updates,
             seen_generations: generations_seen,
-            generation_ledger_changed,
         })
     }
 }
@@ -152,6 +157,9 @@ impl ReconcileObservation {
         let raw = std::fs::read_to_string(&meta_path).map_err(|e| Error::io(&meta_path, e))?;
         let meta: ProjectMeta = serde_json::from_str(&raw)?;
         if meta.id != self.plan.project_id {
+            return Ok(false);
+        }
+        if crate::narrative::layout::observation(&self.plan.root) != self.layout_observation {
             return Ok(false);
         }
 
@@ -195,6 +203,10 @@ impl ReconcileObservation {
             if atomic::read_stamped(&path)?.map(|(_, current)| current) != Some(stamp.clone()) {
                 return Ok(false);
             }
+        }
+        if self.plan.narrative_cache.observe(&self.plan.root)?.signature != self.narrative.signature
+        {
+            return Ok(false);
         }
         Ok(true)
     }
@@ -257,6 +269,9 @@ impl Project {
         cancel: &Cancel,
         on_progress: &mut impl FnMut(ScanProgress),
     ) -> Result<()> {
+        if !self.is_read_only() {
+            self.apply_narrative_deletions()?;
+        }
         let files = self.node_files();
         let total = files.len();
         on_progress(ScanProgress { done: 0, total });
@@ -291,8 +306,15 @@ impl Project {
         // recorded so the navigator can say so. The clear and every refill are
         // one transaction, so a malformed row or SQLite failure restores the
         // previous complete read model rather than exposing a partial rebuild.
-        self.index.rebuild_from_scan(&blobs, &generation_records, &fresh, &broken)?;
-        generations::invalidate_spend_aggregate(&self.root);
+        let narrative = self.narrative_cache.observe(&self.root)?;
+        self.index.rebuild_from_scan(
+            &blobs,
+            &generation_records,
+            &fresh,
+            &broken,
+            narrative.entries.iter().map(|entry| &entry.entry),
+        )?;
+        self.refresh_narrative_dependencies()?;
         on_progress(ScanProgress { done: total, total });
         Ok(())
     }
@@ -303,6 +325,7 @@ impl Project {
     /// Only files whose `(mtime, size)` moved are re-read: listing a directory
     /// over SMB is cheap, re-reading hundreds of small files is not.
     pub fn reconcile(&mut self) -> Result<bool> {
+        let recovered = if self.is_read_only() { false } else { self.apply_narrative_deletions()? };
         for _ in 0..3 {
             let observation = self.reconcile_plan()?.observe()?;
             if !observation.revalidate()? {
@@ -312,7 +335,7 @@ impl Project {
             // so an index-stale baseline would be an internal invariant
             // violation. Retrying is still safer than applying it.
             if let Some(changed) = self.apply_reconcile(observation)? {
-                return Ok(changed);
+                return Ok(changed || recovered);
             }
         }
         // A continuously changing folder will be observed again on the next
@@ -329,6 +352,9 @@ impl Project {
             corrupt: self.index.corrupt_paths()?.into_iter().collect(),
             assets: self.index.asset_paths()?,
             generations: self.index.generation_paths()?,
+            narrative: self.index.narrative_signature()?,
+            narrative_cache: self.narrative_cache.clone(),
+            layout_observation: self.layout_observation.clone(),
         })
     }
 
@@ -347,15 +373,18 @@ impl Project {
             seen_assets,
             generations,
             seen_generations,
-            mut generation_ledger_changed,
+            narrative,
+            layout_observation,
         } = observation;
 
         if self.id() != plan.project_id
             || self.root != plan.root
+            || self.layout_observation != plan.layout_observation
             || self.index.all_stamps()? != plan.node_stamps
             || self.index.corrupt_paths()?.into_iter().collect::<HashSet<_>>() != plan.corrupt
             || self.index.asset_paths()? != plan.assets
             || self.index.generation_paths()? != plan.generations
+            || self.index.narrative_signature()? != plan.narrative
         {
             return Ok(None);
         }
@@ -403,11 +432,16 @@ impl Project {
         for rel in plan.generations.iter().filter(|rel| !seen_generations.contains(*rel)) {
             self.index.remove_generation_by_rel_path(rel)?;
             changed = true;
-            generation_ledger_changed = true;
         }
-        if generation_ledger_changed {
-            generations::invalidate_spend_aggregate(&self.root);
+        if narrative.signature != plan.narrative {
+            self.index.replace_narrative(narrative.entries.iter().map(|entry| &entry.entry))?;
+            changed = true;
         }
+        if changed {
+            self.refresh_narrative_dependencies()?;
+        }
+        changed |= self.layout_observation != layout_observation;
+        self.layout_observation = layout_observation;
         Ok(Some(changed))
     }
 
@@ -417,6 +451,11 @@ impl Project {
             return Err(Error::Disconnected);
         }
 
+        let narrative_changed = changed_paths.iter().any(|path| {
+            let rel = path.strip_prefix(&self.root).unwrap_or(path);
+            rel.components().next().is_some_and(|part| part.as_os_str() == "narrative")
+        }) && self.reconcile_narrative()?;
+        let recovered = if self.is_read_only() { false } else { self.apply_narrative_deletions()? };
         let known = self.index.all_stamps()?;
         let was_corrupt: HashSet<String> = self.index.corrupt_paths()?.into_iter().collect();
         let mut targets = HashSet::new();
@@ -489,7 +528,13 @@ impl Project {
                 }
             }
         }
-        Ok(changed)
+        let layout_observation = crate::narrative::layout::observation(&self.root);
+        let layout_changed = self.layout_observation != layout_observation;
+        self.layout_observation = layout_observation;
+        if changed || narrative_changed || recovered {
+            self.refresh_narrative_dependencies()?;
+        }
+        Ok(changed || narrative_changed || recovered || layout_changed)
     }
 
     /// Every Markdown file under `nodes/`, as `(relative path, absolute path)`.
@@ -508,7 +553,17 @@ impl Project {
     }
 
     /// The other half: files `guarded_write` parked, which are never nodes.
+    ///
+    /// Narrative source siblings are listed alongside the Markdown ones,
+    /// because source keeps the never-merge rule and that rule is only worth
+    /// anything if the losing version is reachable from the card. Layout
+    /// sidecars are deliberately absent: they merge, so they never produce
+    /// one, and a `.corrupt-` sibling is not a conflict for a human to
+    /// arbitrate.
     pub(super) fn conflict_files(&self) -> Vec<(String, PathBuf)> {
-        self.markdown_files().into_iter().filter(|(_, path)| is_conflict_path(path)).collect()
+        let mut found: Vec<(String, PathBuf)> =
+            self.markdown_files().into_iter().filter(|(_, path)| is_conflict_path(path)).collect();
+        found.extend(crate::narrative::conflict_paths(&self.root));
+        found
     }
 }

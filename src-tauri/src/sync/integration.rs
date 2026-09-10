@@ -585,6 +585,28 @@ impl Sessions for SessionsInto {
     }
 }
 
+async fn wire_pair(project: Id) -> (SyncEndpoint, SyncEndpoint, Session, Session) {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let server = SyncEndpoint::bind(
+        Config::loopback(),
+        Arc::new(Holds(project)),
+        Arc::new(SessionsInto(tx)),
+    )
+    .await
+    .unwrap();
+    let client = SyncEndpoint::bind(
+        Config::loopback(),
+        Arc::new(Holds(project)),
+        Arc::new(SessionsInto(mpsc::unbounded_channel().0)),
+    )
+    .await
+    .unwrap();
+    let outbound = client.connect(server.addr(), project).await.unwrap();
+    let inbound = rx.recv().await.unwrap();
+
+    (client, server, outbound, inbound)
+}
+
 #[test]
 fn a_disconnect_halfway_through_a_body_lands_no_partial_file_or_index_row() {
     run_async(async {
@@ -601,23 +623,7 @@ fn a_disconnect_halfway_through_a_body_lands_no_partial_file_or_index_row() {
         let bytes_before = fs::read(&target_path).unwrap();
         let index_before = pair.b.manifest(pair.project);
 
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        let server = SyncEndpoint::bind(
-            Config::loopback(),
-            Arc::new(Holds(pair.project)),
-            Arc::new(SessionsInto(tx)),
-        )
-        .await
-        .unwrap();
-        let client = SyncEndpoint::bind(
-            Config::loopback(),
-            Arc::new(Holds(pair.project)),
-            Arc::new(SessionsInto(mpsc::unbounded_channel().0)),
-        )
-        .await
-        .unwrap();
-        let outbound = client.connect(server.addr(), pair.project).await.unwrap();
-        let inbound = rx.recv().await.unwrap();
+        let (client, server, outbound, inbound) = wire_pair(pair.project).await;
 
         let replica = pair.b.manager().replica(pair.project).unwrap();
         let peer = inbound.peer().to_string();
@@ -641,6 +647,299 @@ fn a_disconnect_halfway_through_a_body_lands_no_partial_file_or_index_row() {
             })
             .unwrap();
 
+        client.shutdown().await.unwrap();
+        server.shutdown().await.unwrap();
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn narrative_records_publications_and_explicit_recovery_cross_real_peers() {
+    run_async(async {
+        use wobu_store::{
+            NarrativeRecordDocument as Document, NarrativeRecordFile as File,
+            NarrativeRecordKind as Kind,
+        };
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let (scene, record_id, publication) = a
+            .with(|p| {
+                let scene = p.create_scene("Kiln Council")?;
+                let mut scenario = File {
+                    document: Document::new(
+                        Kind::Scenario,
+                        new_id(),
+                        "Council checkpoint",
+                        serde_json::json!({"version":1}),
+                    ),
+                    stamp: None,
+                };
+                p.save_narrative_record(&mut scenario)?;
+                let publication = new_id();
+                p.publish_narrative_records(
+                    publication,
+                    "Council review",
+                    &[Document::new(
+                        Kind::Receipt,
+                        new_id(),
+                        "Receipt",
+                        serde_json::json!({"version":1}),
+                    )],
+                    None,
+                )?;
+                Ok((scene, scenario.document.id, publication))
+            })
+            .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert_eq!(p.load_scene(scene.scene.id)?.scene, scene.scene);
+            assert!(p.narrative_record(Kind::Scenario, record_id)?.is_some());
+            assert_eq!(p.narrative_publication(publication)?.unwrap().records.len(), 1);
+            Ok(())
+        })
+        .unwrap();
+        a.with(|p| {
+            let mut file = p.narrative_record(Kind::Scenario, record_id)?.unwrap();
+            file.document.name = "Updated checkpoint".into();
+            p.save_narrative_record(&mut file)?;
+            Ok(())
+        })
+        .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert_eq!(
+                p.narrative_record(Kind::Scenario, record_id)?.unwrap().document.name,
+                "Updated checkpoint"
+            );
+            Ok(())
+        })
+        .unwrap();
+        for (replica, name) in [(&a, "A's checkpoint"), (&b, "B's checkpoint")] {
+            replica
+                .with(|p| {
+                    let mut file = p.narrative_record(Kind::Scenario, record_id)?.unwrap();
+                    file.document.name = name.into();
+                    p.save_narrative_record(&mut file)?;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        pair.a.sync_with(pair.project, &pair.b).await;
+        for (replica, name) in [(&a, "A's checkpoint"), (&b, "B's checkpoint")] {
+            replica
+                .with(|p| {
+                    let file = p.narrative_record(Kind::Scenario, record_id)?.unwrap();
+                    assert_eq!(file.document.name, name);
+                    assert_eq!(conflicts(&p.root().join(file.document.rel())).len(), 1);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let deletion = a
+            .with(|p| {
+                p.delete_narrative_file(&scene.rel, scene.stamp.as_ref().unwrap())?;
+                Ok(p.narrative_deletions()?.pop().unwrap().deletion.id)
+            })
+            .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        assert!(!pair.b.root.join(&scene.rel).exists());
+        a.with(|p| {
+            p.restore_narrative_deletion(deletion)?;
+            Ok(())
+        })
+        .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert_eq!(p.load_scene(scene.scene.id)?.scene, scene.scene);
+            assert!(p.narrative_deletions()?.iter().all(|d| d.restored));
+            Ok(())
+        })
+        .unwrap();
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn narrative_partial_bodies_bad_hashes_and_midstream_revocation_never_write() {
+    run_async(async {
+        for fault in ["cut", "hash", "revoke"] {
+            let pair = Pair::new(false).await;
+            let incoming = pair
+                .a
+                .manager()
+                .replica(pair.project)
+                .unwrap()
+                .with(|p| {
+                    let scene = p.create_scene("Never partially write this")?;
+                    let entry =
+                        p.narrative_manifest()?.into_iter().find(|e| e.rel == scene.rel).unwrap();
+                    Ok(p.narrative_outgoing(&entry)?.unwrap())
+                })
+                .unwrap();
+            let (client, server, outbound, inbound) = wire_pair(pair.project).await;
+            super::bodies::verify_receive_byte_limits(outbound.connection(), inbound.connection())
+                .await;
+            let replica = pair.b.manager().replica(pair.project).unwrap();
+            super::narrative::fault_exchange(
+                pair.b.manager(),
+                &replica,
+                &outbound,
+                &inbound,
+                incoming.clone(),
+                fault,
+            )
+            .await;
+            assert!(!pair.b.root.join(&incoming.rel).exists(), "{fault}");
+            replica
+                .with(|p| {
+                    assert!(p.narrative_manifest()?.is_empty());
+                    Ok(())
+                })
+                .unwrap();
+            client.shutdown().await.unwrap();
+            server.shutdown().await.unwrap();
+            pair.stop().await;
+        }
+    });
+}
+
+#[test]
+fn flow_layouts_merge_per_node_and_equal_time_mode_then_sync_deleted_notes() {
+    run_async(async {
+        use wobu_store::{Annotation, AnnotationId, GraphKey, Layout, LayoutMode, NodeKey};
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let scene = a
+            .with(|p| {
+                let mut file = p.create_scene("Kiln route")?;
+                file.scene.beats.push(wobu_narrative::Beat::new("Arrival"));
+                file.scene.beats.push(wobu_narrative::Beat::new("Verdict"));
+                p.save_scene(&mut file)?;
+                Ok(file.scene)
+            })
+            .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        let mut left = Layout::empty(GraphKey::of_scene(scene.id));
+        let mut right = left.clone();
+        let at = Utc::now();
+        left.mode = LayoutMode::Manual;
+        left.mode_updated_at = at;
+        right.mode = LayoutMode::Automatic;
+        right.mode_updated_at = at;
+        left.place(NodeKey::Beat(scene.beats[0].id), 15.0, 60.0);
+        right.place(NodeKey::Beat(scene.beats[1].id), 450.0, 60.0);
+        let note = AnnotationId::new();
+        left.upsert_annotation(Annotation {
+            id: note,
+            body: "Ask about the logbook.".into(),
+            x: 120.0,
+            y: 20.0,
+            width: None,
+            height: None,
+            attached_to: None,
+            updated_at: at,
+        });
+        a.with(|p| {
+            p.save_scene_layout(&scene, &left)?;
+            Ok(())
+        })
+        .unwrap();
+        b.with(|p| {
+            p.save_scene_layout(&scene, &right)?;
+            Ok(())
+        })
+        .unwrap();
+        let before = a.with(|p| Ok(p.narrative_fingerprint()?)).unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        let merged = a.with(|p| Ok(p.scene_layout(&scene).layout)).unwrap();
+        assert_eq!(merged, b.with(|p| Ok(p.scene_layout(&scene).layout)).unwrap());
+        assert_eq!(merged.nodes.len(), 2);
+        assert!(merged.annotations.contains_key(&note));
+        let mut removed = merged.clone();
+        removed.remove_annotation(note);
+        a.with(|p| {
+            p.save_scene_layout(&scene, &removed)?;
+            Ok(())
+        })
+        .unwrap();
+        pair.a.sync_with(pair.project, &pair.b).await;
+        b.with(|p| {
+            assert!(p.scene_layout(&scene).layout.annotations.is_empty());
+            assert_eq!(p.narrative_fingerprint()?, before);
+            Ok(())
+        })
+        .unwrap();
+        // A cosmetic parse error does not block a subsequent source update.
+        let path = wobu_store::narrative::layout::path_of(&pair.a.root, &merged.graph).unwrap();
+        fs::write(&path, "{broken arrangement").unwrap();
+        pair.a.edit(pair.project, pair.node, "Core sync still works");
+        pair.a.sync_with(pair.project, &pair.b).await;
+        assert_eq!(pair.b.notes(pair.project, pair.node), "Core sync still works");
+        assert!(
+            pair.a
+                .manager()
+                .project_statuses()
+                .iter()
+                .flat_map(|p| &p.peers)
+                .any(|p| p.arrangement_notice.is_some())
+        );
+        pair.stop().await;
+    });
+}
+
+#[test]
+fn a_layout_offer_survives_receiving_the_peer_merge_before_sending_its_body() {
+    run_async(async {
+        use super::layout::{Snapshot, offer, receive};
+        use wobu_store::{GraphKey, Layout, NodeKey};
+        let pair = Pair::new(false).await;
+        let a = pair.a.manager().replica(pair.project).unwrap();
+        let b = pair.b.manager().replica(pair.project).unwrap();
+        let mut left = Layout::empty(GraphKey::Arc { arc: "project".into() });
+        let mut right = left.clone();
+        left.place(NodeKey::Scene(wobu_narrative::SceneId::new()), 15.0, 60.0);
+        right.place(NodeKey::Scene(wobu_narrative::SceneId::new()), 450.0, 60.0);
+        for (replica, arrangement) in [(&a, &left), (&b, &right)] {
+            replica
+                .with(|p| {
+                    wobu_store::narrative::layout::save(p.root(), "test", arrangement, None)?;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let original = a.with(|p| Ok(p.layout_manifest().entries.remove(0))).unwrap();
+        let frozen_a = a.with(|p| Snapshot::capture(p)).unwrap();
+        let frozen_b = b.with(|p| Snapshot::capture(p)).unwrap();
+        let (client, server, outbound, inbound) = wire_pair(pair.project).await;
+        // Force the CI interleaving: finish merging B into A before A can
+        // answer a request for its original advertised hash. No timing sleeps.
+        let first = tokio::try_join!(
+            offer(pair.b.manager(), &b, &inbound, frozen_b),
+            receive(pair.a.manager(), &a, &outbound),
+        )
+        .unwrap();
+        assert_eq!(first, (None, (true, None)));
+        assert!(a.with(|p| Ok(p.layout_outgoing(&original)?)).unwrap().is_none());
+        let second = tokio::try_join!(
+            offer(pair.a.manager(), &a, &outbound, frozen_a),
+            receive(pair.b.manager(), &b, &inbound),
+        )
+        .unwrap();
+        assert_eq!(second, (None, (true, None)));
+        let read = |replica: &super::manager::Replica| {
+            replica
+                .with(|p| {
+                    Ok(wobu_store::narrative::layout::read_document(p.root(), &original.rel)?
+                        .unwrap()
+                        .0)
+                })
+                .unwrap()
+        };
+        let merged = read(&a);
+        assert_eq!(merged.nodes.len(), 2);
+        assert_eq!(merged, read(&b));
         client.shutdown().await.unwrap();
         server.shutdown().await.unwrap();
         pair.stop().await;

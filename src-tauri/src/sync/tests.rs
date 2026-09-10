@@ -203,6 +203,10 @@ impl Wake for Counter {
 /// selection, and a network where the relay is blocked. Those need two
 /// machines.
 async fn manager(state: &AppState, dir: &Path) -> Arc<SyncManager> {
+    manager_with_poll(state, dir, false).await
+}
+
+async fn manager_with_poll(state: &AppState, dir: &Path, poll: bool) -> Arc<SyncManager> {
     SyncManager::start(
         state.handle(),
         Arc::new(Counter::default()),
@@ -210,10 +214,7 @@ async fn manager(state: &AppState, dir: &Path) -> Arc<SyncManager> {
             identity: Identity::ephemeral(),
             reach: Reach::Loopback,
             shares: Shares::load_from(dir.join("shares.json")),
-            // No dialling: these tests are about the manager, and a poller
-            // reaching for a ticket nobody minted is a task to shut down for
-            // no reason and noise in the log.
-            poll: false,
+            poll,
             index_dir: Some(dir.join("index")),
         },
     )
@@ -438,6 +439,78 @@ async fn opening_a_project_takes_the_folder_off_sync_and_closing_gives_it_back()
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_local_edit_interrupts_the_backoff_instead_of_waiting_out_two_minutes() {
+    // The half of the wake that was missing. `expedite` was only ever reached
+    // from the inbound accept path, so a peer that dialled us — already current
+    // by definition — could shorten our next poll, while the machine whose user
+    // had just typed something could not. With the backoff at its far end that
+    // is a two-minute wait before anybody else sees the edit, which is what
+    // "it synced once and then never again" actually looks like.
+    let dir = scratch("sync-local-edit");
+    let state = AppState::default();
+    let manager = manager(&state, &dir).await;
+
+    let project = Project::create(&dir, "Ashfall").expect("a project in a temp directory");
+    let id = project.id();
+    let root = project.root().to_path_buf();
+    drop(project);
+    manager.share(id, &root);
+
+    let replica = manager.replica(id).expect("sharing registered a replica");
+    // Past the end of the backoff list, which is where a pair that has been
+    // quiet for a few minutes sits: the next dial is 120 seconds out.
+    replica.go_idle_for_test(99);
+    assert!(!replica.took_wake_for_test().await, "nothing has happened yet");
+
+    manager.changed_locally(id);
+
+    assert_eq!(replica.idle_steps(), 0, "the next poll is still minutes away");
+    assert!(replica.took_wake_for_test().await, "a sleeping poller was not woken");
+
+    // A project this machine does not hold is the ordinary case on any
+    // installation with more than one world, and must not panic.
+    manager.changed_locally(new_id());
+
+    manager.shutdown().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_local_change_runs_the_sleeping_poller() {
+    let dir = scratch("sync-poller-wake");
+    let state = AppState::default();
+    let manager = manager_with_poll(&state, &dir, true).await;
+    let project = Project::create(&dir, "Ashfall").unwrap();
+    let id = project.id();
+    let root = project.root().to_path_buf();
+    drop(project);
+
+    // Register without starting the timer, then park at maximum backoff
+    // before share starts the actual production poller.
+    manager.opening(id, &root);
+    manager.closing(id);
+    let replica = manager.replica(id).unwrap();
+    replica.go_idle_for_test(99);
+    manager.share(id, &root);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(replica.idle_steps(), 99);
+
+    state.announce_local_change(id);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        // With no peers, one completed round advances idle from 0 to 1.
+        // Resetting idle alone cannot satisfy this assertion.
+        while replica.idle_steps() != 1 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the poller stayed asleep after a local change");
+
+    manager.shutdown().await;
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_round_serves_what_a_peer_asks_for_and_pushes_what_it_is_behind_on() {
     // The one test that runs a whole round against real QUIC, and the only
     // thing standing between this milestone and a protocol bug that appears
@@ -508,7 +581,20 @@ async fn a_round_serves_what_a_peer_asks_for_and_pushes_what_it_is_behind_on() {
     // that is the same rule that makes an empty manifest safe.
     assert!(pushed.contains(&node_id), "the app did not push a node the peer lacked");
     assert_eq!(pushed.len(), announced, "{pushed:?}");
-
+    // This peer deliberately advertised no cosmetic stage. Core transfer is
+    // usable and the unsupported arrangements are reported separately.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if manager.project_statuses().iter().flat_map(|p| &p.peers).any(|p| {
+                p.arrangement_notice.as_ref().is_some_and(|n| n.contains("cannot share Flow"))
+            }) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("missing arrangement capability should be visible without failing core sync");
     session.close();
     manager.shutdown().await;
     peer.shutdown().await.unwrap();
@@ -536,12 +622,18 @@ async fn one_round(
     // The peer's half of the manifest exchange: it holds nothing. Under the
     // rule `wobu-sync` states twice, that is "never had it" and not
     // "deleted", so the app's side plans to send rather than to remove.
-    let exchange =
-        wobu_sync::manifest::exchange(&session, &[], &[], wobu_sync::manifest::IDLE_TIMEOUT)
-            .await
-            .map_err(WobuError::from)?;
+    let exchange = wobu_sync::manifest::exchange_with_layout(
+        &session,
+        &[],
+        &[],
+        wobu_sync::manifest::IDLE_TIMEOUT,
+        false,
+    )
+    .await
+    .map_err(WobuError::from)?;
 
     let connection = session.connection();
+    super::narrative::empty_exchange(connection).await?;
     // Both halves at once, exactly as `round::run` does it — a peer that
     // asked everything before answering anything would deadlock against an
     // app doing the same, and this is what proves it does not.

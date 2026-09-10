@@ -2,14 +2,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api'
 import type { ProjectSummary } from '../api'
 import { closeProjectAfterEditorWrites } from '../projectClose'
-import { invalidateWorld, qk } from './keys'
+import { clearNarrativeReads, invalidateWorld, qk } from './keys'
 /* ── keys ─────────────────────────────────────────────────────────────────── */
 
 export function useOpenProject() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (path: string) => api.projectOpen(path),
-    onSuccess: (p) => {
+    onSuccess: async (p) => {
+      await clearNarrativeReads(qc)
       qc.setQueryData(qk.projectCurrent, p)
       void qc.invalidateQueries({ queryKey: qk.projectRecent })
       invalidateWorld(qc)
@@ -40,7 +41,8 @@ export function useCreateProject() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (v: { parentDir: string; name: string }) => api.projectCreate(v.parentDir, v.name),
-    onSuccess: (p) => {
+    onSuccess: async (p) => {
+      await clearNarrativeReads(qc)
       qc.setQueryData(qk.projectCurrent, p)
       void qc.invalidateQueries({ queryKey: qk.projectRecent })
       invalidateWorld(qc)
@@ -61,7 +63,8 @@ export function useCloseProject() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: closeProjectAfterEditorWrites,
-    onSuccess: () => {
+    onSuccess: async () => {
+      await clearNarrativeReads(qc)
       qc.setQueryData(qk.projectCurrent, null)
       void qc.invalidateQueries({ queryKey: qk.projectRecent })
       qc.removeQueries({ queryKey: qk.nodes })

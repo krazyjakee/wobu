@@ -232,7 +232,6 @@
 .forge-inspector .variant-controls {
   grid-column: span 2;
 }
-.forge-inspector .spend-panel,
 .forge-inspector .shot-generate {
   grid-column: 1 / -1;
 }

@@ -181,3 +181,173 @@ describe('openAncestors', () => {
     expect(useUI.getState().collapsedNodes).toBe(before)
   })
 })
+
+describe('the shared narrative selection', () => {
+  beforeEach(() => {
+    useUI.setState({
+      narrative: { sceneId: null, beatId: null, lineId: null },
+      narrativeReveal: null,
+      narrativeTab: 'flow',
+      narrativeFilters: { needsText: false, needsReview: false, outOfDate: false },
+    })
+  })
+
+  it('holds one path, so a deeper id left out is cleared rather than kept', () => {
+    // The failure this prevents: Flow selects a beat, the reader opens another
+    // scene in the Library, and Script is still showing a beat that belongs to
+    // the scene they just left.
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'flow')
+    useUI.getState().selectNarrative({ sceneId: 'verdict' }, 'library')
+    expect(useUI.getState().narrative).toEqual({
+      sceneId: 'verdict',
+      beatId: null,
+      lineId: null,
+    })
+  })
+
+  it('keeps the ancestors when a line is chosen inside the open beat', () => {
+    useUI
+      .getState()
+      .selectNarrative({ sceneId: 'council', beatId: 'present', lineId: 'mira-1' }, 'script')
+    expect(useUI.getState().narrative).toEqual({
+      sceneId: 'council',
+      beatId: 'present',
+      lineId: 'mira-1',
+    })
+  })
+
+  it('re-uses the same object when the path did not actually change', () => {
+    // A canvas re-lays-out when this value changes. Clicking the node that is
+    // already selected must not cost that.
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'flow')
+    const before = useUI.getState().narrative
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'script')
+    expect(useUI.getState().narrative).toBe(before)
+  })
+
+  it('raises a reveal every time, including for the same target twice', () => {
+    // Clicking the same diagnostic again means "take me there again", so the
+    // sequence rises even though nothing about the selection moved.
+    useUI.getState().selectNarrative({ sceneId: 'council' }, 'diagnostic')
+    const first = useUI.getState().narrativeReveal!
+    useUI.getState().selectNarrative({ sceneId: 'council' }, 'diagnostic')
+    const second = useUI.getState().narrativeReveal!
+    expect(second.seq).toBeGreaterThan(first.seq)
+    expect(second).toMatchObject({ sceneId: 'council', origin: 'diagnostic' })
+  })
+
+  it('records which surface asked, so that surface can skip its own scroll', () => {
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'flow')
+    expect(useUI.getState().narrativeReveal!.origin).toBe('flow')
+  })
+
+  it('survives a rename, because it holds no names to go stale', () => {
+    // Nothing to assert but the shape: a rename changes no id, so there is no
+    // code path here for it to break. The test exists to pin that down — the
+    // moment a name is cached in this slice, it fails.
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'library')
+    expect(Object.keys(useUI.getState().narrative).sort()).toEqual(['beatId', 'lineId', 'sceneId'])
+  })
+
+  it('lets go of a deleted beat but stays in its scene', () => {
+    useUI
+      .getState()
+      .selectNarrative({ sceneId: 'council', beatId: 'present', lineId: 'mira-1' }, 'flow')
+    useUI.getState().forgetNarrative(['present'])
+    expect(useUI.getState().narrative).toEqual({
+      sceneId: 'council',
+      beatId: null,
+      lineId: null,
+    })
+  })
+
+  it('clears the whole path when the scene itself goes', () => {
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'flow')
+    useUI.getState().forgetNarrative(['council'])
+    expect(useUI.getState().narrative).toEqual({ sceneId: null, beatId: null, lineId: null })
+  })
+
+  it('drops a pending reveal that pointed at something deleted', () => {
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'diagnostic')
+    useUI.getState().forgetNarrative(['present'])
+    expect(useUI.getState().narrativeReveal).toBeNull()
+  })
+
+  it('changes nothing when the deleted ids are not the selected ones', () => {
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'flow')
+    const before = useUI.getState().narrative
+    const reveal = useUI.getState().narrativeReveal
+    useUI.getState().forgetNarrative(['some-other-scene'])
+    expect(useUI.getState().narrative).toBe(before)
+    expect(useUI.getState().narrativeReveal).toBe(reveal)
+  })
+
+  it('leaves the selection alone when the centre tab changes', () => {
+    useUI.getState().selectNarrative({ sceneId: 'council', beatId: 'present' }, 'flow')
+    useUI.getState().setNarrativeTab('script')
+    useUI.getState().setNarrativeTab('source')
+    expect(useUI.getState().narrative).toEqual({
+      sceneId: 'council',
+      beatId: 'present',
+      lineId: null,
+    })
+  })
+
+  it('toggles each work filter independently', () => {
+    useUI.getState().toggleNarrativeFilter('needsText')
+    useUI.getState().toggleNarrativeFilter('outOfDate')
+    useUI.getState().toggleNarrativeFilter('outOfDate')
+    expect(useUI.getState().narrativeFilters).toEqual({
+      needsText: true,
+      needsReview: false,
+      outOfDate: false,
+    })
+  })
+})
+
+it('retains an exact project-scoped reveal across tabs and repeats the same target', () => {
+  const target = {
+    sceneId: 'scene',
+    beatId: 'beat',
+    choiceId: 'choice',
+    field: 'destination' as const,
+  }
+  useUI.getState().selectNarrative(target, 'diagnostic', { projectKey: '/project', focus: true })
+  const first = useUI.getState().narrativeReveal!
+  useUI.getState().setNarrativeTab('script')
+  useUI.getState().setNarrativeTab('flow')
+  expect(useUI.getState().narrativeReveal).toBe(first)
+  useUI.getState().selectNarrative(target, 'diagnostic', { projectKey: '/project', focus: true })
+  expect(useUI.getState().narrativeReveal).toMatchObject({
+    ...target,
+    projectKey: '/project',
+    focus: true,
+    seq: first.seq + 1,
+  })
+  useUI.getState().forgetNarrative(['choice'])
+  expect(useUI.getState().narrative).toEqual({ sceneId: 'scene', beatId: 'beat', lineId: null })
+  expect(useUI.getState().narrativeReveal).toBeNull()
+})
+
+it('retains route and variant selection across tabs and clears descendants when selecting ancestors', () => {
+  useUI.getState().selectNarrative({ sceneId: 'scene', beatId: 'beat', choiceId: 'choice' }, 'flow')
+  useUI.getState().setNarrativeTab('script')
+  expect(useUI.getState().narrative.choiceId).toBe('choice')
+  useUI
+    .getState()
+    .selectNarrative({ sceneId: 'scene', beatId: 'beat', outcomeId: 'outcome' }, 'flow')
+  expect(useUI.getState().narrative.choiceId).toBeUndefined()
+  useUI.getState().forgetNarrative(['outcome'])
+  expect(useUI.getState().narrative).toEqual({ sceneId: 'scene', beatId: 'beat', lineId: null })
+  useUI
+    .getState()
+    .selectNarrative(
+      { sceneId: 'scene', beatId: 'beat', lineId: 'slot', variantId: 'variant' },
+      'search',
+    )
+  expect(useUI.getState().narrative.variantId).toBe('variant')
+  useUI.getState().forgetNarrative(['variant'])
+  expect(useUI.getState().narrative.lineId).toBe('slot')
+  useUI.getState().selectNarrative({ sceneId: 'scene' }, 'inspector')
+  expect(useUI.getState().narrative).toEqual({ sceneId: 'scene', beatId: null, lineId: null })
+})

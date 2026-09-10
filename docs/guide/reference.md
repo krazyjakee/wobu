@@ -59,7 +59,7 @@ Taking it would rewind an entire save every time somebody tried to take back a w
 | Providers and models | What this world uses, and the keys on this computer. See [Providers and keys](providers.md). |
 | Legal | The terms and the privacy policy, read from the files that came with the app, and what you agreed to. |
 | Introduction | Runs the opening tour again. It never re-asks you to agree to anything. |
-| Agent access (MCP) | Letting an AI assistant read or change your world. See [Agent access](agent-access.md). |
+| Agent access (MCP) | Letting an AI assistant read or change your world and the story you have written in it. See [Agent access](agent-access.md). |
 | Storage | Where the search index is, how big it is, and **Rebuild search index**. |
 | Editor | How long Wobu waits before saving. Raise it on a slow shared drive. |
 | Appearance | Theme — *Match system*, *Light* or *Dark* — and how big everything is. |
@@ -88,7 +88,7 @@ version control.
 
 ```
 Ashfall.wobu/
-├── project.json                  name, id, which services it uses, spending limit
+├── project.json                  name, id, which services it uses
 ├── nodes/
 │   ├── style-guide/              the Art Style page
 │   ├── world-bible/              the World Canon page
@@ -105,7 +105,6 @@ Ashfall.wobu/
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
     ├── sessions/<session-id>.json  who else has this open right now
-    ├── spend/                      what has been spent
     └── tmp/                        where saves are staged
 ```
 
@@ -207,7 +206,6 @@ every label, tooltip, empty screen and error message says, and what this guide s
 | Job | One thing Wobu has asked a service for: a picture, an enhance, a 3D shape. |
 | Queue | The jobs that have not finished yet. How many is in the bottom bar. |
 | Receipt | What Wobu keeps of a finished picture: the prompt, the settings, everything that went into it and what it cost. Written once and never changed. |
-| Spending ceiling | A limit, shared through the world folder, at which Wobu stops rather than spending more. |
 
 ### Files, folders and other people
 

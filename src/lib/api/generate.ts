@@ -44,37 +44,9 @@ export interface ReferenceLayerReport {
   reasons: string[]
 }
 
-export interface CostEstimate {
-  currency: 'USD'
-  perImageUsdMicros: number
-  batchUsdMicros: number
-  images: number
-  variesByCell: boolean
-  indicative: boolean
-  conservativeFallback: boolean
-  checkedAt: string
-  sourceUrl: string
-}
-
-export interface SpendStatus {
-  /** Null deliberately disables paid generation; it is never an unlimited ceiling. */
-  ceilingUsdMicros: number | null
-  /** Reconstructed from immutable generation receipts. */
-  spentUsdMicros: number
-  /** Paid batches admitted but not yet fully receipted. */
-  reservedUsdMicros: number
-  remainingUsdMicros: number | null
-  pendingReservations: number
-  oldestReservationAt: string | null
-  /** True when a prior process may have crashed while holding the ledger. */
-  ledgerLocked: boolean
-}
-
 export interface ImageReferenceReport {
   buckets: ReferenceBucketReport[]
   layers: ReferenceLayerReport[]
-  /** Null for a local provider such as ComfyUI. */
-  cost: CostEstimate | null
   lockedSeed: number | null
 }
 
@@ -111,16 +83,6 @@ export const imageGenerationCapabilities = (model?: string) =>
   call<ImageGenerationCapabilities>('image_generation_capabilities', {
     ...(model === undefined ? {} : { model }),
   })
-
-export const spendStatus = () => call<SpendStatus>('spend_status')
-
-/** Null disables paid generation for the project. Amounts are integer USD micros. */
-export const spendCeilingSet = (ceilingUsdMicros: number | null) =>
-  call<SpendStatus>('spend_ceiling_set', { ceilingUsdMicros })
-
-/** Archive crash-orphaned reservations after every paid job has stopped. */
-export const spendRecoveryReset = (confirmNoPaidJobs: boolean) =>
-  call<SpendStatus>('spend_recovery_reset', { confirmNoPaidJobs })
 
 /** Queue one negotiated image generation and return its job id. */
 export const generateStart = (subjectId: string, options: GenerateOptions = {}) =>

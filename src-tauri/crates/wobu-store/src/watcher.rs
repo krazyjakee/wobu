@@ -15,6 +15,7 @@ use std::time::Duration;
 use notify::{RecursiveMode, Watcher as _};
 
 use crate::error::{Error, Result};
+use crate::narrative::NARRATIVE_DIR;
 
 const LOCAL_DEBOUNCE: Duration = Duration::from_millis(400);
 
@@ -55,7 +56,10 @@ pub enum Change {
 pub struct Watcher {
     strategy: Strategy,
     stop: Arc<AtomicBool>,
-    _inner: Option<notify::RecommendedWatcher>,
+    /// Shared with the debounce thread, which attaches the narrative tree to
+    /// it once that tree exists. `Drop` empties it rather than waiting for the
+    /// thread, so a dropped `Watcher` stops delivering immediately.
+    _inner: Arc<std::sync::Mutex<Option<notify::RecommendedWatcher>>>,
 }
 
 impl Watcher {
@@ -96,9 +100,31 @@ impl Watcher {
             .watch(&nodes, RecursiveMode::Recursive)
             .map_err(|e| Error::io(&nodes, std::io::Error::other(e)))?;
 
+        // The project root, non-recursively. Its own directory entries change
+        // when a *tree* is created — which is the one event this watcher
+        // otherwise cannot see, because `narrative/` does not exist in a
+        // project that has no narrative and cannot be created here: an empty
+        // folder appearing inside every art-only project would be a change to
+        // a folder we promised to open unchanged. Writes further down do not
+        // touch the root's entry, so this watch is quiet.
+        let _ = watcher.watch(root, RecursiveMode::NonRecursive);
+
+        let narrative = root.join(NARRATIVE_DIR);
+        let watching_narrative =
+            narrative.is_dir() && watcher.watch(&narrative, RecursiveMode::Recursive).is_ok();
+
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = stop.clone();
+        // Shared with the debounce thread so the narrative tree can be picked
+        // up the moment it appears — a peer sync, a `git pull`, or this
+        // machine writing its first scene. `Drop` takes the watcher out of the
+        // mutex and drops it there, so stopping is still immediate and the
+        // thread simply finds nothing left to attach to.
+        let inner = Arc::new(std::sync::Mutex::new(Some(watcher)));
+        let thread_inner = Arc::clone(&inner);
+        let thread_root = root.to_path_buf();
         std::thread::spawn(move || {
+            let mut watching_narrative = watching_narrative;
             while !thread_stop.load(Ordering::Relaxed) {
                 // Block until something happens, then swallow the burst: a
                 // single save produces several events, and reconciling once per
@@ -111,11 +137,25 @@ impl Watcher {
                 if thread_stop.load(Ordering::Relaxed) {
                     break;
                 }
+                if !watching_narrative {
+                    let narrative = thread_root.join(NARRATIVE_DIR);
+                    // A poisoned lock means the other side panicked while
+                    // holding it; the watcher is then unusable and the right
+                    // answer is to carry on delivering events rather than to
+                    // take the app down over a directory we could not attach.
+                    if narrative.is_dir()
+                        && let Ok(mut guard) = thread_inner.lock()
+                        && let Some(watcher) = guard.as_mut()
+                    {
+                        watching_narrative =
+                            watcher.watch(&narrative, RecursiveMode::Recursive).is_ok();
+                    }
+                }
                 let _ = on_change(Change::Local(paths.into_iter().collect()));
             }
         });
 
-        Ok(Watcher { strategy: Strategy::Local, stop, _inner: Some(watcher) })
+        Ok(Watcher { strategy: Strategy::Local, stop, _inner: inner })
     }
 
     /// The poller, which backs off when the world is quiet.
@@ -169,13 +209,20 @@ impl Watcher {
                 }
             }
         });
-        Watcher { strategy: Strategy::Poll, stop, _inner: None }
+        Watcher { strategy: Strategy::Poll, stop, _inner: Arc::new(std::sync::Mutex::new(None)) }
     }
 }
 
 impl Drop for Watcher {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
+        // Dropped here rather than left for the debounce thread's next tick:
+        // a `Watcher` that keeps delivering for half a second after it is gone
+        // would deliver into a closure whose captured state the caller has
+        // already torn down.
+        if let Ok(mut guard) = self._inner.lock() {
+            drop(guard.take());
+        }
     }
 }
 

@@ -216,8 +216,7 @@ fn a_truncated_response_is_a_failure_even_though_most_of_it_arrived() {
 #[test]
 fn a_stream_that_dies_partway_still_reports_what_the_prompt_cost() {
     // The provider charged for the input the moment it read it. A failure that
-    // reported zero would let the spend ceiling drift low exactly when a flaky
-    // connection is making the user retry.
+    // reported zero would tell the user a flaky connection was free.
     let provider = FakeProvider::new(Ending::Dropped);
     let outcome = block_on(provider.enhance(&request(), &mut Discard, &Cancel::new()));
 
@@ -316,4 +315,20 @@ fn every_kind_can_be_asked_for_and_answered_through_the_trait() {
             .unwrap_or_else(|e| panic!("{} could not round-trip its own schema: {e}", def.kind));
         assert!(!validated.description.is_empty(), "{}", def.kind);
     }
+}
+
+#[test]
+fn existing_providers_decline_structured_requests_without_running_enhance() {
+    let provider = FakeProvider::new(Ending::Whole);
+    assert!(!provider.supports_structured());
+    let request = wobu_llm::StructuredRequest {
+        model: "fake-1".into(),
+        system: None,
+        prompt: "Generate prose".into(),
+        schema: json!({"type":"object"}),
+        max_output_tokens: 16,
+    };
+    let outcome = block_on(provider.structured(&request, &mut Discard, &Cancel::new()));
+    assert!(matches!(outcome.result, Err(Error::SchemaRejected { .. })));
+    assert_eq!(provider.chunks_sent.load(Ordering::SeqCst), 0);
 }

@@ -8,7 +8,7 @@ import { call } from './call'
  * The shapes here mirror `wobu-jobs` exactly — see `src-tauri/crates/wobu-jobs`,
  * where the reasoning for each of them is written down.
  */
-export type JobKind = 'enhance' | 'generate' | 'train_lora' | 'mesh' | 'thumbnail'
+export type JobKind = 'enhance' | 'narrative' | 'generate' | 'train_lora' | 'mesh' | 'thumbnail'
 
 /**
  * Whether the attempt that failed cost the user money.

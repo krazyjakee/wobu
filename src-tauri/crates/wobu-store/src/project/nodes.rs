@@ -53,9 +53,13 @@ impl Project {
     }
 
     pub fn get_node(&self, id: Id) -> Result<Node> {
+        self.get_node_stamped(id).map(|(node, _)| node)
+    }
+
+    pub fn get_node_stamped(&self, id: Id) -> Result<(Node, atomic::Stamp)> {
         let rel = self.index.rel_path_of(id)?.ok_or_else(|| Error::NoSuchNode(id.to_string()))?;
         let path = paths::from_rel_string(&self.root, &rel);
-        let Some((text, _)) = atomic::read_stamped(&path)? else {
+        let Some((text, stamp)) = atomic::read_stamped(&path)? else {
             // The index says this node exists and the file says otherwise. If
             // the whole folder has gone, believe the index: telling the user
             // their character does not exist, when it is sitting safely on a
@@ -66,7 +70,7 @@ impl Project {
                 Error::Disconnected
             });
         };
-        markdown::from_markdown(&text, &path)
+        markdown::from_markdown(&text, &path).map(|node| (node, stamp))
     }
 
     /// The exact node version a long-running local task read before it started.
@@ -440,6 +444,9 @@ impl Project {
             }
         }
         self.index.remove_node(id)?;
+        if node.kind == NodeKind::Character {
+            self.refresh_narrative_dependencies()?;
+        }
         Ok(())
     }
 
@@ -448,6 +455,15 @@ impl Project {
         node: &Node,
         expected: Option<&atomic::Stamp>,
     ) -> Result<SaveOutcome> {
+        let previous = self.index.node(node.id)?;
+        let narrative_changed = (node.kind == NodeKind::Character
+            || previous.as_ref().is_some_and(|old| old.kind == NodeKind::Character))
+            && previous.as_ref().is_none_or(|old| {
+                old.kind != node.kind
+                    || old.name != node.name
+                    || old.attributes.get("narrative_voice")
+                        != node.attributes.get("narrative_voice")
+            });
         let rel = self.rel_path(node);
         let path = paths::from_rel_string(&self.root, &rel);
         let text = markdown::to_markdown(node)?;
@@ -462,12 +478,18 @@ impl Project {
             && let Some((theirs, stamp)) = self.same_words_on_disk(node, &path, expected)?
         {
             self.index.upsert_node(&theirs, &rel, &stamp)?;
+            if narrative_changed {
+                self.refresh_narrative_dependencies()?;
+            }
             return Ok(SaveOutcome::Saved(Box::new(theirs)));
         }
 
         match atomic::guarded_write(&self.root, &path, &text, expected, &self.peer)? {
             WriteOutcome::Written(stamp) => {
                 self.index.upsert_node(node, &rel, &stamp)?;
+                if narrative_changed {
+                    self.refresh_narrative_dependencies()?;
+                }
                 Ok(SaveOutcome::Saved(Box::new(node.clone())))
             }
             WriteOutcome::Conflict { conflict_path, .. } => {

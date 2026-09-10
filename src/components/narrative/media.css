@@ -1,0 +1,16 @@
+.nrt-media-line {
+  border-top: 1px solid var(--border);
+  padding-block: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.nrt-media audio {
+  width: min(100%, 32rem);
+}
+.nrt-media code {
+  overflow-wrap: anywhere;
+}
+.nrt-media [aria-label='Recording audition'] {
+  border: 1px solid var(--border);
+  padding: 0.8rem;
+  margin-block: 0.8rem;
+}

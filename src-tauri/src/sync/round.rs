@@ -146,11 +146,17 @@ pub async fn run(
 
     let (nodes, mut announce, generation_paths) = replica.with(|project| {
         let nodes = project.manifest()?;
-        let blobs: Vec<Blob> = project
+        let mut blobs: Vec<Blob> = project
             .list_assets()?
             .into_iter()
             .map(|asset| Blob { rel_path: asset.rel_path, hash: asset.hash })
             .collect();
+        blobs.extend(
+            project
+                .media_sync_blobs()?
+                .into_iter()
+                .map(|blob| Blob { rel_path: blob.path, hash: blob.hash }),
+        );
         Ok((nodes, blobs, project.generation_sync_paths()?))
     })?;
     let local_archives: Vec<String> = generation_paths
@@ -184,6 +190,8 @@ pub async fn run(
     }
 
     let exchange = manifest::exchange(session, &nodes, &announce, manifest::IDLE_TIMEOUT).await?;
+    super::narrative::require_capability(exchange.narrative_records)?;
+    let narrative = Box::pin(super::narrative::exchange(manager, replica, session)).await?;
     let fetched = match blobs {
         Some(blobs) => {
             blobs
@@ -233,14 +241,33 @@ pub async fn run(
         answer(manager, replica, &peer, connection, &completion),
     )?;
 
+    let (layout_changed, layout_notice) = if exchange.flow_layouts {
+        match Box::pin(super::layout::exchange(manager, replica, session)).await {
+            Ok(result) => result,
+            Err(error) => {
+                (false, Some(format!("Arrangements were not fully shared: {}", error.message)))
+            }
+        }
+    } else {
+        (false,Some("This peer cannot share Flow arrangements. Update Wobu on that machine; story and asset sync remain available.".into()))
+    };
+    manager.arrangement_notice(replica.project(), &peer, layout_notice);
     let outcome = Outcome {
-        applied: ours.applied + theirs.applied,
-        parked: ours.parked + theirs.parked,
-        refused: ours.refused + theirs.refused + exchange.refused + fetched.refused,
-        pushed: ours.pushed,
-        served: theirs.served,
+        applied: ours.applied + theirs.applied + narrative.applied,
+        parked: ours.parked + theirs.parked + narrative.parked,
+        refused: ours.refused
+            + theirs.refused
+            + exchange.refused
+            + fetched.refused
+            + narrative.refused,
+        pushed: ours.pushed + narrative.pushed,
+        served: theirs.served + narrative.served,
         blobs: fetched.placed.len(),
-        changed: ours.changed || theirs.changed || !fetched.placed.is_empty(),
+        changed: ours.changed
+            || theirs.changed
+            || narrative.changed
+            || layout_changed
+            || !fetched.placed.is_empty(),
         whole: exchange.is_whole() && fetched.failed == 0 && fetched.refused == 0,
     };
 

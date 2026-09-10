@@ -79,9 +79,6 @@ const REPLACEMENTS: Record<string, string> = {
     'The provider answered, but not with anything Wobu could use. Trying again usually works.',
   'provider.context_too_long':
     'What Wobu sent the provider was longer than the model accepts. Shorten the notes, or mute a layer or two in the inspector, then try again.',
-  'billing.ceiling_exceeded':
-    'This project’s spending ceiling has been reached, so Wobu stopped before spending any more. Raise the ceiling in Settings → Providers and models if you meant to carry on.',
-
   internal:
     'Something went wrong inside Wobu itself, rather than in anything you did. Settings → Diagnostics has the log, if you would like to report it.',
 }

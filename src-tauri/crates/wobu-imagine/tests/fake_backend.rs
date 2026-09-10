@@ -443,8 +443,8 @@ fn a_cancelled_generation_stops_the_work_rather_than_discarding_the_answer() {
 fn a_failure_after_the_provider_generated_still_reports_what_it_cost() {
     // The reason `ImageOutcome` is not a `Result`. A refusal that arrives after
     // generation has been paid for, and if the usage rode out with the error it
-    // would be dropped by the first `?` — leaving #55's ceiling drifting low
-    // exactly when the user is hitting limits.
+    // would be dropped by the first `?` — leaving the user told that a refusal
+    // they were charged for cost them nothing.
     let node = subject();
     let extracted = stack(&node);
     let gemini = RemoteGemini { ending: Ending::Refused };

@@ -380,13 +380,21 @@ impl Project {
                 None => (String::new(), String::new()),
             };
             let node = self.index.node_at_rel_path(&target_rel)?;
+            // A narrative source file has no node row to name it — scenes are
+            // not in the index yet (#153) — so the name comes from the winner
+            // on disk. A card that cannot say which scene it is about is a
+            // card nobody resolves.
+            let named = node
+                .as_ref()
+                .map(|(_, name)| name.clone())
+                .or_else(|| crate::narrative::scene_name_at(&self.root, &target_rel));
 
             out.push(Conflict {
                 mine: name.peer.as_deref() == Some(self.peer.as_str()),
                 rel_path: rel,
                 node_rel_path: target_rel,
                 node_id: node.as_ref().map(|(id, _)| *id),
-                node_name: node.map(|(_, name)| name),
+                node_name: named,
                 user: name.peer,
                 saved_at: name.saved_at,
                 parked,
@@ -494,6 +502,17 @@ impl Project {
                 let Some((parked, _)) = atomic::read_stamped(&sibling)? else {
                     return Err(Error::NotAConflict(sibling));
                 };
+                if crate::narrative::registry::classify(&target_rel).is_some() {
+                    crate::narrative::registry::safe_path(&self.root, &target_rel)?;
+                    if std::fs::symlink_metadata(&sibling).is_ok_and(|m| m.file_type().is_symlink())
+                    {
+                        return Err(Error::NotAConflict(sibling));
+                    }
+                    crate::narrative::registry::parse(&target_rel, &parked)?;
+                    if let Some((text, _)) = &current {
+                        crate::narrative::registry::parse(&target_rel, text)?;
+                    }
+                }
                 let expected = current.map(|(_, stamp)| stamp);
 
                 // Back through `guarded_write` rather than a plain write. The
@@ -509,6 +528,17 @@ impl Project {
                     &self.peer,
                 )? {
                     WriteOutcome::Written(stamp) => {
+                        // Narrative source is not in the node index, so there
+                        // is nothing to upsert and — more to the point —
+                        // nothing to mark corrupt. Running a YAML scene
+                        // through the Markdown parser would put it in the
+                        // navigator's broken-file list under a name no node
+                        // has, which is a bug report rather than a diagnostic.
+                        if crate::narrative::registry::classify(&target_rel).is_some() {
+                            self.index_narrative_path(&target_rel)?;
+                            self.remove_sibling(&sibling)?;
+                            return Ok(Resolved::Done);
+                        }
                         match markdown::from_markdown(&parked, &target) {
                             Ok(node) => {
                                 self.index.upsert_node(&node, &target_rel, &stamp)?;

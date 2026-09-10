@@ -1,0 +1,30 @@
+ if(c.op==='profileInvoke') {
+  const intervals=[];let previous=performance.now(),live=true;
+  const frame=(now)=>{intervals.push(now-previous);previous=now;if(live)requestAnimationFrame(frame)};
+  requestAnimationFrame(frame);
+  const started=performance.now();let value,error;
+  try {value=await invoke(c.command,c.args)} catch(e) {error=JSON.stringify(e)}
+  const ms=performance.now()-started;
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  live=false;
+  return {command:c.command,ms,frameIntervals:intervals,outputBytes:value===undefined?0:new TextEncoder().encode(JSON.stringify(value)).byteLength,error,
+   rows:value?.rows?.length,total:value?.total,sceneCount:value?.sceneCount,sceneId:value?.scene?.id??value?.scene_id,reviewLines:value?.lines?.length,
+   summaries:value?.rows?.map(row=>({id:row.summary.id,matchCount:row.matchCount,snippets:row.matches.length,quests:row.quests.map(q=>q.id)})),
+   value:c.includeValue?value:undefined,active:describe(document.activeElement),domNodes:document.getElementsByTagName('*').length,errors}
+ }
+ if(c.op==='profileUi') {
+  const intervals=[];let previous=performance.now(),live=true;
+  const frame=(now)=>{intervals.push(now-previous);previous=now;if(live)requestAnimationFrame(frame)};
+  requestAnimationFrame(frame);
+  const started=performance.now();for(const action of c.actions)await execute(action);
+  while(performance.now()-started<30000){
+   await new Promise(r=>setTimeout(r,16));
+   const e=document.querySelector(c.until.selector);
+   if(e && (!c.until.text || e.textContent.includes(c.until.text)) && (!c.until.value || e.value?.includes(c.until.value))){
+    live=false;return {ms:performance.now()-started,frameIntervals:intervals,rows:document.querySelectorAll('.nsl-table tbody tr').length,
+     active:describe(document.activeElement),text:e.textContent,value:e.value,selection:useUI.getState().narrative,
+     scroll:Array.from(document.querySelectorAll('.nrt-center,.nsl-table-wrap,.nrt-script')).map(e=>({className:e.className,top:e.scrollTop})),errors}
+   }
+  }
+  live=false;throw Error('UI measurement timed out: '+JSON.stringify(c.until))
+ }

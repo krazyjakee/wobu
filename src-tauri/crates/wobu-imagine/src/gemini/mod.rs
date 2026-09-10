@@ -433,8 +433,8 @@ fn accept(returned: wire::Returned) -> Result<GeneratedImage> {
 ///
 /// One image or none, and the line is whether the provider is understood to have
 /// generated pixels. Two of these are judgement calls and both err towards
-/// *having* been charged, because `ImageUsage` is what #55's ceiling reads and a
-/// ceiling that undercounts stops being a ceiling:
+/// *having* been charged, because `ImageUsage` is what tells the user whether
+/// an attempt that produced nothing still cost them money:
 ///
 /// - **A cancellation after the request went out.** `backend.rs` states the rule
 ///   in as many words — "a remote render that is abandoned rather than stopped is
@@ -908,8 +908,8 @@ mod tests {
     fn an_abandoned_call_is_counted_as_billed_because_google_does_not_stop() {
         // `backend.rs`: "a remote render that is abandoned rather than stopped is
         // billed in full". There is no call that stops Gemini generating —
-        // dropping the response only stops us waiting — so #55's ceiling has to
-        // count it, and a response that arrived and could not be read even more
+        // dropping the response only stops us waiting — so it counts as
+        // billed, and a response that arrived and could not be read even more
         // so.
         assert!(billed_by(&Error::Cancelled).is_billed());
         assert!(billed_by(&Error::NotAnImage { detail: "html".into() }).is_billed());

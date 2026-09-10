@@ -47,7 +47,7 @@
 //!
 //! ```
 //! use wobu_core::{
-//!     Description, FragmentTarget, Layer, Node, NodeKind, SectionValue, default_preset,
+//!     Description, FragmentTarget, Layer, Node, NodeKind, SectionValue, preset,
 //! };
 //! use wobu_influence::{Sliders, World, fragments, resolve};
 //!
@@ -59,7 +59,7 @@
 //!
 //! let world = World::new([&kael]);
 //! let stack = resolve(&world, kael.id, None).unwrap();
-//! let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+//! let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 //!
 //! let rows: Vec<_> = compiled
 //!     .iter()
@@ -81,7 +81,7 @@
 //! whole engine exists for.
 //!
 //! ```
-//! use wobu_core::{Description, Node, NodeKind, SectionValue, default_preset};
+//! use wobu_core::{Description, Node, NodeKind, SectionValue, preset};
 //! use wobu_influence::{
 //!     Budget, Chars, DropReason, Sliders, World, compile, fragments, resolve,
 //! };
@@ -95,7 +95,7 @@
 //!
 //! let world = World::new([&kael]);
 //! let stack = resolve(&world, kael.id, None).unwrap();
-//! let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+//! let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 //!
 //! // Room for one of the two prompt fragments. A character sheet is read as a
 //! // shape, so `silhouette` outweighs `costume` and the longcoat is what goes.

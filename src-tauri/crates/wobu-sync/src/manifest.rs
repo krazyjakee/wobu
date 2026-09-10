@@ -315,6 +315,9 @@ pub struct Counts {
 /// looking at the whole picture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exchange {
+    /// Negotiated extension; absent on older peers means unsupported.
+    pub narrative_records: bool,
+    pub flow_layouts: bool,
     /// The peer's nodes, in the order it wrote them. Not sorted, and not
     /// deduplicated: the comparison sorts, and a peer sending the same id twice
     /// is a peer that wasted some bytes rather than one that broke anything.
@@ -401,6 +404,10 @@ enum Page {
     /// zero.
     End {
         held: Counts,
+        #[serde(default)]
+        narrative_records: bool,
+        #[serde(default)]
+        flow_layouts: bool,
     },
 }
 
@@ -494,6 +501,18 @@ pub async fn exchange(
     blobs: &[Blob],
     idle: Duration,
 ) -> Result<Exchange> {
+    exchange_with_layout(session, nodes, blobs, idle, true).await
+}
+
+/// Explicit capability for embedders which implement core records but do not
+/// participate in the optional cosmetic stage.
+pub async fn exchange_with_layout(
+    session: &Session,
+    nodes: &[(Id, String)],
+    blobs: &[Blob],
+    idle: Duration,
+    flow_layouts: bool,
+) -> Result<Exchange> {
     let connection = session.connection();
 
     // Opening a unidirectional stream is local — QUIC puts nothing on the wire
@@ -512,12 +531,13 @@ pub async fn exchange(
     // - **Reading must not come after writing.** Writing everything before
     //   reading anything deadlocks as soon as either manifest is larger than the
     //   peer's stream receive window, which at the cap is megabytes.
-    let (sent, received) = tokio::try_join!(write_manifest(send, nodes, blobs, idle), async {
-        let mut recv =
-            within(idle, async { connection.accept_uni().await.map_err(Error::interrupted) })
-                .await?;
-        read_manifest(&mut recv, idle).await
-    })?;
+    let (sent, received) =
+        tokio::try_join!(write_manifest(send, nodes, blobs, idle, flow_layouts), async {
+            let mut recv =
+                within(idle, async { connection.accept_uni().await.map_err(Error::interrupted) })
+                    .await?;
+            read_manifest(&mut recv, idle).await
+        })?;
 
     Ok(Exchange {
         nodes: received.nodes,
@@ -525,6 +545,8 @@ pub async fn exchange(
         held: received.held,
         sent,
         refused: received.refused,
+        narrative_records: received.narrative_records,
+        flow_layouts: received.flow_layouts,
     })
 }
 
@@ -542,6 +564,7 @@ async fn write_manifest(
     nodes: &[(Id, String)],
     blobs: &[Blob],
     idle: Duration,
+    flow_layouts: bool,
 ) -> Result<Counts> {
     let mut sent = Counts::default();
 
@@ -557,7 +580,7 @@ async fn write_manifest(
     // The true counts, not `sent`. A receiver's only way to know it is looking at
     // a partial picture is that these two numbers disagree with what arrived.
     let held = Counts { nodes: nodes.len(), blobs: blobs.len() };
-    write_page(&mut send, &Page::End { held }, idle).await?;
+    write_page(&mut send, &Page::End { held, narrative_records: true, flow_layouts }, idle).await?;
 
     send.finish().map_err(Error::interrupted)?;
     within(idle, async { send.stopped().await.map(|_| ()).map_err(Error::interrupted) }).await?;
@@ -584,6 +607,8 @@ async fn write_page(send: &mut SendStream, page: &Page, idle: Duration) -> Resul
 
 /// The peer's half, as far as [`Page::End`].
 struct Received {
+    narrative_records: bool,
+    flow_layouts: bool,
     nodes: Vec<(Id, String)>,
     blobs: Vec<Blob>,
     held: Counts,
@@ -624,7 +649,16 @@ async fn read_manifest(recv: &mut RecvStream, idle: Duration) -> Result<Received
                     }
                 }
             }
-            Some(Page::End { held }) => return Ok(Received { nodes, blobs, held, refused }),
+            Some(Page::End { held, narrative_records, flow_layouts }) => {
+                return Ok(Received {
+                    nodes,
+                    blobs,
+                    held,
+                    refused,
+                    narrative_records,
+                    flow_layouts,
+                });
+            }
             // The stream finished without saying it was finished. Not treated as
             // a short manifest, because a short manifest and a cut connection
             // would then be the same event — and one of them is a peer that holds
@@ -833,6 +867,8 @@ mod tests {
             held: Counts { nodes: 1, blobs: 0 },
             sent: Counts { nodes: 1, blobs: 0 },
             refused: 0,
+            narrative_records: true,
+            flow_layouts: true,
         };
 
         assert!(whole.is_whole());
@@ -851,6 +887,8 @@ mod tests {
             held: Counts { nodes: 12_000, blobs: 3 },
             sent: Counts::default(),
             refused: 0,
+            narrative_records: true,
+            flow_layouts: true,
         };
 
         assert!(!cut.is_whole());
@@ -865,9 +903,32 @@ mod tests {
             held: Counts { nodes: 1, blobs: 0 },
             sent: Counts::default(),
             refused: 0,
+            narrative_records: true,
+            flow_layouts: true,
         };
 
         assert!(!odd.is_whole());
         assert_eq!(odd.elided(), Counts::default());
+    }
+    #[test]
+    fn optional_narrative_capability_is_ignored_by_legacy_readers_and_absent_defaults_false() {
+        #[derive(Deserialize)]
+        #[serde(tag = "page", rename_all = "snake_case")]
+        enum LegacyPage {
+            End { held: Counts },
+        }
+        let new = serde_json::to_string(&Page::End {
+            held: Counts::default(),
+            narrative_records: true,
+            flow_layouts: true,
+        })
+        .unwrap();
+        let LegacyPage::End { held } = serde_json::from_str(&new).unwrap();
+        assert_eq!(held, Counts::default());
+        let old = r#"{"page":"end","held":{"nodes":0,"blobs":0}}"#;
+        assert!(matches!(
+            serde_json::from_str::<Page>(old).unwrap(),
+            Page::End { narrative_records: false, flow_layouts: false, .. }
+        ));
     }
 }

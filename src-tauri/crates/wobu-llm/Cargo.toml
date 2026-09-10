@@ -26,5 +26,9 @@ serde_json = "1.0.151"
 thiserror = "2.0.19"
 wobu-core = { workspace = true }
 
+[dev-dependencies]
+# Real local HTTP fixtures need reqwest's reactor; already locked in the workspace.
+tokio = { version = "1.53", features = ["rt", "time", "net"] }
+
 [lints]
 workspace = true

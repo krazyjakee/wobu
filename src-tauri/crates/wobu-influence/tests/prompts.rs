@@ -9,7 +9,7 @@
 
 use wobu_core::{
     AssetRef, AssetRole, Description, FragmentTarget, Id, Layer, Link, LinkRole, Node, NodeKind,
-    SectionValue, default_preset,
+    SectionValue, preset,
 };
 use wobu_influence::{
     Budget, Chars, CompiledPrompt, DropReason, Fragment, FragmentBody, Origin, Reached,
@@ -102,7 +102,7 @@ impl Ashfall {
     fn extract<'a>(&'a self, world: &World<'a>, sliders: &Sliders) -> Vec<Fragment<'a>> {
         let shot = Shot::new("Character sheet · 3:4");
         let stack = resolve(world, self.kael.id, Some(shot)).unwrap();
-        fragments(&stack, default_preset(NodeKind::Character), sliders)
+        fragments(&stack, preset("character_sheet").unwrap(), sliders)
     }
 }
 
@@ -124,7 +124,7 @@ fn a_character_sheet_compiles_layer_by_layer_with_the_subject_last() {
         format!(
             "Oil on board, Long-limbed, four-jointed, Tall, narrow, hooded, Ash-grey longcoat, \
              #2b2118, #c2703a, {}",
-            default_preset(NodeKind::Character).framing
+            preset("character_sheet").unwrap().framing
         )
     );
     assert_eq!(compiled.negative(), "photographic detail, fur, modern firearms, clean surfaces");
@@ -419,7 +419,7 @@ fn the_compiled_prompt_does_not_depend_on_the_order_the_nodes_were_loaded() {
         let world = World::new(nodes);
         let shot = Shot::new("Character sheet · 3:4");
         let stack = resolve(&world, ashfall.kael.id, Some(shot)).unwrap();
-        let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+        let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
         let compiled = compile(&extracted, tight);
         format!("{:?}|{:?}|{:?}", compiled.prompt(), compiled.negative(), report(&compiled))
     };

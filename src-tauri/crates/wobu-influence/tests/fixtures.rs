@@ -29,7 +29,7 @@
 
 use std::path::{Path, PathBuf};
 
-use wobu_core::{FragmentTarget, Id, Layer, NodeKind, Preset, default_preset, preset};
+use wobu_core::{FragmentTarget, Id, Layer, Preset, preset};
 use wobu_influence::{
     Budget, Chars, CompiledImages, CompiledPrompt, DropReason, Fragment, RefBucket, ResolvedStack,
     Shot, Sliders, World, compile, compile_images, fragments, image_budget, resolve,
@@ -349,7 +349,7 @@ fn the_layer_cards_list_what_the_files_actually_say() {
     // contributing that section — no error, just a thinner prompt.
     let saltmarch = Fixture::open("Saltmarch.wobu");
     let world = saltmarch.world();
-    let sheet = default_preset(NodeKind::Character);
+    let sheet = preset("character_sheet").unwrap();
     let extracted = saltmarch_fragments(&world, saltmarch.id("Wren Alder"), sheet);
 
     assert_eq!(
@@ -409,7 +409,7 @@ fn the_two_prompts_are_the_files_joined_in_layer_order() {
     // framing last where a text encoder's recency bias does the most good.
     let saltmarch = Fixture::open("Saltmarch.wobu");
     let world = saltmarch.world();
-    let sheet = default_preset(NodeKind::Character);
+    let sheet = preset("character_sheet").unwrap();
     let extracted = saltmarch_fragments(&world, saltmarch.id("Wren Alder"), sheet);
     let compiled = compile(&extracted, Budget::unlimited());
 
@@ -467,7 +467,7 @@ fn a_text_budget_too_small_says_which_sentences_it_cut() {
     // which is the feedback loop the whole engine is for.
     let saltmarch = Fixture::open("Saltmarch.wobu");
     let world = saltmarch.world();
-    let sheet = default_preset(NodeKind::Character);
+    let sheet = preset("character_sheet").unwrap();
     let extracted = saltmarch_fragments(&world, saltmarch.id("Wren Alder"), sheet);
 
     let budget = Budget { prompt: Chars::new(260), negative: Chars::UNLIMITED };
@@ -539,11 +539,8 @@ fn the_style_bucket_overflows_before_any_other_does() {
     // they are what goes, attributed to the card that lost them.
     let saltmarch = Fixture::open("Saltmarch.wobu");
     let world = saltmarch.world();
-    let extracted = saltmarch_fragments(
-        &world,
-        saltmarch.id("Wren Alder"),
-        default_preset(NodeKind::Character),
-    );
+    let extracted =
+        saltmarch_fragments(&world, saltmarch.id("Wren Alder"), preset("character_sheet").unwrap());
     let images = compile_images(&extracted, image_budget("gemini-3-pro-image").unwrap());
 
     assert_eq!(
@@ -592,7 +589,7 @@ fn a_ring_of_links_on_disk_contributes_each_court_exactly_once() {
         ]
     );
 
-    let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
     let compiled = compile(&extracted, Budget::unlimited());
     assert_eq!(
         compiled.prompt(),
@@ -614,7 +611,7 @@ fn a_link_weighted_to_zero_on_disk_keeps_its_card_and_silences_its_fragments() {
     let ouroboros = Fixture::open("Ouroboros.wobu");
     let world = ouroboros.world();
     let stack = resolve(&world, ouroboros.id("Moss"), None).unwrap();
-    let extracted = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let extracted = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     // The card is present and its rows are listed, at zero.
     let mill: Vec<_> = fragment_rows(&extracted)

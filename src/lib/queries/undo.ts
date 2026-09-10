@@ -1,6 +1,11 @@
+import { isProjectSession, projectSessionEpoch } from '../projectSession'
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { applyCommand, useUndoStack } from '../undo'
+import { sceneEditKey, useScriptDrafts } from '../../components/narrative/scriptDrafts'
+import { useUI } from '../../store/ui'
+import type { ProjectSummary } from '../api'
+import { qk } from './keys'
 import { report, toast } from '../../store/ui'
 import { invalidateWorld } from './keys'
 /* ── keys ─────────────────────────────────────────────────────────────────── */
@@ -19,29 +24,53 @@ import { invalidateWorld } from './keys'
  */
 export function useUndoRunner() {
   const qc = useQueryClient()
+  const draftUndo = useCallback(
+    (redo: boolean) => {
+      const project = qc.getQueryData<ProjectSummary | null>(qk.projectCurrent)?.path
+      if (!project) return false
+      const store = useScriptDrafts.getState()
+      const sceneId = useUI.getState().narrative.sceneId
+      const key = sceneId && sceneEditKey(project, sceneId)
+      if (key && store.drafts[key]) {
+        if (redo) store.redo(key)
+        else store.undo(key)
+        return true
+      }
+      if (Object.keys(store.drafts).some((key) => key.startsWith(`${project}:`))) {
+        toast('Return to the scene draft to undo, or save or discard it first.')
+        return true
+      }
+      return false
+    },
+    [qc],
+  )
 
   const undo = useCallback(async () => {
+    const epoch = projectSessionEpoch()
+    if (draftUndo(false)) return
     try {
       const entry = await useUndoStack.getState().undo(applyCommand)
-      if (!entry) return
+      if (!entry || !isProjectSession(epoch)) return
       toast(entry.caveat ? `Undone: ${entry.label}. ${entry.caveat}` : `Undone: ${entry.label}`)
     } catch (e) {
-      report(e, 'Undo failed')
+      if (isProjectSession(epoch)) report(e, 'Undo failed')
     } finally {
-      invalidateWorld(qc)
+      if (isProjectSession(epoch)) invalidateWorld(qc)
     }
-  }, [qc])
+  }, [qc, draftUndo])
 
   const redo = useCallback(async () => {
+    const epoch = projectSessionEpoch()
+    if (draftUndo(true)) return
     try {
       const entry = await useUndoStack.getState().redo(applyCommand)
-      if (entry) toast(`Redone: ${entry.label}`)
+      if (entry && isProjectSession(epoch)) toast(`Redone: ${entry.label}`)
     } catch (e) {
-      report(e, 'Redo failed')
+      if (isProjectSession(epoch)) report(e, 'Redo failed')
     } finally {
-      invalidateWorld(qc)
+      if (isProjectSession(epoch)) invalidateWorld(qc)
     }
-  }, [qc])
+  }, [qc, draftUndo])
 
   return { undo, redo }
 }

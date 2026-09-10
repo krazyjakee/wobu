@@ -1,0 +1,238 @@
+{
+  "project_open": {
+    "ms": {
+      "n": 1,
+      "min": 7982,
+      "median": 7982,
+      "p95_inclusive": 7982,
+      "max": 7982
+    },
+    "frameIntervalsMs": {
+      "n": 498,
+      "min": 15,
+      "median": 16.0,
+      "p95_inclusive": 17.0,
+      "max": 17
+    },
+    "perCallMaximumFrameMs": {
+      "n": 1,
+      "min": 17,
+      "median": 17,
+      "p95_inclusive": 17,
+      "max": 17
+    },
+    "outputBytes": {
+      "n": 1,
+      "min": 199,
+      "median": 199,
+      "p95_inclusive": 199,
+      "max": 199
+    },
+    "domNodes": {
+      "n": 1,
+      "min": 308,
+      "median": 308,
+      "p95_inclusive": 308,
+      "max": 308
+    }
+  },
+  "first_browse": {
+    "ms": {
+      "n": 1,
+      "min": 204.99999999999636,
+      "median": 204.99999999999636,
+      "p95_inclusive": 204.99999999999636,
+      "max": 204.99999999999636
+    },
+    "frameIntervalsMs": {
+      "n": 15,
+      "min": 8.999999999996362,
+      "median": 16,
+      "p95_inclusive": 16.3,
+      "max": 17
+    },
+    "perCallMaximumFrameMs": {
+      "n": 1,
+      "min": 17,
+      "median": 17,
+      "p95_inclusive": 17,
+      "max": 17
+    },
+    "outputBytes": {
+      "n": 1,
+      "min": 13999,
+      "median": 13999,
+      "p95_inclusive": 13999,
+      "max": 13999
+    },
+    "domNodes": {
+      "n": 1,
+      "min": 308,
+      "median": 308,
+      "p95_inclusive": 308,
+      "max": 308
+    }
+  },
+  "search": {
+    "ms": {
+      "n": 30,
+      "min": 192,
+      "median": 205.0,
+      "p95_inclusive": 288.7000000000007,
+      "max": 405
+    },
+    "frameIntervalsMs": {
+      "n": 473,
+      "min": 2,
+      "median": 16,
+      "p95_inclusive": 17.0,
+      "max": 18
+    },
+    "perCallMaximumFrameMs": {
+      "n": 30,
+      "min": 16,
+      "median": 17.0,
+      "p95_inclusive": 17.55,
+      "max": 18
+    },
+    "outputBytes": {
+      "n": 30,
+      "min": 3677,
+      "median": 3677.0,
+      "p95_inclusive": 3677.0,
+      "max": 3677
+    },
+    "domNodes": {
+      "n": 30,
+      "min": 308,
+      "median": 308.0,
+      "p95_inclusive": 308.0,
+      "max": 308
+    }
+  },
+  "combined": {
+    "ms": {
+      "n": 30,
+      "min": 217.00000000000364,
+      "median": 233.50000000000364,
+      "p95_inclusive": 285.99999999999835,
+      "max": 341
+    },
+    "frameIntervalsMs": {
+      "n": 513,
+      "min": 1,
+      "median": 16,
+      "p95_inclusive": 17.0,
+      "max": 17
+    },
+    "perCallMaximumFrameMs": {
+      "n": 30,
+      "min": 17,
+      "median": 17.0,
+      "p95_inclusive": 17.0,
+      "max": 17
+    },
+    "outputBytes": {
+      "n": 30,
+      "min": 16948,
+      "median": 16948.0,
+      "p95_inclusive": 16948.0,
+      "max": 16948
+    },
+    "domNodes": {
+      "n": 30,
+      "min": 308,
+      "median": 308.0,
+      "p95_inclusive": 308.0,
+      "max": 308
+    }
+  },
+  "scene": {
+    "ms": {
+      "n": 30,
+      "min": 64,
+      "median": 70.0,
+      "p95_inclusive": 110.65,
+      "max": 121
+    },
+    "frameIntervalsMs": {
+      "n": 200,
+      "min": 0,
+      "median": 16.0,
+      "p95_inclusive": 17.0,
+      "max": 21
+    },
+    "perCallMaximumFrameMs": {
+      "n": 30,
+      "min": 16,
+      "median": 17.0,
+      "p95_inclusive": 17.0,
+      "max": 21
+    },
+    "outputBytes": {
+      "n": 30,
+      "min": 18693,
+      "median": 18693.0,
+      "p95_inclusive": 18693.0,
+      "max": 18693
+    },
+    "domNodes": {
+      "n": 30,
+      "min": 308,
+      "median": 308.0,
+      "p95_inclusive": 308.0,
+      "max": 308
+    }
+  },
+  "review": {
+    "ms": {
+      "n": 30,
+      "min": 403,
+      "median": 437.5000000000018,
+      "p95_inclusive": 522.95,
+      "max": 734
+    },
+    "frameIntervalsMs": {
+      "n": 902,
+      "min": 7.999999999996362,
+      "median": 16.0,
+      "p95_inclusive": 17.0,
+      "max": 18
+    },
+    "perCallMaximumFrameMs": {
+      "n": 30,
+      "min": 17,
+      "median": 17.0,
+      "p95_inclusive": 17.55,
+      "max": 18
+    },
+    "outputBytes": {
+      "n": 30,
+      "min": 33933,
+      "median": 33933.0,
+      "p95_inclusive": 33933.0,
+      "max": 33933
+    },
+    "domNodes": {
+      "n": 30,
+      "min": 308,
+      "median": 308.0,
+      "p95_inclusive": 308.0,
+      "max": 308
+    }
+  },
+  "processTreeRssBytes": {
+    "n": 122,
+    "min": 781221888,
+    "median": 786989056.0,
+    "p95_inclusive": 790418022.4,
+    "max": 791076864
+  },
+  "notes": [
+    "Inclusive interpolated p95; all samples and outliers retained.",
+    "Frame intervals include two post-result requestAnimationFrame callbacks; first callback begins at timer installation, not the preceding display frame.",
+    "Summed native and descendant RSS duplicates shared pages; it is not PSS.",
+    "No claim of controlled cold disk or cold index.",
+    "Fewer than 30 samples do not establish p95 compliance."
+  ]
+}

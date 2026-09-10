@@ -1,0 +1,71 @@
+.sheet.nrt-build-sheet {
+  width: min(1160px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+.nrt-build {
+  width: 100%;
+  min-width: 0;
+  max-height: calc(100vh - 90px);
+  overflow: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.nrt-build header,
+.nrt-build-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.nrt-build header h2 {
+  flex: 1;
+}
+.nrt-build label {
+  display: grid;
+  gap: 4px;
+}
+.nrt-build select {
+  min-width: 0;
+  max-width: 100%;
+}
+.nrt-build textarea {
+  min-height: 64px;
+  width: 100%;
+}
+.nrt-build-table {
+  max-height: 42vh;
+  overflow: auto;
+}
+.nrt-build table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+}
+.nrt-build th,
+.nrt-build td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.nrt-build th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+}
+.nrt-build td p {
+  margin: 4px 0;
+}
+
+.nrt-build th:first-child {
+  width: 64px;
+}
+.nrt-build th:nth-child(2) {
+  width: 55%;
+}
+.nrt-build th:nth-child(3) {
+  width: 18%;
+}

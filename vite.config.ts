@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => ({
   // Don't let Vite wipe Rust compiler errors off the screen.
   clearScreen: false,
 
+  optimizeDeps: {
+    // The small API facade stays on the main thread. The unmodified upstream
+    // worker is emitted with ?url; never construct elk.bundled inside a Worker.
+    include: ['elkjs/lib/elk-api.js'],
+  },
+
   server: {
     port: 1420,
     strictPort: true,

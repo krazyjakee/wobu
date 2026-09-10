@@ -96,7 +96,7 @@ beforeEach(() => {
       })
     }
     if (command === 'image_reference_report') {
-      return Promise.resolve({ buckets: [], layers: [], cost: null, lockedSeed: null })
+      return Promise.resolve({ buckets: [], layers: [], lockedSeed: null })
     }
     if (command === 'image_generation_capabilities') {
       return Promise.resolve({
@@ -113,17 +113,6 @@ beforeEach(() => {
             substituted: false,
           },
         ],
-      })
-    }
-    if (command === 'spend_status') {
-      return Promise.resolve({
-        ceilingUsdMicros: null,
-        spentUsdMicros: 0,
-        reservedUsdMicros: 0,
-        remainingUsdMicros: null,
-        pendingReservations: 0,
-        oldestReservationAt: null,
-        ledgerLocked: false,
       })
     }
     if (command === 'node_thumb_batch') return Promise.resolve({ kael: '/thumbs/kael.webp' })

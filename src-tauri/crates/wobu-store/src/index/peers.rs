@@ -137,6 +137,7 @@ impl Index {
         let tx = self.conn.unchecked_transaction()?;
         tx.execute("DELETE FROM sync_state WHERE peer_id = ?1", params![peer_id])?;
         tx.execute("DELETE FROM sync_rejected WHERE peer_id = ?1", params![peer_id])?;
+        tx.execute("DELETE FROM narrative_sync WHERE peer = ?1", params![peer_id])?;
         tx.commit()?;
         Ok(())
     }

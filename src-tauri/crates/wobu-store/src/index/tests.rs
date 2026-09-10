@@ -99,11 +99,11 @@ fn four_thousand_node_rebuild_has_constant_transaction_and_prepare_counts() {
     };
 
     index.reset_write_metrics();
-    index.rebuild_from_scan(&[], &[], &make_records(1), &[]).unwrap();
+    index.rebuild_from_scan(&[], &[], &make_records(1), &[], &[]).unwrap();
     let one = (index.write_metrics.commits.get(), index.write_metrics.preparations.get());
 
     index.reset_write_metrics();
-    index.rebuild_from_scan(&[], &[], &make_records(4_000), &[]).unwrap();
+    index.rebuild_from_scan(&[], &[], &make_records(4_000), &[], &[]).unwrap();
     let four_thousand = (index.write_metrics.commits.get(), index.write_metrics.preparations.get());
 
     assert_eq!(one, (1, REBUILD_STATEMENT_COUNT));
@@ -133,7 +133,7 @@ fn failed_bulk_rebuild_restores_the_previous_complete_index() {
 
     let broken = Node::new(NodeKind::Setting, "Break Rebuild").unwrap();
     let records = vec![(broken, "nodes/settings/break-rebuild.md".into(), stamp())];
-    assert!(index.rebuild_from_scan(&[], &[], &records, &[]).is_err());
+    assert!(index.rebuild_from_scan(&[], &[], &records, &[], &[]).is_err());
 
     assert_eq!(index.list_nodes().unwrap()[0].id, original.id);
     assert_eq!(index.write_metrics.commits.get(), 0);

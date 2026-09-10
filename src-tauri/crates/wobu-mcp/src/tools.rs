@@ -42,11 +42,14 @@ impl Tool {
                 "title": self.title,
                 "readOnlyHint": !self.write,
                 // Nothing here deletes. `update_node` overwrites the fields it
-                // is given and `link_nodes` adds an edge; both are recoverable
-                // by hand, and neither removes a node or an asset. There is no
-                // MCP tool that deletes anything, on purpose.
+                // is given, `link_nodes` adds an edge, `create_scene` adds a
+                // file and `draft_dialogue` only ever fills a slot that was
+                // empty; all four are recoverable by hand, and none removes a
+                // node, an asset, a scene or a line. There is no MCP tool that
+                // deletes anything, on purpose.
                 "destructiveHint": false,
-                "idempotentHint": !self.write || self.name != "create_node",
+                "idempotentHint": !self.write
+                    || !matches!(self.name, "create_node" | "create_scene"),
                 "openWorldHint": false,
             },
         })
@@ -174,6 +177,129 @@ fn link_schema() -> Value {
     )
 }
 
+fn scene_id_only() -> Value {
+    object(
+        json!({ "sceneId": { "type": "string", "description": "The scene's ULID." } }),
+        &["sceneId"],
+    )
+}
+
+fn list_scenes_schema() -> Value {
+    object(
+        json!({
+            "query": {
+                "type": "string",
+                "description":
+                    "Optional free text over scene names, beat intent and dialogue. When set, \
+                     each row also carries the lines that matched.",
+            },
+            "act": { "type": "string", "description": "Act EntityId, from narrative_overview." },
+            "arc": { "type": "string", "description": "Arc EntityId." },
+            "quest": { "type": "string", "description": "Quest EntityId. A scene may be in several." },
+            "tag": { "type": "string", "description": "Tag EntityId." },
+            "participant": { "type": "string", "description": "Character node id, as list_nodes reports it." },
+            "review": { "type": "string", "enum": ["draft", "approved"] },
+            "freshness": { "type": "string", "enum": ["current", "out_of_date"] },
+            "missingText": {
+                "type": "boolean",
+                "description": "Only scenes with a dialogue slot that has no words in it yet.",
+            },
+            "offset": { "type": "integer", "minimum": 0 },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 25 },
+        }),
+        &[],
+    )
+}
+
+fn narrative_search_schema() -> Value {
+    object(
+        json!({
+            "query": {
+                "type": "string",
+                "description": "Free text. Matches scene names, beat intent and dialogue lines.",
+            },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 25 },
+        }),
+        &["query"],
+    )
+}
+
+fn text_asset_schema() -> Value {
+    object(
+        json!({ "assetId": { "type": "string", "description": "The text asset's ULID." } }),
+        &["assetId"],
+    )
+}
+
+fn narrative_diagnostics_schema() -> Value {
+    object(
+        json!({
+            "sceneId": {
+                "type": "string",
+                "description": "Optional. Omit to check every scene in the project.",
+            }
+        }),
+        &[],
+    )
+}
+
+fn create_scene_schema() -> Value {
+    object(json!({ "name": { "type": "string", "minLength": 1 } }), &["name"])
+}
+
+fn draft_dialogue_schema() -> Value {
+    object(
+        json!({
+            "sceneId": { "type": "string" },
+            "slotId": {
+                "type": "string",
+                "description":
+                    "The dialogue slot to fill, from get_scene. It must have no variants yet \
+                     and must not be locked.",
+            },
+            "body": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The line, as it would be spoken. Not a condition and not a command.",
+            },
+        }),
+        &["sceneId", "slotId", "body"],
+    )
+}
+
+fn add_dialogue_slot_schema() -> Value {
+    object(
+        json!({
+            "sceneId": { "type": "string" },
+            "beatId": {
+                "type": "string",
+                "description": "The beat to add the line to, from get_scene.",
+            },
+            "speaker": {
+                "type": "string",
+                "description":
+                    "\"narrator\" for unattributed narration, or the id of a character who is \
+                     already a participant in this scene. The player cannot be given lines here, \
+                     and a character who is not in the cast is refused: adding somebody to a \
+                     scene is the writer's decision.",
+            },
+            "position": {
+                "type": "string",
+                "enum": ["start", "end"],
+                "description":
+                    "Where in the beat the new line goes. Defaults to the end. Use \"start\" for \
+                     establishing narration before a beat's first spoken line.",
+            },
+            "body": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The line, as it would be spoken or read. Not a condition and not a command.",
+            },
+        }),
+        &["sceneId", "beatId", "speaker", "body"],
+    )
+}
+
 /// Everything, in the order an agent should meet it.
 ///
 /// Reads first and writes last is not cosmetic: `tools/list` truncates in some
@@ -254,6 +380,88 @@ static CATALOGUE: &[Tool] = &[
         schema: generation_schema,
     },
     Tool {
+        name: "narrative_overview",
+        title: "Narrative overview",
+        description: "Whether this project has an authored story, and its shape: scene and \
+             supporting-text counts, how many dialogue slots are still empty, and the acts, arcs, \
+             tags and quests a scene can be filed under, with the ids the other narrative tools \
+             filter by.",
+        write: false,
+        schema: empty,
+    },
+    Tool {
+        name: "list_scenes",
+        title: "List scenes",
+        description: "Scene rows from the same library the writer uses: name, act, arc, quests, \
+             tags, cast, beat and slot counts, and how much of the text is generated, edited, \
+             locked, awaiting review or out of date. Filterable and paged. With a query, each row \
+             also carries the lines that matched.",
+        write: false,
+        schema: list_scenes_schema,
+    },
+    Tool {
+        name: "search_narrative",
+        title: "Search the story",
+        description: "Full-text search over scene names, beat intent and dialogue, including \
+             unapproved drafts. Each hit names the scene, beat, slot and variant it is in, so a \
+             line can be read in place with get_scene.",
+        write: false,
+        schema: narrative_search_schema,
+    },
+    Tool {
+        name: "get_scene",
+        title: "Read a scene",
+        description: "One scene document in full: participants, entry condition, beats in author \
+             order, each beat's intents, must-convey and must-not-reveal notes, dialogue slots and \
+             their variants with revision and review state, choices, outcomes and tombstones.",
+        write: false,
+        schema: scene_id_only,
+    },
+    Tool {
+        name: "narrative_state",
+        title: "Read the declared state",
+        description: "Every state variable the story may branch on — name, type, owner, default and \
+             range. Read this before writing anything that mentions a condition: a name that is not \
+             declared here cannot appear in one.",
+        write: false,
+        schema: empty,
+    },
+    Tool {
+        name: "narrative_world",
+        title: "Read the story canon",
+        description: "Facts, what each character believes and how they came to believe it, \
+             relationships, events, quests and the facts withheld until a condition — with the \
+             diagnostics they currently raise. A belief here may be false; that is the point of \
+             recording it separately from the fact.",
+        write: false,
+        schema: empty,
+    },
+    Tool {
+        name: "list_text_assets",
+        title: "List supporting text",
+        description: "Barks, letters, item descriptions and the rest: the supporting text assets in \
+             this project, as summaries with their kind.",
+        write: false,
+        schema: empty,
+    },
+    Tool {
+        name: "get_text_asset",
+        title: "Read one supporting text asset",
+        description: "One supporting text asset in full: its trigger, cast, repeat policy and every \
+             authored entry with its condition and lines.",
+        write: false,
+        schema: text_asset_schema,
+    },
+    Tool {
+        name: "narrative_diagnostics",
+        title: "Check the story",
+        description: "What is wrong with one scene, or with every scene: destinations that point \
+             nowhere, conditions over undeclared variables, references to entities that are not in \
+             the project. Reading them changes nothing and repairs nothing.",
+        write: false,
+        schema: narrative_diagnostics_schema,
+    },
+    Tool {
         name: "create_node",
         title: "Create a node",
         description: "Add a new entity to the open world. Writes a Markdown file into the user's \
@@ -276,6 +484,37 @@ static CATALOGUE: &[Tool] = &[
              influenced node will contain. Writes to the user's project folder.",
         write: true,
         schema: link_schema,
+    },
+    Tool {
+        name: "create_scene",
+        title: "Create a scene",
+        description: "Add an empty scene to the story. Writes a new YAML file into the user's \
+             project folder; nothing that exists is touched.",
+        write: true,
+        schema: create_scene_schema,
+    },
+    Tool {
+        name: "draft_dialogue",
+        title: "Draft a line into an empty slot",
+        description: "Put words into a dialogue slot that has none yet, as an unreviewed draft \
+             marked as coming from outside Wobu. Refused for a slot that already has a wording and \
+             for a locked slot: nothing here replaces a line anybody wrote. It writes one line and \
+             cannot add a beat, a choice, an outcome or a condition, so it cannot change where the \
+             story goes.",
+        write: true,
+        schema: draft_dialogue_schema,
+    },
+    Tool {
+        name: "add_dialogue_slot",
+        title: "Add a line to a beat",
+        description: "Append or prepend a new dialogue line to an existing beat, as an unreviewed \
+             draft marked as coming from outside Wobu. For narration a scene is missing — an \
+             establishing line before a beat's first spoken line — and for an extra line where a \
+             beat has only one. The speaker is the narrator or a character already in the scene's \
+             cast. It adds a line and nothing else: no beat, choice, outcome, effect, condition or \
+             destination, so it cannot change where the story goes.",
+        write: true,
+        schema: add_dialogue_slot_schema,
     },
 ];
 
@@ -311,12 +550,32 @@ mod tests {
     }
 
     #[test]
-    fn the_write_set_is_exactly_the_three_tools_the_disclosure_names() {
+    fn the_write_set_is_exactly_the_tools_the_disclosure_names() {
         // The Settings pane tells the user which tools the write opt-in turns
         // on. If this list grows, that sentence is wrong until somebody updates
         // it — which is what this test is for.
         let writes: Vec<_> = CATALOGUE.iter().filter(|t| t.write).map(|t| t.name).collect();
-        assert_eq!(writes, ["create_node", "update_node", "link_nodes"]);
+        assert_eq!(
+            writes,
+            [
+                "create_node",
+                "update_node",
+                "link_nodes",
+                "create_scene",
+                "draft_dialogue",
+                "add_dialogue_slot"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_privacy_policy_can_say_how_many_tools_there_are_because_this_says_so() {
+        // `docs/legal/privacy-policy.md` §3.5 states the size of the read
+        // surface and the shape of the write one. A count in a legal document
+        // that nothing checks is a count that goes stale on the next commit.
+        let reads = CATALOGUE.iter().filter(|tool| !tool.write).count();
+        let writes = CATALOGUE.len() - reads;
+        assert_eq!((reads, writes), (18, 6), "update the privacy policy and the guide with these");
     }
 
     #[test]

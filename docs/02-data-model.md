@@ -135,7 +135,7 @@ path. Nothing about a project is stored in a global application database.
 
 ```
 Ashfall.wobu/
-├── project.json                  id, name, schema version, providers, shared spend ceiling
+├── project.json                  id, name, schema version, providers
 ├── nodes/
 │   ├── species/vashk.md          YAML frontmatter + notes + description
 │   ├── setting/cinder-bay.md
@@ -145,10 +145,15 @@ Ashfall.wobu/
 │   ├── thumbs/a3/a3f9…c1.webp
 │   ├── loras/7d/7d42…9e.safetensors  trained weights, content-addressed
 │   └── meshes/7b/7b21…04.glb     concept 3D output
+├── narrative/                    only in projects that have narrative
+│   ├── state.yaml                declared variables, project-wide
+│   ├── scenes/kiln-interrogation.yaml   one SceneDocument each
+│   └── layout/                   presentation metadata, never source
+│       ├── scenes/<scene-ulid>.json
+│       └── arcs/<arc-slug>.json
 ├── generations/2026-07/<ulid>.json
 └── .wobu/
     ├── sessions/<session-id>.json  heartbeat locks — who else has this open
-    ├── spend/reservations/*.json   paid batches admitted but not fully receipted
     └── tmp/                        staging for atomic writes (same filesystem)
 ```
 
@@ -191,6 +196,93 @@ These are constraints on the writer, and each one exists because something break
   storage (the OS keychain or its owner-only app-data fallback); `project.json` records only
   *which* provider and model a project prefers. This matters
   enormously now that folders are shared — see [08 — Providers & BYOK](08-providers.md).
+
+### Narrative source, and the layout beside it
+
+Scenes are not nodes. A node is one record type with a kind, YAML frontmatter and a body of
+prose; a scene is a structured document with a beat graph inside it, and it lives in its own
+tree so that the Markdown walker never meets a file it cannot parse. A project with no
+narrative has no `narrative/` directory at all — nothing on the open path creates one — which
+is what keeps an existing art-only project opening exactly as it did before.
+
+```
+narrative/
+├── state.yaml                          schema_version + declared variables
+├── scenes/<slug>.yaml                  schema_version + one scene
+└── layout/
+    ├── scenes/<scene-ulid>.json        where the boxes are, per scene
+    └── arcs/<arc-slug>.json            where the boxes are, per arc graph
+```
+
+`narrative/scenes/**` and `narrative/state.yaml` are **canonical source**. They carry their own
+`schema_version`, separate from the project's, so adding narrative to a project is never a
+migration of the world files; every struct in them refuses unknown fields, so a mistyped key
+is reported rather than silently dropped on the next save. Scene filenames are slugs minted
+once from the name and never recomputed — renaming a scene does not move its file, for the same
+reason renaming a node does not move its Markdown.
+
+`narrative/layout/**` is **presentation metadata and nothing else**: node positions, collapsed
+groups, manual/automatic layout mode, and pinned canvas notes. Four properties make it safe:
+
+- **It is keyed by the ids the source already mints** — scene, beat, choice and outcome — under
+  a tagged string key (`beat:01J8…`), so a beat id cannot be read back as a scene id. Renaming
+  and reordering therefore keep every position for free, duplication allocates fresh ones
+  because a copy is a new id, and a deleted id's entry is garbage-collected on the next read.
+- **It is a separate directory, not an adjacent file.** Everything that must never see layout —
+  a compiler input set, a build fingerprint, an export — is then a directory prefix rather than
+  a filename pattern, and a prefix cannot be got subtly wrong. Source is YAML and layout is
+  JSON, as a second, redundant signal.
+- **A missing, stale, corrupt or newer-than-us layout file never stops a scene opening.** Each
+  degrades to automatic layout for the affected nodes plus a non-blocking notice. Corrupt bytes
+  are parked as a `.corrupt-<peer>-<ts>.json` sibling rather than deleted; a file written by a
+  newer Wobu is read as absent and is never written over, because downgrading somebody's whole
+  arrangement to save one drag is the wrong trade.
+- **A layout-only edit leaves source byte-identical.** `wobu-store` exposes a fingerprint over
+  narrative source that structurally cannot reach `narrative/layout/`, and the store tests hash
+  the scene file, its mtime, its text revisions and that fingerprint either side of an
+  afternoon of dragging.
+
+One layout file, in full — `narrative/layout/scenes/01M1Y5…SWZQ.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "graph": { "kind": "scene", "scene": "01M1Y5VGJT7286T8H6DTYHSWZQ" },
+  "mode": "manual",
+  "modeUpdatedAt": "2026-09-07T14:55:14.533Z",
+  "nodes": {
+    "beat:01M1Y5VGK06ZXMJKA4ZJYP6RQD": {
+      "x": 240.0, "y": 96.0, "collapsed": false,
+      "updatedAt": "2026-09-07T14:55:14.533Z"
+    },
+    "choice:01M1Y5VGK080WRNMYRSZE7TTFT": {
+      "x": 720.0, "y": 288.0, "updatedAt": "2026-09-07T14:55:14.533Z"
+    }
+  },
+  "groups": {
+    "01M1Y5VGK5Z2VXZVWS3N0GDQNG": {
+      "id": "01M1Y5VGK5Z2VXZVWS3N0GDQNG", "label": "Act one", "collapsed": true,
+      "members": ["beat:01M1Y5VGK06ZXMJKA4ZJYP6RQD"],
+      "updatedAt": "2026-09-07T14:55:14.533Z"
+    }
+  },
+  "annotations": {
+    "01M1Y5VGK588B1S3D96HJVG79D": {
+      "id": "01M1Y5VGK588B1S3D96HJVG79D", "body": "Ask Nadia whether this lands",
+      "x": 10.0, "y": 20.0, "width": 180.0, "height": 90.0,
+      "attachedTo": "beat:01M1Y5VGK06ZXMJKA4ZJYP6RQD",
+      "updatedAt": "2026-09-07T14:55:14.533Z"
+    }
+  }
+}
+```
+
+Every `updatedAt` is there for one reason: it is what the merge below resolves on. Maps are
+written in key order, so two machines that agree on an arrangement produce the same bytes and
+neither wakes the other's watcher on open.
+
+Layout files are also the one place in a project folder Wobu **merges** rather than conflicts.
+That departure, and its precise limits, are in [07 — Projects on file shares](07-file-shares.md).
 
 ### Where the index lives — and why it is not in the folder
 

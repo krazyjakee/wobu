@@ -22,9 +22,9 @@
 //! 4. [`batch::plan_batch`], [`scene::plan_scene`] and [`preview::reference_report_for_plan`] all read
 //!    that plan. The first two produce a [`task::PlannedBatch`]; the report negotiates
 //!    the same first cell the batch would send first, so the numbers on screen
-//!    are the numbers that would be spent.
-//! 5. [`task::PlannedBatch::into_task`] is the only route to the queue, so spend
-//!    reservation and the billing flag are stated once.
+//!    are the numbers that would really be sent.
+//! 5. [`task::PlannedBatch::into_task`] is the only route to the queue, so the
+//!    billing flag is stated once.
 //!
 //! Replay deliberately joins at step 5 and nowhere earlier: it re-sends a
 //! recorded request rather than compiling a new one. Mesh reconstruction
@@ -39,7 +39,6 @@ pub mod plan;
 pub mod preview;
 pub mod replay;
 pub mod scene;
-pub mod spend;
 pub mod task;
 
 #[cfg(test)]
@@ -65,7 +64,6 @@ use self::plan::{
     GenerateShot, GenerateSlider, GenerationPlanRequest, SeedIntent, SeedSource, VariantGrid,
     locked_seed_of, resolve_seed,
 };
-use self::spend::{Price, apply_pricing_metadata};
 use self::task::GenerateTask;
 use crate::commands::providers::ProviderChoice;
 use crate::error::{Code, CommandResult, WobuError};
@@ -188,11 +186,9 @@ struct ReceiptPreparation<'a> {
     resolution: Resolution,
     negative_prompt_supported: bool,
     seed_source: SeedSource,
-    cost_usd_micros: u64,
     reference_asset_ids: &'a [Id],
     loras: &'a [ReceiptLora],
     lora_downgrades: &'a [LoraDowngrade],
-    price: Option<Price>,
     /// The transient controls that produced this image, as History replays
     /// them. Single-subject and scene shapes differ — a composition has no
     /// per-layer sliders and no Shot label — so the shape is supplied by the
@@ -211,12 +207,10 @@ impl ReceiptPreparation<'_> {
         params.insert("height".into(), json!(self.resolution.height));
         params.insert("negativePromptSupported".into(), json!(self.negative_prompt_supported));
         params.insert("seedSource".into(), json!(self.seed_source));
-        params.insert("estimatedCostUsdMicros".into(), json!(self.cost_usd_micros));
         params.insert("referenceAssetIds".into(), json!(self.reference_asset_ids));
         params.insert("loras".into(), json!(self.loras));
         params.insert("loraDowngrades".into(), json!(self.lora_downgrades));
         params.insert("controls".into(), self.controls.clone());
-        apply_pricing_metadata(&mut params, self.price);
         params
     }
 }
@@ -434,7 +428,6 @@ pub async fn generate_start(
     })
     .await?;
     keep_named_views(&mut plan, views.as_deref())?;
-    plan.reserve_spend()?;
     let id = jobs.queue().submit(plan);
     Ok(id.to_string())
 }
@@ -449,8 +442,7 @@ pub async fn generate_start(
 /// Applied by filtering the prepared plan rather than by teaching the planner a
 /// subset: the cells are already built and already carry their `view_type`, and
 /// a second path through `variant_cells` would be a second place for the eight
-/// names to be spelled. Spend is reserved *after* this, so a one-view reroll
-/// reserves one image.
+/// names to be spelled.
 fn keep_named_views(plan: &mut GenerateTask, views: Option<&[String]>) -> CommandResult<()> {
     let Some(views) = views.filter(|views| !views.is_empty()) else { return Ok(()) };
     let wanted: HashSet<&str> = views.iter().map(|view| view.trim()).collect();

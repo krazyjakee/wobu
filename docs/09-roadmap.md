@@ -62,6 +62,10 @@ far harder than starting there. Every milestone after this gets the write path f
 Ticket-based direct sync, last-agreed-hash reconciliation, blob transfer, conflicts, background
 projects, status, authorization, and the Share/Accept/manage workflow are implemented.
 
+Local saves and completed jobs wake the outbound poller in
+[PR #150](https://github.com/krazyjakee/wobu/pull/150), with repeatable coverage recorded in
+[the v0.1.11 evidence](13-acceptance-evidence.md#v0111--local-sync-and-concept-defaults).
+
 ### M4 — References
 
 Image import via drag/paste, content-addressed hashing, thumbnails, the reference grid, per-image
@@ -77,8 +81,16 @@ the adapter boundary is real instead of one vendor's request shape wearing a tra
 
 `wobu-influence` (resolution, fragments, text *and* per-role image budgets, attribution), the
 Inspector panel, the ComfyUI adapter plus Gemini image, output presets for
-character/prop/environment, capability negotiation, cost estimation and the spend ceiling, the job
-queue with live previews, and the Concepts grid. **This is the first complete loop.**
+character/prop/environment, capability negotiation, the job queue with live previews, and the
+Concepts grid. **This is the first complete loop.**
+
+Concepts default to one image for every node type; larger presets remain selectable
+([PR #150](https://github.com/krazyjakee/wobu/pull/150)).
+
+The per-project spend ceiling and cost estimate shipped here and were retired: they metered a local
+model of published prices rather than the account that actually holds the money, so the number they
+enforced could disagree with the provider's own balance in either direction. Paid models are marked
+as paid; the provider's dashboard is the only thing that knows what is left.
 
 Aspect choices come from the selected image backend. Unsupported or malformed saved values are
 replaced before queueing, the UI previews the negotiated dimensions, and flexible backends use
@@ -99,8 +111,8 @@ and export for a modeller.
 
 The 3D tab is the whole of it: it surfaces every rendered turnaround view, re-rolls a bad one as a
 single image on its own seed, gates a paid reconstruction behind an explicit confirmation — the
-hosted backend bills per job and does not report the amount back, so there is nothing for the image
-spend ceiling to reserve — and queues the job beside the image ones. The finished GLB appears in the
+hosted backend bills per job and does not report the amount back, so consent is the only honest
+gate — and queues the job beside the image ones. The finished GLB appears in the
 viewer without a reload ([#110](https://github.com/krazyjakee/wobu/issues/110)).
 
 ### M9 — Later, if earned
@@ -112,3 +124,31 @@ viewer without a reload ([#110](https://github.com/krazyjakee/wobu/issues/110)).
 | Cross-project style transfer | **Implemented** | [#71](https://github.com/krazyjakee/wobu/issues/71) |
 | Multi-entity scene composition | **Implemented** | [#72](https://github.com/krazyjakee/wobu/issues/72) |
 | Static world wiki export | **Implemented** | [#73](https://github.com/krazyjakee/wobu/issues/73) |
+
+## Narrative extension in progress
+
+[Narrative tracker #151](https://github.com/krazyjakee/wobu/issues/151) contains 16 concrete user
+stories, the proposed workspace, and the implementation checklist. The
+[narrative design](17-narrative-system.md) keeps the same contract in the repository. This extends
+Wobu from concept assets to offline narrative compilation. N1 and N2 have working foundations;
+their complete acceptance remains in progress. N3 is complete through [PR #202](https://github.com/krazyjakee/wobu/pull/202), with native supporting-text and mocked-provider pipeline evidence distinguished in the authoring guide. N5 is excluded from the current implementation scope.
+[PR #203](https://github.com/krazyjakee/wobu/pull/203) adds project and quest Flow, affected-build planning and revision-aware localisation. Large-project Review performance and complete accessibility acceptance remain open in #194 and #182.
+Their N-prefix avoids collisions with the existing product and engineering milestone numbers.
+
+| Milestone | Status | Exit result | Implementation issues |
+| --- | --- | --- | --- |
+| [N1 — Narrative world and scene authoring](https://github.com/krazyjakee/wobu/milestone/15) | **In progress** | Find scenes in the Scene library; author through coordinated Flow/Script views with separate layout metadata. | [#152](https://github.com/krazyjakee/wobu/issues/152)–[#157](https://github.com/krazyjakee/wobu/issues/157), [#184](https://github.com/krazyjakee/wobu/issues/184)–[#186](https://github.com/krazyjakee/wobu/issues/186), [#191](https://github.com/krazyjakee/wobu/issues/191) |
+| [N2 — Deterministic compiler and playable preview](https://github.com/krazyjakee/wobu/milestone/16) | **In progress** | Compile/export and play offline, inspect arc Flow and played routes, and repeat saved scenario tests. | [#158](https://github.com/krazyjakee/wobu/issues/158)–[#162](https://github.com/krazyjakee/wobu/issues/162), [#187](https://github.com/krazyjakee/wobu/issues/187)–[#188](https://github.com/krazyjakee/wobu/issues/188) |
+| [N3 — Generation and editorial review](https://github.com/krazyjakee/wobu/milestone/17) | **Complete** | Generate, edit, approve, and lock dialogue and supporting text without changing authored logic. | [#163](https://github.com/krazyjakee/wobu/issues/163)–[#167](https://github.com/krazyjakee/wobu/issues/167) |
+| [N4 — Incremental builds and narrative analysis](https://github.com/krazyjakee/wobu/milestone/18) | **In progress** | Rebuild affected content safely, inspect bounded coverage and Flow diagnostics, and author the DSL. [Dependency tracking](35-narrative-dependencies.md) explains affected lines; [affected builds](36-narrative-builds.md) now plan, cache and resume selected work. Bounded analysis and the DSL remain in progress. | [#168](https://github.com/krazyjakee/wobu/issues/168)–[#172](https://github.com/krazyjakee/wobu/issues/172), [#189](https://github.com/krazyjakee/wobu/issues/189) |
+| [N5 — Portable engine integrations](https://github.com/krazyjakee/wobu/milestone/19) | **Excluded from current work** | Play matching native traces in Unity, Godot, and Unreal; export supported graphs to Yarn. | [#173](https://github.com/krazyjakee/wobu/issues/173)–[#177](https://github.com/krazyjakee/wobu/issues/177) |
+| [N6 — Production pipeline and release readiness](https://github.com/krazyjakee/wobu/milestone/20) | **In progress** | Localise, voice, build reproducibly in CI, recover shared work, and record release acceptance. | [#178](https://github.com/krazyjakee/wobu/issues/178)–[#183](https://github.com/krazyjakee/wobu/issues/183) |
+
+The current [authoring and Preview increment](19-narrative-authoring.md) advances world records
+(#155), typed scene forms (#156), compiler/runtime foundations (#158/#159), playable Preview
+(#161) and quest discovery (#191). The guide separates implemented behavior from pending
+acceptance. Source repair, native package export, explicit save migration and evaluated Preview
+traces, saved regression scenarios, attributed frozen context and portable record sync/recovery are
+implemented. The native Flow spike records the selected toolkit and node budget. Cancellable provider
+jobs produce separate prose proposals and immutable receipts. Editorial review and dependency
+analysis remain planned. N5 (#173–#177) is not implemented, as requested.

@@ -25,6 +25,7 @@ pub mod gemini;
 pub mod partial;
 pub mod provider;
 pub(crate) mod stream;
+mod structured;
 pub mod transport;
 pub mod validate;
 
@@ -35,6 +36,6 @@ pub use gemini::GeminiProvider;
 pub use partial::read_partial;
 pub use provider::{
     DEFAULT_MAX_OUTPUT_TOKENS, DeltaSink, Discard, EnhanceOutcome, EnhanceRequest, QUESTIONS_KEY,
-    TextProvider, Usage,
+    StructuredOutcome, StructuredRequest, TextProvider, Usage,
 };
 pub use validate::{ValidatedDescription, parse_description, validate_description};

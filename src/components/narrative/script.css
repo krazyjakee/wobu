@@ -1,0 +1,107 @@
+.nrt-script-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+  padding: 20px;
+}
+.nrt-script-toolbar,
+.nrt-script-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.nrt-script-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nrt-script-editor input,
+.nrt-script-editor select,
+.nrt-script-editor textarea {
+  width: 100%;
+  padding: 8px;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.nrt-script-editor textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.nrt-script-editor fieldset {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.nrt-script-editor legend {
+  padding: 0 6px;
+}
+.nrt-script-editor fieldset:disabled {
+  opacity: 0.7;
+}
+.nrt-script-editor .nrt-script-line {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+}
+.nrt-script-editor .nrt-script-line.is-selected {
+  outline: 2px solid var(--accent);
+}
+.nrt-script-editor .nrt-script-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(100px, 2fr);
+  gap: 10px;
+}
+.nrt-script-editor .nrt-script-status {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.nrt-script-editor .nrt-typed-condition {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.nrt-script-editor .nrt-typed-condition > div,
+.nrt-script-editor .nrt-typed-condition > fieldset,
+.nrt-script-editor .nrt-typed-condition > pre {
+  grid-column: 1 / -1;
+}
+@media (max-width: 800px) {
+  .nrt-script-editor .nrt-typed-condition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nrt-line-review {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  margin-top: 0.6rem;
+}
+.nrt-line-review pre {
+  max-height: 18rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+}
+.nrt-line-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.nrt-script-editor .nrt-review-ack {
+  flex-direction: row;
+  align-items: center;
+}
+.nrt-script-editor .nrt-review-ack input {
+  width: auto;
+}

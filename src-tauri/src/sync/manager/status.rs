@@ -59,6 +59,7 @@ impl SyncManager {
                     alias: ticket.alias(),
                     connected: false,
                     last_converged_at: None,
+                    arrangement_notice: None,
                 });
             }
         }
@@ -114,6 +115,18 @@ impl SyncManager {
         self.wake.sync_state(self.with_known_peers(snapshot));
     }
 
+    pub(crate) fn arrangement_notice(&self, project: Id, endpoint: &str, notice: Option<String>) {
+        let snapshot = {
+            let mut runtime = self.runtime.lock();
+            let status = runtime.entry(project).or_default();
+            if let Some(peer) = status.peers.get_mut(endpoint) {
+                peer.arrangement_notice = notice;
+            }
+            status.snapshot(project)
+        };
+        self.wake.sync_peer(self.with_known_peers(snapshot));
+    }
+
     pub(super) fn set_peer(
         &self,
         project: Id,
@@ -132,6 +145,7 @@ impl SyncManager {
                 alias: alias.clone(),
                 connected,
                 last_converged_at: None,
+                arrangement_notice: None,
             });
             peer.alias = alias;
             peer.connected = connected;

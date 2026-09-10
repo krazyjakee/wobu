@@ -2,10 +2,121 @@ import { create } from 'zustand'
 import { errorCode, errorMessage, errorSurface, isRetryable, isWobuError } from '../lib/api'
 import type { NodeKind } from '../lib/api'
 
-export type Mode = 'library' | 'forge' | 'assets' | 'settings'
+export type Mode = 'library' | 'forge' | 'assets' | 'narrative' | 'settings'
 export type EditorTab = 'notes' | 'refs' | 'concepts' | 'three' | 'relations'
 
 export const EDITOR_TABS: EditorTab[] = ['notes', 'refs', 'concepts', 'three', 'relations']
+
+/**
+ * The Narrative workspace's centre tabs.
+ *
+ * Deliberately not `EditorTab`. The two sets are over different things — one
+ * shows an entity's notes, the other a scene's structure — and sharing a field
+ * would mean ⌘3 in the Library left the narrative workspace sitting on Preview.
+ */
+export type NarrativeTab = 'flow' | 'script' | 'preview' | 'source'
+
+export const NARRATIVE_TABS: NarrativeTab[] = ['flow', 'script', 'preview', 'source']
+
+/** The Library navigator's three work filters, from the #151 mockup. */
+export type NarrativeFilter = 'needsText' | 'needsReview' | 'outOfDate'
+
+/**
+ * What the Narrative workspace is pointing at — as stable ids, and nothing else.
+ *
+ * Flow, Script, the inspector, the Library, search results and diagnostics all
+ * read and write this one value, which is why selecting a beat on the canvas
+ * selects the same beat in Script without either of them knowing the other
+ * exists. Anything that needs a name, a position or a status looks it up from
+ * the id; none of that is copied in here, so a rename is invisible to the
+ * selection and cannot leave a stale label behind.
+ *
+ * Ids rather than indexes or coordinates, because in a narrative both move
+ * constantly: beats are reordered, a node is dragged across the canvas, a scene
+ * gains a branch above the one you were reading. "The third beat" follows none
+ * of that. `docs`-level identity rules are #152's; this is the UI half of the
+ * same promise.
+ *
+ * The three ids are one *path*, not three independent selections — a beat only
+ * means something inside its scene. `selectNarrative` therefore takes the whole
+ * path, so a beat from the previous scene can never survive under a new one.
+ */
+export interface NarrativeSelection {
+  choiceId?: string | null
+  outcomeId?: string | null
+  variantId?: string | null
+  sceneId: string | null
+  beatId: string | null
+  lineId: string | null
+}
+
+/** Which surface asked, so a surface can skip a reveal it caused itself. */
+export type NarrativeOrigin =
+  'library' | 'flow' | 'script' | 'inspector' | 'search' | 'diagnostic' | 'preview'
+
+export type NarrativeField =
+  | 'name'
+  | 'entry'
+  | 'setting'
+  | 'participants'
+  | 'title'
+  | 'intent'
+  | 'condition'
+  | 'effects'
+  | 'destination'
+  | 'label'
+  | 'speaker'
+  | 'text'
+  | 'act'
+  | 'arc'
+  | 'tags'
+
+export interface NarrativeWorldTarget {
+  projectKey: string
+  collection: 'facts' | 'knowledge' | 'relationships' | 'events' | 'quests' | 'restrictions'
+  recordId: string
+  seq: number
+}
+
+export interface NarrativeRevealOptions {
+  projectKey?: string
+  focus?: boolean
+}
+
+/**
+ * A request to bring the selection into view.
+ *
+ * Separate from the selection because "what is selected" is a state and "scroll
+ * to it" is an event: a canvas must not re-centre on every render, only when
+ * something asked it to. `seq` rises on every request, so asking twice for the
+ * same beat scrolls twice — which is what a user who clicks the same diagnostic
+ * again is asking for.
+ *
+ * Latched rather than consumed. A tab that was unmounted when the request was
+ * made still owes the scroll when the user switches to it, so the request stays
+ * readable and each surface remembers the last `seq` it honoured.
+ */
+export interface NarrativeReveal extends NarrativeSelection {
+  projectKey: string | null
+  variantId: string | null
+  choiceId: string | null
+  outcomeId: string | null
+  field: NarrativeField | null
+  focus: boolean
+  seq: number
+  origin: NarrativeOrigin
+}
+
+/** The argument to `selectNarrative`: deeper ids left out are cleared. */
+export interface NarrativeTarget {
+  variantId?: string | null
+  choiceId?: string | null
+  outcomeId?: string | null
+  field?: NarrativeField | null
+  sceneId: string | null
+  beatId?: string | null
+  lineId?: string | null
+}
 
 export interface Toast {
   id: number
@@ -71,6 +182,35 @@ interface UIState {
   tab: EditorTab
   setTab: (t: EditorTab) => void
 
+  /**
+   * The one narrative selection every narrative surface shares, and the tab and
+   * filters around it.
+   *
+   * All of it is machine-local, exactly as `navWidth` and the collapse state
+   * above are: which tab this person left open is a fact about their screen,
+   * not about the story, and writing it into the project folder would push one
+   * author's workspace onto everybody who opens the world.
+   */
+  narrative: NarrativeSelection
+  narrativeEntityTarget: { projectKey: string; entityId: string; seq: number } | null
+  openNarrativeEntity: (projectKey: string, entityId: string) => void
+  finishNarrativeEntityReveal: (seq: number) => void
+  narrativeWorldTarget: NarrativeWorldTarget | null
+  openNarrativeWorld: (target: Omit<NarrativeWorldTarget, 'seq'>) => void
+  narrativeReveal: NarrativeReveal | null
+  selectNarrative: (
+    target: NarrativeTarget,
+    origin: NarrativeOrigin,
+    options?: NarrativeRevealOptions,
+  ) => void
+  forgetNarrative: (ids: readonly string[]) => void
+
+  narrativeTab: NarrativeTab
+  setNarrativeTab: (t: NarrativeTab) => void
+
+  narrativeFilters: Record<NarrativeFilter, boolean>
+  toggleNarrativeFilter: (f: NarrativeFilter) => void
+
   filter: string
   setFilter: (v: string) => void
 
@@ -118,13 +258,50 @@ interface UIState {
 }
 
 let toastSeq = 0
+let narrativeSeq = 0
+
+/** Nothing selected. One instance, so "unchanged" stays an identity check. */
+const NO_NARRATIVE: NarrativeSelection = { sceneId: null, beatId: null, lineId: null }
+
+function samePath(a: NarrativeSelection, b: NarrativeSelection): boolean {
+  return (
+    a.sceneId === b.sceneId &&
+    a.beatId === b.beatId &&
+    a.lineId === b.lineId &&
+    (a.choiceId ?? null) === (b.choiceId ?? null) &&
+    (a.outcomeId ?? null) === (b.outcomeId ?? null) &&
+    (a.variantId ?? null) === (b.variantId ?? null)
+  )
+}
+
+/**
+ * Drop the levels that no longer exist, keeping their surviving ancestors.
+ *
+ * A forgotten beat takes its line with it even when nobody named the line: the
+ * line was inside the beat, so it went too. Returns the same object when
+ * nothing was hit, which is what lets `forgetNarrative` skip the write.
+ */
+function prunePath(sel: NarrativeSelection, gone: Set<string>): NarrativeSelection {
+  if (sel.sceneId !== null && gone.has(sel.sceneId)) return NO_NARRATIVE
+  if (sel.beatId !== null && gone.has(sel.beatId)) {
+    return { sceneId: sel.sceneId, beatId: null, lineId: null }
+  }
+  const next = { ...sel }
+  if (sel.lineId !== null && gone.has(sel.lineId)) {
+    next.lineId = null
+    delete next.variantId
+  }
+  for (const key of ['choiceId', 'outcomeId', 'variantId'] as const)
+    if (next[key] && gone.has(next[key]!)) delete next[key]
+  return samePath(sel, next) ? sel : next
+}
 
 export const TOAST_DURATION = {
   info: 4_200,
   error: 8_000,
 } as const
 
-export const useUI = create<UIState>((set) => ({
+export const useUI = create<UIState>((set, get) => ({
   mode: 'library',
   setMode: (mode) => set({ mode }),
 
@@ -143,6 +320,104 @@ export const useUI = create<UIState>((set) => ({
 
   tab: 'notes',
   setTab: (tab) => set({ tab }),
+
+  narrative: NO_NARRATIVE,
+  narrativeEntityTarget: null,
+  openNarrativeEntity: (projectKey, entityId) => {
+    get().select(entityId)
+    set({
+      mode: 'library',
+      narrativeEntityTarget: { projectKey, entityId, seq: ++narrativeSeq },
+    })
+  },
+  finishNarrativeEntityReveal: (seq) =>
+    set((state) =>
+      state.narrativeEntityTarget?.seq === seq ? { narrativeEntityTarget: null } : {},
+    ),
+  narrativeWorldTarget: null,
+  openNarrativeWorld: (target) =>
+    set({ mode: 'narrative', narrativeWorldTarget: { ...target, seq: ++narrativeSeq } }),
+  narrativeReveal: null,
+  // The single writer for every route into a narrative element — a Library row,
+  // a Flow node, a Script line, a search hit, a diagnostic. Each of them hands
+  // over the whole path and says who it is; nothing sets `narrative` directly,
+  // because a half-written path is exactly how Flow and Script would come to
+  // disagree about what is selected.
+  selectNarrative: (target, origin, options) =>
+    set((state) => {
+      const next: NarrativeSelection = {
+        sceneId: target.sceneId,
+        beatId: target.sceneId ? (target.beatId ?? null) : null,
+        lineId:
+          target.sceneId && target.beatId && !target.choiceId && !target.outcomeId
+            ? (target.lineId ?? null)
+            : null,
+        ...(target.sceneId && target.beatId
+          ? target.choiceId
+            ? { choiceId: target.choiceId }
+            : target.outcomeId
+              ? { outcomeId: target.outcomeId }
+              : target.lineId && target.variantId
+                ? { variantId: target.variantId }
+                : {}
+          : {}),
+      }
+      // The previous object back when nothing actually moved. A canvas
+      // subscribed to `narrative` re-runs its layout when the value changes,
+      // and re-selecting the row you are already on must not cost that.
+      const narrative = samePath(state.narrative, next) ? state.narrative : next
+      return {
+        narrative,
+        narrativeReveal: {
+          ...next,
+          seq: ++narrativeSeq,
+          origin,
+          projectKey: options?.projectKey ?? null,
+          focus: options?.focus ?? true,
+          variantId: target.variantId ?? null,
+          choiceId: target.choiceId ?? null,
+          outcomeId: target.outcomeId ?? null,
+          field: target.field ?? null,
+        },
+      }
+    }),
+  // What a deletion does to a selection. Only ids are held here, so a removed
+  // element leaves a live-looking id pointing at nothing; whoever owns the
+  // model says what went away. Surviving ancestors are kept — deleting a line
+  // should leave the writer on its beat rather than throw them back to the
+  // project — and a lost scene clears the path outright, because a beat outside
+  // its scene is not somewhere the workspace can show.
+  forgetNarrative: (ids) =>
+    set((state) => {
+      const gone = new Set(ids)
+      if (gone.size === 0) return {}
+      const narrative = prunePath(state.narrative, gone)
+      const reveal = state.narrativeReveal
+      const stale =
+        reveal !== null &&
+        [
+          reveal.sceneId,
+          reveal.beatId,
+          reveal.lineId,
+          reveal.variantId,
+          reveal.choiceId,
+          reveal.outcomeId,
+        ].some((id) => id !== null && gone.has(id))
+      if (narrative === state.narrative && !stale) return {}
+      return { narrative, narrativeReveal: stale ? null : reveal }
+    }),
+
+  narrativeTab: 'flow',
+  // Only the tab moves. The selection is a sibling field precisely so that
+  // reading a beat on the canvas and then opening Script lands on the same
+  // beat rather than at the top of the scene.
+  setNarrativeTab: (narrativeTab) => set({ narrativeTab }),
+
+  narrativeFilters: { needsText: false, needsReview: false, outOfDate: false },
+  toggleNarrativeFilter: (f) =>
+    set((state) => ({
+      narrativeFilters: { ...state.narrativeFilters, [f]: !state.narrativeFilters[f] },
+    })),
 
   filter: '',
   setFilter: (filter) => set({ filter }),

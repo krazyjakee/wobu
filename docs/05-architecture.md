@@ -1,5 +1,16 @@
 # 05 — Technical Architecture
 
+The [narrative extension](17-narrative-system.md) adds typed source and world records in
+`wobu-narrative`, guarded source persistence in `wobu-store`, deterministic lowering in
+`wobu-narrative-compiler`, and isolated execution in `wobu-narrative-runtime`. The compiler/runtime
+are pure Rust: neither depends on Tauri, providers or the authoring store. Tauri Preview commands
+read saved project source and return isolated graph/snapshot data without changing canon.
+
+Editorial generation/review, release packages and production tooling remain in the backlog. N5
+engine contracts/adapters are excluded from this increment. See the
+[internal runtime contract](17-narrative-runtime-contract.md) for implemented boundaries and the
+[authoring guide](19-narrative-authoring.md) for the UI and remaining acceptance.
+
 ## Stack
 
 - **Shell**: Tauri 2 (Rust core, system webview).
@@ -87,7 +98,9 @@ when both the master switch and that server's own switch are on.
 
 `src-tauri/src/mcp.rs` holds the settings (`mcp.json` in app data, `0600`, never in a project),
 the listener handle — dropping it is what "off" means — and the implementation of the crate's
-`World` trait against the open project. Every tool call is emitted as `mcp:activity` and
+`World` trait against the open project; `src-tauri/src/mcp/narrative.rs` implements its
+`Narrative` trait, which is the authored story rather than the world model, and whose only
+writes add a scene or fill a dialogue slot that is empty. Every tool call is emitted as `mcp:activity` and
 written to the diagnostics log. Full detail, including what is deliberately not implemented,
 in [16 — Agent Access (MCP)](16-mcp.md).
 
@@ -139,5 +152,8 @@ recoverable; the exporter never cleans up or deletes user data.
 - **Thumbnails**: generate WebP thumbs on import off the UI thread; grids bind to thumbs only.
 - **Cancellation**: every job must be genuinely cancellable, including in-flight ComfyUI
   prompts, or the queue becomes a hostage situation.
-- **Undo**: node edits go through a command log so `⌘Z` works across the whole workspace, not
-  just inside a text field.
+- **Undo**: node edits and narrative scene edits go through one command log so `⌘Z` works across
+  the whole workspace, not just inside a text field. One stack, deliberately: a structural edit
+  made on the Flow canvas and the same edit made in a form have to be indistinguishable in
+  history. Canvas *arrangement* is not on it — moving a box is not a story change, and the log has
+  no command that could carry a coordinate.

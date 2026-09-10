@@ -13,6 +13,24 @@ pub use self::reconcile::{ReconcileObservation, ReconcilePlan};
 
 mod assets;
 mod generations;
+pub mod layout_sync;
+mod narrative;
+pub mod narrative_build;
+pub mod narrative_context;
+mod narrative_deletions;
+pub mod narrative_deps;
+pub mod narrative_generation;
+mod narrative_index;
+pub mod narrative_locale;
+pub mod narrative_media;
+mod narrative_records;
+pub mod narrative_review;
+pub mod narrative_sync;
+pub mod narrative_variants;
+pub use narrative_deletions::NarrativeDeletionView;
+mod narrative_repair;
+mod narrative_wording;
+mod narrative_world;
 mod nodes;
 mod peers;
 mod reconcile;
@@ -25,7 +43,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use wobu_core::{Generation, Id, Node, SCHEMA_VERSION, kind_registry};
+use wobu_core::{Id, Node, SCHEMA_VERSION, kind_registry};
 
 use crate::atomic::{self};
 use crate::error::{Error, Result};
@@ -39,14 +57,6 @@ const PROJECT_META_RECOVERY: &str = "project.json.recovery";
 
 const NODES_DIR: &str = "nodes";
 
-/// New and pre-ceiling projects start with the same modest shared guardrail.
-/// Stored as integer USD micros: no floating-point drift in an admission check.
-pub const DEFAULT_SPEND_CEILING_USD_MICROS: u64 = 10_000_000;
-
-fn default_spend_ceiling() -> Option<u64> {
-    Some(DEFAULT_SPEND_CEILING_USD_MICROS)
-}
-
 /// `project.json`. Records *which* provider a project prefers, never a key —
 /// keys live in machine-local credential storage, because project folders get shared.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,9 +68,6 @@ pub struct ProjectMeta {
     pub created_at: DateTime<Utc>,
     #[serde(default)]
     pub providers: serde_json::Map<String, serde_json::Value>,
-    /// Shared because it authorises spend by this project, not by one machine.
-    #[serde(default = "default_spend_ceiling")]
-    pub spend_ceiling_usd_micros: Option<u64>,
 }
 
 /// What the launcher and title bar bind to.
@@ -124,6 +131,8 @@ pub struct Project {
     /// stamp two conflict siblings in one folder under two different names,
     /// which is a folder nobody can read back.
     peer: String,
+    layout_observation: String,
+    narrative_cache: std::sync::Arc<crate::narrative::registry::cache::SourceCache>,
     /// Every node, whole, for the influence engine. Empty until something asks —
     /// see [`world_nodes`](Project::world_nodes), which is also where the cost
     /// of holding this is argued.
@@ -159,7 +168,6 @@ impl Project {
             schema_version: SCHEMA_VERSION,
             created_at: Utc::now(),
             providers: serde_json::Map::new(),
-            spend_ceiling_usd_micros: default_spend_ceiling(),
         };
         std::fs::write(root.join(PROJECT_FILE), serde_json::to_string_pretty(&meta)?)
             .map_err(|e| Error::io(root.join(PROJECT_FILE), e))?;
@@ -168,6 +176,8 @@ impl Project {
         let index = Index::open_for(&meta.id)?;
         index.clear()?;
         let mut project = Project {
+            narrative_cache: Default::default(),
+            layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
             index,
@@ -249,6 +259,8 @@ impl Project {
             None => (Index::open_for(&meta.id)?, paths::index_path(&meta.id)),
         };
         let mut project = Project {
+            narrative_cache: Default::default(),
+            layout_observation: crate::narrative::layout::observation(&root),
             root,
             meta,
             index,
@@ -334,55 +346,6 @@ impl Project {
         &self.meta
     }
 
-    /// Set the shared spend guardrail while preserving metadata fields this
-    /// build does not understand. The full JSON is staged and published through
-    /// the store's crash-recoverable metadata replacement path.
-    pub fn set_spend_ceiling(&mut self, ceiling_usd_micros: Option<u64>) -> Result<()> {
-        self.ensure_writable()?;
-        let path = self.root.join(PROJECT_FILE);
-        let bytes = std::fs::read(&path).map_err(|error| Error::io(&path, error))?;
-        let mut value: serde_json::Value = serde_json::from_slice(&bytes)?;
-        let object = value.as_object_mut().ok_or_else(|| {
-            Error::Json(serde_json::Error::io(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "project.json must contain a JSON object",
-            )))
-        })?;
-        object.insert(
-            "spendCeilingUsdMicros".into(),
-            ceiling_usd_micros.map_or(serde_json::Value::Null, |amount| amount.into()),
-        );
-        let encoded = serde_json::to_vec_pretty(&value)?;
-        atomic::replace_metadata(&self.root, &path, PROJECT_META_RECOVERY, &encoded)?;
-        self.meta.spend_ceiling_usd_micros = ceiling_usd_micros;
-        Ok(())
-    }
-
-    /// Read the shared ceiling without opening the receipt ledger or a second
-    /// local SQLite index. Display polling uses this O(1) half while admission
-    /// uses [`spend_ledger`](Self::spend_ledger) below.
-    pub fn spend_ceiling(path: &Path) -> Result<Option<u64>> {
-        let meta_path = path.join(PROJECT_FILE);
-        atomic::recover_replace(path, &meta_path, PROJECT_META_RECOVERY)?;
-        if !meta_path.is_file() {
-            return Err(Error::NotAProject(path.to_path_buf()));
-        }
-        let raw =
-            std::fs::read_to_string(&meta_path).map_err(|error| Error::io(&meta_path, error))?;
-        let meta: ProjectMeta = serde_json::from_str(&raw)?;
-        Ok(meta.spend_ceiling_usd_micros)
-    }
-
-    /// Read the shared ceiling and every canonical receipt, without opening a
-    /// second local SQLite index. Spend admission calls this while holding its
-    /// cross-process ledger lock, and a network scan must not create two
-    /// independent `Project` owners for one index merely to sum JSON files.
-    pub fn spend_ledger(path: &Path) -> Result<(Option<u64>, Vec<Generation>)> {
-        let ceiling = Self::spend_ceiling(path)?;
-        let receipts = crate::generations::read_all_strict(path)?;
-        Ok((ceiling, receipts))
-    }
-
     pub fn index(&self) -> &Index {
         &self.index
     }
@@ -462,3 +425,6 @@ impl Project {
         self.index_path.clone()
     }
 }
+
+pub mod narrative_arc;
+pub mod narrative_library;

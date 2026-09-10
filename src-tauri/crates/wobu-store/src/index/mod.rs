@@ -22,6 +22,9 @@
 // type stays one type without the file having to be one file.
 mod assets;
 mod generations;
+mod narrative;
+mod narrative_deps;
+mod narrative_library;
 mod nodes;
 mod peers;
 mod rows;
@@ -53,7 +56,7 @@ use crate::error::Result;
 
 /// Bumped when the table layout changes. A mismatch drops everything and
 /// rebuilds from the project folder, which is why this needs no migration code.
-pub const INDEX_VERSION: u32 = 10;
+pub const INDEX_VERSION: u32 = 13;
 
 /// A node file that is on disk and cannot be read.
 ///
@@ -102,6 +105,14 @@ pub struct Index {
 }
 
 impl Index {
+    /// A cheap change token for this connection. Compare around a local command
+    /// to detect writes that reconciliation will skip because they are already
+    /// indexed. Cache-only writes can also advance it; scheduling an extra sync
+    /// round for those is harmless. Reads do not advance it.
+    pub fn change_count(&self) -> u64 {
+        self.conn.total_changes()
+    }
+
     /// Open (or create) the index for a project, rebuilding from scratch if the
     /// schema version has moved.
     pub fn open_for(project_id: &Id) -> Result<Index> {
@@ -190,7 +201,12 @@ impl Index {
                  DROP TABLE IF EXISTS generations;
                  DROP TABLE IF EXISTS corrupt;
                  DROP TABLE IF EXISTS sync_state;
-                 DROP TABLE IF EXISTS sync_rejected;",
+                 DROP TABLE IF EXISTS sync_rejected;
+                 DROP TABLE IF EXISTS narrative_files;
+                 DROP TABLE IF EXISTS narrative_scene_summary;
+                 DROP TABLE IF EXISTS narrative_scene_text;
+                 DROP TABLE IF EXISTS narrative_scene_variant;
+                 DROP TABLE IF EXISTS narrative_sync;",
             )?;
             self.conn.execute_batch(SCHEMA)?;
             self.conn.execute(
@@ -248,12 +264,13 @@ impl Index {
     /// see either the previous complete index or the new complete index, and a
     /// failed row restores the previous one. Statements are prepared once for
     /// the batch rather than once per node, edge, asset, or generation.
-    pub(crate) fn rebuild_from_scan(
+    pub(crate) fn rebuild_from_scan<'a>(
         &self,
         assets: &[Asset],
         generations: &[(Generation, String, Stamp)],
         nodes: &[(Node, String, Stamp)],
         corrupt: &[(String, String)],
+        narrative: impl IntoIterator<Item = &'a crate::NarrativeIndexEntry>,
     ) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         tx.execute_batch(CLEAR_DERIVED_SQL)?;
@@ -271,6 +288,9 @@ impl Index {
             for (rel_path, error) in corrupt {
                 statements.mark_corrupt(rel_path, error)?;
             }
+        }
+        for entry in narrative {
+            self::narrative::put(&tx, entry)?;
         }
         tx.commit()?;
         self.write_metrics.committed();

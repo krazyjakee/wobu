@@ -41,7 +41,6 @@ export type ErrorCode =
   | 'provider.unavailable'
   | 'provider.bad_response'
   | 'provider.context_too_long'
-  | 'billing.ceiling_exceeded'
   | 'io.failed'
   | 'cancelled'
   | 'internal'

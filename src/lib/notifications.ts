@@ -111,7 +111,6 @@ const SETTINGS_CODES = new Set([
   'provider.keychain_unavailable',
   'provider.billing_required',
   'provider.rate_limited',
-  'billing.ceiling_exceeded',
 ])
 
 /**
@@ -134,6 +133,15 @@ function jobAction(job: JobSnapshot, code: string): NotificationAction | undefin
     }
   }
   const subject = job.subjectId
+  if (job.kind === 'narrative') {
+    return {
+      label: 'Open Narrative',
+      run: () => {
+        useNotifications.getState().setOpen(false)
+        useUI.getState().setMode('narrative')
+      },
+    }
+  }
   if (!subject) return undefined
   if (job.kind === 'train_lora') {
     return {

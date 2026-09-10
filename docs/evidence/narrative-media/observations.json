@@ -1,0 +1,286 @@
+{
+  "strict-before-import": {
+    "diagnostics": [],
+    "localeDiagnostics": [],
+    "mediaDiagnostics": [
+      {
+        "key": "en/01M21AJ0Q5FT68769KBTB9QG0W/other",
+        "code": "missing_media",
+        "message": "Missing or outdated recording for exact source/translation."
+      }
+    ],
+    "payloadHash": null,
+    "scenes": 0,
+    "strings": 0,
+    "bytes": 0
+  },
+  "strict-after-import": {
+    "diagnostics": [],
+    "localeDiagnostics": [],
+    "mediaDiagnostics": [],
+    "payloadHash": "1f188f5b8e467a9e892831c5bec1488aab053df7e87abd77f8a29d16c306b791",
+    "scenes": 0,
+    "strings": 1,
+    "bytes": 48484
+  },
+  "stale-strict-block": {
+    "diagnostics": [],
+    "localeDiagnostics": [],
+    "mediaDiagnostics": [
+      {
+        "key": "en/01M21AJ0Q5FT68769KBTB9QG0W/other",
+        "code": "missing_media",
+        "message": "Missing or outdated recording for exact source/translation."
+      }
+    ],
+    "payloadHash": null,
+    "scenes": 0,
+    "strings": 0,
+    "bytes": 0
+  },
+  "fallback-check": {
+    "diagnostics": [],
+    "localeDiagnostics": [],
+    "mediaDiagnostics": [
+      {
+        "key": "en/01M21AJ0Q5FT68769KBTB9QG0W/other",
+        "code": "text_fallback",
+        "message": "Missing or outdated recording for exact source/translation."
+      }
+    ],
+    "payloadHash": "f17d2eb12c2d573a962eafd56ccb417bdc895925d2e3c759fa09f9d63fe5f4a4",
+    "scenes": 0,
+    "strings": 1,
+    "bytes": 656
+  },
+  "native-package": {
+    "report": {
+      "destination": "/tmp/wobu-179-native-ready/strict-package-1788899716695807394",
+      "payloadHash": "1f188f5b8e467a9e892831c5bec1488aab053df7e87abd77f8a29d16c306b791",
+      "scenes": 0,
+      "strings": 1,
+      "bytes": 48484
+    },
+    "manifest": {
+      "format": "wobu-narrative",
+      "version": 1,
+      "graph_version": 1,
+      "profile": "release",
+      "locale": "en",
+      "required_capabilities": {
+        "deterministic_graph": 1,
+        "prepared_media": 1,
+        "separate_strings": 1,
+        "supporting_text": 1
+      },
+      "files": {
+        "assets/media/24ff011c236ed5fbc23365d4fe8137986b08282b0127e01fa73b0a52ace457bc.wav": {
+          "bytes": 46482,
+          "hash": "24ff011c236ed5fbc23365d4fe8137986b08282b0127e01fa73b0a52ace457bc"
+        },
+        "assets/media/cb6039dc1a26f525a06443d7aec2e873ebba0bf05dcb963f4641e82490ce4246.json": {
+          "bytes": 585,
+          "hash": "cb6039dc1a26f525a06443d7aec2e873ebba0bf05dcb963f4641e82490ce4246"
+        },
+        "graph.json": {
+          "bytes": 406,
+          "hash": "36744d2fc4d254f3a8d0174fc0f6f67493fd0a3eb4a869aaeb47360dafb47420"
+        },
+        "media.json": {
+          "bytes": 875,
+          "hash": "884de79b35a9eb958f3683cbc4cc6e6dc4c8904b55b259a981bc627c27ed6ec2"
+        },
+        "state.json": {
+          "bytes": 2,
+          "hash": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279"
+        },
+        "strings/en.json": {
+          "bytes": 134,
+          "hash": "9196fff2d14c9a63fe5d421740ea2c5703c1f2d5e1b68c71fb2e041f44419c01"
+        }
+      },
+      "payload_hash": "1f188f5b8e467a9e892831c5bec1488aab053df7e87abd77f8a29d16c306b791"
+    },
+    "media": {
+      "version": 1,
+      "required": {
+        "en": false
+      },
+      "timing": ["en"],
+      "takes": {
+        "en/01M21AJ0Q5FT68769KBTB9QG0W/other": {
+          "key": {
+            "id": "01M21AJ0Q5FT68769KBTB9QG0W",
+            "locale": "en",
+            "form": "other"
+          },
+          "origin": "en",
+          "source_revision": "a6b0e244bf00974afda2574e9bdc896a",
+          "translation_revision": null,
+          "template": "The harbor is quiet. Keep the lantern burning.",
+          "spoken_text": "The harbor is quiet. Keep the lantern burning.",
+          "parameters": {},
+          "audio": {
+            "path": "assets/media/24ff011c236ed5fbc23365d4fe8137986b08282b0127e01fa73b0a52ace457bc.wav",
+            "hash": "24ff011c236ed5fbc23365d4fe8137986b08282b0127e01fa73b0a52ace457bc",
+            "bytes": 46482
+          },
+          "info": {
+            "channels": 1,
+            "sample_rate": 8000,
+            "frames": 23219,
+            "duration_ms": 2902
+          },
+          "timing": {
+            "path": "assets/media/cb6039dc1a26f525a06443d7aec2e873ebba0bf05dcb963f4641e82490ce4246.json",
+            "hash": "cb6039dc1a26f525a06443d7aec2e873ebba0bf05dcb963f4641e82490ce4246",
+            "bytes": 585
+          }
+        }
+      },
+      "fallback": []
+    }
+  },
+  "fallback-package": {
+    "version": 1,
+    "required": {
+      "en": true
+    },
+    "timing": ["en"],
+    "takes": {},
+    "fallback": ["en/01M21AJ0Q5FT68769KBTB9QG0W/other"]
+  },
+  "source-before": {
+    "narrative/texts/lantern-keeper.yaml": "514bec6042bed552a8ef9d84a573161bcee6e42f8c62ad27a90023deae446e50"
+  },
+  "minimum": {
+    "width": 960,
+    "height": 620,
+    "theme": "light",
+    "bg": "rgb(238, 235, 230)",
+    "errors": [],
+    "sheet": {
+      "x": 16,
+      "y": 23,
+      "width": 928,
+      "height": 574
+    },
+    "section": {
+      "rect": {
+        "x": 17,
+        "y": 24,
+        "width": 926,
+        "height": 572
+      },
+      "scrollWidth": 917,
+      "clientWidth": 917
+    }
+  },
+  "large-scale": {
+    "width": 960,
+    "height": 620,
+    "theme": "light",
+    "bg": "rgb(238, 235, 230)",
+    "errors": [],
+    "sheet": {
+      "x": 24,
+      "y": 35,
+      "width": 912,
+      "height": 550
+    },
+    "section": {
+      "rect": {
+        "x": 25,
+        "y": 36,
+        "width": 910,
+        "height": 548
+      },
+      "scrollWidth": 598,
+      "clientWidth": 598
+    }
+  },
+  "import": {
+    "rows": 1,
+    "bindings": 1,
+    "history_entries": 1,
+    "diagnostic": "unknown source ID skipped",
+    "source_hashes_unchanged": true
+  },
+  "unlock_relock": {
+    "source_revision_before": "a6b0e244bf00974afda2574e9bdc896a",
+    "source_revision_after": "a6b0e244bf00974afda2574e9bdc896a",
+    "guard_before": "b686fad0a1efdbe6b22c162f19918f5ff3c22d6e9b69d3b99807ca28474b0114",
+    "guard_after": "d40242a0a24e693e5c35c3c8e18d3c3252043c2044773110eec473705a5f0d2b",
+    "source_ready": true
+  },
+  "native_playback": [
+    {
+      "time_seconds": 0,
+      "duration_seconds": 2.902375,
+      "paused": true,
+      "ready_state": 3,
+      "error": null,
+      "active_cues": ["word: The harbor is quiet. (0–1200 ms)"],
+      "console_errors": []
+    },
+    {
+      "time_seconds": 0.32231,
+      "duration_seconds": 2.902375,
+      "paused": false,
+      "ready_state": 3,
+      "error": null,
+      "active_cues": ["word: The harbor is quiet. (0–1200 ms)", "viseme: aa (100–900 ms)"],
+      "console_errors": []
+    },
+    {
+      "time_seconds": 0.745163,
+      "duration_seconds": 2.902375,
+      "paused": false,
+      "ready_state": 3,
+      "error": null,
+      "active_cues": ["word: The harbor is quiet. (0–1200 ms)", "viseme: aa (100–900 ms)"],
+      "console_errors": []
+    },
+    {
+      "time_seconds": 0.981222,
+      "duration_seconds": 2.902375,
+      "paused": false,
+      "ready_state": 3,
+      "error": null,
+      "active_cues": ["word: The harbor is quiet. (0–1200 ms)", "viseme: aa (100–900 ms)"],
+      "console_errors": []
+    },
+    {
+      "time_seconds": 1.479294,
+      "duration_seconds": 2.902375,
+      "paused": false,
+      "ready_state": 3,
+      "error": null,
+      "active_cues": ["word: Keep the lantern burning. (1200–2902 ms)"],
+      "console_errors": []
+    },
+    {
+      "time_seconds": 1.862698,
+      "duration_seconds": 2.902375,
+      "paused": false,
+      "ready_state": 3,
+      "error": null,
+      "active_cues": [
+        "word: Keep the lantern burning. (1200–2902 ms)",
+        "viseme: ih (1300–2200 ms)"
+      ],
+      "console_errors": []
+    }
+  ],
+  "review_filter": {
+    "locale": "en",
+    "current": 0,
+    "out_of_date": 1
+  },
+  "final_errors": [],
+  "builds": {
+    "release_import_backend": "7e4333b",
+    "playback_backend": "d3c403b plus media-src blob:",
+    "final_player": "f331534 (0825ecc), including 42268c9 (aef0441)"
+  }
+}

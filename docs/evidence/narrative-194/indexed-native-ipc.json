@@ -1,0 +1,1107 @@
+{
+  "project": "/tmp/wobu-narrative-scale-baseline/narrative-scale.wobu",
+  "projectId": "01M1ZMYZW1TAWXFW4NNJHDK0Q4",
+  "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "samplesPerWarmOperation": 30,
+  "measurements": [
+    {
+      "label": "cold_project_open",
+      "command": "project_open",
+      "ms": 19289,
+      "outputBytes": 213
+    },
+    {
+      "label": "first_library_page",
+      "command": "narrative_library_query",
+      "ms": 160,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warmup_selected",
+      "command": "narrative_scene_get",
+      "ms": 69,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 166,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 187,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 217,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 67,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 157,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 183,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 213,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 64,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 156,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 211,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 63.00000000000364,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 156.00000000000364,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 183,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 209,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 67,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 159,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 183,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 223.00000000000364,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 83.99999999999636,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 157,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 221,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 68,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 158.00000000000364,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 189.99999999999636,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 217.00000000000364,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 65.99999999999636,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 163,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 191,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 234,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 69,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 171,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 207.00000000000364,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 61.99999999999636,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 157,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 209,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 62,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 155,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 184,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 211,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 64,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 159,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 206,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 63.00000000000364,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 154,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 189.99999999999636,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 220.00000000000364,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 65.99999999999636,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 155.00000000000364,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 183,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 207.99999999999636,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 62,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 154,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 208,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 64,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 158,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 184.00000000000364,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 209,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 62.99999999999636,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 161.99999999999636,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 211,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 223.00000000000364,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 64.99999999999636,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 179,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 209,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 210,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 65.00000000000364,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 159.99999999999636,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 183.99999999999636,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 207.00000000000364,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 63,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 156,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 183.00000000000728,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 204.99999999999272,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 63,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 157,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 180,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 205,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 63,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 163,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 190,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 205,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 63.000000000007276,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 154.99999999999272,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 182,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 221.00000000000728,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 64.99999999999272,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 155,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 181,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 209,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 64,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 159,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 186,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 210,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 71,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 167,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 194,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 235,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 66,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 177.00000000000728,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 204.99999999999272,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 233,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 85,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 172,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 189,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 221,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 65,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 158,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 187,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 215,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 65.00000000000728,
+      "outputBytes": 18693
+    },
+    {
+      "label": "warm_browse",
+      "command": "narrative_library_query",
+      "ms": 165,
+      "outputBytes": 13999,
+      "rows": 25,
+      "total": 1000,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_line_search",
+      "command": "narrative_library_query",
+      "ms": 187,
+      "outputBytes": 3677,
+      "rows": 1,
+      "total": 1,
+      "sceneCount": 1000
+    },
+    {
+      "label": "warm_combined_filter",
+      "command": "narrative_library_query",
+      "ms": 212,
+      "outputBytes": 16948,
+      "rows": 25,
+      "total": 100,
+      "sceneCount": 1000
+    },
+    {
+      "label": "selected_scene_get",
+      "command": "narrative_scene_get",
+      "ms": 65,
+      "outputBytes": 18693
+    }
+  ],
+  "scope": "Real Tauri/WebKit IPC on canonical 1000-scene/50000-slot filesystem fixture. API timings and JSON reply bytes; no UI search/open-return claim. Development build. No generation or source mutation.",
+  "implementationCommit": "c536e8bb991e45d2ec0651fa64f5315709912338",
+  "machine": {
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+    "logical_cpus": 24,
+    "cpu_model": "AMD Ryzen 9 5900X 12-Core Processor",
+    "memory_kib": 32770716,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+  },
+  "webkitgtk": "2.52.6",
+  "display": "Xvfb :197, software rendering, 1280x1000 window",
+  "canonicalVerification": {
+    "yamlFiles": 1001,
+    "unchangedBeforeAfter": true,
+    "sha256OfSortedManifest": "29883418c62367ce4dd0d980cc92efa83c291c2effde0aec5a436cbb4b5a4c43"
+  },
+  "method": {
+    "timer": "WebKit performance.now; observed millisecond resolution",
+    "p95": "nearest rank, ceil(0.95*n)",
+    "cold": "fresh local XDG/index; source filesystem cache warm; excludes process/portal startup",
+    "queries": "25-row browse; exact ASHFALL-PHRASE-0731; logbook + quest 00000000000000000004000011 + Edited; selected Scene 00000000000000000000000732",
+    "scopeLimitation": "Programmatic public commands in native WebKit. No UI open/return, DOM row, memory, frame-stall or keyboard acceptance claim."
+  },
+  "summary": {
+    "cold_project_open": {
+      "samples": 1,
+      "p50Ms": 19289,
+      "p95Ms": 19289,
+      "minMs": 19289,
+      "maxMs": 19289,
+      "minReplyBytes": 213,
+      "maxReplyBytes": 213
+    },
+    "first_library_page": {
+      "samples": 1,
+      "p50Ms": 160,
+      "p95Ms": 160,
+      "minMs": 160,
+      "maxMs": 160,
+      "minReplyBytes": 13999,
+      "maxReplyBytes": 13999
+    },
+    "warmup_selected": {
+      "samples": 1,
+      "p50Ms": 69,
+      "p95Ms": 69,
+      "minMs": 69,
+      "maxMs": 69,
+      "minReplyBytes": 18693,
+      "maxReplyBytes": 18693
+    },
+    "warm_browse": {
+      "samples": 30,
+      "p50Ms": 158.00000000000182,
+      "p95Ms": 177.00000000000728,
+      "minMs": 154,
+      "maxMs": 179,
+      "minReplyBytes": 13999,
+      "maxReplyBytes": 13999
+    },
+    "warm_line_search": {
+      "samples": 30,
+      "p50Ms": 186.0,
+      "p95Ms": 209,
+      "minMs": 180,
+      "maxMs": 211,
+      "minReplyBytes": 3677,
+      "maxReplyBytes": 3677
+    },
+    "warm_combined_filter": {
+      "samples": 30,
+      "p50Ms": 211.0,
+      "p95Ms": 234,
+      "minMs": 204.99999999999272,
+      "maxMs": 235,
+      "minReplyBytes": 16948,
+      "maxReplyBytes": 16948
+    },
+    "selected_scene_get": {
+      "samples": 30,
+      "p50Ms": 64.99999999999454,
+      "p95Ms": 83.99999999999636,
+      "minMs": 61.99999999999636,
+      "maxMs": 85,
+      "minReplyBytes": 18693,
+      "maxReplyBytes": 18693
+    }
+  }
+}

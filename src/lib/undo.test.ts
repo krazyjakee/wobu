@@ -1,3 +1,5 @@
+import { projectClose, projectOpen } from './api/project'
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(null) }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   COALESCE_MS,
@@ -7,19 +9,47 @@ import {
   editEntry,
   editLabel,
   moveEntry,
+  sceneBirthEntry,
+  sceneDeletionEntry,
+  sceneEditEntry,
+  sceneEditLabel,
   useUndoStack,
   type NewEntry,
   type UndoEntry,
   type WorldCommand,
 } from './undo'
+import type { Beat, Scene, SceneFile } from './api'
 import { node } from '../test/fixtures'
 
-/** An entry with only the fields a given test cares about spelled out. */
-function entry(over: Partial<UndoEntry> & { nodeId: string }): NewEntry {
+/* ── narrative fixtures ───────────────────────────────────────────────────── */
+
+function beat(over: Partial<Beat> & { id: string }): Beat {
+  return { title: over.id, ...over }
+}
+
+function scene(over: Partial<Scene> & { id: string }): Scene {
+  return { name: 'Council hearing', ...over }
+}
+
+function file(over: Partial<SceneFile> & { scene: Scene }): SceneFile {
   return {
-    label: `edit ${over.nodeId}`,
-    undo: [{ type: 'delete', id: over.nodeId }],
-    redo: [{ type: 'delete', id: over.nodeId }],
+    slug: 'council-hearing',
+    rel: 'narrative/scenes/council-hearing.yaml',
+    stamp: { mtime_ms: 1, size: 2, hash: 'h' },
+    ...over,
+  }
+}
+
+function typingScene(title: string): SceneFile {
+  return file({ scene: scene({ id: 's1', beats: [beat({ id: 'b1', title })] }) })
+}
+
+/** An entry with only the fields a given test cares about spelled out. */
+function entry(over: Partial<UndoEntry> & { subjectId: string }): NewEntry {
+  return {
+    label: `edit ${over.subjectId}`,
+    undo: [{ type: 'delete', id: over.subjectId }],
+    redo: [{ type: 'delete', id: over.subjectId }],
     coalesce: false,
     ...over,
   }
@@ -28,7 +58,7 @@ function entry(over: Partial<UndoEntry> & { nodeId: string }): NewEntry {
 /** An edit of `id`, carrying the two states it moved between. */
 function edit(id: string, before: string, after: string, at?: number) {
   return entry({
-    nodeId: id,
+    subjectId: id,
     label: `notes edit ${after}`,
     undo: [{ type: 'upsert', node: node({ id, notesRaw: before }) }],
     redo: [{ type: 'upsert', node: node({ id, notesRaw: after }) }],
@@ -114,8 +144,8 @@ describe('coalescing a run of typing', () => {
     // Three deletes collapsing into one ⌘Z would leave two nodes gone with no
     // way back.
     const push = useUndoStack.getState().push
-    push(entry({ nodeId: 'kell', coalesce: false, at: 1000 }))
-    push(entry({ nodeId: 'kell', coalesce: false, at: 1001 }))
+    push(entry({ subjectId: 'kell', coalesce: false, at: 1000 }))
+    push(entry({ subjectId: 'kell', coalesce: false, at: 1001 }))
     expect(useUndoStack.getState().past).toHaveLength(2)
   })
 })
@@ -148,7 +178,7 @@ describe('undo and redo', () => {
     const { seen, run } = recorder()
     useUndoStack.getState().push(
       entry({
-        nodeId: 'kell',
+        subjectId: 'kell',
         undo: [
           { type: 'upsert', node: node({ id: 'kell' }) },
           { type: 'move', id: 'child', parentId: 'kell' },
@@ -166,8 +196,8 @@ describe('undo and redo', () => {
   it('undoes in reverse order of the pushes', async () => {
     const { seen, run } = recorder()
     const push = useUndoStack.getState().push
-    push(entry({ nodeId: 'first' }))
-    push(entry({ nodeId: 'second' }))
+    push(entry({ subjectId: 'first' }))
+    push(entry({ subjectId: 'second' }))
     await useUndoStack.getState().undo(run)
     await useUndoStack.getState().undo(run)
     expect(seen).toEqual([
@@ -180,7 +210,7 @@ describe('undo and redo', () => {
     // An undo goes through the same guarded write path as any save and can
     // raise write.conflict. Dropping the entry would make a recoverable refusal
     // permanent.
-    useUndoStack.getState().push(entry({ nodeId: 'kell' }))
+    useUndoStack.getState().push(entry({ subjectId: 'kell' }))
     const run = vi.fn().mockRejectedValue({ code: 'write.conflict', message: 'someone else wrote' })
     await expect(useUndoStack.getState().undo(run)).rejects.toMatchObject({
       code: 'write.conflict',
@@ -212,8 +242,8 @@ describe('undo and redo', () => {
     // ⌘Z held down repeats, and two overlapping undos would interleave writes
     // to the same file.
     const push = useUndoStack.getState().push
-    push(entry({ nodeId: 'a' }))
-    push(entry({ nodeId: 'b' }))
+    push(entry({ subjectId: 'a' }))
+    push(entry({ subjectId: 'b' }))
     let release: () => void = () => {}
     const gate = new Promise<void>((r) => (release = r))
     const first = useUndoStack.getState().undo(() => gate)
@@ -225,10 +255,10 @@ describe('undo and redo', () => {
 
   it('drops the oldest entries rather than growing without bound', () => {
     const push = useUndoStack.getState().push
-    for (let i = 0; i < MAX_ENTRIES + 10; i++) push(entry({ nodeId: `n${i}` }))
+    for (let i = 0; i < MAX_ENTRIES + 10; i++) push(entry({ subjectId: `n${i}` }))
     const { past } = useUndoStack.getState()
     expect(past).toHaveLength(MAX_ENTRIES)
-    expect(past[0]!.nodeId).toBe('n10')
+    expect(past[0]!.subjectId).toBe('n10')
   })
 })
 
@@ -236,7 +266,7 @@ describe('project scope', () => {
   it('throws the stack away when a different project is opened', () => {
     // Every command names a node by id in one world. Replaying it against
     // another project would either fail or, worse, hit an unrelated node.
-    useUndoStack.getState().push(entry({ nodeId: 'kell' }))
+    useUndoStack.getState().push(entry({ subjectId: 'kell' }))
     useUndoStack.getState().setProject('other')
     expect(useUndoStack.getState().past).toEqual([])
     expect(useUndoStack.getState().future).toEqual([])
@@ -245,15 +275,15 @@ describe('project scope', () => {
   it('leaves the stack alone when told the same project again', () => {
     // The scope is synced from a query result that re-renders freely; clearing
     // on every report would empty the stack at random moments.
-    useUndoStack.getState().push(entry({ nodeId: 'kell' }))
+    useUndoStack.getState().push(entry({ subjectId: 'kell' }))
     useUndoStack.getState().setProject('proj')
     expect(useUndoStack.getState().past).toHaveLength(1)
   })
 
   it('clears when the project closes and ignores pushes after it', () => {
-    useUndoStack.getState().push(entry({ nodeId: 'kell' }))
+    useUndoStack.getState().push(entry({ subjectId: 'kell' }))
     useUndoStack.getState().setProject(null)
-    useUndoStack.getState().push(entry({ nodeId: 'kell' }))
+    useUndoStack.getState().push(entry({ subjectId: 'kell' }))
     expect(useUndoStack.getState().past).toEqual([])
   })
 })
@@ -346,3 +376,243 @@ describe('editLabel', () => {
     expect(editLabel(before, { ...before, updatedAt: '2030-01-01T00:00:00Z' })).toBeNull()
   })
 })
+
+describe('narrative source on the same stack as nodes', () => {
+  it('inverts a scene create by deleting, and redoes it without minting a new id', () => {
+    // narrative_scene_create mints a fresh scene id, so a redone create would
+    // be a different scene and every entry recorded after it would name beats
+    // that no longer exist.
+    const made = file({ scene: scene({ id: 's1' }) })
+    const e = sceneBirthEntry(made, 'create')
+    expect(e.undo).toEqual([{ type: 'sceneDelete', id: 's1' }])
+    expect(e.redo).toEqual([{ type: 'sceneSave', scene: made.scene, slug: made.slug }])
+    expect(e.coalesce).toBe(false)
+  })
+
+  it('restores a deleted scene as itself, and says what it cannot bring back', () => {
+    const gone = file({ scene: scene({ id: 's1', beats: [beat({ id: 'b1' })] }) })
+    const e = sceneDeletionEntry(gone)
+    expect(e.undo).toEqual([{ type: 'sceneSave', scene: gone.scene, slug: gone.slug }])
+    expect(e.redo).toEqual([{ type: 'sceneDelete', id: 's1' }])
+    // The layout sidecar goes with the scene and no inverse can put it back.
+    expect(e.caveat).toBeTruthy()
+  })
+
+  it('inverts every edit the same way, so a canvas edit and a form edit match', () => {
+    // #186: a structural edit made on the canvas and the same edit made in a
+    // form have to be indistinguishable in history. They are, because both
+    // arrive here as one document replacing another.
+    const before = file({ scene: scene({ id: 's1', beats: [beat({ id: 'b1' })] }) })
+    const wired = {
+      ...before.scene,
+      beats: [beat({ id: 'b1', choices: [{ id: 'c1', label: 'Go', to: { end: {} } }] })],
+    }
+    const fromCanvas = sceneEditEntry(before, { ...before, scene: wired })
+    const fromForm = sceneEditEntry(before, { ...before, scene: structuredClone(wired) })
+
+    expect(fromCanvas).toEqual(fromForm)
+    expect(fromCanvas?.undo).toEqual([
+      { type: 'sceneSave', scene: before.scene, slug: before.slug, expected: wired },
+    ])
+    expect(fromCanvas?.label).toContain('branch change')
+  })
+
+  it('records nothing for a save that changed nothing', () => {
+    // An entry whose inverse restores the state it is already in reads as a
+    // broken ⌘Z, exactly as it does for nodes.
+    const before = file({ scene: scene({ id: 's1' }) })
+    expect(
+      sceneEditEntry(before, { ...before, stamp: { mtime_ms: 9, size: 9, hash: 'x' } }),
+    ).toBeNull()
+  })
+
+  it('coalesces a run of typing and never a run of structural edits', () => {
+    const s = scene({ id: 's1', beats: [beat({ id: 'b1', title: 'Presen' })] })
+    const typed = { ...s, beats: [beat({ id: 'b1', title: 'Present' })] }
+    expect(sceneEditLabel(s, typed)).toEqual({ verb: 'text edit', coalesce: true })
+
+    const deleted = { ...s, beats: [] }
+    expect(sceneEditLabel(s, deleted)).toEqual({ verb: 'delete beat', coalesce: false })
+  })
+
+  it('names the most structural thing that changed, not the most textual', () => {
+    // A deletion that also touched some wording is a deletion. Labelling it a
+    // text edit would badly understate what ⌘Z is about to reverse.
+    const s = scene({ id: 's1', beats: [beat({ id: 'b1' }), beat({ id: 'b2' })] })
+    const both = { ...s, beats: [beat({ id: 'b1', title: 'renamed' })] }
+    expect(sceneEditLabel(s, both)?.verb).toBe('delete beat')
+  })
+
+  it('tells reordering apart from adding and deleting', () => {
+    const s = scene({ id: 's1', beats: [beat({ id: 'b1' }), beat({ id: 'b2' })] })
+    const moved = { ...s, beats: [beat({ id: 'b2' }), beat({ id: 'b1' })] }
+    expect(sceneEditLabel(s, moved)?.verb).toBe('reorder beats')
+    expect(sceneEditLabel(s, { ...s, beats: [...(s.beats ?? []), beat({ id: 'b3' })] })?.verb).toBe(
+      'add beat',
+    )
+  })
+
+  it('notices a destination connected or disconnected', () => {
+    // The canvas edit #186 is built around. Missing it would not produce a
+    // wrong label, it would produce no entry at all.
+    const linked = scene({
+      id: 's1',
+      beats: [beat({ id: 'b1', choices: [{ id: 'c1', label: 'Go', to: { beat: 'b2' } }] })],
+    })
+    const cut = scene({
+      id: 's1',
+      beats: [beat({ id: 'b1', choices: [{ id: 'c1', label: 'Go', to: { end: {} } }] })],
+    })
+    expect(sceneEditLabel(linked, cut)?.verb).toBe('branch change')
+  })
+
+  it('names the scene-level edits that are not about a beat', () => {
+    const s = scene({ id: 's1' })
+    expect(sceneEditLabel(s, { ...s, participants: [{ entity: 'kael' }] })?.verb).toBe(
+      'participant change',
+    )
+    expect(sceneEditLabel(s, { ...s, entry: 'never' })?.verb).toBe('condition change')
+    expect(sceneEditLabel(s, { ...s, summary: 'the captain answers' })).toEqual({
+      verb: 'summary edit',
+      coalesce: true,
+    })
+    // A field this comparison has never heard of still produces an entry. A
+    // label that is merely vague is recoverable; no entry at all is the one
+    // edit ⌘Z cannot take back.
+    expect(sceneEditLabel(s, { ...s, tombstones: [] })?.verb).toBe('edit')
+  })
+
+  it('separates a scene rename from anything inside it', () => {
+    const s = scene({ id: 's1' })
+    expect(sceneEditLabel(s, { ...s, name: 'The hearing' })).toEqual({
+      verb: 'rename',
+      coalesce: false,
+    })
+  })
+
+  it('carries no command that could put a coordinate on the world stack', () => {
+    // #185, kept as a property of the primitives rather than as a convention.
+    // Every command names a node or a scene; none of them has an x or a y, so
+    // no caller — including one written after this test — can make ⌘Z undo a
+    // drag and then, on the very next press, undo a paragraph.
+    const commands: WorldCommand[] = [
+      { type: 'upsert', node: node({ id: 'kell' }) },
+      { type: 'delete', id: 'kell' },
+      { type: 'move', id: 'kell', parentId: null },
+      { type: 'sceneSave', scene: scene({ id: 's1' }), slug: 'council-hearing' },
+      { type: 'sceneDelete', id: 's1' },
+    ]
+    for (const command of commands) {
+      expect(JSON.stringify(command)).not.toMatch(/"(x|y|collapsed|graph|annotations)"/)
+    }
+  })
+
+  it('coalesces a scene typing run and a node typing run separately', () => {
+    // The subject key is what keeps the two apart on one stack: typing into a
+    // scene must not absorb the node edit that happened a moment earlier.
+    const { push } = useUndoStack.getState()
+    push(entry({ subjectId: 'kell', coalesce: true, at: 1000 }))
+    push(entry({ subjectId: 's1', coalesce: true, at: 1100 }))
+    expect(useUndoStack.getState().past).toHaveLength(2)
+  })
+
+  it('undoes and redoes coalesced scene typing with guards for the whole run', async () => {
+    const original = typingScene('C')
+    const middle = typingScene('Co')
+    const final = typingScene('Council')
+    const { push, undo, redo } = useUndoStack.getState()
+    push({ ...sceneEditEntry(original, middle)!, at: 1000 })
+    push({ ...sceneEditEntry(middle, final)!, at: 1100 })
+    expect(useUndoStack.getState().past).toHaveLength(1)
+    let saved = final.scene
+    const guardedSave = async (cmd: WorldCommand) => {
+      if (cmd.type !== 'sceneSave') throw new Error('Expected a scene restore')
+      if (JSON.stringify(saved) !== JSON.stringify(cmd.expected)) throw new Error('Conflict')
+      saved = cmd.scene
+    }
+    await undo(guardedSave)
+    expect(saved).toEqual(original.scene)
+    await redo(guardedSave)
+    expect(saved).toEqual(final.scene)
+    saved = { ...saved, summary: 'A collaborator added this' }
+    await expect(undo(guardedSave)).rejects.toThrow('Conflict')
+    expect(saved.summary).toBe('A collaborator added this')
+    expect(useUndoStack.getState().past).toHaveLength(1)
+  })
+
+  it('does not coalesce scene typing across a collaborator change', () => {
+    const original = typingScene('C')
+    const first = typingScene('Co')
+    const peer = { ...first, scene: { ...first.scene, summary: 'Peer notes' } }
+    const last = { ...peer, scene: { ...peer.scene, beats: typingScene('Council').scene.beats } }
+    const { push } = useUndoStack.getState()
+    push({ ...sceneEditEntry(original, first)!, at: 1000 })
+    push({ ...sceneEditEntry(peer, last)!, at: 1100 })
+    expect(useUndoStack.getState().past).toHaveLength(2)
+  })
+})
+
+it.each(['undo', 'redo'] as const)(
+  'stops a multi-command %s after same-project reopen without clearing a newer busy operation',
+  async (direction) => {
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+    const history: UndoEntry = {
+      ...entry({
+        subjectId: 'first',
+        undo: [
+          { type: 'delete', id: 'first' },
+          { type: 'delete', id: 'second' },
+        ],
+        redo: [
+          { type: 'delete', id: 'first' },
+          { type: 'delete', id: 'second' },
+        ],
+      }),
+      at: 1,
+    }
+    useUndoStack.setState({
+      projectId: 'same-id',
+      past: direction === 'undo' ? [history] : [],
+      future: direction === 'redo' ? [history] : [],
+      busy: false,
+    })
+    let finishOld!: () => void
+    const oldRunner = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOld = resolve
+        }),
+    )
+    const old = useUndoStack
+      .getState()
+      [direction](oldRunner)
+      .catch((error: unknown) => error)
+    await projectClose()
+    useUndoStack.getState().setProject(null)
+    await projectOpen('/same')
+    useUndoStack.getState().setProject('same-id')
+    useUndoStack.setState({
+      past: direction === 'undo' ? [history] : [],
+      future: direction === 'redo' ? [history] : [],
+    })
+    let finishNew!: () => void
+    const newRunner = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishNew = resolve
+          }),
+      )
+      .mockResolvedValue(undefined)
+    const newer = useUndoStack.getState()[direction](newRunner)
+    finishOld()
+    expect(await old).toMatchObject({ message: expect.stringContaining('session changed') })
+    expect(oldRunner).toHaveBeenCalledTimes(1)
+    expect(useUndoStack.getState().busy).toBe(true)
+    finishNew()
+    await newer
+    expect(useUndoStack.getState().busy).toBe(false)
+    expect(newRunner).toHaveBeenCalledTimes(2)
+  },
+)

@@ -1,0 +1,28 @@
+{
+  "phase": "reads",
+  "time": 1788900449.9428055,
+  "loadavg": [17.6513671875, 18.55615234375, 12.33837890625],
+  "scope": "actual Tauri/WebKit public IPC; harness-assisted calls, no provider calls and no mocked IPC",
+  "processes": [
+    "    PID COMMAND         %CPU %MEM",
+    "3908434 outskirts_integ  276  0.1",
+    "3908640 farms-55d38ded4  163  0.4",
+    "3909033 props-fbeb90532  102  0.4",
+    "3909381 rustc            100  1.7",
+    "3855011 morrow-quay-02  99.0  2.9",
+    "3909498 python3         75.0  0.0",
+    "3660316 Isolated Web Co 22.1  1.7",
+    "2769724 Paseo           15.1  1.9",
+    "2769695 Paseo            5.5  0.2",
+    "3750426 wobu             5.3  0.7",
+    "  13653 firefox-bin      5.3  2.1",
+    "3750494 WebKitWebProces  4.7  0.9",
+    "2424832 WebKitWebProces  4.6  0.3",
+    "3890467 openclaw-node    4.5  0.6",
+    "1468491 synbadd          4.0  2.7",
+    " 125220 cinnamon         3.9  0.7",
+    "3460860 dotcefnative     3.7  0.1",
+    "   2001 Xorg             3.0  0.3",
+    "3672797 codex            3.0  0.3"
+  ]
+}

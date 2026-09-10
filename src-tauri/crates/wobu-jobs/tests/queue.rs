@@ -499,7 +499,7 @@ async fn cancelling_a_job_that_has_not_started_means_it_never_runs() {
 async fn a_task_that_honours_its_token_stops_itself_and_gets_to_say_so() {
     // The graceful path, and the reason for the grace at all: an adapter that
     // notices the token still has to unwind far enough to report what the
-    // provider charged, and #55's spend ceiling only counts what it is told.
+    // provider charged, or a cancelled job is reported as free on no evidence.
     let (queue, recorder) = queue_with(Config::default());
     let task = Fake::new("polite", [Step::AwaitCancel]);
     let log = task.log();
@@ -767,10 +767,12 @@ async fn closing_the_queue_stops_everything_unfinished_and_then_quiesces() {
     let running = Fake::new("mid generation", [Step::AwaitCancel]);
     let running_log = running.log();
     let running = queue.submit(running);
+    // Establish the occupied slot before submitting the queued job: spawned
+    // tasks can first acquire the semaphore in either order on this runtime.
+    recorder.until(|| running_log.started() == 1).await;
     let queued = Fake::new("waiting behind it", [Step::Finish]);
     let queued_log = queued.log();
     let queued = queue.submit(queued);
-    recorder.until(|| running_log.started() == 1).await;
 
     assert_eq!(queue.active(), 2, "one running, one queued");
     assert_eq!(queue.close(), 2, "both unfinished jobs are asked to stop");

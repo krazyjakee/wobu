@@ -30,6 +30,16 @@ pub mod influence;
 /// command group with a job, a provider adapter and a task of its own;
 /// `generations::mesh_concepts` is only the reading half of it.
 pub mod mesh;
+/// Narrative source, diagnostics and canvas layout (#151). Coarse on purpose:
+/// a structural edit is a whole scene document, so a canvas edit and the
+/// equivalent form edit cannot produce different source.
+pub mod narrative;
+pub mod narrative_build;
+pub mod narrative_generation;
+pub mod narrative_source;
+pub mod narrative_state_history;
+/// Repeated wordings across the whole project, and the answers to them (#209).
+pub mod narrative_wording;
 pub mod nodes;
 pub mod project;
 /// The one reader of `project.json`'s `providers` map, shared by images, text,
@@ -118,3 +128,26 @@ pub fn job_cancel(jobs: State<'_, Jobs>, job_id: String) -> CommandResult<bool> 
 pub fn job_list(jobs: State<'_, Jobs>) -> QueueSnapshot {
     jobs.snapshot()
 }
+
+pub mod narrative_world;
+
+pub mod narrative_preview;
+
+pub mod narrative_export;
+
+pub mod narrative_context;
+pub mod narrative_deps;
+pub mod narrative_review;
+pub mod narrative_scenarios;
+
+pub mod narrative_recovery;
+
+#[cfg(test)]
+mod narrative_layout_contract;
+
+pub mod narrative_arc;
+pub mod narrative_library;
+pub mod narrative_locale;
+pub mod narrative_media;
+pub mod narrative_text;
+pub mod narrative_variants;

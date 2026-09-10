@@ -1,5 +1,13 @@
 # 03 — UI Layout
 
+This page describes the workspace. [Narrative mode](19-narrative-authoring.md) now combines a
+searchable Scene library, scoped Flow canvases, and Script/Source editing of the same scene.
+World state edits attributed facts, relationships, quests and finite variable declarations. Typed
+Script forms author conditions/effects; Preview plays saved source through the isolated Rust runner.
+The inspector shows saved participants, intent and dialogue; its outline contains only the active
+scene. Review, affected builds and Flow playback overlays remain in the
+[narrative delivery plan](17-narrative-system.md).
+
 ## Shape of the app
 
 One primary screen — **the Workspace** — with three vertical regions plus a mode rail. Users
@@ -39,8 +47,55 @@ live here 95% of the time. Everything else is a mode swap in the centre or a mod
 
 ### Mode rail (52px)
 Icon-only, always visible. `Library` (the tree above) · `Forge` (full-width generation +
-result grid) · `Assets` (all images, filterable) · `Settings`. Keeps the top bar clean and
-makes mode switching muscle memory.
+result grid) · `Assets` (all images, filterable) · `Narrative` · `Settings`. Keeps the top bar
+clean and makes mode switching muscle memory.
+
+`Narrative` is appended rather than slotted in beside `Library`, so the first three buttons
+keep the positions they have always had. It opens the main Scene library, with World state available from Narrative navigation and
+Flow/Script/Preview/Source views for a selected scene. The plan it belongs to is
+tracked in issue #151; nothing in that workspace should be described as shipped until its
+acceptance criteria pass.
+
+What is connected to the project folder today, and what is not:
+
+| | Reads the project | Notes |
+| --- | --- | --- |
+| Library → Scenes | Yes | `narrative/scenes/*.yaml`, with **Create first scene** writing a real file |
+| Flow, both levels | Yes | Scenes, beats, choices, outcomes, and authored scene links |
+| Flow layout | Yes | `narrative/layout/`, saved per drag, never on the undo stack |
+| Diagnostics badges | Yes | Source-level only; see below |
+| World state and quest discovery | Yes | `narrative/world.yaml`; independent beliefs, relationships, events, quests and scene memberships |
+| Variables | Yes | `narrative/state.yaml`; declared finite domains and ownership |
+| Script and Source | Yes | One guarded scene source; typed forms and explicit YAML formatting |
+| Preview | Yes | Compiles saved scenes/state into an isolated graph; playback never writes canon |
+| Text library | **Partial** | Six kinds author, compile, play and export; generation, review-queue listing and search remain — see [supporting text](33-narrative-supporting-text.md) |
+| Review, Build, Export | **No** | #166, #169, #160 |
+
+Two things #189 asks for are refused with the reason rather than drawn: a badge cannot open a
+**witness scenario**, because generated reachability scenarios remain unimplemented (#171) — Preview
+draws the route it played (#188), but a scene nothing has played is not thereby unreachable; and an
+**affected-build scope** cannot be highlighted, because that needs the build planner (#169). Which
+lines an edit affected, and why, is already answered by [dependency
+tracking](35-narrative-dependencies.md) (#168) — in **Context → Why affected**, not on the canvas.
+
+#### What the Flow canvas can and cannot author
+
+The canvas edits the same documents as Script forms, through the same single write, so what it
+offers is bounded by what the source model can say rather than by what a canvas could draw:
+
+- **A destination can be moved, and cannot be cleared.** `Destination` is a beat, a scene or an
+  ending, with deliberately no fourth case — so "nowhere" is not a thing a choice can be. The
+  control that would clear one is not offered, and a caller that asks anyway is refused out loud.
+- **A beat's wires to its own choices and outcomes are structural.** They exist because a choice
+  belongs to a beat, not because somebody drew them, so their handles refuse to start a
+  connection.
+- **A choice or an outcome is authored by connecting**, from a beat's spare handle, because the
+  gesture is what supplies the destination the model requires. There is no Add button for one,
+  which would have to invent an ending nobody chose.
+- **An ending and a scene link are pictures of a field**, not elements. They cannot be deleted or
+  re-pointed, and they have no layout key, so their coordinates live only for the session.
+- **Badges store nothing.** Their filters are canvas-local memory, errors are not hideable by any
+  of them, and every badge carries a word and a glyph rather than a tint alone.
 
 ### Navigator (272px, resizable)
 Filter box at top, and under it one line giving the size of the world — `812 entities`, or

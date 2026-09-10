@@ -1,0 +1,32 @@
+{
+  "time_utc": "2026-09-08T19:48:57Z",
+  "kernel": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+  "loadavg": [4.1669921875, 4.416015625, 3.7978515625],
+  "cpu_count": 24,
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.1\nLLVM version: 22.1.6\n",
+  "baseline_product_commit": "730ab3a",
+  "profile_build_commit": "4060079",
+  "root_heavy_checks": "paused during run",
+  "processes": [
+    "    PID COMMAND         %CPU %MEM",
+    "3523959 ps               200  0.0",
+    "3523802 openclaw-node   92.2  0.8",
+    "3429144 wobu            32.4  0.7",
+    "3460860 dotcefnative    14.5  1.1",
+    "2769724 Paseo           13.6  1.9",
+    "3523926 python3         11.1  0.0",
+    "  13653 firefox-bin      5.2  1.8",
+    "2769695 Paseo            4.9  0.2",
+    "2424832 WebKitWebProces  4.6  0.3",
+    "3460726 Grayjay          4.0  4.3",
+    "1468491 synbadd          4.0  2.6",
+    " 125220 cinnamon         3.9  0.7",
+    "3462043 dotcefnative     3.8  0.8",
+    "   2001 Xorg             3.0  0.2",
+    " 484392 spotify          2.9  1.0",
+    "  13772 WebExtensions    2.7  3.1",
+    "2770949 codex            2.7  0.3"
+  ],
+  "finish_utc": "2026-09-08T19:50:22Z",
+  "finish_loadavg": [2.390625, 3.83251953125, 3.65234375]
+}

@@ -1,0 +1,302 @@
+{
+  "captured": "2026-09-08",
+  "environment": {
+    "surface": "Linux Tauri / WebKit native window",
+    "theme": "dark",
+    "scale": 1,
+    "restored_window": [1440, 900]
+  },
+  "counts": {
+    "potential": {
+      "value": "12",
+      "exact": true
+    },
+    "included": {
+      "value": "7",
+      "exact": true
+    },
+    "excluded": {
+      "value": "5",
+      "exact": true
+    },
+    "unknown": {
+      "value": "0",
+      "exact": true
+    }
+  },
+  "report_id": "01M21CAJP6J6G1BM33HP24717G",
+  "complete": true,
+  "assumptions": [
+    "World-event effects and quest/state bindings are explicitly authored in this policy; source prose supplies no effects.",
+    "Transitions model configurations before admission to this beat. They are not an executed runtime route or command acknowledgement.",
+    "Invariants constrain initial states and every model successor. Exclusions hold only under these declared assumptions."
+  ],
+  "reasons": [],
+  "included_witnesses": [
+    {
+      "id": "c1314fc3d925159dba3ce4c217598b80215730ca34f5ff9eff732cd22c4e8b07",
+      "witness": {
+        "state": {
+          "evidence": 0,
+          "permit": false,
+          "stage": "arrival"
+        },
+        "transitions": [],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    },
+    {
+      "id": "38b6147b90291638dabeac7176b61628801a5ec20e87e31a7f4ca8138d2222ba",
+      "witness": {
+        "state": {
+          "evidence": 0,
+          "permit": true,
+          "stage": "arrival"
+        },
+        "transitions": ["world/events/01M21BM9J7RVN3Q28RZAKXM64F"],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    },
+    {
+      "id": "c1d144871c331ef6ce040e5f02d502ed2896d6fee7269e7f982727df1ea4d1b1",
+      "witness": {
+        "state": {
+          "evidence": 1,
+          "permit": false,
+          "stage": "departed"
+        },
+        "transitions": [
+          "world/events/01M21BM9J7RVN3Q28RZAKXM64F",
+          "world/events/01M21BM9J7WP073HF4ERYJNFWR",
+          "world/quests/01M21BM9J74RXTTB9XGCWRW0QN/transitions/0",
+          "world/events/01M21BM9J7W7SCT8BRN64ZN01V",
+          "world/quests/01M21BM9J74RXTTB9XGCWRW0QN/transitions/1"
+        ],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    },
+    {
+      "id": "b7ffaafc4eb16716402dc7dba7fa31572d21a1dc208978288387d0aa82dfc2a4",
+      "witness": {
+        "state": {
+          "evidence": 1,
+          "permit": false,
+          "stage": "hearing"
+        },
+        "transitions": [
+          "world/events/01M21BM9J7RVN3Q28RZAKXM64F",
+          "world/events/01M21BM9J7WP073HF4ERYJNFWR",
+          "world/quests/01M21BM9J74RXTTB9XGCWRW0QN/transitions/0",
+          "world/events/01M21BM9J7W7SCT8BRN64ZN01V"
+        ],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    },
+    {
+      "id": "2a7a07f29893123cb2215e303342135745c2a96a6686f244a3fb0fd47c03ae27",
+      "witness": {
+        "state": {
+          "evidence": 1,
+          "permit": true,
+          "stage": "arrival"
+        },
+        "transitions": [
+          "world/events/01M21BM9J7RVN3Q28RZAKXM64F",
+          "world/events/01M21BM9J7WP073HF4ERYJNFWR"
+        ],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    },
+    {
+      "id": "b937ae0e78715c7ddd1571ea8238e6e52c5f3809ba12f23e449bc82b4552a5cd",
+      "witness": {
+        "state": {
+          "evidence": 1,
+          "permit": true,
+          "stage": "departed"
+        },
+        "transitions": [
+          "world/events/01M21BM9J7RVN3Q28RZAKXM64F",
+          "world/events/01M21BM9J7WP073HF4ERYJNFWR",
+          "world/quests/01M21BM9J74RXTTB9XGCWRW0QN/transitions/0",
+          "world/events/01M21BM9J7W7SCT8BRN64ZN01V",
+          "world/quests/01M21BM9J74RXTTB9XGCWRW0QN/transitions/1",
+          "world/events/01M21BM9J763FBPPQN93H67F5T"
+        ],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    },
+    {
+      "id": "d2581aebf41a3c19ef8704b3848aa89a403b3c0541a517235d37dcb43c6eca91",
+      "witness": {
+        "state": {
+          "evidence": 1,
+          "permit": true,
+          "stage": "hearing"
+        },
+        "transitions": [
+          "world/events/01M21BM9J7RVN3Q28RZAKXM64F",
+          "world/events/01M21BM9J7WP073HF4ERYJNFWR",
+          "world/quests/01M21BM9J74RXTTB9XGCWRW0QN/transitions/0"
+        ],
+        "initial": 0,
+        "target": {
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "beat": "01M21BM9J7T7FV76M49G0TRM16"
+        },
+        "runtime_route_verified": false
+      }
+    }
+  ],
+  "minimum_window_modal_rect": {
+    "x": 24,
+    "y": 25,
+    "width": 912,
+    "height": 570
+  },
+  "build": {
+    "id": "01M21CAQD78Z78DVK3Z35N5JKM",
+    "items": [
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "5XSBAM8A09YMKBPKJ3NHX4NPE4"
+        },
+        "state": {
+          "evidence": 0,
+          "permit": false,
+          "stage": "arrival"
+        }
+      },
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "4T38CXXR8Y8D3SZ37TMC6EVCNB"
+        },
+        "state": {
+          "evidence": 0,
+          "permit": true,
+          "stage": "arrival"
+        }
+      },
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "4R3AZA7YWV6GTVQBPCZF6S1FSN"
+        },
+        "state": {
+          "evidence": 1,
+          "permit": false,
+          "stage": "departed"
+        }
+      },
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "2VSQACH7EP3JP3D1ZMT4GVHG0M"
+        },
+        "state": {
+          "evidence": 1,
+          "permit": false,
+          "stage": "hearing"
+        }
+      },
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "1A4S0S37CG8S0J7JJN9TNGAZAS"
+        },
+        "state": {
+          "evidence": 1,
+          "permit": true,
+          "stage": "arrival"
+        }
+      },
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "6QP9657KEAE20NTZE0MWK0VH6G"
+        },
+        "state": {
+          "evidence": 1,
+          "permit": true,
+          "stage": "departed"
+        }
+      },
+      {
+        "action": "generate",
+        "target": {
+          "beat": "01M21BM9J7T7FV76M49G0TRM16",
+          "scene": "01M21BM9J7JMENNAR7D14K07ZD",
+          "slot": "01M21BM9M95RQ81YN5FFR6GZB1",
+          "variant": "1F6SJZG7CPFT4VVCDQD5Z1T6D9"
+        },
+        "state": {
+          "evidence": 1,
+          "permit": true,
+          "stage": "hearing"
+        }
+      }
+    ]
+  },
+  "successful_script_assertions": {
+    "reopened_same_report": true,
+    "planning_preserved_scene_hashes": true,
+    "existing_authored_wording_identity_revision_provenance_policy_preserved": true,
+    "distinct_complete_build_states": 7,
+    "dispatches": 0,
+    "attempts": 0
+  },
+  "provider_calls": 0,
+  "runtime_routes_replayed": 0,
+  "frontend_errors": [],
+  "artifact_note": "Report and geometry come from recorded native command/inspection results; build items come from the resulting canonical receipt chunks. Reopen and attempt assertions passed in the executed script. Reproduction script uses distinct status and screenshot metadata filenames to avoid overwriting those status artifacts."
+}

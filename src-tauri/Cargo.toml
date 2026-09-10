@@ -2,7 +2,7 @@
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.10"
+version = "0.2.1"
 edition = "2024"
 # Inherited by every crate rather than written eight times. `cargo metadata`
 # reads this, which is what keeps Wobu's own crates out of the third-party
@@ -45,6 +45,25 @@ wobu-imagine = { path = "crates/wobu-imagine" }
 wobu-jobs = { path = "crates/wobu-jobs" }
 wobu-mcp = { path = "crates/wobu-mcp" }
 wobu-sync = { path = "crates/wobu-sync" }
+# The typed narrative source model (#152). No Tauri and no provider
+# dependency by design, so the compiler, the runtime and the engine
+# adapters can all be built against it without pulling the desktop shell in.
+wobu-narrative = { path = "crates/wobu-narrative" }
+wobu-narrative-compiler = { path = "crates/wobu-narrative-compiler" }
+wobu-narrative-runtime = { path = "crates/wobu-narrative-runtime" }
+wobu-narrative-scenarios = { path = "crates/wobu-narrative-scenarios" }
+wobu-narrative-package = { path = "crates/wobu-narrative-package" }
+wobu-narrative-context = { path = "crates/wobu-narrative-context" }
+wobu-narrative-generation = { path = "crates/wobu-narrative-generation" }
+# Field-level dependency tracking, fingerprints and the rebuildable reverse
+# index (#168). Pure data over the canonical model, like the compiler: it takes
+# scenes, texts, the world and the declared state, and structurally cannot see
+# the Flow layout sidecars.
+wobu-narrative-deps = { path = "crates/wobu-narrative-deps" }
+wobu-narrative-build = { path = "crates/wobu-narrative-build" }
+wobu-narrative-locale = { path = "crates/wobu-narrative-locale" }
+wobu-narrative-variants = { path = "crates/wobu-narrative-variants" }
+wobu-narrative-media = { path = "crates/wobu-narrative-media" }
 
 [package]
 name = "wobu"
@@ -74,6 +93,11 @@ workspace = true
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+wobu-narrative-build.workspace = true
+wobu-narrative-locale.workspace = true
+wobu-narrative-variants.workspace = true
+wobu-narrative-media.workspace = true
+
 async-trait = "0.1.91"
 blake3 = "1.8.5"
 chrono = "0.4.45"
@@ -134,6 +158,18 @@ wobu-llm = { workspace = true }
 # turns it on in Settings; `mcp.rs` is the only thing that can, and it is handed
 # an explicit flag to do it with.
 wobu-mcp = { workspace = true }
+# The typed narrative source model. Named here as well as in `wobu-store`
+# because the command layer speaks in its types directly: a `Scene` crosses the
+# bridge as the source document it is, and a mirrored DTO in this crate would
+# be a second copy of the model to keep in step — see `commands/narrative.rs`.
+wobu-narrative = { workspace = true }
+wobu-narrative-compiler = { workspace = true }
+wobu-narrative-runtime = { workspace = true }
+wobu-narrative-scenarios = { workspace = true }
+wobu-narrative-package = { workspace = true }
+wobu-narrative-context = { workspace = true }
+wobu-narrative-generation = { workspace = true }
+wobu-narrative-deps = { workspace = true }
 wobu-store = { workspace = true }
 wobu-sync = { workspace = true }
 

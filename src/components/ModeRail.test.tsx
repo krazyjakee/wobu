@@ -40,6 +40,24 @@ describe('ModeRail accessibility', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('Forge · Ctrl+G')
   })
 
+  it('reaches the Narrative workspace without disturbing the other three', () => {
+    render(<ModeRail />)
+    const order = [...screen.getByRole('navigation', { name: 'Workspace modes' }).children]
+      .map((child) => child.getAttribute('aria-label'))
+      .filter((label): label is string => label !== null)
+    // Appended, not inserted: a hand that reaches for the third button still
+    // lands on Assets.
+    expect(order.slice(0, 4)).toEqual(['Library', 'Forge', 'Assets', 'Narrative'])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Narrative' }))
+
+    expect(useUI.getState().mode).toBe('narrative')
+    expect(screen.getByRole('button', { name: 'Narrative' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
   it('keeps the mode name out of the tooltip alone', () => {
     // The tooltip is a *description*. If it were the label, a rail with no
     // pointer on it would be four unnamed buttons.

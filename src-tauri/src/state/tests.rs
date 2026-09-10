@@ -113,6 +113,10 @@ fn reopening_the_same_folder_invalidates_an_old_project_ticket() {
 
     let error = state.with_ticket(&ticket, |_| Ok(())).unwrap_err();
     assert_eq!(error.code, crate::error::Code::NoProjectOpen);
+    assert_eq!(
+        state.reconcile_ticket_now(&ticket).unwrap_err().code,
+        crate::error::Code::NoProjectOpen
+    );
 }
 
 #[test]
@@ -189,6 +193,176 @@ fn overlapping_full_requests_coalesce_into_one_followup_observation() {
     );
 }
 
+/// Records what sync would have been told, so the wiring can be asserted
+/// without an `AppHandle` the unit tests have no way to mint.
+#[derive(Default)]
+struct SpyHandover {
+    changed: Mutex<Vec<Id>>,
+    state: Option<AppState>,
+}
+
+impl Handover for SpyHandover {
+    fn opening(&self, _project: Id, _root: &Path) {}
+    fn closing(&self, _project: Id) {}
+    fn changed_locally(&self, project: Id) {
+        if let Some(state) = &self.state {
+            assert!(state.slot.try_lock().is_some(), "sync was notified under the project lock");
+        }
+        self.changed.lock().push(project);
+    }
+}
+
+fn observe_changes(state: &AppState) -> Arc<SpyHandover> {
+    let spy = Arc::new(SpyHandover { state: Some(state.handle()), ..Default::default() });
+    state.observe(Arc::downgrade(&spy) as Weak<dyn Handover>);
+    spy
+}
+
+fn bump_mtime(path: &Path) {
+    let meta = std::fs::metadata(path).unwrap();
+    let later = meta.modified().unwrap() + Duration::from_secs(2);
+    let f = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    f.set_modified(later).unwrap();
+}
+
+#[test]
+fn an_edit_this_machine_made_nudges_sync_rather_than_waiting_for_its_backoff() {
+    // The Obsidian case, followed one step further than the store tests take
+    // it: the folder is canonical, so an edit made outside the app still has to
+    // reach the collaborators. Reconciling it into the index is only half of
+    // that — without the nudge the bytes then sit until the outbound poller's
+    // backoff happens to come round, which at its far end is two minutes.
+    let (_dir, root, state) = open_test_state("Nudge");
+    let spy = observe_changes(&state);
+    let project = state.open_id().expect("open_test_state installs a project");
+
+    state
+        .with(|p| Ok(p.create_node(wobu_core::NodeKind::Species, "Vashk", None)?))
+        .expect("a node in an open project");
+    assert_eq!(&*spy.changed.lock(), &[project], "the app's own write must wake sync");
+    spy.changed.lock().clear();
+    // Everything so far went through the index, so there is nothing outstanding
+    // and a reload has nothing to announce.
+    assert!(!state.reconcile_now().unwrap());
+    assert!(spy.changed.lock().is_empty(), "an unchanged reload is not an edit");
+
+    let path = root.join("nodes/species/vashk.md");
+    let text = std::fs::read_to_string(&path).unwrap().replace("name: Vashk", "name: Vashk-Prime");
+    std::fs::write(&path, text).unwrap();
+    bump_mtime(&path);
+
+    assert!(state.reconcile_now().unwrap(), "the external edit was not observed");
+    assert_eq!(&*spy.changed.lock(), &[project], "sync was not told to fan the edit out");
+}
+
+#[test]
+fn a_job_can_nudge_its_project_after_the_window_closes() {
+    let state = AppState::default();
+    let spy = observe_changes(&state);
+
+    let project = wobu_core::new_id();
+    state.announce_local_change(project);
+    assert_eq!(&*spy.changed.lock(), &[project], "closed projects can still finish jobs");
+}
+
+#[test]
+fn indexed_saves_wake_sync_but_reads_and_sync_writes_do_not() {
+    let (_dir, root, state) = open_test_state("Indexed writes");
+    let node = state
+        .with(|project| Ok(project.create_node(wobu_core::NodeKind::Species, "Vashk", None)?))
+        .unwrap();
+    let project_id = state.open_id().unwrap();
+    let spy = observe_changes(&state);
+
+    state.with(|project| Ok(project.get_node(node.id)?)).unwrap();
+    assert!(spy.changed.lock().is_empty(), "reading must not defeat the idle backoff");
+
+    state.with(|project| Ok(project.set_locked_seed(node.id, Some(42))?)).unwrap();
+    assert_eq!(&*spy.changed.lock(), &[project_id]);
+    spy.changed.lock().clear();
+    assert!(
+        !state
+            .with(|project| {
+                Ok(project.reconcile_paths(&[root.join("nodes/species/vashk.md")])?)
+            })
+            .unwrap(),
+        "the save was already indexed before the watcher fired"
+    );
+    assert!(!state.reconcile_now().unwrap());
+    assert!(spy.changed.lock().is_empty());
+
+    state
+        .with_project(project_id, |project| Ok(project.set_locked_seed(node.id, Some(43))?))
+        .unwrap();
+    state.with(|project| Ok(project.get_node(node.id)?)).unwrap();
+    assert!(spy.changed.lock().is_empty(), "sync must not announce its writes as local edits");
+
+    let result: CommandResult<()> = state.with(|project| {
+        project.set_locked_seed(node.id, Some(44))?;
+        Err(WobuError::no_project_open())
+    });
+    assert!(result.is_err());
+    assert_eq!(&*spy.changed.lock(), &[project_id], "a partial write still needs to sync");
+}
+
+#[test]
+fn ticket_commits_wake_sync_and_stale_tickets_do_not() {
+    let (_dir, _root, state) = open_test_state("Ticket writes");
+    let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+    let spy = observe_changes(&state);
+    state
+        .with_ticket(&ticket, |project| {
+            Ok(project.create_node(wobu_core::NodeKind::Species, "Vashk", None)?)
+        })
+        .unwrap();
+    assert_eq!(&*spy.changed.lock(), &[ticket.project]);
+    spy.changed.lock().clear();
+
+    state.generation.fetch_add(1, Ordering::SeqCst);
+    assert!(
+        state
+            .with_ticket(&ticket, |_| -> CommandResult<()> {
+                panic!("a stale ticket ran its write");
+            })
+            .is_err()
+    );
+    assert!(spy.changed.lock().is_empty());
+}
+
+#[test]
+fn generation_receipts_and_deletions_wake_sync_without_a_node_edit() {
+    let (_dir, _root, state) = open_test_state("Concept writes");
+    let node = state
+        .with(|project| Ok(project.create_node(wobu_core::NodeKind::Character, "Kael", None)?))
+        .unwrap();
+    let spy = observe_changes(&state);
+    let project_id = state.open_id().unwrap();
+    let generation = wobu_core::Generation {
+        id: wobu_core::new_id(),
+        node_id: node.id,
+        created_at: chrono::Utc::now(),
+        preset: "single_image".into(),
+        view_type: None,
+        user_prompt: String::new(),
+        compiled_prompt: "Kael".into(),
+        negative_prompt: String::new(),
+        backend: "comfyui".into(),
+        model: "test".into(),
+        seed: 42,
+        params: Default::default(),
+        output_asset_ids: Vec::new(),
+        influence_snapshot: wobu_core::InfluenceSnapshot { layers: Vec::new() },
+    };
+    let id = generation.id;
+    state.with(|project| Ok(project.record_generation(generation)?)).unwrap();
+    assert_eq!(&*spy.changed.lock(), &[project_id]);
+    spy.changed.lock().clear();
+    assert!(!state.reconcile_now().unwrap());
+    assert!(spy.changed.lock().is_empty());
+    state.with(|project| Ok(project.delete_generation(id)?)).unwrap();
+    assert_eq!(&*spy.changed.lock(), &[project_id]);
+}
+
 #[test]
 fn every_string_on_a_job_failure_is_scrubbed_before_it_leaves_the_process() {
     // `job:error` is the one route to the webview that does not pass through
@@ -223,4 +397,89 @@ fn an_ordinary_failure_message_comes_through_unchanged() {
     let clean = scrubbed(failure);
     assert_eq!(clean.message, "Anthropic is rate limiting this key.");
     assert_eq!(clean.detail, None);
+}
+
+#[test]
+fn narrative_build_publication_cannot_follow_a_changed_project_session() {
+    use crate::commands::narrative_build::plan_saved;
+    let source = r#"{"scope":"all_selected","containers":[],"state":{},"commands":{},"token_budget":4000,"max_output_tokens":512}"#;
+    for same_folder in [false, true] {
+        let (dir, original_root, state) = open_test_state("Original build session");
+        let replacement_root = if same_folder {
+            original_root.clone()
+        } else {
+            let project = Project::create(&dir.0, "Replacement build session").unwrap();
+            project.root().to_path_buf()
+        };
+        let outcome = plan_saved(&state, source, || {
+            // Deterministic scheduling point: reconciliation has finished but
+            // authoring publication has not acquired the project mutex yet.
+            state.close();
+            let project = Project::open(&replacement_root).unwrap();
+            *state.slot.lock() = Some(Open {
+                project,
+                watcher: None,
+                presence: Presence::start(&replacement_root),
+                offline: false,
+            });
+        });
+        assert!(outcome.is_err(), "A stale session published a build");
+        assert!(state.with(|project| Ok(project.narrative_build_ids()?)).unwrap().is_empty());
+        if !same_folder {
+            assert!(
+                Project::open(&original_root).unwrap().narrative_build_ids().unwrap().is_empty()
+            );
+        }
+        // The replacement remains usable through its own newly captured ticket.
+        let current = plan_saved(&state, source, || {}).unwrap();
+        assert_eq!(
+            state.with(|project| Ok(project.narrative_build_ids()?)).unwrap(),
+            vec![current.id]
+        );
+    }
+}
+
+#[test]
+fn scheduled_review_computation_releases_the_mutex_and_rejects_later_source_edits() {
+    use crate::commands::narrative_review::{capture_read, finish_read};
+    let (_dir, root, state) = open_test_state("Review read guard");
+    let file = state.with(|project| Ok(project.create_scene("First")?)).unwrap();
+    let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+    let snapshot = capture_read(&state, &ticket, file.scene.id, None).unwrap();
+    let worker = state.handle();
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        started_tx.send(()).unwrap();
+        release_rx.recv().unwrap();
+        let view = snapshot.view_with_proposals(vec![]).unwrap();
+        finish_read(&worker, &ticket, &snapshot, view)
+    });
+    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let started = Instant::now();
+    assert_eq!(state.with(|project| Ok(project.list_nodes()?.len())).unwrap(), 2);
+    assert!(started.elapsed() < Duration::from_millis(100));
+    let path = root.join(file.rel);
+    let raw = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(path, raw.replace("First", "Other")).unwrap();
+    release_tx.send(()).unwrap();
+    assert!(
+        thread.join().unwrap().is_err(),
+        "late source edits must not return a stale review snapshot"
+    );
+}
+
+#[test]
+fn scheduled_review_completion_rejects_a_closed_project_session() {
+    use crate::commands::narrative_review::{capture_read, finish_read};
+    let (_dir, _root, state) = open_test_state("Review session guard");
+    let file = state.with(|project| Ok(project.create_scene("First")?)).unwrap();
+    let (ticket, ()) = state.ticket(|_| Ok(())).unwrap();
+    let snapshot = capture_read(&state, &ticket, file.scene.id, None).unwrap();
+    let view = snapshot.view_with_proposals(vec![]).unwrap();
+    state.close();
+    assert_eq!(
+        finish_read(&state, &ticket, &snapshot, view).err().unwrap().code,
+        crate::error::Code::NoProjectOpen
+    );
 }

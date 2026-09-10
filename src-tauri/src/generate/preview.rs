@@ -2,8 +2,8 @@
 //!
 //! The Inspector's live reference report and the aspect-ratio picker both read
 //! the same plan a batch would run and negotiate the same first cell, so the
-//! references, the price and the output size on screen are the ones that would
-//! be spent. Nothing here queues a job or reserves against the ceiling.
+//! references and the output size on screen are the ones a generation would
+//! really use. Nothing here queues a job.
 
 use serde::Serialize;
 use tauri::State;
@@ -16,7 +16,6 @@ use super::plan::{
     fragments_for_cell, locked_seed_of, prepare_generation_plan, resolve_generation_stack,
     resolve_seed,
 };
-use super::spend::{CostEstimate, cost_estimate_prices, image_price};
 use super::{BackendPurpose, image_backend, selected_image_provider, unprobed_image_backend};
 use crate::error::{Code, CommandResult, WobuError};
 use crate::machine::MachineSettings;
@@ -47,7 +46,6 @@ pub struct ReferenceLayerReport {
 pub struct ImageReferenceReport {
     pub(super) buckets: Vec<ReferenceBucketReport>,
     pub(super) layers: Vec<ReferenceLayerReport>,
-    pub(super) cost: Option<CostEstimate>,
     pub(super) locked_seed: Option<u64>,
 }
 
@@ -147,7 +145,6 @@ pub fn image_reference_report(
     let (seed, seed_source) = resolve_seed(seed, locked_seed, SeedIntent::Estimate);
     reference_report_for_plan(
         &nodes,
-        &selection.provider,
         &model,
         backend.as_ref(),
         GenerationPlanRequest {
@@ -174,7 +171,6 @@ pub fn image_reference_report(
 /// instead would be a budget for an image this preset never sends.
 pub(super) fn reference_report_for_plan(
     nodes: &[Node],
-    provider: &str,
     model: &str,
     backend: &dyn ImageBackend,
     request: GenerationPlanRequest,
@@ -183,20 +179,13 @@ pub(super) fn reference_report_for_plan(
     let caps = backend.capabilities(model);
     let plan = prepare_generation_plan(nodes, request, &caps)?;
     let stack = resolve_generation_stack(nodes, &plan)?;
-    let mut prices = Vec::with_capacity(plan.cells.len());
-    let mut first = None;
-    for cell in &plan.cells {
+    let first = plan.cells.first().map(|cell| {
         let extracted = fragments_for_cell(&stack, cell, &plan.controls.user_prompt);
-        let negotiated = negotiate(&extracted, cell.aspect, &caps);
-        prices.extend(image_price(provider, model, negotiated.resolution()));
-        if first.is_none() {
-            first = Some(negotiated);
-        }
-    }
+        negotiate(&extracted, cell.aspect, &caps)
+    });
     let negotiated = first.ok_or_else(|| {
-        WobuError::new(Code::Internal, "This preset produced no images to estimate.")
+        WobuError::new(Code::Internal, "This preset produced no images to report on.")
     })?;
-    let cost = cost_estimate_prices(prices, plan.cells.len());
     let buckets = negotiated
         .images()
         .buckets()
@@ -247,5 +236,5 @@ pub(super) fn reference_report_for_plan(
             }
         })
         .collect();
-    Ok(ImageReferenceReport { buckets, layers, cost, locked_seed })
+    Ok(ImageReferenceReport { buckets, layers, locked_seed })
 }

@@ -407,7 +407,7 @@ fn no_such_subject(id: Id) -> WobuError {
 /// Keys are per installation and `project.json` carries only the selection, so
 /// this is expected rather than exceptional — which is why it names the provider
 /// and says where the key would go, instead of reporting that something broke.
-fn no_key(provider: &str) -> WobuError {
+pub(crate) fn no_key(provider: &str) -> WobuError {
     WobuError::new(
         Code::ProviderNoKey,
         format!(
@@ -433,12 +433,12 @@ const TEXT: &str = "text";
 
 /// Which text provider a project has chosen, and which model.
 #[derive(Debug, PartialEq)]
-struct Selection {
-    provider: String,
+pub(crate) struct Selection {
+    pub(crate) provider: String,
     /// Absent means the adapter's own default. Model ids move faster than
     /// anything else in `docs/08-providers.md`, so the one this build would pick
     /// is a fact about the adapter rather than about the project.
-    model: Option<String>,
+    pub(crate) model: Option<String>,
 }
 
 /// Read the selection out of the open project's `providers`.
@@ -454,7 +454,7 @@ struct Selection {
 /// collaborator changes on the share is picked up on the next open — which is
 /// the right way round: the provider a running session is spending against
 /// should not change underneath it between one Enhance and the next.
-fn selection(providers: &Map<String, Value>) -> Selection {
+pub(crate) fn selection(providers: &Map<String, Value>) -> Selection {
     let chosen = providers.get(TEXT).and_then(Value::as_object);
     let field = |name: &str| {
         chosen
@@ -477,7 +477,17 @@ fn selection(providers: &Map<String, Value>) -> Selection {
 /// exists because the label is needed *before* a provider can be built: the
 /// "no key on this machine" message names the vendor, and there is no key to
 /// build one with.
-fn text_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>> {
+/// Adapter metadata can be selected without opening a keychain or constructing a client.
+pub(crate) fn planning_model(selection: &Selection) -> CommandResult<String> {
+    let default = match selection.provider.as_str() {
+        anthropic::ID => anthropic::DEFAULT_MODEL,
+        gemini::ID => gemini::DEFAULT_MODEL,
+        _ => return Err(WobuError::new(Code::Invalid, "Unsupported text provider.")),
+    };
+    Ok(selection.model.clone().unwrap_or_else(|| default.into()))
+}
+
+pub(crate) fn text_provider(id: &str, key: &Secret) -> CommandResult<Arc<dyn TextProvider>> {
     let built = match id {
         anthropic::ID => {
             AnthropicProvider::new(key.expose()).map(|p| Arc::new(p) as Arc<dyn TextProvider>)

@@ -40,6 +40,14 @@ describe('resolving a keystroke to exactly one command', () => {
     expect(resolveCommand('Mod+Q', {})).toBeNull()
   })
 
+  it('keeps the Narrative workspace off the New-entity key', () => {
+    // Mod+N and Mod+Shift+N are one Shift apart and mean entirely different
+    // things, so both are pinned here rather than left to the conflict check —
+    // which would pass just as happily if they had swapped.
+    expect(resolveCommand('Mod+Shift+N', {})?.id).toBe('mode.narrative')
+    expect(resolveCommand('Mod+N', {})?.id).toBe('node.new')
+  })
+
   it('honours the other platform’s redo, until redo is rebound', () => {
     expect(resolveCommand('Mod+Y', {})?.id).toBe('edit.redo')
     expect(resolveCommand('Mod+Y', { 'edit.redo': 'Mod+R' })).toBeNull()

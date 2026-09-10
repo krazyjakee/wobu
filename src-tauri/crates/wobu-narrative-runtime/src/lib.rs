@@ -1,0 +1,887 @@
+//! Bounded deterministic execution of compiled narrative graphs. No IO or AI.
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use wobu_narrative::{Condition, Effect, Name, Operand, Owner, Speaker, Value};
+use wobu_narrative_compiler::{CompiledBeat, GRAPH_VERSION, Graph, Target, accepts};
+
+mod migration;
+mod text;
+mod trace;
+pub use migration::Migration;
+pub use text::{DeliveredLine, TextDelivery, TextProgress};
+pub use trace::{ChoiceStatus, ExecutionTrace, TraceEvent, TraceRecord, TraceSite};
+
+pub type State = BTreeMap<Name, Value>;
+pub const SNAPSHOT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum Yield {
+    Line {
+        scene: String,
+        beat: String,
+        slot: String,
+        variant: String,
+        speaker: Speaker,
+        text: String,
+        revision: String,
+    },
+    Choices {
+        scene: String,
+        beat: String,
+        choices: Vec<AvailableChoice>,
+    },
+    GameCommand {
+        token: String,
+        name: Name,
+        args: Vec<Value>,
+    },
+    End {
+        label: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AvailableChoice {
+    pub id: String,
+    pub label: String,
+}
+
+/// What the player should be doing, according to the author (#207).
+///
+/// What a quest log or a HUD shows. It exists so a host has something *authored*
+/// to put there: with nothing, the nearest available string is a beat title,
+/// which is a display name written for the writer and is frequently the title of
+/// a beat the player has not reached — an objective that names a mistake before
+/// it happens.
+///
+/// `text` is empty for a stage whose objective wording has not been written. A
+/// row with an empty string rather than no row at all, because "this quest is at
+/// this stage and nobody wrote what to do" is the honest answer, and the compiler
+/// has already said so as a `missing_objective` diagnostic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActiveObjective {
+    pub quest: String,
+    pub stage: Name,
+    /// The wording's stable identity, which is its key in the package string
+    /// table — so a host showing a translated build looks the objective up the
+    /// same way it looks up a line of dialogue.
+    pub id: Option<String>,
+    pub text: String,
+    pub revision: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum CommandResult {
+    Success { host_inputs: State },
+    Failed { message: String },
+    Cancelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum Error {
+    #[error("incompatible graph or snapshot version/content")]
+    Incompatible,
+    #[error("invalid runtime state: {0}")]
+    InvalidState(String),
+    #[error("missing state variable {0}")]
+    MissingState(String),
+    #[error("no matching variant or transition at {0}")]
+    NoMatch(String),
+    #[error("scene entry condition failed for {0}")]
+    EntryDenied(String),
+    #[error("invalid action at this yield")]
+    InvalidAction,
+    #[error("choice {0} is unavailable")]
+    UnavailableChoice(String),
+    #[error("arithmetic overflow or declared range exceeded for {0}")]
+    Overflow(String),
+    #[error("automatic execution exceeded {0} steps")]
+    StepLimit(u32),
+    #[error("command token is not pending")]
+    InvalidCommand,
+    #[error("host command failed: {0}")]
+    CommandFailed(String),
+    #[error("host command was cancelled")]
+    CommandCancelled,
+}
+
+type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResolvedCommand {
+    token: String,
+    name: Name,
+    args: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    site: Option<TraceSite>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+enum Phase {
+    Dialogue { index: usize, variant: String },
+    Branch,
+    Commands { commands: Vec<ResolvedCommand>, index: usize, to: Target },
+    End { label: String },
+}
+
+/// A save belongs to one graph and one caller-assigned playthrough ID.
+/// Private fields prevent constructing unchecked snapshots through the Rust API;
+/// restore also validates deserialized saves before they can execute.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Snapshot {
+    version: u32,
+    graph_version: u32,
+    graph_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    command_graph_hash: Option<String>,
+    run_id: String,
+    seed: u64,
+    scene: String,
+    beat: String,
+    phase: Phase,
+    state: State,
+    visits: BTreeMap<String, u64>,
+    /// Supporting text delivery state (#167), keyed by asset id.
+    ///
+    /// Skipped when empty so a playthrough of a project without supporting text
+    /// serializes to exactly the bytes it did before, and an existing save
+    /// restores unchanged.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    texts: BTreeMap<String, TextProgress>,
+    /// Which stage each quest is in (#207), keyed by quest id.
+    ///
+    /// Saved rather than recomputed on restore. A quest that has passed through a
+    /// stage has passed through it, and re-deriving the whole machine from the
+    /// current state would walk a quest forward through a condition that has since
+    /// stopped holding — or backwards, which is worse.
+    ///
+    /// Skipped when empty so a playthrough of a project without quests serializes
+    /// to exactly the bytes it did before, and an existing save restores
+    /// unchanged.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    quests: BTreeMap<String, Name>,
+    command_sequence: u64,
+    acknowledged: BTreeMap<String, State>,
+    step_limit: u32,
+}
+
+enum Action {
+    Target(Target),
+    Dialogue(usize),
+    /// The trace site is boxed because it is by far the largest thing an action
+    /// carries, and this enum is moved once per step of the driver loop.
+    Transition(Vec<Effect>, Target, Box<TraceSite>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Runtime {
+    graph: Graph,
+    saved: Snapshot,
+    trace: ExecutionTrace,
+}
+
+impl Runtime {
+    /// The host must assign a distinct run_id for independent playthroughs and
+    /// retain it across saves. Seed is reserved in v1: there is no random policy.
+    pub fn start(
+        graph: Graph,
+        scene: &str,
+        host_inputs: State,
+        run_id: String,
+        seed: u64,
+        step_limit: u32,
+    ) -> Result<Self> {
+        for (name, value) in &host_inputs {
+            let decl =
+                graph.state.get(name).ok_or_else(|| Error::InvalidState(name.to_string()))?;
+            if decl.owner != Owner::Host || !accepts(&decl.ty, value) {
+                return Err(Error::InvalidState(name.to_string()));
+            }
+        }
+        Self::start_with_state(graph, scene, host_inputs, run_id, seed, step_limit)
+    }
+
+    /// Initialize host-triggered text without inventing a scene cursor. The
+    /// returned runner yields End for scene actions; delivery and repeat state
+    /// use the normal text_events/deliver_text/snapshot contract.
+    pub fn start_text(graph: Graph, host_inputs: State, run_id: String, seed: u64) -> Result<Self> {
+        Self::start(graph, "", host_inputs, run_id, seed, 1)
+    }
+
+    /// Scenario initialization may override narrative defaults as well as host
+    /// inputs. Ownership restrictions apply to every subsequent write. This
+    /// never edits graph defaults or changes the content hash.
+    pub fn start_with_state(
+        graph: Graph,
+        scene: &str,
+        initial: State,
+        run_id: String,
+        seed: u64,
+        step_limit: u32,
+    ) -> Result<Self> {
+        if graph.version != GRAPH_VERSION {
+            return Err(Error::Incompatible);
+        }
+        if run_id.is_empty() || step_limit == 0 {
+            return Err(Error::InvalidState("run_id and positive step limit are required".into()));
+        }
+        let state = graph
+            .state
+            .iter()
+            .filter(|(_, d)| d.owner == Owner::Narrative)
+            .map(|(n, d)| (n.clone(), d.default.clone()))
+            .collect();
+        let mut runner = Self {
+            saved: Snapshot {
+                version: SNAPSHOT_VERSION,
+                graph_version: graph.version,
+                graph_hash: graph.hash(),
+                command_graph_hash: None,
+                run_id,
+                seed,
+                scene: scene.into(),
+                beat: String::new(),
+                phase: Phase::Branch,
+                state,
+                visits: BTreeMap::new(),
+                texts: BTreeMap::new(),
+                quests: BTreeMap::new(),
+                command_sequence: 0,
+                acknowledged: BTreeMap::new(),
+                step_limit,
+            },
+            graph,
+            trace: ExecutionTrace::default(),
+        };
+        runner.saved.state.extend(initial);
+        runner.validate_state()?;
+        // Every quest starts at its declared initial stage, and is then advanced
+        // against the state the run is actually starting with — so a scenario that
+        // begins mid-story begins with the right objective rather than with the
+        // first one.
+        runner.saved.quests = runner
+            .graph
+            .quests
+            .iter()
+            .map(|(id, quest)| (id.clone(), quest.initial.clone()))
+            .collect();
+        runner.advance_quests()?;
+        if scene.is_empty() && !runner.graph.texts.is_empty() {
+            runner.saved.phase = Phase::End { label: "Supporting text".into() };
+            return Ok(runner);
+        }
+        let mut budget = step_limit;
+        runner.drive(Action::Target(Target::Scene(scene.into())), &mut budget)?;
+        Ok(runner)
+    }
+
+    pub fn snapshot(&self) -> Snapshot {
+        self.saved.clone()
+    }
+    pub fn state(&self) -> &State {
+        &self.saved.state
+    }
+    pub fn visits(&self) -> &BTreeMap<String, u64> {
+        &self.saved.visits
+    }
+
+    /// Which stage each quest is in right now, keyed by quest id (#207).
+    pub fn quests(&self) -> &BTreeMap<String, Name> {
+        &self.saved.quests
+    }
+
+    /// What the player should be doing, for every quest, in quest id order.
+    ///
+    /// The answer a quest log or a HUD asks for, and the reason this exists: a
+    /// host with nothing authored to show falls back to the nearest string it can
+    /// find, and the nearest string is a beat title — a display name written for
+    /// the writer, often belonging to a beat the player has not reached.
+    ///
+    /// Reading this never advances anything. Repeated reads give the same answer,
+    /// exactly as [`Runtime::current`] does.
+    pub fn objectives(&self) -> Vec<ActiveObjective> {
+        self.saved
+            .quests
+            .iter()
+            .map(|(id, stage)| {
+                let objective = self
+                    .graph
+                    .quests
+                    .get(id)
+                    .and_then(|quest| quest.stages.iter().find(|one| &one.name == stage))
+                    .and_then(|one| one.objective.as_ref());
+                ActiveObjective {
+                    quest: id.clone(),
+                    stage: stage.clone(),
+                    id: objective.map(|o| o.id.clone()),
+                    text: objective.map(|o| o.text.clone()).unwrap_or_default(),
+                    revision: objective.map(|o| o.revision.clone()),
+                }
+            })
+            .collect()
+    }
+
+    /// Walk every quest forward as far as its transitions allow (#207).
+    ///
+    /// Run after every write to state, because a quest stage is a statement *about*
+    /// state and leaving it behind would mean a host showing an objective for a
+    /// stage the player left two choices ago.
+    ///
+    /// Deterministic in two ways that matter. Quests are visited in id order, and
+    /// within a quest the transitions are tried in author order and the first whose
+    /// condition holds wins — the same first-match rule a beat's outcomes follow,
+    /// so there is one answer to "what does priority mean" in this crate.
+    ///
+    /// Forward only, and bounded: a quest advances at most once per stage it
+    /// declares, so a cycle of always-true transitions settles instead of spinning.
+    /// It never moves a quest backwards on its own — only an authored transition
+    /// does that — and it cannot write state, so a quest cannot change the story.
+    fn advance_quests(&mut self) -> Result<()> {
+        let mut moved = std::mem::take(&mut self.saved.quests);
+        for (id, stage) in &mut moved {
+            let Some(quest) = self.graph.quests.get(id) else {
+                return Err(Error::InvalidState(format!("missing quest {id}")));
+            };
+            for _ in 0..quest.stages.len() {
+                let mut next = None;
+                for transition in &quest.transitions {
+                    if &transition.from == stage && evaluate(&transition.when, &self.saved.state)? {
+                        next = Some(transition.to.clone());
+                        break;
+                    }
+                }
+                match next {
+                    Some(to) => *stage = to,
+                    None => break,
+                }
+            }
+        }
+        self.saved.quests = moved;
+        Ok(())
+    }
+
+    /// Whether the saved quest cursor agrees with the graph it is pinned to.
+    ///
+    /// Strict — every quest present, every stage declared — and that is safe
+    /// rather than optimistic: a snapshot is refused outright unless its
+    /// `graph_hash` matches, so any save reaching here was written by a build that
+    /// compiled exactly these quests.
+    fn validate_quests(&self) -> Result<()> {
+        if self.saved.quests.len() != self.graph.quests.len() {
+            return Err(Error::InvalidState("invalid quest cursor".into()));
+        }
+        for (id, stage) in &self.saved.quests {
+            let quest = self
+                .graph
+                .quests
+                .get(id)
+                .ok_or_else(|| Error::InvalidState(format!("quest {id}")))?;
+            if !quest.stages.iter().any(|one| &one.name == stage) {
+                return Err(Error::InvalidState(format!("quest {id} stage {stage}")));
+            }
+        }
+        Ok(())
+    }
+
+    /// The compiled content this run is pinned to.
+    ///
+    /// A hash of the graph, which is the only identity a run has: the same
+    /// snapshot restored against different content is refused by [`restore`],
+    /// so anything drawn *from* this run — an overlay on the Flow canvas — is
+    /// describing this build and no other. Exposed as its own accessor rather
+    /// than read off a serialized `Snapshot`, because the snapshot is opaque by
+    /// contract and a caller that reached into it would be depending on a field
+    /// name this crate never promised.
+    ///
+    /// [`restore`]: Runtime::restore
+    pub fn build(&self) -> &str {
+        &self.saved.graph_hash
+    }
+
+    pub fn restore(graph: Graph, snapshot: Snapshot) -> Result<Self> {
+        if graph.version != GRAPH_VERSION
+            || snapshot.version != SNAPSHOT_VERSION
+            || snapshot.graph_version != graph.version
+            || snapshot.graph_hash != graph.hash()
+        {
+            return Err(Error::Incompatible);
+        }
+        let runner = Self { graph, saved: snapshot, trace: ExecutionTrace::default() };
+        if runner.saved.run_id.is_empty() || runner.saved.step_limit == 0 {
+            return Err(Error::InvalidState("invalid execution settings".into()));
+        }
+        runner.validate_state()?;
+        if runner.saved.scene.is_empty() {
+            if runner.graph.texts.is_empty()
+                || !runner.saved.beat.is_empty()
+                || !runner.saved.visits.is_empty()
+                || runner.saved.command_sequence != 0
+                || !runner.saved.acknowledged.is_empty()
+                || runner.saved.phase != (Phase::End { label: "Supporting text".into() })
+            {
+                return Err(Error::InvalidState("invalid supporting-text cursor".into()));
+            }
+        } else {
+            runner.beat()?;
+        }
+        for (id, count) in &runner.saved.visits {
+            if *count == 0 || !runner.graph.scenes.values().any(|s| s.beats.contains_key(id)) {
+                return Err(Error::InvalidState("invalid visit history".into()));
+            }
+        }
+        runner.validate_texts()?;
+        runner.validate_quests()?;
+        if let Phase::Commands { commands, index, to } = &runner.saved.phase {
+            if commands.is_empty() || *index >= commands.len() {
+                return Err(Error::InvalidCommand);
+            }
+            runner.validate_target(to)?;
+            let mut tokens = std::collections::BTreeSet::new();
+            for command in commands {
+                if let Some(site) = &command.site {
+                    let beat = runner.beat()?;
+                    if site.scene != runner.saved.scene
+                        || site.beat.as_deref() != Some(&runner.saved.beat)
+                        || site
+                            .choice
+                            .as_ref()
+                            .is_some_and(|id| !beat.choices.iter().any(|c| &c.id == id))
+                        || site
+                            .outcome
+                            .as_ref()
+                            .is_some_and(|id| !beat.outcomes.iter().any(|o| &o.id == id))
+                    {
+                        return Err(Error::InvalidState(
+                            "pending command source no longer resolves".into(),
+                        ));
+                    }
+                }
+                if !tokens.insert(&command.token) || !runner.valid_token(&command.token) {
+                    return Err(Error::InvalidCommand);
+                }
+                let types =
+                    runner.graph.commands.get(&command.name).ok_or(Error::InvalidCommand)?;
+                if types.len() != command.args.len()
+                    || !types.iter().zip(&command.args).all(|(ty, value)| accepts(ty, value))
+                {
+                    return Err(Error::InvalidCommand);
+                }
+            }
+            for (position, command) in commands.iter().enumerate() {
+                if runner.saved.acknowledged.contains_key(&command.token) != (position < *index) {
+                    return Err(Error::InvalidCommand);
+                }
+            }
+        }
+        for (token, inputs) in &runner.saved.acknowledged {
+            if !runner.valid_token(token) {
+                return Err(Error::InvalidCommand);
+            }
+            runner.validate_host_inputs(inputs)?;
+        }
+        runner.current()?;
+        Ok(runner)
+    }
+
+    /// Repeated reads never advance or select a different line.
+    pub fn current(&self) -> Result<Yield> {
+        match &self.saved.phase {
+            Phase::Dialogue { index, variant } => {
+                let slot = self.beat()?.dialogue.get(*index).ok_or(Error::InvalidAction)?;
+                let text =
+                    slot.variants.iter().find(|v| &v.id == variant).ok_or(Error::InvalidAction)?;
+                Ok(Yield::Line {
+                    scene: self.saved.scene.clone(),
+                    beat: self.saved.beat.clone(),
+                    slot: slot.id.clone(),
+                    variant: text.id.clone(),
+                    speaker: slot.speaker.clone(),
+                    text: text.text.clone(),
+                    revision: text.revision.clone(),
+                })
+            }
+            Phase::Branch => {
+                let choices = self.available_choices()?;
+                if choices.is_empty() {
+                    return Err(Error::NoMatch(self.saved.beat.clone()));
+                }
+                Ok(Yield::Choices {
+                    scene: self.saved.scene.clone(),
+                    beat: self.saved.beat.clone(),
+                    choices,
+                })
+            }
+            Phase::Commands { commands, index, .. } => {
+                let command = commands.get(*index).ok_or(Error::InvalidCommand)?;
+                Ok(Yield::GameCommand {
+                    token: command.token.clone(),
+                    name: command.name.clone(),
+                    args: command.args.clone(),
+                })
+            }
+            Phase::End { label } => Ok(Yield::End { label: label.clone() }),
+        }
+    }
+
+    /// Failed actions leave cursor, variables, acknowledgements and visits unchanged.
+    fn transaction(&mut self, action: impl FnOnce(&mut Self) -> Result<()>) -> Result<Yield> {
+        let mut next = self.clone();
+        next.trace = ExecutionTrace::default();
+        match action(&mut next).and_then(|()| next.current()) {
+            Ok(yielded) => {
+                *self = next;
+                Ok(yielded)
+            }
+            Err(error) => {
+                next.trace.committed = false;
+                next.trace.error = Some(error.to_string());
+                self.trace = next.trace;
+                Err(error)
+            }
+        }
+    }
+
+    pub fn advance(&mut self) -> Result<Yield> {
+        self.transaction(|next| match next.saved.phase {
+            Phase::Dialogue { index, .. } => {
+                let mut budget = next.saved.step_limit;
+                next.drive(Action::Dialogue(index + 1), &mut budget)
+            }
+            Phase::End { .. } => Ok(()),
+            _ => Err(Error::InvalidAction),
+        })
+    }
+
+    pub fn choose(&mut self, choice_id: &str) -> Result<Yield> {
+        self.transaction(|next| {
+            if next.saved.phase != Phase::Branch {
+                return Err(Error::InvalidAction);
+            }
+            let choice = next
+                .beat()?
+                .choices
+                .iter()
+                .find(|c| c.id == choice_id)
+                .cloned()
+                .ok_or_else(|| Error::UnavailableChoice(choice_id.into()))?;
+            let site = TraceSite { choice: Some(choice.id.clone()), ..next.site() };
+            if !next.matches_at(choice.requires.as_ref(), site.clone())? {
+                return Err(Error::UnavailableChoice(choice_id.into()));
+            }
+            let mut budget = next.saved.step_limit;
+            next.drive(Action::Transition(choice.effects, choice.to, Box::new(site)), &mut budget)
+        })
+    }
+
+    /// The same successful token/result is safe to acknowledge again after restore.
+    /// A changed result for an acknowledged token is rejected.
+    pub fn complete_command(&mut self, token: &str, result: CommandResult) -> Result<Yield> {
+        self.transaction(|next| {
+            if let Some(previous) = next.saved.acknowledged.get(token).cloned() {
+                next.record(next.site(), TraceEvent::CommandResult { token: token.into(), result: result.clone(), before: next.saved.state.clone(), after: next.saved.state.clone(), repeated: true });
+                return if matches!(&result, CommandResult::Success { host_inputs } if host_inputs == &previous) { Ok(()) } else { Err(Error::InvalidCommand) };
+            }
+            let Phase::Commands { commands, index, to } = next.saved.phase.clone() else { return Err(Error::InvalidCommand); };
+            if commands[index].token != token { return Err(Error::InvalidCommand); }
+            let command_site = commands[index].site.clone().unwrap_or_else(|| next.site());
+            let before = next.saved.state.clone();
+            let command_result = result.clone();
+            if !matches!(result, CommandResult::Success { .. }) {
+                next.record(command_site.clone(), TraceEvent::CommandResult { token: token.into(), result: result.clone(), before: before.clone(), after: before.clone(), repeated: false });
+            }
+            let inputs = match result {
+                CommandResult::Success { host_inputs } => host_inputs,
+                CommandResult::Failed { message } => return Err(Error::CommandFailed(message)),
+                CommandResult::Cancelled => return Err(Error::CommandCancelled),
+            };
+            next.apply_host_inputs(&inputs)?;
+            next.record(command_site, TraceEvent::CommandResult { token: token.into(), result: command_result, before, after: next.saved.state.clone(), repeated: false });
+            next.saved.acknowledged.insert(token.into(), inputs);
+            if index + 1 < commands.len() {
+                next.saved.phase = Phase::Commands { commands, index: index + 1, to };
+                Ok(())
+            } else {
+                let mut budget = next.saved.step_limit;
+                next.drive(Action::Target(to), &mut budget)
+            }
+        })
+    }
+
+    pub fn update_host_inputs(&mut self, inputs: State) -> Result<Yield> {
+        self.transaction(|next| next.apply_host_inputs(&inputs))
+    }
+
+    fn validate_host_inputs(&self, inputs: &State) -> Result<()> {
+        for (name, value) in inputs {
+            let decl =
+                self.graph.state.get(name).ok_or_else(|| Error::InvalidState(name.to_string()))?;
+            if decl.owner != Owner::Host || !accepts(&decl.ty, value) {
+                return Err(Error::InvalidState(name.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_host_inputs(&mut self, inputs: &State) -> Result<()> {
+        self.validate_host_inputs(inputs)?;
+        self.saved.state.extend(inputs.clone());
+        self.advance_quests()
+    }
+
+    fn validate_state(&self) -> Result<()> {
+        for (name, decl) in &self.graph.state {
+            let value =
+                self.saved.state.get(name).ok_or_else(|| Error::MissingState(name.to_string()))?;
+            if !accepts(&decl.ty, value) {
+                return Err(Error::InvalidState(name.to_string()));
+            }
+        }
+        if self.saved.state.len() != self.graph.state.len() {
+            return Err(Error::InvalidState("undeclared variables".into()));
+        }
+        Ok(())
+    }
+
+    fn beat(&self) -> Result<&CompiledBeat> {
+        self.graph
+            .scenes
+            .get(&self.saved.scene)
+            .and_then(|s| s.beats.get(&self.saved.beat))
+            .ok_or_else(|| Error::InvalidState("missing scene or beat".into()))
+    }
+
+    fn matches(&self, condition: Option<&Condition>) -> Result<bool> {
+        condition.map(|c| evaluate(c, &self.saved.state)).unwrap_or(Ok(true))
+    }
+
+    fn available_choices(&self) -> Result<Vec<AvailableChoice>> {
+        let mut out = Vec::new();
+        for choice in &self.beat()?.choices {
+            if self.matches(choice.requires.as_ref())? {
+                out.push(AvailableChoice { id: choice.id.clone(), label: choice.label.clone() });
+            }
+        }
+        Ok(out)
+    }
+
+    fn consume(&self, budget: &mut u32) -> Result<()> {
+        if *budget == 0 {
+            return Err(Error::StepLimit(self.saved.step_limit));
+        }
+        *budget -= 1;
+        Ok(())
+    }
+
+    // Explicit trampoline: cyclic authored graphs consume budget without
+    // growing the native stack, even when the caller chooses a large budget.
+    fn drive(&mut self, mut action: Action, budget: &mut u32) -> Result<()> {
+        loop {
+            self.consume(budget)?;
+            action = match action {
+                Action::Target(Target::End { label }) => {
+                    self.saved.phase = Phase::End { label };
+                    return Ok(());
+                }
+                Action::Target(Target::Scene(id)) => {
+                    let scene = self
+                        .graph
+                        .scenes
+                        .get(&id)
+                        .cloned()
+                        .ok_or_else(|| Error::InvalidState(format!("missing scene {id}")))?;
+                    if !self.matches_at(
+                        scene.entry.as_ref(),
+                        TraceSite { scene: id.clone(), ..TraceSite::default() },
+                    )? {
+                        return Err(Error::EntryDenied(id));
+                    }
+                    let first = scene.first.clone();
+                    self.saved.scene = id;
+                    Action::Target(Target::Beat(first))
+                }
+                Action::Target(Target::Beat(id)) => {
+                    self.saved.beat = id.clone();
+                    self.beat()?;
+                    let count = self.saved.visits.entry(id).or_default();
+                    *count = count
+                        .checked_add(1)
+                        .ok_or_else(|| Error::InvalidState("visit counter overflow".into()))?;
+                    Action::Dialogue(0)
+                }
+                Action::Dialogue(index) => {
+                    if let Some(slot) = self.beat()?.dialogue.get(index).cloned() {
+                        let mut selected = None;
+                        for variant in &slot.variants {
+                            let site = TraceSite {
+                                slot: Some(slot.id.clone()),
+                                variant: Some(variant.id.clone()),
+                                ..self.site()
+                            };
+                            if self.matches_at(variant.when.as_ref(), site)? {
+                                selected = Some(variant.id.clone());
+                                break;
+                            }
+                        }
+                        let variant = selected.ok_or_else(|| Error::NoMatch(slot.id.clone()))?;
+                        self.saved.phase = Phase::Dialogue { index, variant };
+                        return Ok(());
+                    }
+                    let mut available = false;
+                    for choice in self.beat()?.choices.clone() {
+                        let site = TraceSite { choice: Some(choice.id), ..self.site() };
+                        available |= self.matches_at(choice.requires.as_ref(), site)?;
+                    }
+                    if available {
+                        self.saved.phase = Phase::Branch;
+                        return Ok(());
+                    }
+                    let mut selected = None;
+                    for outcome in self.beat()?.outcomes.clone() {
+                        let site = TraceSite { outcome: Some(outcome.id.clone()), ..self.site() };
+                        if self.matches_at(outcome.when.as_ref(), site)? {
+                            selected = Some(outcome.clone());
+                            break;
+                        }
+                    }
+                    let outcome =
+                        selected.ok_or_else(|| Error::NoMatch(self.saved.beat.clone()))?;
+                    Action::Transition(
+                        outcome.effects,
+                        outcome.to,
+                        Box::new(TraceSite { outcome: Some(outcome.id), ..self.site() }),
+                    )
+                }
+                Action::Transition(effects, to, site) => {
+                    self.record((*site).clone(), TraceEvent::Transition { to: to.clone() });
+                    if self.prepare_transition(&effects, to.clone(), *site)? {
+                        return Ok(());
+                    }
+                    Action::Target(to)
+                }
+            };
+        }
+    }
+
+    fn validate_target(&self, target: &Target) -> Result<()> {
+        let exists = match target {
+            Target::Beat(id) => {
+                self.graph.scenes.get(&self.saved.scene).is_some_and(|s| s.beats.contains_key(id))
+            }
+            Target::Scene(id) => self.graph.scenes.contains_key(id),
+            Target::End { .. } => true,
+        };
+        if exists { Ok(()) } else { Err(Error::InvalidState("missing destination".into())) }
+    }
+
+    /// True means commands are pending; false means the driver can follow to.
+    fn prepare_transition(
+        &mut self,
+        effects: &[Effect],
+        to: Target,
+        site: TraceSite,
+    ) -> Result<bool> {
+        self.validate_target(&to)?;
+        let mut state = self.saved.state.clone();
+        let mut commands = Vec::new();
+        let mut sequence = self.saved.command_sequence;
+        for (index, effect) in effects.iter().enumerate() {
+            let before = trace::effect_values(&state, effect);
+            match effect {
+                Effect::Set(_) | Effect::Add(_) => {
+                    let (name, value) = wobu_narrative::evaluate::assignment(effect, &state)?;
+                    self.write(&mut state, &name, value)?;
+                }
+                Effect::Command(c) => {
+                    let args: Vec<_> =
+                        c.args.iter().map(|arg| operand(arg, &state)).collect::<Result<_>>()?;
+                    let types = self.graph.commands.get(&c.name).ok_or(Error::InvalidCommand)?;
+                    if args.len() != types.len()
+                        || !types.iter().zip(&args).all(|(ty, value)| accepts(ty, value))
+                    {
+                        return Err(Error::InvalidCommand);
+                    }
+                    sequence = sequence.checked_add(1).ok_or(Error::InvalidCommand)?;
+                    commands.push(ResolvedCommand {
+                        token: format!(
+                            "{}:{}:{sequence}",
+                            self.saved.run_id,
+                            self.saved
+                                .command_graph_hash
+                                .as_deref()
+                                .unwrap_or(&self.saved.graph_hash)
+                        ),
+                        name: c.name.clone(),
+                        args,
+                        site: Some(site.clone()),
+                    });
+                }
+            }
+            self.record(
+                site.clone(),
+                TraceEvent::Effect {
+                    index,
+                    effect: effect.clone(),
+                    before,
+                    after: trace::effect_values(&state, effect),
+                },
+            );
+        }
+        self.saved.state = state;
+        self.saved.command_sequence = sequence;
+        self.advance_quests()?;
+        if commands.is_empty() {
+            Ok(false)
+        } else {
+            self.saved.phase = Phase::Commands { commands, index: 0, to };
+            Ok(true)
+        }
+    }
+
+    fn valid_token(&self, token: &str) -> bool {
+        token
+            .strip_prefix(&format!(
+                "{}:{}:",
+                self.saved.run_id,
+                self.saved.command_graph_hash.as_deref().unwrap_or(&self.saved.graph_hash)
+            ))
+            .and_then(|n| n.parse::<u64>().ok())
+            .is_some_and(|n| n > 0 && n <= self.saved.command_sequence)
+    }
+
+    fn write(&self, state: &mut State, name: &Name, value: Value) -> Result<()> {
+        let decl =
+            self.graph.state.get(name).ok_or_else(|| Error::MissingState(name.to_string()))?;
+        wobu_narrative::evaluate::validate_write(name, &decl.ty, decl.owner, &value)?;
+        state.insert(name.clone(), value);
+        Ok(())
+    }
+}
+
+impl From<wobu_narrative::evaluate::EvaluationError> for Error {
+    fn from(error: wobu_narrative::evaluate::EvaluationError) -> Self {
+        use wobu_narrative::evaluate::EvaluationError;
+        match error {
+            EvaluationError::MissingState(value) => Self::MissingState(value),
+            EvaluationError::InvalidState(value) => Self::InvalidState(value),
+            EvaluationError::Overflow(value) => Self::Overflow(value),
+        }
+    }
+}
+fn operand(value: &Operand, state: &State) -> Result<Value> {
+    wobu_narrative::evaluate::operand(value, state).map_err(Into::into)
+}
+
+/// Evaluation is deterministic and short-circuits left-to-right. The compiler
+/// has already checked operand types; this also rejects invalid mixed values.
+pub fn evaluate(condition: &Condition, state: &State) -> Result<bool> {
+    trace::evaluate_recording(condition, state, &mut Vec::new(), &mut |_| {})
+}

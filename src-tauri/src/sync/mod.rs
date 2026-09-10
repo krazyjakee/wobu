@@ -80,6 +80,8 @@
 //! about local disk space and project-folder permissions.
 
 pub mod bodies;
+mod layout;
+mod narrative;
 
 pub mod manager;
 
@@ -406,6 +408,8 @@ pub struct SyncPeerStatus {
     /// RFC 3339, written only after a complete round with no parked or refused
     /// node. `None` is more truthful than calling a partial exchange synced.
     pub last_converged_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arrangement_notice: Option<String>,
 }
 
 /// The event payload and the catch-up value use exactly the same shape.

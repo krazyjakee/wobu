@@ -56,8 +56,6 @@ export function GenerationDetail({
   const replay = useReplayGeneration()
   const deleteGeneration = useDeleteGeneration()
   const drift = generationDrift(generation, currentStack.data ?? null, currentPrompt.data ?? null)
-  const originalCost = numberParam(generation, 'estimatedCostUsdMicros')
-  const replaySourceCost = numberParam(generation, 'replayOriginalEstimatedCostUsdMicros')
   const loras = generationLoraReceipt(generation)
   const imageAssetId = generation.outputAssetIds[0] ?? null
   const deleteDisabledReason = readOnly
@@ -162,23 +160,9 @@ export function GenerationDetail({
                 <> · a repeat of {generation.params.replayOf}</>
               )}
             </dd>
-            {replaySourceCost !== null && (
-              <>
-                <dt>Source estimate</dt>
-                <dd>{usd(replaySourceCost)}</dd>
-              </>
-            )}
-            {originalCost !== null && (
-              <>
-                <dt>{replaySourceCost === null ? 'Original estimate' : 'Replay estimate'}</dt>
-                <dd>{usd(originalCost)}</dd>
-              </>
-            )}
           </dl>
           <p className="generation-replay-note">
             Running it again sends exactly what is recorded here, without looking at today’s world.
-            If it costs money, it is set aside at today’s price for the model, separately from the
-            original estimate.
           </p>
           {(loras.applied.length > 0 || loras.downgrades.length > 0) && (
             <section className="generation-lora-receipt" aria-label="Trained styles used">
@@ -391,12 +375,6 @@ function weight(value: number): string {
 
 function hashPrefix(value: string): string {
   return value.length > 12 ? `${value.slice(0, 12)}…` : value
-}
-
-function usd(micros: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(
-    micros / 1_000_000,
-  )
 }
 
 function recordedControls(

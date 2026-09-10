@@ -33,7 +33,7 @@
 //!   as a `.zip` of a mesh plus a `.mtl` plus texture maps, and the useful facts
 //!   about it are which file is the mesh and what the rest are called.
 //! - **Cost is counted in jobs, not images.** `ImageUsage::billed_images` is
-//!   what a spend ceiling reads for a backend that charges per picture. Hunyuan3D
+//!   what a failed job reads for a backend that charges per picture. Hunyuan3D
 //!   charges per job, and the international `Query` response omits the
 //!   `ResultCreditConsumed` field the mainland one returns, so there is no
 //!   per-image figure to report and no credit figure to read back either.
@@ -560,9 +560,8 @@ impl GeneratedMesh {
 /// and `docs/08-providers.md` records that the international `Query` response
 /// omits the `ResultCreditConsumed` field the mainland one returns — "we cannot
 /// read spend back from the API". So this counts the one thing we can state as a
-/// fact, and a cost estimate in money is a local model of published prices that
-/// belongs with the spend ceiling rather than in an adapter that would have to
-/// guess.
+/// fact. A figure in money would be a local model of published prices, which is
+/// a guess an adapter has no business making.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MeshUsage {

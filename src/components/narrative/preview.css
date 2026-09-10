@@ -1,0 +1,68 @@
+.nrt-preview-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+.nrt-preview-line {
+  font-size: 18px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.nrt-preview table {
+  border-collapse: collapse;
+  text-align: left;
+}
+.nrt-preview th,
+.nrt-preview td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.nrt-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.nrt-preview summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.nrt-preview-trace {
+  max-height: 480px;
+  overflow: auto;
+  padding-left: 24px;
+}
+.nrt-preview-trace li {
+  padding: 8px 0;
+}
+.nrt-preview-trace ol {
+  border-left: 2px solid var(--border);
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.nrt-scenarios fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+}
+.nrt-scenarios label {
+  display: grid;
+  gap: 0.25rem;
+}
+.nrt-scenario-results {
+  max-height: 50vh;
+  overflow: auto;
+  padding-inline-start: 1.25rem;
+}
+.nrt-scenario-results li {
+  margin-block: 1rem;
+}
+.nrt-scenario-results pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

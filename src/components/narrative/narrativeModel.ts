@@ -1,0 +1,42 @@
+import type { NarrativeFilter } from '../../store/ui'
+
+/** Shared status vocabulary and explanations for unavailable Narrative actions. */
+
+/**
+ * A row's condition, said in words.
+ *
+ * The three the writer filters by are the store's `NarrativeFilter` values, so
+ * a filter and the badge it matches are one vocabulary rather than two lists
+ * that have to be kept in step.
+ */
+export type NarrativeStatus = NarrativeFilter | 'locked' | 'ready'
+
+/** Every status carries a label and a glyph: colour alone is not a status. */
+export const NARRATIVE_STATUS: Record<NarrativeStatus, { label: string; icon: string }> = {
+  needsText: { label: 'Needs text', icon: 'spark' },
+  needsReview: { label: 'Needs review', icon: 'clock' },
+  outOfDate: { label: 'Out of date', icon: 'refresh' },
+  locked: { label: 'Locked', icon: 'lock' },
+  ready: { label: 'Ready', icon: 'check' },
+}
+
+/**
+ * Why each control is refused today.
+ *
+ * Written as what is missing rather than as "coming soon": a reader deciding
+ * whether they have hit a bug is owed the actual reason, and none of these is
+ * a failure they can retry.
+ */
+export const NARRATIVE_UNAVAILABLE = {
+  quests:
+    'Grouping by quest state uses the stage each quest starts in, because a project records no running quest state. Quest groups closed on the canvas last for this session: the arrangement file keeps only the groups a writer drew.',
+  flow: 'No scene is selected, so there is nothing to draw. Choose one in the Library, or open one from the arc.',
+  witness:
+    'Opening a witness needs generated reachability scenarios (#171). Preview draws the route it played on this canvas, but a scene nothing has played is not thereby unreachable: these source diagnostics do not establish reachability either way.',
+  affectedScope:
+    'Dependency tracking answers which lines an edit affected and why (Context → Why affected). Highlighting them on this canvas, and planning the rebuild, need the build planner (#169).',
+  affectedRebuild:
+    'Rebuilding these lines needs the affected build planner (#169). Nothing here has been queued, and no wording has been changed.',
+  diagnostics:
+    'Checks cover source errors and missing text. Branch reachability has not been checked.',
+} as const

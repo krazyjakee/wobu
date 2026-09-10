@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+wobu-narrative-variants.workspace = true
+wobu-narrative-media.workspace = true
+wobu-narrative-build.workspace = true
+wobu-narrative-locale.workspace = true
+
 blake3 = "1.8.5"
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
@@ -39,6 +44,16 @@ walkdir = "2.5.0"
 # meet through a byte slice instead.
 webp = { version = "0.3.1", default-features = false }
 wobu-core.workspace = true
+# The typed narrative source model (#152). This crate persists it; it does not
+# extend it — and in particular the layout sidecars in `narrative::layout` are
+# keyed by ids borrowed from here and store no narrative content at all, which
+# is the whole of #185's separation.
+wobu-narrative.workspace = true
+wobu-narrative-generation.workspace = true
+wobu-narrative-context.workspace = true
+# Field-level dependency tracking (#168). Pure: this crate supplies it a
+# coherent snapshot read from the folder and stores the index it returns.
+wobu-narrative-deps.workspace = true
 
 [dev-dependencies]
 # The integration tests need real encoded pictures rather than the hand-written

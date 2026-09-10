@@ -6,8 +6,7 @@ default; pinning one is the thing that changes your world.
 ## The controls
 
 At the bottom of the right-hand panel, under the prompt: **Output preset**, **Aspect**, **Model**,
-an **Extra shot prompt**, **Seed**, the **Variant grid**, the world's spending limit, and
-**Generate**.
+an **Extra shot prompt**, **Seed**, the **Variant grid**, and **Generate**.
 
 The extra shot prompt is the one place to type something off the cuff — framing, an action, the
 weather, a camera angle. It counts as part of the shot and is not saved into your world.
@@ -26,24 +25,22 @@ close study of materials the next.
 
 | Preset | Aspect | Images | Chosen by default for |
 | --- | --- | --- | --- |
-| Single image | 1:1 | 1 | — |
-| Character sheet | 3:4 | 4 | character, creature |
+| Single image | 1:1 | 1 | all node types |
+| Character sheet | 3:4 | 4 | — |
 | Turnaround | 1:1 | 8 | — |
 | Portrait study | 4:5 | 4 | — |
-| Costume plate | 3:4 | 2 | culture |
-| Prop orthographic | 4:3 | 3 | prop, vehicle |
-| Material study | 1:1 | 6 | Art Style, World Canon, species |
-| Environment matte | 21:9 | 3 | environment, setting |
+| Costume plate | 3:4 | 2 | — |
+| Prop orthographic | 4:3 | 3 | — |
+| Material study | 1:1 | 6 | — |
+| Environment matte | 21:9 | 3 | — |
 | Interior | 16:9 | 3 | — |
 
 Presets shuffle the order rather than replacing anything. A material study still gets your art style
 and your world — it just brings materials to the front and pushes silhouette back.
 
-**Single image** is the odd one out: it shuffles nothing, and it is how you ask for one picture
-rather than a whole sheet. It is offered for everything, it takes your world exactly as written, and
-it makes one image — so the estimate beside Generate is the price of one. Every other preset makes
-the batch in the table above; how many you get is part of choosing the preset, not a separate
-setting.
+**Single image** is selected by default for every node type. It shuffles nothing, takes your world
+exactly as written, and makes one image. Choose another preset to generate the batch in the table
+above; how many you get is part of choosing the preset, not a separate setting.
 
 ## Seeds
 
@@ -119,20 +116,17 @@ than squinting at a narrow column.
 
 ## What it costs
 
-Because everything runs on your own account, Wobu is built not to surprise you:
+Everything runs on your own account and is billed there. Wobu does not meter it, cap it, or
+guess at what you have left — your provider's own dashboard is the only place that knows.
 
-- The Generate button shows an **estimate** for the batch on paid services, and the panel shows what
-  you have already spent and what is still set aside.
-- Making pictures on your own machine with ComfyUI shows **no cost at all**. That difference is the
-  point.
-- A **spending limit** is saved in the world folder, so it applies to everyone who opens it, and it
-  stops things dead. A turnaround loop is exactly the sort of thing that quietly runs two hundred
-  pictures while you are making tea.
+- Making pictures on your own machine with ComfyUI costs nothing at a provider. Paid services are
+  marked as such before you generate.
 - Every picture is saved with the service, model and settings that made it — so what a world cost
-  can be worked out from the folder itself, without logging into anybody's billing page.
+  can be worked out from the folder itself, alongside your provider's billing page.
+- If a job is charged for and produces nothing, Wobu says so rather than quietly calling it free.
 
-The estimate is a guide to the price of what comes out. What goes in, and any optional extras, are
-not in it, and the panel says so.
+A turnaround loop is exactly the sort of thing that quietly runs two hundred pictures while you are
+making tea, so set a budget alert with your provider if that matters to you.
 
 > **A note on Google's watermarks** Pictures made through Google's models carry an invisible SynthID
 > watermark. Worth knowing, since this is concept art heading into real work.

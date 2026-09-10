@@ -9,7 +9,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use wobu_core::{Asset, AssetRole, Id, LoraPin, Node};
@@ -701,6 +701,7 @@ impl TrainLoraTask {
         .await;
         match saved {
             Ok(Ok(pin)) => {
+                app.state::<AppState>().announce_local_change(project_id);
                 let _ = app.emit(WORLD_CHANGED, ());
                 Outcome::done_with(pin)
             }

@@ -1,0 +1,25 @@
+{
+  "time": 1788900616.1258883,
+  "processes": [
+    {
+      "pid": 3750426,
+      "parent": 3750413,
+      "rssKiB": 706016,
+      "name": "wobu"
+    },
+    {
+      "pid": 3750484,
+      "parent": 3750426,
+      "rssKiB": 42176,
+      "name": "WebKitNetworkPr"
+    },
+    {
+      "pid": 3750494,
+      "parent": 3750426,
+      "rssKiB": 314316,
+      "name": "WebKitWebProces"
+    }
+  ],
+  "rssBytes": 1088008192,
+  "scope": "sum RSS of native process and descendants, includes shared-page duplication; not PSS"
+}

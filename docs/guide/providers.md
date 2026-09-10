@@ -24,8 +24,8 @@ Leave it blank for the company's default.
 Settings → Providers and models is split down the middle, and the split is the whole point.
 
 **What this project uses** is saved in the world folder and travels with it. Open a world somebody
-else built and you can see the choices they made — which service, which model, which region, the
-spending limit. It is tagged `shared`.
+else built and you can see the choices they made — which service, which model, which region. It
+is tagged `shared`.
 
 **Keys on this computer** never travel. They are tagged `local`, and they are listed once per
 company rather than once per job, because a key is not tied to a job — the same Gemini key writes
@@ -140,13 +140,16 @@ discovering it from an error:
 - A service with no "never draw this" list has yours held back, and says so.
 - Services that require billing are marked as such before you spend anything.
 
-## Keeping a lid on spending
+## Keeping track of spending
 
-- An estimate on the Generate button for paid services; nothing at all for your own machine.
-- A **spending limit** per world, with a hard stop, saved in the folder so it applies to everyone
-  who opens it.
+Wobu does not meter your spending or cap it. Everything is billed to your own account, and your
+provider's dashboard is the only place that knows what is left on it — set a budget alert there if
+that matters to you.
+
+- Your own machine costs nothing at a provider. Paid services are marked as such before you
+  generate, and that asymmetry is deliberate.
 - Every picture is saved with the service, model and settings that made it, so what a world really
-  cost can be worked out from the folder — you never have to log into anybody's billing page to find
-  out.
-- 3D is the exception, and sits behind a tick box instead: that service does not report what it
-  charged. See [Concept 3D](concept-3d.md).
+  cost can be reconstructed from the folder itself.
+- If a paid job is charged for and produces nothing, Wobu says so rather than calling it free.
+- 3D sits behind a tick box: that service charges per job you send and does not report the amount.
+  See [Concept 3D](concept-3d.md).

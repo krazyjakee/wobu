@@ -1,0 +1,26 @@
+[package]
+name = "wobu-narrative-deps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Already the hash everywhere else in the narrative stack — the graph hash, the
+# frozen context hash, the review context revision and the store's file stamps
+# all use it — so a dependency fingerprint that used anything else would be the
+# one value a reader could not compare with the rest.
+blake3 = "1.8.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+wobu-core = { workspace = true }
+wobu-narrative = { workspace = true }
+# For the version constants that belong in a fingerprint, and — in the case of
+# the context resolver — for the exact `content_hash` the frozen context already
+# addresses its own dependencies with. Hashing a character voice differently
+# here would make the two vocabularies incomparable.
+wobu-narrative-compiler = { workspace = true }
+wobu-narrative-context = { workspace = true }
+wobu-narrative-generation = { workspace = true }
+
+[lints]
+workspace = true

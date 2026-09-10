@@ -66,6 +66,8 @@ impl fmt::Display for JobId {
 pub enum JobKind {
     /// A text provider filling in a description (#37).
     Enhance,
+    /// Offline dialogue generation into immutable review proposals.
+    Narrative,
     /// An image backend producing a picture (#38–#40).
     Generate,
     /// A local helper producing project-owned per-entity LoRA weights (#69).

@@ -77,8 +77,7 @@ folder rather than keeping a link that would rot.
 
 The hosted service charges per job you send — including one you cancel while it runs — and its
 international interface does not report the amount. So there is no honest figure Wobu could put in
-front of you and nothing for the spending limit to set aside, which is why paid reconstruction is
-behind that tick box instead.
+front of you, which is why paid reconstruction is behind that tick box instead.
 
 ## Where shapes live
 

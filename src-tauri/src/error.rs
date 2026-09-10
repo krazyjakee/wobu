@@ -175,12 +175,6 @@ pub enum Code {
     #[allow(dead_code)] // constructed once wobu-llm/wobu-imagine land; see below
     ProviderContextTooLong,
 
-    // ── spend ───────────────────────────────────────────────────────────
-    /// A paid batch plus receipts and reservations would cross the project's
-    /// shared ceiling. Retrying unchanged would spend the same amount.
-    #[serde(rename = "billing.ceiling_exceeded")]
-    SpendCeilingExceeded,
-
     // ── generic ──────────────────────────────────────────────────────────
     /// The user stopped a long operation. Not a failure, and the UI shows
     /// nothing at all for it — a toast saying "cancelled" after you pressed
@@ -406,7 +400,6 @@ mod tests {
             (Code::ProviderNoKey, "provider.no_key"),
             (Code::ProviderKeychainUnavailable, "provider.keychain_unavailable"),
             (Code::ProviderBillingRequired, "provider.billing_required"),
-            (Code::SpendCeilingExceeded, "billing.ceiling_exceeded"),
             (Code::Io, "io.failed"),
             (Code::Internal, "internal"),
         ];

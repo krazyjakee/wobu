@@ -1,0 +1,58 @@
+{
+  "project_open": {
+    "samples_ms": [8795.614],
+    "median_ms": 8795.614
+  },
+  "selected_scene": {
+    "samples_ms": [73.399, 62.3, 60.229],
+    "median_ms": 62.3
+  },
+  "reconcile_plan": {
+    "samples_ms": [20.986, 21.854, 24.047],
+    "median_ms": 21.854
+  },
+  "reconcile_observe": {
+    "samples_ms": [44.647, 44.222, 42.868],
+    "median_ms": 44.222
+  },
+  "reconcile_revalidate": {
+    "samples_ms": [43.433, 43.071, 41.227],
+    "median_ms": 43.071
+  },
+  "reconcile_apply": {
+    "samples_ms": [22.046, 22.866, 22.11],
+    "median_ms": 22.11
+  },
+  "source_fingerprint": {
+    "samples_ms": [33.099, 33.695, 32.74],
+    "median_ms": 33.099
+  },
+  "scene_catalog": {
+    "samples_ms": [61.341, 52.71, 52.755],
+    "median_ms": 52.755
+  },
+  "review_capture": {
+    "samples_ms": [262.96, 261.66, 267.428],
+    "median_ms": 262.96
+  },
+  "review_proposals": {
+    "samples_ms": [16.28, 15.994, 15.972],
+    "median_ms": 15.994
+  },
+  "review_view_contexts": {
+    "samples_ms": [73.245, 71.749, 72.156],
+    "median_ms": 72.156
+  },
+  "review_evidence": {
+    "samples_ms": [0.002, 0.002, 0.002],
+    "median_ms": 0.002
+  },
+  "review_final_verify": {
+    "samples_ms": [32.93, 33.699, 33.806],
+    "median_ms": 33.699
+  },
+  "library_query": {
+    "samples_ms": [484.838, 198.907, 203.13],
+    "median_ms": 203.13
+  }
+}

@@ -1,0 +1,56 @@
+.sheet.narrative-variants-modal {
+  width: min(1160px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+.narrative-variants {
+  min-width: 0;
+  max-height: calc(100vh - 90px);
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+.narrative-variants header,
+.variants-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.narrative-variants header h2 {
+  flex: 1;
+}
+.narrative-variants textarea {
+  width: 100%;
+  min-height: 240px;
+  font-family: monospace;
+}
+.variants-table {
+  overflow: auto;
+  min-width: 0;
+}
+.variants-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.variants-table th,
+.variants-table td {
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.variants-table td {
+  overflow-wrap: anywhere;
+}
+.variants-table small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.narrative-variants pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.variants-counts {
+  font-weight: 600;
+}

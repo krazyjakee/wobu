@@ -24,6 +24,7 @@ pub mod image;
 pub mod index;
 pub mod lora;
 pub mod markdown;
+pub mod narrative;
 pub mod paths;
 pub mod peer;
 pub mod presence;
@@ -40,10 +41,18 @@ pub use assets::{ImportWarning, ImportedAsset, StoredMesh};
 pub use conflict::{Conflict, Keep, Resolved};
 pub use error::{Error, Result};
 pub use index::{CorruptFile, GenerationPage, GenerationPageRequest, GenerationSummary, Index};
+pub use narrative::layout::{
+    Annotation, AnnotationId, GraphKey, Group, GroupId, Layout, LayoutLoad, LayoutMode,
+    LayoutNotice, LayoutSave, NodeKey, NodeLayout,
+};
+pub use narrative::{
+    Catalog, SceneEntry, SceneFile, SourceSave, TextCatalog, TextEntrySummary, TextFile,
+    UnreadableSource,
+};
 pub use presence::{Peer, Presence, PresenceHandle};
 pub use project::{
-    AssetUsage, AssetUsageRole, DEFAULT_SPEND_CEILING_USD_MICROS, Enhanced, Project, ProjectMeta,
-    ProjectSummary, ReconcileObservation, ReconcilePlan, SaveOutcome,
+    AssetUsage, AssetUsageRole, Enhanced, Project, ProjectMeta, ProjectSummary,
+    ReconcileObservation, ReconcilePlan, SaveOutcome,
 };
 pub use recent::RecentProject;
 pub use scan::{Cancel, ScanProgress};
@@ -51,3 +60,18 @@ pub use thumbs::{ThumbTarget, Thumbnail};
 pub use transfer::{TransferBundle, TransferCandidate, TransferOutcome, TransferPreview};
 pub use watcher::{Change as WatchChange, Strategy, Watcher};
 pub use wiki::{WikiExport, WikiSnapshot};
+
+pub use narrative::publication::{
+    NarrativeDeletion, NarrativePublication, NarrativePublicationFile, PublishedRecord,
+};
+pub use narrative::records::{NarrativeRecordDocument, NarrativeRecordFile, NarrativeRecordKind};
+pub use narrative::registry::{NarrativeFileKind, NarrativeIndexEntry};
+
+pub use narrative::publication::NarrativeRestoration;
+pub use project::NarrativeDeletionView;
+pub use project::narrative_deps::DependencySnapshot;
+pub use project::narrative_sync::{
+    MAX_NARRATIVE_FILE_BYTES, NarrativeApplied, NarrativeIncoming, NarrativeSyncEntry,
+};
+
+pub use project::layout_sync::{LayoutManifest, LayoutOffer};

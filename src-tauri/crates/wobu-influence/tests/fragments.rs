@@ -8,7 +8,7 @@
 
 use wobu_core::{
     AssetRef, AssetRole, Description, FragmentTarget, Id, Layer, Link, LinkRole, Node, NodeKind,
-    SectionValue, default_preset, kind_registry, preset,
+    SectionValue, kind_registry, preset,
 };
 use wobu_influence::{
     Fragment, FragmentBody, Shot, Sliders, World, fragments, fragments_for_view, resolve,
@@ -111,7 +111,7 @@ fn a_character_sheet_reads_out_layer_by_layer_and_section_by_section() {
     let ashfall = Ashfall::new();
     let world = ashfall.world();
     let stack = resolve(&world, ashfall.kael.id, Some(Shot::new("Character sheet · 3:4"))).unwrap();
-    let sheet = default_preset(NodeKind::Character);
+    let sheet = preset("character_sheet").unwrap();
     let compiled = fragments(&stack, sheet, &Sliders::neutral());
 
     assert_eq!(
@@ -188,7 +188,7 @@ fn a_mood_reference_is_on_the_moodboard_and_reaches_no_backend() {
     let ashfall = Ashfall::new();
     let world = ashfall.world();
     let stack = resolve(&world, ashfall.kael.id, Some(Shot::new("Character sheet"))).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     // It is a fragment: the human sees it on the moodboard, and the layer card
     // counts it among what this node contributes.
@@ -233,7 +233,7 @@ fn every_role_routes_its_reference_the_way_the_link_layer_says() {
 
     let world = World::new(vec![&vashk, &kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     let routed: Vec<_> = compiled.iter().map(|f| (f.layer(), f.section(), f.target())).collect();
     let expected: Vec<_> =
@@ -260,7 +260,7 @@ fn a_disabled_reference_contributes_nothing_at_all() {
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     assert!(compiled.is_empty());
 }
@@ -379,7 +379,7 @@ fn a_weight_is_the_path_the_section_priority_and_the_slider_multiplied_out() {
     let stack = resolve(&world, kael.id, None).unwrap();
     // And the user pulled that card's slider to half as well.
     let sliders = Sliders::from_pairs([(vashk.id, 0.5)]);
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &sliders);
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &sliders);
 
     let weights: Vec<_> = compiled.iter().map(|f| (f.section(), f.weight())).collect();
     assert_eq!(
@@ -426,7 +426,7 @@ fn a_hand_edited_reference_weight_outside_the_range_cannot_amplify_a_layer() {
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     assert_eq!(compiled[0].weight(), 1.0);
 }
@@ -441,7 +441,7 @@ fn a_layer_turned_all_the_way_down_keeps_its_fragments_for_attribution() {
     let world = ashfall.world();
     let stack = resolve(&world, ashfall.kael.id, None).unwrap();
     let sliders = Sliders::from_pairs([(ashfall.vashk.id, 0.0)]);
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &sliders);
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &sliders);
 
     let ancestry: Vec<_> = compiled
         .iter()
@@ -521,7 +521,7 @@ fn nothing_blank_becomes_a_fragment() {
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     // Surviving text is trimmed, because the compiler joins fragments with its
     // own separator and leading space would double it.
@@ -545,7 +545,7 @@ fn a_node_with_no_description_yet_still_contributes_its_references() {
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     assert_eq!(compiled.len(), 1);
     assert_eq!(compiled[0].asset_id(), Some(picture));
@@ -566,7 +566,7 @@ fn a_section_the_kind_does_not_declare_is_not_compiled() {
 
     let world = World::new([&kael]);
     let stack = resolve(&world, kael.id, None).unwrap();
-    let compiled = fragments(&stack, default_preset(NodeKind::Character), &Sliders::neutral());
+    let compiled = fragments(&stack, preset("character_sheet").unwrap(), &Sliders::neutral());
 
     let sections: Vec<_> = compiled.iter().map(|f| f.section()).collect();
     assert_eq!(sections, vec!["silhouette"]);
@@ -597,7 +597,7 @@ fn sections_compile_in_the_kinds_declared_order_however_the_file_was_written() {
         ],
     );
 
-    let sheet = default_preset(NodeKind::Character);
+    let sheet = preset("character_sheet").unwrap();
     let compile = |node: &Node| {
         let world = World::new([node]);
         let stack = resolve(&world, node.id, None).unwrap();
@@ -615,7 +615,7 @@ fn fragments_do_not_depend_on_the_order_the_nodes_were_loaded() {
     // its own map iterates in, and the prompt comes out different on the next
     // launch with nothing in the world to explain it.
     let ashfall = Ashfall::new();
-    let sheet = default_preset(NodeKind::Character);
+    let sheet = preset("character_sheet").unwrap();
     let sliders = Sliders::from_pairs([(ashfall.vashk.id, 0.25)]);
     let compile = |nodes: Vec<&Node>| {
         let world = World::new(nodes);

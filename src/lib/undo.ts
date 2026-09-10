@@ -1,6 +1,9 @@
+import { assertProjectSession, isProjectSession, projectSessionEpoch } from './projectSession'
 import { create } from 'zustand'
+import { narrativeStateRestore } from './api/narrativeStateHistory'
+import { narrativeWorldRestore, type WorldDocument } from './api/narrativeWorld'
 import * as api from './api'
-import type { WobuNode } from './api'
+import type { Scene, SceneFile, WobuNode } from './api'
 
 /**
  * The workspace undo stack.
@@ -13,24 +16,71 @@ import type { WobuNode } from './api'
  * node is undoable the day it is written, without its author knowing this file
  * exists.
  *
- * Three primitives are enough for the whole surface, which is why there are
- * only three. A rename, a notes edit, a link added or reweighted, a cover
+ * Three primitives cover every node edit, and for a long time three was the
+ * whole list. A rename, a notes edit, a link added or reweighted, a cover
  * assigned — all of them are `upsert`, because that is how they reach disk.
  * Create inverts to `delete`, delete inverts to `upsert`, move inverts to
- * `move`. Adding a fourth command means the backend grew a write path that
- * `queries.ts` does not own, which is the thing to fix instead.
+ * `move`.
+ *
+ * ## Why there are now five
+ *
+ * Narrative source is the write path that earned the extension. A scene is not
+ * a `WobuNode`: it is a structured YAML document in its own tree, saved through
+ * its own guarded path against its own precondition, and there is no spelling
+ * of `upsert` that reaches one. So `sceneSave` and `sceneDelete` sit beside the
+ * node three, mirroring them exactly — create inverts to `sceneDelete`, delete
+ * inverts to `sceneSave`, and every structural or textual edit inverts to
+ * `sceneSave`, because that is how all of them reach disk.
+ *
+ * The alternative was a second undo stack for the Narrative workspace, and it
+ * is worse in precisely the way that matters. #186 requires a structural edit
+ * made on the canvas and the same edit made in a form to be indistinguishable
+ * in undo history; two stacks would make ⌘Z mean different things in different
+ * tabs, and in a workspace showing both a scene and a node inspector it would
+ * mean whichever one happened to have focus.
+ *
+ * The bar for a sixth is unchanged: a new command here means the backend grew a
+ * write path the mutation hooks in `lib/queries/` do not own, which is the
+ * thing to fix instead of the thing to add.
+ *
+ * ## Canvas layout is deliberately absent, and must stay absent
+ *
+ * There is no command here that can carry a coordinate, and that is the
+ * command-layer half of #185. Moving a box is not a story change: the file
+ * layer keeps that true by putting arrangements in `narrative/layout/`, where
+ * no fingerprint, compiler or export can reach them, and this file keeps it
+ * true by having nothing that could put one on the world stack.
+ *
+ * The consequence is chosen rather than conceded: **arranging the canvas gets
+ * no undo affordance at this layer at all.** A ⌘Z that rewound a drag would, on
+ * the very next press, rewind a paragraph, and nothing on screen tells a writer
+ * which press they are about to make. If the canvas ever wants to take back a
+ * drag, that history belongs to the canvas, is scoped to the canvas, and is
+ * never mixed into the history of the world.
  */
 export type WorldCommand =
   | { type: 'upsert'; node: WobuNode }
   | { type: 'delete'; id: string }
   | { type: 'move'; id: string; parentId: string | null }
+  /**
+   * Write a whole scene document. `slug` is only consulted when the project no
+   * longer has the scene — restoring one that was deleted — and is made unique
+   * on the far side, so a restore can never land on top of a scene that took
+   * the name in the meantime.
+   */
+  | { type: 'sceneSave'; scene: Scene; slug: string; expected?: Scene | null }
+  | { type: 'sceneDelete'; id: string }
+  | { type: 'worldRestore'; document: WorldDocument; expected: WorldDocument }
+  | { type: 'stateRestore'; document: api.StateDocument; expected: api.StateDocument }
 
 export interface UndoEntry {
   /**
-   * The node the entry is about. Only used to decide whether two consecutive
-   * edits belong to the same run of typing.
+   * The node or scene the entry is about. Only used to decide whether two
+   * consecutive edits belong to the same run of typing — which is why it is a
+   * subject rather than a node: a run of typing into a beat's dialogue has to
+   * coalesce on the same terms a run of typing into a node's notes does.
    */
-  nodeId: string
+  subjectId: string
   /** Verb phrase for the toast and the palette: "rename Ashfall". */
   label: string
   /** Applied in order. More than one only for a delete, which restores children. */
@@ -50,6 +100,31 @@ export interface UndoEntry {
 
 /** An entry before it is pushed; `at` is stamped by `push` unless a test sets it. */
 export type NewEntry = Omit<UndoEntry, 'at'> & { at?: number }
+
+function sceneEditsContinue(previous: NewEntry, next: NewEntry): boolean {
+  const after = previous.redo.filter((cmd) => cmd.type === 'sceneSave')
+  const before = next.undo.filter((cmd) => cmd.type === 'sceneSave')
+  return (
+    after.length === before.length &&
+    after.every((cmd) =>
+      before.some(
+        (other) =>
+          other.scene.id === cmd.scene.id &&
+          JSON.stringify(other.scene) === JSON.stringify(cmd.scene),
+      ),
+    )
+  )
+}
+
+function guardSceneRestores(commands: WorldCommand[], opposite: WorldCommand[]): WorldCommand[] {
+  return commands.map((cmd) => {
+    if (cmd.type !== 'sceneSave') return cmd
+    const expected = opposite.find(
+      (other) => other.type === 'sceneSave' && other.scene.id === cmd.scene.id,
+    )
+    return expected?.type === 'sceneSave' ? { ...cmd, expected: expected.scene } : cmd
+  })
+}
 
 /** Runs one command against the world. Injected so the store stays testable. */
 export type Runner = (cmd: WorldCommand) => Promise<void>
@@ -105,6 +180,8 @@ interface UndoState {
   clear: () => void
 }
 
+let operationSerial = 0
+
 export const useUndoStack = create<UndoState>((set, get) => ({
   projectId: null,
   past: [],
@@ -112,7 +189,11 @@ export const useUndoStack = create<UndoState>((set, get) => ({
   busy: false,
 
   setProject: (id) =>
-    set((s) => (s.projectId === id ? {} : { projectId: id, past: [], future: [] })),
+    set((s) => {
+      if (s.projectId === id) return {}
+      ++operationSerial
+      return { projectId: id, past: [], future: [], busy: false }
+    }),
 
   push: (entry) =>
     set((s) => {
@@ -128,17 +209,21 @@ export const useUndoStack = create<UndoState>((set, get) => ({
         top &&
         entry.coalesce &&
         top.coalesce &&
-        top.nodeId === entry.nodeId &&
-        at - top.at <= COALESCE_MS
+        top.subjectId === entry.subjectId &&
+        at - top.at <= COALESCE_MS &&
+        sceneEditsContinue(top, entry)
       ) {
         // The absorbed entry keeps the *older* inverse. That is the whole point
         // of coalescing: the state to go back to is the one before the first
         // keystroke of the run, not the one from 500ms ago. Only the redo and
-        // the label move forward, to the newest text.
+        // the label move forward, to the newest text. Guarded scene restores
+        // compare the opposite endpoint of the entire run, not an intermediate
+        // keystroke. A collaborator's intervening edit starts a separate entry.
         const merged: UndoEntry = {
           ...top,
           label: entry.label,
-          redo: entry.redo,
+          undo: guardSceneRestores(top.undo, entry.redo),
+          redo: guardSceneRestores(entry.redo, top.undo),
           at,
         }
         return { past: [...s.past.slice(0, -1), merged], future: [] }
@@ -152,15 +237,26 @@ export const useUndoStack = create<UndoState>((set, get) => ({
     }),
 
   undo: async (run) => {
+    const epoch = projectSessionEpoch()
     const { past, busy } = get()
     const entry = past[past.length - 1]
     if (busy || !entry) return null
+    const operation = ++operationSerial
     set({ past: past.slice(0, -1), busy: true })
     try {
-      for (const cmd of entry.undo) await run(cmd)
+      for (const cmd of entry.undo) {
+        assertProjectSession(epoch)
+        await run(cmd)
+      }
+      assertProjectSession(epoch)
       set((s) => ({ future: [...s.future, entry], busy: false }))
       return entry
     } catch (e) {
+      if (operation !== operationSerial) throw e
+      if (!isProjectSession(epoch)) {
+        set({ busy: false })
+        throw e
+      }
       // Put it back rather than swallowing it. The write was refused — a
       // conflict, a read-only folder, a share that went away — and all of those
       // are conditions the user can resolve and try again through. Losing the
@@ -171,15 +267,26 @@ export const useUndoStack = create<UndoState>((set, get) => ({
   },
 
   redo: async (run) => {
+    const epoch = projectSessionEpoch()
     const { future, busy } = get()
     const entry = future[future.length - 1]
     if (busy || !entry) return null
+    const operation = ++operationSerial
     set({ future: future.slice(0, -1), busy: true })
     try {
-      for (const cmd of entry.redo) await run(cmd)
+      for (const cmd of entry.redo) {
+        assertProjectSession(epoch)
+        await run(cmd)
+      }
+      assertProjectSession(epoch)
       set((s) => ({ past: [...s.past, entry], busy: false }))
       return entry
     } catch (e) {
+      if (operation !== operationSerial) throw e
+      if (!isProjectSession(epoch)) {
+        set({ busy: false })
+        throw e
+      }
       set((s) => ({ future: [...s.future, entry], busy: false }))
       throw e
     }
@@ -213,6 +320,19 @@ export function applyCommand(cmd: WorldCommand): Promise<void> {
       return api.nodeDelete(cmd.id)
     case 'move':
       return api.nodeMove(cmd.id, cmd.parentId)
+    // Compare the authored document expected by this history entry. The storage
+    // boundary handles its changing editorial receipt head without authorizing
+    // restoration over a collaborator's newer wording or structure.
+    case 'sceneSave':
+      return api
+        .narrativeSceneRestore(cmd.scene, cmd.expected ?? null, cmd.slug)
+        .then(() => undefined)
+    case 'sceneDelete':
+      return api.narrativeSceneDelete(cmd.id)
+    case 'stateRestore':
+      return narrativeStateRestore(cmd.document, cmd.expected).then(() => undefined)
+    case 'worldRestore':
+      return narrativeWorldRestore(cmd.document, cmd.expected).then(() => undefined)
   }
 }
 
@@ -266,7 +386,7 @@ export function editLabel(before: WobuNode, after: WobuNode): string | null {
 /** A node that has just come into existence — created, duplicated, imported. */
 export function birthEntry(node: WobuNode, verb: string): NewEntry {
   return {
-    nodeId: node.id,
+    subjectId: node.id,
     label: `${verb} “${node.name}”`,
     undo: [{ type: 'delete', id: node.id }],
     // Redo goes back through `upsert`, not `node_create`: `node_create` mints a
@@ -294,7 +414,7 @@ export function birthEntry(node: WobuNode, verb: string): NewEntry {
  */
 export function deletionEntry(node: WobuNode, childIds: string[]): NewEntry {
   return {
-    nodeId: node.id,
+    subjectId: node.id,
     label: `delete “${node.name}”`,
     undo: [
       { type: 'upsert', node },
@@ -316,7 +436,7 @@ export function moveEntry(
 ): NewEntry | null {
   if (node.parentId === parentId) return null
   return {
-    nodeId: node.id,
+    subjectId: node.id,
     label: `move “${node.name}”`,
     undo: [{ type: 'move', id: node.id, parentId: node.parentId }],
     redo: [{ type: 'move', id: node.id, parentId }],
@@ -333,12 +453,175 @@ export function editEntry(before: WobuNode, after: WobuNode): NewEntry | null {
   const verb = editLabel(before, after)
   if (!verb) return null
   return {
-    nodeId: after.id,
+    subjectId: after.id,
     label: `${verb} “${after.name}”`,
     undo: [{ type: 'upsert', node: before }],
     redo: [{ type: 'upsert', node: after }],
     // The only coalescing case: these are the writes that arrive one per
     // autosave debounce while somebody types.
     coalesce: true,
+  }
+}
+
+/* ── inverses: narrative source ───────────────────────────────────────────── */
+
+/**
+ * The narrative builders, beside the node ones and answering the same question.
+ *
+ * Every one of them inverts to `sceneSave`, because every narrative edit
+ * reaches disk that way — a beat added on the canvas, a beat added in the
+ * outline, a line typed in Script and a hand edit in the Source tab are one
+ * write, so they are one inverse. That is what makes #186's "indistinguishable
+ * in undo history" a property of the design rather than something to test for.
+ */
+
+/** What an edit did, and whether a run of them should collapse into one ⌘Z. */
+export interface SceneEdit {
+  verb: string
+  coalesce: boolean
+}
+
+/** The wiring: which branches exist, what gates them, where they go. */
+function wiringOf(scene: Scene): string {
+  return JSON.stringify(
+    (scene.beats ?? []).map((beat) => ({
+      choices: (beat.choices ?? []).map((c) => ({
+        id: c.id,
+        requires: c.requires ?? null,
+        effects: c.effects ?? [],
+        to: c.to,
+      })),
+      outcomes: (beat.outcomes ?? []).map((o) => ({
+        id: o.id,
+        when: o.when ?? null,
+        effects: o.effects ?? [],
+        to: o.to,
+      })),
+    })),
+  )
+}
+
+/** Which slots exist and who speaks them, without their words. */
+function slotsOf(scene: Scene): string {
+  return JSON.stringify(
+    (scene.beats ?? []).map((beat) =>
+      (beat.dialogue ?? []).map((slot) => ({
+        id: slot.id,
+        speaker: slot.speaker,
+        policy: slot.policy ?? null,
+        variants: (slot.variants ?? []).map((v) => ({ id: v.id, when: v.when ?? null })),
+      })),
+    ),
+  )
+}
+
+/** Everything a person typed: titles, labels, briefs, intents, lines. */
+function proseOf(scene: Scene): string {
+  return JSON.stringify(
+    (scene.beats ?? []).map((beat) => ({
+      title: beat.title,
+      intents: beat.intents ?? [],
+      mustConvey: beat.must_convey ?? [],
+      mustNotReveal: beat.must_not_reveal ?? [],
+      labels: (beat.choices ?? []).map((c) => c.label),
+      lines: (beat.dialogue ?? []).flatMap((slot) =>
+        (slot.variants ?? []).map((v) => [v.text.body, v.text.lifecycle ?? null]),
+      ),
+    })),
+  )
+}
+
+/**
+ * What an edit did, in the words the toast will use — or `null` when the save
+ * changed nothing.
+ *
+ * Ordered from the most structural to the most textual, because a beat deletion
+ * that also changed some wording is a deletion; describing it as a "text edit"
+ * would put a label on the stack that badly understates what ⌘Z is about to
+ * reverse.
+ *
+ * Only the textual cases coalesce. Nobody wants three deleted beats to collapse
+ * into one ⌘Z, and everybody wants a run of typing to.
+ */
+export function sceneEditLabel(before: Scene, after: Scene): SceneEdit | null {
+  // The `null` case matters for the same reason it does for nodes: an entry
+  // whose inverse restores the state it is already in is a ⌘Z that visibly
+  // does nothing, which reads as a broken feature.
+  if (JSON.stringify(before) === JSON.stringify(after)) return null
+
+  if (before.name !== after.name) return { verb: 'rename', coalesce: false }
+
+  const was = (before.beats ?? []).map((b) => b.id)
+  const now = (after.beats ?? []).map((b) => b.id)
+  if (now.length > was.length) return { verb: 'add beat', coalesce: false }
+  if (now.length < was.length) return { verb: 'delete beat', coalesce: false }
+  if (was.join() !== now.join()) return { verb: 'reorder beats', coalesce: false }
+
+  if (wiringOf(before) !== wiringOf(after)) return { verb: 'branch change', coalesce: false }
+  if (slotsOf(before) !== slotsOf(after)) return { verb: 'dialogue change', coalesce: false }
+  if (proseOf(before) !== proseOf(after)) return { verb: 'text edit', coalesce: true }
+
+  if (JSON.stringify(before.participants ?? []) !== JSON.stringify(after.participants ?? [])) {
+    return { verb: 'participant change', coalesce: false }
+  }
+  if (JSON.stringify(before.entry ?? null) !== JSON.stringify(after.entry ?? null)) {
+    return { verb: 'condition change', coalesce: false }
+  }
+  if ((before.summary ?? '') !== (after.summary ?? '')) {
+    return { verb: 'summary edit', coalesce: true }
+  }
+  return { verb: 'edit', coalesce: false }
+}
+
+/** A scene that has just come into existence — created, duplicated, imported. */
+export function sceneBirthEntry(file: SceneFile, verb: string): NewEntry {
+  return {
+    subjectId: file.scene.id,
+    label: `${verb} “${file.scene.name}”`,
+    undo: [{ type: 'sceneDelete', id: file.scene.id }],
+    // Redo through `sceneSave`, not `narrative_scene_create`: create mints a
+    // fresh scene id, so a redone create would be a *different* scene, and
+    // every entry recorded after it names ids that no longer exist.
+    redo: [{ type: 'sceneSave', scene: file.scene, slug: file.slug }],
+    coalesce: false,
+  }
+}
+
+/**
+ * A deleted scene.
+ *
+ * The inverse restores the document — the scene id, and every beat, choice,
+ * slot and line id under it — so a destination elsewhere that pointed at it
+ * resolves again and a recording filed against one of its lines still matches.
+ *
+ * The one thing no inverse covers is the arrangement. The delete takes the
+ * layout sidecar with it, deliberately and in that order, and a restore has
+ * nothing to put back; the scene reopens laid out automatically. That is said
+ * out loud when the undo runs rather than quietly discovered.
+ */
+export function sceneDeletionEntry(file: SceneFile): NewEntry {
+  return {
+    subjectId: file.scene.id,
+    label: `delete “${file.scene.name}”`,
+    undo: [{ type: 'sceneSave', scene: file.scene, slug: file.slug }],
+    redo: [{ type: 'sceneDelete', id: file.scene.id }],
+    coalesce: false,
+    caveat: 'Its canvas arrangement went with it and does not come back.',
+  }
+}
+
+/**
+ * Any edit to a scene document, however it was made. `null` when the save
+ * changed nothing.
+ */
+export function sceneEditEntry(before: SceneFile, after: SceneFile): NewEntry | null {
+  const edit = sceneEditLabel(before.scene, after.scene)
+  if (!edit) return null
+  return {
+    subjectId: after.scene.id,
+    label: `${edit.verb} “${after.scene.name}”`,
+    undo: [{ type: 'sceneSave', scene: before.scene, slug: before.slug, expected: after.scene }],
+    redo: [{ type: 'sceneSave', scene: after.scene, slug: after.slug, expected: before.scene }],
+    coalesce: edit.coalesce,
   }
 }

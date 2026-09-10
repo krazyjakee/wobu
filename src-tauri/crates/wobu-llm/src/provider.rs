@@ -145,6 +145,37 @@ impl EnhanceRequest {
     }
 }
 
+/// One schema-shaped call for an authoring compiler. The caller owns semantic
+/// validation (including exact IDs and duplicate keys); a provider cannot author logic.
+#[derive(Debug, Clone)]
+pub struct StructuredRequest {
+    pub model: String,
+    pub system: Option<String>,
+    pub prompt: String,
+    pub schema: Value,
+    pub max_output_tokens: u32,
+}
+
+impl From<&EnhanceRequest> for StructuredRequest {
+    fn from(request: &EnhanceRequest) -> Self {
+        Self {
+            model: request.model.clone(),
+            system: request.system.clone(),
+            prompt: request.prompt.clone(),
+            schema: request.schema(),
+            max_output_tokens: request.max_output_tokens,
+        }
+    }
+}
+
+/// Raw complete JSON and the latest reported usage, including on failures.
+/// Zero usage means unknown, never proof that a failed request was free.
+#[derive(Debug)]
+pub struct StructuredOutcome {
+    pub usage: Usage,
+    pub result: Result<String>,
+}
+
 /// Where streamed output goes on its way to the editor.
 ///
 /// A callback rather than a returned stream, and the reasoning is worth keeping:
@@ -202,8 +233,7 @@ impl DeltaSink for Discard {
 /// was billed": a call cancelled before the provider reported anything may still
 /// have run. Adapters report the last figures they saw rather than waiting for a
 /// clean finish, because a request that is cancelled or truncated has been paid
-/// for either way and [#55](https://github.com/krazyjakee/wobu/issues/55)'s
-/// spend ceiling is only a ceiling if it counts those.
+/// for either way, and telling the user otherwise is a claim nothing supports.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Usage {
@@ -232,8 +262,8 @@ impl Usage {
 /// Not a `Result`, on purpose. `?` on a `Result<_, E>` would carry the error out
 /// and leave the usage behind, and "the call failed so nothing was charged" is
 /// false often enough — a rate limit mid-stream, a cancellation, a truncation —
-/// that the spend ceiling would drift low precisely when the user is hitting
-/// limits. Destructuring is the only way past this type, and destructuring puts
+/// that the user would be told their money was safe on no evidence.
+/// Destructuring is the only way past this type, and destructuring puts
 /// [`Usage`] in front of whoever wrote the call.
 #[derive(Debug)]
 pub struct EnhanceOutcome {
@@ -285,6 +315,29 @@ pub trait TextProvider: Send + Sync {
     /// adapter because model ids are the fastest-moving fact in
     /// `docs/08-providers.md` and should not be spelled out in the frontend.
     fn default_model(&self) -> &'static str;
+
+    /// Adapter capability, not a promise that every model accepts every schema.
+    fn supports_structured(&self) -> bool {
+        false
+    }
+
+    /// Generate one bounded JSON document. The caller must validate its schema
+    /// and exact authoring identities before accepting it. No automatic retries.
+    /// Only a rejected HTTP 429 may return `RateLimited`; an error after a 2xx
+    /// response may have been billed, regardless of the last usage observed.
+    async fn structured(
+        &self,
+        _request: &StructuredRequest,
+        _deltas: &mut dyn DeltaSink,
+        _cancel: &Cancel,
+    ) -> StructuredOutcome {
+        StructuredOutcome {
+            usage: Usage::default(),
+            result: Err(Error::SchemaRejected {
+                detail: "This provider does not support structured authoring requests".into(),
+            }),
+        }
+    }
 
     /// Ask for one description.
     ///
@@ -393,7 +446,7 @@ mod tests {
     #[test]
     fn an_unbilled_failure_says_zero_rather_than_saying_nothing() {
         // `usage` is not optional, so "we do not know" and "nothing was charged"
-        // have to be the same value; the spend ceiling reads it either way.
+        // have to be the same value; `Billed` grades it either way.
         let outcome = EnhanceOutcome::unbilled(Error::NoKey { provider: "Anthropic" });
         assert_eq!(outcome.usage, Usage::default());
         assert!(!outcome.is_ok());
