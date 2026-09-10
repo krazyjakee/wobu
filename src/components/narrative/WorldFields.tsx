@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react'
 import type { VariableDecl } from '../../lib/api'
 import type { QuestStage, WorldDocument } from '../../lib/api/narrativeWorld'
-import { setStageObjective, stageName, stageObjective } from '../../lib/api/narrativeWorld'
+import {
+  renameStage,
+  setStageObjective,
+  stageName,
+  stageObjective,
+} from '../../lib/api/narrativeWorld'
 import type { WorldItem } from './worldModel'
 import { parseSafeInteger } from './integerInput'
 
@@ -289,14 +294,22 @@ export function WorldFields({
         <Lines
           label="Quest stages (one name per line)"
           values={item.stages.map(stageName)}
-          // Renaming or reordering keeps each stage's objective with its name, so
-          // editing this list does not silently drop wording somebody wrote.
+          // Renaming or reordering keeps each stage's objective, so editing this
+          // list does not silently drop wording somebody wrote. A line that
+          // still names a stage keeps that stage wherever it moved to; a line
+          // that names none was renamed in place, so it inherits the stage that
+          // held its position — unless that stage is still listed elsewhere
+          // under its own name, which makes this line a new one.
           onChange={(names) =>
             onChange({
               ...item,
-              stages: names.map(
-                (name) => item.stages.find((one) => stageName(one) === name) ?? name,
-              ),
+              stages: names.map((name, index) => {
+                const existing = item.stages.find((one) => stageName(one) === name)
+                if (existing) return existing
+                const held = item.stages[index]
+                if (!held || names.includes(stageName(held))) return name
+                return renameStage(held, name)
+              }),
             })
           }
         />

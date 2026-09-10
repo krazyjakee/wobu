@@ -93,6 +93,18 @@ export function setStageObjective(stage: QuestStage, body: string): QuestStage {
   }
 }
 
+/**
+ * The same stage under a new name, keeping whatever objective it carried.
+ *
+ * Renaming is an edit to the stage, not a replacement of it: the wording
+ * somebody wrote belongs to the stage they are still editing. A stage with no
+ * objective goes back to the bare shape, so a rename never grows the file.
+ */
+export function renameStage(stage: QuestStage, name: string): QuestStage {
+  const objective = stageObjective(stage)
+  return objective ? { name, objective } : name
+}
+
 export interface Quest extends WorldRecord {
   summary: string
   stages: QuestStage[]
