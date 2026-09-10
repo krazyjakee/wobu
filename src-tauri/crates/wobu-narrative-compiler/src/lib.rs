@@ -750,7 +750,8 @@ fn compile_quest(
                 gate,
                 "missing_objective",
                 format!(
-                    "stage `{}` has no player-facing objective, so a host has nothing authored to                      show as the current objective",
+                    "stage `{}` has no player-facing objective, so a host has nothing \
+                     authored to show as the current objective",
                     stage.name
                 ),
             );
