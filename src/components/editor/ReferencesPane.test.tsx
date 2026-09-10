@@ -6,7 +6,7 @@ import { node as buildNode } from '../../test/fixtures'
 import { chooseOption } from '../Combobox.testing'
 import { ReferencesPane } from './ReferencesPane'
 
-const h = vi.hoisted(() => ({ invoke: vi.fn() }))
+const h = vi.hoisted(() => ({ invoke: vi.fn(), reveal: vi.fn() }))
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: h.invoke,
@@ -16,6 +16,7 @@ vi.mock('@tauri-apps/api/webview', () => ({
   getCurrentWebview: () => ({ onDragDropEvent: () => Promise.resolve(() => {}) }),
 }))
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: () => Promise.resolve(null) }))
+vi.mock('@tauri-apps/plugin-opener', () => ({ revealItemInDir: h.reveal }))
 
 const autosave = {
   queue: vi.fn<(patch: Partial<WobuNode>) => void>(),
@@ -77,6 +78,8 @@ function renderPane(node: WobuNode, assets: Asset[], readOnly = false) {
 
 beforeEach(() => {
   h.invoke.mockReset()
+  h.reveal.mockReset()
+  h.reveal.mockResolvedValue(undefined)
   autosave.queue.mockReset()
   autosave.flush.mockReset()
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 })
@@ -180,6 +183,41 @@ describe('ReferencesPane', () => {
     expect(screen.getByRole('dialog', { name: 'Reference details' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: 'Close reference details' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('replaces the image menu with copy, reveal and confirmed reference deletion', async () => {
+    const reference = link('one', 'palette')
+    const node = buildNode({ id: 'kael', assetLinks: [reference] })
+    renderPane(node, [asset('one')])
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open reference 1 details' }))
+    const image = await screen.findByRole('button', { name: 'View reference image full size' })
+    await waitFor(() => expect(image).toBeEnabled())
+    fireEvent.contextMenu(image, { clientX: 20, clientY: 30 })
+
+    let menu = screen.getByRole('menu', { name: 'Actions for reference 1 image' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent?.trim()),
+    ).toEqual(['Copy image', 'View in file manager', 'Delete reference…'])
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Copy image' }))
+    await waitFor(() =>
+      expect(h.invoke).toHaveBeenCalledWith('asset_copy_image', { assetId: 'one' }),
+    )
+
+    fireEvent.contextMenu(image, { clientX: 20, clientY: 30 })
+    menu = screen.getByRole('menu', { name: 'Actions for reference 1 image' })
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'View in file manager' }))
+    await waitFor(() => expect(h.reveal).toHaveBeenCalledWith('/original/one.png'))
+
+    fireEvent.contextMenu(image, { clientX: 20, clientY: 30 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete reference…' }))
+    expect(autosave.queue).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete reference' }))
+    expect(autosave.queue).toHaveBeenCalledWith({ assetLinks: [] })
+    expect(screen.queryByRole('dialog', { name: 'Reference details' })).not.toBeInTheDocument()
   })
 
   it('edits role and weight, reorders, removes, and chooses a cover', async () => {

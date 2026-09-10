@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { useContextMenu } from '../../hooks/useContextMenu'
 import * as api from '../../lib/api'
 import type { Asset, AssetLink } from '../../lib/api'
+import { ConfirmSheet } from '../ConfirmSheet'
+import { ImageContextMenu } from '../ImageContextMenu'
 import { ImageViewer } from '../ImageViewer'
 import { Modal } from '../Modal'
 
@@ -14,6 +17,8 @@ export function ReferenceDetail({
   thumbnailSrc,
   roleName,
   sizeLabel,
+  readOnly,
+  onDelete,
   onClose,
 }: {
   asset: Asset | undefined
@@ -24,12 +29,17 @@ export function ReferenceDetail({
   thumbnailSrc: string | null
   roleName: string
   sizeLabel: string | null
+  readOnly: boolean
+  onDelete: () => void
   onClose: () => void
 }) {
+  const [originalPath, setOriginalPath] = useState<string | null>(null)
   const [originalSrc, setOriginalSrc] = useState<string | null>(null)
   const [loadingOriginal, setLoadingOriginal] = useState(true)
   const [openError, setOpenError] = useState<string | null>(null)
   const [fullSize, setFullSize] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const menu = useContextMenu<void>()
 
   useEffect(() => {
     let disposed = false
@@ -37,8 +47,10 @@ export function ReferenceDetail({
       .assetOriginal(link.assetId)
       .then((path) => {
         if (disposed) return
-        if (path) setOriginalSrc(convertFileSrc(path))
-        else setOpenError('The original is no longer in the project folder.')
+        if (path) {
+          setOriginalPath(path)
+          setOriginalSrc(convertFileSrc(path))
+        } else setOpenError('The original is no longer in the project folder.')
       })
       .catch((error) => {
         if (!disposed) setOpenError(api.errorMessage(error))
@@ -54,6 +66,13 @@ export function ReferenceDetail({
   const previewSrc = originalSrc ?? thumbnailSrc
   const description = `${nodeName} · ${roleName} · reference ${position}`
   const imageAlt = `${roleName} reference for ${nodeName}`
+  const deleteDisabledReason = readOnly
+    ? 'This project folder is read-only, so the reference cannot be deleted.'
+    : null
+  const requestDelete = () => {
+    setFullSize(false)
+    setConfirmDelete(true)
+  }
 
   return (
     <Modal
@@ -80,7 +99,12 @@ export function ReferenceDetail({
       </header>
 
       <div className="reference-detail-body">
-        <section className="reference-detail-preview" aria-label="Reference image">
+        <section
+          className="reference-detail-preview"
+          aria-label="Reference image"
+          tabIndex={-1}
+          {...menu.trigger()}
+        >
           {previewSrc ? (
             <button
               className="reference-detail-image"
@@ -104,6 +128,18 @@ export function ReferenceDetail({
             </div>
           )}
           {openError && <p className="inline-error">Could not open it: {openError}</p>}
+          {menu.anchor && (
+            <ImageContextMenu
+              anchor={menu.anchor}
+              onClose={menu.close}
+              assetId={link.assetId}
+              originalPath={originalPath}
+              label={`Actions for reference ${position} image`}
+              deleteLabel="Delete reference…"
+              deleteDisabledReason={deleteDisabledReason}
+              onDelete={requestDelete}
+            />
+          )}
         </section>
 
         <section className="reference-detail-meta" aria-label="Reference information">
@@ -167,7 +203,29 @@ export function ReferenceDetail({
           alt={imageAlt}
           title="Full-size reference image"
           description={`The original ${roleName.toLocaleLowerCase()} reference for ${nodeName}. Press Escape, or use Close, to go back to the reference details.`}
+          actions={{
+            assetId: link.assetId,
+            originalPath,
+            menuLabel: `Actions for reference ${position} image`,
+            deleteLabel: 'Delete reference…',
+            deleteDisabledReason,
+            onDelete: requestDelete,
+          }}
           onClose={() => setFullSize(false)}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmSheet
+          title="Delete this reference?"
+          body="It will no longer influence this entity. The image stays in the Asset Library and anywhere else it is used."
+          confirmLabel="Delete reference"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            onDelete()
+            onClose()
+          }}
         />
       )}
     </Modal>

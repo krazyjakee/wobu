@@ -35,6 +35,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Image context menus copy decoded pixels, not a project path or an
+        // asset-protocol URL. Keeping that operation native makes it work the
+        // same way for every source format on every desktop webview.
+        .plugin(tauri_plugin_clipboard_manager::init())
         // The launcher picks project folders with `@tauri-apps/plugin-dialog`;
         // `capabilities/default.json` already grants it, but the plugin still
         // has to be initialised on this side or every pick fails.
@@ -242,6 +246,7 @@ pub fn run() {
             commands::assets::asset_list,
             commands::assets::asset_usage_list,
             commands::assets::asset_delete,
+            commands::assets::asset_copy_image,
             commands::generations::generation_list,
             commands::generations::mesh_concepts,
             commands::mesh::turnaround::turnaround_sheet,

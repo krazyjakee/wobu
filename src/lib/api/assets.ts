@@ -118,6 +118,9 @@ export const assetUsageList = () => call<AssetUsage[]>('asset_usage_list')
 /** Permanently delete one orphan; the backend refuses every linked/cover use. */
 export const assetDelete = (assetId: string) => call<void>('asset_delete', { assetId })
 
+/** Copy the original's displayed pixels to the OS clipboard. */
+export const assetCopyImage = (assetId: string) => call<void>('asset_copy_image', { assetId })
+
 /** Thumbnail path for grids; null when the asset is absent or cannot decode. */
 export const assetThumb = (assetId: string) => call<string | null>('asset_thumb', { assetId })
 

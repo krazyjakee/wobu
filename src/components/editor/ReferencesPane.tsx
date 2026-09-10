@@ -27,6 +27,7 @@ type ImportInput =
   { source: 'path'; name: string; path: string } | { source: 'file'; name: string; file: File }
 type ReferenceViewer = {
   link: AssetLink
+  index: number
   position: number
   cover: boolean
   thumbnailSrc: string | null
@@ -328,6 +329,8 @@ export function ReferencesPane({
           thumbnailSrc={viewer.thumbnailSrc}
           roleName={roleLabel(viewer.link.role)}
           sizeLabel={viewerAsset ? formatBytes(viewerAsset.bytes) : null}
+          readOnly={readOnly}
+          onDelete={() => updateLinks(links.filter((_, index) => index !== viewer.index))}
           onClose={() => setViewer(null)}
         />
       )}
@@ -517,6 +520,7 @@ function VirtualReferenceGrid({
               onOpen={() =>
                 onOpen({
                   link,
+                  index,
                   position: index + 1,
                   cover: coverAssetId === link.assetId,
                   thumbnailSrc: thumbs.get(link.assetId)
