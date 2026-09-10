@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wobu — world building for concept art</title>
+    <meta name="description" content="Wobu is a desktop app for building a world and making concept art that stays consistent. Describe your world once; every picture you make already knows it." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d0e12" />
+    <link rel="canonical" href="https://wobu.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wobu" />
+    <meta property="og:title" content="Wobu — world building for concept art" />
+    <meta property="og:description" content="Wobu is a desktop app for building a world and making concept art that stays consistent. Describe your world once; every picture you make already knows it." />
+    <meta property="og:url" content="https://wobu.app/" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="index.html">
+          <svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+
+          <span class="wordmark">wobu</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="index.html" aria-current="page">Overview</a>
+          <a href="guide/index.html">Guide</a>
+          <a href="download.html">Download</a>
+          <a href="legal.html">Legal</a>
+          <a class="nav-source" href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Runs on your computer · Uses your own AI account · Free and open source</p>
+          <h1>Write your world down once.<br />Every picture remembers it.</h1>
+          <p class="lede">
+            Wobu is a desktop app for people building worlds — a campaign setting, a game, a story.
+            Describe your art style, your peoples, their cultures, their places and your characters
+            once. From then on, every picture you make already knows all of it.
+          </p>
+          <p class="cta-row">
+            <a class="btn btn-primary" href="download.html">Download the beta</a>
+            <a class="btn" href="guide/index.html">Read the guide</a>
+          </p>
+          <p class="hero-note">
+            Still in beta, and the downloads are not signed yet — so your computer will warn you
+            about them. Only ever get Wobu from
+            <a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">GitHub Releases</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="band" aria-labelledby="problem-heading">
+        <div class="wrap">
+          <h2 id="problem-heading">A world is a family tree, not a pile of prompts</h2>
+          <p class="measure">
+            A character comes from a people. That people lives in a world. The whole thing is drawn
+            in one look. Right now all of that sits in your head, and you retype a rough version of
+            it into every prompt — a little differently each time. That is why two people of the same
+            species end up looking unrelated, why the light keeps drifting, and why by the fortieth
+            picture your world has stopped looking like one place.
+          </p>
+          <figure class="prompt-figure">
+        <div class="prompt">
+          <span class="frag frag-style">
+            <span class="frag-label">Style</span>
+            <span class="frag-text">gritty painterly concept art, heavy rim light</span>
+          </span>
+          <span class="frag frag-world">
+            <span class="frag-label">World</span>
+            <span class="frag-text">ash-choked post-eruption coast, late iron age</span>
+          </span>
+          <span class="frag frag-species">
+            <span class="frag-label">Species</span>
+            <span class="frag-text">tall narrow-shouldered digitigrade humanoid</span>
+          </span>
+          <span class="frag frag-culture">
+            <span class="frag-label">Culture</span>
+            <span class="frag-text">ember guild kiln-glaze plate, signet at the collarbone</span>
+          </span>
+          <span class="frag frag-place">
+            <span class="frag-label">Place</span>
+            <span class="frag-text">cinder bay harbour light, salt-bleached timber</span>
+          </span>
+          <span class="frag frag-subject">
+            <span class="frag-label">Subject</span>
+            <span class="frag-text">Kael Vantris, scarred, ex-guild, full body</span>
+          </span>
+        </div>
+        <figcaption>
+          The prompt Wobu wrote for one character. Each part is labelled and tinted with the page it
+          came from, and you can turn any of them down — or off — for a single picture.
+        </figcaption>
+      </figure>
+        </div>
+      </section>
+
+      <section class="band" aria-labelledby="how-heading">
+        <div class="wrap">
+          <h2 id="how-heading">How it works</h2>
+          <ol class="steps">
+          <li class="step">
+            <p class="step-number" aria-hidden="true">1</p>
+            <h3>Write your world down once</h3>
+            <p>Make a <code>.wobu</code> project and fill in two pages: how your world looks, and what
+      is true in it. Then add your peoples, their cultures, their places and your characters, a
+      page each. They are ordinary text files you could still read if Wobu vanished tomorrow.</p>
+          </li>
+          <li class="step">
+            <p class="step-number" aria-hidden="true">2</p>
+            <h3>Tidy up the messy bits</h3>
+            <p>Half-finished notes become a proper description, using your own Claude or Gemini
+      account. You get a side-by-side look at what changed and decide what to keep — nothing is
+      saved until you say so.</p>
+          </li>
+          <li class="step">
+            <p class="step-number" aria-hidden="true">3</p>
+            <h3>Make a picture</h3>
+            <p>Press Generate on anyone in your world and Wobu writes the prompt for you, gathering
+      every layer above them and the reference pictures that belong. Like what comes out? Pin it,
+      and everything below that point starts to look more like it.</p>
+          </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="band band-alt" aria-labelledby="features-heading">
+        <div class="wrap">
+          <h2 id="features-heading">What Wobu does</h2>
+          <ul class="cards">
+          <li class="card">
+            <h3>Say it once, in the right place</h3>
+            <p>Your art style belongs to the whole world. Build and anatomy belong to the species.
+      Clothing belongs to the culture. Only what makes someone <em>them</em> belongs on the
+      character. Do that and your hundredth character is quicker to make than your first — and fits
+      in better.</p>
+          </li>
+          <li class="card">
+            <h3>Scribbled notes in, proper description out</h3>
+            <p>Write the way you would in a notebook. Press <em>Enhance</em> and your notes come back
+      as a clear description — shape, build, materials, colours, and a list of things to never
+      draw. You read it and choose what to keep. Your own notes are never touched.</p>
+          </li>
+          <li class="card">
+            <h3>Nothing is hidden from you</h3>
+            <p>The prompt is always on screen, and every phrase in it is colour-coded to show which
+      page it came from. Turn any part of your world down, or off, for one picture without
+      changing anything you have written.</p>
+          </li>
+          <li class="card">
+            <h3>Pictures count as description too</h3>
+            <p>Every reference picture you add gets a job — a shape to keep, a colour palette, a
+      fabric, a pose, or just something for your own eyes. Wobu uses each one the way you meant
+      it, instead of throwing them all in together.</p>
+          </li>
+          <li class="card">
+            <h3>Your own graphics card, or a paid service</h3>
+            <p>Make pictures on your own machine through ComfyUI, or through Google Gemini. Everything
+      you make is kept with the exact settings that made it, so you can compare, try again, or
+      redo it months later.</p>
+          </li>
+          <li class="card">
+            <h3>Work with other people, no server</h3>
+            <p>Put the world on a shared drive and a few of you can work in it at once, without
+      standing on each other's toes. Or send someone a ticket and your two copies keep each other
+      up to date, machine to machine. Nothing passes through us.</p>
+          </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="band" aria-labelledby="local-heading">
+        <div class="wrap">
+          <div class="split">
+            <div>
+              <h2 id="local-heading">It all stays on your computer</h2>
+              <p>
+                A world is just a folder, ending in <code>.wobu</code>. The notes are plain text and
+                the pictures are ordinary image files, so you can open them in anything, back them
+                up, drop them on a USB stick or keep them in version control. Uninstall Wobu and your
+                world is still sitting there, still readable.
+              </p>
+              <p>
+                We run no servers. There is no account, no tracking, no crash reports and no update
+                check — the app has nowhere to phone home to. Your work leaves your computer only
+                when you press Enhance or Generate, and then it goes straight to the service you
+                chose, on your own account. Your keys are kept in your computer's own password
+                store, never in the world folder.
+              </p>
+              <p>
+                <a class="text-link" href="legal/privacy-policy.html"
+                  >Read the privacy policy →</a
+                >
+              </p>
+            </div>
+            <div class="panel">
+              <h3>What Wobu is not</h3>
+              <ul class="plain">
+            <li><strong>Not a finishing tool.</strong> You get concept art and rough 3D shapes to hand to an artist.</li>
+            <li><strong>Not a wiki or a writing app.</strong> Notes are here to shape pictures.</li>
+            <li><strong>Not a node graph.</strong> ComfyUI already does that beautifully, and Wobu can drive it.</li>
+            <li><strong>Not a service.</strong> No account to make, nothing to sign in to, nothing to subscribe to.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band band-alt" aria-labelledby="status-heading">
+        <div class="wrap">
+          <h2 id="status-heading">Where it is up to</h2>
+          <p class="measure">
+            Wobu is in beta and worked on most days. Building your world, sharing it, syncing between
+            two machines, reference pictures, Enhance and the whole picture-making loop all work
+            today — as do Forge, variant grids, teaching a model one character's look, borrowing a
+            style from another world, scenes with several characters in them, and exporting your
+            world as a browsable website. Concept 3D is half there: Wobu can show and export meshes,
+            but it cannot yet start one from a turnaround for you.
+          </p>
+          <p>
+            <a class="text-link" href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener"
+              >See exactly what is finished →</a
+            >
+          </p>
+        </div>
+      </section>
+
+      <section class="band cta-band" aria-labelledby="download-heading">
+        <div class="wrap">
+          <h2 id="download-heading">Try it</h2>
+          <p class="measure">
+            There are installers for Windows, macOS and Linux. If you would rather build it
+            yourself, the whole thing is on GitHub.
+          </p>
+          <p class="cta-row">
+            <a class="btn btn-primary" href="download.html">Download Wobu</a>
+            <a class="btn" href="https://github.com/krazyjakee/wobu" rel="noopener">View the source</a>
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <p class="footer-brand"><svg class="mark" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="66 68 372 372">
+  <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M140 176 V 226 Q140 258 172 258 H 216" stroke="#e2a44f" />
+    <path d="M256 296 V 350 Q256 382 288 382 H 332" stroke="#4fd1c5" />
+  </g>
+
+  <circle cx="140" cy="136" r="58" fill="#e2a44f" />
+  <circle cx="256" cy="256" r="54" fill="#4fd1c5" />
+  <circle cx="372" cy="380" r="50" fill="#9d7cf5" />
+</svg>
+<span class="wordmark">wobu</span></p>
+            <p>
+              Wobu runs no servers. There is no account, no tracking and no update check. The AI
+              work happens on your own machine, or on your own account with a service you chose.
+            </p>
+          </div>
+          <div class="footer-column">
+            <h2>Product</h2>
+            <ul>
+              <li><a href="index.html">Overview</a></li>
+              <li><a href="guide/index.html">User guide</a></li>
+              <li><a href="download.html">Download</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/docs/09-roadmap.md" rel="noopener">Roadmap</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="legal.html">Legal overview</a></li>
+              <li><a href="legal/privacy-policy.html">Privacy policy</a></li>
+              <li><a href="legal/terms.html">Terms of use</a></li>
+              <li><a href="legal/licence.html">MIT licence</a></li>
+            </ul>
+          </div>
+          <div class="footer-column">
+            <h2>Source</h2>
+            <ul>
+              <li><a href="https://github.com/krazyjakee/wobu" rel="noopener">GitHub repository</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/issues" rel="noopener">Issue tracker</a></li>
+              <li><a href="https://github.com/krazyjakee/wobu/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-legal">
+          © 2026 Jake Cattrall. Wobu is free software under the
+          <a href="legal/licence.html">MIT licence</a>. This site is built from the
+          <a href="https://github.com/krazyjakee/wobu" rel="noopener">Wobu source code</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
