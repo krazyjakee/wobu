@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::id::VariantId;
+use crate::scene::Text;
 use crate::source::{SOURCE_SCHEMA_VERSION, WORLD_SCHEMA_VERSION, check_version_for};
 use crate::{Condition, EntityId, Name, SceneId, StateSchema, Value};
 
@@ -93,6 +95,123 @@ pub struct QuestTransition {
     pub when: Condition,
 }
 
+/// One stage of a quest, and what the player is told to do while in it.
+///
+/// A stage used to be a bare [`Name`] — `available`, `completed` — and nothing in
+/// the model carried a player-facing sentence for "what should I be doing now".
+/// A host with nothing authored to show falls back to the nearest string it can
+/// find, and in practice that was the current beat's title: a display name
+/// written for the writer, shown for a beat the player has not reached, which
+/// puts an objective on screen that names a mistake before it happens.
+///
+/// The bare form is still accepted and still written back unchanged, so an
+/// existing World file round-trips byte for byte and a stage nobody has written
+/// an objective for costs nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuestStage {
+    pub name: Name,
+    /// `None` is a stage with no objective authored yet. A task in Development
+    /// and a blocker in Release, exactly as a dialogue slot with no wording is.
+    pub objective: Option<QuestObjective>,
+}
+
+impl QuestStage {
+    /// A stage with nothing authored for the player yet.
+    pub fn new(name: Name) -> QuestStage {
+        QuestStage { name, objective: None }
+    }
+
+    /// Whether there is wording a host could show. Empty wording is the same
+    /// answer as no wording: neither is something to put in a quest log.
+    pub fn has_objective(&self) -> bool {
+        self.objective.as_ref().is_some_and(|o| !o.text.body.trim().is_empty())
+    }
+}
+
+impl From<Name> for QuestStage {
+    fn from(name: Name) -> QuestStage {
+        QuestStage::new(name)
+    }
+}
+
+/// The player-facing wording for one stage.
+///
+/// A [`VariantId`] and a [`Text`], which is to say the same pair every other
+/// piece of authored wording in this model is: the id is what a locale row, a
+/// recording and an approval are filed under, and the [`Revision`](crate::Revision)
+/// inside the text is what they are keyed to. Giving an objective its own shape
+/// would have meant a seventh kind of wording that the string table, the review
+/// state and the freshness rules all had to learn about separately.
+///
+/// There is no `when`. A stage *is* the condition — the quest's transitions say
+/// when the player is in it — so conditional objective wording would be two
+/// statements of the same thing that can disagree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QuestObjective {
+    pub id: VariantId,
+    pub text: Text,
+}
+
+impl QuestObjective {
+    /// Wording somebody typed.
+    pub fn written(body: impl Into<String>) -> QuestObjective {
+        QuestObjective { id: VariantId::new(), text: Text::written(body) }
+    }
+}
+
+/// The bare name and the structured form are one type, and the bare one is
+/// written back bare.
+///
+/// Not `#[serde(untagged)]` on a two-variant enum, because then a stage would be
+/// two types everywhere in the codebase and every reader would start with a
+/// match. One struct with a hand-written pair of impls keeps `stage.name` the
+/// answer to "which stage is this" regardless of how the file spelled it.
+impl Serialize for QuestStage {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        match &self.objective {
+            // Byte-identical to what was read. An existing World file that nobody
+            // has added an objective to must not be rewritten by being opened:
+            // it is a file a collaborator merges.
+            None => self.name.serialize(serializer),
+            Some(objective) => {
+                let mut out = serializer.serialize_struct("QuestStage", 2)?;
+                out.serialize_field("name", &self.name)?;
+                out.serialize_field("objective", objective)?;
+                out.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for QuestStage {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Structured {
+            name: Name,
+            #[serde(default)]
+            objective: Option<QuestObjective>,
+        }
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Either {
+            Bare(Name),
+            Structured(Structured),
+        }
+        Ok(match Either::deserialize(deserializer)? {
+            Either::Bare(name) => QuestStage { name, objective: None },
+            Either::Structured(Structured { name, objective }) => QuestStage { name, objective },
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Quest {
@@ -100,12 +219,63 @@ pub struct Quest {
     pub name: String,
     pub summary: String,
     #[serde(default)]
-    pub stages: Vec<Name>,
+    pub stages: Vec<QuestStage>,
     pub initial: Name,
     #[serde(default)]
     pub transitions: Vec<QuestTransition>,
     #[serde(default)]
     pub scene_ids: Vec<SceneId>,
+}
+
+impl Quest {
+    /// The stage names, in author order.
+    ///
+    /// The order is the author's and is preserved, because a declared enum of
+    /// quest stages is compared against this list and a set would make that
+    /// comparison depend on hash order.
+    pub fn stage_names(&self) -> Vec<Name> {
+        self.stages.iter().map(|stage| stage.name.clone()).collect()
+    }
+
+    /// Whether this quest declares a stage by that name.
+    pub fn declares(&self, stage: &Name) -> bool {
+        self.stages.iter().any(|one| &one.name == stage)
+    }
+
+    pub fn stage(&self, name: &Name) -> Option<&QuestStage> {
+        self.stages.iter().find(|one| &one.name == name)
+    }
+
+    /// The stages a playthrough can actually be in: the initial stage, and
+    /// everything a transition can lead to from one that is already reachable.
+    ///
+    /// Reachability here is over the *authored graph* and deliberately ignores
+    /// conditions: deciding whether a condition can ever hold needs a search over
+    /// state, and answering "unreachable" wrongly in the reassuring direction
+    /// would excuse a missing objective the player will see. A stage nothing
+    /// leads to is excluded, because requiring wording for a stage that cannot
+    /// be entered would be busywork with no symptom.
+    pub fn reachable_stages(&self) -> Vec<&QuestStage> {
+        let mut reached: BTreeSet<&Name> = BTreeSet::new();
+        if self.declares(&self.initial) {
+            reached.insert(&self.initial);
+        }
+        // At most one new stage per pass, so this terminates on a cyclic quest.
+        for _ in 0..self.stages.len() {
+            let grown: Vec<&Name> = self
+                .transitions
+                .iter()
+                .filter(|t| reached.contains(&t.from) && self.declares(&t.to))
+                .map(|t| &t.to)
+                .collect();
+            let before = reached.len();
+            reached.extend(grown);
+            if reached.len() == before {
+                break;
+            }
+        }
+        self.stages.iter().filter(|stage| reached.contains(&stage.name)).collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,6 +348,15 @@ impl WorldDocument {
             if ["acts", "arcs", "tags"].iter().any(|key| value.get(key).is_some()) {
                 return Err(crate::source::require_v2());
             }
+            // A bare stage name is version-1 shape and stays readable; a stage
+            // carrying an objective is not, and a version-1 file claiming one is
+            // refused rather than read and then written back as something else.
+            if value["quests"]
+                .as_array()
+                .is_some_and(|quests| quests.iter().any(structured_stages))
+            {
+                return Err(crate::source::require_v2());
+            }
         }
         crate::source::parse_yaml(yaml)
     }
@@ -190,7 +369,13 @@ impl WorldDocument {
             });
         }
         if self.schema_version == 1
-            && (!self.acts.is_empty() || !self.arcs.is_empty() || !self.tags.is_empty())
+            && (!self.acts.is_empty()
+                || !self.arcs.is_empty()
+                || !self.tags.is_empty()
+                || self
+                    .quests
+                    .iter()
+                    .any(|quest| quest.stages.iter().any(|stage| stage.objective.is_some())))
         {
             return Err(crate::source::require_v2());
         }
@@ -290,9 +475,60 @@ impl WorldDocument {
             check.condition(event.id, "when", &event.when);
         }
         for quest in &self.quests {
-            let stages: BTreeSet<_> = quest.stages.iter().collect();
+            let stages: BTreeSet<_> = quest.stages.iter().map(|stage| &stage.name).collect();
             if stages.len() != quest.stages.len() {
                 check.issue(quest.id, "stages", "Quest stages must be unique.");
+            }
+            // A reachable stage with nothing to show is a task here and a Release
+            // blocker in the compiler — the same pair of answers a dialogue slot
+            // with no wording gets. Reported on the Quest form, because that is
+            // where the person who would write it is looking.
+            for stage in quest.reachable_stages() {
+                // Only an absent one. Wording that is present but blank is its own
+                // diagnostic below, and saying both would be two rows for one
+                // mistake. The compiler's Release gate treats them alike, which is
+                // right there: neither is shippable.
+                if stage.objective.is_none() {
+                    check.issue(
+                        quest.id,
+                        "stages.objective",
+                        &format!(
+                            "Stage `{}` has no player-facing objective. Without one a host has \
+                             nothing authored to show as the current objective.",
+                            stage.name
+                        ),
+                    );
+                }
+            }
+            for stage in &quest.stages {
+                let Some(objective) = &stage.objective else { continue };
+                // An objective is authored wording, so the two things that can be
+                // wrong with any authored wording are wrong with this too. Both
+                // are reported rather than repaired: resealing a revision is what
+                // would break the locale row keyed to it.
+                if objective.text.body.trim().is_empty() {
+                    check.issue(
+                        quest.id,
+                        "stages.objective",
+                        &format!(
+                            "Stage `{}` has an empty objective. Write what the player should do, \
+                             or remove it.",
+                            stage.name
+                        ),
+                    );
+                }
+                if !objective.text.revision_matches() {
+                    check.issue(
+                        quest.id,
+                        "stages.objective",
+                        &format!(
+                            "Stage `{}`'s recorded revision does not describe its objective text. \
+                             Anything keyed to it — a translation, an approval — has stopped \
+                             matching.",
+                            stage.name
+                        ),
+                    );
+                }
             }
             if !stages.contains(&quest.initial) {
                 check.issue(
@@ -366,4 +602,9 @@ impl WorldCheck<'_> {
 
 fn always() -> Condition {
     Condition::Always
+}
+
+/// Whether any of this quest's stages is written as a map rather than a name.
+fn structured_stages(quest: &serde_json::Value) -> bool {
+    quest["stages"].as_array().is_some_and(|stages| stages.iter().any(|stage| stage.is_object()))
 }

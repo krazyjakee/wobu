@@ -531,3 +531,63 @@ fn prepared_media_package_roundtrip_native_timing_and_fallback_validation() {
     untimed.takes.get_mut(&key.token()).unwrap().timing = None;
     assert!(Package::build(graph, false).unwrap().with_media(untimed, files).is_err());
 }
+
+/// #207. A quest stage objective is a string in the same table as every other
+/// string, which is what makes `strings/en.json` one list for a translator.
+#[test]
+fn a_quest_stage_objective_is_externalised_like_any_other_wording() {
+    let mut graph = fixture(Profile::Release);
+    let objective = QuestObjective::written("Find Rosa at the diner and ask about work.");
+    let id = objective.id.to_string();
+    let revision = objective.text.revision.to_string();
+    graph.quests.insert(
+        "00000000000000000000000010".into(),
+        wobu_narrative_compiler::CompiledQuest {
+            initial: Name::new("available").unwrap(),
+            stages: vec![wobu_narrative_compiler::CompiledStage {
+                name: Name::new("available").unwrap(),
+                objective: Some(wobu_narrative_compiler::CompiledObjective {
+                    id: id.clone(),
+                    text: objective.text.body.clone(),
+                    revision: revision.clone(),
+                }),
+            }],
+            transitions: vec![],
+        },
+    );
+
+    let package = Package::build(graph, false).unwrap();
+    // Declared, so a reader that cannot deliver objectives refuses the package
+    // rather than shipping a quest log with nothing in it.
+    assert_eq!(
+        package.manifest.required_capabilities.get(wobu_narrative_package::QUESTS),
+        Some(&1)
+    );
+
+    let temp = Temp::new();
+    let root = temp.0.join("package");
+    publish(&package, &root).unwrap();
+    let strings: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("strings/en.json")).unwrap()).unwrap();
+    assert_eq!(strings[&id]["text"], "Find Rosa at the diner and ask about work.");
+    assert_eq!(strings[&id]["revision"], revision);
+
+    // And the graph read back out carries the wording again, keyed the same way.
+    let reread = read(&root).unwrap().graph().unwrap();
+    let stage = &reread.quests["00000000000000000000000010"].stages[0];
+    let restored = stage.objective.as_ref().unwrap();
+    assert_eq!(restored.text, "Find Rosa at the diner and ask about work.");
+    assert_eq!(restored.revision, revision);
+    // The graph file itself holds no wording: the string table is the one copy.
+    let graph_bytes = std::fs::read(root.join("graph.json")).unwrap();
+    assert!(!String::from_utf8_lossy(&graph_bytes).contains("Find Rosa"));
+}
+
+#[test]
+fn a_package_with_no_quests_declares_no_quest_capability() {
+    let package = Package::build(fixture(Profile::Release), false).unwrap();
+    assert!(
+        !package.manifest.required_capabilities.contains_key(wobu_narrative_package::QUESTS),
+        "existing packages must keep their identities"
+    );
+}

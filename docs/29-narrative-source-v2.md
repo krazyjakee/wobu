@@ -38,6 +38,59 @@ Duplicate World record IDs and empty names remain visible draft diagnostics. The
 become runtime graph structure. Review refuses to attest against invalid classification references;
 repair the reference or remove it explicitly.
 
+## A scene's setting
+
+Scene has an optional `setting_id` naming a `setting` node in the world model (#206). It is an
+`EntityId` for the same reason a participant is: a scene's place is the project's place, not a
+narrative-only copy of it. Absent means the place is not stated yet, which is the normal state of a
+half-written scene and never an error.
+
+Nothing parses `summary` for a location. The convention it replaces — a `Location: Name [id]` line
+inside the free-text summary — broke silently, because a summary edit that reflowed the sentence made
+the scene unplaceable with no diagnostic and no symptom until a player arrived somewhere and nothing
+started.
+
+An id that does not resolve to a setting node — a character picked by mistake, a deleted node — is a
+diagnostic against the scene's setting field with code `unknown_setting`, and it refuses a compile at
+both profiles: a scene that cannot be placed has no defensible runtime meaning. The reference reaches
+the compiled scene, so a release build carries it without a debug source map.
+
+## Quest stage objectives
+
+A quest stage is a bare name or a name with player-facing objective wording beside it (#207):
+
+```yaml
+stages:
+  - name: available
+    objective:
+      id: 01J…
+      text:
+        revision: 71578f9e…
+        body: Find Rosa at the diner and ask about work.
+  - completed
+```
+
+Both shapes are read and each is written back in the shape it was read in, so an existing World file
+that nobody has written an objective for round-trips byte for byte. The objective is a `VariantId` and
+a `Text`, the same pair every other piece of authored wording is, so one revision, one provenance, one
+review state and one string-table identity serve it. There is no `when` on an objective: a stage *is*
+the condition.
+
+A reachable stage with no objective is an authoring task on the Quest form and refuses a Release
+compile with code `missing_objective` — the same pair of answers a dialogue slot with no wording gets.
+A stage nothing leads to is exempt.
+
+## Repeated wording
+
+Two wordings that share a revision are the same words with the same provenance, stored in two places
+(#209). Reported project-wide as `duplicated_wording`, a warning at both profiles, naming every copy
+across scenes and supporting text assets. The check is on the digest, never on text similarity:
+wordings that differ only in provenance hash differently and are not reported.
+
+A repetition is often deliberate, so each finding can be allowed with a rationale. The suppression is
+keyed to the revision rather than to the places — moving a beat must not revive an answered warning —
+and lives in a policy file rather than the derived index, so rebuilding the index does not discard it.
+
 ## Compatibility and immutable history
 
 Version 1 source rejects the new fields, including explicitly empty fields, and rejects Unresolved.

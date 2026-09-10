@@ -80,7 +80,8 @@ pub use text::{
 
 pub use world::{
     Belief, Fact, FutureRestriction, KnowledgeClaim, KnowledgeProvenance, NamedClassification,
-    Quest, QuestTransition, Relationship, WorldDiagnostic, WorldDocument, WorldEvent,
+    Quest, QuestObjective, QuestStage, QuestTransition, Relationship, WorldDiagnostic,
+    WorldDocument, WorldEvent,
 };
 
 mod source_paths;

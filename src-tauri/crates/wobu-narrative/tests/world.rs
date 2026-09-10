@@ -1,6 +1,10 @@
 use std::collections::BTreeSet;
 use wobu_narrative::*;
 
+fn name(raw: &str) -> Name {
+    Name::new(raw).unwrap()
+}
+
 fn fixture() -> WorldDocument {
     let fact = Fact {
         id: wobu_core::new_id(),
@@ -81,7 +85,7 @@ fn duplicate_ids_invalid_quest_stages_and_undeclared_conditions_are_diagnostics(
         id: world.facts[0].id,
         name: "Quest".into(),
         summary: String::new(),
-        stages: vec![Name::new("started").unwrap()],
+        stages: vec![Name::new("started").unwrap().into()],
         initial: Name::new("missing").unwrap(),
         transitions: vec![QuestTransition {
             from: Name::new("started").unwrap(),
@@ -182,4 +186,151 @@ fn nested_world_conditions_and_legacy_provenance_share_canonical_map_source() {
     let legacy = serde_norway::to_string(&old).unwrap();
     assert!(legacy.contains("!rumour"));
     assert_eq!(WorldDocument::parse(&legacy).unwrap(), old);
+}
+
+/// #207. A stage is a bare name or a name with player-facing wording, and the
+/// bare one is written back bare.
+#[test]
+fn quest_stages_accept_both_shapes_and_round_trip_in_the_one_they_were_written_in() {
+    let bare = "\
+schema_version: 2
+quests:
+  - id: 01J00000000000000000000001
+    name: A shift at the diner
+    summary: Rosa puts her to work.
+    stages:
+      - available
+      - completed
+    initial: available
+";
+    let document = WorldDocument::parse(bare).unwrap();
+    assert_eq!(document.quests[0].stage_names(), [name("available"), name("completed")]);
+    assert!(document.quests[0].stages.iter().all(|stage| stage.objective.is_none()));
+    // Byte-identical: an existing World file nobody has added an objective to is
+    // a file a collaborator merges, and opening it must not rewrite it.
+    assert!(document.to_yaml().unwrap().contains("- available\n"));
+    assert_eq!(WorldDocument::parse(&document.to_yaml().unwrap()).unwrap(), document);
+
+    let mut authored = document.clone();
+    authored.quests[0].stages[0].objective =
+        Some(QuestObjective::written("Find Rosa at the diner and ask about work."));
+    let yaml = authored.to_yaml().unwrap();
+    assert!(yaml.contains("Find Rosa at the diner"), "{yaml}");
+    assert_eq!(WorldDocument::parse(&yaml).unwrap(), authored);
+    // The stage nobody wrote for is still a bare name in the same file.
+    assert!(yaml.contains("- completed\n"), "{yaml}");
+}
+
+#[test]
+fn a_version_one_world_cannot_carry_objectives_in_either_direction() {
+    let v1 = "\
+schema_version: 1
+quests:
+  - id: 01J00000000000000000000001
+    name: Quest
+    summary: ''
+    stages:
+      - name: available
+        objective:
+          id: 01J00000000000000000000009
+          text:
+            revision: '00000000000000000000000000000000'
+            body: Find Rosa.
+    initial: available
+";
+    assert!(WorldDocument::parse(v1).unwrap_err().to_string().contains("version 2"));
+
+    let mut document = WorldDocument {
+        schema_version: 1,
+        quests: vec![Quest {
+            id: wobu_core::Id::generate(),
+            name: "Quest".into(),
+            summary: String::new(),
+            stages: vec![name("available").into()],
+            initial: name("available"),
+            transitions: vec![],
+            scene_ids: vec![],
+        }],
+        ..Default::default()
+    };
+    // Bare stages are version-1 shape, so this is still writable.
+    assert!(document.to_yaml().is_ok());
+    document.quests[0].stages[0].objective = Some(QuestObjective::written("Find Rosa."));
+    assert!(document.to_yaml().unwrap_err().to_string().contains("version 2"));
+}
+
+/// Reachability is over the authored graph and ignores conditions: answering
+/// "unreachable" in the reassuring direction would excuse a missing objective
+/// that a player will see.
+#[test]
+fn reachable_stages_follow_transitions_from_the_initial_stage_and_nothing_else() {
+    let quest = Quest {
+        id: wobu_core::Id::generate(),
+        name: "A shift at the diner".into(),
+        summary: String::new(),
+        stages: vec![
+            name("available").into(),
+            name("working").into(),
+            name("completed").into(),
+            name("orphaned").into(),
+        ],
+        initial: name("available"),
+        transitions: vec![
+            QuestTransition {
+                from: name("available"),
+                to: name("working"),
+                when: Condition::Always,
+            },
+            QuestTransition {
+                from: name("working"),
+                to: name("completed"),
+                when: Condition::Always,
+            },
+            // Nothing leads into `orphaned`, so requiring wording for it would be
+            // busywork with no symptom.
+            QuestTransition {
+                from: name("orphaned"),
+                to: name("completed"),
+                when: Condition::Always,
+            },
+        ],
+        scene_ids: vec![],
+    };
+    assert_eq!(
+        quest.reachable_stages().iter().map(|stage| stage.name.clone()).collect::<Vec<_>>(),
+        [name("available"), name("working"), name("completed")]
+    );
+}
+
+#[test]
+fn an_objective_that_is_blank_or_whose_revision_drifted_is_reported_against_its_quest() {
+    let mut document = WorldDocument {
+        schema_version: 2,
+        quests: vec![Quest {
+            id: wobu_core::Id::generate(),
+            name: "Quest".into(),
+            summary: String::new(),
+            stages: vec![name("available").into(), name("done").into()],
+            initial: name("available"),
+            transitions: vec![],
+            scene_ids: vec![],
+        }],
+        ..Default::default()
+    };
+    document.quests[0].stages[0].objective = Some(QuestObjective::written("   "));
+    let mut drifted = QuestObjective::written("Find Rosa.");
+    drifted.text.body = "Find Rosa at the diner.".into();
+    document.quests[0].stages[1].objective = Some(drifted);
+
+    let issues = document.diagnose(
+        &StateSchema::default(),
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    );
+    let objectives: Vec<_> =
+        issues.iter().filter(|issue| issue.field == "stages.objective").collect();
+    assert_eq!(objectives.len(), 2, "{issues:?}");
+    assert!(objectives[0].message.contains("empty objective"), "{:?}", objectives[0]);
+    assert!(objectives[1].message.contains("stopped matching"), "{:?}", objectives[1]);
 }

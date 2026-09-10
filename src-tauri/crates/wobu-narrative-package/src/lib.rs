@@ -29,6 +29,15 @@ const REQUIRED: [&str; 3] = ["graph.json", "state.json", "media.json"];
 /// reader that cannot deliver the content. It is absent from a package with no
 /// supporting text, so existing packages and their identities are unchanged.
 pub const SUPPORTING_TEXT: &str = "supporting_text";
+/// Declared by a package whose graph contains quests (#207).
+///
+/// A capability for the reason `SUPPORTING_TEXT` is one: a reader written against
+/// a version without quests would load this package, ignore the `quests` map, and
+/// show a quest log with no objectives in it — which looks like the authoring
+/// problem this feature exists to fix rather than like a reader that cannot do
+/// the job. Absent from a package with no quests, so existing packages and their
+/// identities are unchanged.
+pub const QUESTS: &str = "quests";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -130,6 +139,7 @@ impl Package {
         // translator working from `strings/en.json` cannot tell, and should not
         // need to tell, whether a line is spoken in a scene or shouted at a gate.
         let supporting_text = !graph.texts.is_empty();
+        let has_quests = !graph.quests.is_empty();
         for asset in graph.texts.values_mut() {
             for entry in &mut asset.entries {
                 for slot in &mut entry.lines {
@@ -142,6 +152,24 @@ impl Package {
                             },
                         );
                     }
+                }
+            }
+        }
+        // Quest stage objectives go into the same table, keyed by the same kind of
+        // identity and carrying the same wording revision (#207). That is what
+        // makes the locale pack one list: a translator working from
+        // `strings/en.json` cannot tell, and should not need to tell, whether a
+        // string is spoken in a scene, shouted at a gate, or shown in a quest log.
+        for quest in graph.quests.values_mut() {
+            for stage in &mut quest.stages {
+                if let Some(objective) = &mut stage.objective {
+                    strings.insert(
+                        objective.id.clone(),
+                        LocalizedString {
+                            text: std::mem::take(&mut objective.text),
+                            revision: Some(std::mem::take(&mut objective.revision)),
+                        },
+                    );
                 }
             }
         }
@@ -167,7 +195,7 @@ impl Package {
             graph_version: graph.version,
             profile,
             locale: "en".into(),
-            required_capabilities: validate::capabilities(supporting_text),
+            required_capabilities: validate::capabilities(supporting_text, has_quests),
             payload_hash: hash(&json(&records)?),
             files: records,
         };
@@ -267,11 +295,27 @@ impl Package {
                 }
             }
         }
+        for quest in graph.quests.values_mut() {
+            for stage in &mut quest.stages {
+                if let Some(objective) = &mut stage.objective {
+                    if !objective.text.is_empty() || !objective.revision.is_empty() {
+                        return Err(invalid("inline objective in packaged graph"));
+                    }
+                    let text = strings
+                        .remove(&objective.id)
+                        .ok_or_else(|| invalid(format!("missing string {}", objective.id)))?;
+                    objective.text = text.text;
+                    objective.revision =
+                        text.revision.ok_or_else(|| invalid("objective revision missing"))?;
+                }
+            }
+        }
         // The manifest is checked before the graph is parsed, so this is the
         // first point at which the declared capability can be compared with what
         // the payload actually contains. A package claiming supporting text and
         // shipping none — or the reverse — is malformed either way.
-        let mut expected_capabilities = validate::capabilities(!graph.texts.is_empty());
+        let mut expected_capabilities =
+            validate::capabilities(!graph.texts.is_empty(), !graph.quests.is_empty());
         if self.locales()?.is_some() {
             expected_capabilities.insert(LOCALISATION.into(), 1);
         }

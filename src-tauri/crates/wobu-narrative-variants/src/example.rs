@@ -84,7 +84,7 @@ pub fn fixture() -> Fixture {
         id: EntityId::generate(),
         name: "Hearing stages".into(),
         summary: String::new(),
-        stages: vec![name("arrival"), name("hearing"), name("departed")],
+        stages: vec![name("arrival").into(), name("hearing").into(), name("departed").into()],
         initial: name("arrival"),
         scene_ids: vec![scene.id],
         transitions: vec![

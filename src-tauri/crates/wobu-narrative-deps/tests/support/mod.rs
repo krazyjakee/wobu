@@ -134,7 +134,7 @@ pub fn harbour() -> World {
         id: wobu_core::new_id(),
         name: "Harbour watch".into(),
         summary: "Find out who lit the lamp.".into(),
-        stages: vec![Name::new("open").unwrap()],
+        stages: vec![Name::new("open").unwrap().into()],
         initial: Name::new("open").unwrap(),
         transitions: vec![],
         scene_ids: vec![],

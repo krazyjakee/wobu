@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Modal } from '../Modal'
 import { errorMessage } from '../../lib/api'
+import { useModalReport } from './useModalReport'
 import {
   narrativeWordingReport,
   narrativeWordingSuppress,
@@ -32,42 +33,17 @@ export function NarrativeWording({
   readOnly: boolean
   onClose: () => void
 }) {
-  const [report, setReport] = useState<WordingReport | null>(null)
-  const [loading, setLoading] = useState(true)
+  const {
+    data: report,
+    setData: setReport,
+    loading,
+    error,
+    setError,
+    refresh,
+  } = useModalReport(narrativeWordingReport)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
   const [reasons, setReasons] = useState<Record<string, string>>({})
   const busy = loading || saving
-
-  useEffect(() => {
-    let mounted = true
-    void narrativeWordingReport()
-      .then((result) => {
-        if (mounted) setReport(result)
-      })
-      .catch((reason: unknown) => {
-        if (mounted) setError(errorMessage(reason))
-      })
-      .finally(() => {
-        if (mounted) setLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  const refresh = async () => {
-    if (busy) return
-    setLoading(true)
-    setError('')
-    try {
-      setReport(await narrativeWordingReport())
-    } catch (reason) {
-      setError(errorMessage(reason))
-    } finally {
-      setLoading(false)
-    }
-  }
 
   /** Send the whole list, because the guard is what makes two writers safe. */
   const write = async (next: WordingReport['suppressions']) => {
@@ -106,7 +82,7 @@ export function NarrativeWording({
           index.
         </p>
         <div className="nrt-export-actions">
-          <button className="btn" disabled={busy} onClick={() => void refresh()}>
+          <button className="btn" disabled={busy} onClick={() => void refresh(busy)}>
             Check again
           </button>
           <button className="btn" disabled={saving} onClick={onClose}>

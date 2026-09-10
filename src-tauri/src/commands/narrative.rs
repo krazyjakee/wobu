@@ -321,6 +321,7 @@ impl DiagnosticView {
                 view.slot_id = Some(slot);
                 view.variant_id = Some(variant);
             }
+            Site::QuestObjective => view.kind = "questObjective",
             Site::TextAsset => view.kind = "textAsset",
             Site::TextTrigger => view.kind = "textTrigger",
             Site::TextEntry { entry } => {

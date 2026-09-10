@@ -113,7 +113,7 @@ impl Policy {
                 .get(&binding.variable)
                 .ok_or_else(|| invalid("Quest state variable is missing"))?;
             if decl.owner != Owner::Narrative
-                || !matches!(&decl.ty,VarType::Enum{members} if members==&quest.stages)
+                || !matches!(&decl.ty,VarType::Enum{members} if members==&quest.stage_names())
                 || self
                     .initial
                     .iter()
@@ -124,7 +124,7 @@ impl Policy {
                 ));
             }
             for (index, t) in quest.transitions.iter().enumerate() {
-                if !quest.stages.contains(&t.from) || !quest.stages.contains(&t.to) {
+                if !quest.declares(&t.from) || !quest.declares(&t.to) {
                     return Err(invalid("Quest transition references an unknown stage"));
                 }
                 let from = super::condition(&BTreeMap::from([(

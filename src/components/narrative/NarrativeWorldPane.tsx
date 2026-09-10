@@ -16,6 +16,7 @@ import {
   type WorldItem,
 } from './worldModel'
 import { WorldFields } from './WorldFields'
+import { prepareWorldText } from './worldText'
 import { NarrativeVariables } from './NarrativeVariables'
 import './world.css'
 
@@ -126,7 +127,11 @@ function WorldEditor({
     const epoch = projectSessionEpoch()
     if (!draft || disabled || required.length) return
     try {
-      await save.mutateAsync({ file: draft.file, document: draft.document })
+      // Seal the objective wording whose words changed before it is written, for
+      // the reason the Script tab does: a revision is a digest, and minting one
+      // per keystroke would churn every translation keyed to it (#207).
+      const document = await prepareWorldText(draft.file.document, draft.document)
+      await save.mutateAsync({ file: draft.file, document })
       assertProjectSession(epoch)
       if (useWorldDrafts.getState().world[projectKey] === draft)
         useWorldDrafts.getState().putWorld(projectKey, null)

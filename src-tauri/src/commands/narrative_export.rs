@@ -220,6 +220,7 @@ fn prepare_checked(
             // mid-export aborts the capture rather than silencing a warning in
             // half of it.
             wording_suppressions,
+            quests: world.quests.clone(),
         },
         &world,
         &analysis.policies,

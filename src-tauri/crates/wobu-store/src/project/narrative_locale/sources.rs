@@ -24,11 +24,61 @@ impl Project {
         if ids.windows(2).any(|w| w[0] == w[1]) {
             return Err(invalid("Scene and text identities collide."));
         }
-        let result = self.locale_capture_selected(&ids)?;
+        let mut result = self.locale_capture_selected(&ids)?;
+        self.capture_objectives(&mut result.0)?;
         if fingerprint != self.narrative_fingerprint()? {
             return Err(invalid("Narrative membership changed during production capture."));
         }
         Ok(result)
+    }
+
+    /// Add every quest stage objective to the localisation source table (#207).
+    ///
+    /// Only on the whole-project path, never on the per-scene one: an objective
+    /// belongs to a quest, not to any scene, and adding it to a single scene's
+    /// capture would file it under whichever scene happened to be open.
+    ///
+    /// `ready` is read off the objective's own recorded lifecycle — approved,
+    /// current, locked and describing its own words — rather than from verified
+    /// approval history, and that is a weaker claim than the one made for scene
+    /// dialogue. It is also the only claim available: the review machinery is
+    /// keyed to scene and text documents, and World is neither. The consequence
+    /// worth knowing is that a hand-edited World file can present an objective as
+    /// ready without a recorded approval behind it, which is why the diagnostics
+    /// on the objective's revision exist.
+    fn capture_objectives(&self, result: &mut BTreeMap<String, SourceLine>) -> Result<()> {
+        let Some((world, _)) = self.world_document()? else { return Ok(()) };
+        for quest in &world.quests {
+            for stage in &quest.stages {
+                let Some(objective) = &stage.objective else { continue };
+                let text = &objective.text;
+                let lifecycle = &text.lifecycle;
+                let source = SourceLine {
+                    id: objective.id.to_string(),
+                    slot: objective.id.to_string(),
+                    container: quest.id.to_string(),
+                    // Not a person and not the narrator: an objective is the game
+                    // telling the player what to do, and naming a speaker would
+                    // invite somebody to record it in a character's voice.
+                    speaker: "Objective".into(),
+                    text: text.body.clone(),
+                    revision: text.revision.to_string(),
+                    guard: hash(&(&text.revision, &quest.id, &stage.name, lifecycle)),
+                    context: format!("{} / {}\n{}", quest.name, stage.name, quest.summary),
+                    delivery_notes:
+                        "Quest log objective for this stage. Shown while the quest is at it.".into(),
+                    placeholders: locale::format::placeholders(&text.body),
+                    ready: text.revision_matches()
+                        && lifecycle.review == wobu_narrative::ReviewState::Approved
+                        && lifecycle.freshness == Freshness::Current
+                        && lifecycle.policy == PolicyKind::Locked,
+                };
+                if result.insert(source.id.clone(), source).is_some() {
+                    return Err(invalid("Duplicate localisation stable ID."));
+                }
+            }
+        }
+        Ok(())
     }
     pub(super) fn locale_capture_selected(
         &self,

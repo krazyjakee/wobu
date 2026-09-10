@@ -19,9 +19,11 @@ and execution are the [runtime contract](17-narrative-runtime-contract.md); vers
 | Relationship | A directed `from`/`to` pair, a named kind, a typed value and a condition | World `EntityId` |
 | WorldEvent | A summary, the facts it establishes, the entities present and a condition | World `EntityId` |
 | Quest | Declared stages, an initial stage, conditional transitions and scene membership | World `EntityId` |
+| QuestStage | A stage name and, optionally, the player-facing objective for it | Its name within the quest |
+| QuestObjective | One wording with its revision, provenance and lifecycle | `VariantId` |
 | FutureRestriction | A fact withheld from named characters until an explicit condition | World `EntityId` |
 | Act / arc / tag | A named classification a scene may reference | World `EntityId` |
-| Scene | Classification, participants, an entry condition, ordered beats and tombstones | `SceneId` |
+| Scene | Classification, a setting, participants, an entry condition, ordered beats and tombstones | `SceneId` |
 | Beat | Intents, must-convey and must-not-reveal prose, dialogue, choices and outcomes | `BeatId` |
 | DialogueSlot | A speaker, a generation policy and ordered variants | `DialogueSlotId` |
 | Variant | A condition and one wording with its revision, provenance and lifecycle | `VariantId` |
@@ -88,6 +90,23 @@ resolves a branch, picks a variant or advances a cursor.
   of its declared stages. Scenario overrides are validated and applied before any scene entry
   condition is evaluated. Unknown variables, wrong types and out-of-range values fail
   initialization.
+- **A quest stage is derived from state, and saved anyway.** After every write to state the runtime
+  walks each quest forward: transitions are tried in author order and the first whose condition holds
+  wins, bounded by the number of stages the quest declares so a cycle settles rather than spinning.
+  The reached stage is stored in the snapshot rather than recomputed on restore, because a quest that
+  has passed through a stage has passed through it, and re-deriving from the current state would walk
+  a quest through a condition that has since stopped holding. A quest never moves the story: it has
+  no beats, no targets and no effects, and advancing one writes no state.
+- **A stage's objective is the authored answer to "what now".** Declared on the stage, compiled into
+  the graph beside the stage name, and exported through the same `strings/en.json` table as dialogue
+  so it is translated and reviewed like any other wording. A reachable stage with no objective is a
+  task in Development and a blocker in Release, exactly as a dialogue slot with no wording is —
+  without one a host has nothing authored to show and falls back to a beat title, which is a display
+  name written for the writer and often belongs to a beat the player has not reached.
+- **A scene's place is a field, not a sentence.** `setting_id` names a `setting` node in the world
+  model. Nothing parses `summary` for it: a summary is prose, and prose is inert. A reference that
+  does not resolve to a setting node is a diagnostic against the scene and refuses a compile at
+  every profile, because a scene that cannot be placed has no runtime meaning.
 - **Author order is the order.** Beats, dialogue slots, variants, choices, outcomes and text entries
   are ordered by their position in the list; there is no `order` field that could disagree with the
   position it is stored at. Reordering beats changes no destinations, and the first authored beat is

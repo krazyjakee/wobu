@@ -111,6 +111,16 @@ impl Package {
                 }
             }
         }
+        // An objective is looked up exactly as a line is, because it is in the
+        // same table under the same kind of id (#207) — otherwise a translated
+        // build would show a translated story with an English quest log.
+        for quest in graph.quests.values_mut() {
+            for stage in &mut quest.stages {
+                if let Some(objective) = &mut stage.objective {
+                    objective.text = text(&objective.id)?;
+                }
+            }
+        }
         validate::graph(&graph)?;
         Ok(graph)
     }

@@ -96,6 +96,13 @@ pub enum Site {
         slot: DialogueSlotId,
         variant: VariantId,
     },
+    /// A quest stage's player-facing objective wording (#207).
+    ///
+    /// Unit rather than carrying the quest and stage, because a stage is named by
+    /// a [`Name`](crate::Name) and [`Site`] is `Copy` — every caller copies one
+    /// out of a diagnostic. Which quest and which stage travel beside the site on
+    /// the diagnostic itself, where they can be owned.
+    QuestObjective,
     /// A supporting text asset as a whole (#167).
     ///
     /// The counterpart of [`Site::Scene`], and separate from it rather than
@@ -139,6 +146,7 @@ impl fmt::Display for Site {
             Site::Variant { beat, slot, variant } => {
                 write!(f, "beat {beat}, slot {slot}, variant {variant}")
             }
+            Site::QuestObjective => f.write_str("quest stage objective"),
             Site::TextAsset => f.write_str("text asset"),
             Site::TextTrigger => f.write_str("text asset trigger"),
             Site::TextEntry { entry } => write!(f, "entry {entry}"),

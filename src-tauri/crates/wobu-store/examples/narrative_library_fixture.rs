@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             id: id(4_000_000 + number),
             name: format!("Harbor inquiry {number:02}"),
             summary: "Overlapping district investigations".into(),
-            stages: vec!["investigating".parse()?],
+            stages: vec![wobu_narrative::Name::new("investigating")?.into()],
             initial: "investigating".parse()?,
             transitions: vec![],
             scene_ids: scene_ids

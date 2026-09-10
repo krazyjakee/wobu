@@ -19,6 +19,8 @@ pub fn compile_with_analysis(
             compiled.diagnostics.push(CompileDiagnostic {
                 scene: policy.target.scene.to_string(),
                 asset: None,
+                quest: None,
+                stage: None,
                 site,
                 severity,
                 code: code.into(),

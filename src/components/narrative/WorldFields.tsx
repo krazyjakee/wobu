@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react'
 import type { VariableDecl } from '../../lib/api'
-import type { WorldDocument } from '../../lib/api/narrativeWorld'
+import type { QuestStage, WorldDocument } from '../../lib/api/narrativeWorld'
+import { setStageObjective, stageName, stageObjective } from '../../lib/api/narrativeWorld'
 import type { WorldItem } from './worldModel'
 import { parseSafeInteger } from './integerInput'
+
+/** Stage names as picker options, whichever shape the file wrote them in. */
+const stageOptions = (stages: QuestStage[]) =>
+  stages.map((stage) => ({ id: stageName(stage), name: stageName(stage) }))
+
 import { TypedCondition as ConditionEditor } from './TypedCondition'
 
 export interface NamedOption {
@@ -282,13 +288,40 @@ export function WorldFields({
         </label>
         <Lines
           label="Quest stages (one name per line)"
-          values={item.stages}
-          onChange={(stages) => onChange({ ...item, stages })}
+          values={item.stages.map(stageName)}
+          // Renaming or reordering keeps each stage's objective with its name, so
+          // editing this list does not silently drop wording somebody wrote.
+          onChange={(names) =>
+            onChange({
+              ...item,
+              stages: names.map(
+                (name) => item.stages.find((one) => stageName(one) === name) ?? name,
+              ),
+            })
+          }
         />
+        {item.stages.map((stage, index) => (
+          <label key={stageName(stage)}>
+            {`Objective for ${stageName(stage)}`}
+            <textarea
+              data-narrative-field={`quest:objective:${stageName(stage)}`}
+              value={stageObjective(stage)?.text.body ?? ''}
+              placeholder="What the player should do while the quest is at this stage."
+              onChange={(e) =>
+                onChange({
+                  ...item,
+                  stages: item.stages.map((one, i) =>
+                    i === index ? setStageObjective(one, e.target.value) : one,
+                  ),
+                })
+              }
+            />
+          </label>
+        ))}
         <RecordPicker
           label="Initial stage"
           value={item.initial}
-          options={item.stages.map((id) => ({ id, name: id }))}
+          options={stageOptions(item.stages)}
           onChange={(initial) => onChange({ ...item, initial })}
         />
         <MultiplePicker
@@ -303,7 +336,7 @@ export function WorldFields({
             <RecordPicker
               label={`Transition ${index + 1} from`}
               value={transition.from}
-              options={item.stages.map((id) => ({ id, name: id }))}
+              options={stageOptions(item.stages)}
               onChange={(from) =>
                 onChange({
                   ...item,
@@ -316,7 +349,7 @@ export function WorldFields({
             <RecordPicker
               label={`Transition ${index + 1} to`}
               value={transition.to}
-              options={item.stages.map((id) => ({ id, name: id }))}
+              options={stageOptions(item.stages)}
               onChange={(to) =>
                 onChange({
                   ...item,
@@ -358,7 +391,11 @@ export function WorldFields({
               ...item,
               transitions: [
                 ...item.transitions,
-                { from: item.initial, to: item.stages.at(-1) ?? item.initial, when: 'always' },
+                {
+                  from: item.initial,
+                  to: item.stages.at(-1) ? stageName(item.stages.at(-1)!) : item.initial,
+                  when: 'always',
+                },
               ],
             })
           }
