@@ -1,6 +1,6 @@
 //! Compile a coherent source read and drive an isolated, stateless Preview.
 //! A Preview command returns snapshots; it never writes world/project state.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -42,13 +42,23 @@ pub(super) fn compile_project(
         .collect::<Result<Vec<_>, _>>()?;
     let schema = project.state_schema()?;
     // Match the character-only cast and speaker pickers. A prop or style guide
-    // existing in the world does not make it a valid scene participant.
-    let known_entities = project
-        .list_nodes()?
-        .iter()
-        .filter(|node| node.kind == wobu_core::NodeKind::Character)
-        .map(|node| node.id)
-        .collect();
+    // existing in the world does not make it a valid scene participant. Settings
+    // are collected in the same pass and kept apart, because a scene placed in a
+    // character is exactly what one merged set would allow.
+    let mut known_entities = BTreeSet::new();
+    let mut known_settings = BTreeSet::new();
+    for node in project.list_nodes()? {
+        match node.kind {
+            wobu_core::NodeKind::Character => known_entities.insert(node.id),
+            wobu_core::NodeKind::Setting => known_settings.insert(node.id),
+            _ => false,
+        };
+    }
+    // Preview compiles the same source Export does, so it has to compile it with
+    // the same knowledge: a scene's setting, a signed-off repetition and the
+    // quests whose objectives the runtime reports. Without these, every placed
+    // scene is an `unknown_setting` error and Preview has no graph at all.
+    let (wording_suppressions, _) = project.wording_suppressions()?;
     if project.narrative_fingerprint()? != before {
         return Err(WobuError::new(
             Code::Invalid,
@@ -64,7 +74,15 @@ pub(super) fn compile_project(
         &scenes,
         &texts,
         &schema,
-        &CompileOptions { known_entities, commands, verified_reviews, ..CompileOptions::default() },
+        &CompileOptions {
+            known_entities,
+            known_settings,
+            commands,
+            verified_reviews,
+            wording_suppressions,
+            quests: world.quests.clone(),
+            ..CompileOptions::default()
+        },
         &world,
         &analysis.policies,
     );

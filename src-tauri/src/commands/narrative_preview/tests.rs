@@ -255,3 +255,51 @@ fn pending_preview_commands_restore_fail_cancel_and_accept_validated_host_output
     .unwrap();
     assert_eq!(repeated.snapshot, done.snapshot);
 }
+
+/// Preview compiles the project's own source, so it must compile it with the
+/// project's own world: a scene placed in a setting is an error without the
+/// settings, and the runtime can report no objective without the quests.
+#[test]
+fn preview_compiles_a_placed_scene_and_its_quest_objectives_the_way_export_does() {
+    let root = std::env::temp_dir().join(format!("wobu-preview-{}", wobu_core::new_id()));
+    let mut project = Project::create(&root, "Ashfall").unwrap();
+    let diner = project.create_node(wobu_core::NodeKind::Setting, "The diner", None).unwrap();
+    let mut file = project.create_scene("A shift at the diner").unwrap();
+    file.scene.setting_id = Some(diner.id);
+    let mut beat = Beat::new("Only beat");
+    beat.outcomes.push(wobu_narrative::Outcome::new(Destination::End { label: "Done".into() }));
+    file.scene.beats.push(beat);
+    let scene_id = file.scene.id;
+    project.save_scene(&mut file).unwrap();
+    let stage = Name::new("available").unwrap();
+    let quest = wobu_narrative::Quest {
+        id: wobu_narrative::EntityId::generate(),
+        name: "Lunch rush".into(),
+        summary: "Work a shift at the diner.".into(),
+        stages: vec![wobu_narrative::QuestStage {
+            name: stage.clone(),
+            objective: Some(wobu_narrative::QuestObjective::written("Find Rosa at the diner.")),
+        }],
+        initial: stage,
+        transitions: Vec::new(),
+        scene_ids: vec![scene_id],
+    };
+    let quest_id = quest.id.to_string();
+    let world = wobu_narrative::WorldDocument { quests: vec![quest], ..Default::default() };
+    project.save_world(&world, None).unwrap();
+
+    let report = compile_project(&project, BTreeMap::new()).unwrap();
+    assert!(
+        report.diagnostics.iter().all(|d| d.severity != wobu_narrative_compiler::Severity::Error),
+        "{:?}",
+        report.diagnostics
+    );
+    let graph = report.graph.expect("a placed scene with a quest previews");
+    assert_eq!(
+        graph.scenes[&scene_id.to_string()].setting.as_deref(),
+        Some(diner.id.to_string().as_str())
+    );
+    let objective = graph.quests[&quest_id].stages[0].objective.as_ref().expect("an objective");
+    assert_eq!(objective.text, "Find Rosa at the diner.");
+    std::fs::remove_dir_all(&root).ok();
+}
